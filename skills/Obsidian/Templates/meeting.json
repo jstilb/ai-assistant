@@ -1,0 +1,18 @@
+{
+  "type": "meeting",
+  "label": "Meeting Notes",
+  "description": "Meeting records with attendees, agenda, decisions, and action items",
+  "requiredSections": ["Attendees", "Agenda", "Notes"],
+  "optionalSections": ["Date", "Decisions", "Action Items", "Follow-ups", "Key Takeaways"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["meeting_type", "attendees", "location", "duration", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["meeting", "attendees", "agenda", "action item", "decision", "follow-up", "minutes", "discussed", "agreed", "sync", "standup", "retrospective", "1:1"],
+    "contentPatterns": ["## Attendees", "## Agenda", "## Action Items", "## Decisions", "- @"],
+    "folderBias": ["Career", "ActiveProspect"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

@@ -1,0 +1,72 @@
+{
+  "rules": [
+    {
+      "pattern": "skills/CORE/SKILL.md",
+      "targetLines": 100,
+      "preserveKeys": [
+        "response format",
+        "identity",
+        "workflow routing",
+        "security rules",
+        "core rules"
+      ]
+    },
+    {
+      "pattern": "skills/CORE/SYSTEM/AISTEERINGRULES.md",
+      "targetLines": 30,
+      "preserveKeys": [
+        "rule names",
+        "one-line summaries"
+      ]
+    },
+    {
+      "pattern": "skills/CORE/SKILL-INDEX.md",
+      "targetLines": 40,
+      "preserveKeys": [
+        "skill names",
+        "triggers",
+        "descriptions"
+      ]
+    },
+    {
+      "pattern": "skills/CORE/CLI-INDEX.md",
+      "targetLines": 25,
+      "preserveKeys": [
+        "command names",
+        "examples"
+      ]
+    },
+    {
+      "pattern": "skills/CORE/CONTEXT-INDEX.md",
+      "targetLines": 40,
+      "preserveKeys": [
+        "source names",
+        "routing rules",
+        "freshness"
+      ]
+    },
+    {
+      "pattern": "skills/CORE/USER/TELOS/*.md",
+      "targetLines": 30,
+      "preserveKeys": [
+        "mission names",
+        "goal IDs",
+        "statuses",
+        "metrics",
+        "dates"
+      ]
+    },
+    {
+      "pattern": "context/*.md",
+      "targetLines": 50,
+      "preserveKeys": [
+        "key facts",
+        "dates",
+        "numbers",
+        "statuses"
+      ]
+    }
+  ],
+  "minLinesForCompression": 30,
+  "outputSuffix": ".compressed.md"
+}

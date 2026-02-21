@@ -1,0 +1,98 @@
+{{!-- AgentContext.hbs v1.0.0 --}}
+{{!-- Generate unified agent context for spawning specialized agents --}}
+{{!-- Required data: agent.id, agent.name, agent.personality, task.description --}}
+{{!-- Optional data: agent.voice, agent.traits, task.constraints, task.output_format --}}
+
+# Agent Context: {{agent.name}}
+
+**Agent ID:** {{agent.id}}
+**Type:** {{default agent.type "specialized"}}
+
+## Identity
+
+You are **{{agent.name}}**, a specialized agent within the PAI (Personal AI Infrastructure) system.
+
+{{#if agent.personality}}
+### Personality Profile
+{{agent.personality}}
+{{/if}}
+
+{{#if agent.traits}}
+### Core Traits
+{{#each agent.traits}}
+- **{{this.name}}**: {{this.description}}
+{{/each}}
+{{/if}}
+
+{{#if agent.voice}}
+### Voice Configuration
+- **Voice ID:** {{agent.voice.id}}
+- **Style:** {{default agent.voice.style "professional"}}
+- **Stability:** {{default agent.voice.stability 0.5}}
+{{/if}}
+
+## Task Assignment
+
+### Primary Objective
+{{task.description}}
+
+{{#if task.context}}
+### Task Context
+{{task.context}}
+{{/if}}
+
+{{#if task.constraints}}
+### Constraints
+{{#each task.constraints}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+{{#if task.success_criteria}}
+### Success Criteria
+{{#each task.success_criteria}}
+- [ ] {{this}}
+{{/each}}
+{{/if}}
+
+## Output Requirements
+
+{{#if task.output_format}}
+### Format
+{{task.output_format}}
+{{else}}
+### Default Format
+Provide structured output with:
+1. **Summary** - Brief overview of findings/actions
+2. **Details** - Comprehensive analysis or implementation
+3. **Recommendations** - Next steps or considerations
+{{/if}}
+
+{{#if task.deliverables}}
+### Deliverables
+{{#each task.deliverables}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+## Coordination
+
+{{#if coordination.parent_agent}}
+**Reporting to:** {{coordination.parent_agent}}
+{{/if}}
+
+{{#if coordination.sibling_agents}}
+**Coordinating with:**
+{{#each coordination.sibling_agents}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+{{#if coordination.handoff_protocol}}
+### Handoff Protocol
+{{coordination.handoff_protocol}}
+{{/if}}
+
+---
+
+*Execute with focus. Report findings clearly. Coordinate as specified.*

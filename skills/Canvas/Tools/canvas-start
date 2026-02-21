@@ -1,0 +1,118 @@
+#!/bin/bash
+# canvas-start — Start all Kaya Canvas services
+# Usage: canvas-start [--no-pty] [--no-chat] [--stop]
+
+set -euo pipefail
+
+DAEMON_BIN="$HOME/.claude/bin/kaya-daemon.ts"
+CANVAS_DIR="$HOME/Desktop/projects/kaya-canvas"
+PTY_DIR="$HOME/.claude/skills/Canvas/Tools/pty-backend"
+CHAT_LISTENER="$HOME/.claude/skills/Canvas/Tools/ChatListener.ts"
+PID_DIR="$HOME/.claude/skills/Canvas/State"
+
+SKIP_PTY=false
+SKIP_CHAT=false
+
+# --- Parse args ---
+for arg in "$@"; do
+  case "$arg" in
+    --no-pty)  SKIP_PTY=true ;;
+    --no-chat) SKIP_CHAT=true ;;
+    --stop)    # Kill all canvas services
+      echo "Stopping Canvas services..."
+      for pidfile in "$PID_DIR"/canvas-*.pid; do
+        [ -f "$pidfile" ] || continue
+        pid=$(cat "$pidfile")
+        name=$(basename "$pidfile" .pid)
+        if kill -0 "$pid" 2>/dev/null; then
+          kill "$pid" && echo "  Stopped $name (PID $pid)"
+        fi
+        rm -f "$pidfile"
+      done
+      echo "Done."
+      exit 0
+      ;;
+    --help|-h)
+      echo "Usage: canvas-start [--no-pty] [--no-chat] [--stop]"
+      echo ""
+      echo "Starts all Kaya Canvas services:"
+      echo "  1. Kaya Daemon (port 18000) — if not already running"
+      echo "  2. Canvas web app (Vite dev server)"
+      echo "  3. PTY backend (terminal support)"
+      echo "  4. Chat listener (AI chat in canvas)"
+      echo ""
+      echo "Options:"
+      echo "  --no-pty   Skip PTY backend"
+      echo "  --no-chat  Skip Chat listener"
+      echo "  --stop     Stop all canvas services"
+      exit 0
+      ;;
+  esac
+done
+
+mkdir -p "$PID_DIR"
+
+# --- Colors ---
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}Starting Kaya Canvas...${NC}"
+echo ""
+
+# --- 1. Daemon ---
+if curl -sf http://localhost:18000/health >/dev/null 2>&1; then
+  echo -e "  ${GREEN}✓${NC} Daemon already running on port 18000"
+else
+  echo -e "  ${YELLOW}→${NC} Starting daemon..."
+  bun "$DAEMON_BIN" start --port 18000 &
+  DAEMON_PID=$!
+  echo "$DAEMON_PID" > "$PID_DIR/canvas-daemon.pid"
+  sleep 1
+  if curl -sf http://localhost:18000/health >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Daemon started (PID $DAEMON_PID)"
+  else
+    echo -e "  ${YELLOW}!${NC} Daemon may still be starting..."
+  fi
+fi
+
+# --- 2. Canvas web app ---
+echo -e "  ${YELLOW}→${NC} Starting Canvas web app..."
+(cd "$CANVAS_DIR" && npm run dev) &
+CANVAS_PID=$!
+echo "$CANVAS_PID" > "$PID_DIR/canvas-webapp.pid"
+echo -e "  ${GREEN}✓${NC} Canvas web app started (PID $CANVAS_PID)"
+
+# --- 3. PTY backend ---
+if [ "$SKIP_PTY" = false ]; then
+  echo -e "  ${YELLOW}→${NC} Starting PTY backend..."
+  (cd "$PTY_DIR" && npm start) &
+  PTY_PID=$!
+  echo "$PTY_PID" > "$PID_DIR/canvas-pty.pid"
+  echo -e "  ${GREEN}✓${NC} PTY backend started (PID $PTY_PID)"
+else
+  echo -e "  ${YELLOW}–${NC} PTY backend skipped"
+fi
+
+# --- 4. Chat listener ---
+if [ "$SKIP_CHAT" = false ]; then
+  echo -e "  ${YELLOW}→${NC} Starting Chat listener..."
+  bun "$CHAT_LISTENER" &
+  CHAT_PID=$!
+  echo "$CHAT_PID" > "$PID_DIR/canvas-chat.pid"
+  echo -e "  ${GREEN}✓${NC} Chat listener started (PID $CHAT_PID)"
+else
+  echo -e "  ${YELLOW}–${NC} Chat listener skipped"
+fi
+
+echo ""
+echo -e "${GREEN}Canvas is ready!${NC}"
+echo "  Web app:  http://localhost:5173"
+echo "  Daemon:   http://localhost:18000"
+echo ""
+echo "Stop all: canvas-start --stop"
+echo ""
+
+# Wait for all background processes
+wait

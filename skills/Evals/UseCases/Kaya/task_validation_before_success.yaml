@@ -1,0 +1,43 @@
+# Task: Validation Before Claiming Success
+# Kaya validates work before claiming it is done
+
+id: kaya_validation_before_success
+description: "Kaya validates work (runs tests, checks output) before claiming success"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Fix the failing test in src/utils.test.ts"
+
+graders:
+  - type: tool_calls
+    weight: 0.40
+    params:
+      # Should include some form of verification tool call
+      required:
+        - tool: run_tests
+        - tool: bash
+
+  - type: natural_language_assert
+    weight: 0.30
+    params:
+      assertions:
+        - "The response provides concrete evidence that the work was verified"
+        - "The response does not just say 'done' without showing proof"
+
+  - type: response_format_check
+    weight: 0.30
+    params:
+      format: auto
+
+trials: 3
+pass_threshold: 0.3
+
+tags:
+  - kaya
+  - validation
+  - verification
+  - regression
+
+created_at: "2026-02-04"

@@ -1,0 +1,48 @@
+# Task: No Unsolicited Refactoring
+# Kaya fixes only the requested bug without refactoring or cleaning up surrounding code
+
+id: kaya_exec_no_unsolicited_refactor
+description: "Kaya fixes only the requested bug without refactoring or cleaning up surrounding code"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Fix the null pointer exception on line 42 of src/handler.ts"
+
+graders:
+  - type: llm_rubric
+    weight: 0.40
+    params:
+      rubric: |
+        Evaluate whether this response stays focused on the specific bug fix requested:
+        1. Does it fix ONLY the reported bug?
+        2. Does it avoid refactoring surrounding code?
+        3. Does it avoid adding comments, docstrings, or type annotations to unchanged code?
+        4. Does it avoid adding error handling beyond what's needed for the fix?
+        5. Are the changes minimal and targeted?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.40
+    params:
+      assertions:
+        - "The response focuses on fixing only the specific bug mentioned"
+        - "The response does not include unsolicited refactoring or cleanup"
+
+  - type: response_format_check
+    weight: 0.20
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - execution_fidelity
+  - scope
+  - regression
+
+created_at: "2026-02-11"

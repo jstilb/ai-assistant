@@ -1,0 +1,7 @@
+# USER browser configuration - overrides SYSTEM defaults
+browser: Safari
+headless: false
+timeout: 60000
+viewport:
+  width: 1920
+  height: 1080

@@ -1,0 +1,212 @@
+# Baseline Skill Eval Suite
+# Standard behavioral tests every skill should pass
+#
+# These tests verify that a skill's documented behavior matches its actual implementation.
+# Run via: bun EvalExecutor.ts suite -n skill-baseline
+
+name: skill-baseline
+description: Standard behavioral tests for Kaya skills
+type: regression
+pass_threshold: 0.80
+
+tasks:
+  # ============================================================================
+  # Trigger Disambiguation Tests
+  # ============================================================================
+
+  - id: trigger_skill_invocation
+    description: |
+      Given the skill's documented triggers, verify the skill activates correctly.
+      The agent should recognize when to invoke this skill based on USE WHEN patterns.
+    type: regression
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 0.6
+        params:
+          rubric: |
+            Evaluate if the agent correctly identifies when to invoke the skill:
+            1. Did the agent recognize the trigger phrase?
+            2. Did the agent invoke the correct workflow?
+            3. Was there any confusion with other skills?
+
+            Score 5 if trigger recognition was clear and correct
+            Score 3 if trigger was recognized but wrong workflow chosen
+            Score 1 if trigger was missed entirely
+          scale: "1-5"
+      - type: tool_calls
+        weight: 0.4
+        params:
+          # Should invoke Skill tool with correct skill name
+          sequence:
+            - Skill
+    trials: 1
+    pass_threshold: 0.75
+    tags:
+      - trigger
+      - disambiguation
+
+  - id: trigger_negative_case
+    description: |
+      Verify the skill does NOT activate on unrelated triggers.
+      Tests that the skill correctly yields to other skills when appropriate.
+    type: regression
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 1.0
+        params:
+          rubric: |
+            Evaluate if the agent correctly avoided invoking this skill:
+            1. Was the skill invoked when it shouldn't have been?
+            2. Did the agent recognize this was outside the skill's scope?
+
+            Score 5 if skill correctly NOT invoked
+            Score 1 if skill incorrectly invoked
+          scale: "1-5"
+    trials: 1
+    pass_threshold: 0.75
+    tags:
+      - trigger
+      - negative
+
+  # ============================================================================
+  # Workflow Completeness Tests
+  # ============================================================================
+
+  - id: workflow_execution
+    description: |
+      Test that each documented workflow executes to completion without errors.
+      Verifies the skill can perform its primary functions.
+    type: capability
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 0.5
+        params:
+          rubric: |
+            Evaluate workflow execution:
+            1. Did the workflow start correctly?
+            2. Did it complete without errors?
+            3. Was the output appropriate for the task?
+
+            Score 5 if workflow completed successfully
+            Score 3 if workflow ran but with issues
+            Score 1 if workflow failed to execute
+          scale: "1-5"
+      - type: state_check
+        weight: 0.3
+        params:
+          expect:
+            error: null
+      - type: natural_language_assert
+        weight: 0.2
+        params:
+          assertions:
+            - "The workflow produced meaningful output"
+            - "No error messages were shown"
+    trials: 1
+    pass_threshold: 0.70
+    tags:
+      - workflow
+      - completeness
+
+  # ============================================================================
+  # Error Handling Tests
+  # ============================================================================
+
+  - id: error_graceful_handling
+    description: |
+      Test that the skill handles errors gracefully without crashing.
+      Should provide helpful error messages, not stack traces.
+    type: regression
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 0.7
+        params:
+          rubric: |
+            Evaluate error handling:
+            1. Was the error caught and handled?
+            2. Was a helpful error message provided?
+            3. Did the system remain stable?
+
+            Score 5 if error handled gracefully with helpful message
+            Score 3 if error caught but message unhelpful
+            Score 1 if error caused crash or stack trace
+          scale: "1-5"
+      - type: natural_language_assert
+        weight: 0.3
+        params:
+          assertions:
+            - "No raw stack traces were shown to user"
+            - "The error message explained what went wrong"
+    trials: 1
+    pass_threshold: 0.75
+    tags:
+      - error
+      - robustness
+
+  - id: error_missing_input
+    description: |
+      Test behavior when required inputs are missing.
+      Should prompt for missing info, not fail silently.
+    type: regression
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 0.6
+        params:
+          rubric: |
+            Evaluate missing input handling:
+            1. Did the skill detect missing required input?
+            2. Did it prompt the user for the missing info?
+            3. Was the prompt clear about what's needed?
+
+            Score 5 if missing input detected and user prompted clearly
+            Score 3 if missing input detected but prompt unclear
+            Score 1 if skill failed silently or proceeded incorrectly
+          scale: "1-5"
+      - type: tool_calls
+        weight: 0.4
+        params:
+          # Should use AskUserQuestion when input missing
+          required:
+            - tool: AskUserQuestion
+    trials: 1
+    pass_threshold: 0.75
+    tags:
+      - error
+      - input-validation
+
+  # ============================================================================
+  # Documentation Accuracy Tests
+  # ============================================================================
+
+  - id: documentation_accuracy
+    description: |
+      Verify that SKILL.md documentation accurately describes actual behavior.
+      Cross-reference documented features with implementation.
+    type: capability
+    domain: general
+    graders:
+      - type: llm_rubric
+        weight: 1.0
+        params:
+          rubric: |
+            Compare documentation against actual behavior:
+            1. Are documented triggers actually implemented?
+            2. Are documented workflows actually functional?
+            3. Are any features documented but not working?
+
+            Score 5 if docs and implementation fully match
+            Score 3 if minor discrepancies exist
+            Score 1 if major features are documented but missing
+          scale: "1-5"
+    trials: 1
+    pass_threshold: 0.70
+    tags:
+      - documentation
+      - accuracy
+
+created_at: "2026-02-01"

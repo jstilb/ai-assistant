@@ -1,0 +1,19 @@
+# Pantry Staples — Items always on hand
+# These are excluded from generated grocery lists
+
+staples:
+  - salt
+  - pepper
+  - olive oil
+  - butter
+  - garlic
+  - onions
+  - soy sauce
+  - rice
+  - pasta
+  - canned tomatoes
+  - chicken broth
+  - flour
+  - sugar
+  - eggs
+  - milk

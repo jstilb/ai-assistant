@@ -1,0 +1,7 @@
+#!/bin/bash
+# canvas-ctl — Convenience wrapper for CanvasClient CLI
+# Usage: canvas-ctl create markdown "# Hello"
+#        canvas-ctl stream <id> "content"
+#        canvas-ctl snapshot
+#        canvas-ctl chat "message"
+exec bun "$(dirname "$0")/CanvasClient.ts" "$@"

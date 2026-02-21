@@ -1,0 +1,18 @@
+{
+  "type": "recipe",
+  "label": "Recipe",
+  "description": "Cooking recipes with ingredients, instructions, and variations",
+  "requiredSections": ["Ingredients", "Instructions"],
+  "optionalSections": ["Description", "Prep Notes", "Variations", "Tips", "Nutrition", "Source", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["source", "servings", "prep_time", "cook_time", "cuisine", "difficulty", "aliases"]
+  },
+  "signals": {
+    "keywords": ["ingredients", "tablespoon", "teaspoon", "cup", "preheat", "bake", "simmer", "saut\u00e9", "chop", "dice", "mince", "oven", "stir", "servings", "minutes", "degrees"],
+    "contentPatterns": ["- [ ]", "1.", "## Ingredients", "## Instructions", "## Directions"],
+    "folderBias": ["Cooking"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

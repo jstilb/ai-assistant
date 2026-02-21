@@ -1,0 +1,119 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Secrets and credentials -- NEVER COMMIT
+secrets.json
+.env
+settings.local.json
+
+# Personal data
+MEMORY/WORK/
+MEMORY/LEARNING/SIGNALS/
+MEMORY/LEARNING/ALGORITHM/
+MEMORY/LEARNING/SYSTEM/
+MEMORY/State/*.json
+MEMORY/daemon/
+MEMORY/QUEUES/
+MEMORY/VOICE/
+MEMORY/BRIEFINGS/
+MEMORY/AUTOINFO/
+MEMORY/NOTIFICATIONS/
+MEMORY/research/
+MEMORY/entries/
+MEMORY/specs/
+MEMORY/ContextGraph/
+MEMORY/Reports/
+context/*.md
+!context/README.md
+
+# Session data
+history.jsonl
+.current-session
+stats-cache.json
+dedup-hashes.json
+index.json
+session-env/
+
+# Personal identity files
+skills/CORE/USER/ABOUTME.md
+skills/CORE/USER/CONTACTS.md
+skills/CORE/USER/RESUME.*
+skills/CORE/USER/JMIDENTITY.md
+skills/CORE/USER/BASICINFO.md
+skills/CORE/USER/UserContext.md
+skills/CORE/USER/TELOS/*.md
+!skills/CORE/USER/TELOS/README.md
+skills/CORE/USER/HEALTH/
+skills/CORE/USER/FINANCES/
+skills/CORE/USER/BUSINESS/
+skills/CORE/USER/WORK/
+
+# Skill state directories
+skills/*/State/*.json
+skills/*/State/*.yaml
+skills/*/State/*.db
+skills/*/State/*.sqlite
+!skills/*/State/README.md
+
+# LucidTasks database
+skills/LucidTasks/Data/*.db
+skills/LucidTasks/Data/*.sqlite
+!skills/LucidTasks/Data/README.md
+
+# Eval results and transcripts
+skills/Evals/Transcripts/
+skills/Evals/Results/
+
+# Cooking preferences
+skills/Cooking/dietary-preferences.yaml
+skills/Cooking/kitchen-context.yaml
+skills/Cooking/pantry-staples.yaml
+
+# Canvas chat history
+skills/Canvas/MEMORY/
+
+# Build artifacts
+*.pyc
+__pycache__/
+.DS_Store
+*.log
+
+# Debug and temporary files
+debug/
+logs/
+file-history/
+shell-snapshots/
+paste-cache/
+plans/
+todos/
+observability/
+telemetry/
+.cache/
+.checkpoints/
+tasks/
+teams/
+data/
+ide/
+mcp-launchers/
+servers/
+cache/
+statsig/
+
+# Plugin cache
+plugins/cache/
+plugins/installed_plugins.json
+plugins/known_marketplaces.json
+
+# Images and screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Voice data
+VoiceServer/voices.json
+
+# Playwright
+.playwright-mcp/

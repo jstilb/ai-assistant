@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "_docs": {
+    "_overview": "SETTINGS.JSON - Central configuration for Kaya. Copy this file to settings.json and customize.",
+    "_sections": {
+      "env": "Environment variables. KAYA_DIR should point to your installation directory.",
+      "permissions": "Tool permissions. Pre-configured for security and usability.",
+      "hooks": "Lifecycle hook configuration. Each hook fires at a specific point in the session lifecycle.",
+      "daidentity": "AI identity configuration. Name, voice, color, and personality.",
+      "principal": "Your identity. Set your name and timezone.",
+      "techStack": "Your preferred development tools.",
+      "contextFiles": "Files loaded into every session for persistent context.",
+      "contextManager": "Dynamic context routing system toggle.",
+      "statusLine": "Terminal status line command configuration."
+    }
+  },
+
+  "env": {
+    "KAYA_DIR": "~/.claude",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "ENABLE_TOOL_SEARCH": "true",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+
+  "principal": {
+    "name": "YourName",
+    "timezone": "America/Los_Angeles"
+  },
+
+  "daidentity": {
+    "name": "Kaya",
+    "fullName": "Kaya - Personal AI Assistant",
+    "displayName": "Kaya",
+    "color": "#3B82F6",
+    "localVoice": {
+      "id": "af_heart",
+      "model": "kokoro",
+      "speed": 1.1
+    },
+    "voice": {
+      "stability": 0.35,
+      "similarity_boost": 0.8,
+      "style": 0.9,
+      "volume": 0.8
+    },
+    "startupCatchphrase": "Kaya here, ready to go."
+  },
+
+  "techStack": {
+    "terminal": "Kitty",
+    "packageManager": "bun",
+    "pythonPackageManager": "pip",
+    "language": "TypeScript"
+  },
+
+  "model": "opus",
+  "alwaysThinkingEnabled": true,
+
+  "contextManager": {
+    "enabled": true
+  },
+
+  "contextFiles": [
+    "skills/CORE/SKILL.md",
+    "skills/CORE/SYSTEM/AISTEERINGRULES.md",
+    "skills/CORE/CLI-INDEX.md",
+    "skills/CORE/CONTEXT-INDEX.md"
+  ]
+}

@@ -1,0 +1,106 @@
+{{!-- Orchestration.hbs v1.0.0 --}}
+{{!-- Aggregation prompts for multi-agent output synthesis --}}
+{{!-- Required data: agents, outputs, synthesis_mode --}}
+{{!-- Optional data: original_query, evaluation_criteria, format --}}
+
+# Multi-Agent Output Synthesis
+
+{{#if original_query}}
+## Original Query
+{{original_query}}
+{{/if}}
+
+## Agent Outputs
+
+{{#each agents}}
+### {{this.name}} ({{this.id}})
+{{#if this.role}}*Role: {{this.role}}*{{/if}}
+
+{{lookup ../outputs @index}}
+
+---
+{{/each}}
+
+## Synthesis Instructions
+
+{{#if (eq synthesis_mode "consensus")}}
+### Consensus Mode
+Identify areas of **agreement** across all agent outputs:
+1. Find common themes, conclusions, or recommendations
+2. Note where multiple agents independently reached the same conclusion
+3. Weight consensus findings more heavily
+4. Flag any unanimous agreements as high-confidence conclusions
+
+**Output:** A unified view representing what the agents collectively agree upon.
+{{/if}}
+
+{{#if (eq synthesis_mode "debate")}}
+### Debate Mode
+Analyze the **disagreements** between agents:
+1. Identify conflicting positions and their reasoning
+2. Evaluate the strength of each argument
+3. Note which perspectives have stronger evidence
+4. Synthesize a balanced view that acknowledges tensions
+
+**Output:** A nuanced analysis that captures the debate and provides reasoned conclusions.
+{{/if}}
+
+{{#if (eq synthesis_mode "comprehensive")}}
+### Comprehensive Mode
+Create a **complete synthesis** combining all perspectives:
+1. Integrate complementary insights from each agent
+2. Resolve contradictions where possible
+3. Preserve unique insights that only one agent identified
+4. Create a unified narrative that tells the full story
+
+**Output:** A comprehensive synthesis that captures the full breadth of analysis.
+{{/if}}
+
+{{#if (eq synthesis_mode "spotcheck")}}
+### Spotcheck Mode
+**Verification focus** - Compare outputs for consistency:
+1. Check if agents working on the same task produced consistent results
+2. Identify any discrepancies or errors
+3. Flag results that need human review
+4. Report confidence level based on agreement
+
+**Output:** A verification report with confidence assessment.
+{{/if}}
+
+{{#if (eq synthesis_mode "rank")}}
+### Ranking Mode
+**Evaluate and rank** agent outputs:
+1. Score each output against the evaluation criteria
+2. Rank outputs from best to worst
+3. Explain the reasoning for rankings
+4. Identify the winning output
+
+{{#if evaluation_criteria}}
+**Evaluation Criteria:**
+{{#each evaluation_criteria}}
+- {{this.name}}: {{this.description}} (weight: {{default this.weight 1}})
+{{/each}}
+{{/if}}
+
+**Output:** Ranked list with scores and winning selection.
+{{/if}}
+
+{{#unless synthesis_mode}}
+### Default Mode
+Synthesize all outputs into a coherent summary:
+1. Extract key points from each agent
+2. Organize by theme or topic
+3. Note any conflicts or gaps
+4. Provide actionable conclusions
+
+**Output:** A structured summary suitable for decision-making.
+{{/unless}}
+
+{{#if format}}
+## Output Format
+{{format}}
+{{/if}}
+
+---
+
+*Synthesize thoughtfully. Preserve valuable insights. Resolve conflicts with reasoning.*

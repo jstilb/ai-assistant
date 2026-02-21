@@ -1,0 +1,9 @@
+# SYSTEM default browser configuration
+# Override in USER/config/browser.yaml for personal preferences
+
+browser: Chrome
+headless: true
+timeout: 30000
+viewport:
+  width: 1280
+  height: 720

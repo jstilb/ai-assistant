@@ -1,0 +1,12 @@
+{
+  "name": "telegram-bot-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run TelegramBot.ts",
+    "dev": "bun --watch run TelegramBot.ts"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3"
+  }
+}

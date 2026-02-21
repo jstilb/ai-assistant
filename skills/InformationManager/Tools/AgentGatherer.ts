@@ -1,0 +1,269 @@
+#!/usr/bin/env bun
+/**
+ * AgentGatherer - Parallel agent-based gathering for InformationManager
+ *
+ * Wraps AgentOrchestrator to spawn parallel agents for each source,
+ * enabling faster context gathering with domain-specific processing.
+ *
+ * Commands:
+ *   --sources <list>        Comma-separated sources (default: all)
+ *   --strategy <type>       Aggregation strategy: merge|synthesis (default: merge)
+ *   --parallel              Run agents in parallel (default: true)
+ *   --max-concurrent <n>    Max concurrent agents (default: 5)
+ *   --json                  Output as JSON
+ *   --help                  Show this help
+ *
+ * Examples:
+ *   bun run AgentGatherer.ts --sources obsidian,telos,dtr
+ *   bun run AgentGatherer.ts --strategy synthesis
+ *   bun run AgentGatherer.ts --sources learnings --json
+ */
+
+import { parseArgs } from "util";
+import * as path from "path";
+import * as fs from "fs";
+import { orchestrator, type AgentSpec, type AggregationStrategy } from "../../CORE/Tools/AgentOrchestrator";
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+const HOME = process.env.HOME || "/Users/your-username";
+const KAYA_DIR = process.env.KAYA_DIR || path.join(HOME, ".claude");
+const CONTEXT_DIR = path.join(KAYA_DIR, "context");
+const SKILL_DIR = path.join(KAYA_DIR, "skills", "InformationManager");
+
+type SourceType = "obsidian" | "telos" | "learnings" | "projects" | "lucidtasks" | "calendar" | "drive";
+
+const ALL_SOURCES: SourceType[] = ["obsidian", "telos", "learnings", "projects", "lucidtasks", "calendar", "drive"];
+
+// ============================================================================
+// Agent Specs for Each Source
+// ============================================================================
+
+function createAgentSpec(source: SourceType): AgentSpec {
+  const workflowMap: Record<SourceType, string> = {
+    obsidian: "GatherObsidian",
+    telos: "GatherTelos",
+    learnings: "GatherLearnings",
+    projects: "GatherProjects",
+    lucidtasks: "Sync-LucidTasks",
+    calendar: "GatherCalendar",
+    drive: "SyncDriveContext",
+  };
+
+  const workflow = workflowMap[source];
+  const workflowPath = path.join(SKILL_DIR, "Workflows", `${workflow}.md`);
+
+  return {
+    type: "Intern",
+    name: `Gather${source.charAt(0).toUpperCase() + source.slice(1)}`,
+    model: "haiku", // Fast model for simple gathering
+    promptPrefix: `You are a context gathering agent. Execute the workflow at ${workflowPath} and return the gathered context in markdown format. Focus on extracting key information that would be useful for AI agents working on tasks related to this source.`,
+  };
+}
+
+// ============================================================================
+// Main Gathering Function
+// ============================================================================
+
+export async function gatherWithAgents(
+  sources: SourceType[],
+  options: {
+    strategy?: AggregationStrategy;
+    parallel?: boolean;
+    maxConcurrent?: number;
+  } = {}
+): Promise<{
+  success: boolean;
+  results: Array<{ source: SourceType; success: boolean; content?: string; error?: string }>;
+  aggregated?: string;
+  masterContextPath?: string;
+}> {
+  const { strategy = "merge", parallel = true, maxConcurrent = 5 } = options;
+
+  console.log(`Spawning ${sources.length} gathering agents (${parallel ? "parallel" : "sequential"})...`);
+
+  // Create agent specs
+  const specs = sources.map(createAgentSpec);
+
+  // Build task prompt
+  const task = `Gather context from your assigned source and return structured information suitable for AI agent consumption. Include:
+1. Source overview
+2. Key data points or metrics
+3. Any relevant patterns or insights
+4. Timestamp of gathering
+
+Return the gathered context as markdown with clear sections.`;
+
+  // Execute agents
+  const { results, aggregated } = await orchestrator.spawnWithAggregation(
+    specs,
+    task,
+    strategy,
+    {
+      parallel,
+      maxConcurrent,
+      defaultModel: "haiku",
+      onProgress: (completed, total, result) => {
+        console.log(`[${completed}/${total}] ${result.agentName}: ${result.success ? "done" : "failed"}`);
+      },
+    }
+  );
+
+  // Map results back to sources
+  const sourceResults = sources.map((source, i) => {
+    const result = results[i];
+    return {
+      source,
+      success: result?.success || false,
+      content: result?.result,
+      error: result?.error,
+    };
+  });
+
+  // Create master context if successful
+  let masterContextPath: string | undefined;
+  if (aggregated) {
+    const timestamp = new Date().toISOString();
+    const masterContent = `---
+tags: [context, ai-context, master, agent-gathered]
+last_updated: ${timestamp}
+gathered_by: InformationManager/AgentGatherer
+strategy: ${strategy}
+sources: ${sources.join(", ")}
+---
+
+# Master Context (Agent-Gathered)
+
+${aggregated}
+
+---
+*Generated by InformationManager/Tools/AgentGatherer.ts at ${timestamp}*
+`;
+
+    // Ensure context directory exists
+    if (!fs.existsSync(CONTEXT_DIR)) {
+      fs.mkdirSync(CONTEXT_DIR, { recursive: true });
+    }
+
+    masterContextPath = path.join(CONTEXT_DIR, "MasterContext.md");
+    fs.writeFileSync(masterContextPath, masterContent);
+  }
+
+  return {
+    success: sourceResults.filter(r => r.success).length > 0,
+    results: sourceResults,
+    aggregated,
+    masterContextPath,
+  };
+}
+
+// ============================================================================
+// Simplified Direct Gathering (No Agent Overhead)
+// ============================================================================
+
+/**
+ * Simple direct gathering without spawning agents
+ * Use this for quick context updates where agent overhead isn't needed
+ */
+export async function gatherDirect(sources: SourceType[]): Promise<string> {
+  // NOTE: Direct gathering not yet implemented
+  // This would execute the workflows directly without agent overhead
+  // For now, use gatherWithAgents() for all gathering operations
+
+  console.warn("gatherDirect() is not yet implemented. Use gatherWithAgents() instead.");
+  const results: string[] = [];
+
+  for (const source of sources) {
+    results.push(`## ${source.charAt(0).toUpperCase() + source.slice(1)}\n\nDirect gathering not yet implemented for ${source}.`);
+  }
+
+  return results.join("\n\n---\n\n");
+}
+
+// ============================================================================
+// CLI
+// ============================================================================
+
+async function main() {
+  const { values } = parseArgs({
+    args: Bun.argv.slice(2),
+    options: {
+      sources: { type: "string", short: "s" },
+      strategy: { type: "string", default: "merge" },
+      parallel: { type: "boolean", default: true },
+      "max-concurrent": { type: "string", default: "5" },
+      direct: { type: "boolean" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+  });
+
+  if (values.help) {
+    console.log(`
+AgentGatherer - Parallel agent-based gathering for InformationManager
+
+Usage:
+  bun run AgentGatherer.ts --sources obsidian,telos,dtr
+  bun run AgentGatherer.ts --strategy synthesis
+  bun run AgentGatherer.ts --direct  # Skip agent overhead
+
+Options:
+  --sources <list>        Comma-separated sources (default: all)
+  --strategy <type>       Aggregation: merge|synthesis|voting|best (default: merge)
+  --parallel              Run agents in parallel (default: true)
+  --max-concurrent <n>    Max concurrent agents (default: 5)
+  --direct                Use direct gathering (no agents)
+  --json                  Output as JSON
+  --help                  Show this help
+
+Sources: obsidian, dtr, telos, learnings, projects, lucidtasks, calendar, drive
+
+Examples:
+  bun run AgentGatherer.ts --sources obsidian,telos,dtr
+  bun run AgentGatherer.ts --strategy synthesis --parallel
+  bun run AgentGatherer.ts --direct --sources obsidian,learnings
+`);
+    process.exit(0);
+  }
+
+  const sources = values.sources
+    ? (values.sources.split(",") as SourceType[])
+    : ALL_SOURCES;
+
+  console.log(`Sources: ${sources.join(", ")}\n`);
+
+  if (values.direct) {
+    // Direct gathering without agents
+    const content = await gatherDirect(sources);
+    if (values.json) {
+      console.log(JSON.stringify({ content }, null, 2));
+    } else {
+      console.log(content);
+    }
+  } else {
+    // Agent-based gathering
+    const result = await gatherWithAgents(sources, {
+      strategy: values.strategy as AggregationStrategy,
+      parallel: values.parallel,
+      maxConcurrent: parseInt(values["max-concurrent"] || "5", 10),
+    });
+
+    if (values.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`\n=== Summary ===`);
+      console.log(`Success: ${result.success}`);
+      console.log(`Sources: ${result.results.filter(r => r.success).length}/${result.results.length}`);
+      if (result.masterContextPath) {
+        console.log(`Master: ${result.masterContextPath}`);
+      }
+    }
+  }
+}
+
+// Run if executed directly
+if (import.meta.main) {
+  main().catch(console.error);
+}

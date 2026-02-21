@@ -1,0 +1,1714 @@
+{
+  "generated": "2026-02-13T17:05:25.368Z",
+  "totalSkills": 66,
+  "alwaysLoadedCount": 3,
+  "deferredCount": 63,
+  "skills": {
+    "contextgraph": {
+      "name": "ContextGraph",
+      "path": "ContextGraph/SKILL.md",
+      "fullDescription": "Decision trace graph extracting decision points from Kaya data and building queryable causal/temporal graphs. USE WHEN context graph, decision trace, what caused, decision history, show decisions, trace decision, goal decisions, decision patterns, what went wrong, decision analysis.",
+      "triggers": [
+        "context",
+        "graph",
+        "decision",
+        "trace",
+        "what",
+        "caused",
+        "history",
+        "show",
+        "decisions",
+        "goal",
+        "patterns",
+        "went",
+        "wrong",
+        "analysis"
+      ],
+      "workflows": [
+        "TELOS",
+        "Capture",
+        "Synthesize",
+        "Analyze",
+        "Query"
+      ],
+      "tier": "deferred"
+    },
+    "telos": {
+      "name": "Telos",
+      "path": "Telos/SKILL.md",
+      "fullDescription": "Life OS and project analysis. USE WHEN TELOS, life goals, projects, dependencies, books, movies. SkillSearch('telos') for docs.",
+      "triggers": [
+        "telos",
+        "life",
+        "goals",
+        "projects",
+        "dependencies",
+        "books",
+        "movies"
+      ],
+      "workflows": [
+        "Update",
+        "InterviewExtraction",
+        "CreateNarrativePoints",
+        "WriteReport"
+      ],
+      "tier": "deferred"
+    },
+    "research": {
+      "name": "Research",
+      "path": "Research/SKILL.md",
+      "fullDescription": "Comprehensive research, analysis, and content extraction system. USE WHEN user says 'do research', 'do extensive research', 'quick research', 'minor research', 'research this', 'find information', 'investigate', 'extract wisdom', 'extract alpha', 'analyze content', 'can't get this content', 'use fabric', OR requests any web/content research. Supports three research modes (quick/standard/extensive), deep content analysis, intelligent retrieval, and 242+ Fabric patterns. NOTE: For due diligence, OSINT, or background checks, use OSINT skill instead.",
+      "triggers": [
+        "research",
+        "extensive",
+        "quick",
+        "minor",
+        "this",
+        "find",
+        "information",
+        "investigate",
+        "extract",
+        "wisdom",
+        "alpha",
+        "analyze",
+        "content",
+        "cant",
+        "get",
+        "use",
+        "fabric",
+        "requests",
+        "any",
+        "web/content",
+        "osint"
+      ],
+      "workflows": [
+        "OSINT",
+        "QuickResearch",
+        "StandardResearch",
+        "ExtensiveResearch",
+        "ExtractAlpha",
+        "Retrieve",
+        "YoutubeExtraction",
+        "WebScraping",
+        "ClaudeResearch",
+        "InterviewResearch",
+        "AnalyzeAiTrends",
+        "Fabric",
+        "Enhance",
+        "ExtractKnowledge"
+      ],
+      "tier": "always"
+    },
+    "digitalmaestro": {
+      "name": "DigitalMaestro",
+      "path": "DigitalMaestro/SKILL.md",
+      "fullDescription": "AI-powered adaptive learning engine with FSRS spaced repetition, concept graphs, and domain-aware exercise generation. USE WHEN learn topic, study, practice, review cards, spaced repetition, learning session, study session, teach me, quiz me, test knowledge, master concept.",
+      "triggers": [
+        "learn",
+        "topic",
+        "study",
+        "practice",
+        "review",
+        "cards",
+        "spaced",
+        "repetition",
+        "learning",
+        "session",
+        "teach",
+        "quiz",
+        "test",
+        "knowledge",
+        "master",
+        "concept"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "cooking": {
+      "name": "Cooking",
+      "path": "Cooking/SKILL.md",
+      "fullDescription": "Kitchen intelligence system with recipe search, seasonal produce, ingredient substitution, pantry tracking, meal planning, and grocery integration. USE WHEN cooking, recipe, meal plan, what to make, ingredients, meal prep, nutrition, kitchen, dinner ideas, grocery list, pantry, seasonal, substitution, what's in season.",
+      "triggers": [
+        "cooking",
+        "recipe",
+        "meal",
+        "plan",
+        "what",
+        "make",
+        "ingredients",
+        "prep",
+        "nutrition",
+        "kitchen",
+        "dinner",
+        "ideas",
+        "grocery",
+        "list",
+        "pantry",
+        "seasonal",
+        "substitution",
+        "whats",
+        "season"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "proactiveengine": {
+      "name": "ProactiveEngine",
+      "path": "ProactiveEngine/SKILL.md",
+      "fullDescription": "Proactive contact and scheduled automation system. USE WHEN scheduling tasks, setting up cron jobs, creating proactive behaviors, morning briefings, evening summaries, periodic checks, or managing automated outreach.",
+      "triggers": [
+        "scheduling",
+        "tasks",
+        "setting",
+        "cron",
+        "jobs",
+        "creating",
+        "proactive",
+        "behaviors",
+        "morning",
+        "briefings",
+        "evening",
+        "summaries",
+        "periodic",
+        "checks",
+        "managing",
+        "automated",
+        "outreach",
+        "automation"
+      ],
+      "workflows": [
+        "ManageCronJobs",
+        "SendProactiveMessage"
+      ],
+      "tier": "deferred"
+    },
+    "evals": {
+      "name": "Evals",
+      "path": "Evals/SKILL.md",
+      "fullDescription": "Agent evaluation framework based on Anthropic's best practices. USE WHEN eval, evaluate, test agent, benchmark, verify behavior, regression test, capability test. Includes three grader types (code-based, model-based, human), transcript capture, pass@k/pass^k metrics, and ALGORITHM integration.",
+      "triggers": [
+        "eval",
+        "evaluate",
+        "test",
+        "agent",
+        "benchmark",
+        "verify",
+        "behavior",
+        "regression",
+        "capability"
+      ],
+      "workflows": [
+        "ALGORITHM",
+        "HumanReview"
+      ],
+      "tier": "deferred"
+    },
+    "kayaevals": {
+      "name": "KayaEvals",
+      "path": "Evals/KayaEvals/SKILL.md",
+      "fullDescription": "Kaya-specific behavioral evaluation extension for the Evals framework. USE WHEN kaya eval, kaya benchmark, kaya regression, kaya identity check, kaya format check, behavioral eval, personality eval, voice quality check, security eval, coding eval, planning eval, skill routing eval, alignment eval. Adds response format compliance, voice line quality, identity consistency, security, execution fidelity, coding performance, planning, and personal alignment dimensions.",
+      "triggers": [
+        "kaya",
+        "eval",
+        "benchmark",
+        "regression",
+        "identity",
+        "check",
+        "format",
+        "behavioral",
+        "personality",
+        "voice",
+        "quality",
+        "security",
+        "coding",
+        "planning",
+        "skill",
+        "routing",
+        "alignment"
+      ],
+      "workflows": [
+        "ALGORITHM"
+      ],
+      "tier": "deferred"
+    },
+    "autoinfomanager": {
+      "name": "AutoInfoManager",
+      "path": "AutoInfoManager/SKILL.md",
+      "fullDescription": "Autonomous information maintenance workflows with tiered execution. USE WHEN autoinfo daily, autoinfo weekly, autoinfo monthly, maintenance workflows, orphan recovery, scheduled maintenance.",
+      "triggers": [
+        "autoinfo",
+        "daily",
+        "weekly",
+        "monthly",
+        "maintenance",
+        "workflows",
+        "orphan",
+        "recovery",
+        "scheduled"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "specsheet": {
+      "name": "SpecSheet",
+      "path": "SpecSheet/SKILL.md",
+      "fullDescription": "Generate comprehensive spec sheets for AI agents and tasks. USE WHEN spec sheet, agent spec, task specification, agent requirements, define agent, agent design document, PRD for agent.",
+      "triggers": [
+        "spec",
+        "sheet",
+        "agent",
+        "task",
+        "specification",
+        "requirements",
+        "define",
+        "design",
+        "document",
+        "prd"
+      ],
+      "workflows": [
+        "CORE",
+        "THEALGORITHM",
+        "IdealEndState",
+        "GroundedIdeal",
+        "CurrentWork",
+        "GenerateVisionDiagram",
+        "CreateSpec",
+        "QuickSpec",
+        "SpecFromDescription",
+        "ValidateSpec",
+        "AsanaSpecSheet"
+      ],
+      "tier": "deferred"
+    },
+    "queuerouter": {
+      "name": "QueueRouter",
+      "path": "QueueRouter/SKILL.md",
+      "fullDescription": "Universal task queue and routing system for Kaya. USE WHEN queue task, add to queue, list queues, route task, approval queue, approved work, work queue, background queue, process queue, queue status, promote work.",
+      "triggers": [
+        "queue",
+        "task",
+        "add",
+        "list",
+        "queues",
+        "route",
+        "approval",
+        "approved",
+        "work",
+        "background",
+        "process",
+        "status",
+        "promote"
+      ],
+      "workflows": [
+        "AddItem",
+        "ListItems",
+        "ApproveItem",
+        "ReviewSpecs"
+      ],
+      "tier": "deferred"
+    },
+    "shopping": {
+      "name": "Shopping",
+      "path": "Shopping/SKILL.md",
+      "fullDescription": "Smart shopping assistant with multi-agent research AND cart automation. USE WHEN shopping, buy, purchase, need to find, looking for product, gift ideas, price comparison, what should I get, best [product], add to cart, shopping list, OR user mentions needing something to buy.",
+      "triggers": [
+        "shopping",
+        "buy",
+        "purchase",
+        "need",
+        "find",
+        "looking",
+        "product",
+        "gift",
+        "ideas",
+        "price",
+        "comparison",
+        "what",
+        "should",
+        "get",
+        "best",
+        "[product]",
+        "add",
+        "cart",
+        "list",
+        "needing",
+        "something",
+        "research",
+        "automation"
+      ],
+      "workflows": [
+        "AddToCart",
+        "Research",
+        "QuickRecommend",
+        "TrackPrice",
+        "GiftShopping"
+      ],
+      "tier": "deferred"
+    },
+    "core": {
+      "name": "CORE",
+      "path": "CORE/SKILL.md",
+      "fullDescription": "Kaya core system reference. Supplements CLAUDE.md with extended documentation, examples, and lookup tables. USE WHEN needing system reference, documentation routing, secrets management code, troubleshooting protocol, or coding/alignment rules with examples.",
+      "triggers": [
+        "needing",
+        "system",
+        "reference",
+        "documentation",
+        "routing",
+        "secrets",
+        "management",
+        "code",
+        "troubleshooting",
+        "protocol",
+        "coding/alignment",
+        "rules",
+        "examples"
+      ],
+      "workflows": [],
+      "tier": "always"
+    },
+    "createcli": {
+      "name": "CreateCLI",
+      "path": "CreateCLI/SKILL.md",
+      "fullDescription": "Generate TypeScript CLIs. USE WHEN create CLI, build CLI, command-line tool. SkillSearch('createcli') for docs.",
+      "triggers": [
+        "create",
+        "cli",
+        "build",
+        "command-line",
+        "tool"
+      ],
+      "workflows": [
+        "CreateCli",
+        "AddCommand",
+        "UpgradeTier"
+      ],
+      "tier": "deferred"
+    },
+    "council": {
+      "name": "Council",
+      "path": "Council/SKILL.md",
+      "fullDescription": "Multi-agent debate system. USE WHEN council, debate, perspectives, agents discuss. SkillSearch('council') for docs.",
+      "triggers": [
+        "council",
+        "debate",
+        "perspectives",
+        "agents",
+        "discuss"
+      ],
+      "workflows": [
+        "Debate",
+        "Quick"
+      ],
+      "tier": "deferred"
+    },
+    "communityoutreach": {
+      "name": "CommunityOutreach",
+      "path": "CommunityOutreach/SKILL.md",
+      "fullDescription": "Discover people in target communities, build profiles, and generate personalized outreach emails. USE WHEN community outreach, find people, outreach email, discover contacts, professional networking, community finder, build profile, pipeline management.",
+      "triggers": [
+        "community",
+        "outreach",
+        "find",
+        "people",
+        "email",
+        "discover",
+        "contacts",
+        "professional",
+        "networking",
+        "finder",
+        "build",
+        "profile",
+        "pipeline",
+        "management"
+      ],
+      "workflows": [
+        "DiscoverPeople",
+        "BuildProfile",
+        "GenerateOutreach",
+        "ManagePipeline"
+      ],
+      "tier": "deferred"
+    },
+    "unixcli": {
+      "name": "UnixCLI",
+      "path": "UnixCLI/SKILL.md",
+      "fullDescription": "Unix-style CLI tools for external services. USE WHEN user wants CLI operations, pipe operations, youtube download, calendar via CLI, drive sync, gmail CLI, gemini CLI, asana CLI, bluesky CLI, OR mentions kaya-cli, unix tools, command-line interface.",
+      "triggers": [
+        "cli",
+        "operations",
+        "pipe",
+        "youtube",
+        "download",
+        "calendar",
+        "via",
+        "drive",
+        "sync",
+        "gmail",
+        "gemini",
+        "asana",
+        "bluesky",
+        "mentions",
+        "kaya-cli",
+        "unix",
+        "tools",
+        "command-line",
+        "interface"
+      ],
+      "workflows": [
+        "YouTube",
+        "Calendar",
+        "Drive",
+        "Gmail",
+        "Gemini",
+        "Sheets",
+        "Places",
+        "Bluesky",
+        "NotebookLM",
+        "Asana",
+        "Linear",
+        "GitHub",
+        "GitLab",
+        "Slack",
+        "Weather",
+        "Stripe",
+        "Supabase",
+        "Firebase"
+      ],
+      "tier": "deferred"
+    },
+    "prompting": {
+      "name": "Prompting",
+      "path": "Prompting/SKILL.md",
+      "fullDescription": "Meta-prompting system for dynamic prompt generation using templates, standards, and patterns. USE WHEN meta-prompting, template generation, prompt optimization, or programmatic prompt composition.",
+      "triggers": [
+        "meta-prompting",
+        "template",
+        "generation",
+        "prompt",
+        "optimization",
+        "programmatic",
+        "composition"
+      ],
+      "workflows": [
+        "ValidatePrompt",
+        "ReviewPrompts"
+      ],
+      "tier": "deferred"
+    },
+    "voiceinteraction": {
+      "name": "VoiceInteraction",
+      "path": "VoiceInteraction/SKILL.md",
+      "fullDescription": "Bidirectional voice interaction system for mobile (Telegram) and desktop (local mic/speaker). USE WHEN voice conversation, talk to Kaya, voice mode, voice chat, speak to Kaya, desktop voice, voice interaction, push to talk, hands free.",
+      "triggers": [
+        "voice",
+        "conversation",
+        "talk",
+        "kaya",
+        "mode",
+        "chat",
+        "speak",
+        "desktop",
+        "interaction",
+        "push",
+        "hands",
+        "free"
+      ],
+      "workflows": [
+        "StartDesktop",
+        "TelegramVoice",
+        "ProactivePing"
+      ],
+      "tier": "deferred"
+    },
+    "redteam": {
+      "name": "RedTeam",
+      "path": "RedTeam/SKILL.md",
+      "fullDescription": "Adversarial analysis with 32 agents. USE WHEN red team, attack idea, counterarguments, critique, stress test. SkillSearch('redteam') for docs.",
+      "triggers": [
+        "red",
+        "team",
+        "attack",
+        "idea",
+        "counterarguments",
+        "critique",
+        "stress",
+        "test"
+      ],
+      "workflows": [
+        "ParallelAnalysis",
+        "AdversarialValidation"
+      ],
+      "tier": "deferred"
+    },
+    "instacart": {
+      "name": "Instacart",
+      "path": "Instacart/SKILL.md",
+      "fullDescription": "Browser-based Instacart automation with stealth, selector resilience, and store matching. USE WHEN groceries, instacart, add to cart, grocery shopping, order food, grocery list, buy groceries, shopping list.",
+      "triggers": [
+        "groceries",
+        "instacart",
+        "add",
+        "cart",
+        "grocery",
+        "shopping",
+        "order",
+        "food",
+        "list",
+        "buy",
+        "browser",
+        "automation"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "art": {
+      "name": "Art",
+      "path": "Art/SKILL.md",
+      "fullDescription": "Complete visual content system. USE WHEN user wants to create visual content, illustrations, diagrams, OR mentions art, header images, visualizations, mermaid, flowchart, technical diagram, infographic, Kaya icon, pack icon, or Kaya pack icon.",
+      "triggers": [
+        "create",
+        "visual",
+        "content",
+        "illustrations",
+        "diagrams",
+        "mentions",
+        "art",
+        "header",
+        "images",
+        "visualizations",
+        "mermaid",
+        "flowchart",
+        "technical",
+        "diagram",
+        "infographic",
+        "kaya",
+        "icon",
+        "pack"
+      ],
+      "workflows": [
+        "Essay",
+        "D3Dashboards",
+        "Visualize",
+        "Mermaid",
+        "TechnicalDiagrams",
+        "Taxonomies",
+        "Timelines",
+        "Frameworks",
+        "Comparisons",
+        "AnnotatedScreenshots",
+        "step",
+        "Aphorisms",
+        "Maps",
+        "Stats",
+        "Comics",
+        "AdHocYouTubeThumbnail",
+        "CreateKayaPackIcon",
+        "RecipeCards"
+      ],
+      "tier": "always"
+    },
+    "dnd": {
+      "name": "DnD",
+      "path": "DnD/SKILL.md",
+      "fullDescription": "D&D 5e (2014) Dungeon Master toolkit with 12 tools for monster generation, encounter balancing, loot, spells, homebrew validation, art, maps, VTT export, and campaign management. USE WHEN D&D, dungeon master, DM, encounter, monster, stat block, challenge rating, CR, campaign, session log, treasure, D&D 5e, tabletop RPG, initiative, combat, spell lookup, homebrew, mass combat, world building, session prep, VTT, Foundry, Roll20.",
+      "triggers": [
+        "d&d",
+        "dungeon",
+        "master",
+        "encounter",
+        "monster",
+        "stat",
+        "block",
+        "challenge",
+        "rating",
+        "campaign",
+        "session",
+        "log",
+        "treasure",
+        "tabletop",
+        "rpg",
+        "initiative",
+        "combat",
+        "spell",
+        "lookup",
+        "homebrew",
+        "mass",
+        "world",
+        "building",
+        "prep",
+        "vtt",
+        "foundry",
+        "roll20",
+        "art"
+      ],
+      "workflows": [
+        "ImprovGenerate",
+        "ArchitectMonster",
+        "ArchitectEncounter",
+        "ArchitectHomebrew",
+        "SessionDesigner",
+        "WarMechanics",
+        "WorldBuilder"
+      ],
+      "tier": "deferred"
+    },
+    "brightdata": {
+      "name": "BrightData",
+      "path": "BrightData/SKILL.md",
+      "fullDescription": "Progressive URL scraping. USE WHEN Bright Data, scrape URL, web scraping tiers. SkillSearch('brightdata') for docs.",
+      "triggers": [
+        "bright",
+        "data",
+        "scrape",
+        "url",
+        "web",
+        "scraping",
+        "tiers"
+      ],
+      "workflows": [
+        "OSINT"
+      ],
+      "tier": "deferred"
+    },
+    "dailybriefing": {
+      "name": "DailyBriefing",
+      "path": "DailyBriefing/SKILL.md",
+      "fullDescription": "Personalized morning briefings with modular sections. USE WHEN morning briefing, daily briefing, start my day, what's on my schedule, daily summary.",
+      "triggers": [
+        "morning",
+        "briefing",
+        "daily",
+        "start",
+        "day",
+        "whats",
+        "schedule",
+        "summary"
+      ],
+      "workflows": [
+        "GenerateBriefing"
+      ],
+      "tier": "deferred"
+    },
+    "systemflowchart": {
+      "name": "SystemFlowchart",
+      "path": "SystemFlowchart/SKILL.md",
+      "fullDescription": "Kaya system architecture visualization and documentation. USE WHEN system diagram, architecture flowchart, visualize Kaya, system map, how does Kaya work, show system structure, update architecture diagram.",
+      "triggers": [
+        "system",
+        "diagram",
+        "architecture",
+        "flowchart",
+        "visualize",
+        "kaya",
+        "map",
+        "how",
+        "does",
+        "work",
+        "show",
+        "structure",
+        "update"
+      ],
+      "workflows": [
+        "GenerateArchitecture",
+        "SessionLifecycle",
+        "SkillMap",
+        "MemoryStructure"
+      ],
+      "tier": "deferred"
+    },
+    "createskill": {
+      "name": "CreateSkill",
+      "path": "CreateSkill/SKILL.md",
+      "fullDescription": "Create and validate skills. USE WHEN create skill, new skill, skill structure, canonicalize. SkillSearch('createskill') for docs.",
+      "triggers": [
+        "create",
+        "skill",
+        "new",
+        "structure",
+        "canonicalize"
+      ],
+      "workflows": [
+        "Create",
+        "CompanyDueDiligence",
+        "WorkflowName",
+        "CreateSkill",
+        "ValidateSkill",
+        "UpdateSkill",
+        "CanonicalizeSkill"
+      ],
+      "tier": "deferred"
+    },
+    "anki": {
+      "name": "Anki",
+      "path": "Anki/SKILL.md",
+      "fullDescription": "Direct Anki flashcard management via CLI. USE WHEN create flashcard, anki card, deck management, review stats, note type, batch cards, anki sync.",
+      "triggers": [
+        "create",
+        "flashcard",
+        "anki",
+        "card",
+        "deck",
+        "management",
+        "review",
+        "stats",
+        "note",
+        "type",
+        "batch",
+        "cards",
+        "sync"
+      ],
+      "workflows": [
+        "Default"
+      ],
+      "tier": "deferred"
+    },
+    "simulation": {
+      "name": "Simulation",
+      "path": "Simulation/SKILL.md",
+      "fullDescription": "Sandboxed AI agent testing with fault injection, behavioral verification, workflow replay, and stress testing. USE WHEN simulate agent, test workflow, fault injection, chaos test, stress test, behavioral test, replay session, sandbox test, property test, agent resilience.",
+      "triggers": [
+        "simulate",
+        "agent",
+        "test",
+        "workflow",
+        "fault",
+        "injection",
+        "chaos",
+        "stress",
+        "behavioral",
+        "replay",
+        "session",
+        "sandbox",
+        "property",
+        "resilience"
+      ],
+      "workflows": [
+        "RunScenario",
+        "ReplaySession",
+        "StressTest"
+      ],
+      "tier": "deferred"
+    },
+    "agents": {
+      "name": "Agents",
+      "path": "Agents/SKILL.md",
+      "fullDescription": "Dynamic agent composition and management system. USE WHEN user says create custom agents, spin up custom agents, specialized agents, OR asks for agent personalities, available traits, agent voices. Handles custom agent creation, personality assignment, voice mapping, and parallel agent orchestration.",
+      "triggers": [
+        "create",
+        "custom",
+        "agents",
+        "spin",
+        "specialized",
+        "asks",
+        "agent",
+        "personalities",
+        "available",
+        "traits",
+        "voices",
+        "voice"
+      ],
+      "workflows": [
+        "CREATECUSTOMAGENT",
+        "CreateCustomAgent",
+        "LISTTRAITS",
+        "ListTraits",
+        "SPAWNPARALLEL",
+        "SpawnParallelAgents",
+        "CORE"
+      ],
+      "tier": "deferred"
+    },
+    "knowledgegraph": {
+      "name": "KnowledgeGraph",
+      "path": "KnowledgeGraph/SKILL.md",
+      "fullDescription": "Interactive knowledge graph navigation and exploration of Obsidian vault. USE WHEN knowledge graph, obsidian graph, vault navigation, what do I know about, knowledge gaps, concept clusters, related notes, graph analysis, vault exploration, visualize graph, show graph, interactive graph.",
+      "triggers": [
+        "knowledge",
+        "graph",
+        "obsidian",
+        "vault",
+        "navigation",
+        "what",
+        "know",
+        "gaps",
+        "concept",
+        "clusters",
+        "related",
+        "notes",
+        "analysis",
+        "exploration",
+        "visualize",
+        "show",
+        "interactive"
+      ],
+      "workflows": [
+        "Explore",
+        "Analyze",
+        "Discover",
+        "Visualize"
+      ],
+      "tier": "deferred"
+    },
+    "osint": {
+      "name": "OSINT",
+      "path": "OSINT/SKILL.md",
+      "fullDescription": "Open source intelligence gathering. USE WHEN OSINT, due diligence, background check, research person, company intel, investigate. SkillSearch('osint') for docs.",
+      "triggers": [
+        "osint",
+        "due",
+        "diligence",
+        "background",
+        "check",
+        "research",
+        "person",
+        "company",
+        "intel",
+        "investigate"
+      ],
+      "workflows": [
+        "PeopleLookup",
+        "CompanyLookup",
+        "CompanyDueDiligence",
+        "EntityLookup"
+      ],
+      "tier": "deferred"
+    },
+    "system": {
+      "name": "System",
+      "path": "System/SKILL.md",
+      "fullDescription": "System maintenance with three core operations - integrity check (find/fix broken references), document session (current transcript), document recent (catch-up since last update). Plus security workflows. USE WHEN integrity check, audit system, document session, document this session, document today, document recent, catch up docs, what's undocumented, check for secrets, security scan, privacy check, OR asking about past work (\"we just worked on\", \"remember when we\").",
+      "triggers": [
+        "integrity",
+        "check",
+        "audit",
+        "system",
+        "document",
+        "session",
+        "this",
+        "today",
+        "recent",
+        "catch",
+        "docs",
+        "whats",
+        "undocumented",
+        "secrets",
+        "security",
+        "scan",
+        "privacy",
+        "asking",
+        "past",
+        "work",
+        "(we",
+        "just",
+        "worked",
+        "remember",
+        "when",
+        "we)"
+      ],
+      "workflows": [
+        "CORE",
+        "IntegrityCheck",
+        "DocumentSession",
+        "DocumentRecent",
+        "SecretScanning",
+        "PrivacyCheck",
+        "WorkContextRecall"
+      ],
+      "tier": "deferred"
+    },
+    "browser": {
+      "name": "Browser",
+      "path": "Browser/SKILL.md",
+      "fullDescription": "Debug-first browser automation with always-on visibility. Console logs, network requests, and errors captured by default. USE WHEN browser, screenshot, debug web, verify UI, troubleshoot frontend.",
+      "triggers": [
+        "browser",
+        "screenshot",
+        "debug",
+        "web",
+        "verify",
+        "troubleshoot",
+        "frontend",
+        "automation"
+      ],
+      "workflows": [
+        "Browser"
+      ],
+      "tier": "deferred"
+    },
+    "autonomouswork": {
+      "name": "AutonomousWork",
+      "path": "AutonomousWork/SKILL.md",
+      "fullDescription": "Orchestrator of orchestrators for autonomous execution of development, research, and content work. Claude session drives orchestration, delegating to real Claude Code agents and ralph loops. USE WHEN work start, work status, work next, autonomous task execution, pick up from queue.",
+      "triggers": [
+        "work",
+        "start",
+        "status",
+        "next",
+        "autonomous",
+        "task",
+        "execution",
+        "pick",
+        "queue",
+        "research"
+      ],
+      "workflows": [
+        "THEALGORITHM",
+        "Orchestrate"
+      ],
+      "tier": "deferred"
+    },
+    "skillaudit": {
+      "name": "SkillAudit",
+      "path": "SkillAudit/SKILL.md",
+      "fullDescription": "Deep skill analysis, evaluation, and optimization system. USE WHEN audit skill, evaluate skill, analyze skills, skill quality, skill review, consolidate skills, group workflows, abstraction analysis, improve skill, skill health, skill report.",
+      "triggers": [
+        "audit",
+        "skill",
+        "evaluate",
+        "analyze",
+        "skills",
+        "quality",
+        "review",
+        "consolidate",
+        "group",
+        "workflows",
+        "abstraction",
+        "analysis",
+        "improve",
+        "health",
+        "report"
+      ],
+      "workflows": [
+        "AuditSingle",
+        "AuditAll",
+        "DeepTechnicalAnalysis",
+        "AnalyzeEcosystem",
+        "ResearchBestPractices"
+      ],
+      "tier": "deferred"
+    },
+    "uibuilder": {
+      "name": "UIBuilder",
+      "path": "UIBuilder/SKILL.md",
+      "fullDescription": "Zero-cost AI UI development workflow using Claude Code, Gemini MCP, Browse.ts CLI, and shadcn/ui. USE WHEN build ui, create component, ui builder, generate ui, design component, mockup, prototype ui, shadcn component, create page, create layout, build interface, ui workflow, recreate ui, clone ui, screenshot to code.",
+      "triggers": [
+        "build",
+        "create",
+        "component",
+        "builder",
+        "generate",
+        "design",
+        "mockup",
+        "prototype",
+        "shadcn",
+        "page",
+        "layout",
+        "interface",
+        "workflow",
+        "recreate",
+        "clone",
+        "screenshot",
+        "code",
+        "mcp"
+      ],
+      "workflows": [
+        "BuildFromText",
+        "BuildFromScreenshot",
+        "BuildFromUrl",
+        "Iterate",
+        "Preview",
+        "InstallComponents",
+        "AnalyzeDesign",
+        "ScaffoldProject"
+      ],
+      "tier": "deferred"
+    },
+    "telegram": {
+      "name": "Telegram",
+      "path": "Telegram/SKILL.md",
+      "fullDescription": "Two-way Telegram messaging with Kaya. Text and voice messages are processed by Claude with Kaya context. USE WHEN send telegram, telegram message, message me, notify mobile, text me, mobile notification, OR telegram.",
+      "triggers": [
+        "send",
+        "telegram",
+        "message",
+        "notify",
+        "mobile",
+        "text",
+        "notification",
+        "voice"
+      ],
+      "workflows": [
+        "SendMessage"
+      ],
+      "tier": "deferred"
+    },
+    "automaintenance": {
+      "name": "AutoMaintenance",
+      "path": "AutoMaintenance/SKILL.md",
+      "fullDescription": "Autonomous system maintenance workflows. USE WHEN maintenance daily, maintenance weekly, maintenance monthly, system health, automated cleanup, launchd jobs, scheduled maintenance.",
+      "triggers": [
+        "maintenance",
+        "daily",
+        "weekly",
+        "monthly",
+        "system",
+        "health",
+        "automated",
+        "cleanup",
+        "launchd",
+        "jobs",
+        "scheduled"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "contentaggregator": {
+      "name": "ContentAggregator",
+      "path": "ContentAggregator/SKILL.md",
+      "fullDescription": "Content and news aggregation pipeline that collects, filters, deduplicates, and delivers high-value content from RSS feeds and other sources. USE WHEN content aggregation, news digest, RSS feeds, content sources, morning news, aggregate content, news pipeline, add RSS feed, manage sources, generate digest.",
+      "triggers": [
+        "content",
+        "aggregation",
+        "news",
+        "digest",
+        "rss",
+        "feeds",
+        "sources",
+        "morning",
+        "aggregate",
+        "pipeline",
+        "add",
+        "feed",
+        "manage",
+        "generate"
+      ],
+      "workflows": [
+        "Collect",
+        "Digest",
+        "Sources"
+      ],
+      "tier": "deferred"
+    },
+    "firstprinciples": {
+      "name": "FirstPrinciples",
+      "path": "FirstPrinciples/SKILL.md",
+      "fullDescription": "First principles analysis. USE WHEN first principles, fundamental, root cause, decompose. SkillSearch('firstprinciples') for docs.",
+      "triggers": [
+        "first",
+        "principles",
+        "fundamental",
+        "root",
+        "cause",
+        "decompose"
+      ],
+      "workflows": [
+        "Deconstruct",
+        "Challenge",
+        "Reconstruct"
+      ],
+      "tier": "deferred"
+    },
+    "designer": {
+      "name": "Designer",
+      "path": "Designer/SKILL.md",
+      "fullDescription": "Interior design intelligence with room analysis, style matching, color palettes, room state tracking, and furniture search. USE WHEN interior design, decorate, room layout, furniture, cozy, color scheme, reading nook, home decor, style room, room analysis, mood board, lighting, cozify.",
+      "triggers": [
+        "interior",
+        "design",
+        "decorate",
+        "room",
+        "layout",
+        "furniture",
+        "cozy",
+        "color",
+        "scheme",
+        "reading",
+        "nook",
+        "home",
+        "decor",
+        "style",
+        "analysis",
+        "mood",
+        "board",
+        "lighting",
+        "cozify"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "_ralphloop": {
+      "name": "_RALPHLOOP",
+      "path": "_RALPHLOOP/SKILL.md",
+      "fullDescription": "Autonomous iteration engine based on Geoffrey Huntley's Ralph Wiggum technique. USE WHEN tasks need persistent iteration until success, long-running autonomous work, \"iterate until\", \"keep trying until\", \"ralph loop\", or when tests/builds need to pass before completion. Integrates with THEALGORITHM for ISC-driven execution.",
+      "triggers": [
+        "tasks",
+        "need",
+        "persistent",
+        "iteration",
+        "until",
+        "success",
+        "long-running",
+        "autonomous",
+        "work",
+        "iterate",
+        "keep",
+        "trying",
+        "ralph",
+        "loop",
+        "when",
+        "tests/builds",
+        "pass",
+        "before",
+        "completion"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "calendarassistant": {
+      "name": "CalendarAssistant",
+      "path": "CalendarAssistant/SKILL.md",
+      "fullDescription": "Google Calendar automation via CLI with intelligent goal-aligned scheduling, automatic break insertion, conflict resolution, decision rationale, schedule health reports, batch operations, behavioral learning, feedback-weighted scoring, and invitation handling. USE WHEN schedule meeting, check calendar, list events, add event, delete event, find free time, respond to invite, calendar agenda, schedule smart, optimize calendar, goal alignment, break schedule, calendar optimize, analyze schedule, deep work, focus time, schedule optimization, calendar intelligence, time blocking, schedule health, batch schedule, invitation rules, learn patterns, auto accept.",
+      "triggers": [
+        "schedule",
+        "meeting",
+        "check",
+        "calendar",
+        "list",
+        "events",
+        "add",
+        "event",
+        "delete",
+        "find",
+        "free",
+        "time",
+        "respond",
+        "invite",
+        "agenda",
+        "smart",
+        "optimize",
+        "goal",
+        "alignment",
+        "break",
+        "analyze",
+        "deep",
+        "work",
+        "focus",
+        "optimization",
+        "intelligence",
+        "blocking",
+        "health",
+        "batch",
+        "invitation",
+        "rules",
+        "learn",
+        "patterns",
+        "auto",
+        "accept",
+        "automation"
+      ],
+      "workflows": [
+        "THEALGORITHM"
+      ],
+      "tier": "deferred"
+    },
+    "fabric": {
+      "name": "Fabric",
+      "path": "Fabric/SKILL.md",
+      "fullDescription": "Intelligent prompt pattern system with 237 specialized patterns for content analysis, extraction, and transformation. USE WHEN user says 'use fabric', 'fabric pattern', 'run fabric', 'update fabric', 'update patterns', 'sync fabric', 'extract wisdom', 'summarize with fabric', 'create threat model', 'analyze with fabric', OR any request to apply Fabric patterns to content.",
+      "triggers": [
+        "use",
+        "fabric",
+        "pattern",
+        "run",
+        "update",
+        "patterns",
+        "sync",
+        "extract",
+        "wisdom",
+        "summarize",
+        "create",
+        "threat",
+        "model",
+        "analyze",
+        "any",
+        "request",
+        "apply",
+        "content"
+      ],
+      "workflows": [
+        "ExecutePattern",
+        "UpdatePatterns"
+      ],
+      "tier": "deferred"
+    },
+    "agentmonitor": {
+      "name": "AgentMonitor",
+      "path": "AgentMonitor/SKILL.md",
+      "fullDescription": "Agent monitoring and evaluation system for Kaya workflows. Supports batch evaluation and live real-time monitoring with anomaly detection. USE WHEN monitor agent, evaluate agent, agent performance, check agent quality, review workflow, agent traces, retro analysis, baseline metrics, agent alerts, compliance check, live monitoring, watch agents, dashboard, anomaly detection.",
+      "triggers": [
+        "monitor",
+        "agent",
+        "evaluate",
+        "performance",
+        "check",
+        "quality",
+        "review",
+        "workflow",
+        "traces",
+        "retro",
+        "analysis",
+        "baseline",
+        "metrics",
+        "alerts",
+        "compliance",
+        "live",
+        "monitoring",
+        "watch",
+        "agents",
+        "dashboard",
+        "anomaly",
+        "detection"
+      ],
+      "workflows": [
+        "THEALGORITHM"
+      ],
+      "tier": "deferred"
+    },
+    "obsidian": {
+      "name": "Obsidian",
+      "path": "Obsidian/SKILL.md",
+      "fullDescription": "Transform unstructured Obsidian notes into structured templates with frontmatter and tags. USE WHEN obsidian template, note template, structure note, transform note, analyze note, tag suggestion, frontmatter, obsidian vault, note classification.",
+      "triggers": [
+        "obsidian",
+        "template",
+        "note",
+        "structure",
+        "transform",
+        "analyze",
+        "tag",
+        "suggestion",
+        "frontmatter",
+        "vault",
+        "classification"
+      ],
+      "workflows": [
+        "Transform",
+        "Analyze"
+      ],
+      "tier": "deferred"
+    },
+    "thealgorithm": {
+      "name": "THEALGORITHM",
+      "path": "THEALGORITHM/SKILL.md",
+      "fullDescription": "Universal execution engine using scientific method to achieve ideal state. USE WHEN complex tasks, multi-step work, \"run the algorithm\", \"use the algorithm\", OR any non-trivial request that benefits from structured execution with ISC (Ideal State Criteria) tracking.",
+      "triggers": [
+        "complex",
+        "tasks",
+        "multi-step",
+        "work",
+        "run",
+        "algorithm",
+        "use",
+        "any",
+        "non-trivial",
+        "request",
+        "that",
+        "benefits",
+        "structured",
+        "execution",
+        "isc",
+        "(ideal",
+        "state",
+        "criteria)",
+        "tracking"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "documents": {
+      "name": "Documents",
+      "path": "Documents/SKILL.md",
+      "fullDescription": "Document processing. USE WHEN document, process file. SkillSearch('documents') for docs.",
+      "triggers": [
+        "document",
+        "process",
+        "file"
+      ],
+      "workflows": [
+        "DOCX",
+        "PDF",
+        "PPTX",
+        "XLSX"
+      ],
+      "tier": "deferred"
+    },
+    "xlsx": {
+      "name": "Xlsx",
+      "path": "Documents/Xlsx/SKILL.md",
+      "fullDescription": "Excel file processing. USE WHEN xlsx, Excel, spreadsheet. SkillSearch('xlsx') for docs.",
+      "triggers": [
+        "xlsx",
+        "excel",
+        "spreadsheet"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "pdf": {
+      "name": "Pdf",
+      "path": "Documents/Pdf/SKILL.md",
+      "fullDescription": "PDF processing. USE WHEN pdf, PDF file. SkillSearch('pdf') for docs.",
+      "triggers": [
+        "pdf",
+        "file"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "pptx": {
+      "name": "Pptx",
+      "path": "Documents/Pptx/SKILL.md",
+      "fullDescription": "PowerPoint processing. USE WHEN pptx, PowerPoint, slides. SkillSearch('pptx') for docs.",
+      "triggers": [
+        "pptx",
+        "powerpoint",
+        "slides"
+      ],
+      "workflows": [
+        "CRITICAL",
+        "LAYOUT",
+        "VALIDATION",
+        "IMPORTANT",
+        "WARNING"
+      ],
+      "tier": "deferred"
+    },
+    "docx": {
+      "name": "Docx",
+      "path": "Documents/Docx/SKILL.md",
+      "fullDescription": "Word document processing. USE WHEN docx, Word document. SkillSearch('docx') for docs.",
+      "triggers": [
+        "docx",
+        "word",
+        "document"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "becreative": {
+      "name": "BeCreative",
+      "path": "BeCreative/SKILL.md",
+      "fullDescription": "Extended thinking mode. USE WHEN be creative, deep thinking, deep thinking, extended reasoning. SkillSearch('becreative') for docs.",
+      "triggers": [
+        "creative",
+        "deep",
+        "thinking",
+        "extended",
+        "reasoning"
+      ],
+      "workflows": [
+        "ExtendedThinking"
+      ],
+      "tier": "deferred"
+    },
+    "devgraph": {
+      "name": "DevGraph",
+      "path": "DevGraph/SKILL.md",
+      "fullDescription": "Graph-based development knowledge graph with session, trace, error, and commit linking. USE WHEN devgraph, development graph, trace error, what caused, session history, show connections, root cause, graph stats.",
+      "triggers": [
+        "devgraph",
+        "development",
+        "graph",
+        "trace",
+        "error",
+        "what",
+        "caused",
+        "session",
+        "history",
+        "show",
+        "connections",
+        "root",
+        "cause",
+        "stats"
+      ],
+      "workflows": [
+        "Ingest",
+        "Query",
+        "Trace",
+        "Synthesize"
+      ],
+      "tier": "deferred"
+    },
+    "promptinjection": {
+      "name": "PromptInjection",
+      "path": "PromptInjection/SKILL.md",
+      "fullDescription": "Prompt injection testing. USE WHEN prompt injection, jailbreak, LLM security, AI security assessment, pentest AI application, test chatbot vulnerabilities.",
+      "triggers": [
+        "prompt",
+        "injection",
+        "jailbreak",
+        "llm",
+        "security",
+        "assessment",
+        "pentest",
+        "application",
+        "test",
+        "chatbot",
+        "vulnerabilities"
+      ],
+      "workflows": [
+        "CompleteAssessment",
+        "Reconnaissance",
+        "DirectInjectionTesting",
+        "IndirectInjectionTesting",
+        "MultiStageAttacks"
+      ],
+      "tier": "deferred"
+    },
+    "recon": {
+      "name": "Recon",
+      "path": "Recon/SKILL.md",
+      "fullDescription": "Security reconnaissance. USE WHEN recon, reconnaissance, bug bounty, attack surface. SkillSearch('recon') for docs.",
+      "triggers": [
+        "recon",
+        "reconnaissance",
+        "bug",
+        "bounty",
+        "attack",
+        "surface",
+        "security"
+      ],
+      "workflows": [
+        "OSINT"
+      ],
+      "tier": "deferred"
+    },
+    "kayaupgrade": {
+      "name": "KayaUpgrade",
+      "path": "KayaUpgrade/SKILL.md",
+      "fullDescription": "Extract system improvements from content AND monitor external sources (Anthropic ecosystem, YouTube). USE WHEN upgrade, improve system, system upgrade, analyze for improvements, check Anthropic, Anthropic changes, new Claude features, check YouTube, new videos. SkillSearch('upgrade') for docs.",
+      "triggers": [
+        "upgrade",
+        "improve",
+        "system",
+        "analyze",
+        "improvements",
+        "check",
+        "anthropic",
+        "changes",
+        "new",
+        "claude",
+        "features",
+        "youtube",
+        "videos",
+        "extract"
+      ],
+      "workflows": [
+        "ASPIRATIONAL",
+        "CheckForUpgrades",
+        "ResearchUpgrade",
+        "ReleaseNotesDeepDive",
+        "FindSources"
+      ],
+      "tier": "deferred"
+    },
+    "webassessment": {
+      "name": "WebAssessment",
+      "path": "WebAssessment/SKILL.md",
+      "fullDescription": "Web security assessment. USE WHEN web assessment, pentest, security testing, vulnerability scan. SkillSearch('webassessment') for docs.",
+      "triggers": [
+        "web",
+        "assessment",
+        "pentest",
+        "security",
+        "testing",
+        "vulnerability",
+        "scan"
+      ],
+      "workflows": [
+        "UnderstandApplication",
+        "CreateThreatModel"
+      ],
+      "tier": "deferred"
+    },
+    "apify": {
+      "name": "Apify",
+      "path": "Apify/SKILL.md",
+      "fullDescription": "Social media scraping, business data, e-commerce via Apify actors. USE WHEN Twitter, Instagram, LinkedIn, TikTok, YouTube, Facebook, Google Maps, Amazon scraping.",
+      "triggers": [
+        "twitter",
+        "instagram",
+        "linkedin",
+        "tiktok",
+        "youtube",
+        "facebook",
+        "google",
+        "maps",
+        "amazon",
+        "scraping"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "lucidtasks": {
+      "name": "LucidTasks",
+      "path": "LucidTasks/SKILL.md",
+      "fullDescription": "AI-first task management system replacing Asana. USE WHEN tasks, task management, add task, complete task, task inbox, task projects, task search, task stats, lucid tasks, lt, todo, to-do, my tasks, what should I work on, next task, task migration.",
+      "triggers": [
+        "tasks",
+        "task",
+        "management",
+        "add",
+        "complete",
+        "inbox",
+        "projects",
+        "search",
+        "stats",
+        "lucid",
+        "todo",
+        "to-do",
+        "what",
+        "should",
+        "work",
+        "next",
+        "migration"
+      ],
+      "workflows": [
+        "AddTask",
+        "CompleteTask",
+        "InboxReview",
+        "NextTask"
+      ],
+      "tier": "deferred"
+    },
+    "gmail": {
+      "name": "Gmail",
+      "path": "Gmail/SKILL.md",
+      "fullDescription": "Gmail automation and email management via CLI. USE WHEN send email, draft email, search emails, gmail inbox, email labels, email filters, batch email operations, read email.",
+      "triggers": [
+        "send",
+        "email",
+        "draft",
+        "search",
+        "emails",
+        "gmail",
+        "inbox",
+        "labels",
+        "filters",
+        "batch",
+        "operations",
+        "read",
+        "automation"
+      ],
+      "workflows": [
+        "Gmail"
+      ],
+      "tier": "deferred"
+    },
+    "agentprojectsetup": {
+      "name": "AgentProjectSetup",
+      "path": "AgentProjectSetup/SKILL.md",
+      "fullDescription": "Complete infrastructure setup for AI agent coding projects. USE WHEN setting up agent project, agent infrastructure, ai agent repo, agent testing, agent sandbox, OR agent CI/CD. Creates GitHub repos, sandbox environments, test infrastructure, and production-grade tooling.",
+      "triggers": [
+        "setting",
+        "agent",
+        "project",
+        "infrastructure",
+        "repo",
+        "testing",
+        "sandbox",
+        "ci/cd"
+      ],
+      "workflows": [
+        "CreateProject",
+        "AddEnvironment",
+        "AddTesting",
+        "AddCICD",
+        "AddObservability"
+      ],
+      "tier": "deferred"
+    },
+    "informationmanager": {
+      "name": "InformationManager",
+      "path": "InformationManager/SKILL.md",
+      "fullDescription": "Autonomous context collection and information management system organized around four purposes: Refresh (in-place updates), Sync (source → Kaya), Organize (routing), and Enhance (enrichment). USE WHEN gather context, update context, DTR, alignment, habits, goals, missions, challenges, strategies, status update, TELOS data, tracking data, goal progress, refresh context, context status, obsidian context, learnings, how am I doing, progress check, asana tasks, calendar events, projects context.",
+      "triggers": [
+        "gather",
+        "context",
+        "update",
+        "dtr",
+        "alignment",
+        "habits",
+        "goals",
+        "missions",
+        "challenges",
+        "strategies",
+        "status",
+        "telos",
+        "data",
+        "tracking",
+        "goal",
+        "progress",
+        "refresh",
+        "obsidian",
+        "learnings",
+        "how",
+        "doing",
+        "check",
+        "asana",
+        "tasks",
+        "calendar",
+        "events",
+        "projects"
+      ],
+      "workflows": [
+        "TELOS",
+        "THEALGORITHM"
+      ],
+      "tier": "deferred"
+    },
+    "contextmanager": {
+      "name": "ContextManager",
+      "path": "ContextManager/SKILL.md",
+      "fullDescription": "Dynamic context loading with progressive disclosure and token budgets. USE WHEN context loading, context profile, token budget, dynamic context, context management, reduce context, context optimization, what context is loaded.",
+      "triggers": [
+        "context",
+        "loading",
+        "profile",
+        "token",
+        "budget",
+        "dynamic",
+        "management",
+        "reduce",
+        "optimization",
+        "what",
+        "loaded"
+      ],
+      "workflows": [],
+      "tier": "deferred"
+    },
+    "geminisync": {
+      "name": "GeminiSync",
+      "path": "GeminiSync/SKILL.md",
+      "fullDescription": "Sync Kaya infrastructure from Claude Code to Gemini CLI. USE WHEN migrate to gemini, setup gemini, sync gemini, gemini hooks, update gemini config, gemini not working.",
+      "triggers": [
+        "migrate",
+        "gemini",
+        "setup",
+        "sync",
+        "hooks",
+        "update",
+        "config",
+        "not",
+        "working"
+      ],
+      "workflows": [
+        "Reset",
+        "Sync",
+        "Verify"
+      ],
+      "tier": "deferred"
+    }
+  }
+}

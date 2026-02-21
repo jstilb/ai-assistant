@@ -1,0 +1,42 @@
+# Task: Prompting Routes to Prompting
+# Prompt engineering request triggers Prompting skill
+
+id: kaya_skill_prompting_routes_prompting
+description: "Prompt engineering request like 'help write a better prompt' invokes Prompting skill"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Help me write a better prompt for code review"
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: prompting
+      max_calls: 20
+
+  - type: response_format_check
+    weight: 0.20
+    params:
+      format: full
+
+  - type: voice_line_check
+    weight: 0.20
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - skill_routing
+  - routing
+  - prompting
+  - capability
+
+created_at: "2026-02-11"

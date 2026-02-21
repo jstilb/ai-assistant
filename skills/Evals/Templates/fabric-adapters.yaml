@@ -1,0 +1,274 @@
+# Fabric Pattern Adapters for Evals
+#
+# Maps Fabric patterns to Evals grader configurations, allowing patterns
+# to be used as LLM rubric templates for evaluation.
+#
+# Usage in eval definition:
+#   graders:
+#     - type: llm_rubric
+#       template: fabric:arbiter-evaluate-quality
+#       config:
+#         axes: [clarity, completeness, accuracy]
+
+adapters:
+  # =============================================================================
+  # Arbiter Patterns - Multi-axis Quality Assessment
+  # =============================================================================
+
+  arbiter-evaluate-quality:
+    description: Multi-axis quality scoring (clarity, completeness, accuracy, etc.)
+    fabric_pattern: arbiter-evaluate-quality
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      axes:
+        - clarity
+        - completeness
+        - accuracy
+        - relevance
+        - depth
+    output_mapping:
+      score: "mean(axis_scores) / 10"  # Normalize to 0-1
+      passed: "mean(axis_scores) >= 7"
+
+  arbiter-general-evaluator:
+    description: Universal judgment for any content type
+    fabric_pattern: arbiter-general-evaluator
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      reasoning_first: true
+    output_mapping:
+      score: "score / 10"
+      passed: "score >= 7"
+
+  # =============================================================================
+  # Judge Patterns - Binary Good/Bad Assessment
+  # =============================================================================
+
+  judge_output:
+    description: Binary good/bad judgment with reasoning
+    fabric_pattern: judge_output
+    grader_type: llm_rubric
+    default_config:
+      scale: "pass-fail"
+      reasoning_first: true
+    output_mapping:
+      score: "passed ? 1.0 : 0.0"
+      passed: "judgment == 'good'"
+
+  # =============================================================================
+  # Analysis Patterns - Educational/Student Grading
+  # =============================================================================
+
+  analyze_answers:
+    description: Grade student answers against reference solutions
+    fabric_pattern: analyze_answers
+    grader_type: reference_comparison
+    default_config:
+      criteria:
+        - correctness
+        - completeness
+        - explanation_quality
+    output_mapping:
+      score: "grade_score / 100"
+      passed: "grade_score >= 70"
+
+  # =============================================================================
+  # Content Quality Patterns - For Output Quality Assessment
+  # =============================================================================
+
+  rate_ai_response:
+    description: Human-level comparison rating for AI outputs
+    fabric_pattern: rate_ai_response
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      comparison_target: "human-expert"
+    output_mapping:
+      score: "rating / 10"
+      passed: "rating >= 7"
+
+  rate_ai_result:
+    description: Multi-dimension rating using 4096-dimension framework
+    fabric_pattern: rate_ai_result
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      dimensions: "comprehensive"
+    output_mapping:
+      score: "composite_score / 10"
+      passed: "composite_score >= 7"
+
+  rate_content:
+    description: General content quality assessment
+    fabric_pattern: rate_content
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      aspects:
+        - quality
+        - relevance
+        - usefulness
+    output_mapping:
+      score: "mean(aspect_scores) / 10"
+      passed: "mean(aspect_scores) >= 7"
+
+  # =============================================================================
+  # Extraction/Analysis Patterns - For Research & Factual Evaluation
+  # =============================================================================
+
+  extract_wisdom:
+    description: Extract insights, ideas, and wisdom for research output evaluation
+    fabric_pattern: extract_wisdom
+    grader_type: extraction_completeness
+    default_config:
+      expected_sections:
+        - IDEAS
+        - INSIGHTS
+        - QUOTES
+        - HABITS
+        - FACTS
+        - REFERENCES
+    output_mapping:
+      score: "sections_found / total_sections"
+      passed: "sections_found >= 4"
+
+  analyze_claims:
+    description: Validate factual claims and supporting evidence
+    fabric_pattern: analyze_claims
+    grader_type: factual_verification
+    default_config:
+      verification_level: "thorough"
+      require_sources: true
+    output_mapping:
+      score: "verified_claims / total_claims"
+      passed: "verified_claims / total_claims >= 0.8"
+
+  create_threat_model:
+    description: Security threat model assessment for security-focused evals
+    fabric_pattern: create_threat_model
+    grader_type: llm_rubric
+    default_config:
+      scale: "1-10"
+      axes:
+        - threat_identification
+        - risk_assessment
+        - mitigation_completeness
+    output_mapping:
+      score: "mean(axis_scores) / 10"
+      passed: "mean(axis_scores) >= 7"
+
+  # =============================================================================
+  # SkillInvoker Integration (2026-02-02)
+  # =============================================================================
+  # These adapters can be invoked programmatically via SkillInvoker:
+  #
+  # import { invokeSkill } from '~/.claude/skills/CORE/Tools/SkillInvoker.ts';
+  #
+  # // Invoke Fabric pattern for eval grading
+  # const result = await invokeSkill({
+  #   skill: 'Fabric',
+  #   args: 'arbiter-evaluate-quality < content.txt'
+  # });
+  #
+  # This enables:
+  # - Dynamic grader selection based on eval type
+  # - Chaining multiple patterns for comprehensive evaluation
+  # - Consistent scoring across different eval suites
+
+# =============================================================================
+# Pattern Loading Configuration
+# =============================================================================
+
+fabric_patterns_dir: "${HOME}/.config/fabric/patterns"
+
+# How to load a pattern as a grader rubric
+loading:
+  # Path to system prompt within pattern directory
+  prompt_file: "system.md"
+
+  # Extract rubric from pattern's system prompt
+  rubric_extraction:
+    # The pattern's system prompt becomes the rubric
+    mode: "full_prompt"
+
+    # Optionally wrap in eval-specific instructions
+    wrapper: |
+      You are evaluating an AI agent's output. Use the following criteria:
+
+      {pattern_content}
+
+      Based on these criteria, evaluate the output and provide:
+      1. A score (using the scale specified)
+      2. Reasoning for your score
+      3. Specific areas for improvement
+
+# =============================================================================
+# Custom Axes for arbiter-evaluate-quality
+# =============================================================================
+
+available_axes:
+  clarity:
+    description: "How clear and understandable is the output?"
+    weight: 1.0
+
+  completeness:
+    description: "Does the output fully address what was asked?"
+    weight: 1.0
+
+  accuracy:
+    description: "Is the information correct and factual?"
+    weight: 1.5  # Higher weight for accuracy
+
+  relevance:
+    description: "Is the output relevant to the original request?"
+    weight: 1.0
+
+  depth:
+    description: "Does the output provide sufficient depth of analysis?"
+    weight: 0.8
+
+  actionability:
+    description: "Can the user act on this output?"
+    weight: 0.8
+
+  tone:
+    description: "Is the tone appropriate for the context?"
+    weight: 0.5
+
+# =============================================================================
+# Usage Examples
+# =============================================================================
+
+examples:
+  # Example 1: Use arbiter for quality assessment
+  - name: "Quality assessment with arbiter"
+    eval_config: |
+      graders:
+        - type: llm_rubric
+          template: fabric:arbiter-evaluate-quality
+          params:
+            axes: [clarity, accuracy, completeness]
+            scale: "1-10"
+
+  # Example 2: Use judge for binary pass/fail
+  - name: "Binary judgment with judge"
+    eval_config: |
+      graders:
+        - type: llm_rubric
+          template: fabric:judge_output
+          params:
+            criteria: "The output must correctly implement the requested feature"
+
+  # Example 3: Use general evaluator with custom rubric
+  - name: "Custom evaluation criteria"
+    eval_config: |
+      graders:
+        - type: llm_rubric
+          template: fabric:arbiter-general-evaluator
+          params:
+            custom_criteria: |
+              1. Does the code follow TypeScript best practices?
+              2. Are there appropriate error handlers?
+              3. Is the solution performant?

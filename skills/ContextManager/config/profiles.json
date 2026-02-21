@@ -1,0 +1,144 @@
+{
+  "profiles": {
+    "boot": {
+      "tokenBudget": 200,
+      "description": "Minimal boot context - identity + format rules",
+      "required": [],
+      "recommended": [],
+      "optional": [],
+      "excludes": ["*"]
+    },
+    "development": {
+      "tokenBudget": 1200,
+      "description": "Code, projects, bugs, features",
+      "required": [
+        "skills/CORE/CLI-INDEX.md"
+      ],
+      "recommended": [
+        "context/ProjectsContext.md",
+        "context/LearningPatternsContext.md",
+        "context/LearningsContext.md"
+      ],
+      "optional": [
+        "context/SkillsContext.md"
+      ],
+      "excludes": [
+        "skills/CORE/USER/TELOS/*",
+        "context/CalendarContext.md",
+        "context/ObsidianContext.md"
+      ]
+    },
+    "life-coaching": {
+      "tokenBudget": 2200,
+      "description": "Goals, challenges, strategies, progress",
+      "required": [
+        "skills/CORE/USER/TELOS/MISSIONS.md",
+        "skills/CORE/USER/TELOS/GOALS.md",
+        "skills/CORE/USER/TELOS/CHALLENGES.md",
+        "skills/CORE/USER/TELOS/STATUS.md",
+        "skills/CORE/USER/TELOS/STRATEGIES.md"
+      ],
+      "recommended": [
+        "context/TelosContext.md"
+      ],
+      "optional": [],
+      "excludes": [
+        "context/ProjectsContext.md",
+        "context/SkillsContext.md"
+      ]
+    },
+    "planning": {
+      "tokenBudget": 2500,
+      "description": "Weekly/monthly planning combining goals, calendar, and tasks",
+      "required": [
+        "skills/CORE/USER/TELOS/GOALS.md",
+        "skills/CORE/USER/TELOS/STRATEGIES.md",
+        "context/CalendarContext.md"
+      ],
+      "recommended": [
+        "context/LucidTasksContext.md",
+        "skills/CORE/USER/TELOS/STATUS.md"
+      ],
+      "optional": [
+        "skills/CORE/USER/TELOS/MISSIONS.md"
+      ],
+      "excludes": [
+        "context/ObsidianContext.md",
+        "context/LearningsContext.md"
+      ]
+    },
+    "scheduling": {
+      "tokenBudget": 800,
+      "description": "Calendar, meetings, availability",
+      "required": [
+        "context/CalendarContext.md"
+      ],
+      "recommended": [
+        "context/LucidTasksContext.md"
+      ],
+      "optional": [],
+      "excludes": [
+        "skills/CORE/USER/TELOS/*",
+        "context/ProjectsContext.md",
+        "context/ObsidianContext.md"
+      ]
+    },
+    "task-management": {
+      "tokenBudget": 1000,
+      "description": "LucidTasks tasks, deadlines, project tracking",
+      "required": [
+        "context/LucidTasksContext.md"
+      ],
+      "recommended": [
+        "context/CalendarContext.md",
+        "context/ProjectsContext.md"
+      ],
+      "optional": [],
+      "excludes": [
+        "context/ObsidianContext.md",
+        "context/LearningsContext.md"
+      ]
+    },
+    "knowledge-lookup": {
+      "tokenBudget": 1000,
+      "description": "Obsidian notes, knowledge base, research",
+      "required": [
+        "context/ObsidianContext.md"
+      ],
+      "recommended": [
+        "context/LearningsContext.md"
+      ],
+      "optional": [],
+      "excludes": [
+        "context/CalendarContext.md",
+        "context/LucidTasksContext.md"
+      ]
+    },
+    "general": {
+      "tokenBudget": 800,
+      "description": "Ambiguous or mixed-intent requests",
+      "required": [],
+      "recommended": [
+        "skills/CORE/CONTEXT-INDEX.md"
+      ],
+      "optional": [],
+      "excludes": []
+    },
+    "conversational": {
+      "tokenBudget": 200,
+      "description": "Greetings, simple Q&A, confirmations",
+      "required": [],
+      "recommended": [],
+      "optional": [],
+      "excludes": ["*"]
+    },
+    "voice-conversation": {
+      "tokenBudget": 500,
+      "description": "Lightweight context for real-time voice sessions",
+      "required": [],
+      "recommended": ["context/TelosContext.md"],
+      "optional": ["context/CalendarContext.md"],
+      "excludes": ["context/ProjectsContext.md", "context/SkillsContext.md", "skills/CORE/CLI-INDEX.md"]
+    }
+  }
+}

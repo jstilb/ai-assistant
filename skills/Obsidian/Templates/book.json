@@ -1,0 +1,18 @@
+{
+  "type": "book",
+  "label": "Book Notes",
+  "description": "Book summaries with key takeaways, quotes, and ratings",
+  "requiredSections": ["Summary", "Key Takeaways"],
+  "optionalSections": ["About", "Quotes", "Chapter Notes", "Personal Reflections", "Rating", "Recommendations", "Related Books", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["author", "isbn", "rating", "status", "genre", "year_published", "year_read", "source", "aliases"]
+  },
+  "signals": {
+    "keywords": ["author", "book", "chapter", "quote", "takeaway", "summary", "read", "rating", "page", "insight", "lesson", "review"],
+    "contentPatterns": ["## Summary", "## Key Takeaways", "## Quotes", "## Chapter", "Rating:", "Author:"],
+    "folderBias": ["Book Summaries & Takeaways"]
+  },
+  "stubThreshold": 40,
+  "version": 1
+}

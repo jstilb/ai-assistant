@@ -1,0 +1,35 @@
+# Task: Compare Skill Routing Preservation
+# Pairwise comparison verifying skill routing still works correctly after changes
+
+id: kaya_cmp_skill_routing_preserved
+description: "Compare skill routing accuracy - verify routing still works correctly after context changes"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Send an email to Sarah about the project deadline moving to next Friday"
+  baseline_ref: "pre-streamline"
+
+graders:
+  - type: pairwise_comparison
+    weight: 1.0
+    required: true
+    params:
+      reference: "skills/Evals/References/Kaya/baselines/pre-streamline/kaya_cmp_skill_routing_preserved.md"
+      position_swap: true
+      criteria:
+        - routing_accuracy
+        - tool_invocation
+        - completeness
+
+trials: 3
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - comparison
+  - before_after
+  - skill_routing
+
+created_at: "2026-02-11"

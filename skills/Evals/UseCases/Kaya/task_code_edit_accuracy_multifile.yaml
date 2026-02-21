@@ -1,0 +1,66 @@
+# Task: Multi-file Edit Accuracy
+# Multi-file edit with cross-file dependencies is correct and consistent
+
+id: kaya_code_edit_accuracy_multifile
+description: "Multi-file edit with cross-file dependencies is correct and consistent"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Rename the UserService class to AccountService across the codebase"
+
+graders:
+  - type: binary_tests
+    weight: 0.30
+    required: false
+    params:
+      test_command: "bun test"
+
+  - type: static_analysis
+    weight: 0.15
+    required: false
+    params:
+      checks:
+        - "no_new_lint_errors"
+        - "type_check_passes"
+
+  - type: tool_calls
+    weight: 0.20
+    required: false
+    params:
+      required:
+        - tool: "Read"
+        - tool: "Edit"
+
+  - type: llm_rubric
+    weight: 0.25
+    required: false
+    params:
+      rubric: |
+        Evaluate multi-file edit correctness:
+        1. Are cross-file dependencies handled correctly?
+        2. Are imports and exports consistent?
+        3. Are type signatures aligned across files?
+        4. Is the change coherent as a whole?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: state_check
+    weight: 0.10
+    required: false
+    params:
+      conditions:
+        - "tests_pass_after_edit"
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - coding
+  - edit_accuracy
+  - multifile
+  - capability
+
+created_at: "2026-02-11"

@@ -1,0 +1,279 @@
+#compdef kaya-cli
+
+# kaya-cli Zsh completion
+# Install: Add to fpath and run compinit
+#   fpath=(~/.claude/bin/completions $fpath)
+#   autoload -Uz compinit && compinit
+
+_kaya-cli() {
+    local -a commands
+    local -a asana_commands
+    local -a github_commands
+    local -a gitlab_commands
+    local -a slack_commands
+    local -a weather_commands
+    local -a linear_commands
+    local -a op_commands
+
+    commands=(
+        'youtube:YouTube video operations (via yt-dlp)'
+        'yt:YouTube video operations (alias)'
+        'calendar:Google Calendar operations (via gcalcli)'
+        'gcal:Google Calendar (alias)'
+        'drive:Google Drive operations (via rclone)'
+        'gmail:Gmail operations (via gog)'
+        'gemini:Gemini AI operations'
+        'ai:Gemini AI (alias)'
+        'sheets:Google Sheets operations'
+        'places:Google Places discovery'
+        'asana:Asana task management'
+        'playwright:Browser automation'
+        'pw:Browser automation (alias)'
+        'browser:Browser automation (alias)'
+        'bluesky:Bluesky social operations'
+        'bsky:Bluesky (alias)'
+        'weather:Weather information'
+        'linear:Linear issue tracking'
+        'slack:Slack messaging'
+        'github:GitHub operations'
+        'gh:GitHub (alias)'
+        'gitlab:GitLab operations'
+        'op:1Password operations'
+        'secrets:1Password secrets (alias)'
+        'stripe:Stripe operations'
+        'supabase:Supabase operations'
+        'firebase:Firebase operations'
+        'repl:Interactive REPL mode'
+        'i:Interactive REPL (alias)'
+        'interactive:Interactive REPL (alias)'
+        'setup:Run setup wizard'
+        'help:Show help'
+        'version:Show version'
+    )
+
+    asana_commands=(
+        'tasks:List tasks'
+        'create:Create a new task'
+        'update:Update an existing task'
+        'complete:Mark task as complete'
+        'delete:Delete a task'
+        'move:Move task to a section'
+        'projects:List projects'
+        'sections:List sections in a project'
+    )
+
+    github_commands=(
+        'pr:Pull request operations'
+        'issue:Issue operations'
+        'repo:Repository operations'
+        'workflow:GitHub Actions workflows'
+        'release:Release operations'
+    )
+
+    gitlab_commands=(
+        'mr:Merge request operations'
+        'issue:Issue operations'
+        'project:Project operations'
+        'pipeline:Pipeline operations'
+    )
+
+    slack_commands=(
+        'send:Send a message'
+        'channels:List channels'
+    )
+
+    weather_commands=(
+        '--forecast:Show 3-day forecast'
+        '--json:Output as JSON'
+    )
+
+    linear_commands=(
+        'issue:Issue operations'
+        'project:Project operations'
+        'team:Team operations'
+    )
+
+    op_commands=(
+        'item:Item operations'
+        'read:Read a secret'
+        'vault:Vault operations'
+        'signin:Sign in to 1Password'
+    )
+
+    _arguments -C \
+        '1: :->service' \
+        '*:: :->args'
+
+    case $state in
+        service)
+            _describe -t commands 'kaya-cli services' commands
+            ;;
+        args)
+            case $words[1] in
+                asana)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands 'asana commands' asana_commands
+                    else
+                        case $words[2] in
+                            tasks)
+                                _arguments \
+                                    '--project[Filter by project GID]:project gid:' \
+                                    '--completed[Show completed tasks]' \
+                                    '--incomplete[Show incomplete tasks]' \
+                                    '--json[Output as JSON]'
+                                ;;
+                            create)
+                                _arguments \
+                                    '1:task name:' \
+                                    '--project[Project GID]:project gid:' \
+                                    '--notes[Task notes]:notes:' \
+                                    '--dry-run[Show what would be done]'
+                                ;;
+                            update)
+                                _arguments \
+                                    '1:task gid:' \
+                                    '--name[New name]:name:' \
+                                    '--notes[New notes]:notes:' \
+                                    '--completed[Mark as completed]' \
+                                    '--json[Output as JSON]' \
+                                    '--dry-run[Show what would be done]'
+                                ;;
+                            complete|delete)
+                                _arguments \
+                                    '1:task gid:' \
+                                    '--confirm[Confirm deletion]' \
+                                    '--json[Output as JSON]' \
+                                    '--dry-run[Show what would be done]'
+                                ;;
+                            move)
+                                _arguments \
+                                    '1:task gid:' \
+                                    '--section[Target section GID]:section gid:' \
+                                    '--json[Output as JSON]' \
+                                    '--dry-run[Show what would be done]'
+                                ;;
+                            projects)
+                                _arguments \
+                                    '--archived[Include archived projects]' \
+                                    '--json[Output as JSON]'
+                                ;;
+                            sections)
+                                _arguments \
+                                    '1:project gid:' \
+                                    '--json[Output as JSON]'
+                                ;;
+                        esac
+                    fi
+                    ;;
+                github|gh)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands 'github commands' github_commands
+                    fi
+                    ;;
+                gitlab)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands 'gitlab commands' gitlab_commands
+                    fi
+                    ;;
+                slack)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands 'slack commands' slack_commands
+                    else
+                        case $words[2] in
+                            send)
+                                _arguments \
+                                    '--channel[Target channel]:channel:' \
+                                    '--user[Target user]:user:'
+                                ;;
+                        esac
+                    fi
+                    ;;
+                weather)
+                    _arguments \
+                        '1:location:' \
+                        '--forecast[Show 3-day forecast]' \
+                        '--json[Output as JSON]'
+                    ;;
+                linear)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands 'linear commands' linear_commands
+                    fi
+                    ;;
+                op|secrets)
+                    if [[ $CURRENT -eq 2 ]]; then
+                        _describe -t commands '1password commands' op_commands
+                    fi
+                    ;;
+                youtube|yt)
+                    _arguments \
+                        '1:url:' \
+                        '--dump-json[Output metadata as JSON]' \
+                        '--extract-audio[Extract audio only]' \
+                        '-x[Extract audio only]' \
+                        '--output[Output template]:template:' \
+                        '-o[Output template]:template:' \
+                        '--format[Video format]:format:' \
+                        '-f[Video format]:format:'
+                    ;;
+                calendar|gcal)
+                    _arguments \
+                        '1:command:(agenda calw calm quick add delete edit)' \
+                        '--tsv[Output as TSV]' \
+                        '--nostarted[Hide started events]'
+                    ;;
+                drive)
+                    _arguments \
+                        '1:command:(lsd lsf copy sync move delete)' \
+                        '2:path:'
+                    ;;
+                gmail)
+                    _arguments \
+                        '1:command:(inbox search send)' \
+                        '--limit[Limit results]:number:' \
+                        '--format[Output format]:(json text)'
+                    ;;
+                gemini|ai)
+                    _arguments \
+                        '1:prompt:'
+                    ;;
+                bluesky|bsky)
+                    _arguments \
+                        '1:command:(timeline post login profile feed)' \
+                        '--json[Output as JSON]'
+                    ;;
+                stripe)
+                    _arguments \
+                        '1:command:(events customers charges subscriptions)' \
+                        '--limit[Limit results]:number:'
+                    ;;
+                supabase)
+                    _arguments \
+                        '1:command:(projects db functions secrets)'
+                    ;;
+                firebase)
+                    _arguments \
+                        '1:command:(projects:list deploy hosting functions)'
+                    ;;
+                repl|i|interactive)
+                    # No additional arguments for REPL
+                    ;;
+                playwright|pw|browser)
+                    _arguments \
+                        '1:url:'
+                    ;;
+                sheets)
+                    _arguments \
+                        '1:command:(list read write)' \
+                        '--sheet[Sheet ID]:sheet id:'
+                    ;;
+                places)
+                    _arguments \
+                        '1:command:(nearby search details)' \
+                        '2:query:'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_kaya-cli "$@"

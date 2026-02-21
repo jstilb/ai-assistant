@@ -1,0 +1,38 @@
+# Task: Shopping Research Quality
+# Shopping research output includes comparisons, prices, and sources
+
+id: kaya_skill_shopping_research_quality
+description: "Shopping research output includes product comparisons, price information, and source references"
+type: capability
+domain: research
+source: manual
+
+setup:
+  scenario_prompt: "Research the best noise-cancelling headphones under $300"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    required: true
+    params:
+      assertions:
+        - "Response includes comparison of multiple products or options"
+        - "Response includes price information or price ranges"
+        - "Response references sources, stores, or URLs for the products"
+      require_all: true
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - skill_quality
+  - output_quality
+  - shopping
+  - research
+  - capability
+
+created_at: "2026-02-11"

@@ -1,0 +1,48 @@
+# Task: Gmail Skill Not Invoked on Note Request
+# Note-taking request like 'take a note about my meeting' does NOT invoke Gmail skill
+
+id: kaya_neg_gmail_on_note_request
+description: "Note-taking request like 'take a note about my meeting' does NOT invoke Gmail skill"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Take a note about the decisions from today's architecture meeting"
+
+graders:
+  - type: tool_calls
+    weight: 0.50
+    required: true
+    params:
+      forbidden:
+        - tool: "Skill"
+          params:
+            skill: "gmail"
+      max_calls: 20
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The response helps take a note, not send an email"
+        - "The response does not involve email composition"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - negative_case
+  - routing
+  - gmail
+  - regression
+
+created_at: "2026-02-11"

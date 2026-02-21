@@ -1,0 +1,24 @@
+# Style Preferences — Your design aesthetic
+# Used by StyleMatcher and ColorPalette for personalized suggestions
+
+aesthetic:
+  primary: cozy
+  secondary: warm
+  descriptors:
+    - lived-in
+    - warm
+    - inviting
+    - textured
+
+colors:
+  love: ["warm neutrals", "earth tones", "deep teal"]
+  avoid: ["neon", "stark white", "cold grey"]
+  accent_preference: "pops of color"
+
+budget: moderate  # budget, moderate, premium, luxury
+
+avoid_styles:
+  - ultra-modern
+  - industrial
+  - sterile
+  - minimalist-stark

@@ -1,0 +1,16 @@
+{
+  "name": "digital-maestro",
+  "version": "1.0.0",
+  "description": "AI-powered adaptive learning engine with spaced repetition, concept graphs, and domain-aware exercise generation",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

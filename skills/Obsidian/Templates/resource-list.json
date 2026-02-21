@@ -1,0 +1,18 @@
+{
+  "type": "resource-list",
+  "label": "Resource List",
+  "description": "Curated collections of links, tools, and references with annotations",
+  "requiredSections": ["Resources"],
+  "optionalSections": ["Categories", "Annotations", "Recommendations", "Last Reviewed", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["topic", "status", "last_reviewed", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["resource", "link", "tool", "library", "framework", "collection", "list", "curated", "awesome", "bookmark", "recommendation"],
+    "contentPatterns": ["http://", "https://", "- [", "[Link]", "## Resources", "## Tools", "## Libraries"],
+    "folderBias": ["Skills", "Research Design & Applications for Data Analysis"]
+  },
+  "stubThreshold": 20,
+  "version": 1
+}

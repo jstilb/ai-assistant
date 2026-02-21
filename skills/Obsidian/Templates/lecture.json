@@ -1,0 +1,18 @@
+{
+  "type": "lecture",
+  "label": "Lecture/Course Notes",
+  "description": "Structured notes from lectures, courses, and educational content",
+  "requiredSections": ["Key Points", "Notes"],
+  "optionalSections": ["Course Info", "Topic", "Lecture Details", "Examples", "Diagrams", "Assignments", "Discussion Questions", "Readings", "Summary"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["course", "instructor", "lecture_number", "week", "topic", "status", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["lecture", "course", "class", "professor", "instructor", "week", "assignment", "homework", "exam", "quiz", "syllabus", "reading", "module", "lesson", "session"],
+    "contentPatterns": ["## Lecture", "## Week", "## Assignment", "## Reading", "## Module", "Professor", "Instructor"],
+    "folderBias": ["Berkeley MIDS", "Bill Hilton Piano Course", "Calculus", "Capstone", "Research Design & Applications for Data Analysis"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

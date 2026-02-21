@@ -1,0 +1,19 @@
+# Kitchen Context — Your cooking environment
+# Used by MealPlanner and RecipeSearch to filter appropriate recipes
+
+skill_level: home-cook  # beginner, home-cook, intermediate, advanced, professional
+
+time_constraints:
+  weekday_max_minutes: 30
+  weekend_max_minutes: 120
+
+equipment:
+  - oven
+  - stovetop
+  - microwave
+  - blender
+  - food-processor
+  - instant-pot
+  # Add/remove as needed: air-fryer, sous-vide, grill, stand-mixer, etc.
+
+notes: ""

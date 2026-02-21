@@ -1,0 +1,14 @@
+# Rooms — Active design projects and room inventory
+# Used by RoomState for context, RoomAnalyzer for comparison
+
+current_focus: "adding coziness and color"
+
+interest_areas:
+  - reading nooks
+  - ambient lighting
+  - warm textiles
+  - accent walls
+
+rooms: {}
+  # Add rooms as you track them, or use RoomState CLI:
+  #   bun Tools/RoomState.ts add-room "living room" --dimensions "14x18" --budget 2000

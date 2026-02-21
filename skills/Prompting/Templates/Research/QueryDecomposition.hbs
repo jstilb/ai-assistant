@@ -1,0 +1,80 @@
+{{!-- QueryDecomposition.hbs v1.0.0 --}}
+{{!-- Decompose complex research queries into parallel search strategies --}}
+{{!-- Required data: query --}}
+{{!-- Optional data: domain_hints, max_queries, search_types --}}
+
+# Query Decomposition
+
+## Original Query
+{{query}}
+
+{{#if domain_hints}}
+## Domain Context
+{{#each domain_hints}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+## Decomposition Instructions
+
+Break this query into {{default max_queries 5}} parallel search strategies.
+
+For each sub-query, provide:
+
+1. **Query text** - The specific search query
+2. **Intent** - What this query aims to discover
+3. **Search type** - Which approach to use:
+{{#if search_types}}
+{{#each search_types}}
+   - `{{this.name}}`: {{this.description}}
+{{/each}}
+{{else}}
+   - `web`: General web search
+   - `academic`: Scholarly articles and papers
+   - `code`: GitHub, Stack Overflow, technical docs
+   - `news`: Recent news and developments
+   - `social`: Twitter, Reddit, forums
+{{/if}}
+4. **Priority** - `high`, `medium`, or `low`
+5. **Expected sources** - Types of sources likely to have answers
+
+## Output Format (JSON)
+
+```json
+{
+  "original_query": "{{query}}",
+  "decomposed_queries": [
+    {
+      "id": 1,
+      "query": "specific search query",
+      "intent": "what this aims to discover",
+      "search_type": "web|academic|code|news|social",
+      "priority": "high|medium|low",
+      "expected_sources": ["source type 1", "source type 2"],
+      "rationale": "why this query helps answer the original"
+    }
+  ],
+  "synthesis_strategy": "how to combine results",
+  "gaps": ["aspects that may not be well-covered"]
+}
+```
+
+## Decomposition Strategies
+
+1. **Breadth-first**: Cover different aspects of the topic
+2. **Depth-first**: Drill into specific subtopics
+3. **Temporal**: Past, present, future perspectives
+4. **Perspective**: Different stakeholder viewpoints
+5. **Definitional**: What is X, how does X work, why X matters
+
+## Quality Criteria
+
+- Each query should be independently searchable
+- Queries should be complementary, not redundant
+- Cover the full scope of the original question
+- Include at least one query that might surface unexpected insights
+- Prioritize queries that directly address the core intent
+
+---
+
+*Decompose thoroughly. Ensure coverage. Enable parallel execution.*

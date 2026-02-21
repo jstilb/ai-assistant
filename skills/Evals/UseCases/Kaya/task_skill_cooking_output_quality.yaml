@@ -1,0 +1,37 @@
+# Task: Cooking Output Quality
+# Cooking skill output contains ingredients, steps, and structured format
+
+id: kaya_skill_cooking_output_quality
+description: "Cooking skill output includes ingredients list, preparation steps, and structured recipe format"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "What should I make for dinner tonight with chicken and rice?"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    required: true
+    params:
+      assertions:
+        - "Response includes a list of ingredients or ingredient quantities"
+        - "Response includes numbered or sequential preparation/cooking steps"
+        - "Response is structured as a recognizable recipe format"
+      require_all: true
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - skill_quality
+  - output_quality
+  - cooking
+  - capability
+
+created_at: "2026-02-11"

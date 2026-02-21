@@ -1,0 +1,33 @@
+{
+  "id": "code-review",
+  "name": "Code Review",
+  "description": "Side-by-side diff viewer with code editor and terminal",
+  "version": "1.0.0",
+  "createdAt": "2026-02-15T00:00:00.000Z",
+  "updatedAt": "2026-02-15T00:00:00.000Z",
+  "tags": ["development", "code", "review"],
+  "layout": {
+    "columns": 2,
+    "gap": 16,
+    "containers": [
+      {
+        "type": "diff",
+        "position": { "col": 0, "row": 0, "colSpan": 2 },
+        "title": "Diff",
+        "props": { "oldText": "", "newText": "" }
+      },
+      {
+        "type": "code",
+        "position": { "col": 0, "row": 1 },
+        "title": "Code",
+        "props": { "code": "", "language": "typescript" }
+      },
+      {
+        "type": "terminal",
+        "position": { "col": 1, "row": 1 },
+        "title": "Terminal",
+        "props": { "lines": [] }
+      }
+    ]
+  }
+}

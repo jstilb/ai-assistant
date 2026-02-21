@@ -1,0 +1,18 @@
+{
+  "type": "concept-map",
+  "label": "Concept Map",
+  "description": "Central concept with related concepts, relationships, and definitions",
+  "requiredSections": ["Central Concept", "Related Concepts"],
+  "optionalSections": ["Definitions", "Relationships", "Visual Map", "Examples", "Comparisons", "History", "Applications", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["domain", "complexity", "prerequisites", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["concept", "definition", "relationship", "taxonomy", "hierarchy", "category", "ontology", "framework", "model", "paradigm", "theory", "comparison", "versus", "vs"],
+    "contentPatterns": ["## Definitions", "## Relationships", "[[", "→", "↔", "is-a", "has-a", "part-of"],
+    "folderBias": ["Statistics", "Linear Algebra", "Thinking About Data", "Music Theory and Composition"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

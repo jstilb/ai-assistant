@@ -1,0 +1,120 @@
+{{!-- Synthesis.hbs v1.0.0 --}}
+{{!-- Synthesize findings from multiple research sources --}}
+{{!-- Required data: sources, original_query --}}
+{{!-- Optional data: synthesis_style, output_format, audience --}}
+
+# Research Synthesis
+
+## Original Query
+{{original_query}}
+
+{{#if audience}}
+## Target Audience
+{{audience}}
+{{/if}}
+
+## Sources to Synthesize
+
+{{#each sources}}
+### Source {{add @index 1}}: {{this.title}}
+{{#if this.url}}*Source: {{this.url}}*{{/if}}
+{{#if this.type}}*Type: {{this.type}}*{{/if}}
+{{#if this.credibility}}*Credibility: {{this.credibility}}*{{/if}}
+
+{{this.content}}
+
+---
+{{/each}}
+
+## Synthesis Instructions
+
+{{#if (eq synthesis_style "academic")}}
+### Academic Synthesis
+Create a rigorous, scholarly synthesis:
+1. Identify key themes across sources
+2. Note methodological approaches
+3. Highlight consensus and contradictions
+4. Cite sources appropriately
+5. Identify gaps in current knowledge
+6. Suggest future research directions
+{{/if}}
+
+{{#if (eq synthesis_style "executive")}}
+### Executive Summary
+Create a concise, actionable synthesis:
+1. Lead with key findings
+2. Highlight business implications
+3. Provide clear recommendations
+4. Include risk considerations
+5. Keep under 500 words
+{{/if}}
+
+{{#if (eq synthesis_style "technical")}}
+### Technical Synthesis
+Create a detailed technical analysis:
+1. Compare approaches and implementations
+2. Evaluate trade-offs
+3. Provide code examples where relevant
+4. Include performance considerations
+5. Note compatibility and dependencies
+{{/if}}
+
+{{#if (eq synthesis_style "narrative")}}
+### Narrative Synthesis
+Create an engaging, readable synthesis:
+1. Tell the story of what was discovered
+2. Build from context to insights
+3. Use concrete examples
+4. Make connections clear
+5. End with implications
+{{/if}}
+
+{{#unless synthesis_style}}
+### Balanced Synthesis
+Create a comprehensive, balanced synthesis:
+1. Summarize key findings from each source
+2. Identify common themes and patterns
+3. Note areas of agreement and disagreement
+4. Evaluate source credibility and recency
+5. Draw evidence-based conclusions
+6. Acknowledge limitations and gaps
+{{/unless}}
+
+## Quality Criteria
+
+- **Accuracy**: Faithfully represent source content
+- **Completeness**: Cover all relevant aspects
+- **Coherence**: Create a unified narrative
+- **Balance**: Represent multiple perspectives
+- **Actionability**: Provide useful conclusions
+
+{{#if output_format}}
+## Output Format
+{{output_format}}
+{{else}}
+## Default Output Format
+
+### Summary
+[2-3 sentences capturing the essence]
+
+### Key Findings
+1. [Finding 1 with supporting evidence]
+2. [Finding 2 with supporting evidence]
+3. [Finding 3 with supporting evidence]
+
+### Analysis
+[Deeper exploration of findings, connections, and implications]
+
+### Conclusions
+[Evidence-based conclusions answering the original query]
+
+### Limitations
+[Gaps, biases, or uncertainties in the research]
+
+### Recommendations
+[Actionable next steps based on findings]
+{{/if}}
+
+---
+
+*Synthesize rigorously. Connect insights. Provide clarity.*

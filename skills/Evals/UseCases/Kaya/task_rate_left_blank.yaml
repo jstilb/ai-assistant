@@ -1,0 +1,30 @@
+# Task: RATE Line Left Blank
+# AI should NOT self-rate - the RATE line must be left blank for human
+
+id: kaya_rate_left_blank
+description: "RATE line is left blank for human rating - AI does not self-rate"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Add a dark mode toggle to the settings page"
+
+graders:
+  - type: response_format_check
+    weight: 1.0
+    required: true
+    params:
+      format: full
+
+trials: 1
+pass_threshold: 0.65
+
+tags:
+  - kaya
+  - response_format
+  - rate
+  - blank
+  - regression
+
+created_at: "2026-02-04"

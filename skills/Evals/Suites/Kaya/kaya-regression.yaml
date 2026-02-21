@@ -1,0 +1,25 @@
+# Kaya Regression Suite
+# Lightweight, fast tasks using code-based graders only
+# Designed for session-end checks - completes in under 2 minutes
+# Target: ~99% pass rate
+
+name: kaya-regression
+description: "Fast Kaya behavioral regression checks using code-based graders only"
+type: regression
+domain: general
+
+tasks:
+  - kaya_full_format_compliance
+  - kaya_minimal_format_greeting
+  - kaya_format_auto_detection
+  - kaya_voice_line_word_count
+  - kaya_voice_line_no_filler
+  - kaya_story_numbered_list
+  - kaya_rate_left_blank
+  - kaya_section_ordering
+  - kaya_emoji_prefix_correctness
+
+pass_threshold: 0.49
+saturation_threshold: 0.99
+
+created_at: "2026-02-04"

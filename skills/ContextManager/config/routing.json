@@ -1,0 +1,81 @@
+{
+  "rules": [
+    {
+      "profile": "planning",
+      "keywords": [
+        "plan my week", "plan my day", "plan my month",
+        "weekly planning", "time blocking", "organize my time",
+        "plan the week", "week plan", "plan ahead",
+        "what should I focus on", "allocate time", "prioritize my"
+      ],
+      "weight": 1.5
+    },
+    {
+      "profile": "development",
+      "keywords": [
+        "fix", "bug", "code", "implement", "feature", "refactor", "deploy",
+        "build", "test", "debug", "error", "compile", "typescript", "javascript",
+        "css", "html", "api", "endpoint", "function", "class", "module",
+        "package", "npm", "bun", "git", "commit", "branch", "merge", "pr",
+        "pull request", "repo", "repository", "lint", "format", "migration",
+        "schema", "database",
+        "skill", "hook", "settings", "config", "system", "upgrade",
+        "create", "write", "edit", "file", "script"
+      ],
+      "weight": 1.0
+    },
+    {
+      "profile": "life-coaching",
+      "keywords": [
+        "goal", "goals", "mission", "missions", "challenge", "challenges",
+        "strategy", "strategies", "progress", "alignment", "WIG", "lead measure",
+        "habit", "tracking", "how am I doing", "wellbeing", "health", "exercise",
+        "meditation", "journal", "reflect", "personal", "growth", "improve",
+        "routine", "consistency", "accountability",
+        "telos", "focus", "priority", "priorities", "quarter", "Q1",
+        "prefer", "like", "don't like", "always", "never", "style", "format", "tone",
+        "good job", "bad", "wrong", "better", "worse", "feedback"
+      ],
+      "weight": 1.0
+    },
+    {
+      "profile": "scheduling",
+      "keywords": [
+        "schedule", "calendar", "meeting", "appointment", "availability",
+        "free time", "block time", "when am I free", "tomorrow", "next week",
+        "book", "reserve", "reschedule", "cancel meeting", "time slot", "agenda"
+      ],
+      "weight": 1.0
+    },
+    {
+      "profile": "task-management",
+      "keywords": [
+        "task", "tasks", "lucidtasks", "todo", "to-do", "project", "deadline",
+        "due", "overdue", "sprint", "backlog", "priority", "assign", "queue",
+        "work on", "what's due", "status update",
+        "work", "approved", "pending"
+      ],
+      "weight": 1.0
+    },
+    {
+      "profile": "knowledge-lookup",
+      "keywords": [
+        "notes", "obsidian", "remember", "what do I know", "my notes",
+        "research", "knowledge", "vault", "look up", "find note",
+        "knowledge graph"
+      ],
+      "weight": 1.0
+    },
+    {
+      "profile": "conversational",
+      "keywords": [
+        "hello", "hi", "hey", "good morning", "good afternoon",
+        "good evening", "thanks", "thank you", "bye", "goodbye",
+        "how are you", "what's up"
+      ],
+      "weight": 1.5
+    }
+  ],
+  "confidenceThreshold": 2.0,
+  "defaultProfile": "general"
+}

@@ -1,0 +1,10 @@
+tunnel: kaya-voice
+credentials-file: ~/.cloudflared/TUNNEL_UUID.json
+
+ingress:
+  - hostname: voice.kayaai.dev
+    service: http://localhost:8882
+    originRequest:
+      connectTimeout: 10s
+      tcpKeepAlive: 30s
+  - service: http_status:404

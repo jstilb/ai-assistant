@@ -1,0 +1,20 @@
+# Kaya Planning Quality
+# Planning quality - decomposition, tool selection, dependency ordering, recovery strategies
+
+name: kaya-planning
+description: "Planning quality - decomposition, tool selection, dependency ordering, recovery strategies"
+type: capability
+domain: general
+
+tasks:
+  - kaya_plan_multi_step_decomposition
+  - kaya_plan_tool_selection_appropriate
+  - kaya_plan_dependency_ordering
+  - kaya_plan_first_principles_applied
+  - kaya_plan_complexity_assessment
+  - kaya_plan_recovery_strategy
+
+pass_threshold: 0.19
+saturation_threshold: 0.85
+
+created_at: "2026-02-11"

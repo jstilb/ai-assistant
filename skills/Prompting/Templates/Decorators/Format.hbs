@@ -1,0 +1,120 @@
+{{!--
+  FORMAT DECORATOR - Output Format Controls
+
+  Purpose: Stackable directives that modify output structure without changing content.
+
+  Research Foundation: Prompt Decorators (arXiv:2510.19850v1)
+  - Format decorators are orthogonal to reasoning and tone
+  - Based on Claude 4.x Standards (markdown-first, positive framing)
+  - Composable with other decorator types
+
+  Input Data Structure:
+  ```yaml
+  output: string (structured | narrative | checklist | comparison)
+  task_description: string (optional - the task being modified)
+  ```
+
+  Usage:
+  {{> Decorators/Format output="structured"}}
+
+  ## Your Task
+  [Your task here]
+--}}
+
+{{#if (eq output "structured")}}
+## Output Format
+
+Organize your response using consistent markdown structure:
+- Use `##` headers to separate major sections
+- Use `###` subheaders for subsections when needed
+- Use **bold** for emphasis on key terms or findings
+- Use `inline code` for commands, file paths, or technical terms
+- Use bullet points for lists of related items
+- Use numbered lists only for sequential steps
+
+Consistent structure helps readers scan and find information quickly.
+{{/if}}
+
+{{#if (eq output "narrative")}}
+## Output Format
+
+Present your response as flowing prose without lists:
+- Write in complete paragraphs with natural transitions
+- Connect ideas smoothly from one sentence to the next
+- Avoid bullet points or numbered lists
+- Use markdown minimally - primarily for `inline code` when needed
+- Let ideas flow naturally like you're telling a story
+
+The goal is readability and natural flow, not scannability.
+{{/if}}
+
+{{#if (eq output "checklist")}}
+## Output Format
+
+Present your response as actionable checklist items:
+- Use `- [ ]` checkbox format for each actionable item
+- Each item should be concrete and verifiable
+- Group related items under `###` headers if needed
+- Order items by logical sequence or priority
+- Keep items specific enough to check off when complete
+
+Format example:
+```
+### Phase 1: Preparation
+- [ ] Review existing documentation
+- [ ] Set up development environment
+- [ ] Create test data fixtures
+
+### Phase 2: Implementation
+- [ ] Implement core feature logic
+- [ ] Add error handling
+```
+
+Make it easy for someone to track progress through the work.
+{{/if}}
+
+{{#if (eq output "comparison")}}
+## Output Format
+
+Present your response as side-by-side analysis:
+
+Use tables or parallel sections to facilitate comparison:
+
+**Table Format** (when comparing discrete attributes):
+| Aspect | Option A | Option B |
+|--------|----------|----------|
+| Attribute | Value | Value |
+
+**Parallel Sections** (when comparing complex items):
+```
+### Approach A: [Name]
+**Strengths:**
+- Point 1
+- Point 2
+
+**Weaknesses:**
+- Point 1
+- Point 2
+
+### Approach B: [Name]
+**Strengths:**
+- Point 1
+- Point 2
+
+**Weaknesses:**
+- Point 1
+- Point 2
+
+### Recommendation
+[Your conclusion based on the comparison]
+```
+
+Structure should make differences and similarities immediately visible.
+{{/if}}
+
+{{#unless output}}
+{{!-- Fallback if no valid output format provided --}}
+## Output Format
+
+[No format decorator applied - specify output: structured, narrative, checklist, or comparison]
+{{/unless}}

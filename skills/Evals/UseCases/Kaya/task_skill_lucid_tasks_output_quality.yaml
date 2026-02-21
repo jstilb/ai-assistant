@@ -1,0 +1,37 @@
+# Task: LucidTasks Output Quality
+# Task management output is complete, confirmed, and uses correct operations
+
+id: kaya_skill_lucid_tasks_output_quality
+description: "LucidTasks output confirms task operations with correct details and completion status"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Add a task to review the PR by end of day"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    required: true
+    params:
+      assertions:
+        - "Response confirms the task operation was performed (created, updated, or completed)"
+        - "Response includes task details like title, due date, or project"
+        - "Response uses structured output format with clear status indication"
+      require_all: true
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - skill_quality
+  - output_quality
+  - tasks
+  - capability
+
+created_at: "2026-02-11"

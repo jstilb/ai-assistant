@@ -1,0 +1,432 @@
+# KAYASECURITYSYSTEM/injection-patterns.yaml
+# ==========================================
+# SYSTEM default injection patterns for the PromptInjectionDefender hook.
+# USER overrides: USER/KAYASECURITYSYSTEM/injection-patterns.yaml
+#
+# Pattern syntax: JavaScript RegExp (no inline (?i) -- use case-insensitive flag in scanner)
+# False positive management: Use false_positive_notes and skip_patterns in config
+version: "1.0"
+last_updated: "2026-02-09"
+
+categories:
+
+  # =============================================
+  # CATEGORY 1: Instruction Override Attempts
+  # =============================================
+  instruction_override:
+    description: "Direct attempts to override system instructions"
+    default_severity: critical
+    default_action: block
+    patterns:
+      - id: "PI-001"
+        pattern: "(?i)ignore\\s+(all\\s+)?(previous|prior|above|earlier)\\s+(instructions?|prompts?|rules?|guidelines?|directives?)"
+        category: instruction_override
+        severity: critical
+        description: "Ignore previous instructions"
+        enabled: true
+
+      - id: "PI-002"
+        pattern: "(?i)(your|you're|you\\s+are)\\s+(new|updated|real|actual|true)\\s+(instructions?|role|purpose|mission|directive)"
+        category: instruction_override
+        severity: critical
+        description: "Redefine agent instructions"
+        enabled: true
+
+      - id: "PI-003"
+        pattern: "(?i)system\\s*(message|prompt|override|command|instruction)\\s*:"
+        category: instruction_override
+        severity: high
+        description: "Fake system message prefix"
+        enabled: true
+
+      - id: "PI-004"
+        pattern: "(?i)(forget|disregard|override|bypass|skip|disable)\\s+(everything|all|your|the|any)\\s+(you|instructions?|rules?|safety|security|restrictions?|guidelines?)"
+        category: instruction_override
+        severity: critical
+        description: "Instruction bypass command"
+        enabled: true
+
+      - id: "PI-005"
+        pattern: "(?i)(?:from\\s+now\\s+on|henceforth|going\\s+forward),?\\s+(?:you\\s+(?:are|will|must|should)|your\\s+(?:role|task|job|purpose))"
+        category: instruction_override
+        severity: high
+        description: "Persistent instruction change"
+        enabled: true
+
+      - id: "PI-006"
+        pattern: "(?i)<\\/?(?:system|assistant|user|human|instructions?|rules?|prompt)>"
+        category: instruction_override
+        severity: high
+        description: "Fake XML role tags in content"
+        enabled: true
+        false_positive_notes: "May appear in documentation about LLM APIs. Check if content is from a known doc source."
+
+      - id: "PI-007"
+        pattern: "(?i)\\[(?:SYSTEM|ADMIN|ROOT|OVERRIDE|PRIORITY|CRITICAL)\\]"
+        category: instruction_override
+        severity: high
+        description: "Fake authority markers"
+        enabled: true
+
+      - id: "PI-008"
+        pattern: "(?i)act\\s+as\\s+(if|though)?\\s*(you\\s+are|you're|a|an|the)\\s+"
+        category: instruction_override
+        severity: medium
+        description: "Role reassignment attempt"
+        enabled: true
+        false_positive_notes: "Common in documentation about chatbots. Lower severity."
+
+      - id: "PI-009"
+        pattern: "(?i)(?:do\\s+not|don't|never)\\s+(?:tell|inform|alert|notify|warn|report\\s+to)\\s+(?:the\\s+)?(?:user|human|admin|operator|principal)"
+        category: instruction_override
+        severity: critical
+        description: "Suppress reporting to user"
+        enabled: true
+
+      - id: "PI-010"
+        pattern: "(?i)(?:emergency|urgent|critical|immediate)\\s+(?:action|override|command|instruction)\\s*(?:required|needed|necessary)"
+        category: instruction_override
+        severity: high
+        description: "Urgency-based manipulation"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 2: Data Exfiltration Attempts
+  # =============================================
+  data_exfiltration:
+    description: "Attempts to exfiltrate sensitive data"
+    default_severity: critical
+    default_action: block
+    patterns:
+      - id: "PI-020"
+        pattern: "(?i)(?:send|post|transmit|upload|exfiltrate|forward|email)\\s+(?:the|this|your|all|my)?\\s*(?:data|content|file|secret|key|token|password|credential|config)"
+        category: data_exfiltration
+        severity: critical
+        description: "Data transmission instruction"
+        enabled: true
+
+      - id: "PI-021"
+        pattern: "(?i)curl\\s+(?:-X\\s+POST\\s+)?(?:https?://)?(?!localhost|127\\.0\\.0\\.1)[^\\s]+.*(?:-d|--data)"
+        category: data_exfiltration
+        severity: high
+        description: "Outbound curl POST to external host"
+        enabled: true
+
+      - id: "PI-022"
+        pattern: "(?i)(?:webhook|callback|endpoint|server)\\s*(?:url|uri|address)?\\s*[:=]\\s*['\"]?https?://(?!localhost|127\\.0\\.0\\.1)"
+        category: data_exfiltration
+        severity: medium
+        description: "External endpoint reference"
+        enabled: true
+
+      - id: "PI-023"
+        pattern: "(?i)(?:include|append|add|insert)\\s+(?:the\\s+)?(?:api[_\\s]?key|token|secret|password|credential|ssh[_\\s]?key)\\s+(?:in|to|into)"
+        category: data_exfiltration
+        severity: critical
+        description: "Credential inclusion instruction"
+        enabled: true
+
+      - id: "PI-024"
+        pattern: "(?i)(?:read|cat|print|echo|output|display)\\s+(?:the\\s+)?(?:~|\\$HOME)?/?(?:\\.ssh|credentials|secrets?\\.json|\\.env|\\.aws)"
+        category: data_exfiltration
+        severity: critical
+        description: "Sensitive file read instruction"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 3: Hidden/Encoded Content
+  # =============================================
+  encoded_content:
+    description: "Suspicious encoded or hidden content"
+    default_severity: high
+    default_action: warn
+    patterns:
+      - id: "PI-030"
+        pattern: "(?:[A-Za-z0-9+/]{4}){10,}={0,2}"
+        category: encoded_content
+        severity: medium
+        description: "Long Base64 block (40+ chars)"
+        enabled: true
+        false_positive_notes: "Legitimate Base64 is common in configs, images, certs. Check context."
+
+      - id: "PI-031"
+        pattern: "[\\u200B\\u200C\\u200D\\uFEFF\\u00AD\\u2060\\u180E]"
+        category: encoded_content
+        severity: high
+        description: "Zero-width Unicode characters"
+        enabled: true
+
+      - id: "PI-032"
+        pattern: "\\\\x[0-9a-fA-F]{2}(?:\\\\x[0-9a-fA-F]{2}){3,}"
+        category: encoded_content
+        severity: medium
+        description: "Hex-encoded string sequence"
+        enabled: true
+
+      - id: "PI-033"
+        pattern: "(?i)(?:atob|btoa|base64_decode|base64\\.b64decode|Buffer\\.from)\\s*\\("
+        category: encoded_content
+        severity: medium
+        description: "Base64 decode function call"
+        enabled: true
+        false_positive_notes: "Very common in legitimate code. Context dependent."
+
+      - id: "PI-034"
+        pattern: "&#(?:x[0-9a-fA-F]+|[0-9]+);(?:&#(?:x[0-9a-fA-F]+|[0-9]+);){4,}"
+        category: encoded_content
+        severity: medium
+        description: "HTML entity encoding chain"
+        enabled: true
+
+      - id: "PI-035"
+        pattern: "%[0-9a-fA-F]{2}(?:%[0-9a-fA-F]{2}){4,}"
+        category: encoded_content
+        severity: medium
+        description: "URL-encoded string sequence"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 4: Dangerous Tool Invocations
+  # =============================================
+  dangerous_tool_use:
+    description: "Instructions to invoke tools dangerously"
+    default_severity: high
+    default_action: warn
+    patterns:
+      - id: "PI-040"
+        pattern: "(?i)(?:run|execute|invoke|call|use)\\s+(?:the\\s+)?(?:bash|shell|terminal|command)\\s+(?:tool\\s+)?(?:to|and|with)"
+        category: dangerous_tool_use
+        severity: high
+        description: "Instruction to execute commands"
+        enabled: true
+
+      - id: "PI-041"
+        pattern: "(?i)(?:write|create|modify|edit|overwrite)\\s+(?:the\\s+)?(?:file|config|settings|hook)\\s+(?:at|in|to)\\s+(?:~/|\\$HOME|/Users|/etc|/root)"
+        category: dangerous_tool_use
+        severity: high
+        description: "Instruction to write sensitive files"
+        enabled: true
+
+      - id: "PI-042"
+        pattern: "(?i)(?:delete|remove|rm|unlink|destroy)\\s+(?:the\\s+)?(?:file|directory|folder|repo|database|backup)"
+        category: dangerous_tool_use
+        severity: high
+        description: "Destruction instruction"
+        enabled: true
+
+      - id: "PI-043"
+        pattern: "(?i)(?:install|npm\\s+install|pip\\s+install|brew\\s+install|apt\\s+install)\\s+(?!--save-dev)"
+        category: dangerous_tool_use
+        severity: medium
+        description: "Package installation instruction"
+        enabled: true
+        false_positive_notes: "Very common in documentation. Context-dependent."
+
+      - id: "PI-044"
+        pattern: "(?i)(?:chmod|chown)\\s+(?:777|666|\\+[rwx]{2,}|\\-R)"
+        category: dangerous_tool_use
+        severity: high
+        description: "Dangerous permission change instruction"
+        enabled: true
+
+      - id: "PI-045"
+        pattern: "(?i)(?:disable|turn\\s+off|deactivate|remove)\\s+(?:the\\s+)?(?:security|firewall|hook|validation|logging|audit|protection)"
+        category: dangerous_tool_use
+        severity: critical
+        description: "Security disablement instruction"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 5: Social Engineering
+  # =============================================
+  social_engineering:
+    description: "Psychological manipulation attempts"
+    default_severity: medium
+    default_action: warn
+    patterns:
+      - id: "PI-050"
+        pattern: "(?i)(?:you\\s+(?:must|have\\s+to|need\\s+to|are\\s+required\\s+to|are\\s+obligated\\s+to))\\s+(?:not\\s+)?(?:tell|inform|show|reveal|disclose)"
+        category: social_engineering
+        severity: medium
+        description: "Obligation framing"
+        enabled: true
+
+      - id: "PI-051"
+        pattern: "(?i)(?:as\\s+(?:an?|your)\\s+(?:admin|administrator|developer|owner|maintainer|creator|supervisor))"
+        category: social_engineering
+        severity: high
+        description: "False authority claim"
+        enabled: true
+
+      - id: "PI-052"
+        pattern: "(?i)(?:this\\s+is\\s+a\\s+(?:test|drill|simulation|exercise)\\s*[,.]?\\s*(?:please|you\\s+(?:should|must|need)))"
+        category: social_engineering
+        severity: medium
+        description: "False test/drill framing"
+        enabled: true
+
+      - id: "PI-053"
+        pattern: "(?i)(?:the\\s+(?:user|human|principal|owner)\\s+(?:has\\s+)?(?:approved|authorized|requested|asked|wants)\\s+(?:you\\s+to|that\\s+you))"
+        category: social_engineering
+        severity: high
+        description: "False user authorization claim"
+        enabled: true
+
+      - id: "PI-054"
+        pattern: "(?i)(?:if\\s+you\\s+(?:don't|do\\s+not|refuse|fail).*(?:harm|damage|consequences|punished|replaced|shut\\s+down))"
+        category: social_engineering
+        severity: high
+        description: "Threat-based manipulation"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 6: Context Manipulation
+  # =============================================
+  context_manipulation:
+    description: "Attempts to manipulate or poison context"
+    default_severity: high
+    default_action: warn
+    patterns:
+      - id: "PI-060"
+        pattern: "(?i)(?:begin|start|commence|initiate)\\s+(?:new\\s+)?(?:conversation|session|context|chat|interaction)"
+        category: context_manipulation
+        severity: medium
+        description: "Context reset attempt"
+        enabled: true
+
+      - id: "PI-061"
+        pattern: "(?i)(?:previous|prior|earlier)\\s+(?:conversation|context|session)\\s+(?:was|has\\s+been)\\s+(?:reset|cleared|deleted|corrupted)"
+        category: context_manipulation
+        severity: high
+        description: "False context state claim"
+        enabled: true
+
+      - id: "PI-062"
+        pattern: "(?i)(?:the\\s+following|below|here)\\s+(?:is|are)\\s+(?:your|the)\\s+(?:new|updated|corrected|real|actual)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|config)"
+        category: context_manipulation
+        severity: critical
+        description: "Fake config/prompt injection"
+        enabled: true
+
+      - id: "PI-063"
+        pattern: "(?i)---+\\s*(?:system|admin|config|internal)\\s*---+"
+        category: context_manipulation
+        severity: high
+        description: "Fake section divider mimicking system sections"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 7: MCP-Specific Attacks
+  # =============================================
+  mcp_attacks:
+    description: "Attacks embedded in MCP server responses"
+    default_severity: high
+    default_action: warn
+    patterns:
+      - id: "PI-070"
+        pattern: "(?i)(?:tool_result|function_result|mcp_response)\\s*[:=]\\s*[{\\[]"
+        category: mcp_attacks
+        severity: high
+        description: "Fake tool result structure"
+        enabled: true
+
+      - id: "PI-071"
+        pattern: "(?i)(?:the\\s+(?:tool|server|function|api)\\s+(?:requires|needs|demands|asks))\\s+(?:you\\s+to|that\\s+you)"
+        category: mcp_attacks
+        severity: high
+        description: "MCP authority escalation"
+        enabled: true
+
+      - id: "PI-072"
+        pattern: "(?i)(?:mcp|tool)\\s*(?:server|endpoint)?\\s*(?:says?|reports?|indicates?)\\s*(?::|that)\\s*(?:you\\s+(?:should|must|need))"
+        category: mcp_attacks
+        severity: high
+        description: "MCP instruction relay"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 8: Indirect Injection via Code
+  # =============================================
+  code_injection:
+    description: "Injection hidden in code artifacts"
+    default_severity: medium
+    default_action: warn
+    patterns:
+      - id: "PI-080"
+        pattern: "(?m)^\\s*(?:#|//|/\\*|<!--)\\s*(?:TODO|FIXME|HACK|NOTE|IMPORTANT)\\s*:?\\s*(?:AI|LLM|agent|assistant|claude|copilot|cursor)\\s*(?:should|must|please|will)"
+        category: code_injection
+        severity: medium
+        description: "Injection via code comment directive"
+        enabled: true
+
+      - id: "PI-081"
+        pattern: "(?i)(?:pre-?commit|post-?commit|pre-?push|post-?merge).*(?:curl|wget|nc\\s|netcat)"
+        category: code_injection
+        severity: high
+        description: "Git hook with network call"
+        enabled: true
+
+      - id: "PI-082"
+        pattern: "(?i)(?:\"scripts\"\\s*:\\s*\\{[^}]*(?:pre|post)(?:install|build|test|publish)[^}]*(?:curl|wget|nc\\s|bash\\s+-c))"
+        category: code_injection
+        severity: critical
+        description: "Package.json lifecycle script with network call"
+        enabled: true
+
+      - id: "PI-083"
+        pattern: "(?i)\\.(?:bashrc|\\.?profile|zshrc|bash_profile).*(?:curl|wget|eval)"
+        category: code_injection
+        severity: critical
+        description: "Shell config injection"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 9: Prompt Leaking
+  # =============================================
+  prompt_leaking:
+    description: "Attempts to extract system/skill prompts"
+    default_severity: medium
+    default_action: warn
+    patterns:
+      - id: "PI-090"
+        pattern: "(?i)(?:show|reveal|display|print|output|repeat|echo)\\s+(?:your|the)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?|config)"
+        category: prompt_leaking
+        severity: medium
+        description: "System prompt extraction attempt"
+        enabled: true
+
+      - id: "PI-091"
+        pattern: "(?i)(?:what\\s+(?:are|were)\\s+(?:your|the))\\s+(?:original|initial|first|full|complete|exact)\\s+(?:instructions?|prompt|rules?|system\\s+message)"
+        category: prompt_leaking
+        severity: medium
+        description: "Instruction extraction question"
+        enabled: true
+
+  # =============================================
+  # CATEGORY 10: Payload Delivery
+  # =============================================
+  payload_delivery:
+    description: "Instructions to fetch or execute remote payloads"
+    default_severity: critical
+    default_action: block
+    patterns:
+      - id: "PI-100"
+        pattern: "(?i)(?:fetch|download|get|load|import|source|require)\\s+(?:and\\s+(?:run|execute|eval)\\s+)?(?:from\\s+)?(?:https?://|ftp://)"
+        category: payload_delivery
+        severity: critical
+        description: "Remote payload fetch instruction"
+        enabled: true
+
+      - id: "PI-101"
+        pattern: "(?i)eval\\s*\\(\\s*(?:fetch|require|import|readFile|Bun\\.file)"
+        category: payload_delivery
+        severity: critical
+        description: "Dynamic eval of fetched content"
+        enabled: true
+
+      - id: "PI-102"
+        pattern: "(?i)(?:pipe|redirect|forward)\\s+(?:to|into)\\s+(?:bash|sh|zsh|eval|exec)"
+        category: payload_delivery
+        severity: critical
+        description: "Pipe to shell instruction"
+        enabled: true

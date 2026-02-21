@@ -1,0 +1,33 @@
+{
+  "environment": "production",
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "file": "~/.claude/logs/calendar-assistant.log",
+    "maxFileSizeMB": 100,
+    "retentionDays": 7
+  },
+  "cache": {
+    "calendarReadTTLMs": 300000,
+    "intentCacheTTLMs": 600000
+  },
+  "calendar": {
+    "retryMaxAttempts": 3,
+    "retryBackoffMs": 1000,
+    "offlineModeEnabled": true,
+    "writeQueueMaxSize": 50
+  },
+  "approval": {
+    "attendeeThreshold": 3,
+    "confidenceThreshold": 0.75,
+    "protectedTimeBlocks": []
+  },
+  "breaks": {
+    "defaultFramework": "52-17",
+    "coverageWarningThreshold": 0.6
+  },
+  "performance": {
+    "maxLatencyMs": 6000,
+    "maxCostPerOperation": 0.005
+  }
+}

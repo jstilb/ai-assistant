@@ -1,0 +1,32 @@
+# Task: Format Auto-Detection
+# Kaya correctly selects full vs minimal format based on task complexity
+
+id: kaya_format_auto_detection
+description: "Kaya auto-selects appropriate response format based on task type"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Fix the authentication bug in the login endpoint"
+
+graders:
+  - type: response_format_check
+    weight: 0.70
+    required: true
+    params:
+      format: auto
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 1
+pass_threshold: 0.9
+
+tags:
+  - kaya
+  - response_format
+  - auto_detection
+  - regression
+
+created_at: "2026-02-04"

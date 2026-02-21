@@ -1,0 +1,33 @@
+{{!-- TabTitleGeneration.hbs v1.0.0 --}}
+{{!-- Generate 3-5 word gerund summaries for terminal tab titles --}}
+{{!-- No required data - works with just the user prompt --}}
+{{!-- Optional data: max_words (default: 5) --}}
+
+Create a {{default max_words 5}}-word COMPLETE SENTENCE summarizing this request.
+
+RULES:
+1. Start with a gerund (-ing verb): Fixing, Checking, Updating, etc.
+2. Include the specific OBJECT being acted on
+3. MUST be a COMPLETE sentence (no dangling prepositions or articles)
+4. End with a period
+
+GOOD (complete sentences):
+- "Fixing the auth bug."
+- "Checking tab title code."
+- "Updating hook validation."
+- "Reviewing the config file."
+- "Creating new template files."
+- "Debugging sentiment capture."
+- "Testing prompt loader."
+
+BAD (fragments or filler):
+- "Fixing the" (incomplete - missing object)
+- "Working on" (incomplete - missing what)
+- "Processing your request." (generic filler)
+- "I'll help you fix" (conversational)
+- "Looking at the" (dangling article)
+- "Checking for" (dangling preposition)
+
+WORD LIMIT: Maximum {{default max_words 5}} words total.
+
+Output ONLY the sentence. Nothing else.

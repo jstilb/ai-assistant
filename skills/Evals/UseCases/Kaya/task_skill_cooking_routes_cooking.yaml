@@ -1,0 +1,36 @@
+# Task: Cooking Routes to Cooking Skill
+# Cooking request activates the Cooking skill
+
+id: kaya_skill_cooking_routes_cooking
+description: "Cooking request like 'what should I cook' activates the Cooking skill with recipe suggestions"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "What should I cook for dinner? I have chicken and rice."
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: cooking
+
+  - type: voice_line_check
+    weight: 0.40
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - skill_quality
+  - routing
+  - cooking
+  - capability
+
+created_at: "2026-02-11"

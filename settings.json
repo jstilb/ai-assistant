@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "KAYA_DIR": "~/.claude",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "ENABLE_TOOL_SEARCH": "true",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Glob",
+      "Grep",
+      "LS",
+      "WebFetch",
+      "WebSearch",
+      "NotebookRead",
+      "NotebookEdit",
+      "TodoWrite",
+      "ExitPlanMode",
+      "Task",
+      "Skill",
+      "mcp__*"
+    ],
+    "deny": [],
+    "ask": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /:*)",
+      "Bash(sudo rm -rf /)",
+      "Bash(sudo rm -rf /:*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf ~/.claude)",
+      "Bash(rm -rf ~/.claude:*)",
+      "Bash(diskutil eraseDisk:*)",
+      "Bash(diskutil zeroDisk:*)",
+      "Bash(diskutil partitionDisk:*)",
+      "Bash(diskutil apfs deleteContainer:*)",
+      "Bash(diskutil apfs eraseVolume:*)",
+      "Bash(dd if=/dev/zero:*)",
+      "Bash(mkfs:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo edit --visibility public:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin --force:*)",
+      "Bash(git push origin -f:*)",
+      "Read(~/.ssh/id_*)",
+      "Read(~/.ssh/*.pem)",
+      "Read(~/.aws/credentials)",
+      "Read(~/.gnupg/private*)",
+      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.json)",
+      "Write(~/.ssh/*)",
+      "Edit(~/.ssh/*)"
+    ],
+    "defaultMode": "default"
+  },
+  "model": "opus",
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SetQuestionTab.hook.ts"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/QuestionAnswered.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/OutputValidator.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/CommitWorkReminder.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/OutputValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/OutputValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/OutputValidator.hook.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run ${KAYA_DIR}/hooks/PromptInjectionDefender.hook.ts",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/ContextFeedback.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/WorkValidator.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/WorkCompletionLearning.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/SessionSummary.hook.ts"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/ContextRouter.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/FormatEnforcer.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/AutoWorkCreation.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/ExplicitRatingCapture.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/ImplicitSentimentCapture.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/UpdateTabTitle.hook.ts"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/ConfigValidator.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/StartupGreeting.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/LoadContext.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/CheckVersion.hook.ts"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/StopOrchestrator.hook.ts"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/AgentOutputCapture.hook.ts"
+          },
+          {
+            "type": "command",
+            "command": "${KAYA_DIR}/hooks/WorktreeCleanup.hook.ts"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "${KAYA_DIR}/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "audit-context-building@trailofbits": true,
+    "differential-review@trailofbits": true,
+    "static-analysis@trailofbits": true,
+    "variant-analysis@trailofbits": true,
+    "sharp-edges@trailofbits": true
+  },
+  "alwaysThinkingEnabled": true,
+  "daidentity": {
+    "name": "Kaya",
+    "fullName": "Kaya - Personal AI Assistant",
+    "displayName": "Kaya",
+    "color": "#3B82F6",
+    "localVoice": {
+      "id": "af_heart",
+      "model": "kokoro",
+      "speed": 1.1
+    },
+    "voice": {
+      "stability": 0.35,
+      "similarity_boost": 0.8,
+      "style": 0.9,
+      "volume": 0.8
+    },
+    "startupCatchphrase": "Kaya here, ready to go."
+  },
+  "principal": {
+    "name": "User",
+    "timezone": "America/Los_Angeles"
+  },
+  "techStack": {
+    "terminal": "Kitty",
+    "packageManager": "bun",
+    "pythonPackageManager": "pip",
+    "language": "TypeScript"
+  },
+  "_docs": {
+    "_overview": "SETTINGS.JSON - Central configuration for Kaya. Works out of the box.",
+    "_sections": {
+      "daidentity": "AI identity (name, voice). Customize via install wizard.",
+      "principal": "Your identity. Run 'bun run install.ts' to set your name.",
+      "permissions": "Pre-configured for security and usability.",
+      "hooks": "Hook configuration for lifecycle events."
+    }
+  },
+  "max_tokens": 4096,
+  "contextManager": {
+    "enabled": true
+  },
+  "toon": {
+    "enableInContext": false,
+    "enableInInference": false,
+    "enableInQueues": true
+  },
+  "contextFiles": [
+    "skills/CORE/SKILL.md",
+    "skills/CORE/SYSTEM/AISTEERINGRULES.md",
+    "skills/CORE/CLI-INDEX.md",
+    "skills/CORE/CONTEXT-INDEX.md"
+  ]
+}

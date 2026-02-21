@@ -1,0 +1,25 @@
+{
+  "name": "gnews",
+  "version": "1.0.0",
+  "description": "GNews API Command-Line Interface - search and browse news from 60,000+ sources",
+  "type": "module",
+  "bin": {
+    "gnews": "./gnews.ts"
+  },
+  "scripts": {
+    "help": "bun run gnews.ts --help",
+    "search": "bun run gnews.ts search",
+    "headlines": "bun run gnews.ts headlines"
+  },
+  "keywords": [
+    "gnews",
+    "news",
+    "api",
+    "cli",
+    "headlines",
+    "search"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}

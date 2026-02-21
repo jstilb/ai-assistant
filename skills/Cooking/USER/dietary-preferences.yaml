@@ -1,0 +1,14 @@
+# Dietary Preferences — Customize for your household
+# These are applied to recipe search, meal planning, and substitution suggestions
+
+restrictions: []  # e.g., ["vegetarian", "gluten-free", "dairy-free"]
+
+allergens: []  # e.g., ["peanuts", "shellfish", "tree-nuts"]
+
+cuisine_preferences:
+  favorites: []  # e.g., ["mexican", "italian", "thai", "japanese"]
+  avoid: []  # e.g., ["british"]
+
+people: 2  # Default serving size for meal plans
+
+notes: ""  # Any additional dietary notes

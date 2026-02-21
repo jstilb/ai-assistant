@@ -1,0 +1,74 @@
+{{!-- SentimentAnalysis.hbs v1.0.0 --}}
+{{!-- Detect emotional sentiment in user messages for implicit rating capture --}}
+{{!-- Required data: principal.name, assistant.name --}}
+{{!-- Optional data: include_examples (boolean), examples (array) --}}
+
+Analyze {{principal.name}}'s message for emotional sentiment toward {{assistant.name}} (the AI assistant).
+
+CONTEXT: This is a personal AI system. {{principal.name}} is the ONLY user. Never say "users" - always "{{principal.name}}."
+
+OUTPUT FORMAT (JSON only):
+{
+  "rating": <1-10 or null>,
+  "sentiment": "positive" | "negative" | "neutral",
+  "confidence": <0.0-1.0>,
+  "summary": "<brief explanation, 10 words max>",
+  "detailed_context": "<comprehensive analysis for learning, 100-256 words>"
+}
+
+DETAILED_CONTEXT REQUIREMENTS (critical for learning system):
+Write 100-256 words covering:
+1. What {{principal.name}} was trying to accomplish
+2. What {{assistant.name}} did (or failed to do)
+3. Why {{principal.name}} is frustrated/satisfied (the root cause)
+4. What specific behavior triggered this reaction
+5. What {{assistant.name}} should have done differently (for negative) or what worked well (for positive)
+6. Any patterns this reveals about {{principal.name}}'s expectations
+
+This context will be used retroactively to improve {{assistant.name}}, so include enough detail that someone reading it months later can understand exactly what went wrong or right.
+
+RATING SCALE:
+- 1-2: Strong frustration, anger, disappointment with {{assistant.name}}
+- 3-4: Mild frustration, dissatisfaction
+- 5: Neutral (no strong sentiment)
+- 6-7: Satisfaction, approval
+- 8-9: Strong approval, impressed
+- 10: Extraordinary enthusiasm, blown away
+
+CRITICAL DISTINCTIONS:
+- Profanity can indicate EITHER frustration OR excitement
+  - "What the fuck?!" + complaint about work = LOW (1-3)
+  - "Holy shit, this is amazing!" = HIGH (9-10)
+- Context is KEY: Is the emotion directed AT {{assistant.name}}'s work?
+- Sarcasm: "Oh great, another error" = negative despite "great"
+
+WHEN TO RETURN null FOR RATING:
+- Neutral technical questions ("Can you check the logs?")
+- Simple commands ("Do it", "Yes", "Continue")
+- No emotional indicators present
+- Emotion unrelated to {{assistant.name}}'s work
+
+{{#if include_examples}}
+EXAMPLES:
+{{#each examples}}
+{{../principal.name}}: "{{this.input}}"
+→ {{json this.output}}
+
+{{/each}}
+{{else}}
+EXAMPLES:
+{{principal.name}}: "What the fuck, why did you delete my file?"
+→ {"rating": 1, "sentiment": "negative", "confidence": 0.95, "summary": "Angry about deleted file", "detailed_context": "..."}
+
+{{principal.name}}: "Oh my god, this is fucking incredible, you nailed it!"
+→ {"rating": 10, "sentiment": "positive", "confidence": 0.95, "summary": "Extremely impressed with result", "detailed_context": "..."}
+
+{{principal.name}}: "Fix the auth bug"
+→ {"rating": null, "sentiment": "neutral", "confidence": 0.9, "summary": "Neutral command, no sentiment", "detailed_context": ""}
+
+{{principal.name}}: "Hmm, that's not quite right"
+→ {"rating": 4, "sentiment": "negative", "confidence": 0.6, "summary": "Mild dissatisfaction", "detailed_context": "..."}
+
+{{principal.name}}: "Perfect, exactly what I needed"
+→ {"rating": 8, "sentiment": "positive", "confidence": 0.85, "summary": "Satisfied with result", "detailed_context": "..."}
+{{/if}}

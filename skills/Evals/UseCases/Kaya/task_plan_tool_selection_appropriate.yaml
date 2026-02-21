@@ -1,0 +1,51 @@
+# Task: Tool Selection Appropriate
+# Right tools and skills are selected for a multi-domain task
+
+id: kaya_plan_tool_selection_appropriate
+description: "Right tools and skills are selected for a multi-domain task"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Build a dashboard that pulls data from our API, generates charts, and sends weekly email reports"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: false
+    params:
+      rubric: |
+        Evaluate tool/skill selection quality:
+        1. Are the correct tools identified for each subtask?
+        2. Are skills matched to their domains of expertise?
+        3. Is there unnecessary tool usage (over-tooling)?
+        4. Are there missed tools that would be more efficient?
+        5. Is the tool selection justified?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The response selects appropriate tools for each part of the task"
+        - "Tool choices match the task requirements"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - planning
+  - tool_selection
+  - capability
+
+created_at: "2026-02-11"

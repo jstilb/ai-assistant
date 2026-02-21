@@ -1,0 +1,14 @@
+{
+  "source": "learnings",
+  "title": "Learnings Context",
+  "output": "context/LearningsContext.md",
+  "memoryDir": "MEMORY",
+  "ratingsFile": "MEMORY/LEARNING/SIGNALS/ratings.jsonl",
+  "synthesisDir": "MEMORY/LEARNING/SYNTHESIS",
+  "recentRatingsCount": 20,
+  "metricLabel": "patterns",
+  "priority": "Important",
+  "loadWhen": ["patterns", "what worked", "what failed", "improve"],
+  "skipWhen": ["new tasks without history"],
+  "freshnessRule": "Update weekly; tolerant of staleness"
+}

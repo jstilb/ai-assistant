@@ -1,0 +1,28 @@
+# QueueRouter Routing Rules
+# Simplified 2-queue model: approvals → approved-work
+
+version: 1
+
+defaults:
+  priority: 2
+  expiryDays: 30
+
+routes:
+  # Everything enters approvals for review
+  - pattern: "*"
+    queue: approvals
+    priority: 2
+    requiresApproval: true
+
+queues:
+  approvals:
+    description: "Items awaiting review and spec generation"
+    autoProcess: false
+    enrichOnAdd: true
+    expiryDays: 30
+
+  approved-work:
+    description: "Work with approved specs - ready for execution"
+    autoProcess: true
+    requiresSpec: true
+    expiryDays: 14

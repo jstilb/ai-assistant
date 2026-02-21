@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "containers": {
+    "markdown": {
+      "label": "Markdown",
+      "props": {
+        "content": { "type": "string", "default": "# Hello\n\nStart writing markdown here." }
+      },
+      "defaultSize": { "width": 400, "height": 400 },
+      "streaming": true,
+      "streamProp": "content"
+    },
+    "code": {
+      "label": "Code Editor",
+      "props": {
+        "code": { "type": "string", "default": "// Start coding here\n" },
+        "language": { "type": "string", "default": "typescript" }
+      },
+      "defaultSize": { "width": 600, "height": 500 },
+      "streaming": true,
+      "streamProp": "code"
+    },
+    "terminal": {
+      "label": "Terminal",
+      "props": {
+        "lines": { "type": "array", "items": "string", "default": [] }
+      },
+      "defaultSize": { "width": 600, "height": 300 },
+      "streaming": true,
+      "streamProp": "lines"
+    },
+    "image": {
+      "label": "Image",
+      "props": {
+        "src": { "type": "string", "default": "" },
+        "alt": { "type": "string", "default": "" },
+        "fit": { "type": "string", "enum": ["fit", "fill", "cover"], "default": "fit" }
+      },
+      "defaultSize": { "width": 400, "height": 400 },
+      "streaming": false
+    },
+    "table": {
+      "label": "Table",
+      "props": {
+        "columns": { "type": "array", "items": "string", "default": [] },
+        "rows": { "type": "array", "items": "object", "default": [] }
+      },
+      "defaultSize": { "width": 600, "height": 400 },
+      "streaming": false
+    },
+    "chart": {
+      "label": "Chart",
+      "props": {
+        "chartType": { "type": "string", "enum": ["bar", "line", "pie", "scatter"], "default": "bar" },
+        "data": { "type": "object", "default": {} },
+        "title": { "type": "string", "default": "" }
+      },
+      "defaultSize": { "width": 500, "height": 400 },
+      "streaming": false,
+      "note": "Not yet implemented in Phase 1 — falls back to markdown"
+    },
+    "form": {
+      "label": "Form",
+      "props": {
+        "fields": { "type": "array", "items": "object", "default": [] },
+        "submitLabel": { "type": "string", "default": "Submit" }
+      },
+      "defaultSize": { "width": 400, "height": 500 },
+      "streaming": false,
+      "note": "Not yet implemented in Phase 1 — falls back to markdown"
+    },
+    "list": {
+      "label": "List",
+      "props": {
+        "items": { "type": "array", "items": "string", "default": [] },
+        "ordered": { "type": "boolean", "default": false }
+      },
+      "defaultSize": { "width": 300, "height": 400 },
+      "streaming": false,
+      "note": "Not yet implemented in Phase 1 — falls back to markdown"
+    },
+    "custom": {
+      "label": "Custom",
+      "props": {
+        "content": { "type": "string", "default": "" }
+      },
+      "defaultSize": { "width": 400, "height": 400 },
+      "streaming": true,
+      "streamProp": "content",
+      "note": "Falls back to markdown rendering"
+    }
+  }
+}

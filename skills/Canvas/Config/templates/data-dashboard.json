@@ -1,0 +1,49 @@
+{
+  "id": "data-dashboard",
+  "name": "Data Dashboard",
+  "description": "Analytics view with charts, data tables, and input forms",
+  "version": "1.0.0",
+  "createdAt": "2026-02-15T00:00:00.000Z",
+  "updatedAt": "2026-02-15T00:00:00.000Z",
+  "tags": ["analytics", "data", "dashboard"],
+  "layout": {
+    "columns": 3,
+    "gap": 16,
+    "containers": [
+      {
+        "type": "chart",
+        "position": { "col": 0, "row": 0, "colSpan": 2 },
+        "title": "Charts",
+        "props": { "data": "[]", "chartType": "line" }
+      },
+      {
+        "type": "declarative",
+        "schema": {
+          "type": "form",
+          "title": "Filters",
+          "data": {
+            "fields": [],
+            "submitLabel": "Apply"
+          }
+        },
+        "position": { "col": 2, "row": 0 },
+        "title": "Filters"
+      },
+      {
+        "type": "declarative",
+        "schema": {
+          "type": "list",
+          "title": "Data Table",
+          "data": {
+            "items": [],
+            "sortable": true,
+            "filterable": true,
+            "emptyMessage": "No data loaded"
+          }
+        },
+        "position": { "col": 0, "row": 1, "colSpan": 3 },
+        "title": "Data Table"
+      }
+    ]
+  }
+}

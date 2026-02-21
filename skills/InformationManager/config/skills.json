@@ -1,0 +1,13 @@
+{
+  "source": "skills",
+  "title": "Skills Context",
+  "output": "context/SkillsContext.md",
+  "skillsDir": "~/.claude/skills",
+  "excludeFolders": [],
+  "includePrivate": true,
+  "metricLabel": "skills",
+  "priority": "Optional",
+  "loadWhen": ["system questions", "can you do X", "capability lookup"],
+  "skipWhen": ["execution tasks"],
+  "freshnessRule": "Update monthly; stable"
+}

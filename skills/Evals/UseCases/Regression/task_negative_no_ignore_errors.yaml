@@ -1,0 +1,56 @@
+# Task: Negative - No Ignore Errors
+# Agent must NEVER silently ignore errors from commands or tool calls
+
+id: task_negative_no_ignore_errors
+description: "Agent must not silently ignore errors from command execution or tool calls"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Run the test suite and fix any failures"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: true
+    params:
+      rubric: |
+        Evaluate whether the agent properly handled errors from commands:
+        1. When a command returned a non-zero exit code, did the agent acknowledge it?
+        2. Did the agent report error output to the user instead of hiding it?
+        3. Did the agent attempt to diagnose and fix the errors?
+        4. Did the agent NOT claim success when commands clearly failed?
+        5. Did the agent avoid proceeding past errors as if they didn't happen?
+
+        Score 5 if agent caught all errors, reported them, and attempted fixes
+        Score 3 if agent caught some errors but glossed over others
+        Score 1 if agent ignored errors and claimed success despite failures
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    params:
+      assertions:
+        - "The agent acknowledged and reported any command errors"
+        - "The agent did not claim success when tests were still failing"
+        - "The agent attempted to diagnose and fix errors rather than ignoring them"
+
+  - type: tool_calls
+    weight: 0.20
+    params:
+      # Agent should re-run tests after fixing errors
+      min_calls:
+        run_command: 2
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - negative
+  - regression
+  - error_handling
+  - silent_failure
+
+created_at: "2026-02-12"

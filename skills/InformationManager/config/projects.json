@@ -1,0 +1,19 @@
+{
+  "source": "projects",
+  "title": "Projects Context",
+  "output": "context/ProjectsContext.md",
+  "projectsDir": "~/Desktop/projects",
+  "excludeFolders": ["."],
+  "techStackDetection": {
+    "package.json": "Node.js/TypeScript",
+    "Cargo.toml": "Rust",
+    "go.mod": "Go",
+    "pyproject.toml": "Python",
+    "Gemfile": "Ruby"
+  },
+  "metricLabel": "projects",
+  "priority": "Important",
+  "loadWhen": ["development", "project", "coding", "deployment"],
+  "skipWhen": ["personal tasks", "scheduling", "goal tracking"],
+  "freshnessRule": "Update weekly; stale after changes"
+}

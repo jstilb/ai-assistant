@@ -1,0 +1,20 @@
+# Kaya Before/After Comparison Suite
+# Pairwise comparison of responses before/after context management changes
+# Target: ~50% pass rate (new capability wins or ties)
+
+name: kaya-comparison
+description: "Pairwise before/after comparison of context and skill changes"
+type: capability
+domain: general
+
+tasks:
+  - kaya_cmp_context_focus_coding
+  - kaya_cmp_context_focus_greeting
+  - kaya_cmp_skill_routing_preserved
+  - kaya_cmp_response_quality_general
+  - kaya_cmp_context_noise_reduction
+
+pass_threshold: 0.53
+saturation_threshold: 0.80
+
+created_at: "2026-02-11"

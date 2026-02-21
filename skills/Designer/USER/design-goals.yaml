@@ -1,0 +1,16 @@
+# Design Goals — Active projects and priorities
+# Referenced by all Designer tools for context
+
+active_projects: []
+  # Example:
+  # - name: "Living Room Refresh"
+  #   room: living-room
+  #   budget: 2000
+  #   priority: 1
+  #   target_style: hygge
+  #   timeline: "Q1 2026"
+
+priorities:
+  - "Add warmth and texture to main living spaces"
+  - "Improve ambient lighting"
+  - "Create a dedicated reading nook"

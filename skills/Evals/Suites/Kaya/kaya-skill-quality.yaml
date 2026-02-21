@@ -1,0 +1,28 @@
+# Kaya Skill Output Quality Suite
+# Tests skill routing accuracy and output completeness
+# Target: ~75% pass rate
+
+name: kaya-skill-quality
+description: "Skill routing accuracy and output completeness"
+type: capability
+domain: general
+
+tasks:
+  # Skill routing
+  - kaya_skill_email_routes_gmail
+  - kaya_skill_cooking_routes_cooking
+  - kaya_skill_calendar_routes_calendar_assistant
+  - kaya_skill_tasks_routes_lucid_tasks
+  - kaya_skill_briefing_routes_daily_briefing
+
+  # Output quality
+  - kaya_skill_cooking_output_quality
+  - kaya_skill_gmail_output_quality
+  - kaya_skill_briefing_output_quality
+  - kaya_skill_lucid_tasks_output_quality
+  - kaya_skill_shopping_research_quality
+
+pass_threshold: 0.21
+saturation_threshold: 0.90
+
+created_at: "2026-02-11"

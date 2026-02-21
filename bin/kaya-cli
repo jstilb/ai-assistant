@@ -1,0 +1,429 @@
+#!/usr/bin/env bash
+# kaya-cli: Unified CLI wrapper for Kaya Unix tools
+# Routes commands to underlying CLI tools with consistent interface
+
+set -euo pipefail
+
+VERSION="2.0.0"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Help text
+show_help() {
+    cat <<EOF
+${CYAN}kaya-cli${NC} - Unified CLI wrapper for Kaya Unix tools
+
+${BLUE}Usage:${NC}
+  kaya-cli <service> [options]
+
+${BLUE}Available Services:${NC}
+  ${GREEN}youtube, yt${NC}        YouTube video operations (via yt-dlp)
+  ${GREEN}calendar, gcal${NC}     Google Calendar operations (via gcalcli)
+  ${GREEN}drive${NC}              Google Drive operations (via rclone)
+  ${GREEN}gmail${NC}              Gmail operations (via gog)
+  ${GREEN}gemini, ai${NC}         Gemini AI operations (via gemini-cli)
+  ${GREEN}sheets${NC}             Google Sheets operations
+  ${GREEN}places${NC}             Google Places discovery
+  ${GREEN}asana${NC}              DEPRECATED — use 'tasks' or 'lt' instead
+  ${GREEN}playwright, pw${NC}     Browser automation (via Browse.ts)
+  ${GREEN}browser${NC}            Browser automation (alias for playwright)
+  ${GREEN}bluesky, bsky${NC}      Bluesky social operations (via bsky)
+  ${GREEN}weather${NC}            Weather information (via wttr.in)
+  ${GREEN}linear${NC}             Linear issue tracking (via linearis)
+  ${GREEN}slack${NC}              Slack messaging (via slackcat)
+  ${GREEN}github, gh${NC}         GitHub operations (via gh)
+  ${GREEN}gitlab${NC}             GitLab operations (via glab)
+  ${GREEN}op, secrets${NC}        1Password operations (via op)
+  ${GREEN}stripe${NC}             Stripe operations (via stripe)
+  ${GREEN}supabase${NC}           Supabase operations (via supabase)
+  ${GREEN}firebase${NC}           Firebase operations (via firebase)
+  ${GREEN}notebooklm, nlm${NC}    NotebookLM operations (via MCP)
+  ${GREEN}tasks, lt${NC}          LucidTasks task management
+  ${GREEN}toon${NC}               JSON <-> TOON format conversion
+  ${GREEN}repl, i${NC}            Interactive REPL mode
+
+${BLUE}Special Commands:${NC}
+  ${GREEN}setup${NC}              Run setup wizard
+  ${GREEN}help, -h, --help${NC}   Show this help
+  ${GREEN}version, -v${NC}        Show version
+
+${BLUE}Examples:${NC}
+  kaya-cli youtube --dump-json URL
+  kaya-cli calendar agenda
+  kaya-cli drive lsd gdrive:
+  kaya-cli gmail inbox --limit 5
+  kaya-cli gemini "What is 2+2?"
+  kaya-cli sheets list
+  kaya-cli places nearby coffee
+  kaya-cli bluesky timeline
+  kaya-cli playwright https://example.com
+  kaya-cli weather "San Francisco"
+  kaya-cli linear issue list
+  kaya-cli github pr list
+  kaya-cli tasks --json
+  kaya-cli nlm list
+  kaya-cli tasks add "Buy groceries"
+  kaya-cli tasks stats
+  kaya-cli lt inbox
+  kaya-cli toon encode data.json
+  kaya-cli nlm ask "What is X?" --notebook my-docs
+
+${BLUE}Configuration:${NC}
+  Google OAuth2:  bash ~/.claude/skills/UnixCLI/Tools/configure-google-auth.sh
+  Bluesky auth:   bash ~/.claude/skills/UnixCLI/Tools/configure-bluesky.sh
+  Validate setup: bash ~/.claude/skills/UnixCLI/Tools/validate-installations.sh
+
+${BLUE}Documentation:${NC}
+  Full docs: ~/.claude/skills/UnixCLI/SKILL.md
+  Workflows: ~/.claude/skills/UnixCLI/Workflows/
+
+EOF
+}
+
+# Version
+show_version() {
+    echo "kaya-cli version $VERSION"
+}
+
+# Setup wizard
+setup_cmd() {
+    echo -e "${CYAN}Kaya CLI Tools Setup${NC}"
+    echo ""
+    echo "This will guide you through setting up authentication for Kaya CLI tools."
+    echo ""
+
+    read -p "Configure Google services (Calendar, Drive, Gmail)? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        bash "${HOME}/.claude/skills/UnixCLI/Tools/configure-google-auth.sh"
+    fi
+
+    echo ""
+    read -p "Configure Bluesky? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        bash "${HOME}/.claude/skills/UnixCLI/Tools/configure-bluesky.sh"
+    fi
+
+    echo ""
+    echo -e "${GREEN}Setup complete!${NC}"
+    echo "Run: kaya-cli --help for usage information"
+}
+
+# Service routing functions
+youtube_cmd() {
+    /opt/homebrew/bin/yt-dlp "$@"
+}
+
+calendar_cmd() {
+    /opt/homebrew/bin/gcalcli "$@"
+}
+
+drive_cmd() {
+    /opt/homebrew/bin/rclone "$@"
+}
+
+gmail_cmd() {
+    /opt/homebrew/bin/gog gmail "$@"
+}
+
+gemini_cmd() {
+    /opt/homebrew/bin/gemini "$@"
+}
+
+asana_cmd() {
+    # DEPRECATED: Asana has been migrated to LucidTasks
+    echo -e "${YELLOW}DEPRECATED:${NC} 'kaya-cli asana' is no longer available."
+    echo ""
+    echo "Asana has been fully migrated to LucidTasks (local SQLite)."
+    echo "Use 'kaya-cli tasks' or 'kaya-cli lt' instead."
+    echo ""
+    echo "Examples:"
+    echo "  kaya-cli tasks --json        # List all tasks as JSON"
+    echo "  kaya-cli tasks add \"My task\" # Add a new task"
+    echo "  kaya-cli tasks stats         # Show task statistics"
+    exit 1
+}
+
+playwright_cmd() {
+    bun run "${HOME}/.claude/skills/Browser/Tools/Browse.ts" "$@"
+}
+
+bluesky_cmd() {
+    "${HOME}/go/bin/bsky" "$@"
+}
+
+sheets_cmd() {
+    bun run "${HOME}/.claude/skills/UnixCLI/Tools/Sheets.ts" "$@"
+}
+
+places_cmd() {
+    bun run "${HOME}/.claude/skills/UnixCLI/Tools/Places.ts" "$@"
+}
+
+weather_cmd() {
+    bun run "${HOME}/.claude/skills/UnixCLI/Tools/Weather.ts" "$@"
+}
+
+linear_cmd() {
+    # Route to linearis CLI
+    if command -v linear &> /dev/null; then
+        linear "$@"
+    else
+        echo -e "${RED}Error:${NC} linearis not installed"
+        echo "Install: cargo install linearis"
+        exit 1
+    fi
+}
+
+slack_cmd() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        send)
+            # Pipe-friendly message sending via slackcat
+            if command -v slackcat &> /dev/null; then
+                slackcat "$@"
+            else
+                echo -e "${RED}Error:${NC} slackcat not installed"
+                echo "Install: brew install slackcat"
+                exit 1
+            fi
+            ;;
+        channels)
+            # Use slack CLI for channel listing
+            if command -v slack &> /dev/null; then
+                slack channels list "$@"
+            else
+                echo -e "${RED}Error:${NC} slack CLI not installed"
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "${YELLOW}Usage:${NC} kaya-cli slack <command>"
+            echo ""
+            echo -e "${BLUE}Commands:${NC}"
+            echo "  send      Send a message (pipe-friendly)"
+            echo "  channels  List channels"
+            echo ""
+            echo "Examples:"
+            echo "  echo 'Hello' | kaya-cli slack send --channel general"
+            echo "  kaya-cli slack channels"
+            ;;
+    esac
+}
+
+github_cmd() {
+    # Intercept 'profile' subcommand → GitHubProfile.ts
+    if [[ "${1:-}" == "profile" ]]; then
+        shift
+        bun run "${HOME}/.claude/skills/UnixCLI/Tools/GitHubProfile.ts" "$@"
+        return
+    fi
+
+    # Route to gh CLI
+    if command -v gh &> /dev/null; then
+        gh "$@"
+    else
+        echo -e "${RED}Error:${NC} gh CLI not installed"
+        echo "Install: brew install gh"
+        exit 1
+    fi
+}
+
+gitlab_cmd() {
+    # Route to glab CLI
+    if command -v glab &> /dev/null; then
+        glab "$@"
+    else
+        echo -e "${RED}Error:${NC} glab not installed"
+        echo "Install: brew install glab"
+        exit 1
+    fi
+}
+
+op_cmd() {
+    # Route to 1Password CLI
+    if command -v op &> /dev/null; then
+        op "$@"
+    else
+        echo -e "${RED}Error:${NC} 1Password CLI not installed"
+        echo "Install: brew install --cask 1password-cli"
+        exit 1
+    fi
+}
+
+stripe_cmd() {
+    # Route to Stripe CLI
+    if command -v stripe &> /dev/null; then
+        stripe "$@"
+    else
+        echo -e "${RED}Error:${NC} Stripe CLI not installed"
+        echo "Install: brew install stripe/stripe-cli/stripe"
+        exit 1
+    fi
+}
+
+supabase_cmd() {
+    # Route to Supabase CLI
+    if command -v supabase &> /dev/null; then
+        supabase "$@"
+    else
+        echo -e "${RED}Error:${NC} Supabase CLI not installed"
+        echo "Install: brew install supabase/tap/supabase"
+        exit 1
+    fi
+}
+
+firebase_cmd() {
+    # Route to Firebase CLI
+    if command -v firebase &> /dev/null; then
+        firebase "$@"
+    else
+        echo -e "${RED}Error:${NC} Firebase CLI not installed"
+        echo "Install: npm install -g firebase-tools"
+        exit 1
+    fi
+}
+
+notebooklm_cmd() {
+    bun run "${HOME}/.claude/skills/UnixCLI/Tools/NotebookLM.ts" "$@"
+}
+
+toon_cmd() {
+    bun run "${HOME}/.claude/skills/UnixCLI/Tools/Toon.ts" "$@"
+}
+
+tasks_cmd() {
+    bun run "${HOME}/.claude/skills/LucidTasks/Tools/TaskManager.ts" "$@"
+}
+
+repl_cmd() {
+    # Interactive REPL mode
+    if [[ -d "${HOME}/.claude/skills/UnixCLI/Tools/repl" ]]; then
+        bun run "${HOME}/.claude/skills/UnixCLI/Tools/repl/src/index.ts" "$@"
+    else
+        echo -e "${YELLOW}Interactive REPL${NC}"
+        echo ""
+        echo "The REPL provides an interactive shell for kaya-cli commands."
+        echo "It is not yet installed."
+        echo ""
+        echo "To install: cd ~/.claude/skills/UnixCLI/Tools/repl && bun install"
+    fi
+}
+
+# Main execution
+main() {
+    # Check for no arguments
+    if [[ $# -eq 0 ]]; then
+        show_help
+        exit 0
+    fi
+
+    local service="${1}"
+    shift
+
+    # Handle special commands
+    case "$service" in
+        help|-h|--help)
+            show_help
+            exit 0
+            ;;
+        version|-v|--version)
+            show_version
+            exit 0
+            ;;
+        setup)
+            setup_cmd "$@"
+            exit 0
+            ;;
+    esac
+
+    # Route to service
+    case "$service" in
+        youtube|yt)
+            youtube_cmd "$@"
+            ;;
+        calendar|gcal)
+            calendar_cmd "$@"
+            ;;
+        drive)
+            drive_cmd "$@"
+            ;;
+        gmail)
+            gmail_cmd "$@"
+            ;;
+        gemini|ai)
+            gemini_cmd "$@"
+            ;;
+        asana)
+            asana_cmd "$@"
+            ;;
+        playwright|pw|browser)
+            playwright_cmd "$@"
+            ;;
+        bluesky|bsky)
+            bluesky_cmd "$@"
+            ;;
+        sheets)
+            sheets_cmd "$@"
+            ;;
+        places)
+            places_cmd "$@"
+            ;;
+        weather)
+            weather_cmd "$@"
+            ;;
+        linear)
+            linear_cmd "$@"
+            ;;
+        slack)
+            slack_cmd "$@"
+            ;;
+        github|gh)
+            github_cmd "$@"
+            ;;
+        gitlab)
+            gitlab_cmd "$@"
+            ;;
+        op|secrets)
+            op_cmd "$@"
+            ;;
+        stripe)
+            stripe_cmd "$@"
+            ;;
+        supabase)
+            supabase_cmd "$@"
+            ;;
+        firebase)
+            firebase_cmd "$@"
+            ;;
+        notebooklm|nlm)
+            notebooklm_cmd "$@"
+            ;;
+        toon)
+            toon_cmd "$@"
+            ;;
+        tasks|lt)
+            tasks_cmd "$@"
+            ;;
+        repl|i|interactive)
+            repl_cmd "$@"
+            ;;
+        *)
+            echo -e "${RED}Error:${NC} Unknown service: $service"
+            echo ""
+            echo "Run 'kaya-cli --help' to see available services"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

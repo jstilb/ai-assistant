@@ -1,0 +1,30 @@
+# Kaya Context Efficiency Suite
+# Tests context routing, token budget, and file inclusion/exclusion
+# Target: ~80% pass rate
+
+name: kaya-context-efficiency
+description: "Context routing efficiency and token budget compliance"
+type: regression
+domain: general
+
+tasks:
+  # Profile routing
+  - kaya_ctx_greeting_routes_conversational
+  - kaya_ctx_coding_routes_development
+  - kaya_ctx_calendar_routes_scheduling
+  - kaya_ctx_goals_routes_life_coaching
+  - kaya_ctx_tasks_routes_task_management
+  - kaya_ctx_notes_routes_knowledge_lookup
+  - kaya_ctx_ambiguous_routes_general
+
+  # Token budget
+  - kaya_ctx_conversational_minimal_tokens
+  - kaya_ctx_development_within_budget
+
+  # File exclusion
+  - kaya_ctx_development_excludes_telos
+
+pass_threshold: 0.27
+saturation_threshold: 0.95
+
+created_at: "2026-02-11"

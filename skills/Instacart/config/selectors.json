@@ -1,0 +1,146 @@
+{
+  "searchInput": {
+    "description": "Main search bar input field",
+    "primary": "input[type=\"search\"]",
+    "fallbacks": [
+      "input[placeholder*=\"Search\"]",
+      "[data-testid=\"search-input\"]",
+      "input[aria-label*=\"Search\"]",
+      "input[role=\"searchbox\"]"
+    ]
+  },
+  "addToCartButton": {
+    "description": "Add to cart button on product card or search results",
+    "primary": "[data-testid=\"add-to-cart-button\"]",
+    "fallbacks": [
+      "button:has-text(\"Add to cart\")",
+      "button:has-text(\"Add\")",
+      "[aria-label*=\"Add to cart\"]",
+      "button[class*=\"AddToCart\"]"
+    ]
+  },
+  "productCard": {
+    "description": "Individual product card in search results",
+    "primary": "[data-testid=\"product-card\"]",
+    "fallbacks": [
+      ".product-card",
+      "[class*=\"ProductCard\"]",
+      "[data-testid=\"product-tile\"]",
+      "li[class*=\"product\"]"
+    ]
+  },
+  "modalAddButton": {
+    "description": "Add to cart button inside product detail modal",
+    "primary": "[data-testid=\"add-to-cart-button\"]",
+    "fallbacks": [
+      "button:has-text(\"Add to cart\")",
+      "button:has-text(\"Add\")",
+      "[role=\"dialog\"] button[class*=\"AddToCart\"]"
+    ]
+  },
+  "closeModal": {
+    "description": "Close button for product detail modal",
+    "primary": "[aria-label=\"Close\"]",
+    "fallbacks": [
+      "button:has-text(\"Close\")",
+      "[data-testid=\"close-button\"]",
+      "[role=\"dialog\"] button[aria-label*=\"close\"]"
+    ]
+  },
+  "accountButton": {
+    "description": "Account/user menu button indicating logged-in state",
+    "primary": "[data-testid=\"account-button\"]",
+    "fallbacks": [
+      "[aria-label*=\"Account\"]",
+      ".user-menu",
+      "[data-testid=\"user-menu\"]",
+      "[data-testid=\"header-account\"]"
+    ]
+  },
+  "signInButton": {
+    "description": "Sign in/log in button indicating logged-out state",
+    "primary": "text=Sign in",
+    "fallbacks": [
+      "text=Log in",
+      "[data-testid=\"login-button\"]",
+      "a[href*=\"/login\"]"
+    ]
+  },
+  "cartItem": {
+    "description": "Individual item row in the cart view",
+    "primary": "[data-testid=\"cart-item\"]",
+    "fallbacks": [
+      ".cart-item",
+      "[class*=\"CartItem\"]",
+      "[data-testid=\"cart-product\"]"
+    ]
+  },
+  "itemName": {
+    "description": "Item name text within a cart item",
+    "primary": "[data-testid=\"item-name\"]",
+    "fallbacks": [
+      ".item-name",
+      "h3",
+      "h4",
+      "[class*=\"ItemName\"]"
+    ]
+  },
+  "itemPrice": {
+    "description": "Item price text within a cart item",
+    "primary": "[data-testid=\"item-price\"]",
+    "fallbacks": [
+      ".item-price",
+      "[class*=\"price\"]",
+      "[data-testid=\"item-cost\"]"
+    ]
+  },
+  "itemQuantity": {
+    "description": "Item quantity input/display within a cart item",
+    "primary": "[data-testid=\"item-quantity\"]",
+    "fallbacks": [
+      ".item-quantity",
+      "input[type=\"number\"]",
+      "[class*=\"quantity\"]"
+    ]
+  },
+  "storeSelector": {
+    "description": "Store selection/switching UI element",
+    "primary": "[data-testid=\"store-selector\"]",
+    "fallbacks": [
+      "[aria-label*=\"store\"]",
+      "[data-testid=\"retailer-selector\"]",
+      "button:has-text(\"Choose store\")",
+      "[class*=\"StoreSelector\"]"
+    ]
+  },
+  "storeSearchInput": {
+    "description": "Search input within store selection modal",
+    "primary": "[data-testid=\"store-search-input\"]",
+    "fallbacks": [
+      "[role=\"dialog\"] input[type=\"search\"]",
+      "[role=\"dialog\"] input[placeholder*=\"Search\"]",
+      "input[placeholder*=\"store\"]"
+    ]
+  },
+  "storeOption": {
+    "description": "Individual store option in the store picker",
+    "primary": "[data-testid=\"store-option\"]",
+    "fallbacks": [
+      "[role=\"option\"]",
+      "[data-testid=\"retailer-option\"]",
+      "li[class*=\"store\"]"
+    ]
+  },
+  "captchaChallenge": {
+    "description": "CAPTCHA or bot verification challenge page indicators",
+    "primary": "iframe[src*=\"captcha\"]",
+    "fallbacks": [
+      "iframe[src*=\"challenge\"]",
+      "[class*=\"captcha\"]",
+      "#challenge-running",
+      "[data-testid=\"challenge-container\"]",
+      "iframe[src*=\"recaptcha\"]",
+      "iframe[title*=\"reCAPTCHA\"]"
+    ]
+  }
+}

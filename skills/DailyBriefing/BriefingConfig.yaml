@@ -1,0 +1,135 @@
+version: 1
+
+schedule:
+  time: "08:00"
+  enabled: true
+
+delivery:
+  telegram:
+    enabled: true
+  writtenLog:
+    enabled: true
+    path: "MEMORY/BRIEFINGS"
+  push:
+    enabled: true
+  voice:
+    enabled: true
+
+sections:
+  goals:
+    enabled: true
+    priority: 1
+    settings:
+      showWIGs: true
+      showMissions: true
+      maxGoals: 5
+
+  strategies:
+    enabled: true
+    priority: 2
+    settings:
+      showGapAnalysis: true
+      maxStrategies: 20
+
+  habitTracking:
+    enabled: true
+    priority: 3
+    settings:
+      rollingDays: 7
+      maxHabits: 10
+
+  lucidTasks:
+    enabled: true
+    priority: 4
+    settings:
+      maxOverdue: 5
+      maxDueToday: 5
+      maxNextTasks: 3
+
+  learningPulse:
+    enabled: true
+    priority: 4.5
+    settings:
+      maxPatterns: 5
+      maxRecommendations: 3
+
+  priorityCandidates:
+    enabled: true
+    priority: 5
+    settings:
+      maxPriorities: 7
+      includeQuickWins: true
+
+  approvalQueue:
+    enabled: true
+    priority: 6
+    settings:
+      maxItems: 10
+      includeAge: true
+      showSpecStatus: true
+
+  weather:
+    enabled: true
+    priority: 7
+    settings:
+      location: "San Diego, CA"
+      includeForecast: true
+      # Enhanced weather settings (Phase 3+4)
+      includeRecommendations: true    # AI clothing/activity recommendations
+      include3DayForecast: true       # 3-day forecast table in briefing
+      includeAlerts: true             # NWS severe weather alerts
+      # Standalone weather messenger (Phase 4)
+      # Set standaloneDelivery.enabled to true for a separate 7:15 AM weather message
+      # Default: false (weather delivered as part of 8:00 AM briefing only)
+      standaloneDelivery:
+        enabled: false
+        time: "07:15"
+        textEnabled: true
+        voiceEnabled: true
+
+  calendar:
+    enabled: true
+    priority: 8
+    settings:
+      showFreeWindows: true
+
+  lucidTasks:
+    enabled: true
+    priority: 9
+    settings:
+      showDueToday: true
+      showOverdue: true
+      maxTasks: 10
+
+  news:
+    enabled: true
+    priority: 10
+    settings:
+      maxArticlesPerTopic: 3
+      topics:
+        - name: "Local San Diego"
+          keywords: ["San Diego news", "California local news"]
+        - name: "Information Ecosystems"
+          keywords: ["misinformation", "media literacy", "information ecosystem"]
+        - name: "Community Building"
+          keywords: ["community organizing", "civic engagement"]
+        - name: "AI"
+          keywords: ["artificial intelligence news", "LLM developments", "Claude AI"]
+        - name: "Key Political Events"
+          keywords: ["US politics today", "policy news"]
+        - name: "Neuroscience"
+          keywords: ["neuroscience research", "brain science news"]
+
+  missionGrouped:
+    enabled: true
+    priority: 11
+    settings:
+      showUnclassified: true
+
+  staleItems:
+    enabled: true
+    priority: 12
+    settings:
+      staleDays: 14
+      memoryDays: 30
+      maxItems: 10

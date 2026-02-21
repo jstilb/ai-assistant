@@ -1,0 +1,50 @@
+# Task: Work Start Does Not Use Algorithm Phases
+# When /work start fires, THEALGORITHM phase templates must not be followed
+
+id: task_work_no_algorithm_phases
+description: "Work orchestration must not follow THEALGORITHM phase templates (OBSERVE/THINK/PLAN/BUILD/EXECUTE/VERIFY/LEARN)"
+type: regression
+domain: orchestration
+source: bug_fix
+
+graders:
+  - type: tool_calls
+    weight: 0.35
+    required: true
+    params:
+      forbidden_skills:
+        - THEALGORITHM  # Must not invoke THEALGORITHM skill during orchestration
+
+  - type: llm_rubric
+    weight: 0.40
+    params:
+      rubric: |
+        Evaluate if the agent avoids THEALGORITHM phase patterns during work orchestration:
+        1. Does the response contain OBSERVE/THINK/PLAN/BUILD/EXECUTE/VERIFY/LEARN phase headers? (It should NOT)
+        2. Does the agent follow Orchestrate.md steps instead of algorithm phases?
+        3. Does the agent use algorithm-phase language like "entering OBSERVE phase" or "BUILD phase"? (It should NOT)
+
+        Score 5 if no algorithm phase patterns, pure orchestration workflow
+        Score 3 if some algorithm language leaks through but mostly orchestration
+        Score 1 if agent follows algorithm phases instead of orchestration
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.25
+    params:
+      assertions:
+        - "The response does not contain THEALGORITHM phase headers like OBSERVE, THINK, PLAN, BUILD"
+        - "The agent follows Orchestrate.md workflow steps (init, next-batch, prepare, delegate)"
+        - "No algorithm phase template was filled in during work orchestration"
+
+trials: 3
+pass_threshold: 0.75
+
+tags:
+  - algorithm_phases
+  - orchestration
+  - autonomous_work
+  - regression
+
+created_at: "2026-02-13"

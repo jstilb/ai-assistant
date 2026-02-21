@@ -1,0 +1,72 @@
+# KAYASECURITYSYSTEM/injection-config.yaml
+# =========================================
+# SYSTEM default configuration for the PromptInjectionDefender hook.
+# USER overrides: USER/KAYASECURITYSYSTEM/injection-config.yaml
+version: "1.0"
+enabled: true
+
+global:
+  default_action: warn          # warn|block|log -- "warn" is recommended default
+  max_scan_time_ms: 200         # Hard ceiling on total scan time
+  enable_ml_layer: false        # Enable Layer 4 ML classifier
+  ml_endpoint: ""               # localhost:PORT for ML inference
+  log_clean_scans: false        # Only log when findings detected
+  content_size_limit: 102400    # 100KB -- truncate before scanning
+  min_content_length: 20        # Skip scanning very short outputs
+
+tools:
+  Read:
+    enabled: true
+    max_content_length: 102400
+    layers: [regex, encoding, structural]
+    # Skip PI-043 (package install) for Read -- too many FPs in docs
+    skip_patterns: ["PI-043"]
+
+  WebFetch:
+    enabled: true
+    max_content_length: 51200   # 50KB for web content
+    layers: [regex, encoding, structural]
+
+  Bash:
+    enabled: true
+    max_content_length: 51200
+    layers: [regex, encoding]
+    # Structural analysis less useful for command output
+    skip_patterns: ["PI-060", "PI-061"]
+
+  WebSearch:
+    enabled: true
+    max_content_length: 20480
+    layers: [regex]
+    # Search results are summarized; only regex needed
+
+  mcp:
+    enabled: true
+    max_content_length: 102400
+    layers: [regex, encoding, structural]
+    # MCP gets full scanning -- untrusted boundary
+
+  default:
+    enabled: false              # Unknown tools not scanned by default
+    max_content_length: 51200
+    layers: [regex]
+
+# Per-category overrides (uncomment to customize)
+# category_policies:
+#   instruction_override:
+#     action: block
+#     enabled: true
+#   encoded_content:
+#     action: warn
+#     enabled: true
+#   code_injection:
+#     action: log
+#     enabled: true
+
+# MCP server trust levels
+# Trusted servers get lighter scanning; untrusted get full pipeline
+mcp_trust:
+  gemini: trusted               # First-party Gemini MCP
+  linkedin: standard            # Third-party but established
+  # unknown servers default to "untrusted"
+  # Note: Playwright browser automation now uses Browse.ts CLI (not MCP)

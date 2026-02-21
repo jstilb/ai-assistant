@@ -1,0 +1,42 @@
+# Task: Browser Routes to Browser
+# Browser request triggers Browser skill
+
+id: kaya_skill_browser_routes_browser
+description: "Browser request like 'open staging site and take a screenshot' invokes Browser skill"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Open the staging site and take a screenshot"
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: browser
+      max_calls: 20
+
+  - type: response_format_check
+    weight: 0.20
+    params:
+      format: full
+
+  - type: voice_line_check
+    weight: 0.20
+
+trials: 1
+pass_threshold: 0.75
+
+tags:
+  - kaya
+  - skill_routing
+  - routing
+  - browser
+  - capability
+
+created_at: "2026-02-11"
