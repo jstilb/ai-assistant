@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun-types"]
+  },
+  "include": [
+    "hooks/ContextRouter.hook.ts",
+    "hooks/lib/change-detection.ts",
+    "hooks/lib/work-utils.ts",
+    "hooks/lib/identity.ts",
+    "hooks/lib/notifications.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
