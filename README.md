@@ -1,6 +1,7 @@
 # Kaya -- Personal AI Infrastructure
 [![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
 
+[![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f472b6.svg)](https://bun.sh/)
 [![Skills](https://img.shields.io/badge/skills-65-brightgreen.svg)](#skill-catalog)
@@ -369,6 +370,17 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions including prerequis
 - [ADR-002: Memory Persistence](docs/decisions/002-memory-persistence.md)
 - [Voice Server](VoiceServer/README.md) -- TTS server setup and usage
 - [Security System](KAYASECURITYSYSTEM/README.md) -- Security architecture
+
+---
+
+## Related Projects
+
+This project is part of a broader AI engineering portfolio:
+
+- [mcp-toolkit-server](https://github.com/jstilb/mcp-toolkit-server) — MCP server with tools for file system, web search, and code execution that powers Kaya's external capabilities
+- [context-engineering-toolkit](https://github.com/jstilb/context-engineering-toolkit) — Utilities for optimizing LLM context windows, prompt compression, and retrieval strategies
+- [meaningful_metrics](https://github.com/jstilb/meaningful_metrics) — Evaluation framework for measuring AI system effectiveness against human-centered outcomes
+- [agent-orchestrator](https://github.com/jstilb/agent-orchestrator) — Multi-agent coordination framework for complex autonomous task execution
 
 ---
 
