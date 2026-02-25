@@ -1,7 +1,5 @@
 # Kaya -- Personal AI Infrastructure
 [![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
-
-[![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f472b6.svg)](https://bun.sh/)
 [![Skills](https://img.shields.io/badge/skills-65-brightgreen.svg)](#skill-catalog)
@@ -387,10 +385,3 @@ This project is part of a broader AI engineering portfolio:
 ## License
 
 MIT
-
-
-## Related Projects
-
-- [mcp-toolkit-server](https://github.com/jstilb/mcp-toolkit-server) — MCP server toolkit for Claude AI integration
-- [context-engineering-toolkit](https://github.com/jstilb/context-engineering-toolkit) — Context window optimization and prompt engineering tools
-- [modern-rag-pipeline](https://github.com/jstilb/modern-rag-pipeline) — Production RAG pipeline with hybrid search
