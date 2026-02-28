@@ -17,17 +17,17 @@
 
 **90-second walkthrough** showing the complete Kaya pipeline in action: prompt input, hook pipeline firing, skill dispatch and execution, memory being written, and the next session picking up context from the previous one.
 
-<!-- Demo video pending recording. The video will demonstrate:
-  1. Prompt input: User types a development prompt in Claude Code
-  2. Hook pipeline firing: ContextRouter classifies intent, SecurityValidator validates tool calls
-  3. Skill dispatch + execution: AutonomousWork skill spawns and executes a task
-  4. Memory write: SessionSummary writes learnings to MEMORY/LEARNING/
-  5. Next-session context retrieval: ContextRouter loads prior context in a fresh session
-  Video will be hosted unlisted on YouTube and embedded here with a thumbnail image. -->
+<!-- DEMO VIDEO THUMBNAIL — replace href and src with actual YouTube unlisted URL and thumbnail once recorded -->
+[![Kaya Demo — 90-second pipeline walkthrough](https://img.youtube.com/vi/PLACEHOLDER_VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID)
 
-[![Demo Video](https://img.shields.io/badge/Demo-YouTube%20%28coming%20soon%29-red.svg)](https://www.youtube.com/channel/UCjstilb)
+> **Note (human-required):** Demo video recording requires a screen recording session. The video above will link to the actual YouTube unlisted URL once recorded. The video will be ≤90 seconds and demonstrate: (1) prompt input, (2) hook pipeline firing visibly in stderr logs, (3) skill dispatch + execution, (4) memory write to MEMORY/LEARNING/, and (5) next-session context retrieval via ContextRouter.
 
-> **Note:** Demo video recording is in progress. The thumbnail and YouTube link will be embedded here once recorded. The video will be ≤90 seconds and demonstrate all five checkpoints listed in the architecture section.
+The five checkpoints the video covers:
+1. **Prompt input** — User types a development prompt in Claude Code terminal
+2. **Hook pipeline firing** — ContextRouter classifies intent, SecurityValidator validates each tool call (visible in stderr)
+3. **Skill dispatch + execution** — AutonomousWork skill spawns a parallel task agent and executes
+4. **Memory write** — SessionSummary writes learnings and session summary to `MEMORY/LEARNING/`
+5. **Next-session context retrieval** — Fresh session shows ContextRouter loading prior context from memory
 
 ---
 
