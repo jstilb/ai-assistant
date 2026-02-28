@@ -1,5 +1,6 @@
 # Kaya -- Personal AI Infrastructure
 [![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-tracked-brightgreen.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f472b6.svg)](https://bun.sh/)
 [![Skills](https://img.shields.io/badge/skills-65-brightgreen.svg)](#skill-catalog)
@@ -9,6 +10,24 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 > A production-grade AI agent framework with 65 composable skills, autonomous task execution, voice interaction, and persistent memory. Built on Anthropic's Claude Code as the foundation for a fully autonomous personal AI assistant.
+
+---
+
+## Demo
+
+**90-second walkthrough** showing the complete Kaya pipeline in action: prompt input, hook pipeline firing, skill dispatch and execution, memory being written, and the next session picking up context from the previous one.
+
+<!-- Demo video pending recording. The video will demonstrate:
+  1. Prompt input: User types a development prompt in Claude Code
+  2. Hook pipeline firing: ContextRouter classifies intent, SecurityValidator validates tool calls
+  3. Skill dispatch + execution: AutonomousWork skill spawns and executes a task
+  4. Memory write: SessionSummary writes learnings to MEMORY/LEARNING/
+  5. Next-session context retrieval: ContextRouter loads prior context in a fresh session
+  Video will be hosted unlisted on YouTube and embedded here with a thumbnail image. -->
+
+[![Demo Video](https://img.shields.io/badge/Demo-YouTube%20%28coming%20soon%29-red.svg)](https://www.youtube.com/channel/UCjstilb)
+
+> **Note:** Demo video recording is in progress. The thumbnail and YouTube link will be embedded here once recorded. The video will be ≤90 seconds and demonstrate all five checkpoints listed in the architecture section.
 
 ---
 
