@@ -360,10 +360,37 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions including prerequis
 
 ---
 
+## Evals
+
+The system is validated by an 18-eval framework covering three categories. Full details: [docs/EVALS.md](docs/EVALS.md).
+
+| Category | Evals | Pass Rate | Type |
+|----------|-------|-----------|------|
+| [Hook Pipeline Correctness](docs/EVALS.md#category-1-hook-pipeline-correctness) | 5 | **100%** | Regression |
+| [Skill Routing Accuracy](docs/EVALS.md#category-2-skill-routing-accuracy) | 6 | **100%** | Regression |
+| [Prompt Injection Detection](docs/EVALS.md#category-3-prompt-injection-detection-rate) | 7 | **100%** | Regression |
+| **Overall** | **18** | **100%** | — |
+
+Run evals:
+```bash
+bun test tests/security/
+bun run ~/.claude/skills/Evals/Tools/AlgorithmBridge.ts -s kaya-week3-evals
+```
+
+---
+
+## Blog
+
+- [How I Built a 65-Skill Autonomous Agent on Claude Code](docs/blog-post.md) — Technical deep-dive covering the "every session starts from zero" problem and how hooks + memory solve it (1,650 words)
+
+---
+
 ## Documentation
 
 - [Installation Guide](INSTALL.md) -- Prerequisites, setup, and configuration
 - [Architecture](docs/architecture.md) -- System design and data flow
+- [Evals Framework](docs/EVALS.md) -- System evaluation results
+- [Memory System Design](docs/MEMORY-SYSTEM.md) -- Full feedback loop documentation
 - [ADR-001: Skill-based Architecture](docs/decisions/001-skill-based-architecture.md)
 - [ADR-002: Memory Persistence](docs/decisions/002-memory-persistence.md)
 - [Voice Server](VoiceServer/README.md) -- TTS server setup and usage
