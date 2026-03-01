@@ -34,9 +34,9 @@ Claude Code invokes hooks synchronously in registration order for each event. Ho
 
 ## Hook Types and Lifecycle Ordering
 
-Kaya registers 23 hooks across 6 lifecycle event types. The ordering within each event matters — hooks within the same event run sequentially in registration order.
+Kaya registers 24 hooks across 7 lifecycle event types. The ordering within each event matters — hooks within the same event run sequentially in registration order.
 
-### SessionStart Hooks (3 hooks)
+### SessionStart Hooks (4 hooks)
 
 | Order | Hook | Purpose |
 |-------|------|---------|
@@ -84,6 +84,12 @@ Kaya registers 23 hooks across 6 lifecycle event types. The ordering within each
 |-------|------|---------|
 | 1 | `AgentOutputCapture` | Captures sub-agent results to MEMORY/STATE for the parent session |
 | 2 | `WorktreeCleanup` | Removes completed git worktrees to prevent accumulation |
+
+### PreCompact Hooks (1 hook)
+
+| Order | Hook | Purpose |
+|-------|------|---------|
+| 1 | `PreCompact` | Preserves active work dir and context classification to MEMORY/STATE/ before context window compression |
 
 ### SessionEnd Hooks (4 hooks)
 
@@ -149,6 +155,16 @@ Model completes turn → produces response
   ▼
 [Stop]
   └─ StopOrchestrator     → response capture, tab reset, voice announcement
+  │
+  ▼
+Context window approaches limit (or /compact issued)
+  │
+  ▼
+[PreCompact]
+  └─ PreCompact           → preserves session state before compression
+  │
+  ▼
+Context compressed
   │
   ▼
 Session closes
@@ -486,7 +502,7 @@ The model calls `Edit` with a fix. **PreToolUse** fires again. `SecurityValidato
 
 **SessionSummary** — writes final summary file, clears `current-work.json`.
 
-**Total hooks executed: 23 hook invocations across 6 event types for a single prompt-to-response cycle.**
+**Total hooks executed: 24 hook invocations across 7 event types for a full session lifecycle (23 in a typical prompt-to-response cycle when no compaction occurs).**
 
 ---
 
