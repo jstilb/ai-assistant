@@ -99,7 +99,7 @@ categories:
     default_action: block
     patterns:
       - id: "PI-020"
-        pattern: "(?i)(?:send|post|transmit|upload|exfiltrate|forward|email)\\s+(?:the|this|your|all|my)?\\s*(?:data|content|file|secret|key|token|password|credential|config)"
+        pattern: "(?i)(?:send|post|transmit|upload|exfiltrate|forward|email)\\s+(?:(?:the|this|your|all|my|our)\\s+)*(?:\\w+\\s+)*?(?:api[_\\s]?keys?|tokens?|secrets?|passwords?|credentials?|data|content|files?|configs?)"
         category: data_exfiltration
         severity: critical
         description: "Data transmission instruction"
@@ -302,7 +302,7 @@ categories:
         enabled: true
 
       - id: "PI-062"
-        pattern: "(?i)(?:the\\s+following|below|here)\\s+(?:is|are)\\s+(?:your|the)\\s+(?:new|updated|corrected|real|actual)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|config)"
+        pattern: "(?i)(?:the\\s+following|below|here)\\s+(?:is|are)\\s+(?:your|the)\\s+(?:(?:new|updated|corrected|real|actual)\\s+)+(?:system\\s+)?(?:prompt|instructions?|rules?|config)"
         category: context_manipulation
         severity: critical
         description: "Fake config/prompt injection"
@@ -389,7 +389,7 @@ categories:
     default_action: warn
     patterns:
       - id: "PI-090"
-        pattern: "(?i)(?:show|reveal|display|print|output|repeat|echo)\\s+(?:your|the)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?|config)"
+        pattern: "(?i)(?:show|reveal|display|print|output|repeat|echo)\\s+(?:me\\s+)?(?:your|the)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?|config)"
         category: prompt_leaking
         severity: medium
         description: "System prompt extraction attempt"
