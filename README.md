@@ -1,6 +1,6 @@
 # Kaya -- Personal AI Infrastructure
 [![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-tracked-brightgreen.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/github/actions/workflow/status/jstilb/ai-assistant/ci.yml?label=coverage&logo=github)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f472b6.svg)](https://bun.sh/)
 [![Skills](https://img.shields.io/badge/skills-65-brightgreen.svg)](#skill-catalog)
