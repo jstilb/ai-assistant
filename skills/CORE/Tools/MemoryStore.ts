@@ -534,7 +534,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
           if (tagIds === null) {
             tagIds = idsForTag;
           } else {
-            tagIds = new Set([...tagIds].filter(id => idsForTag.has(id)));
+            tagIds = new Set([...tagIds].filter((id: string) => idsForTag.has(id)));
           }
         }
         if (candidateIds && tagIds) {

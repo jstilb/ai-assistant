@@ -67,7 +67,7 @@ import { existsSync, readFileSync, watch as fsWatch, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
-import { z, type ZodSchema, type ZodTypeDef } from 'zod';
+import { z, type ZodSchema } from 'zod';
 
 // ============================================================================
 // TYPES
@@ -80,7 +80,7 @@ export interface ConfigLoaderOptions<T> {
   /** Config key, e.g., "agents", "browser", "voice" */
   key: string;
   /** Zod schema for validation */
-  schema: ZodSchema<T, ZodTypeDef, unknown>;
+  schema: ZodSchema<T>;
   /** Default values when no config found */
   defaults: T;
   /** Environment variable prefix, e.g., "KAYA" -> KAYA_VOICE_ID */
@@ -363,7 +363,7 @@ export function loadSettings(): Settings {
  */
 export function loadTieredConfig<T>(
   key: string,
-  schema: ZodSchema<T, ZodTypeDef, unknown>,
+  schema: ZodSchema<T>,
   defaults: T,
   options?: TieredConfigOptions
 ): T {
@@ -404,7 +404,7 @@ export function loadTieredConfig<T>(
       const fileData = readConfigFile(userPath);
       const parsed = schema.safeParse(fileData);
       if (parsed.success) {
-        config = parsed.data;
+        config = parsed.data as T;
         loadedPath = userPath;
       } else {
         console.warn(`ConfigLoader: Validation failed for ${userPath}, using fallback`);
@@ -420,7 +420,7 @@ export function loadTieredConfig<T>(
       const fileData = readConfigFile(systemPath);
       const parsed = schema.safeParse(fileData);
       if (parsed.success) {
-        config = parsed.data;
+        config = parsed.data as T;
         loadedPath = systemPath;
       } else {
         console.warn(`ConfigLoader: Validation failed for ${systemPath}, using fallback`);
@@ -598,7 +598,7 @@ export function createConfigLoader<T>(
  */
 export function validateConfigFile<T>(
   path: string,
-  schema: ZodSchema<T, ZodTypeDef, unknown>
+  schema: ZodSchema<T>
 ): ValidationResult {
   try {
     if (!existsSync(path)) {
