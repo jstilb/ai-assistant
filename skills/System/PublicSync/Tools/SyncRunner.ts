@@ -361,8 +361,8 @@ async function runSync(opts: RunOptions): Promise<void> {
   // ── Safety validation ────────────────────────────────
   console.log("[PublicSync] Running safety validator (3 layers)...");
 
-  // Stage all changes in git
-  execSync(`git -C "${STAGING_DIR}" add -A`, { stdio: "inherit" });
+  // Stage all changes in git (use -Af to override target repo's .gitignore)
+  execSync(`git -C "${STAGING_DIR}" add -Af`, { stdio: "inherit" });
 
   const diff = getGitDiff(STAGING_DIR);
   const stagedRelativePaths = getStagedPaths(STAGING_DIR);
@@ -390,6 +390,9 @@ async function runSync(opts: RunOptions): Promise<void> {
 
   console.log("  All 3 safety layers passed.");
 
+  // Unstage everything so per-group commits can stage selectively
+  execSync(`git -C "${STAGING_DIR}" reset HEAD`, { stdio: "pipe" });
+
   // ── Semantic commits by skill group ─────────────────
   console.log("\n[PublicSync] Committing by skill group...");
   const groups = engine.groupBySkill(changedFiles.map((f) => f.relativePath));
@@ -397,13 +400,26 @@ async function runSync(opts: RunOptions): Promise<void> {
   const commitMessages: string[] = [];
 
   for (const group of groups) {
+    // Stage only this group's files (use -f to override target repo's .gitignore)
+    for (const file of group.files) {
+      try {
+        execSync(`git -C "${STAGING_DIR}" add -f "${file}"`, { stdio: "pipe" });
+      } catch {
+        // File may not exist in staging (e.g., filtered by target .gitignore)
+      }
+    }
+
+    // Check if anything was actually staged (files may be identical to HEAD)
+    try {
+      execSync(`git -C "${STAGING_DIR}" diff --cached --quiet`, { stdio: "pipe" });
+      // Exit code 0 means no staged changes — skip this group
+      continue;
+    } catch {
+      // Exit code 1 means there ARE staged changes — proceed to commit
+    }
+
     const commitMsg = engine.generateCommitMessage(group.files);
     commitMessages.push(commitMsg);
-
-    // Stage only this group's files
-    for (const file of group.files) {
-      execSync(`git -C "${STAGING_DIR}" add "${file}"`, { stdio: "pipe" });
-    }
 
     execSync(
       `git -C "${STAGING_DIR}" commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
