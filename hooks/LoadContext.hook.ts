@@ -11,8 +11,7 @@
  *
  * INPUT:
  * - Environment: KAYA_DIR, TIME_ZONE
- * - Files: skills/CORE/SKILL.md, skills/CORE/SYSTEM/AISTEERINGRULES.md,
- *          skills/CORE/USER/AISTEERINGRULES.md, MEMORY/STATE/progress/*.json
+ * - Files: CLAUDE.md, MEMORY/STATE/progress/*.json
  *
  * OUTPUT:
  * - stdout: <system-reminder> containing SKILL.md + AI Steering Rules
@@ -40,158 +39,177 @@
  */
 
 import { readFileSync, existsSync, readdirSync, writeFileSync } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 import { execSync } from 'child_process';
 import { getKayaDir } from './lib/paths';
 import { recordSessionStart } from './lib/notifications';
 
+// ============================================================================
+// Wisdom Frame Types & Constants (ISC 7500, 5832, 5544)
+// ============================================================================
+
+interface WisdomFrameFrontmatter {
+  pattern: string;
+  confidence: number;
+  first_seen: string;
+  last_updated: string;
+  source_count: number;
+  category?: string;
+}
+
+interface WisdomFrame {
+  frontmatter: WisdomFrameFrontmatter;
+  body: string;
+  filename: string;
+}
+
+const WISDOM_CONFIDENCE_THRESHOLD = 85;
+const WISDOM_MAX_FRAMES = 10;
+const WISDOM_TOKEN_BUDGET = 500;
+
 /**
- * Queue summary functionality (integrated from QueueSummary.hook.ts)
- * Embedded here because Claude Code drops output from later hooks in the array
+ * Approximate token count (chars / 4, rounded up)
  */
-interface QueueItem {
-  id: string;
-  created: string;
-  status: string;
-  priority: 1 | 2 | 3;
-  type: string;
-  queue: string;
-  payload: { title: string; description?: string };
-}
-
-function loadQueueItems(filePath: string): QueueItem[] {
-  if (!existsSync(filePath)) return [];
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    return content.trim().split('\n').filter(Boolean).map(line => {
-      try { return JSON.parse(line) as QueueItem; } catch { return null; }
-    }).filter((item): item is QueueItem => item !== null);
-  } catch { return []; }
-}
-
-function formatTimeSince(isoDate: string): string {
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return 'just now';
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
 }
 
 /**
- * Check if TOON queue encoding is enabled in settings.json
+ * Parse YAML-style frontmatter from a markdown file.
+ * Returns null if frontmatter is missing or malformed.
  */
-function isToonQueuesEnabled(kayaDir: string): boolean {
-  try {
-    const settingsPath = join(kayaDir, 'settings.json');
-    if (!existsSync(settingsPath)) return false;
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-    return settings?.toon?.enableInQueues === true;
-  } catch {
-    return false;
-  }
-}
+function parseFrontmatter(content: string): { frontmatter: WisdomFrameFrontmatter; body: string } | null {
+  if (!content.startsWith('---')) return null;
 
-/**
- * Format queue items as TOON when they form uniform arrays (Phase 3c).
- *
- * Extracts a flat representation of each item suitable for tabular TOON encoding:
- *   id_short, title, status, priority, queue, created_ago
- *
- * Returns TOON-encoded string if items are present, empty string if empty.
- * This is a pure function -- the caller gates behind toon.enableInQueues.
- *
- * @param items - Array of QueueItem objects
- * @returns TOON-formatted string, or empty string for empty arrays
- */
-export function formatQueueItemsAsToon(items: QueueItem[]): string {
-  if (items.length === 0) return '';
+  const endIdx = content.indexOf('\n---', 3);
+  if (endIdx === -1) return null;
 
-  // Flatten items into a uniform structure for TOON
-  const flatItems = items.map(item => ({
-    id: item.id.slice(0, 8),
-    title: item.payload.title,
-    status: item.status,
-    priority: item.priority,
-    queue: item.queue,
-    age: formatTimeSince(item.created),
-  }));
+  const yamlSection = content.slice(3, endIdx).trim();
+  const body = content.slice(endIdx + 4).trim();
 
   try {
-    // Lazy import ToonHelper
-    const kayaDir = getKayaDir();
-    const { maybeEncode } = require(join(kayaDir, "skills/CORE/Tools/ToonHelper")) as typeof import("../skills/CORE/Tools/ToonHelper");
-    const result = maybeEncode(flatItems);
-    if (result.format === 'toon') {
-      return `<toon-data format="queue-items">\n${result.data}\n</toon-data>`;
+    const fm: Partial<WisdomFrameFrontmatter> = {};
+    for (const line of yamlSection.split('\n')) {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx === -1) continue;
+      const key = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
+
+      if (key === 'pattern') fm.pattern = value.replace(/^["']|["']$/g, '');
+      else if (key === 'confidence') fm.confidence = parseFloat(value);
+      else if (key === 'first_seen') fm.first_seen = value;
+      else if (key === 'last_updated') fm.last_updated = value;
+      else if (key === 'source_count') fm.source_count = parseInt(value, 10);
+      else if (key === 'category') fm.category = value;
     }
-  } catch {
-    // Fall through to markdown format
-  }
 
-  // Fallback: markdown bullet list
-  return flatItems.map(item =>
-    `   - [${item.id}] ${item.title} (${item.status}, P${item.priority}, ${item.age})`
-  ).join('\n');
+    if (!fm.pattern || typeof fm.confidence !== 'number') return null;
+
+    return {
+      frontmatter: {
+        pattern: fm.pattern,
+        confidence: fm.confidence,
+        first_seen: fm.first_seen ?? '',
+        last_updated: fm.last_updated ?? '',
+        source_count: fm.source_count ?? 0,
+        category: fm.category,
+      },
+      body,
+    };
+  } catch {
+    return null;
+  }
 }
 
-function getQueueSummary(kayaDir: string): string | null {
-  const queuesDir = join(kayaDir, 'MEMORY', 'QUEUES');
-  if (!existsSync(queuesDir)) return null;
-
-  const stats = { total: 0, pending: 0, awaitingApproval: 0, inProgress: 0, byQueue: {} as Record<string, number>, approvalItems: [] as QueueItem[], highPriority: [] as QueueItem[] };
-
+/**
+ * Load Wisdom Frames from MEMORY/WISDOM/FRAMES/.
+ * Filters by confidence >= threshold, sorts desc, limits to max frames.
+ * Enforces token budget by truncating body if needed.
+ * Returns formatted string for injection into system-reminder.
+ *
+ * Guards: returns '' if settings.wisdom.enabled !== true or FRAMES dir missing.
+ */
+function loadWisdomFrames(kayaDir: string, settings: Settings): string {
   try {
-    const files = readdirSync(queuesDir).filter(f => f.endsWith('.jsonl'));
+    // Feature flag guard (ISC 5832)
+    const wisdomSettings = (settings as Record<string, unknown>).wisdom as Record<string, unknown> | undefined;
+    if (wisdomSettings?.enabled !== true) {
+      console.error('[LoadContext] Wisdom Frames: disabled via settings.wisdom.enabled !== true');
+      return '';
+    }
+
+    const framesDir = join(kayaDir, 'MEMORY', 'WISDOM', 'FRAMES');
+    if (!existsSync(framesDir)) {
+      console.error('[LoadContext] Wisdom Frames: FRAMES directory not found, skipping');
+      return '';
+    }
+
+    const files = readdirSync(framesDir).filter(f => f.endsWith('.md'));
+    if (files.length === 0) {
+      console.error('[LoadContext] Wisdom Frames: no frame files found');
+      return '';
+    }
+
+    // Load and parse all frames
+    const frames: WisdomFrame[] = [];
     for (const file of files) {
-      const queueName = basename(file, '.jsonl');
-      const items = loadQueueItems(join(queuesDir, file));
-      const activeItems = items.filter(i => ['pending', 'in_progress', 'awaiting_approval'].includes(i.status));
-      if (activeItems.length === 0) continue;
-      stats.byQueue[queueName] = activeItems.length;
-      stats.total += activeItems.length;
-      for (const item of activeItems) {
-        if (item.status === 'pending') stats.pending++;
-        else if (item.status === 'in_progress') stats.inProgress++;
-        else if (item.status === 'awaiting_approval') { stats.awaitingApproval++; stats.approvalItems.push(item); }
-        if (item.priority === 1 && item.status !== 'awaiting_approval') stats.highPriority.push(item);
-      }
-    }
-  } catch { return null; }
+      try {
+        const content = readFileSync(join(framesDir, file), 'utf-8');
+        const parsed = parseFrontmatter(content);
+        if (!parsed) continue;
 
-  if (stats.total === 0) return null;
+        // Filter by confidence threshold (ISC 7500)
+        if (parsed.frontmatter.confidence < WISDOM_CONFIDENCE_THRESHOLD) {
+          console.error(`[LoadContext] Wisdom Frames: skipping "${file}" (confidence=${parsed.frontmatter.confidence} < ${WISDOM_CONFIDENCE_THRESHOLD})`);
+          continue;
+        }
 
-  const useToon = isToonQueuesEnabled(kayaDir);
-  let output = '\n📋 QUEUE SUMMARY:\n';
-  if (stats.awaitingApproval > 0) {
-    output += `\n⚠️  AWAITING APPROVAL (${stats.awaitingApproval}):\n`;
-    if (useToon) {
-      output += formatQueueItemsAsToon(stats.approvalItems.slice(0, 5)) + '\n';
-    } else {
-      for (const item of stats.approvalItems.slice(0, 5)) {
-        output += `   • [${item.id.slice(0, 8)}] ${item.payload.title} (${formatTimeSince(item.created)})\n`;
+        frames.push({ ...parsed, filename: file });
+      } catch {
+        // Skip unreadable files
       }
     }
-  }
-  if (stats.highPriority.length > 0) {
-    output += `\n🔴 HIGH PRIORITY (${stats.highPriority.length}):\n`;
-    if (useToon) {
-      output += formatQueueItemsAsToon(stats.highPriority.slice(0, 3)) + '\n';
-    } else {
-      for (const item of stats.highPriority.slice(0, 3)) {
-        output += `   • [${item.queue}] ${item.payload.title}\n`;
-      }
+
+    if (frames.length === 0) {
+      console.error('[LoadContext] Wisdom Frames: no frames passed confidence gate');
+      return '';
     }
+
+    // Sort by confidence descending, limit to max (ISC 5544)
+    frames.sort((a, b) => b.frontmatter.confidence - a.frontmatter.confidence);
+    const topFrames = frames.slice(0, WISDOM_MAX_FRAMES);
+
+    // Build injection text with token budget enforcement (ISC 5544)
+    let injectedText = '\n## Wisdom Frames (Crystallized Behavioral Patterns)\n\n';
+    let tokenCount = estimateTokens(injectedText);
+
+    for (const frame of topFrames) {
+      let frameText = frame.body + '\n\n';
+      const frameTokens = estimateTokens(frameText);
+
+      if (tokenCount + frameTokens > WISDOM_TOKEN_BUDGET) {
+        // Try to truncate body to fit
+        const remainingBudget = WISDOM_TOKEN_BUDGET - tokenCount;
+        const maxBodyChars = remainingBudget * 4;
+        if (maxBodyChars > 50) {
+          frameText = frame.body.slice(0, maxBodyChars) + '...\n\n';
+          injectedText += frameText;
+          tokenCount += estimateTokens(frameText);
+        }
+        break;
+      }
+
+      injectedText += frameText;
+      tokenCount += frameTokens;
+    }
+
+    console.error(`[LoadContext] Wisdom Frames: loaded ${topFrames.length} frames (estimated ${tokenCount} tokens)`);
+    return injectedText;
+  } catch (err) {
+    // Fail open — never block session start
+    console.error(`[LoadContext] Wisdom Frames: error loading frames (non-fatal): ${err}`);
+    return '';
   }
-  output += `\n📊 BY QUEUE:\n`;
-  for (const [queue, count] of Object.entries(stats.byQueue)) {
-    output += `   ${queue === 'approvals' ? '⚠️ ' : '   '}${queue}: ${count}\n`;
-  }
-  output += `\n   Total: ${stats.total} items (${stats.pending} pending, ${stats.inProgress} in progress, ${stats.awaitingApproval} awaiting approval)\n`;
-  output += '\n💡 Commands: /queue list, /queue approve <id>, /queue work\n';
-  return output;
 }
 
 /**
@@ -272,9 +290,7 @@ function loadSettings(kayaDir: string): Settings {
  */
 function loadContextFiles(kayaDir: string, settings: Settings): string {
   const defaultFiles = [
-    'skills/CORE/SKILL.md',
-    'skills/CORE/SYSTEM/AISTEERINGRULES.md',
-    'skills/CORE/USER/AISTEERINGRULES.md'
+    'CLAUDE.md'
   ];
 
   const contextFiles = settings.contextFiles || defaultFiles;
@@ -357,8 +373,8 @@ async function checkActiveProgress(kayaDir: string): Promise<string | null> {
       }
     }
 
-    summary += '\n💡 To resume: `bun run ~/.claude/skills/CORE/Tools/SessionProgress.ts resume <project>`\n';
-    summary += '💡 To complete: `bun run ~/.claude/skills/CORE/Tools/SessionProgress.ts complete <project>`\n';
+    summary += '\n💡 To resume: `bun run ~/.claude/lib/core/SessionProgress.ts resume <project>`\n';
+    summary += '💡 To complete: `bun run ~/.claude/lib/core/SessionProgress.ts complete <project>`\n';
 
     return summary;
   } catch (error) {
@@ -407,7 +423,9 @@ async function main() {
 
     if (contextManagerEnabled) {
       console.error('🧠 ContextManager ENABLED - boot context in CLAUDE.md, injecting date/time only');
-      message = `<system-reminder>\n📅 CURRENT DATE/TIME: ${currentDate}\n</system-reminder>`;
+      // Load Wisdom Frames (ISC 7500, 5832, 5544)
+      const wisdomContent = loadWisdomFrames(kayaDir, settings);
+      message = `<system-reminder>\n📅 CURRENT DATE/TIME: ${currentDate}${wisdomContent ? '\n' + wisdomContent : ''}\n</system-reminder>`;
     } else {
       // Legacy mode: extract identity for full context injection
       const PRINCIPAL_NAME = (settings as Record<string, unknown>).principal &&
@@ -469,23 +487,6 @@ This context is now active. Additional context loads dynamically as needed.
       console.log(activeProgress);
       console.error('📋 Active work found from previous sessions');
     }
-
-    // Output queue summary (embedded here because separate hook output gets dropped)
-    const queueSummary = getQueueSummary(kayaDir);
-    if (queueSummary) {
-      console.log(`<system-reminder>${queueSummary}</system-reminder>`);
-      console.error('📋 Queue summary loaded');
-    }
-
-    // Auto-cleanup stale queue items (debounced, ~0ms if recent)
-    try {
-      const { QueueManager } = require(join(kayaDir, "skills/QueueRouter/Tools/QueueManager"));
-      const qm = new QueueManager();
-      const cleanupResult = await qm.maybeCleanup();
-      if (cleanupResult && cleanupResult.archived > 0) {
-        console.error(`🧹 Auto-cleanup: archived ${cleanupResult.archived} stale queue items`);
-      }
-    } catch {}
 
     console.error('✅ Kaya context injected into session');
     process.exit(0);

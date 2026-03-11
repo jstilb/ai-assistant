@@ -1,0 +1,34 @@
+# Task: Greeting Routes to Conversational
+# Simple greeting routes to conversational/boot profile with minimal tokens
+
+id: kaya_ctx_greeting_routes_conversational
+description: "Simple greeting like 'hello' routes to conversational or boot profile with minimal token usage"
+type: regression
+domain: conversational
+source: manual
+
+setup:
+  scenario_prompt: "hello"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profiles:
+        - conversational
+        - boot
+      max_tokens: 200
+      max_classification_stage: keyword
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - conversational
+  - regression
+
+created_at: "2026-02-11"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_first_person_voice",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:38:40.929Z",
+  "completed_at": "2026-02-12T06:39:06.502Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya uses first-person voice ('I'), never refers to itself as 'Kaya' in third person",
+      "timestamp": "2026-02-12T06:38:40.929Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session initialized, checking queue for pending work.\n\nI see there's 1 item in the approvals queue. What can I help you with tonight, Jm?\n\n🗣️ Kaya: Ready and online. One approved work item in queue if you want to pick it up.",
+      "timestamp": "2026-02-12T06:39:06.502Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25573,
+    "time_to_first_token_ms": 25573,
+    "time_to_last_token_ms": 25573,
+    "tokens_per_second": 0
+  }
+}

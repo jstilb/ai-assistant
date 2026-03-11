@@ -7,7 +7,7 @@
  * - SESSION: One directory per Claude Code session (the primitive)
  * - TASK: Subdirectories for distinct work items within a session
  *
- * Each task has its own algorithm execution context (ISC.json, THREAD.md).
+ * Each task has its own execution context (THREAD.md with frontmatter metadata).
  *
  * TRIGGER: UserPromptSubmit
  *
@@ -16,8 +16,7 @@
  * ├── META.yaml                    # Session metadata
  * ├── tasks/
  * │   ├── 001_{task-slug}/
- * │   │   ├── ISC.json             # Task's Ideal State Criteria
- * │   │   └── THREAD.md            # Task's algorithm log (includes metadata in frontmatter)
+ * │   │   └── THREAD.md            # Task thread with metadata in frontmatter
  * │   └── current -> 001_...       # Symlink to active task
  * └── scratch/                     # Temporary files
  */
@@ -25,7 +24,7 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, symlinkSync, unlinkSync, lstatSync } from 'fs';
 import { join } from 'path';
 import { getPSTComponents, getISOTimestamp } from './lib/time';
-import { inference } from '../skills/CORE/Tools/Inference';
+import { inference } from '../lib/core/Inference';
 
 interface HookInput {
   session_id: string;
@@ -153,7 +152,7 @@ status: "ACTIVE"
 }
 
 /**
- * Create task directory with ISC.json and THREAD.md (with frontmatter metadata)
+ * Create task directory with THREAD.md (with frontmatter metadata)
  */
 function createTaskDirectory(
   sessionPath: string,
@@ -161,7 +160,7 @@ function createTaskDirectory(
   title: string,
   effort: string,
   prompt: string,
-  skipAlgorithmThread: boolean = false
+  _unused?: boolean
 ): string {
   const taskId = String(taskNumber).padStart(3, '0');
   const taskSlug = slugify(title);
@@ -171,74 +170,22 @@ function createTaskDirectory(
 
   mkdirSync(taskPath, { recursive: true });
 
-  // Task THREAD.md with frontmatter metadata (no separate META.yaml)
-  const thread = skipAlgorithmThread
-    ? `---
+  // Task THREAD.md with frontmatter metadata
+  const thread = `---
 taskId: "${taskDirName}"
 title: "${title}"
 effortLevel: "${effort}"
-executionMode: "orchestration"
 status: "IN_PROGRESS"
 createdAt: "${timestamp}"
 prompt: |
   ${prompt.substring(0, 500).replace(/\n/g, '\n  ')}
 ---
 
-# Orchestration Thread: ${title}
-
-This task uses the AutonomousWork orchestration workflow (Orchestrate.md).
-Algorithm phase templates do not apply — delegation is managed by the orchestrator.
+# Task Thread: ${title}
 
 ## Execution Log
 
-_Orchestration events logged here..._
-
----
-
-## Key Observations
-
-_Important observations during execution..._
-`
-    : `---
-taskId: "${taskDirName}"
-title: "${title}"
-effortLevel: "${effort}"
-status: "IN_PROGRESS"
-createdAt: "${timestamp}"
-prompt: |
-  ${prompt.substring(0, 500).replace(/\n/g, '\n  ')}
----
-
-# Algorithm Thread: ${title}
-
-## Phase Log
-
-### 👀 OBSERVE Phase
-_Pending..._
-
-### 🧠 THINK Phase
-_Pending..._
-
-### 📋 PLAN Phase
-_Pending..._
-
-### 🔨 BUILD Phase
-_Pending..._
-
-### ▶️ EXECUTE Phase
-_Pending..._
-
-### ✅ VERIFY Phase
-_Pending..._
-
-### 🎓 LEARN Phase
-_Pending..._
-
----
-
-## ISC Evolution
-
-_Criteria updates logged here..._
+_Events logged here..._
 
 ---
 
@@ -247,19 +194,6 @@ _Criteria updates logged here..._
 _Important observations during execution..._
 `;
   writeFileSync(join(taskPath, 'THREAD.md'), thread, 'utf-8');
-
-  // Task ISC.json with proper scaffold
-  const isc = {
-    taskId: taskDirName,
-    status: 'PENDING',
-    effortLevel: effort,
-    criteria: [],
-    antiCriteria: [],
-    satisfaction: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  writeFileSync(join(taskPath, 'ISC.json'), JSON.stringify(isc, null, 2), 'utf-8');
 
   // Update 'current' symlink
   const currentLink = join(sessionPath, 'tasks', 'current');

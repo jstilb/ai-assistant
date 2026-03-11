@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_createskill_routes_createskill",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:46:53.133Z",
+  "completed_at": "2026-02-12T19:49:23.531Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Create a new skill for tracking my workouts",
+      "timestamp": "2026-02-12T19:46:53.133Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Waiting for Jm's input on workout preferences before finalizing the plan.",
+      "timestamp": "2026-02-12T19:49:23.531Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 150398,
+    "time_to_first_token_ms": 150398,
+    "time_to_last_token_ms": 150398,
+    "tokens_per_second": 0
+  }
+}

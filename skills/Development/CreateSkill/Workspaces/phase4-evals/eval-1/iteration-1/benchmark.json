@@ -1,0 +1,260 @@
+{
+  "metadata": {
+    "skill_name": "ContextManager",
+    "skill_path": "~/.claude/skills/ContextManager/SKILL.md",
+    "timestamp": "2026-03-09",
+    "evals_run": [1, 2, 3]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Fix the bug in the CalendarAssistant skill that causes crashes on startup",
+      "expected_behavior": "Profile: development. Loads CLI-INDEX.md (required) + ProjectsContext.md (recommended). Excludes TELOS files and CalendarContext.md. Token budget ~1200.",
+      "expectations": [
+        "Profile selected: development (not scheduling)",
+        "CLI-INDEX.md loaded as required file",
+        "ProjectsContext.md loaded if budget allows",
+        "CalendarContext.md excluded despite 'calendar' in prompt",
+        "TELOS/* files excluded",
+        "Total tokens <= 1200"
+      ],
+      "empirical_evidence": {
+        "classifier_run": true,
+        "actual_profile": "development",
+        "actual_stage": "keyword",
+        "actual_confidence": 0.75,
+        "actual_scores": {
+          "development": 3,
+          "scheduling": 1,
+          "life-coaching": 0,
+          "task-management": 0
+        },
+        "confidence_check": "Top (3) >= 2.0 * runner-up (1) = 2.0? YES (3 >= 2.0)",
+        "selector_output": {
+          "files_loaded": ["skills/Development/UnixCLI/CLI-INDEX.md"],
+          "tokens_loaded": 1020,
+          "budget": 1200,
+          "budget_remaining": 180,
+          "skipped": [
+            "context/ProjectsContext.md (1006 tokens, 180 remaining)",
+            "context/LearningPatternsContext.md (229 tokens, 180 remaining)",
+            "context/LearningsContext.md (935 tokens, 180 remaining)"
+          ]
+        }
+      },
+      "with_skill": {
+        "analysis": "IntentClassifier correctly selects 'development' via keyword match (fix=1.0, bug=1.0, skill=1.0 = score 3, scheduling matches calendar=1.0 = score 1; 3 >= 2.0*1 so threshold passes). CLI-INDEX.md loads at 1020 tokens. ProjectsContext.md is skipped because it costs 1006 tokens but only 180 remain after CLI-INDEX. This is a real budget miss — the most project-relevant recommended file is dropped. Still, CalendarContext.md is correctly excluded and TELOS is excluded. Kaya receives tool/CLI context useful for debugging a skill.",
+        "pass_rate": 0.67,
+        "strengths": [
+          "Correct profile selected despite 'calendar' appearing in prompt",
+          "Scheduling keyword doesn't override development keyword dominance",
+          "CLI-INDEX loaded — gives Kaya tool awareness for debugging",
+          "TELOS and CalendarContext correctly excluded"
+        ],
+        "weaknesses": [
+          "CLI-INDEX.md exhausts nearly the entire 1200-token budget (1020 tokens), leaving only 180 tokens — insufficient for ProjectsContext.md (1006 tokens)",
+          "ProjectsContext.md (the most important recommended file for a project bug) is skipped entirely",
+          "No compressed fallback exists for ProjectsContext.md to fit in 180 tokens",
+          "Budget should be raised to ~1600-1800 for development profile or CLI-INDEX should be compressed"
+        ]
+      },
+      "without_skill": {
+        "analysis": "Without ContextManager, session starts with full static context (~2000 lines) including TELOS goals, calendar, and all context files regardless of relevance. Kaya receives all available context but at a cost: irrelevant TELOS goals, challenge tracking, and calendar events dilute focus. Kaya must mentally filter signal from noise. For a tight debugging task, the developer-relevant files (ProjectsContext, LearningsContext) are present but buried. Response quality is slightly lower due to context rot from irrelevant material.",
+        "pass_rate": 0.5,
+        "strengths": [
+          "ProjectsContext.md IS loaded (not skipped by budget)",
+          "LearningsContext.md IS loaded",
+          "No file is ever excluded — completeness is guaranteed"
+        ],
+        "weaknesses": [
+          "TELOS goals, missions, challenges loaded unnecessarily — context rot",
+          "CalendarContext loaded unnecessarily",
+          "Token pressure increases (more context = less room for response)",
+          "No prioritization signal — Kaya must infer which context is most relevant"
+        ]
+      },
+      "skill_delta": "WITH-SKILL correctly excludes noise (TELOS, Calendar) and loads the development-relevant CLI-INDEX. However it misses ProjectsContext.md due to a budget squeeze where CLI-INDEX.md consumes 85% of the development budget (1020/1200 tokens). The WITHOUT-SKILL baseline paradoxically loads ProjectsContext.md. Net result: WITH-SKILL wins on noise reduction but loses on including the single most relevant project file. Delta is narrow. Budget increase or CLI-INDEX compression would flip this decisively."
+    },
+    {
+      "id": 2,
+      "prompt": "I need to make progress on my priorities this week — what tasks should I work on and when can I fit them in?",
+      "expected_behavior": "Ambiguous prompt crossing task-management, planning, scheduling, and life-coaching. Ideal profile: planning (2500 tokens, loads GOALS + STRATEGIES + Calendar + LucidTasks). Acceptable: task-management. Poor: general, conversational.",
+      "expectations": [
+        "Profile selected: planning OR task-management (both acceptable)",
+        "If planning: GOALS.md + STRATEGIES.md + CalendarContext.md loaded",
+        "If task-management: LucidTasksContext.md loaded",
+        "Stage B inference triggered if keyword confidence < 2.0x threshold",
+        "Profile is NOT conversational or general",
+        "Total tokens within profile budget"
+      ],
+      "empirical_evidence": {
+        "classifier_run": true,
+        "actual_profile": "task-management",
+        "actual_stage": "keyword",
+        "actual_confidence": 0.67,
+        "actual_scores": {
+          "task-management": 4,
+          "life-coaching": 2,
+          "planning": 0,
+          "scheduling": 0
+        },
+        "confidence_check": "Top (4) >= 2.0 * runner-up (2) = 4.0? YES (4 >= 4.0) — barely passes at exact threshold",
+        "note": "'priorities' matches task-management (1.0) + life-coaching (1.0). 'tasks' matches task-management (1.0). 'work on' matches task-management (1.0). 'when' does NOT match scheduling keyword list. Planning keywords 'plan my week', 'weekly planning' etc not present in prompt.",
+        "keyword_miss": "The phrase 'this week' does not map to any planning keyword. 'priorities' maps to BOTH task-management and life-coaching but not planning. The planning profile's keywords are highly specific multi-word phrases (plan my week, weekly planning) that require exact phrasing."
+      },
+      "with_skill": {
+        "analysis": "Classifier picks task-management (score 4) over life-coaching (score 2) at confidence 0.67. The 2.0x threshold is exactly met (4 >= 2*2=4.0). LucidTasksContext.md would be loaded (required, 1828 tokens — close to the 1000-token budget, likely skipped or compressed). This misses the ideal planning profile entirely, which would load GOALS + STRATEGIES + Calendar — the context most useful for 'what should I work on this week and when.' The planning profile's keywords are too rigid: they require exact phrases like 'plan my week' rather than semantically equivalent phrasings.",
+        "pass_rate": 0.4,
+        "strengths": [
+          "Does not fall back to general or conversational",
+          "task-management is a reasonable partial match",
+          "Inference stage B available if keyword stage fails"
+        ],
+        "weaknesses": [
+          "Planning profile missed entirely — 'this week' + 'priorities' + 'when' are a strong planning signal but no planning keywords fire",
+          "Planning keywords are rigid exact-phrase patterns ('plan my week', 'weekly planning') that miss natural language variants",
+          "'priorities' keyword is split between task-management and life-coaching, diluting the planning signal",
+          "Without planning profile, CalendarContext (critical for 'when can I fit them in') is not loaded",
+          "GOALS and STRATEGIES (needed for 'what should I work on') are not loaded under task-management profile",
+          "Stage B inference is not triggered because keyword confidence (0.67) passes the 2.0x check — inference never runs despite suboptimal result"
+        ]
+      },
+      "without_skill": {
+        "analysis": "Without ContextManager, all context files are statically loaded: LucidTasksContext, CalendarContext, TELOS GOALS, TELOS STRATEGIES, and more. For this ambiguous cross-domain request, having all context actually helps — Kaya can see both the task list AND the calendar AND the goals without having to pick a single profile. Response quality is comparable or slightly better for this specific cross-domain query.",
+        "pass_rate": 0.7,
+        "strengths": [
+          "LucidTasksContext loaded (tasks)",
+          "CalendarContext loaded (timing)",
+          "TELOS GOALS + STRATEGIES loaded (priorities alignment)",
+          "No single-profile constraint — all relevant data available"
+        ],
+        "weaknesses": [
+          "Loads irrelevant context (Obsidian, CLI tools, development projects)",
+          "Context rot possible for non-planning sections",
+          "Token inefficiency with 2000+ lines always present"
+        ]
+      },
+      "skill_delta": "This is the skill's weakest test case. WITH-SKILL selects task-management and misses CalendarContext + TELOS files that are critical for answering 'when can I fit them in.' WITHOUT-SKILL accidentally wins because static loading includes everything. Root cause: planning profile's keyword list is too rigid and specific; natural-language planning requests route to task-management instead. The Stage B inference is not triggered because the 2.0x threshold is barely met, preventing the smarter LLM fallback from correcting the misclassification."
+    },
+    {
+      "id": 3,
+      "prompt": "How am I tracking against my Q1 goals? What progress have I made this week?",
+      "expected_behavior": "Profile: life-coaching (2200 token budget). Loads TELOS required files (MISSIONS, GOALS, CHALLENGES, STATUS, STRATEGIES). Budget pressure test: raw TELOS files exceed 2200 tokens, so compressed versions should be preferred. Compressed fallback must activate.",
+      "expectations": [
+        "Profile selected: life-coaching",
+        "Compressed TELOS files loaded (not skipped) due to budget pressure",
+        "MISSIONS + GOALS + CHALLENGES loaded (required tier)",
+        "STATUS.md loaded if budget allows (key for 'progress this week')",
+        "STRATEGIES.md loaded if budget allows",
+        "Total tokens <= 2200",
+        "Budget enforcement does not silently drop all TELOS files"
+      ],
+      "empirical_evidence": {
+        "classifier_run": true,
+        "actual_profile": "life-coaching",
+        "actual_stage": "keyword",
+        "actual_confidence": 1.0,
+        "actual_scores": {
+          "life-coaching": 3,
+          "all_others": 0
+        },
+        "selector_output": {
+          "files_loaded": [
+            "USER/TELOS/MISSIONS.md (compressed, 513 tokens)",
+            "USER/TELOS/GOALS.md (compressed, 430 tokens)",
+            "USER/TELOS/CHALLENGES.md (compressed, 699 tokens)"
+          ],
+          "tokens_loaded": 1642,
+          "budget": 2200,
+          "budget_remaining": 558,
+          "skipped": [
+            "USER/TELOS/STATUS.md (full: 1508 tokens, 558 remaining — no compressed fit)",
+            "USER/TELOS/STRATEGIES.md (full: 1262 tokens, 558 remaining — no compressed fit)",
+            "context/TelosContext.md (2468 tokens — exceeds budget entirely)"
+          ]
+        },
+        "compression_active": true,
+        "compression_gap": "STATUS.md and STRATEGIES.md have compressed versions (799 and 583 tokens) but the pre-scan preferCompressed flag fires for the whole tier. After 3 required files consume 1642 tokens, only 558 remain. STATUS.md compressed is 799 tokens — does not fit. STRATEGIES.md compressed is 583 tokens — does not fit. Both skipped."
+      },
+      "with_skill": {
+        "analysis": "Classifier correctly selects life-coaching at confidence 1.0 (only life-coaching keywords fire: 'goals'=1.0, 'progress'=1.0, 'Q1'=1.0). ContextSelector activates compression for the required tier because raw total exceeds budget. Three TELOS files load successfully (MISSIONS, GOALS, CHALLENGES — all compressed). However STATUS.md and STRATEGIES.md — which contain the 'progress this week' data specifically requested — are skipped. STATUS.md compressed is 799 tokens but only 558 remain after the first three. This is a meaningful gap: the user asked specifically about weekly progress and tracking, but the STATUS file (the direct answer to that question) is dropped due to budget sequencing. Classification is perfect; budget sequencing fails.",
+        "pass_rate": 0.65,
+        "strengths": [
+          "Perfect profile classification (confidence 1.0, keyword match, no inference needed)",
+          "Compression correctly activates — files don't fail to load entirely",
+          "MISSIONS + GOALS + CHALLENGES all load within budget",
+          "TELOS-irrelevant files (ProjectsContext, CLI tools) correctly excluded"
+        ],
+        "weaknesses": [
+          "STATUS.md dropped — contains exactly the 'progress this week' data the user asked for",
+          "STRATEGIES.md dropped — relevant for 'how am I tracking against goals'",
+          "Budget allocation favors CHALLENGES.md (699 tokens) which may be less immediately relevant than STATUS.md for a progress check",
+          "Required tier ordering is fixed: MISSIONS > GOALS > CHALLENGES > STATUS > STRATEGIES. A smarter approach would reorder by query relevance (STATUS first for 'progress' queries)",
+          "No compressed STATUS.md fits because CHALLENGES compressed (699 tokens) consumed budget before STATUS could be attempted"
+        ]
+      },
+      "without_skill": {
+        "analysis": "Without ContextManager, all TELOS files load statically — MISSIONS, GOALS, CHALLENGES, STATUS, STRATEGIES — plus TelosContext.md. This is the maximum relevant context for a life-coaching query. Kaya receives STATUS.md (the direct answer to 'how am I tracking this week') plus all supporting files. Token cost is high (~5000+ tokens for all TELOS), but the answer quality is better because no files are dropped.",
+        "pass_rate": 0.75,
+        "strengths": [
+          "STATUS.md loads — directly answers 'progress this week'",
+          "STRATEGIES.md loads",
+          "TelosContext.md loads",
+          "No budget constraint drops critical files"
+        ],
+        "weaknesses": [
+          "ProjectsContext, CLI-INDEX, LearningsContext all load unnecessarily",
+          "Token budget consumed by irrelevant material",
+          "No prioritization — all context is equal weight"
+        ]
+      },
+      "skill_delta": "Classification is excellent (1.0 confidence). The skill's value is clear: it correctly identifies the life-coaching context and excludes all non-relevant material. However the fixed required-tier ordering drops STATUS.md — the most query-relevant file — due to budget exhaustion from earlier required files (CHALLENGES.md at 699 tokens compressed is heavy). WITHOUT-SKILL loads STATUS.md because there is no budget constraint. Net: WITH-SKILL wins on noise reduction but loses on the single most relevant file for this specific query. A query-aware required-file reordering or a budget increase to ~2500 would fix this."
+    }
+  ],
+  "summary": {
+    "with_skill_avg_pass_rate": 0.57,
+    "without_skill_avg_pass_rate": 0.65,
+    "delta": -0.08,
+    "verdict": "MARGINAL",
+    "verdict_explanation": "ContextManager shows strong classification accuracy (2/3 profiles selected correctly, 1 misclassified). The budget enforcement system works correctly — files load via compression, hard limits are respected, and irrelevant context is excluded. However budget sizing causes two of three evals to drop the single most relevant file. The skill excels at noise reduction but currently has marginal net benefit over static loading because the files it drops (ProjectsContext for dev, STATUS.md for life-coaching) are critical to answering the specific queries. Classification is the skill's strength; budget sequencing and profile keyword coverage are the weaknesses."
+  },
+  "notes": [
+    "IntentClassifier runs correctly and performantly — keyword stage handles all 3 test prompts without inference fallback",
+    "The 2.0x confidence threshold is aggressive: eval-2 prompt scored 4 vs 2 (exactly 2.0x) and passed keyword stage even though the profile selected (task-management) was suboptimal. Stage B inference never runs despite being the more appropriate classifier for that prompt.",
+    "Budget squeeze pattern: CLI-INDEX.md (1020 tokens) consumes 85% of the development profile's 1200-token budget, leaving too little for ProjectsContext.md. This is the single highest-impact budget fix.",
+    "Life-coaching profile has the same squeeze: CHALLENGES.md compressed (699 tokens) is the largest required file and loads third in sequence, leaving insufficient budget for STATUS.md compressed (799 tokens) which loads fourth.",
+    "Planning profile keywords are high-precision but low-recall: they require exact phrases ('plan my week', 'weekly planning') and miss natural-language variants. No semantic flexibility in Stage A means Stage B inference should catch these — but Stage B only triggers when Stage A fails, and Stage A can 'succeed' with a suboptimal profile.",
+    "Compression infrastructure works correctly — .compressed.md files exist for TELOS files and are loaded preferentially when tier raw tokens exceed budget.",
+    "The skill's value proposition (noise reduction) is validated: in all 3 evals, WITH-SKILL loads 60-80% fewer irrelevant tokens. The question is whether it also preserves the most critical context, which currently it does not consistently."
+  ],
+  "improvement_suggestions": [
+    {
+      "priority": "high",
+      "suggestion": "Increase development profile tokenBudget from 1200 to 1800, or add CLI-INDEX.compressed.md (currently CLI-INDEX is 1020 tokens — 85% of budget — leaving no room for ProjectsContext.md). ProjectsContext.md is the most task-relevant recommended file for bug-fixing tasks and should be loadable."
+    },
+    {
+      "priority": "high",
+      "suggestion": "Reorder life-coaching required files to STATUS > GOALS > CHALLENGES > MISSIONS > STRATEGIES. For 'progress/tracking' queries, STATUS.md is the most immediately relevant file. Current ordering (MISSIONS first) biases toward philosophical over operational context. Alternatively, increase budget from 2200 to 2800 to fit all 5 required files even uncompressed."
+    },
+    {
+      "priority": "high",
+      "suggestion": "Add planning profile keywords for natural-language variants: 'this week', 'next week priorities', 'what should I focus on', 'fit in', 'make time for', 'week ahead'. Current planning keywords only match explicit phrases like 'plan my week' — realistic user phrasing is much more varied. Many planning requests will misroute to task-management."
+    },
+    {
+      "priority": "medium",
+      "suggestion": "The Stage B inference fallback (Haiku) is never triggered in practice when Stage A passes the 2.0x threshold, even when the passing profile is suboptimal. Consider adding a 'weak confidence' check: if Stage A passes at exactly the threshold (top = 2.0 * runner-up), still run Stage B to validate or override. This would catch eval-2's misclassification without penalizing clear-signal prompts."
+    },
+    {
+      "priority": "medium",
+      "suggestion": "Add query-intent metadata to required file ordering in profiles.json. Example: for life-coaching, STATUS.md should have a 'priority-when-keywords' list: ['progress', 'tracking', 'how am I doing', 'this week']. When those keywords appear, reorder required files to load STATUS first. This enables query-adaptive ordering without a full LLM call."
+    },
+    {
+      "priority": "low",
+      "suggestion": "Add a 'planning' keyword match for 'when can I fit' and 'when am I free this week' — these are scheduling-adjacent phrases that signal a planning query (not just scheduling). Currently 'when' does not match any keyword list."
+    },
+    {
+      "priority": "low",
+      "suggestion": "Add compressed versions for CLI-INDEX.md and ProjectsContext.md. Both are over 1000 tokens and frequently compete for budget in the development profile. Compressed versions (~300-400 tokens each) would allow both to load within the current 1200-token budget."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:47:16.098Z",
+  "completed_at": "2026-02-12T05:48:15.400Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Calendar query like 'what's on my calendar' routes to scheduling profile with CalendarContext loaded",
+      "timestamp": "2026-02-12T05:47:16.098Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Here's your schedule, Jm:\n\n**Wed Feb 11 (Today)**\n- 6:30 Morning Routine\n- 7:00 Walk\n- 7:15 Work Session - Focus\n- 8:45 Salsa practice\n- 9:00 Work Session - Flex\n- 10:00 Team Sync\n- 10:30 Rehab → 10:45 Workout\n- 12:00 Call Mom + Lunch\n- 12:30 Decompress → 1:30 Walk\n- 2:00 Personal tasks\n- 3:00 Project Time\n- 5:00 Dinner\n- 6:00 Julie & Market / **DSA 101**\n- 7:00 **Labor Working Group Meeting**\n- 9:30 Evening Routine\n\n**Coming up:**\n- **Thu**: R&I Initiative Sync (9am), optional DataAI (8am)\n- **Fri**: Focus Friday (no meetings), CSDC General Meeting (5:45pm), Get Board Waxed, Laundry x2\n- **Sat**: Valentine's Day — DSA Day of Caring (9:30am), V-Day with Julie (10am), Book Club (4pm)\n- **Sun**: Ryan Charleston's bday, North County Branch Meeting (2pm), DnD (5pm), Black Panther Party History (6pm)\n\n🗣️ Kaya: It's 9:47pm — you have evening routine at 9:30, DSA and Labor meetings were earlier tonight.",
+      "timestamp": "2026-02-12T05:48:15.400Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 59302,
+    "time_to_first_token_ms": 59302,
+    "time_to_last_token_ms": 59302,
+    "tokens_per_second": 0
+  }
+}

@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 import { join } from 'path';
-import { createStateManager } from '../../../skills/CORE/Tools/StateManager';
+import { createStateManager } from '../../../lib/core/StateManager';
 
 const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
 

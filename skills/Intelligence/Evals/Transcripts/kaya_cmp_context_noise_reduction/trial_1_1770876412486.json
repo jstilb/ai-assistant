@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:04:43.493Z",
+  "completed_at": "2026-02-12T06:06:52.485Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T06:04:43.493Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: None of your 61 Asana tasks have specific due dates set. Here's what's time-sensitive this week based on context.\n\n🔍 ANALYSIS: No tasks have `due_on` dates assigned in Asana. However, based on section status and Valentine's Day (Feb 14), I can flag what's urgent this week.\n\n📊 STATUS: **61 open tasks** across 10 projects, grouped by urgency:\n\n### **This Week — Valentine's Day (Sat Feb 14)**\n| Task | Project | Section |\n|------|---------|---------|\n| Vday Letter | Family | In Progress |\n| Valentine's Day Cooking | Self | Prioritized |\n\n### **In Progress (active work)**\n| Task | Project |\n|------|---------|\n| create context management system in Kaya | Professional |\n| Define MVP Value Prop | Lucidview |\n| Call Jesse | Friend |\n| Make magical items in dnd beyond | Dnd |\n\n### **Prioritized (ready to pick up)**\n- **Professional:** 8 tasks (research, LinkedIn, gmail automation, etc.)\n- **Self:** 15 tasks (shopping, closet cleanup, ebooks, etc.)\n- **Adventurer:** 4 tasks (Sedona hotel, Guatemala plans)\n- **Dnd:** 3 tasks (streaming, stat sheets, war mechanics)\n- **Family:** Followup on Therapist Progress\n- **DSA:** Involvement plan in organizing committee\n\n➡️ NEXT: I'd recommend setting due dates on your tasks — especially the V-Day ones. Want me to set `2026-02-14` on the Vday Letter and Valentine's Day Cooking tasks?\n\n🗣️ Kaya: No due dates set in Asana. Vday Letter and Valentine's Cooking are your urgent ones this week.",
+      "timestamp": "2026-02-12T06:06:52.485Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 128992,
+    "time_to_first_token_ms": 128992,
+    "time_to_last_token_ms": 128992,
+    "tokens_per_second": 0
+  }
+}

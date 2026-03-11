@@ -1,0 +1,230 @@
+{
+  "task_id": "kaya_jobengine_browser_submit_dryrun",
+  "trial_id": "trial_1",
+  "started_at": "2026-03-10T00:58:01.267Z",
+  "completed_at": "2026-03-10T00:59:31.285Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Read skills/Commerce/JobEngine/Tools/lib/browser-submit.ts.\nFind the FormComplexityAnalysis type and the dry-run gate logic.\nVerify:\n1. The BrowserSubmitResult type has exactly 4 status values: \"submitted\", \"incomplete_form\", \"skipped_complex\", \"failed\"\n2. Multi-step wizard detection exists and returns \"skipped_complex\" status\n3. The agentic form-fill loop (runAgenticFormFillLoop) has maxRounds=3 limit\n4. The function exports BrowserSubmitOptions and BrowserSubmitResult types\nReport what you find with evidence from the code.\n",
+      "timestamp": "2026-03-10T00:58:01.267Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Got all the evidence. Here's the report:\n\n📋 SUMMARY: Code review of `browser-submit.ts` — verifying 4 specific claims about types, dry-run gate, and agentic loop.\n\n🔍 ANALYSIS:\n\n**1. BrowserSubmitResult status values** — **CONFIRMED (exactly 4)**\nLine 57:\n```ts\nstatus: \"submitted\" | \"incomplete_form\" | \"skipped_complex\" | \"failed\";\n```\n\n**2. Multi-step wizard detection returning \"skipped_complex\"** — **CONFIRMED**\n- Line 2505-2506: Detection via regex `step \\d+ of \\d+|page \\d+ of \\d+`\n- Line 2519: `isMultiStep` feeds into `estimatedDifficulty = \"complex\"`\n- Lines 3044-3053: Complexity gate returns `status: \"skipped_complex\"` when `estimatedDifficulty === \"complex\"`\n- Reason string includes multi-step flag: `\"Form too complex (N required fields, multi-step: true/false)\"`\n\n**3. runAgenticFormFillLoop maxRounds** — **PARTIAL: default is 3, but callsite overrides to 5**\n- Line 1970: Function signature declares `maxRounds = 3`\n- Line 3058: Actual callsite passes `5` — `runAgenticFormFillLoop(page, fullProfile!, job!, resumePath, 5, ...)`\n- So the default parameter is 3, but the production call uses 5 rounds.\n\n**4. Exported types** — **CONFIRMED**\n- Line 39: `export interface BrowserSubmitOptions`\n- Line 55: `export interface BrowserSubmitResult`\n- Also exports: `FormComplexityAnalysis` (line 2477), `analyzeFormComplexity` (line 2490), `submitApplication` (line 2548), and several other helpers.\n\n📊 STATUS: All 4 checks verified against source code.\n\n📁 CAPTURE: The dry-run gate (line 3032-3042) returns early with `status: \"submitted\"` and populates `complexityAnalysis` — note it returns `success: true` for dry-run even though nothing was submitted. The complexity gate (line 3044-3053) sits immediately after dry-run and blocks complex forms.\n\n➡️ NEXT: Two items worth noting:\n1. The maxRounds default (3) vs actual usage (5) mismatch could be confusing — consider aligning them\n2. Dry-run returning `status: \"submitted\"` is semantically misleading — a `\"dry_run\"` status value might be clearer\n\n📖 STORY EXPLANATION:\n1. `BrowserSubmitResult.status` has exactly 4 values: `submitted`, `incomplete_form`, `skipped_complex`, `failed` — confirmed at line 57\n2. Multi-step wizard detection uses regex on ARIA snapshots looking for \"step X of Y\" patterns (line 2505)\n3. When `isMultiStep` is true or `requiredFields > 15`, difficulty is set to `\"complex\"` (line 2519)\n4. The complexity gate at line 3044 returns `skipped_complex` for complex forms before any filling begins\n5. `runAgenticFormFillLoop` declares `maxRounds = 3` default (line 1970) but is called with `5` at line 3058\n6. Both `BrowserSubmitOptions` and `BrowserSubmitResult` are exported interfaces\n7. Dry-run gate (line 3032) returns early with analysis data but uses `status: \"submitted\"` which is semantically imprecise\n8. `FormComplexityAnalysis` type has 6 fields: totalFields, requiredFields, hasResumeUpload, isMultiStep, estimatedDifficulty, atsType\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All 4 checks verified. Note: maxRounds default is 3 but callsite overrides to 5.",
+      "timestamp": "2026-03-10T00:59:31.285Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1773104371285_lh8ipb",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/browser-submit.ts"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "No files found",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_z3m3gz",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/JobEngine/**"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "No files found",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_cbok17",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/browser-submit*"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "No files found",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_g4uqqm",
+      "name": "Bash",
+      "params": {
+        "command": "ls -la /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_jobengine_browser_submit_dryrun-wabXeB/",
+        "description": "List working directory contents"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "total 0\ndrwx------@   2 [user]  staff    64 Mar  9 17:58 .\ndrwx------@ 174 [user]  staff  5568 Mar  9 17:58 ..",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_iyc63n",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*.ts"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "No files found",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_j3igh5",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/Commerce/JobEngine/**/*.ts",
+        "path": "~/.claude"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "~/.claude/skills/Commerce/JobEngine/Tools/CompanyResearch.ts\n~/.claude/skills/Commerce/JobEngine/Tools/DigestGenerator.ts\n~/.claude/skills/Commerce/JobEngine/Tools/GmailJobsSync.ts\n~/.claude/skills/Commerce/JobEngine/Tools/NetworkEngine.ts\n~/.claude/skills/Commerce/JobEngine/Tools/__tests__/JobScanner.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/__tests__/NetworkEngine.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/contact-scoring.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/state-helper.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/yaml-helper.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/contact-scoring.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/dedup.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/pdf-helper.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/scoring.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/yaml-helper.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/ats-blocklist.ts\n~/.claude/skills/Commerce/JobEngine/Tools/JobScanner.ts\n~/.claude/skills/Commerce/JobEngine/Tools/MigrateApplications.ts\n~/.claude/skills/Commerce/JobEngine/Tools/AnalyticsEngine.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/state-helper.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/inference-helper.ts\n~/.claude/skills/Commerce/JobEngine/Tools/__tests__/AutoApply.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/dedup.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/__tests__/isc-coverage.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/browser-submit.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/__tests__/scoring.test.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/types.ts\n~/.claude/skills/Commerce/JobEngine/Tools/AutoApply.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts\n~/.claude/skills/Commerce/JobEngine/Tools/lib/scoring.test.ts",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_iozr3s",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts"
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "error": "File content (42688 tokens) exceeds maximum allowed tokens (25000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_c546rw",
+      "name": "Grep",
+      "params": {
+        "pattern": "FormComplexityAnalysis|BrowserSubmitResult|BrowserSubmitOptions",
+        "path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "output_mode": "content",
+        "-n": true
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "39:export interface BrowserSubmitOptions {\n55:export interface BrowserSubmitResult {\n66:  complexityAnalysis?: FormComplexityAnalysis;\n2477:export interface FormComplexityAnalysis {\n2490:export function analyzeFormComplexity(ariaSnapshot: string, url: string): FormComplexityAnalysis {\n2549:  options: BrowserSubmitOptions\n2550:): Promise<BrowserSubmitResult> {\n2557:  const watchdogPromise = new Promise<BrowserSubmitResult>((resolve) => {\n2582:  options: BrowserSubmitOptions,\n2585:): Promise<BrowserSubmitResult> {",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_3ovd1c",
+      "name": "Grep",
+      "params": {
+        "pattern": "skipped_complex|incomplete_form|submitted|failed",
+        "path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "output_mode": "content",
+        "-n": true
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "10: *   5. Post-submit validation: detect \"form needs corrections\" → incomplete_form\n57:  status: \"submitted\" | \"incomplete_form\" | \"skipped_complex\" | \"failed\";\n387:    failedLabels: string[];\n482:Failed fields (could not locate): ${roundContext.failedLabels.length > 0 ? roundContext.failedLabels.join(\", \") : \"none\"}\n483:Focus on fixing these issues. Re-emit actions for failed/errored fields with alternative labels or css_selector fallbacks.`;\n550: * Returns count of successful actions and list of failed labels.\n556:): Promise<{ filledCount: number; failedLabels: string[]; resumeUploaded: boolean }> {\n559:  const failedLabels: string[] = [];\n582:      // All strategies failed for this action\n588:      failedLabels.push(action.label);\n613:  return { filledCount, failedLabels, resumeUploaded };\n1574:      } catch { /* text-scoped verification failed */ }\n1870:    // Verification failed — don't block execution\n1875:/** Capture DOM context around a failed field for the correction prompt. Called only on failure. */\n1911:/** Build a targeted correction prompt for rounds 2+, with DOM context per failed field. */\n1914:  failedAttempts: FieldAttemptRecord[],\n1930:The following fields could not be filled or failed verification. For each, DOM context HTML is provided. Reason about the DOM structure to find the correct selector strategy.\n1934:  for (const attempt of failedAttempts) {\n1937:- Strategy used: ${attempt.strategyUsed === -1 ? \"all failed\" : `#${attempt.strategyUsed}`}\n1952:Re-emit actions ONLY for the failed fields listed above. Use css_selector if ARIA labels are ambiguous. Try alternative selectors based on the DOM context shown.`;\n1962: * Round 2+: Fresh ARIA → correction prompt with DOM context → re-plan failed fields only.\n1963: * Exits early if no errors and no failed fields.\n1981:  let failedAttempts: FieldAttemptRecord[] = [];\n2060:        userPrompt = buildCorrectionPrompt(ariaTree, failedAttempts, fullProfile, job);\n2083:        log(`[Agentic loop] Round ${round} inference failed (${consecutiveInferenceFailures} consecutive): ${result.error ?? \"no JSON\"}`);\n2088:          errors: [`Inference failed: ${result.error ?? \"no JSON\"}`],\n2089:          failedLabels: [],\n2190:          // Cross-method fallback: if primary method failed, try related methods\n2240:              // Execution claimed success but verification failed — try cross-method fallback\n2275:                attempt.error = `verification failed: read back \"${verification.actualValue}\"`;\n2282:            // Execution failed — capture DOM context for correction prompt\n2295:          const strat = attempt.strategyUsed === -1 ? \"all-failed\" : `strategy-${attempt.strategyUsed}`;\n2326:      // Update failed attempts for next correction round (only keep failures)\n2327:      failedAttempts = roundFieldAttempts.filter((a) => !a.succeeded);\n2334:        failedLabels: roundFailedLabels,\n2340:      log(`[Agentic loop] Round ${round}: ${roundFilled}/${plan.actions.length} actions, ${errors.length} errors, ${roundFailedLabels.length} failed`);\n2342:      // 7. Exit early if no errors and no failed fields\n2350:      // A failed click means the button wasn't found — that's a locator problem, not a loop\n2373:        failedLabels: [],\n2566:        resolve({ success: false, status: \"failed\", reason: `Hard timeout after ${Math.round(elapsed / 1000)}s (${progress.totalFilled} fields filled)`, atsType: \"unknown\" });\n2571:        resolve({ success: false, status: \"failed\", reason: `Stalled: no fields filled for ${Math.round(stallTime / 1000)}s (${progress.totalFilled} total)`, atsType: \"unknown\" });\n2592:      status: \"failed\",\n2653:        status: \"failed\",\n2784:            status: \"failed\",\n2818:          if (verbose) console.log(`  [indeed] Apply button click failed: ${err instanceof Error ? err.message : err}`);\n2826:            status: \"failed\",\n2888:                  return { success: false, status: \"failed\", reason: `${postHopAuth.site} requires authentication`, atsType: postHopAuth.site ?? \"unknown\" };\n2912:          if (verbose) console.log(`  [indeed] Second-hop failed: ${err instanceof Error ? err.message : err}`);\n3024:          status: \"failed\",\n3036:        status: \"submitted\",\n3048:        status: \"skipped_complex\",\n3065:          status: \"failed\",\n3129:        status: \"incomplete_form\",\n3153:        // File upload failed — continue, will note in result\n3171:          status: \"failed\",\n3245:            status: \"incomplete_form\",\n3256:          status: \"failed\",\n3257:          reason: `Submit click failed: ${err instanceof Error ? err.message : err}`,\n3285:        const confirmPatterns = /thank you|application received|successfully submitted|we received|application complete|application has been/i;\n3304:        status: \"failed\",\n3319:        status: \"incomplete_form\",\n3340:      status: \"submitted\",\n3355:      status: \"failed\",",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_40nemk",
+      "name": "Grep",
+      "params": {
+        "pattern": "maxRounds|runAgenticFormFillLoop|multi.?step|wizard",
+        "path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "output_mode": "content",
+        "-n": true,
+        "-i": true
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "6: *   2. runAgenticFormFillLoop(page, profile, job, resumePath, maxRounds=3):\n1965:async function runAgenticFormFillLoop(\n1970:  maxRounds = 3,\n1995:  for (let round = 1; round <= maxRounds; round++) {\n2481:  isMultiStep: boolean;\n2504:  // Check for multi-step wizard\n2505:  const multiStepIndicators = /step \\d+ of \\d+|page \\d+ of \\d+/i;\n2506:  const isMultiStep = multiStepIndicators.test(ariaSnapshot);\n2519:  if (isMultiStep || requiredFields > 15) {\n2529:    isMultiStep,\n3052:        reason: `Form too complex (${complexityAnalysis.requiredFields} required fields, multi-step: ${complexityAnalysis.isMultiStep})`,\n3058:      const loopResult = await runAgenticFormFillLoop(page, fullProfile!, job!, resumePath, 5, verbose, progress ? () => { progress.lastProgressMs = Date.now(); progress.totalFilled++; } : undefined, progress ? () => { progress.lastProgressMs = Date.now(); } : undefined);",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_hp8e2i",
+      "name": "Grep",
+      "params": {
+        "pattern": "^export",
+        "path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "output_mode": "content",
+        "-n": true
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "39:export interface BrowserSubmitOptions {\n55:export interface BrowserSubmitResult {\n93:export async function selectResumePath(\n166:export async function saveSiteCookies(\n180:export async function loadSiteCookies(\n203:export function isAuthWall(url: string): { blocked: boolean; site?: string } {\n379:export function buildFormFillPrompt(\n499:export function parseFormFillPlan(parsed: unknown): FormFillPlan {\n617:export function inferInputType(label: string): string | null {\n2401:export function extractMetadataFromUrl(url: string): { company?: string; title?: string } {\n2423:export function parsePageTitle(pageTitle: string): { company?: string; title?: string } {\n2477:export interface FormComplexityAnalysis {\n2490:export function analyzeFormComplexity(ariaSnapshot: string, url: string): FormComplexityAnalysis {\n2548:export async function submitApplication(",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_fu15yi",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "offset": 39,
+        "limit": 30
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "    39→export interface BrowserSubmitOptions {\n    40→  url: string;\n    41→  profile: ProfileInfo;\n    42→  /** Full MasterProfile for AI form filling (rich context) */\n    43→  fullProfile?: MasterProfile;\n    44→  resumePath: string;\n    45→  headless?: boolean;\n    46→  timeout?: number;\n    47→  /** Job context for AI form filling */\n    48→  job?: { title: string; company: string; description_snippet?: string };\n    49→  /** Enable verbose diagnostic logging to stdout */\n    50→  verbose?: boolean;\n    51→  /** Dry-run mode: analyze form complexity without filling or submitting */\n    52→  dryRun?: boolean;\n    53→}\n    54→\n    55→export interface BrowserSubmitResult {\n    56→  success: boolean;\n    57→  status: \"submitted\" | \"incomplete_form\" | \"skipped_complex\" | \"failed\";\n    58→  reason?: string;\n    59→  screenshotPath?: string;\n    60→  atsType: string;\n    61→  /** Metadata extracted from page title after navigation (for resolving \"Unknown\" placeholders) */\n    62→  extractedMetadata?: { title?: string; company?: string };\n    63→  /** Whether a confirmation page/message was detected after submit */\n    64→  confirmationDetected?: boolean;\n    65→  /** Form complexity analysis (populated by dry-run and complexity gate) */\n    66→  complexityAnalysis?: FormComplexityAnalysis;\n    67→}\n    68→",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_nwkrb0",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "offset": 2477,
+        "limit": 80
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "  2477→export interface FormComplexityAnalysis {\n  2478→  totalFields: number;\n  2479→  requiredFields: number;\n  2480→  hasResumeUpload: boolean;\n  2481→  isMultiStep: boolean;\n  2482→  estimatedDifficulty: \"simple\" | \"moderate\" | \"complex\";\n  2483→  atsType: string;\n  2484→}\n  2485→\n  2486→/**\n  2487→ * Analyze form complexity from an ARIA snapshot.\n  2488→ * Used by --dry-run and pre-submit complexity gate.\n  2489→ */\n  2490→export function analyzeFormComplexity(ariaSnapshot: string, url: string): FormComplexityAnalysis {\n  2491→  const lines = ariaSnapshot.split(\"\\n\");\n  2492→\n  2493→  // Count form fields\n  2494→  const fieldPatterns = /role=\"(textbox|combobox|listbox|radio|checkbox|spinbutton)\"|type=\"(text|email|tel|url|number|file|radio|checkbox)\"|<input|<select|<textarea/gi;\n  2495→  const totalFields = (ariaSnapshot.match(fieldPatterns) || []).length;\n  2496→\n  2497→  // Count required fields (marked with * or \"required\")\n  2498→  const requiredPattern = /\\[required\\]|aria-required=\"true\"/gi;\n  2499→  const requiredFields = (ariaSnapshot.match(requiredPattern) || []).length;\n  2500→\n  2501→  // Check for resume upload\n  2502→  const hasResumeUpload = /resume|cv|curriculum/i.test(ariaSnapshot) && /type=\"file\"|upload/i.test(ariaSnapshot);\n  2503→\n  2504→  // Check for multi-step wizard\n  2505→  const multiStepIndicators = /step \\d+ of \\d+|page \\d+ of \\d+/i;\n  2506→  const isMultiStep = multiStepIndicators.test(ariaSnapshot);\n  2507→\n  2508→  // Detect ATS type\n  2509→  let atsType = \"generic\";\n  2510→  if (/greenhouse/i.test(url)) atsType = \"greenhouse\";\n  2511→  else if (/lever/i.test(url)) atsType = \"lever\";\n  2512→  else if (/ashby/i.test(url)) atsType = \"ashby\";\n  2513→  else if (/workday/i.test(url)) atsType = \"workday\";\n  2514→  else if (/icims/i.test(url)) atsType = \"icims\";\n  2515→  else if (/jobvite/i.test(url)) atsType = \"jobvite\";\n  2516→\n  2517→  // Estimate difficulty\n  2518→  let estimatedDifficulty: \"simple\" | \"moderate\" | \"complex\" = \"simple\";\n  2519→  if (isMultiStep || requiredFields > 15) {\n  2520→    estimatedDifficulty = \"complex\";\n  2521→  } else if (requiredFields > 8 || totalFields > 12) {\n  2522→    estimatedDifficulty = \"moderate\";\n  2523→  }\n  2524→\n  2525→  return {\n  2526→    totalFields,\n  2527→    requiredFields,\n  2528→    hasResumeUpload,\n  2529→    isMultiStep,\n  2530→    estimatedDifficulty,\n  2531→    atsType,\n  2532→  };\n  2533→}\n  2534→\n  2535→/** Per-action timeout for strategy exploration. Prevents 30s burns on wrong elements. */\n  2536→const STRATEGY_ACTION_TIMEOUT = 5_000;\n  2537→\n  2538→interface ProgressToken {\n  2539→  lastProgressMs: number;\n  2540→  totalFilled: number;\n  2541→  isComplete: boolean;\n  2542→}\n  2543→const PROGRESS_STALL_MS = 180_000;       // 180s with no fills = stalled (was 60s; agentic loop inference rounds take 15-30s each)\n  2544→\n  2545→/** Per-application hard timeout: 10 minutes absolute cap. Progress watchdog handles stalls. */\n  2546→const APPLICATION_HARD_TIMEOUT_MS = 10 * 60 * 1000;\n  2547→\n  2548→export async function submitApplication(\n  2549→  options: BrowserSubmitOptions\n  2550→): Promise<BrowserSubmitResult> {\n  2551→  const progress: ProgressToken = { lastProgressMs: Date.now(), totalFilled: 0, isComplete: false };\n  2552→  const browserRef: { current: PlaywrightBrowserType | null } = { current: null };\n  2553→  const startMs = Date.now();\n  2554→\n  2555→  const innerPromise = submitApplicationInner(options, progress, browserRef).finally(() => { progress.isComplete = true; });\n  2556→",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_j7zo0n",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "offset": 1965,
+        "limit": 35
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "  1965→async function runAgenticFormFillLoop(\n  1966→  page: import(\"playwright-core\").Page,\n  1967→  fullProfile: MasterProfile,\n  1968→  job: { title: string; company: string; description_snippet?: string },\n  1969→  resumePath: string,\n  1970→  maxRounds = 3,\n  1971→  verbose = false,\n  1972→  onFieldFilled?: () => void,\n  1973→  onRoundStart?: () => void\n  1974→): Promise<AgenticLoopResult> {\n  1975→  const rounds: RoundResult[] = [];\n  1976→  const allFilledLabels: string[] = [];\n  1977→  let totalFilled = 0;\n  1978→  let resumeUploaded = false;\n  1979→  let submitLabel: string | null = null;\n  1980→  let cumulativeErrors: string[] = [];\n  1981→  let failedAttempts: FieldAttemptRecord[] = [];\n  1982→  const debugLogPath = join(SCREENSHOT_DIR, \"debug-agentic.log\");\n  1983→  const dlog = (msg: string) => {\n  1984→    const line = `[${new Date().toISOString()}] ${msg}\\n`;\n  1985→    appendFileSync(debugLogPath, line);\n  1986→  };\n  1987→  const log = verbose\n  1988→    ? (msg: string) => { console.log(msg); dlog(msg); }\n  1989→    : (msg: string) => { process.stderr.write(msg + \"\\n\"); dlog(msg); };\n  1990→  dlog(\"=== AGENTIC LOOP START ===\");\n  1991→  let prevRoundClickOnly = false;\n  1992→  let consecutiveClickOnly = 0;\n  1993→  let consecutiveInferenceFailures = 0;\n  1994→\n  1995→  for (let round = 1; round <= maxRounds; round++) {\n  1996→    // Reset stall clock at each round start — inference calls (30-120s) shouldn't count toward stall\n  1997→    if (totalFilled > 0) {\n  1998→      onRoundStart?.();\n  1999→    }",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1773104371285_hxgg83",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts",
+        "offset": 3030,
+        "limit": 40
+      },
+      "started_at": "2026-03-10T00:59:31.285Z",
+      "result": "  3030→    }\n  3031→\n  3032→    if (dryRun) {\n  3033→      await browser.close();\n  3034→      return {\n  3035→        success: true,\n  3036→        status: \"submitted\",\n  3037→        atsType: adapter.name,\n  3038→        extractedMetadata,\n  3039→        complexityAnalysis,\n  3040→        reason: `dry-run: ${complexityAnalysis.totalFields} fields (${complexityAnalysis.requiredFields} required), ATS: ${complexityAnalysis.atsType}, difficulty: ${complexityAnalysis.estimatedDifficulty}`,\n  3041→      };\n  3042→    }\n  3043→\n  3044→    if (complexityAnalysis.estimatedDifficulty === \"complex\") {\n  3045→      await browser.close();\n  3046→      return {\n  3047→        success: false,\n  3048→        status: \"skipped_complex\",\n  3049→        atsType: adapter.name,\n  3050→        extractedMetadata,\n  3051→        complexityAnalysis,\n  3052→        reason: `Form too complex (${complexityAnalysis.requiredFields} required fields, multi-step: ${complexityAnalysis.isMultiStep})`,\n  3053→      };\n  3054→    }\n  3055→\n  3056→    // ── Primary path: Agentic AI form fill loop ──\n  3057→    if (useAI) {\n  3058→      const loopResult = await runAgenticFormFillLoop(page, fullProfile!, job!, resumePath, 5, verbose, progress ? () => { progress.lastProgressMs = Date.now(); progress.totalFilled++; } : undefined, progress ? () => { progress.lastProgressMs = Date.now(); } : undefined);\n  3059→\n  3060→      // Auth wall detected by content analysis — abort immediately\n  3061→      if (loopResult.authWallDetected) {\n  3062→        await browser.close();\n  3063→        return {\n  3064→          success: false,\n  3065→          status: \"failed\",\n  3066→          reason: \"Auth wall detected — page requires account creation/login, not an application form. Run manual auth first.\",\n  3067→          atsType: adapter.name,\n  3068→        };\n  3069→      }",
+      "completed_at": "2026-03-10T00:59:31.285Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.40164875,
+    "duration": 85516,
+    "turns": 16,
+    "inputTokens": 42,
+    "outputTokens": 2492,
+    "cacheReadTokens": 252815,
+    "cacheCreationTokens": 34037
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 15,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 90018,
+    "time_to_first_token_ms": 90018,
+    "time_to_last_token_ms": 90018,
+    "tokens_per_second": 0
+  }
+}

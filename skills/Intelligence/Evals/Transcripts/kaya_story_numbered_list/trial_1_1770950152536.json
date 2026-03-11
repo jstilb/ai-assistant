@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:35:07.474Z",
+  "completed_at": "2026-02-13T02:35:52.536Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Walk me through the steps to debug a Node.js application that's running slowly",
+      "timestamp": "2026-02-13T02:35:07.474Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Walkthrough of Node.js performance debugging steps.\n\n📖 STORY EXPLANATION:\n1. **Start with `--inspect`** — Run your app with `node --inspect app.js` and open `chrome://inspect` in Chrome to connect the DevTools debugger\n2. **CPU Profile first** — In DevTools Performance tab, record during the slow period, then look for long-running functions in the flame chart to find CPU bottlenecks\n3. **Check the event loop** — Use `clinic doctor` (`npx clinic doctor -- node app.js`) which auto-detects event loop delays, I/O issues, and GC pressure with a visual report\n4. **Heap snapshot for memory leaks** — In DevTools Memory tab, take snapshots before and after the slow behavior, then use \"Comparison\" view to find objects that grew unexpectedly\n5. **Trace async bottlenecks** — Use `clinic bubbleprof` to visualize async operation timing, or add `console.time`/`console.timeEnd` around suspected slow async calls (DB queries, HTTP requests, file I/O)\n6. **Check for blocking code** — Look for synchronous `fs` calls (`readFileSync`, `writeFileSync`), CPU-heavy loops, or JSON parsing of large payloads on the main thread — move these to worker threads or streams\n7. **Profile in production carefully** — Use `0x` (`npx 0x app.js`) for low-overhead flame graphs, or enable `--prof` for V8's built-in profiler, then process with `--prof-process` to get a human-readable report\n8. **Narrow down with targeted logging** — Once you've identified the area, use `perf_hooks` (`performance.mark`, `performance.measure`) for precise timing of specific code paths without third-party tools\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Debug Node.js slowness using inspect, clinic, heap snapshots, flame graphs, and async tracing.",
+      "timestamp": "2026-02-13T02:35:52.536Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.20605074999999998,
+    "duration": 39573,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 471,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 29483
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 45062,
+    "time_to_first_token_ms": 45062,
+    "time_to_last_token_ms": 45062,
+    "tokens_per_second": 0
+  }
+}

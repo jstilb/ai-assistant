@@ -13,6 +13,12 @@
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { z } from "zod";
+
+const AgentTypeSchema = z.string().min(1, "agentType must be non-empty").regex(
+  /^[a-zA-Z0-9_-]+$/,
+  "agentType must be alphanumeric (plus hyphens/underscores)",
+);
 
 interface AgentContext {
   agentType: string;
@@ -33,6 +39,7 @@ export class AgentContextLoader {
    * Load context for a specific agent type
    */
   loadContext(agentType: string): AgentContext {
+    AgentTypeSchema.parse(agentType);
     const contextPath = join(this.agentsDir, `${agentType}Context.md`);
 
     if (!existsSync(contextPath)) {

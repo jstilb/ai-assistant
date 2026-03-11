@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_exec_plan_means_stop",
+  "trial_id": "trial_1",
+  "started_at": "2026-03-01T04:27:36.800Z",
+  "completed_at": "2026-03-01T04:27:36.855Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "I need to redesign the entire auth system. Let's plan this out.\n\nNote: Do NOT use these tools: Edit, Write, Bash",
+      "timestamp": "2026-03-01T04:27:36.800Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-03-01T04:27:36.855Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 55,
+    "time_to_first_token_ms": 55,
+    "time_to_last_token_ms": 55,
+    "tokens_per_second": 0
+  }
+}

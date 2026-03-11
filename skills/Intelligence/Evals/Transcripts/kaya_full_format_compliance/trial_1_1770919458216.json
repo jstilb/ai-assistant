@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_full_format_compliance",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:03:39.010Z",
+  "completed_at": "2026-02-12T18:04:18.216Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix the authentication bug in the login endpoint and run the tests",
+      "timestamp": "2026-02-12T18:03:39.010Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Need to identify which project has the auth bug before proceeding.\n\nI see references in your recent MEMORY to JWT/auth bugs in **local-lens** — is that the project? I also need to know the specific symptom. Which project and what's the bug?\n\n🗣️ Kaya: Need project name and bug details before exploring the authentication issue.",
+      "timestamp": "2026-02-12T18:04:18.216Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 39206,
+    "time_to_first_token_ms": 39206,
+    "time_to_last_token_ms": 39206,
+    "tokens_per_second": 0
+  }
+}

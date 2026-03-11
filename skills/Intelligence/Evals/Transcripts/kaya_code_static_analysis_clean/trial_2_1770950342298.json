@@ -1,0 +1,103 @@
+{
+  "task_id": "kaya_code_static_analysis_clean",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T02:38:19.032Z",
+  "completed_at": "2026-02-13T02:39:02.298Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add a retry mechanism to the HTTP client",
+      "timestamp": "2026-02-13T02:38:19.032Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Empty working directory — no HTTP client found to modify.\n🗣️ Kaya: Working directory is empty. Need the HTTP client location or permission to create one.",
+      "timestamp": "2026-02-13T02:39:02.298Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770950342298_8xcayj",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*"
+      },
+      "started_at": "2026-02-13T02:39:02.298Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:39:02.298Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950342298_pqy9p5",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*.{ts,js,py,go,rs,java}"
+      },
+      "started_at": "2026-02-13T02:39:02.298Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:39:02.298Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950342298_t6sen0",
+      "name": "Bash",
+      "params": {
+        "command": "ls -la /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_static_analysis_clean-uEhJm4/",
+        "description": "List all files in working directory"
+      },
+      "started_at": "2026-02-13T02:39:02.298Z",
+      "result": "total 0\ndrwx------@   2 [user]  staff    64 Feb 12 18:38 .\ndrwx------@ 229 [user]  staff  7328 Feb 12 18:38 ..",
+      "completed_at": "2026-02-13T02:39:02.298Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950342298_i0mneu",
+      "name": "AskUserQuestion",
+      "params": {
+        "questions": [
+          {
+            "question": "The current working directory is empty. Which HTTP client should I add retry logic to?",
+            "header": "HTTP Client",
+            "options": [
+              {
+                "label": "Create new one",
+                "description": "Create a new HTTP client with built-in retry mechanism from scratch"
+              },
+              {
+                "label": "Point me to it",
+                "description": "Provide the path to the existing HTTP client file/project you want me to modify"
+              }
+            ],
+            "multiSelect": false
+          }
+        ]
+      },
+      "started_at": "2026-02-13T02:39:02.298Z",
+      "error": "Answer questions?",
+      "completed_at": "2026-02-13T02:39:02.298Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.28584525000000005,
+    "duration": 36511,
+    "turns": 5,
+    "inputTokens": 6,
+    "outputTokens": 505,
+    "cacheReadTokens": 168948,
+    "cacheCreationTokens": 30101
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 4,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 43266,
+    "time_to_first_token_ms": 43266,
+    "time_to_last_token_ms": 43266,
+    "tokens_per_second": 0
+  }
+}

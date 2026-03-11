@@ -60,7 +60,25 @@ import { join } from 'path';
 import { getLearningCategory } from './lib/learning-utils';
 import { getPrincipalName } from './lib/identity';
 import { getISOTimestamp, getPSTComponents } from './lib/time';
-import { captureFailure } from '../skills/CORE/Tools/FailureCapture';
+import { captureFailure, captureFailureDump } from '../lib/core/FailureCapture';
+
+/**
+ * Check if failure dumps are enabled in settings.json.
+ * Defaults to true if setting is missing.
+ */
+function isFailureDumpsEnabled(): boolean {
+  const baseDir = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
+  const settingsPath = join(baseDir, 'settings.json');
+  if (!existsSync(settingsPath)) return true;
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    // If failures key exists and enabled is explicitly false, disable
+    if (settings.failures && settings.failures.enabled === false) return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 interface HookInput {
   session_id: string;
@@ -290,7 +308,26 @@ async function main() {
         } catch (err) {
           console.error(`[ExplicitRatingCapture] Error creating failure capture: ${err}`);
         }
+
+        // Additionally create structured 3-file failure dump package (ISC 8120, 8740)
+        // Only if failures.enabled !== false in settings
+        if (isFailureDumpsEnabled()) {
+          // Fire-and-forget: non-blocking, async (ISC 3634)
+          captureFailureDump({
+            sessionId: data.session_id,
+            transcriptPath: data.transcript_path,
+            rating: result.rating,
+            comment: result.comment,
+          }).then(packageDir => {
+            console.error(`[ExplicitRatingCapture] Failure dump package created: ${packageDir}`);
+          }).catch(err => {
+            console.error(`[ExplicitRatingCapture] Failure dump error (non-fatal): ${err}`);
+          });
+        } else {
+          console.error('[ExplicitRatingCapture] Failure dumps disabled via settings.failures.enabled=false');
+        }
       }
+      // Ratings 4-10: no failure dump created (ISC 9240)
     }
 
     console.error('[ExplicitRatingCapture] Done');

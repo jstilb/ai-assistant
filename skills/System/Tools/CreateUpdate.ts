@@ -19,7 +19,7 @@
 import { writeFile, mkdir, readFile } from "fs/promises";
 import { join } from "path";
 import { parseArgs } from "util";
-import { memoryStore } from "../../CORE/Tools/MemoryStore.ts";
+import { memoryStore } from "../../../lib/core/MemoryStore.ts";
 
 const KAYA_DIR = process.env.KAYA_DIR || `${process.env.HOME}/.claude`;
 const UPDATES_DIR = join(KAYA_DIR, "MEMORY/KAYASYSTEMUPDATES");

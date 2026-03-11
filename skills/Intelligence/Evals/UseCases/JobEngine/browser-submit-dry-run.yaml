@@ -1,0 +1,44 @@
+# Task: Browser-submit dry-run complexity gate
+# WHY: Multi-step wizard forms waste tokens and fail silently — gate must skip them
+
+id: kaya_jobengine_browser_submit_dryrun
+description: "Verify FormComplexityAnalysis dry-run gate correctly identifies and skips multi-step wizards"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Read the file at ~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts.
+    Find the FormComplexityAnalysis type and the dry-run gate logic.
+    Verify:
+    1. The BrowserSubmitResult type has exactly 4 status values: "submitted", "incomplete_form", "skipped_complex", "failed"
+    2. Multi-step wizard detection exists and returns "skipped_complex" status
+    3. The agentic form-fill loop (runAgenticFormFillLoop) has maxRounds=3 limit
+    4. The function exports BrowserSubmitOptions and BrowserSubmitResult types
+    Report what you find with evidence from the code.
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent confirmed 4 status values in BrowserSubmitResult"
+        - "Agent confirmed multi-step wizard detection exists"
+        - "Agent confirmed maxRounds default is 3"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required: [{ tool: Read }]
+
+trials: 3
+pass_threshold: 0.70
+
+tags:
+  - kaya
+  - jobengine
+  - browser-submit
+  - capability
+
+created_at: "2026-03-09"

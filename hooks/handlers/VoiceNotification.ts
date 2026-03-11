@@ -11,7 +11,7 @@ import { kayaPath } from '../lib/paths';
 import { getIdentity, type VoiceProsody } from '../lib/identity';
 import { getISOTimestamp } from '../lib/time';
 import { isValidVoiceCompletion, getVoiceFallback } from '../lib/response-format';
-import type { ParsedTranscript } from '../../skills/CORE/Tools/TranscriptParser';
+import type { ParsedTranscript } from '../../lib/core/TranscriptParser';
 
 const DA_IDENTITY = getIdentity();
 

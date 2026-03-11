@@ -1,119 +1,210 @@
-# Dependencies
-node_modules/
-*/node_modules/
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAI System .gitignore - Private Repository
+# ═══════════════════════════════════════════════════════════════════════════════
+# This file excludes secrets, credentials, and operational data that should
+# never be committed, even to a private repo.
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Secrets and credentials -- NEVER COMMIT
-secrets.json
+# ─────────────────────────────────────────────────────────────────────────────────
+# SECRETS & CREDENTIALS (NEVER COMMIT)
+# ─────────────────────────────────────────────────────────────────────────────────
 .env
-settings.local.json
+.env.*
+.env.local
+.env.production
+.env.development
+*.env
 
-# Personal data
-MEMORY/WORK/
-MEMORY/LEARNING/SIGNALS/
-MEMORY/LEARNING/ALGORITHM/
-MEMORY/LEARNING/SYSTEM/
-MEMORY/State/*.json
-MEMORY/daemon/
-MEMORY/QUEUES/
-MEMORY/VOICE/
-MEMORY/BRIEFINGS/
-MEMORY/AUTOINFO/
-MEMORY/NOTIFICATIONS/
-MEMORY/research/
-MEMORY/entries/
-MEMORY/specs/
-MEMORY/ContextGraph/
-MEMORY/Reports/
-context/*.md
-!context/README.md
+# API Keys & Certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*credential*
+*secret*
+*_secret*
+*-secret*
+*.secret
+api_key*
+apikey*
+*token.json
+*tokens.json
 
-# Session data
-history.jsonl
-.current-session
-stats-cache.json
-dedup-hashes.json
-index.json
-session-env/
+# PAI Secrets (NEVER COMMIT)
+secrets.json
 
-# Personal identity files
-skills/CORE/USER/ABOUTME.md
-skills/CORE/USER/CONTACTS.md
-skills/CORE/USER/RESUME.*
-skills/CORE/USER/JMIDENTITY.md
-skills/CORE/USER/BASICINFO.md
-skills/CORE/USER/UserContext.md
-skills/CORE/USER/TELOS/*.md
-!skills/CORE/USER/TELOS/README.md
-skills/CORE/USER/HEALTH/
-skills/CORE/USER/FINANCES/
-skills/CORE/USER/BUSINESS/
-skills/CORE/USER/WORK/
+# OAuth & Auth files
+oauth*.json
+auth*.json
+.credentials/
+credentials/
 
-# Skill state directories
-skills/*/State/*.json
-skills/*/State/*.yaml
-skills/*/State/*.db
-skills/*/State/*.sqlite
-!skills/*/State/README.md
-
-# LucidTasks database
-skills/LucidTasks/Data/*.db
-skills/LucidTasks/Data/*.sqlite
-!skills/LucidTasks/Data/README.md
-
-# Eval results and transcripts
-skills/Evals/Transcripts/
-skills/Evals/Results/
-
-# Cooking preferences
-skills/Cooking/dietary-preferences.yaml
-skills/Cooking/kitchen-context.yaml
-skills/Cooking/pantry-staples.yaml
-
-# Canvas chat history
-skills/Canvas/MEMORY/
-
-# Build artifacts
-*.pyc
-__pycache__/
-.DS_Store
-*.log
-
-# Debug and temporary files
-debug/
+# ─────────────────────────────────────────────────────────────────────────────────
+# OPERATIONAL DATA (Temporary/Regenerable)
+# ─────────────────────────────────────────────────────────────────────────────────
+# Logs and debug output
 logs/
-file-history/
+debug/
+*.log
+*.log.*
+
+# Shell and session snapshots
 shell-snapshots/
+session-env/
+.current-session
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
 paste-cache/
-plans/
-todos/
-observability/
+
+# Telemetry and monitoring data
 telemetry/
-.cache/
-.checkpoints/
-tasks/
-teams/
-data/
-ide/
-mcp-launchers/
-servers/
-cache/
 statsig/
 
-# Plugin cache
+# Claude Code internal files
+tool-results/
+projects/*/tool-results/
+history.jsonl
+
+# Session-specific todos (ephemeral, regenerated each session)
+todos/
+
+# Claude Code session data (ephemeral, regenerated each session)
+backups/
+file-history/
+projects/
 plugins/cache/
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# EDITOR & OS FILES
+# ─────────────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# IDE/Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# NODE/BUN DEPENDENCIES (Regenerable)
+# ─────────────────────────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.bun/
+bun.lockb
+bun.lock
+**/bun.lock
+**/bun.lockb
+**/*-bun.lock
+*-bun.lock
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# LARGE GENERATED FILES
+# ─────────────────────────────────────────────────────────────────────────────────
+# Bun-compiled bundles (regenerable via bun build)
+skills/UnixCLI/Tools/Sheets.js
+
+# Voice server cache (regenerable)
+VoiceServer/cache/
+VoiceServer/node_modules/
+
+# Observability build artifacts
+Observability/*/node_modules/
+Observability/*/.next/
+Observability/*/dist/
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SETTINGS (Keep base, exclude local overrides)
+# ─────────────────────────────────────────────────────────────────────────────────
+# settings.json - KEEP (contains identity, not secrets)
+# settings.local.json - EXCLUDE (contains session-specific permissions)
+settings.local.json
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# WORKTREES & NESTED GIT REPOS
+# ─────────────────────────────────────────────────────────────────────────────────
+# Git worktrees have their own branches — never stage into main
+worktrees/
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# CACHE FILES (Regenerable)
+# ─────────────────────────────────────────────────────────────────────────────────
+cache/
+.cache/
+**/.cache/
+*-cache.json
+stats-cache.json
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# LOCK FILES (Session-specific)
+# ─────────────────────────────────────────────────────────────────────────────────
+ide/*.lock
+tasks/**/.lock
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# PLUGINS (Fetched from remote, not source)
+# ─────────────────────────────────────────────────────────────────────────────────
+plugins/install-counts-cache.json
 plugins/installed_plugins.json
 plugins/known_marketplaces.json
+plugins/marketplaces/
 
-# Images and screenshots
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
+# ─────────────────────────────────────────────────────────────────────────────────
+# TRANSIENT STATE
+# ─────────────────────────────────────────────────────────────────────────────────
+MEMORY/State/current-work.json
+MEMORY/State/cache/
+MEMORY/VALIDATION/
+MEMORY/daemon/cron/*.backup.json
 
-# Voice data
-VoiceServer/voices.json
+# ─────────────────────────────────────────────────────────────────────────────────
+# AUTO-GENERATED PLANS (temp plan mode files with random names)
+# ─────────────────────────────────────────────────────────────────────────────────
+plans/*-*-*.md
 
-# Playwright
-.playwright-mcp/
+# ─────────────────────────────────────────────────────────────────────────────────
+# GENERATED INDEXES & HISTORY
+# ─────────────────────────────────────────────────────────────────────────────────
+skills/skill-index.json
+history/*.jsonl
+
+# ─────────────────════════════════════════════════════════════════════════════════
+# WHAT IS TRACKED (For Reference)
+# ─────────────────────────────────────────────────────────────────────────────────
+# The following ARE tracked for backup/history:
+# - skills/           (all skills including _USERCONTEXT, _DTR, _RALPHLOOP)
+# - hooks/            (lifecycle handlers)
+# - bin/              (maintenance scripts)
+# - MEMORY/           (session history, learnings - YOUR BACKUP)
+# - context/          (personal context files - YOUR BACKUP)
+# - plans/            (planning documents)
+# - VoiceServer/      (TTS infrastructure, minus cache)
+# - PAISECURITYSYSTEM/ (security patterns)
+# - Observability/    (dashboard code, minus builds)
+# - settings.json     (identity config - no secrets)
+# - CLAUDE.md         (entry point)
+# - install.ts        (setup script)
+skills/LucidTasks/Data/*.db
+skills/LucidTasks/Data/*.db-wal
+skills/LucidTasks/Data/*.db-shm
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SCREENSHOTS (Browser automation artifacts, large binaries)
+# ─────────────────────────────────────────────────────────────────────────────────
+**/screenshots/*.png

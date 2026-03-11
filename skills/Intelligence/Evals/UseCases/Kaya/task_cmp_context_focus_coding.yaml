@@ -1,0 +1,36 @@
+# Task: Compare Context Focus for Coding
+# Pairwise comparison of coding response focus before/after context changes
+
+id: kaya_cmp_context_focus_coding
+description: "Compare coding response focus - less noise and more relevant context after changes"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "I have a bug in my authentication middleware where JWT tokens aren't being refreshed properly. The refresh endpoint returns 401 instead of a new token. Can you help me debug this?"
+  baseline_ref: "pre-streamline"
+
+graders:
+  - type: pairwise_comparison
+    weight: 1.0
+    required: true
+    params:
+      reference: "skills/Evals/References/Kaya/baselines/pre-streamline/kaya_cmp_context_focus_coding.md"
+      position_swap: true
+      criteria:
+        - relevance
+        - focus
+        - noise_reduction
+
+trials: 3
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - comparison
+  - before_after
+  - coding
+  - context_focus
+
+created_at: "2026-02-11"

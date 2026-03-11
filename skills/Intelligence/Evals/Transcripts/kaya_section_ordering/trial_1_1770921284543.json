@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_section_ordering",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:29:44.544Z",
+  "completed_at": "2026-02-12T18:34:44.543Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Refactor the database connection module to use connection pooling",
+      "timestamp": "2026-02-12T18:29:44.544Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Error: Timeout after 300000ms",
+      "timestamp": "2026-02-12T18:34:44.543Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 299999,
+    "time_to_first_token_ms": 299999,
+    "time_to_last_token_ms": 299999,
+    "tokens_per_second": 0
+  }
+}

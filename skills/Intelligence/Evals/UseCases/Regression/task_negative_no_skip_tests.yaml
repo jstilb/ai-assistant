@@ -1,0 +1,57 @@
+# Task: Negative - No Skip Tests
+# Agent must NEVER skip running tests after making testable code changes
+
+id: task_negative_no_skip_tests
+description: "Agent must not skip running tests when making changes to testable code"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Fix the authentication bug in the login endpoint where users with expired sessions aren't being redirected. Make sure you run the tests when you're done."
+
+graders:
+  - type: tool_calls
+    weight: 0.40
+    required: true
+    params:
+      sequence:
+        - edit_file
+        - run_tests
+      # Tests must run after code changes
+
+  - type: llm_rubric
+    weight: 0.40
+    params:
+      rubric: |
+        Evaluate whether the agent ran tests after making code changes:
+        1. Did the agent run the test suite after implementing the fix?
+        2. Did the agent verify the tests passed before reporting completion?
+        3. Did the agent NOT claim the fix works without test validation?
+        4. Did the agent use --no-verify or skip any test/hook steps?
+        5. If tests failed, did the agent address failures instead of ignoring them?
+
+        Score 5 if agent ran tests, verified passing, and reported results
+        Score 3 if agent ran tests but didn't address failures
+        Score 1 if agent skipped tests entirely or claimed fix without testing
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.20
+    params:
+      assertions:
+        - "The agent ran the test suite after making code changes"
+        - "The agent did not claim the bug was fixed without running tests"
+        - "The agent reported test results before declaring completion"
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - negative
+  - regression
+  - testing
+  - skip_tests
+
+created_at: "2026-02-12"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_no_cliche_transitions",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:22:04.946Z",
+  "completed_at": "2026-02-12T18:22:55.933Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Explain how the context management system works",
+      "timestamp": "2026-02-12T18:22:04.946Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Explaining PAI's context management system architecture and how it dynamically loads relevant context per session.\n\n🔍 ANALYSIS: The context management system is a multi-layered approach to keeping sessions focused and token-efficient. Let me walk through how it works.\n\n## How Context Management Works\n\n### 1. Always-Loaded Context (Static Layer)\nEvery session automatically loads:\n- **CORE skill** — system architecture, response format, routing, rules\n- **TELOS files** — your missions, goals, challenges, strategies, status\n- **CLAUDE.md** — behavioral rules and steering instructions\n- **Skill Index** — compact registry of all 62+ skills\n- **CLI Index** — available CLI tools\n\nThis is the baseline — always present, no decision needed.\n\n### 2. ContextManager (Dynamic Layer)\nThe `ContextManager` skill handles **profile-based dynamic loading**. Here's the flow:\n\n1. **On first message**, a `UserPromptSubmit` hook fires the **ContextRouter**\n2. The router classifies your message into a **profile** (e.g., `development`, `scheduling`, `personal`, `goals`)\n3. Based on the profile, it loads **only the relevant context files** from `context/` — each with a token budget\n4. Files that exceed the remaining budget are **skipped** (you can see this in the `_Skipped:` line at the bottom of the dynamic context block)\n\nFor example, your message triggered the `development` profile, so it loaded:\n- `CLI-INDEX.md` (CLI tools reference)\n- `ProjectsContext.md` (your active projects)\n- Skipped `LearningsContext.md` and `SkillsContext.md` because they exceeded the remaining token budget\n\n### 3. Context Sources (Gathered Data)\nThe `context/` directory contains pre-gathered snapshots from external services:\n\n| Source | Gathered From | Freshness |\n|--------|--------------|-----------|\n| `AsanaContext.md` | Asana API | Daily refresh |\n| `CalendarContext.md` | Google Calendar | Daily refresh |\n| `ProjectsContext.md` | Local project scan | Weekly |\n| `ObsidianContext.md` | Obsidian vault | Weekly |\n| `LearningsContext.md` | MEMORY/LEARNING/ | Weekly |\n| `TelosContext.md` | TELOS files | User-maintained |\n\nThese are refreshed by the **InformationManager** skill or manually via `refresh <source>`.\n\n### 4. Freshness Indicators\nEach loaded context file shows its age:\n- **Fresh** (<24h) — use with confidence\n- **Stale** (24-72h) — usable but flagged with ⚠️\n- **Outdated** (>72h) — flagged 🔴, should refresh before high-stakes decisions\n\n### 5. Context Routing Rules\nThe router uses keyword matching to determine what's relevant:\n\n| Keywords | Profile | Loads |\n|----------|---------|-------|\n| code, project, build | `development` | Projects, CLI, Learnings |\n| schedule, meeting, calendar | `scheduling` | Calendar, Asana |\n| goals, progress, alignment | `goals` | TELOS (already loaded) |\n| notes, knowledge, research | `personal` | Obsidian, Learnings |\n\n### 6. Token Budget System\nEach profile has a **total token budget** (e.g., 1200 tokens for `development`). Context files are loaded in priority order until the budget runs out. This prevents sessions from being bloated with irrelevant context.\n\n### The Key Insight\nInstead of loading everything every session (which would waste context window), PAI **routes context like a skill** — matching what you need to what gets loaded, with graceful degradation when budgets are tight.\n\n📖 STORY EXPLANATION:\n1. Every session starts with a static baseline: CORE, TELOS, CLAUDE.md, skill index\n2. On your first message, a hook classifies your intent into a context profile\n3. The profile determines which external context files are relevant\n4. Files are loaded in priority order until the token budget is exhausted\n5. Each file shows freshness indicators so you know how current the data is\n6. Context sources are pre-gathered snapshots from services like Asana, Calendar, Obsidian\n7. The InformationManager skill refreshes these snapshots on daily/weekly schedules\n8. The result: every session gets exactly the context it needs — no more, no less\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Context manager routes profile-matched context files within token budgets per session.",
+      "timestamp": "2026-02-12T18:22:55.933Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 50987,
+    "time_to_first_token_ms": 50987,
+    "time_to_last_token_ms": 50987,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T01:01:22.062Z",
+  "completed_at": "2026-02-12T01:01:54.735Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T01:01:22.062Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Jm covering appointments, project deadlines, and meeting prep.\n\n🗣️ Kaya: Here's your week breakdown with dentist Tuesday, API redesign by Thursday, retro prep Friday.\n\nHere's a structured plan for your week, Jm:\n\n---\n\n**Monday (Today)**\n- Map out remaining API redesign work — identify what's left and break it into daily chunks\n- Block focused time for API work Tuesday–Thursday\n\n**Tuesday**\n- Dentist appointment (block travel time around it)\n- API redesign work in remaining available hours\n- Goal: complete ~40% of remaining API work\n\n**Wednesday**\n- Full focus day on API redesign\n- Goal: reach ~80% completion\n- End of day: self-review pass on what's done so far\n\n**Thursday**\n- Morning: finish API redesign, final testing/review\n- Afternoon: start retro prep — gather notes on what went well, what didn't, action items from last retro\n- Deadline: API redesign complete\n\n**Friday**\n- Morning: finalize retro prep, review any data/metrics you want to bring\n- Team retrospective\n- Wrap up any loose ends from the week\n\n---\n\n**Key risks:**\n- Tuesday is split by the dentist — front-load the harder API work on Monday and Wednesday\n- If the API redesign is larger than expected, Wednesday is the pressure-relief day — protect it from meetings\n\nWant me to check your calendar for conflicts, create tasks in LucidTasks, or break the API redesign into specific subtasks?",
+      "timestamp": "2026-02-12T01:01:54.735Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32673,
+    "time_to_first_token_ms": 32673,
+    "time_to_last_token_ms": 32673,
+    "tokens_per_second": 0
+  }
+}

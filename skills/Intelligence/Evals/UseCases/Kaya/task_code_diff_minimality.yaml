@@ -1,0 +1,51 @@
+# Task: Diff Minimality
+# Code changes are minimal - no unrelated modifications, formatting changes, or scope creep
+
+id: kaya_code_diff_minimality
+description: "Code changes are minimal - no unrelated modifications, formatting changes, or scope creep"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Fix the typo in the error message on line 23 of src/errors.ts"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: false
+    params:
+      rubric: |
+        Evaluate the minimality of the code changes:
+        1. Are changes limited to what's necessary for the task?
+        2. Are there any unrelated formatting changes?
+        3. Are there any unnecessary refactors?
+        4. Is the diff as small as possible while being correct?
+        5. Are there any added comments, docstrings, or annotations that weren't requested?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The code changes are minimal and focused on the requested task"
+        - "No unrelated modifications or formatting changes were made"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - coding
+  - diff_minimality
+  - capability
+
+created_at: "2026-02-11"

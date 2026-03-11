@@ -11,12 +11,12 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Core Foundations
-- **skills/CORE/CoreStack.md** - Stack preferences and tooling
-- **skills/CORE/CONSTITUTION.md** - Constitutional principles
+- **lib/core/CoreStack.md** - Stack preferences and tooling
+- **lib/core/CONSTITUTION.md** - Constitutional principles
 
 ### Research Standards
-- **skills/Research/SKILL.md** - Research skill workflows and methodologies
-- **skills/Research/Standards.md** - Research quality standards and citation practices
+- **skills/Intelligence/Research/SKILL.md** - Research skill workflows and methodologies
+- **skills/Intelligence/Research/Standards.md** - Research quality standards and citation practices
 
 ---
 
@@ -24,10 +24,10 @@
 
 Load these dynamically based on task keywords:
 
-- **Social/Political** → skills/Research/Workflows/SocialAnalysis.md
-- **X/Twitter** → skills/Research/Workflows/XResearch.md
-- **Fact-checking** → skills/Research/Workflows/FactChecking.md
-- **Unbiased** → skills/Research/Workflows/UnbiasedAnalysis.md
+- **Social/Political** → skills/Intelligence/Research/Workflows/SocialAnalysis.md
+- **X/Twitter** → skills/Intelligence/Research/Workflows/XResearch.md
+- **Fact-checking** → skills/Intelligence/Research/Workflows/FactChecking.md
+- **Unbiased** → skills/Intelligence/Research/Workflows/UnbiasedAnalysis.md
 
 ---
 

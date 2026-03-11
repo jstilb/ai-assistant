@@ -1,35 +1,12 @@
 # Kaya -- Personal AI Infrastructure
-[![CI](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/github/actions/workflow/status/jstilb/ai-assistant/ci.yml?label=coverage&logo=github)](https://github.com/jstilb/ai-assistant/actions/workflows/ci.yml)
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f472b6.svg)](https://bun.sh/)
-[![Skills](https://img.shields.io/badge/skills-65-brightgreen.svg)](#skill-catalog)
-[![Hooks](https://img.shields.io/badge/hooks-24-orange.svg)](#the-hook-system)
-[![Agents](https://img.shields.io/badge/agents-12-purple.svg)](#the-agent-system)
+[![Skills](https://img.shields.io/badge/skills-60%2B-brightgreen.svg)](#skill-catalog)
 [![Claude Code](https://img.shields.io/badge/powered%20by-Claude%20Code-6366f1.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-> A production-grade AI agent framework with 65 composable skills, autonomous task execution, voice interaction, and persistent memory. Built on Anthropic's Claude Code as the foundation for a fully autonomous personal AI assistant.
-
----
-
-## Demo
-
-**90-second walkthrough** showing the complete Kaya pipeline in action: prompt input, hook pipeline firing, skill dispatch and execution, memory being written, and the next session picking up context from the previous one.
-
-<!-- DEMO VIDEO THUMBNAIL — replace href and src with actual YouTube unlisted URL and thumbnail once recorded -->
-[![Kaya Demo — 90-second pipeline walkthrough](https://img.youtube.com/vi/PLACEHOLDER_VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID)
-
-> **Note (human-required):** Demo video recording requires a screen recording session. The video above will link to the actual YouTube unlisted URL once recorded. The video will be ≤90 seconds and demonstrate: (1) prompt input, (2) hook pipeline firing visibly in stderr logs, (3) skill dispatch + execution, (4) memory write to MEMORY/LEARNING/, and (5) next-session context retrieval via ContextRouter.
-
-The five checkpoints the video covers:
-1. **Prompt input** — User types a development prompt in Claude Code terminal
-2. **Hook pipeline firing** — ContextRouter classifies intent, SecurityValidator validates each tool call (visible in stderr)
-3. **Skill dispatch + execution** — AutonomousWork skill spawns a parallel task agent and executes
-4. **Memory write** — SessionSummary writes learnings and session summary to `MEMORY/LEARNING/`
-5. **Next-session context retrieval** — Fresh session shows ContextRouter loading prior context from memory
-
----
+A production-grade AI agent framework with 60+ composable skills, autonomous task execution, voice interaction, and persistent memory. Built on Anthropic's Claude Code as the foundation for a fully autonomous personal AI assistant.
 
 ## Why I Built This
 
@@ -39,395 +16,145 @@ After working extensively with AI assistants, I noticed a fundamental gap: every
 - **Acts autonomously** -- executes multi-step workflows without constant supervision
 - **Composes capabilities** -- chains specialized skills together for complex tasks
 - **Speaks and listens** -- bidirectional voice interaction, not just text
-- **Improves itself** -- learns from feedback and adjusts behavior over time
 
 Kaya is the result: a skill-based architecture where each capability is a self-contained module that Claude Code can discover, load, and execute. The system handles everything from calendar management and grocery shopping to security reconnaissance and multi-agent debates.
 
----
-
-## Architecture Overview
-
-```mermaid
-graph TB
-    subgraph "Claude Code Runtime"
-        CC[Claude Code] --> CM[CLAUDE.md<br/>Behavioral Rules]
-        CM --> HR[Hook Router]
-        CM --> SR[Skill Router]
-    end
-
-    subgraph "Hook Pipeline"
-        HR --> H1[SecurityValidator]
-        HR --> H2[ContextRouter]
-        HR --> H3[FormatEnforcer]
-        HR --> H4[PromptInjectionDefender]
-        HR --> H5[OutputValidator]
-        HR --> H6[LearningCapture]
-    end
-
-    subgraph "Skill System"
-        SR --> S1[CORE Kernel]
-        SR --> S2[68 Skill Modules]
-        S2 --> SK1[Tools/]
-        S2 --> SK2[Workflows/]
-        S2 --> SK3[State/]
-    end
-
-    subgraph "Persistence"
-        H6 --> M1[MEMORY/LEARNING]
-        SK3 --> M2[MEMORY/State]
-        M1 --> M3[Pattern Synthesis]
-        M3 --> H2
-    end
-
-    subgraph "External Services"
-        S2 --> E1[ElevenLabs TTS]
-        S2 --> E2[Playwright Browser]
-        S2 --> E3[Telegram Bot]
-        S2 --> E4[Google Calendar]
-        S2 --> E5[Gemini API]
-    end
-```
-
----
-
-## System Design
-
-### The Skill System
-
-Skills are the fundamental unit of capability in Kaya. Each skill is a self-contained module with a standardized interface:
-
-```mermaid
-graph LR
-    subgraph "Skill Module"
-        A[SKILL.md<br/>Manifest] --> B[Tools/<br/>TypeScript]
-        A --> C[Workflows/<br/>Step-by-step]
-        A --> D[_Context.md<br/>Domain Knowledge]
-        B --> E[State/<br/>Persistence]
-    end
-    F[ContextRouter] -->|USE WHEN match| A
-```
-
-**SKILL.md** is the hero document -- it declares:
-- `USE WHEN` trigger clause (how the router discovers the skill)
-- Available commands and their CLI interfaces
-- Workflow references for multi-step operations
-- Integration points with other skills
+## Architecture
 
 ```
-skills/ExampleSkill/
-  SKILL.md            # Manifest: triggers, workflows, integration
-  _Context.md         # Domain knowledge loaded on demand
-  Tools/              # TypeScript utilities (CLI-first)
-    ToolName.ts       # Each tool: stdin -> stdout, JSON support
-    __tests__/        # Test coverage
-  Workflows/          # Step-by-step workflow definitions
-  State/              # Runtime state (gitignored)
+kaya/
+  skills/             # 60+ composable skill modules
+    Agents/           # Multi-agent orchestration and composition
+    AutonomousWork/   # Parallel task execution engine
+    CalendarAssistant/# Google Calendar automation
+    VoiceInteraction/ # Bidirectional voice (desktop + mobile)
+    Browser/          # Playwright-based browser automation
+    ...               # 55+ more skills
+  agents/             # Agent personality definitions and traits
+  bin/                # CLI tools and cron scripts
+  hooks/              # Git hooks and lifecycle automation
+  lib/                # Shared libraries (cron, daemon, messaging)
+  VoiceServer/        # ElevenLabs-powered TTS server
+  MEMORY/             # Persistent state, learnings, and context
+  Observability/      # System monitoring and health checks
+  KAYASECURITYSYSTEM/  # Security protocols and threat models
 ```
 
-### The Hook System
+## Key Capabilities
 
-Hooks are lifecycle interceptors that fire at specific points in the Claude Code session. They provide security validation, context routing, format enforcement, and learning capture without modifying the core system.
+### Autonomous Task Execution
+The `AutonomousWork` skill orchestrates parallel agent execution -- multiple Claude instances working on independent tasks simultaneously with branch-isolated git operations.
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant CC as Claude Code
-    participant H as Hook Pipeline
-    participant S as Skills
+### Skill Composition
+Skills are composable modules with standardized interfaces. Each skill exposes:
+- A `SKILL.md` manifest with triggers, workflows, and integration points
+- Optional TypeScript tooling in `Tools/` directories
+- Workflow definitions in `Workflows/` directories
+- Context files that load domain knowledge on demand
 
-    U->>CC: Message
-    CC->>H: SessionStart
-    H-->>CC: Config validated, context loaded
-    U->>CC: Prompt
-    CC->>H: UserPromptSubmit
-    H-->>CC: Context routed, format enforced
-    CC->>S: Tool Use
-    CC->>H: PreToolUse
-    H-->>CC: Security validated
-    S-->>CC: Tool Result
-    CC->>H: PostToolUse
-    H-->>CC: Output validated, injection defended
-    CC->>U: Response
-    CC->>H: Stop
-    H-->>CC: Work captured, learning signals stored
-```
+### Voice Interaction
+Bidirectional voice system supporting desktop (local mic/speaker) and mobile (Telegram) channels, powered by ElevenLabs TTS with configurable voice personalities per agent.
 
-**24 Active Hooks:**
+### Persistent Memory
+The `MEMORY/` subsystem provides:
+- **Learning signals** -- Pattern recognition across sessions with sentiment tracking
+- **State management** -- Persistent JSON state for skills, work queues, and cron jobs
+- **Validation logs** -- Configuration and work integrity checks
+- **Voice event history** -- Timestamped voice interaction logs
 
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `SecurityValidator` | PreToolUse | Validates commands against security rules |
-| `PromptInjectionDefender` | PostToolUse | Detects injection attempts in tool output |
-| `ContextRouter` | UserPromptSubmit | Routes context based on request classification |
-| `FormatEnforcer` | UserPromptSubmit | Enforces response format compliance |
-| `OutputValidator` | PostToolUse | Validates tool output integrity |
-| `ConfigValidator` | SessionStart | Validates system configuration |
-| `StartupGreeting` | SessionStart | Displays startup banner with system stats |
-| `LoadContext` | SessionStart | Loads core context into session |
-| `CheckVersion` | SessionStart | Checks for system updates |
-| `AutoWorkCreation` | UserPromptSubmit | Creates work session records |
-| `ExplicitRatingCapture` | UserPromptSubmit | Captures user ratings (1-10) |
-| `ImplicitSentimentCapture` | UserPromptSubmit | Detects sentiment from conversation |
-| `UpdateTabTitle` | UserPromptSubmit | Updates terminal tab with current task |
-| `SetQuestionTab` | PreToolUse | Sets tab state for pending questions |
-| `QuestionAnswered` | PostToolUse | Clears question tab state |
-| `CommitWorkReminder` | PostToolUse | Reminds to commit work periodically |
-| `StopOrchestrator` | Stop | Orchestrates session stop activities |
-| `ContextFeedback` | SessionEnd | Captures context relevance feedback |
-| `WorkValidator` | SessionEnd | Validates work session integrity |
-| `WorkCompletionLearning` | SessionEnd | Extracts learnings from completed work |
-| `SessionSummary` | SessionEnd | Writes session summary to MEMORY |
-| `AgentOutputCapture` | SubagentStop | Captures sub-agent outputs |
-| `WorktreeCleanup` | SubagentStop | Cleans up git worktrees |
-
-### The Agent System
-
-Kaya supports 12 specialized agent personalities that can be composed for complex tasks:
-
-| Agent | Role | Specialization |
-|-------|------|---------------|
-| **Engineer** | Implementation | TDD, architecture, production code |
-| **Architect** | Design | System design, trade-off analysis |
-| **Designer** | UX/UI | Visual design, user experience |
-| **Algorithm** | Execution | Task orchestration, workflow management |
-| **Pentester** | Security | Vulnerability assessment, red teaming |
-| **QATester** | Quality | Testing, validation, edge cases |
-| **Artist** | Creative | Visual content, image generation |
-| **Intern** | General | Parallel task execution, research |
-| **ClaudeResearcher** | Research | Claude-based deep research |
-| **GeminiResearcher** | Research | Gemini-based research |
-| **GrokResearcher** | Research | Grok-based research |
-| **CodexResearcher** | Research | Multi-model code research |
-
-**Multi-Agent Orchestration:**
-- **Delegation**: Spawn parallel agents for independent tasks
-- **Council**: Multi-agent debate for complex decisions
-- **Branch Isolation**: Each agent works on its own git branch
-- **Background Delegation**: Non-blocking agent execution
-
-### The Memory System
-
-```mermaid
-graph LR
-    subgraph "Capture"
-        A[Rating Hook] --> D[SIGNALS/]
-        B[Sentiment Hook] --> D
-        C[Feedback Hook] --> D
-    end
-
-    subgraph "Storage"
-        D --> E[ratings.jsonl]
-        D --> F[context-feedback.jsonl]
-    end
-
-    subgraph "Synthesis"
-        E --> G[ContinualLearning Skill]
-        F --> G
-        G --> H[ALGORITHM/ Patterns]
-    end
-
-    subgraph "Loading"
-        H --> I[ContextRouter Hook]
-        I --> J[Session Context]
-    end
-```
-
-The memory system creates a feedback loop:
-1. **Capture**: Hooks capture explicit ratings and implicit sentiment during sessions
-2. **Store**: Raw signals are appended to JSONL files in `MEMORY/LEARNING/SIGNALS/`
-3. **Synthesize**: The ContinualLearning skill aggregates signals into patterns
-4. **Load**: The ContextRouter loads relevant patterns into future sessions
-
-### The Security System
-
-```mermaid
-graph TD
-    subgraph "Defense Layers"
-        L1[Layer 1: Permissions<br/>allow/ask/deny rules] --> L2[Layer 2: Hook Validation<br/>SecurityValidator + OutputValidator]
-        L2 --> L3[Layer 3: Prompt Injection Defense<br/>Regex + LLM pattern detection]
-        L3 --> L4[Layer 4: Behavioral Rules<br/>CLAUDE.md steering rules]
-    end
-
-    subgraph "Protection Areas"
-        L1 --> P1[File System Access]
-        L1 --> P2[Destructive Commands]
-        L2 --> P3[Secret Exposure]
-        L2 --> P4[Path Traversal]
-        L3 --> P5[Instruction Override]
-        L3 --> P6[Data Exfiltration]
-    end
-```
-
-**Key Security Features:**
-- **Three-tier permission model**: `allow` (auto-approve), `ask` (require confirmation), `deny` (block)
-- **Pre-tool-use validation**: Every Bash, Read, Write, and Edit command passes through SecurityValidator
-- **Post-tool-use injection defense**: All tool outputs are scanned for prompt injection patterns
-- **Destructive operation gates**: Force push, rm -rf, DROP DATABASE require explicit confirmation
-- **Secret isolation**: API keys stored in `secrets.json` (gitignored), never in tracked files
-
-### The Voice System
-
-The VoiceServer provides text-to-speech via ElevenLabs with WebSocket streaming:
-
-- **Desktop**: Local voice output via the menubar app
-- **Mobile**: Telegram bot integration for voice messages
-- **Per-Agent Voices**: Each agent personality has its own voice configuration
-- **Streaming**: WebSocket-based for low-latency speech output
-
-### The Autonomous Work System
-
-The AutonomousWork skill enables parallel task execution:
-
-1. **Spec-Driven**: Work items are defined with specifications and success criteria (ISC)
-2. **Branch Isolation**: Each work item runs on its own git branch
-3. **Parallel Execution**: Multiple Claude Code instances work simultaneously
-4. **Verification**: Built-in verification against ISC before completion
-5. **Learning**: Work completion triggers learning signal capture
-
----
+### Multi-Agent System
+The `Agents/` skill enables dynamic agent composition with:
+- Specialized agent roles (Engineer, Designer, Researcher)
+- Personality trait mapping and voice assignment
+- Parallel orchestration with branch isolation
+- Council-style multi-agent debates
 
 ## Skill Catalog
 
 | Category | Skills | Description |
 |----------|--------|-------------|
-| **Core** | CORE, System, THEALGORITHM, Algorithm | System kernel, maintenance, execution engines |
-| **Agents** | Agents, AgentMonitor, Council, Simulation, AgentProjectSetup | Multi-agent orchestration, evaluation, and project setup |
-| **Productivity** | CalendarAssistant, DailyBriefing, LucidTasks, QueueRouter | Calendar, briefings, task management, work queues |
-| **Development** | CreateCLI, CreateSkill, Browser, UIBuilder, DevGraph | CLI generation, skill scaffolding, browser automation |
-| **Research** | OSINT, Recon, FirstPrinciples, RedTeam, Research | Intelligence gathering, analysis, adversarial testing |
-| **Content** | ContentAggregator, Fabric, Obsidian, KnowledgeGraph, Graph | RSS pipelines, knowledge management, note transformation |
-| **Commerce** | Shopping, Instacart, Cooking | Product search, grocery automation, recipe management |
-| **Communication** | Telegram, VoiceInteraction, Canvas | Messaging, voice interaction, visual collaboration |
-| **Security** | WebAssessment, PromptInjection, KAYASECURITYSYSTEM | Security testing, injection defense, threat models |
-| **Meta** | SkillAudit, SpecSheet, Evals, KayaUpgrade, AutoMaintenance | Self-improvement, quality assurance, system maintenance |
-| **Learning** | ContinualLearning, DigitalMaestro, ContextManager | Feedback loops, adaptive learning, context routing |
-| **Creativity** | Art, BeCreative, Designer, Prompting, DnD | Visual content, extended thinking, design, meta-prompting |
-| **Data** | Apify, BrightData, GeminiSync, Documents, ArgumentMapper | Web scraping, data sync, document processing |
-| **Automation** | AutonomousWork, ProactiveEngine, _RALPHLOOP, AutoInfoManager | Parallel execution, proactive actions, autonomous iteration |
-| **Career** | CommunityOutreach | Networking, outreach (State/ excluded) |
-| **Goals** | Telos, Anki | Goal tracking, spaced repetition learning |
-| **System** | SystemFlowchart, UnixCLI, InformationManager | System visualization, CLI tools, info management |
-
----
-
-## Key Engineering Decisions
-
-- [ADR-001: Skill-based Architecture](docs/decisions/001-skill-based-architecture.md) -- Why skills over plugins
-- [ADR-002: Memory Persistence](docs/decisions/002-memory-persistence.md) -- How cross-session memory works
-
----
-
-## What's Not Included
-
-This is a sanitized version of a production personal AI system. The following are excluded for privacy:
-
-| Component | Reason | Architecture |
-|-----------|--------|-------------|
-| `MEMORY/` contents | Personal work history, learning signals | See [MEMORY/README.md](MEMORY/README.md) |
-| `context/` contents | Personal calendar, projects, notes | See [context/README.md](context/README.md) |
-| `secrets.json` | API keys and credentials | See [secrets.example.json](secrets.example.json) |
-| `skills/CORE/USER/` personal files | Identity, contacts, resume, goals | See [USER/README.md](skills/CORE/USER/README.md) |
-| `skills/*/State/` contents | Runtime state data | Each has a `State/README.md` explaining the schema |
-| `history.jsonl` | Conversation logs | Session-specific, auto-generated |
-| `.git/` history | May contain historical secrets | Fresh repo, no history |
-
-Every excluded directory contains a README.md explaining its architecture, data shapes, and how to set it up.
-
----
+| **Core** | System, lib/core | System kernel and maintenance |
+| **Agents** | Agents, AgentMonitor, Council, Simulation | Multi-agent orchestration and evaluation |
+| **Productivity** | CalendarAssistant, Gmail, Kaya, DailyBriefing | Personal assistant capabilities |
+| **Development** | AgentProjectSetup, CreateCLI, CreateSkill, Browser | Engineering and automation tools |
+| **Research** | OSINT, Recon, FirstPrinciples, RedTeam | Intelligence gathering and analysis |
+| **Content** | ContentAggregator, Fabric, Obsidian, KnowledgeGraph | Knowledge management and synthesis |
+| **Commerce** | Shopping, Instacart, Cooking | Consumer automation |
+| **Communication** | Telegram, VoiceInteraction, CommunityOutreach | Messaging and outreach |
+| **Security** | WebAssessment, PromptInjection, KAYASECURITYSYSTEM | Security testing and protocols |
+| **Meta** | SkillAudit, SpecSheet, Evals, KayaUpgrade | Self-improvement and quality |
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Runtime** | [Bun](https://bun.sh/) | TypeScript/JavaScript execution |
-| **AI Foundation** | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Core AI reasoning engine |
-| **Voice** | [ElevenLabs](https://elevenlabs.io/) | Text-to-speech with WebSocket streaming |
-| **Browser** | [Playwright](https://playwright.dev/) | Browser automation and testing |
-| **Messaging** | Telegram Bot API | Mobile voice interaction channel |
-| **Calendar** | Google Calendar CLI | Calendar automation |
-| **State** | JSON/JSONL + SQLite | Persistent state with validation |
-| **Scheduling** | macOS launchd | Cron-style task automation |
-| **Security** | Custom hook pipeline | Multi-layer defense system |
-
----
+- **Runtime**: Bun (TypeScript/JavaScript)
+- **AI Foundation**: Claude Code (Anthropic)
+- **Voice**: ElevenLabs TTS with WebSocket streaming
+- **Browser Automation**: Playwright CLI (Browse.ts)
+- **Messaging**: Telegram Bot API
+- **Calendar**: Google Calendar CLI
+- **State**: JSON-based persistent state with validation
+- **Scheduling**: macOS launchd for cron-style automation
 
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/kaya.git ~/.claude
+# Clone and install
+git clone https://github.com/[user]/kaya.git ~/.claude
 cd ~/.claude
-
-# 2. Install dependencies
-bun install
-
-# 3. Run the setup wizard
 bun run install.ts
 
-# 4. Configure your secrets
-cp secrets.example.json secrets.json
-# Edit secrets.json with your API keys
+# Start the voice server
+cd VoiceServer && ./start.sh
 
-# 5. Start the voice server (optional)
-cd VoiceServer && ./install.sh && ./start.sh
-
-# 6. Launch Claude Code
+# Launch Claude Code with Kaya loaded
 claude
 ```
 
-See [INSTALL.md](INSTALL.md) for detailed setup instructions including prerequisites and configuration options.
+See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 
----
+## How Skills Work
 
-## Evals
+Each skill follows a standardized structure:
 
-The system is validated by an 18-eval framework covering three categories. Full details: [docs/EVALS.md](docs/EVALS.md).
-
-| Category | Evals | Pass Rate | Type |
-|----------|-------|-----------|------|
-| [Hook Pipeline Correctness](docs/EVALS.md#category-1-hook-pipeline-correctness) | 5 | **100%** | Regression |
-| [Skill Routing Accuracy](docs/EVALS.md#category-2-skill-routing-accuracy) | 6 | **100%** | Regression |
-| [Prompt Injection Detection](docs/EVALS.md#category-3-prompt-injection-detection-rate) | 7 | **100%** | Regression |
-| **Overall** | **18** | **100%** | — |
-
-Run evals:
-```bash
-bun test tests/security/
-bun run ~/.claude/skills/Evals/Tools/AlgorithmBridge.ts -s kaya-week3-evals
+```
+skills/ExampleSkill/
+  SKILL.md            # Manifest: triggers, workflows, integration
+  _Context.md         # Domain knowledge loaded on demand
+  Tools/              # TypeScript utilities
+  Workflows/          # Step-by-step workflow definitions
 ```
 
----
+Skills are discovered and loaded dynamically by the CORE router based on keyword matching in user requests. The router reads each skill's `USE WHEN` trigger clause to determine relevance.
 
-## Blog
+## Development
 
-- [How I Built a 65-Skill Autonomous Agent on Claude Code](docs/blog-post.md) — Technical deep-dive covering the "every session starts from zero" problem and how hooks + memory solve it (1,650 words)
+```bash
+# Run the installer wizard
+bun run install.ts
 
----
+# Validate system integrity
+# (within a Claude Code session)
+/system integrity check
+
+# Audit skill quality
+/skill-audit
+```
 
 ## Documentation
 
 - [Installation Guide](INSTALL.md) -- Prerequisites, setup, and configuration
 - [Architecture](docs/architecture.md) -- System design and data flow
-- [Evals Framework](docs/EVALS.md) -- System evaluation results
-- [Memory System Design](docs/MEMORY-SYSTEM.md) -- Full feedback loop documentation
 - [ADR-001: Skill-based Architecture](docs/decisions/001-skill-based-architecture.md)
 - [ADR-002: Memory Persistence](docs/decisions/002-memory-persistence.md)
 - [Voice Server](VoiceServer/README.md) -- TTS server setup and usage
-- [Security System](KAYASECURITYSYSTEM/README.md) -- Security architecture
-
----
-
-## Related Projects
-
-This project is part of a broader AI engineering portfolio:
-
-- [mcp-toolkit-server](https://github.com/jstilb/mcp-toolkit-server) — MCP server with tools for file system, web search, and code execution that powers Kaya's external capabilities
-- [context-engineering-toolkit](https://github.com/jstilb/context-engineering-toolkit) — Utilities for optimizing LLM context windows, prompt compression, and retrieval strategies
-- [meaningful_metrics](https://github.com/jstilb/meaningful_metrics) — Evaluation framework for measuring AI system effectiveness against human-centered outcomes
-- [agent-orchestrator](https://github.com/jstilb/agent-orchestrator) — Multi-agent coordination framework for complex autonomous task execution
-
----
 
 ## License
 
 MIT
+
+
+## Related Projects
+
+- [ai-assistant](https://github.com/[user]/ai-assistant) — Autonomous AI assistant powered by Claude Code
+- [mcp-toolkit-server](https://github.com/[user]/mcp-toolkit-server) — MCP server toolkit for Claude AI integration
+- [context-engineering-toolkit](https://github.com/[user]/context-engineering-toolkit) — Context window optimization tools

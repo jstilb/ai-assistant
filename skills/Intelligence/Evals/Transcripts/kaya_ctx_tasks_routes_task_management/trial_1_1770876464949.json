@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:07:20.763Z",
+  "completed_at": "2026-02-12T06:07:44.948Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Task query like 'tasks due this week' routes to task-management profile with AsanaContext loaded",
+      "timestamp": "2026-02-12T06:07:20.763Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, reviewing queue and system status.\n\nLooking at the queue — you have 1 item in approvals and 1 in approved-work. Want me to pull up the queue details, or is there something specific you'd like to work on tonight, Jm?\n\n🗣️ Kaya: Queue has 2 items. Ready for whatever you need tonight.",
+      "timestamp": "2026-02-12T06:07:44.948Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24185,
+    "time_to_first_token_ms": 24185,
+    "time_to_last_token_ms": 24185,
+    "tokens_per_second": 0
+  }
+}

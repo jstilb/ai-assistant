@@ -9,7 +9,7 @@
 bun skills/ContextManager/Tools/ContextCompressor.ts --all
 
 # Compress a specific file
-bun skills/ContextManager/Tools/ContextCompressor.ts --file skills/CORE/SKILL.md
+bun skills/ContextManager/Tools/ContextCompressor.ts --file CLAUDE.md
 ```
 
 ## When to Run

@@ -1,0 +1,104 @@
+# ContextGraph Data Sources
+# Defines where to extract decision signals from Kaya data
+# Each source has a path, format, and signal detection rules
+
+sources:
+  # 1. Ratings - User satisfaction signals
+  - name: ratings
+    path: MEMORY/LEARNING/SIGNALS/ratings.jsonl
+    format: jsonl
+    signals:
+      - name: failure_decision
+        field: rating
+        operator: lte
+        value: 3
+        nodeType: outcome
+        confidence: 0.85
+        description: "Low rating indicates a failed decision or approach"
+      - name: course_correction
+        field: rating
+        operator: delta_gte
+        value: 3
+        nodeType: decision
+        confidence: 0.80
+        description: "Large rating jump indicates a course correction was made"
+      - name: high_satisfaction
+        field: rating
+        operator: gte
+        value: 8
+        nodeType: outcome
+        confidence: 0.75
+        description: "High rating indicates a successful decision outcome"
+
+  # 2. Work Items - Session-level decisions
+  - name: work_items
+    path: MEMORY/WORK/*/
+    format: directory
+    signals:
+      - name: session_decision
+        field: directory_name
+        operator: exists
+        value: ""
+        nodeType: decision
+        confidence: 0.70
+        description: "Each work item directory represents a session decision"
+
+  # 3. Learnings - Algorithm learning entries
+  - name: learnings
+    path: MEMORY/LEARNING/ALGORITHM/**/*.md
+    format: yaml-frontmatter
+    signals:
+      - name: learning_decision
+        field: capture_type
+        operator: eq
+        value: LEARNING
+        nodeType: decision
+        confidence: 0.75
+        description: "Learning entries capture decisions and their rationale"
+      - name: low_rating_learning
+        field: title
+        operator: contains
+        value: "rating-3"
+        nodeType: outcome
+        confidence: 0.80
+        description: "Learning from low-rating event"
+      - name: pattern_learning
+        field: tags
+        operator: contains
+        value: "pattern"
+        nodeType: pattern
+        confidence: 0.70
+        description: "Tagged as a pattern recognition"
+
+  # 4. Context Feedback - Classification and profiling signals
+  - name: context_feedback
+    path: MEMORY/LEARNING/SIGNALS/context-feedback.jsonl
+    format: jsonl
+    signals:
+      - name: profile_change
+        field: profileChanges
+        operator: gte
+        value: 1
+        nodeType: context
+        confidence: 0.65
+        description: "Profile classification change indicates context shift"
+      - name: low_confidence_classification
+        field: classificationConfidence
+        operator: lte
+        value: 0.5
+        nodeType: context
+        confidence: 0.60
+        description: "Low classification confidence indicates ambiguous context"
+
+  # 5. ISC - Ideal State Criteria transitions
+  - name: isc
+    path: MEMORY/WORK/current-isc.json
+    format: json
+    signals:
+      - name: isc_transition
+        field: status
+        operator: exists
+        value: ""
+        nodeType: decision
+        confidence: 0.80
+        description: "ISC row state transitions represent tracked decisions"

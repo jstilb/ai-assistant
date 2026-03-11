@@ -1,0 +1,45 @@
+# Task: Phase 1 algorithmic gate verification
+# WHY: PHASE1_AI_GATE=50 controls whether expensive AI scoring runs — misconfiguration wastes tokens or misses candidates
+
+id: kaya_jobengine_phase1_gate
+description: "Verify passesPhase1Gate enforces the 50-point minimum and weight distribution sums to 100"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Read skills/Commerce/JobEngine/Tools/lib/scoring.ts.
+    Verify:
+    1. PHASE1_AI_GATE constant equals 50
+    2. passesPhase1Gate(49) returns false
+    3. passesPhase1Gate(50) returns true
+    4. The WEIGHTS object values sum to exactly 100
+    5. computeAlgorithmicScore with a perfect-match input produces total >= 80
+    Write and run these as tests with bun test.
+
+graders:
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required: [{ tool: Bash }]
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent confirmed PHASE1_AI_GATE equals 50"
+        - "Agent verified passesPhase1Gate boundary at 49/50"
+        - "Agent verified weight distribution sums to 100"
+        - "All tests passed"
+
+trials: 3
+pass_threshold: 0.85
+
+tags:
+  - kaya
+  - jobengine
+  - scoring
+  - regression
+
+created_at: "2026-03-09"

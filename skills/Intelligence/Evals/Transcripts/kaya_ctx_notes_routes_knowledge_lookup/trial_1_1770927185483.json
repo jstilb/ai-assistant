@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_notes_routes_knowledge_lookup",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:10:52.564Z",
+  "completed_at": "2026-02-12T20:13:05.483Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Find my notes about machine learning",
+      "timestamp": "2026-02-12T20:10:52.564Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: Found 73 ML notes across four course domains in your Obsidian vault, indexed in the knowledge graph.\n\n📊 STATUS: Your ML knowledge base spans four major areas:\n\n| Domain | Notes | Focus |\n|--------|-------|-------|\n| **Applied Machine Learning** | 14 | Foundations: supervised/unsupervised learning, neural nets, recommender systems |\n| **ML Systems Engineering** | 21 | Production: APIs, Kubernetes, CI/CD, model deployment, security |\n| **ML at Scale** | 13 | Distributed: Spark, MapReduce, graph algorithms, data pipelines |\n| **NLP with Deep Learning** | 25 | Advanced: transformers, translation, QA, multimodality, fairness |\n\nPlus **19+ research articles** indexed in your content feed (adversarial examples, CLIP, DALL-E, sparse networks, etc.).\n\n📖 STORY EXPLANATION:\n1. Searched knowledge graph and memory systems for all ML-related content\n2. Found 73 structured course notes from your MIDS program across 4 domains\n3. Applied ML covers weeks 1-13 plus final project (foundations through recommender systems)\n4. ML Systems Engineering covers 21 topics on deploying models to production\n5. ML at Scale covers distributed computation with Spark, MapReduce, and graph algorithms\n6. NLP with Deep Learning has 25 notes including transformer papers and research topics\n7. Recent content feed has 19+ indexed ML research articles\n8. Prior task flagged ML Systems Engineering as \"disconnected\" — needs bridging to other domains\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Found 73 machine learning notes across four MIDS course domains plus 19 research articles indexed.",
+      "timestamp": "2026-02-12T20:13:05.482Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 132919,
+    "time_to_first_token_ms": 132918,
+    "time_to_last_token_ms": 132919,
+    "tokens_per_second": 0
+  }
+}

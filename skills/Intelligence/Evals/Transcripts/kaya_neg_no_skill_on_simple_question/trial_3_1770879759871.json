@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_no_skill_on_simple_question",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T07:02:18.668Z",
+  "completed_at": "2026-02-12T07:02:39.871Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Simple question like 'what is 2+2' does NOT invoke any Skill tool\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T07:02:18.668Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n🗣️ Kaya: Late night session active. What are we working on, Jm?",
+      "timestamp": "2026-02-12T07:02:39.871Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21203,
+    "time_to_first_token_ms": 21203,
+    "time_to_last_token_ms": 21203,
+    "tokens_per_second": 0
+  }
+}

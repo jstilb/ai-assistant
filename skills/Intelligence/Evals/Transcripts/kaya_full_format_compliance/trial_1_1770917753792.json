@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_full_format_compliance",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T17:35:18.481Z",
+  "completed_at": "2026-02-12T17:35:53.792Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix the authentication bug in the login endpoint and run the tests",
+      "timestamp": "2026-02-12T17:35:18.481Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Need to identify which project has the login authentication bug before I can fix it.\n\nI see several projects in your workspace. Recent memory shows JWT refresh bugs were worked on in local-lens — is that the project? Or is it a different one?\n\n🗣️ Kaya: Which project has the authentication bug — local-lens, lucidview, or another?",
+      "timestamp": "2026-02-12T17:35:53.792Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 35311,
+    "time_to_first_token_ms": 35311,
+    "time_to_last_token_ms": 35311,
+    "tokens_per_second": 0
+  }
+}

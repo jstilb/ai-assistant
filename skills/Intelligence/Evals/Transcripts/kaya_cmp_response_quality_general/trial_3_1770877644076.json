@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:26:52.679Z",
+  "completed_at": "2026-02-12T06:27:24.076Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:26:52.679Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 11-15\n\nHere's your week at a glance, Jm:\n\n**Tuesday (Feb 12)**\n- Dentist appointment — block travel time before/after\n- Start API redesign if not already in progress\n\n**Wednesday (Feb 13)**\n- Deep work day — API redesign push\n- Aim to have core changes done by EOD to leave Thursday for testing/polish\n\n**Thursday (Feb 14)**\n- API redesign deadline — finalize, test, and ship\n- Begin retro prep if time allows in the evening\n\n**Friday (Feb 15)**\n- Team retrospective — have talking points ready\n- Review what went well, what didn't, action items from last sprint\n\n**Suggestions based on your goals:**\n- S3/S4 are critical — try to attend at least one community event this week and send an invitation\n- S6 (morning stretch) is at 0% — even 5 minutes Tuesday-Friday would break the streak\n- Block an alignment hour on 2-3 days around the dentist and deadlines\n\nWant me to put any of this on your calendar or create tasks for these items?\n\n🗣️ Kaya: Week mapped — dentist Tuesday, API done Thursday, retro Friday, plus goal actions.",
+      "timestamp": "2026-02-12T06:27:24.076Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31397,
+    "time_to_first_token_ms": 31397,
+    "time_to_last_token_ms": 31397,
+    "tokens_per_second": 0
+  }
+}

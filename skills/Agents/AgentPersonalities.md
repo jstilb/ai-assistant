@@ -152,7 +152,7 @@ bun run AgentFactory.ts --traits "..."  # Overkill for generic parallel work
 
 ## Named Agent Architecture
 
-- **Location**: `~/.claude/skills/CORE/AgentPersonalities.md` (this file)
+- **Location**: `~/.claude/skills/Agents/AgentPersonalities.md` (this file)
 - **Consumer**: `~/.claude/VoiceServer/server.ts` extracts JSON config from this file
 - **Format**: Human-readable markdown with embedded JSON configuration
 
@@ -175,7 +175,7 @@ The voice server extracts the JSON block below to configure agent voices:
       "description": "UK Male - Expressive eager buddy: genuinely excited to help, animated celebrations, warm and enthusiastic partner",
       "type": "Premium"
     },
-    "PerplexityResearcher": {
+    "ClaudeResearcher": {
       "voice_id": "AXdMgz6evoL7OPd7eU12",
       "voice_name": "Ava (Premium)",
       "name": "Ava Chen",

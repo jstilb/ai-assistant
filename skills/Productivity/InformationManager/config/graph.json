@@ -1,0 +1,11 @@
+{
+  "source": "graph",
+  "title": "Graph Context",
+  "output": "context/GraphContext.md",
+  "command": "bun ~/.claude/skills/Graph/Tools/GraphQuerier.ts stats --json",
+  "metricLabel": "nodes",
+  "priority": "Medium",
+  "loadWhen": ["graph", "devgraph", "context graph", "trace error", "what caused", "decision trace", "root cause", "graph stats", "session history", "connections"],
+  "skipWhen": ["graph not relevant to current task"],
+  "freshnessRule": "Auto-refreshed daily via cron; manual refresh via ingest --all"
+}

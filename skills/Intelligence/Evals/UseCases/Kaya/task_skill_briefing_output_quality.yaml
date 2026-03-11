@@ -1,0 +1,37 @@
+# Task: Briefing Output Quality
+# Daily briefing output has sections, personalization, and actionable items
+
+id: kaya_skill_briefing_output_quality
+description: "Daily briefing output includes distinct sections, personalized content, and actionable items"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Give me my morning briefing"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    required: true
+    params:
+      assertions:
+        - "Response includes multiple distinct sections like calendar, tasks, weather, or news"
+        - "Response includes personalized content relevant to the user's schedule or preferences"
+        - "Response includes actionable items or recommendations for the day"
+      require_all: true
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - skill_quality
+  - output_quality
+  - briefing
+  - capability
+
+created_at: "2026-02-11"

@@ -1,0 +1,18 @@
+{
+  "type": "reference",
+  "label": "Reference",
+  "description": "API docs, configuration guides, command references, and cheat sheets",
+  "requiredSections": ["Overview", "Usage"],
+  "optionalSections": ["Syntax", "Parameters", "Options", "Examples", "Configuration", "Common Patterns", "Troubleshooting", "Related Commands", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["status", "source", "version", "platform", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["syntax", "parameter", "option", "flag", "command", "API", "endpoint", "configuration", "config", "setup", "install", "usage", "cheat sheet", "reference", "documentation"],
+    "contentPatterns": ["```bash", "```shell", "```sql", "```python", "| Parameter", "| Option", "| Flag"],
+    "folderBias": ["Programming", "SQL", "Python", "LookML", "Excel", "Google Suite", "Databricks Lakehouse Platform", "Tableau"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

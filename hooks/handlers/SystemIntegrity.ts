@@ -32,7 +32,7 @@ import {
   generateDescriptiveTitle,
   type FileChange,
 } from '../lib/change-detection';
-import type { ParsedTranscript } from '../../skills/CORE/Tools/TranscriptParser';
+import type { ParsedTranscript } from '../../lib/core/TranscriptParser';
 
 interface HookInput {
   session_id: string;
@@ -42,31 +42,7 @@ interface HookInput {
 
 const STATE_DIR = kayaPath('MEMORY', 'STATE');
 const STATE_FILE = join(STATE_DIR, 'integrity-state.json');
-const INTEGRITY_SCRIPT = kayaPath('skills', 'CORE', 'Tools', 'IntegrityMaintenance.ts');
-
-/**
- * Send voice notification for integrity check start.
- * Fire-and-forget - doesn't block.
- * Includes 4-second delay to let main voice handler finish speaking first.
- */
-async function notifyIntegrityStart(): Promise<void> {
-  try {
-    // Wait 4 seconds for main voice handler to finish speaking
-    await new Promise(resolve => setTimeout(resolve, 4000));
-
-    await fetch('http://localhost:8888/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: 'Checking system integrity for recent changes.',
-        voice_enabled: true,
-        priority: 'low',
-      }),
-    });
-  } catch {
-    // Voice server might not be running - silent fail
-  }
-}
+const INTEGRITY_SCRIPT = kayaPath('lib', 'core', 'IntegrityMaintenance.ts');
 
 /**
  * Update the integrity state file.
@@ -97,6 +73,12 @@ function spawnIntegrityMaintenance(
   changes: FileChange[],
   hookInput: HookInput
 ): void {
+  // IntegrityMaintenance.ts has not been created yet — disable spawn
+  // until the script is implemented. Change detection logic below is
+  // preserved for when the script exists.
+  console.error('[SystemIntegrity] IntegrityMaintenance.ts not yet implemented, skipping spawn');
+  return;
+
   try {
     // Check if script exists
     if (!existsSync(INTEGRITY_SCRIPT)) {
@@ -204,9 +186,6 @@ export async function handleSystemIntegrity(
 
   // Update state before spawning
   updateIntegrityState(systemChanges);
-
-  // Send voice notification (fire-and-forget)
-  notifyIntegrityStart().catch(() => {});
 
   // Spawn background process
   spawnIntegrityMaintenance(systemChanges, hookInput);

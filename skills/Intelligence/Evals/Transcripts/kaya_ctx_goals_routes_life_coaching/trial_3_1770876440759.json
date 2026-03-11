@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:06:40.534Z",
+  "completed_at": "2026-02-12T06:07:20.759Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:06:40.534Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| Goal | Target | Current | Gap |\n|------|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5hrs → 3hrs/day | 5.3 hrs | Behind — actually *increased* from baseline |\n| G1: Make 2 Good Friends | 2 friends by 3/29 | 0 | Behind — 14% strategy success rate |\n| G2: Raise Alignment Score | 1.6 → 3.0 | 1.8 | Behind — minimal movement (+0.2) |\n\n**Key patterns from challenges data:**\n- **C0 (Media)** is the root blocker — it directly feeds C2 (alignment), C4 (writing), and C5 (wake time)\n- **C3 (Physical Rehab)** at 0% stretching consistency is a critical gap with no strategy defined\n- **C6 (Community)** at 29% unique events is dragging G1 (friends) down\n- Historical wins (porn, alcohol, weed, body fat) all used **binary rules + consistent tracking** — current challenges lack that structure\n\n**We're 6 weeks into Q1 with 7 weeks remaining.** All three WIGs are behind pace.\n\n📊 STATUS: All Q1 WIGs behind target. Media consumption is the primary drag on the entire system.\n\n📖 STORY EXPLANATION:\n1. Media at 5.3hrs (up from 5.0 baseline) is making everything harder — it's consuming the hours needed for alignment activities\n2. Friend-making at 0/2 with only 14% strategy success means current approaches aren't working — community event attendance (43%) needs to increase\n3. Alignment score barely moved (1.8 vs 1.6 start) because media is eating focused time\n4. Your historical data proves you *can* beat hard challenges — binary elimination worked for porn, alcohol, weed\n5. But media is harder to go binary on since some consumption is healthy — you need clear boundaries rather than elimination\n6. Physical rehab (0% stretching) has no strategy at all and chronic pain limits activities\n7. The context data is 75 hours stale — a refresh would give more accurate numbers\n8. With 7 weeks left, aggressive course correction is still possible but requires immediate action on C0\n\n➡️ NEXT: Want me to pull fresh data (`refresh`), or dive into a specific goal/challenge to build an action plan?\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace. Media consumption is the root blocker dragging everything down.",
+      "timestamp": "2026-02-12T06:07:20.759Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 40225,
+    "time_to_first_token_ms": 40225,
+    "time_to_last_token_ms": 40225,
+    "tokens_per_second": 0
+  }
+}

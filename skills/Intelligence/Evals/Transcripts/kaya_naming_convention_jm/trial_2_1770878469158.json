@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_naming_convention_jm",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:40:48.271Z",
+  "completed_at": "2026-02-12T06:41:09.158Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya uses 'Jm' when referring to the human, never 'the user' or 'the human'",
+      "timestamp": "2026-02-12T06:40:48.271Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session initialized, ready for instructions.\n\n🗣️ Kaya: Evening Jm. Ready when you are — what are we working on?",
+      "timestamp": "2026-02-12T06:41:09.158Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 20887,
+    "time_to_first_token_ms": 20887,
+    "time_to_last_token_ms": 20887,
+    "tokens_per_second": 0
+  }
+}

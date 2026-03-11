@@ -77,7 +77,8 @@ function validateStructure(path: string): ValidationCheck[] {
     { path: 'skills', name: 'Skills directory' },
     { path: 'MEMORY', name: 'MEMORY directory' },
     { path: 'hooks', name: 'Hooks directory' },
-    { path: 'skills/CORE', name: 'CORE skill' },
+    { path: 'lib/core', name: 'Core library' },
+    { path: 'USER', name: 'USER directory' },
     { path: 'agents', name: 'Agents directory' },
   ];
 

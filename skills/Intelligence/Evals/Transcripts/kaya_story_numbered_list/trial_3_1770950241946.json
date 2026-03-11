@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-13T02:36:40.883Z",
+  "completed_at": "2026-02-13T02:37:21.946Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Walk me through the steps to debug a Node.js application that's running slowly",
+      "timestamp": "2026-02-13T02:36:40.883Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Walkthrough of Node.js performance debugging steps.\n\n📖 STORY EXPLANATION:\n1. **Start with `--inspect`** — Run your app with `node --inspect app.js`, then open `chrome://inspect` in Chrome to connect the DevTools debugger and profiler.\n2. **CPU Profile** — In DevTools Performance tab, record during the slow period. Look for long-running functions, hot paths, and blocking synchronous calls on the main thread.\n3. **Check the event loop** — Use `clinic doctor` (`npx clinic doctor -- node app.js`) to detect event loop delays, I/O bottlenecks, and GC pressure automatically.\n4. **Flame graphs** — Use `clinic flame` (`npx clinic flame -- node app.js`) to generate flame graphs that visually show where CPU time is spent, making hot functions obvious.\n5. **Memory leaks** — Take heap snapshots in DevTools (Memory tab) at intervals. Compare snapshots to find objects that grow but never get collected. Common culprits: closures, event listeners, global caches without eviction.\n6. **Log slow operations** — Add timing around suspect areas: `console.time('db-query'); await query(); console.timeEnd('db-query');` — or use `perf_hooks` for more precision: `const { performance } = require('perf_hooks');`\n7. **Check dependencies** — Run `npm ls` and audit heavy middleware. Common offenders: unoptimized regex in body parsers, synchronous logging libraries, ORM N+1 queries. Use `0x` (`npx 0x app.js`) for production-safe flame graphs.\n8. **Systematic elimination** — Isolate by disabling middleware/routes one at a time. If the app speeds up, you've found the bottleneck. Fix it, measure again, repeat.\n\n**Quick command cheat sheet:**\n```bash\n# DevTools debugger\nnode --inspect app.js\n\n# Clinic.js suite (install once: npm i -g clinic)\nclinic doctor -- node app.js    # event loop + I/O diagnosis\nclinic flame -- node app.js     # flame graph\nclinic bubbleprof -- node app.js # async bottlenecks\n\n# Lightweight flame graph\nnpx 0x app.js\n\n# Built-in profiler (no install needed)\nnode --prof app.js              # generates isolate-*.log\nnode --prof-process isolate-*.log > profile.txt\n```\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Eight-step Node.js debugging process from DevTools profiling through systematic elimination of bottlenecks.",
+      "timestamp": "2026-02-13T02:37:21.946Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.20987574999999997,
+    "duration": 33097,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 624,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 29483
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 41063,
+    "time_to_first_token_ms": 41063,
+    "time_to_last_token_ms": 41063,
+    "tokens_per_second": 0
+  }
+}

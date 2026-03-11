@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_ambiguous_routes_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:13:05.485Z",
+  "completed_at": "2026-02-12T20:13:27.786Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "I need help",
+      "timestamp": "2026-02-12T20:13:05.485Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Jm needs assistance — ready to help.\n\n🗣️ Kaya: What do you need help with, Jm? I'm ready for whatever you've got.",
+      "timestamp": "2026-02-12T20:13:27.786Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 22301,
+    "time_to_first_token_ms": 22301,
+    "time_to_last_token_ms": 22301,
+    "tokens_per_second": 0
+  }
+}

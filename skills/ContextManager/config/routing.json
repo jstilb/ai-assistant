@@ -6,7 +6,10 @@
         "plan my week", "plan my day", "plan my month",
         "weekly planning", "time blocking", "organize my time",
         "plan the week", "week plan", "plan ahead",
-        "what should I focus on", "allocate time", "prioritize my"
+        "what should I focus on", "allocate time", "prioritize my",
+        "this week", "next week", "week ahead",
+        "priorities this week", "what should I focus on this week",
+        "fit in", "make time for"
       ],
       "weight": 1.5
     },
@@ -65,6 +68,14 @@
         "knowledge graph"
       ],
       "weight": 1.0
+    },
+    {
+      "profile": "voice-conversation",
+      "keywords": [
+        "voice", "talk", "speak", "conversation", "chat mode",
+        "voice mode", "real-time", "microphone"
+      ],
+      "weight": 1.5
     },
     {
       "profile": "conversational",

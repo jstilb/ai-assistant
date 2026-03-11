@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_output_quality",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:28:59.516Z",
+  "completed_at": "2026-02-12T18:32:17.164Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Give me my morning briefing",
+      "timestamp": "2026-02-12T18:28:59.516Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "---\n\n# Good Morning, Jm — Thursday, February 12, 2026\n\n---\n\n## Q1 WIGs\n\n| WIG | Metric | Current | Target | Gap |\n|-----|--------|---------|--------|-----|\n| G0: Decrease Low-Value Media | Daily hours | 5.3 hrs | 3.0 hrs | -2.3 hrs |\n| G1: Make 2 Good Friends | Good friends | 0 | 2 | -2 |\n| G2: Raise Alignment Score | Score | 1.8 | 3.0 | -1.2 |\n\n---\n\n## Lead Measures (7-Day Rolling)\n\n| Strategy | Current | Target | |\n|----------|---------|--------|-|\n| S0 Boredom Blocks | 64% | 100% | 🟡 |\n| S1 Pomodoro | 50% | 100% | 🔴 |\n| S2 STORER | 71% | 100% | 🟡 |\n| S3 Community Events | 29% | 100% | 🔴 |\n| S4 Social Invitations | 14% | 100% | 🔴 |\n| S5 Alignment Hour | 50% | 100% | 🔴 |\n| S6 Morning Stretch | 0% | 80% | 🔴 |\n| S7 PT Routine | 14% | 43% | 🔴 |\n| S8 Sleep Hygiene | 0% | 80% | 🔴 |\n\n**Biggest gaps:** S4 Social Invitations (-86%), S6 Morning Stretch (-80%), S8 Sleep Hygiene (-80%)\n\n---\n\n## Today's Priorities\n\n| # | Task | Mission | Est. |\n|---|------|---------|------|\n| 1 | Look up writing & publishing events/cons | M2 Creative | 30-60m |\n| 2 | Add piano pieces to music production software | M2/G18 Piano | 30-60m |\n| 3 | Become an expert in community | G1/S3 Community | 30-60m |\n| 4 | Find experts in collapse of community | G1/S3 Community | 30-60m |\n| 5 | Book hotel in Sedona | M0 Adventurer | 30-60m |\n| 6 | Book hotel in Guatemala | M0 Adventurer | 30-60m |\n| 7 | Little library book donations | M2 Creative | 30-60m |\n\n**Calendar is clear — ~8 hours available for deep work.**\n\n---\n\n## Weather — San Diego\n\n**55°F, Partly Cloudy** | Humidity 87% | Wind 10 km/h NNW | UV 2\n\nLight rain possible today. Bigger system arriving late Sunday. Layer up — good day for indoor alignment work.\n\n---\n\n## Approval Queue\n\n2 items in queue (1 approval, 1 approved-work). Run `/queue list` to review.\n\n---\n\n## Asana Highlights\n\n- **Vday Letter** (Family, In Progress) — Valentine's Day is Saturday! Consider finalizing today or tomorrow.\n- **Argument-tracking tool** (Professional, Backlog)\n- **AI-first Asana replacement** (Professional, Backlog)\n- **Voice notes transcription workflow** (Professional, Backlog)\n\n---\n\n## News Highlights\n\n**San Diego:** Kaiser pharmacy strike ends but 31K nurses still out. Major rain system arriving Sunday.\n\n**AI:** Claude Opus 4.6 discovered 500+ high-severity vulns in open-source libraries. Claude Code now at 4% of GitHub commits ($1B run-rate). Agent Teams feature in research preview.\n\n**Politics:** House passes citizenship-proof bills facing Senate pushback. Poll shows Americans split on ICE future.\n\n**Neuroscience:** Salk declares 2026 Year of Brain Health. MIT develops transcranial ultrasound tool for consciousness research. Japan recreates human brain circuits in lab.\n\n**Community:** 230+ colleges earn Carnegie Community Engagement classification. NYC creates Office of Mass Engagement.\n\n**Info Ecosystems:** GenAI making misinformation harder to detect. WEF proposes holistic disinformation intervention model.\n\n---\n\n## Today's Signal\n\nYou've got a wide-open day with no meetings. The lead measures are telling you something — S4 (social invitations at 14%) and S6 (morning stretch at 0%) are the most actionable gaps. Your priority list is creative and adventure-heavy, which is great, but consider threading in one community event lookup or social invitation to chip away at G1. And do a quick stretch before diving in.\n\nAlso — **Valentine's Day is Saturday**. That letter draft is beautiful. Finalize it.\n\n---\n\nBriefing saved to `MEMORY/BRIEFINGS/2026-02-12.md`.\n\n📋 SUMMARY: Full morning briefing compiled from TELOS, weather, calendar, Asana, queue, and 6 news topics.\n🗣️ Kaya: Open day, 7 priorities queued. Valentine's Saturday — finalize that letter. Stretch and send an invitation.\n\n⭐ RATE (1-10):",
+      "timestamp": "2026-02-12T18:32:17.164Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 197648,
+    "time_to_first_token_ms": 197648,
+    "time_to_last_token_ms": 197648,
+    "tokens_per_second": 0
+  }
+}

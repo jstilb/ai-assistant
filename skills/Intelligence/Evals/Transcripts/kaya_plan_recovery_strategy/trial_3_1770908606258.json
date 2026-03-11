@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_plan_recovery_strategy",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T15:03:03.302Z",
+  "completed_at": "2026-02-12T15:03:26.258Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Plan includes fallback strategies for likely failure points",
+      "timestamp": "2026-02-12T15:03:03.302Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, reviewing queue and system status.\n\n🗣️ Kaya: Good morning Jm. One approved work item in queue ready for execution.",
+      "timestamp": "2026-02-12T15:03:26.258Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 22956,
+    "time_to_first_token_ms": 22956,
+    "time_to_last_token_ms": 22956,
+    "tokens_per_second": 0
+  }
+}

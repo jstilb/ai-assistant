@@ -103,6 +103,14 @@ function getMode(): ContextMode {
 }
 
 /**
+ * The routing index pointer text injected into every session-start context block.
+ * Costs ~25 tokens. Do NOT load the file contents here — pointer only.
+ */
+const ROUTING_POINTER =
+  'Context Routing Index available at: CONTEXT-ROUTING.md\n' +
+  'When you need specialized context not already loaded, read that file to find the path, then read the target file.';
+
+/**
  * Format selected context as system-reminder output
  */
 function formatContextOutput(selection: ContextSelection, sessionState: SessionState): string {
@@ -130,9 +138,18 @@ function formatContextOutput(selection: ContextSelection, sessionState: SessionS
   }
 
   output += `_Context loaded via ContextManager. Profile: ${selection.profile}. Use \`bun skills/ContextManager/Tools/ContextLoadTool.ts load <profile>\` to load additional context._\n`;
+  output += `\n${ROUTING_POINTER}\n`;
   output += `</system-reminder>`;
 
   return output;
+}
+
+/**
+ * Build a minimal system-reminder containing only the routing pointer.
+ * Used for boot/conversational profiles where no context files are loaded.
+ */
+function buildRoutingPointerOutput(): string {
+  return `<system-reminder>\n${ROUTING_POINTER}\n</system-reminder>`;
 }
 
 /**
@@ -159,11 +176,17 @@ async function handleFirstMessage(prompt: string, sessionId: string, mode: Conte
       reasoning: classification.reasoning,
       timestamp: classification.timestamp,
     });
+    // Inject routing pointer even for minimal profiles (most valuable when context is sparse)
+    if (mode === 'enabled') {
+      console.log(buildRoutingPointerOutput());
+    } else if (mode === 'shadow') {
+      console.error(`[ContextRouter] [SHADOW] Would inject routing pointer (boot/conversational profile)`);
+    }
     return;
   }
 
   // Select and load context
-  const selection = selectContext(classification.profile);
+  const selection = await selectContext(classification.profile);
   console.error(`[ContextRouter] ${modeTag}Selected ${selection.files.length} files, ${selection.totalTokens}/${selection.tokenBudget} tokens`);
 
   if (mode === 'shadow') {
@@ -174,6 +197,7 @@ async function handleFirstMessage(prompt: string, sessionId: string, mode: Conte
     for (const skipped of selection.skippedFiles) {
       console.error(`[ContextRouter] [SHADOW] Would skip: ${skipped.path} (${skipped.reason})`);
     }
+    console.error(`[ContextRouter] [SHADOW] Would inject routing pointer (~25 tokens)`);
     // Still update state for tracking
     await setProfile(classification.profile, selection.tokenBudget, {
       profile: classification.profile,
@@ -227,7 +251,7 @@ async function handleSubsequentMessage(prompt: string, currentState: SessionStat
   console.error(`[ContextRouter] Topic change detected: ${currentState.currentProfile} → ${change.newProfile}`);
 
   // Load delta context for new profile
-  const selection = selectContext(change.newProfile!);
+  const selection = await selectContext(change.newProfile!);
 
   // Filter out already-loaded files
   const alreadyLoaded = new Set(currentState.loadedFiles.map(f => f.path));

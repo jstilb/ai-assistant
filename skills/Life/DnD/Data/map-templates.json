@@ -1,0 +1,263 @@
+{
+  "description": "Map templates for D&D encounters. Grid-based layouts with terrain features and entry/exit points.",
+  "templates": [
+    {
+      "id": "dungeon_entrance",
+      "name": "Dungeon Entrance Hall",
+      "type": "dungeon",
+      "width": 40,
+      "height": 30,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 0, "y": 0, "w": 40, "h": 30 },
+        { "type": "pillar", "x": 10, "y": 10, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 25, "y": 10, "w": 5, "h": 5 },
+        { "type": "rubble", "x": 30, "y": 20, "w": 10, "h": 5, "difficult_terrain": true },
+        { "type": "statue", "x": 17, "y": 5, "w": 5, "h": 5, "cover": "half" }
+      ],
+      "entries": [
+        { "id": "south_door", "x": 17, "y": 30, "w": 5, "direction": "south", "type": "door" }
+      ],
+      "exits": [
+        { "id": "north_corridor", "x": 17, "y": 0, "w": 5, "direction": "north", "type": "corridor" },
+        { "id": "east_door", "x": 40, "y": 12, "h": 5, "direction": "east", "type": "locked_door" }
+      ],
+      "lighting": "dim",
+      "description": "A grand entrance hall with crumbling pillars and a worn statue of a forgotten deity. Rubble blocks the eastern side."
+    },
+    {
+      "id": "treasure_vault",
+      "name": "Treasure Vault",
+      "type": "dungeon",
+      "width": 30,
+      "height": 30,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 0, "y": 0, "w": 30, "h": 30 },
+        { "type": "treasure_pile", "x": 12, "y": 5, "w": 5, "h": 5, "difficult_terrain": true },
+        { "type": "chest", "x": 5, "y": 5, "w": 5, "h": 5 },
+        { "type": "chest", "x": 20, "y": 5, "w": 5, "h": 5 },
+        { "type": "trap", "x": 10, "y": 15, "w": 10, "h": 5, "trapType": "pressure_plate", "dc": 15, "damage": "4d10 piercing" },
+        { "type": "pillar", "x": 5, "y": 20, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 20, "y": 20, "w": 5, "h": 5 }
+      ],
+      "entries": [
+        { "id": "south_door", "x": 12, "y": 30, "w": 5, "direction": "south", "type": "reinforced_door" }
+      ],
+      "exits": [],
+      "lighting": "dark",
+      "description": "A sealed vault with ornate chests and piles of treasure. A hidden pressure plate guards the approach."
+    },
+    {
+      "id": "throne_room",
+      "name": "Boss Throne Room",
+      "type": "dungeon",
+      "width": 50,
+      "height": 40,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 0, "y": 0, "w": 50, "h": 40 },
+        { "type": "throne", "x": 22, "y": 2, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 10, "y": 10, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 35, "y": 10, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 10, "y": 25, "w": 5, "h": 5 },
+        { "type": "pillar", "x": 35, "y": 25, "w": 5, "h": 5 },
+        { "type": "carpet", "x": 20, "y": 10, "w": 10, "h": 25 },
+        { "type": "brazier", "x": 5, "y": 5, "w": 5, "h": 5, "light_radius": 15 },
+        { "type": "brazier", "x": 40, "y": 5, "w": 5, "h": 5, "light_radius": 15 }
+      ],
+      "entries": [
+        { "id": "south_door", "x": 22, "y": 40, "w": 5, "direction": "south", "type": "double_door" }
+      ],
+      "exits": [
+        { "id": "secret_passage", "x": 0, "y": 2, "h": 5, "direction": "west", "type": "secret_door", "dc": 18 }
+      ],
+      "lighting": "bright",
+      "description": "A grand throne room with a carpet leading to an ornate seat of power. Braziers light the chamber. Massive pillars support the vaulted ceiling."
+    },
+    {
+      "id": "prison_cells",
+      "name": "Prison Cells",
+      "type": "dungeon",
+      "width": 40,
+      "height": 25,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 10, "y": 0, "w": 20, "h": 25 },
+        { "type": "cell", "x": 0, "y": 0, "w": 10, "h": 10, "bars": true },
+        { "type": "cell", "x": 0, "y": 15, "w": 10, "h": 10, "bars": true },
+        { "type": "cell", "x": 30, "y": 0, "w": 10, "h": 10, "bars": true },
+        { "type": "cell", "x": 30, "y": 15, "w": 10, "h": 10, "bars": true },
+        { "type": "table", "x": 15, "y": 10, "w": 10, "h": 5, "cover": "half" }
+      ],
+      "entries": [
+        { "id": "north_door", "x": 17, "y": 0, "w": 5, "direction": "north", "type": "door" }
+      ],
+      "exits": [
+        { "id": "south_stairs", "x": 17, "y": 25, "w": 5, "direction": "south", "type": "stairs_down" }
+      ],
+      "lighting": "dim",
+      "description": "Four prison cells flank a central corridor. A guard table sits in the middle."
+    },
+    {
+      "id": "forest_clearing",
+      "name": "Forest Clearing",
+      "type": "wilderness",
+      "width": 60,
+      "height": 60,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "grass", "x": 15, "y": 15, "w": 30, "h": 30 },
+        { "type": "dense_trees", "x": 0, "y": 0, "w": 60, "h": 15, "difficult_terrain": true, "cover": "three_quarters" },
+        { "type": "dense_trees", "x": 0, "y": 45, "w": 60, "h": 15, "difficult_terrain": true, "cover": "three_quarters" },
+        { "type": "dense_trees", "x": 0, "y": 15, "w": 15, "h": 30, "difficult_terrain": true, "cover": "three_quarters" },
+        { "type": "dense_trees", "x": 45, "y": 15, "w": 15, "h": 30, "difficult_terrain": true, "cover": "three_quarters" },
+        { "type": "fallen_log", "x": 20, "y": 25, "w": 15, "h": 5, "cover": "half", "difficult_terrain": true },
+        { "type": "campfire_remains", "x": 27, "y": 32, "w": 5, "h": 5 },
+        { "type": "stream", "x": 35, "y": 15, "w": 5, "h": 30, "difficult_terrain": true }
+      ],
+      "entries": [
+        { "id": "south_trail", "x": 27, "y": 60, "w": 5, "direction": "south", "type": "trail" }
+      ],
+      "exits": [
+        { "id": "north_trail", "x": 27, "y": 0, "w": 5, "direction": "north", "type": "trail" },
+        { "id": "east_trail", "x": 60, "y": 27, "h": 5, "direction": "east", "type": "trail" }
+      ],
+      "lighting": "bright",
+      "description": "A sunlit clearing in a dense forest. A cold campfire and fallen log suggest recent use. A shallow stream cuts through the eastern side."
+    },
+    {
+      "id": "mountain_pass",
+      "name": "Mountain Pass Ambush",
+      "type": "wilderness",
+      "width": 50,
+      "height": 80,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "dirt_road", "x": 15, "y": 0, "w": 20, "h": 80 },
+        { "type": "cliff", "x": 0, "y": 0, "w": 15, "h": 80, "elevation": 20, "cover": "three_quarters" },
+        { "type": "cliff", "x": 35, "y": 0, "w": 15, "h": 80, "elevation": 20, "cover": "three_quarters" },
+        { "type": "boulder", "x": 17, "y": 30, "w": 5, "h": 5, "cover": "half" },
+        { "type": "boulder", "x": 28, "y": 50, "w": 5, "h": 5, "cover": "half" },
+        { "type": "scree", "x": 12, "y": 40, "w": 8, "h": 10, "difficult_terrain": true }
+      ],
+      "entries": [
+        { "id": "south_road", "x": 20, "y": 80, "w": 10, "direction": "south", "type": "road" }
+      ],
+      "exits": [
+        { "id": "north_road", "x": 20, "y": 0, "w": 10, "direction": "north", "type": "road" }
+      ],
+      "lighting": "bright",
+      "description": "A narrow mountain pass flanked by high cliffs. Boulders provide cover on the road. Perfect ambush terrain."
+    },
+    {
+      "id": "tavern_common_room",
+      "name": "Tavern Common Room",
+      "type": "urban",
+      "width": 40,
+      "height": 35,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "wood_floor", "x": 0, "y": 0, "w": 40, "h": 35 },
+        { "type": "bar", "x": 0, "y": 0, "w": 15, "h": 5, "cover": "half" },
+        { "type": "table", "x": 5, "y": 10, "w": 5, "h": 5, "cover": "half" },
+        { "type": "table", "x": 20, "y": 10, "w": 5, "h": 5, "cover": "half" },
+        { "type": "table", "x": 30, "y": 10, "w": 5, "h": 5, "cover": "half" },
+        { "type": "table", "x": 5, "y": 20, "w": 5, "h": 5, "cover": "half" },
+        { "type": "table", "x": 20, "y": 20, "w": 10, "h": 5, "cover": "half" },
+        { "type": "fireplace", "x": 35, "y": 0, "w": 5, "h": 5, "light_radius": 20 },
+        { "type": "stairs", "x": 35, "y": 25, "w": 5, "h": 10 }
+      ],
+      "entries": [
+        { "id": "front_door", "x": 17, "y": 35, "w": 5, "direction": "south", "type": "door" }
+      ],
+      "exits": [
+        { "id": "kitchen", "x": 0, "y": 12, "h": 5, "direction": "west", "type": "door" },
+        { "id": "upstairs", "x": 37, "y": 25, "w": 5, "direction": "up", "type": "stairs_up" }
+      ],
+      "lighting": "bright",
+      "description": "A warm, bustling tavern common room. A long bar runs along the north wall, with tables scattered throughout. A roaring fireplace and stairs to the upper floor."
+    },
+    {
+      "id": "underground_river",
+      "name": "Underground River Crossing",
+      "type": "dungeon",
+      "width": 50,
+      "height": 40,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 0, "y": 0, "w": 50, "h": 15 },
+        { "type": "underground_river", "x": 0, "y": 15, "w": 50, "h": 10, "difficult_terrain": true, "swim_dc": 12 },
+        { "type": "stone_floor", "x": 0, "y": 25, "w": 50, "h": 15 },
+        { "type": "bridge", "x": 20, "y": 15, "w": 10, "h": 10 },
+        { "type": "stalagmite", "x": 5, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "stalagmite", "x": 40, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "stalagmite", "x": 10, "y": 30, "w": 5, "h": 5, "cover": "half" },
+        { "type": "stalagmite", "x": 35, "y": 30, "w": 5, "h": 5, "cover": "half" }
+      ],
+      "entries": [
+        { "id": "north_tunnel", "x": 22, "y": 0, "w": 5, "direction": "north", "type": "corridor" }
+      ],
+      "exits": [
+        { "id": "south_tunnel", "x": 22, "y": 40, "w": 5, "direction": "south", "type": "corridor" }
+      ],
+      "lighting": "dark",
+      "description": "A cavern bisected by a rushing underground river. A crumbling stone bridge offers the only dry crossing. Stalagmites dot both shores."
+    },
+    {
+      "id": "graveyard",
+      "name": "Haunted Graveyard",
+      "type": "wilderness",
+      "width": 50,
+      "height": 50,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "grass", "x": 0, "y": 0, "w": 50, "h": 50 },
+        { "type": "tombstone", "x": 5, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 15, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 25, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 35, "y": 5, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 5, "y": 20, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 15, "y": 20, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 25, "y": 20, "w": 5, "h": 5, "cover": "half" },
+        { "type": "tombstone", "x": 35, "y": 20, "w": 5, "h": 5, "cover": "half" },
+        { "type": "mausoleum", "x": 17, "y": 35, "w": 15, "h": 10, "cover": "full" },
+        { "type": "open_grave", "x": 40, "y": 30, "w": 5, "h": 10, "difficult_terrain": true },
+        { "type": "fog", "x": 0, "y": 0, "w": 50, "h": 50, "lightly_obscured": true }
+      ],
+      "entries": [
+        { "id": "south_gate", "x": 22, "y": 50, "w": 5, "direction": "south", "type": "iron_gate" }
+      ],
+      "exits": [
+        { "id": "mausoleum_door", "x": 22, "y": 35, "w": 5, "direction": "north", "type": "stone_door" }
+      ],
+      "lighting": "dim",
+      "description": "A fog-shrouded graveyard with rows of weathered tombstones. A large mausoleum dominates the northern end. An open grave gapes ominously."
+    },
+    {
+      "id": "wizard_tower_top",
+      "name": "Wizard Tower Summit",
+      "type": "dungeon",
+      "width": 30,
+      "height": 30,
+      "gridSize": 5,
+      "terrain": [
+        { "type": "stone_floor", "x": 0, "y": 0, "w": 30, "h": 30, "shape": "circle" },
+        { "type": "arcane_circle", "x": 10, "y": 10, "w": 10, "h": 10 },
+        { "type": "bookshelf", "x": 0, "y": 0, "w": 5, "h": 15, "cover": "half" },
+        { "type": "bookshelf", "x": 25, "y": 0, "w": 5, "h": 15, "cover": "half" },
+        { "type": "desk", "x": 10, "y": 2, "w": 10, "h": 5, "cover": "half" },
+        { "type": "crystal_ball_pedestal", "x": 12, "y": 22, "w": 5, "h": 5 },
+        { "type": "balcony", "x": 10, "y": 25, "w": 10, "h": 5, "elevation": 100, "railing": true }
+      ],
+      "entries": [
+        { "id": "trapdoor", "x": 12, "y": 12, "w": 5, "h": 5, "direction": "down", "type": "trapdoor" }
+      ],
+      "exits": [
+        { "id": "balcony_edge", "x": 12, "y": 30, "w": 5, "direction": "south", "type": "open_air" }
+      ],
+      "lighting": "bright",
+      "description": "The summit of a wizard's tower. Bookshelves line the curved walls, an arcane circle is etched into the floor, and a balcony overlooks the lands below."
+    }
+  ]
+}

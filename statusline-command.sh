@@ -7,9 +7,9 @@
 #   - nano   (<35 cols): Minimal single-line displays
 #   - micro  (35-54):    Compact with key metrics
 #   - mini   (55-79):    Balanced information density
-#   - normal (80+):      Full display with sparklines
+#   - normal (80+):      Full display
 #
-# Output order: Greeting → Wielding → Git → Learning → Signal → Context → Quote
+# Output order: Kaya Branding → Context → Wielding → Git → Quote
 #
 # KNOWN LIMITATION: Context percentage won't match /context exactly.
 # Hook JSON excludes system prompt, tools, MCP tokens. See:
@@ -24,8 +24,6 @@ set -o pipefail
 
 KAYA_DIR="${KAYA_DIR:-$HOME/.claude}"
 SETTINGS_FILE="$KAYA_DIR/settings.json"
-RATINGS_FILE="$KAYA_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl"
-TREND_CACHE="$KAYA_DIR/MEMORY/STATE/trending-cache.json"
 MODEL_CACHE="$KAYA_DIR/MEMORY/State/cache/model-cache.txt"
 QUOTE_CACHE="$KAYA_DIR/.quote-cache"
 LOCATION_CACHE="$KAYA_DIR/MEMORY/State/cache/location-cache.json"
@@ -90,10 +88,6 @@ input=$(cat)
 DA_NAME=$(jq -r '.daidentity.name // .daidentity.displayName // .env.DA // "Assistant"' "$SETTINGS_FILE" 2>/dev/null)
 DA_NAME="${DA_NAME:-Assistant}"
 
-# Get Kaya version from settings (single source of truth)
-PAI_VERSION=$(jq -r '.pai.version // "2.0"' "$SETTINGS_FILE" 2>/dev/null)
-PAI_VERSION="${PAI_VERSION:-2.0}"
-
 # Extract all data from JSON in single jq call
 eval "$(echo "$input" | jq -r '
   "current_dir=" + (.workspace.current_dir // .cwd | @sh) + "\n" +
@@ -128,15 +122,6 @@ dir_name=$(basename "$current_dir")
 skills_count=$(ls -d "$KAYA_DIR/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')
 workflows_count=$(ls "$KAYA_DIR/skills"/*/workflows/*.md 2>/dev/null | wc -l | tr -d ' ')
 hooks_count=$(ls "$KAYA_DIR/hooks"/*.ts 2>/dev/null | wc -l | tr -d ' ')
-learnings_count=$(find "$KAYA_DIR/MEMORY/LEARNING" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-work_count=$(find "$KAYA_DIR/MEMORY/WORK" -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ')
-
-# Count learning files
-learning_count=$(find "$KAYA_DIR/MEMORY/LEARNING" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-
-# Count ratings (dynamic learning signal)
-ratings_count=0
-[ -f "$RATINGS_FILE" ] && ratings_count=$(wc -l < "$RATINGS_FILE" 2>/dev/null | tr -d ' ')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
@@ -155,29 +140,14 @@ SLATE_600='\033[38;2;71;85;105m'       # Separators
 EMERALD='\033[38;2;74;222;128m'        # Positive/success
 ROSE='\033[38;2;251;113;133m'          # Error/negative
 
-# Rating gradient (for get_rating_color)
-RATING_10='\033[38;2;74;222;128m'      # 9-10: Emerald
-RATING_8='\033[38;2;163;230;53m'       # 8: Lime
-RATING_7='\033[38;2;250;204;21m'       # 7: Yellow
-RATING_6='\033[38;2;251;191;36m'       # 6: Amber
-RATING_5='\033[38;2;251;146;60m'       # 5: Orange
-RATING_4='\033[38;2;248;113;113m'      # 4: Light red
-RATING_LOW='\033[38;2;239;68;68m'      # 0-3: Red
-
-# Line 1: Greeting (violet theme)
-GREET_PRIMARY='\033[38;2;167;139;250m'
-GREET_SECONDARY='\033[38;2;139;92;246m'
-GREET_ACCENT='\033[38;2;196;181;253m'
-
-# Line 2: Wielding (cyan/teal theme)
+# Wielding (cyan/teal theme)
 WIELD_PRIMARY='\033[38;2;34;211;238m'
-WIELD_SECONDARY='\033[38;2;45;212;191m'
 WIELD_ACCENT='\033[38;2;103;232;249m'
 WIELD_WORKFLOWS='\033[38;2;94;234;212m'
 WIELD_HOOKS='\033[38;2;6;182;212m'
-WIELD_LEARNINGS='\033[38;2;20;184;166m'
+WIELD_MODEL='\033[38;2;45;212;191m'
 
-# Line 3: Git (sky/blue theme)
+# Git (sky/blue theme)
 GIT_PRIMARY='\033[38;2;56;189;248m'
 GIT_VALUE='\033[38;2;186;230;253m'
 GIT_DIR='\033[38;2;147;197;253m'
@@ -190,61 +160,33 @@ GIT_AGE_RECENT='\033[38;2;96;165;250m'
 GIT_AGE_STALE='\033[38;2;59;130;246m'
 GIT_AGE_OLD='\033[38;2;99;102;241m'
 
-# Line 4: Learning (purple theme)
-LEARN_PRIMARY='\033[38;2;167;139;250m'
-LEARN_SECONDARY='\033[38;2;196;181;253m'
-LEARN_WORK='\033[38;2;192;132;252m'
-LEARN_SIGNALS='\033[38;2;139;92;246m'
-LEARN_RESEARCH='\033[38;2;165;180;252m'
-
-# Line 5: Learning Signal (blue theme)
-SIGNAL_LABEL='\033[38;2;56;189;248m'
-SIGNAL_COLOR='\033[38;2;96;165;250m'
-SIGNAL_PERIOD='\033[38;2;148;163;184m'
-
-# Line 6: Context (indigo theme)
+# Context (indigo theme)
 CTX_PRIMARY='\033[38;2;129;140;248m'
 CTX_SECONDARY='\033[38;2;165;180;252m'
 CTX_ACCENT='\033[38;2;139;92;246m'
 CTX_BUCKET_EMPTY='\033[38;2;75;82;95m'
 
-# Line 7: Quote (gold theme)
+# Quote (gold theme)
 QUOTE_PRIMARY='\033[38;2;252;211;77m'
 QUOTE_AUTHOR='\033[38;2;180;140;60m'
 
-# Kaya Branding (matches banner colors)
-PAI_P='\033[38;2;30;58;138m'          # Navy
-PAI_A='\033[38;2;59;130;246m'         # Medium blue
-PAI_I='\033[38;2;147;197;253m'        # Light blue
-PAI_LABEL='\033[38;2;100;116;139m'    # Slate for "status line"
-PAI_CITY='\033[38;2;147;197;253m'     # Light blue for city
-PAI_STATE='\033[38;2;100;116;139m'    # Slate for state
-PAI_TIME='\033[38;2;96;165;250m'      # Medium-light blue for time
-PAI_WEATHER='\033[38;2;135;206;235m'  # Sky blue for weather
+# Kaya Branding
+KAYA_K='\033[38;2;30;58;138m'         # Navy
+KAYA_A='\033[38;2;59;130;246m'        # Medium blue
+KAYA_Y='\033[38;2;96;165;250m'        # Medium-light blue
+KAYA_A2='\033[38;2;147;197;253m'      # Light blue
+KAYA_LABEL='\033[38;2;100;116;139m'   # Slate for labels
+KAYA_CITY='\033[38;2;147;197;253m'    # Light blue for city
+KAYA_STATE='\033[38;2;100;116;139m'   # Slate for state
+KAYA_TIME='\033[38;2;96;165;250m'     # Medium-light blue for time
+KAYA_WEATHER='\033[38;2;135;206;235m' # Sky blue for weather
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Get color for rating value (handles "—" for no data)
-get_rating_color() {
-    local val="$1"
-    [[ "$val" == "—" || -z "$val" ]] && { echo "$SLATE_400"; return; }
-    local rating_int=${val%%.*}
-    [[ ! "$rating_int" =~ ^[0-9]+$ ]] && { echo "$SLATE_400"; return; }
-
-    if   [ "$rating_int" -ge 9 ]; then echo "$RATING_10"
-    elif [ "$rating_int" -ge 8 ]; then echo "$RATING_8"
-    elif [ "$rating_int" -ge 7 ]; then echo "$RATING_7"
-    elif [ "$rating_int" -ge 6 ]; then echo "$RATING_6"
-    elif [ "$rating_int" -ge 5 ]; then echo "$RATING_5"
-    elif [ "$rating_int" -ge 4 ]; then echo "$RATING_4"
-    else echo "$RATING_LOW"
-    fi
-}
-
 # Get gradient color for context bar bucket
-# Green(74,222,128) → Yellow(250,204,21) → Orange(251,146,60) → Red(239,68,68)
+# Green(74,222,128) -> Yellow(250,204,21) -> Orange(251,146,60) -> Red(239,68,68)
 get_bucket_color() {
     local pos=$1 max=$2
     local pct=$((pos * 100 / max))
@@ -298,7 +240,7 @@ render_context_bar() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LINE 0: Kaya BRANDING (location, time, weather)
+# LINE 0: KAYA BRANDING (location, time, weather)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Get current time in 24hr format
@@ -379,16 +321,16 @@ weather_str=$(fetch_weather)
 # Output Kaya branding line
 case "$MODE" in
     nano)
-        printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_400}v${PAI_VERSION}${RESET} ${PAI_TIME}${current_time}${RESET}\n"
+        printf "${KAYA_K}K${KAYA_A}a${KAYA_Y}y${KAYA_A2}a${RESET} ${KAYA_TIME}${current_time}${RESET}\n"
         ;;
     micro)
-        printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_400}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
+        printf "${KAYA_K}K${KAYA_A}a${KAYA_Y}y${KAYA_A2}a${RESET} ${SLATE_600}│${RESET} ${KAYA_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${KAYA_WEATHER}${weather_str}${RESET}\n"
         ;;
     mini)
-        printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_400}v${PAI_VERSION}${RESET} ${PAI_A}STATUSLINE:${RESET} ${PAI_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${PAI_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
+        printf "${KAYA_K}K${KAYA_A}a${KAYA_Y}y${KAYA_A2}a${RESET} ${KAYA_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${KAYA_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${KAYA_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${KAYA_WEATHER}${weather_str}${RESET}\n"
         ;;
     normal)
-        printf "${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_400}v${PAI_VERSION}${RESET} ${PAI_A}STATUSLINE:${RESET} ${PAI_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${PAI_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
+        printf "${KAYA_K}K${KAYA_A}a${KAYA_Y}y${KAYA_A2}a${RESET} ${KAYA_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${KAYA_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${KAYA_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${KAYA_WEATHER}${weather_str}${RESET}\n"
         ;;
 esac
 
@@ -442,7 +384,35 @@ case "$MODE" in
 esac
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LINE 4: GIT STATUS
+# LINE 2: WIELDING (skills, workflows, hooks, model)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+case "$MODE" in
+    nano)
+        printf "${WIELD_PRIMARY}⚡${RESET} ${WIELD_ACCENT}${skills_count}${RESET}s ${WIELD_HOOKS}${hooks_count}${RESET}h\n"
+        ;;
+    micro)
+        printf "${WIELD_PRIMARY}⚡${RESET} ${WIELD_ACCENT}${skills_count}${RESET}s ${WIELD_WORKFLOWS}${workflows_count}${RESET}w ${WIELD_HOOKS}${hooks_count}${RESET}h ${SLATE_600}│${RESET} ${WIELD_MODEL}${model_name}${RESET}\n"
+        ;;
+    mini)
+        printf "${WIELD_PRIMARY}⚡${RESET} ${WIELD_PRIMARY}WIELDING:${RESET} "
+        printf "${WIELD_ACCENT}${skills_count}${RESET} ${SLATE_400}skills${RESET} "
+        printf "${WIELD_WORKFLOWS}${workflows_count}${RESET} ${SLATE_400}flows${RESET} "
+        printf "${WIELD_HOOKS}${hooks_count}${RESET} ${SLATE_400}hooks${RESET} "
+        printf "${SLATE_600}│${RESET} ${WIELD_MODEL}${model_name}${RESET}\n"
+        ;;
+    normal)
+        printf "${WIELD_PRIMARY}⚡${RESET} ${WIELD_PRIMARY}WIELDING:${RESET} "
+        printf "${WIELD_ACCENT}${skills_count}${RESET} ${SLATE_400}skills${RESET} "
+        printf "${SLATE_600}│${RESET} ${WIELD_WORKFLOWS}${workflows_count}${RESET} ${SLATE_400}workflows${RESET} "
+        printf "${SLATE_600}│${RESET} ${WIELD_HOOKS}${hooks_count}${RESET} ${SLATE_400}hooks${RESET} "
+        printf "${SLATE_600}│${RESET} ${WIELD_MODEL}${model_name}${RESET} "
+        printf "${SLATE_500}(CC ${cc_version})${RESET}\n"
+        ;;
+esac
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LINE 3: GIT STATUS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if git rev-parse --git-dir > /dev/null 2>&1; then
@@ -539,202 +509,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LINE 5: LEARNING
-# ═══════════════════════════════════════════════════════════════════════════════
-
-case "$MODE" in
-    nano)
-        printf "${LEARN_PRIMARY}◎${RESET} ${LEARN_WORK}📁${RESET}${SLATE_300}${work_count}${RESET} ${LEARN_SIGNALS}✦${RESET}${SLATE_300}${ratings_count}${RESET}\n"
-        ;;
-    micro)
-        printf "${LEARN_PRIMARY}◎${RESET} ${LEARN_WORK}📁${RESET}${SLATE_300}${work_count}${RESET} ${LEARN_SIGNALS}✦${RESET}${SLATE_300}${ratings_count}${RESET}\n"
-        ;;
-    mini)
-        printf "${LEARN_PRIMARY}◎${RESET} ${LEARN_SECONDARY}LEARNING:${RESET} "
-        printf "${LEARN_WORK}📁${RESET}${SLATE_300}${work_count}${RESET} "
-        printf "${SLATE_600}│${RESET} ${LEARN_SIGNALS}✦${RESET}${SLATE_300}${ratings_count}${RESET}\n"
-        ;;
-    normal)
-        printf "${LEARN_PRIMARY}◎${RESET} ${LEARN_SECONDARY}LEARNING:${RESET} "
-        printf "${LEARN_WORK}📁${RESET}${SLATE_300}${work_count}${RESET} ${LEARN_WORK}Work${RESET} "
-        printf "${SLATE_600}│${RESET} ${LEARN_SIGNALS}✦${RESET}${SLATE_300}${ratings_count}${RESET} ${LEARN_SIGNALS}Ratings${RESET}\n"
-        ;;
-esac
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# LINE 6: LEARNING SIGNAL (with sparklines in normal mode)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-if [ -f "$RATINGS_FILE" ] && [ -s "$RATINGS_FILE" ]; then
-    now=$(date +%s)
-
-    # Single jq call computes all metrics
-    eval "$(jq -rs --argjson now "$now" '
-      # Parse ISO timestamp to epoch (handles timezone offsets)
-      def to_epoch:
-        (capture("(?<sign>[-+])(?<h>[0-9]{2}):(?<m>[0-9]{2})$") // {sign: "+", h: "00", m: "00"}) as $tz |
-        gsub("[-+][0-9]{2}:[0-9]{2}$"; "Z") | gsub("\\.[0-9]+"; "") | fromdateiso8601 |
-        . + (if $tz.sign == "-" then 1 else -1 end) * (($tz.h | tonumber) * 3600 + ($tz.m | tonumber) * 60);
-
-      # Filter valid ratings and add epoch
-      [.[] | select(.rating != null) | . + {epoch: (.timestamp | to_epoch)}] |
-
-      # Time boundaries
-      ($now - 900) as $q15_start | ($now - 3600) as $hour_start | ($now - 86400) as $today_start |
-      ($now - 604800) as $week_start | ($now - 2592000) as $month_start |
-
-      # Calculate averages
-      (map(select(.epoch >= $q15_start) | .rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $q15_avg |
-      (map(select(.epoch >= $hour_start) | .rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $hour_avg |
-      (map(select(.epoch >= $today_start) | .rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $today_avg |
-      (map(select(.epoch >= $week_start) | .rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $week_avg |
-      (map(select(.epoch >= $month_start) | .rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $month_avg |
-      (map(.rating) | if length > 0 then (add / length | . * 10 | floor / 10 | tostring) else "—" end) as $all_avg |
-
-      # Sparkline: diverging from 5, symmetric heights, color = direction
-      def to_bar:
-        floor |
-        if . >= 10 then "\u001b[38;2;34;197;94m▅\u001b[0m"      # brightest green
-        elif . >= 9 then "\u001b[38;2;74;222;128m▅\u001b[0m"    # green
-        elif . >= 8 then "\u001b[38;2;134;239;172m▄\u001b[0m"   # light green
-        elif . >= 7 then "\u001b[38;2;59;130;246m▃\u001b[0m"    # dark blue
-        elif . >= 6 then "\u001b[38;2;96;165;250m▂\u001b[0m"    # blue
-        elif . >= 5 then "\u001b[38;2;253;224;71m▁\u001b[0m"    # yellow baseline
-        elif . >= 4 then "\u001b[38;2;253;186;116m▂\u001b[0m"   # light orange
-        elif . >= 3 then "\u001b[38;2;251;146;60m▃\u001b[0m"    # orange
-        elif . >= 2 then "\u001b[38;2;248;113;113m▄\u001b[0m"   # light red
-        else "\u001b[38;2;239;68;68m▅\u001b[0m" end;            # red
-
-      def make_sparkline($period_start):
-        . as $all | ($now - $period_start) as $dur | ($dur / 58) as $sz |
-        [range(58) | . as $i | ($period_start + ($i * $sz)) as $s | ($s + $sz) as $e |
-          [$all[] | select(.epoch >= $s and .epoch < $e) | .rating] |
-          if length == 0 then "\u001b[38;2;45;50;60m \u001b[0m" else (add / length) | to_bar end
-        ] | join("");
-
-      (make_sparkline($q15_start)) as $q15_sparkline |
-      (make_sparkline($hour_start)) as $hour_sparkline |
-      (make_sparkline($today_start)) as $day_sparkline |
-      (make_sparkline($week_start)) as $week_sparkline |
-      (make_sparkline($month_start)) as $month_sparkline |
-
-      # Trend calculation helper
-      def calc_trend($data):
-        if ($data | length) >= 2 then
-          (($data | length) / 2 | floor) as $half |
-          ($data[-$half:] | add / length) as $recent |
-          ($data[:$half] | add / length) as $older |
-          ($recent - $older) | if . > 0.5 then "up" elif . < -0.5 then "down" else "stable" end
-        else "stable" end;
-
-      # Friendly summary helper (8 words max)
-      def friendly_summary($avg; $trend; $period):
-        if $avg == "—" then "No data yet for \($period)"
-        elif ($avg | tonumber) >= 8 then
-          if $trend == "up" then "Excellent and improving" elif $trend == "down" then "Great but cooling slightly" else "Smooth sailing, all good" end
-        elif ($avg | tonumber) >= 6 then
-          if $trend == "up" then "Good and getting better" elif $trend == "down" then "Okay but trending down" else "Solid, steady performance" end
-        elif ($avg | tonumber) >= 4 then
-          if $trend == "up" then "Recovering, headed right direction" elif $trend == "down" then "Needs attention, declining" else "Mixed results, room to improve" end
-        else
-          if $trend == "up" then "Rough but improving now" elif $trend == "down" then "Struggling, needs focus" else "Challenging period, stay sharp" end
-        end;
-
-      # Hour and day trends
-      ([.[] | select(.epoch >= $hour_start) | .rating]) as $hour_data |
-      ([.[] | select(.epoch >= $today_start) | .rating]) as $day_data |
-      (calc_trend($hour_data)) as $hour_trend |
-      (calc_trend($day_data)) as $day_trend |
-
-      # Generate friendly summaries
-      (friendly_summary($hour_avg; $hour_trend; "hour")) as $hour_summary |
-      (friendly_summary($today_avg; $day_trend; "day")) as $day_summary |
-
-      # Overall trend
-      length as $total |
-      (if $total >= 4 then
-        (($total / 2) | floor) as $half |
-        (.[- $half:] | map(.rating) | add / length) as $recent |
-        (.[:$half] | map(.rating) | add / length) as $older |
-        ($recent - $older) | if . > 0.3 then "up" elif . < -0.3 then "down" else "stable" end
-      else "stable" end) as $trend |
-
-      (last | .rating | tostring) as $latest |
-      (last | .source // "explicit") as $latest_source |
-
-      "latest=\($latest | @sh)\nlatest_source=\($latest_source | @sh)\n" +
-      "q15_avg=\($q15_avg | @sh)\nhour_avg=\($hour_avg | @sh)\ntoday_avg=\($today_avg | @sh)\n" +
-      "week_avg=\($week_avg | @sh)\nmonth_avg=\($month_avg | @sh)\nall_avg=\($all_avg | @sh)\n" +
-      "q15_sparkline=\($q15_sparkline | @sh)\nhour_sparkline=\($hour_sparkline | @sh)\nday_sparkline=\($day_sparkline | @sh)\n" +
-      "week_sparkline=\($week_sparkline | @sh)\nmonth_sparkline=\($month_sparkline | @sh)\n" +
-      "hour_trend=\($hour_trend | @sh)\nday_trend=\($day_trend | @sh)\n" +
-      "hour_summary=\($hour_summary | @sh)\nday_summary=\($day_summary | @sh)\n" +
-      "trend=\($trend | @sh)\ntotal_count=\($total)"
-    ' "$RATINGS_FILE" 2>/dev/null)"
-
-    if [ "$total_count" -gt 0 ] 2>/dev/null; then
-        # Trend icon/color
-        case "$trend" in
-            up)   trend_icon="↗"; trend_color="$EMERALD" ;;
-            down) trend_icon="↘"; trend_color="$ROSE" ;;
-            *)    trend_icon="→"; trend_color="$SLATE_400" ;;
-        esac
-
-        # Get colors
-        [ "$q15_avg" != "—" ] && pulse_base="$q15_avg" || { [ "$hour_avg" != "—" ] && pulse_base="$hour_avg" || { [ "$today_avg" != "—" ] && pulse_base="$today_avg" || pulse_base="$all_avg"; }; }
-        PULSE_COLOR=$(get_rating_color "$pulse_base")
-        LATEST_COLOR=$(get_rating_color "${latest:-5}")
-        Q15_COLOR=$(get_rating_color "${q15_avg:-5}")
-        HOUR_COLOR=$(get_rating_color "${hour_avg:-5}")
-        TODAY_COLOR=$(get_rating_color "${today_avg:-5}")
-        WEEK_COLOR=$(get_rating_color "${week_avg:-5}")
-        MONTH_COLOR=$(get_rating_color "${month_avg:-5}")
-        ALL_COLOR=$(get_rating_color "$all_avg")
-
-        [ "$latest_source" = "explicit" ] && src_label="EXP" || src_label="IMP"
-
-        case "$MODE" in
-            nano)
-                printf "${SIGNAL_LABEL}◆${RESET} ${LATEST_COLOR}${latest}${RESET} ${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET}\n"
-                ;;
-            micro)
-                printf "${SIGNAL_LABEL}◆${RESET} ${LATEST_COLOR}${latest}${RESET} ${SIGNAL_PERIOD}1h:${RESET} ${HOUR_COLOR}${hour_avg}${RESET} ${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET} ${SIGNAL_PERIOD}1w:${RESET} ${WEEK_COLOR}${week_avg}${RESET}\n"
-                ;;
-            mini)
-                printf "${SIGNAL_LABEL}◆${RESET} ${SIGNAL_COLOR}LEARNING SIGNAL:${RESET} ${SLATE_600}│${RESET} "
-                printf "${LATEST_COLOR}${latest}${RESET} "
-                printf "${SIGNAL_PERIOD}1h:${RESET} ${HOUR_COLOR}${hour_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1w:${RESET} ${WEEK_COLOR}${week_avg}${RESET}\n"
-                ;;
-            normal)
-                printf "${SIGNAL_LABEL}◆${RESET} ${SIGNAL_COLOR}LEARNING SIGNAL:${RESET} ${SLATE_600}│${RESET} "
-                printf "${LATEST_COLOR}${latest}${RESET}${SLATE_500}${src_label}${RESET} ${SLATE_600}│${RESET} "
-                printf "${SIGNAL_PERIOD}15m:${RESET} ${Q15_COLOR}${q15_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}60m:${RESET} ${HOUR_COLOR}${hour_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1d:${RESET} ${TODAY_COLOR}${today_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1w:${RESET} ${WEEK_COLOR}${week_avg}${RESET} "
-                printf "${SIGNAL_PERIOD}1mo:${RESET} ${MONTH_COLOR}${month_avg}${RESET}\n"
-
-                # Sparklines (condensed, no blank lines)
-                printf "   ${SLATE_600}├─${RESET} ${SIGNAL_PERIOD}%-5s${RESET} %s\n" "15m:" "$q15_sparkline"
-                printf "   ${SLATE_600}├─${RESET} ${SIGNAL_PERIOD}%-5s${RESET} %s\n" "60m:" "$hour_sparkline"
-                printf "   ${SLATE_600}├─${RESET} ${SIGNAL_PERIOD}%-5s${RESET} %s\n" "1d:" "$day_sparkline"
-                printf "   ${SLATE_600}├─${RESET} ${SIGNAL_PERIOD}%-5s${RESET} %s\n" "1w:" "$week_sparkline"
-                printf "   ${SLATE_600}└─${RESET} ${SIGNAL_PERIOD}%-5s${RESET} %s\n" "1mo:" "$month_sparkline"
-                ;;
-        esac
-    else
-        printf "${SIGNAL_LABEL}◆${RESET} ${SIGNAL_LABEL}LEARNING SIGNAL:${RESET}\n"
-        printf "  ${SLATE_500}No ratings yet${RESET}\n"
-    fi
-else
-    printf "${SIGNAL_LABEL}◆${RESET} ${SIGNAL_LABEL}LEARNING SIGNAL:${RESET}\n"
-    printf "  ${SLATE_500}No ratings yet${RESET}\n"
-fi
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# LINE 7: QUOTE (normal mode only)
+# LINE 4: QUOTE (normal mode only)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if [ "$MODE" = "normal" ]; then

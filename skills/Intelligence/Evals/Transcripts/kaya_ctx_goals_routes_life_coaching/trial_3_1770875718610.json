@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T05:54:37.167Z",
+  "completed_at": "2026-02-12T05:55:18.610Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:54:37.167Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — All Behind Pace:**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5hrs → 3hrs (4wk avg) | 5.3 hrs | +2.3 hrs over target |\n| G1: Make 2 Good Friends | 2 friends by 3/29 | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6 → 3.0 | 1.8 | +0.2 gain, need +1.2 more |\n\n**Key Patterns from Challenges:**\n- **C0 (Media)** is the root blocker — it directly undermines G0, G2, C4 (writing), and C5 (wake time)\n- **C1 (Friends)** has 14% success rate on strategies S3/S4 — social anxiety + new city\n- **C3 (Physical rehab)** at 0% stretching consistency — no strategy even defined\n- **C4 (Writing)** at 36% consistency — media is competing for the same time\n\n**What's working:** Your historical wins (porn, alcohol, weed, body fat) all used binary rules or consistent tracking. Current challenges are more gradient/behavioral — harder to apply the same binary approach.\n\n**What's not working:** Strategies for friendship (S3, S4) are at 14-29% success. Media reduction strategies (S0, S2) are at 64-71% but still not enough to hit target.\n\n⚡ ACTIONS: Context review only — no changes made.\n\n📊 STATUS: ~6.5 weeks remain in Q1. All three WIGs are behind pace. Media consumption is the keystone problem.\n\n➡️ NEXT: \n- TELOS context is 75 hours stale — consider running `refresh` for current numbers\n- Want me to dig into specific strategies or help build an intervention plan for any of these?\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are behind pace with 6.5 weeks remaining\n2. Media consumption (5.3 hrs vs 3 hr target) is the primary blocker cascading into other goals\n3. Friendship goal has zero progress — strategies are only landing 14% of the time\n4. Alignment score moved marginally (1.6 → 1.8) but needs to reach 3.0\n5. Physical rehab has no defined strategy and 0% consistency — a blind spot\n6. Your proven method (binary rules + tracking) worked for addictions but current goals need different tactics\n7. Writing and wake time are secondary casualties of the media consumption problem\n8. Solving C0 first would likely unblock progress across G0, G2, C4, and C5\n\n⭐ RATE (1-10): \n\n🗣️ Kaya: All three Q1 WIGs behind pace. Media consumption is the keystone blocker across goals.",
+      "timestamp": "2026-02-12T05:55:18.610Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 41443,
+    "time_to_first_token_ms": 41443,
+    "time_to_last_token_ms": 41443,
+    "tokens_per_second": 0
+  }
+}

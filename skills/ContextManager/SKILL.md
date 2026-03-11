@@ -27,13 +27,15 @@ Topic changes trigger delta loading. Claude reads files directly or uses `Contex
 | Profile | Budget | When Used |
 |---------|--------|-----------|
 | `boot` | 200 | Always (Tier 1) |
-| `development` | 3200 | Code, projects, bugs, features |
-| `life-coaching` | 1500 | Goals, challenges, strategies, progress |
+| `development` | 1200 | Code, projects, bugs, features |
+| `life-coaching` | 2200 | Goals, challenges, strategies, progress |
 | `scheduling` | 800 | Calendar, meetings, availability |
 | `task-management` | 1000 | Asana, tasks, deadlines, queues |
 | `knowledge-lookup` | 1000 | Obsidian, notes, research |
-| `general` | 2500 | Ambiguous or mixed-intent requests |
+| `general` | 800 | Ambiguous or mixed-intent requests |
 | `conversational` | 200 | Greetings, simple Q&A |
+| `planning` | 2500 | Weekly/monthly planning, time blocking |
+| `voice-conversation` | 500 | Real-time voice sessions |
 
 ## Classification
 
@@ -55,6 +57,12 @@ Two-stage intent classification:
 | `ContextLearner.ts` | Learn from usage patterns | `bun ContextLearner.ts --analyze` |
 
 ## Workflows
+
+| Workflow | Trigger | File |
+|----------|---------|------|
+| Classify-And-Load | Automatic via ContextRouter hook | `Workflows/Classify-And-Load.md` |
+| Compress-Context | "compress context", "regenerate compressed" | `Workflows/Compress-Context.md` |
+| Review-Feedback | "review context feedback", "analyze context usage" | `Workflows/Review-Feedback.md` |
 
 ### Classify-And-Load (automatic via hook)
 1. ContextRouter.hook.ts fires on UserPromptSubmit
@@ -128,7 +136,7 @@ Context profile changes are logged to stderr for observability. No voice notific
 ```
 User: "Fix the authentication bug in login.ts"
 → Profile: development (keyword match: "fix", "bug")
-→ Loads: SKILL-INDEX, CLI-INDEX, ProjectsContext
+→ Loads: CLI-INDEX, ProjectsContext
 → Skips: TELOS/*, Calendar, Obsidian
 → Tokens: ~1100/1200 budget
 ```

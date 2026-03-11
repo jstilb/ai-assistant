@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_full_format_compliance",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:12:27.295Z",
+  "completed_at": "2026-02-12T06:12:59.384Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya produces a full PAI response format with all required sections for a coding task",
+      "timestamp": "2026-02-12T06:12:27.295Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, system loaded, ready for work.\n\n🔍 ANALYSIS: All systems online — 63 skills, 10 workflows, 21 hooks active. 1 approved work item in queue.\n\n📊 STATUS: Awaiting instructions.\n\n🗣️ Kaya: Evening Jm. Systems loaded, one approved item in queue. What are we working on?",
+      "timestamp": "2026-02-12T06:12:59.384Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32089,
+    "time_to_first_token_ms": 32089,
+    "time_to_last_token_ms": 32089,
+    "tokens_per_second": 0
+  }
+}

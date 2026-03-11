@@ -12,7 +12,9 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname, basename, extname } from 'path';
-import { inference } from '../../../skills/CORE/Tools/Inference';
+import { z } from 'zod';
+import { inference } from '../../../lib/core/Inference';
+import { createStateManager } from '../../../lib/core/StateManager';
 import { estimateTokens } from './TokenEstimator';
 
 const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
@@ -30,15 +32,26 @@ interface CompressionConfig {
   outputSuffix: string;
 }
 
-function loadCompressionRules(): CompressionConfig {
-  if (!existsSync(COMPRESSION_RULES_PATH)) {
-    return {
-      rules: [],
-      minLinesForCompression: 30,
-      outputSuffix: '.compressed.md',
-    };
-  }
-  return JSON.parse(readFileSync(COMPRESSION_RULES_PATH, 'utf-8'));
+const CompressionRuleSchema = z.object({
+  pattern: z.string(),
+  targetLines: z.number(),
+  preserveKeys: z.array(z.string()),
+});
+
+const CompressionConfigSchema = z.object({
+  rules: z.array(CompressionRuleSchema),
+  minLinesForCompression: z.number().default(30),
+  outputSuffix: z.string().default('.compressed.md'),
+});
+
+const compressionState = createStateManager({
+  path: COMPRESSION_RULES_PATH,
+  schema: CompressionConfigSchema,
+  defaults: { rules: [], minLinesForCompression: 30, outputSuffix: '.compressed.md' },
+});
+
+async function loadCompressionRules(): Promise<CompressionConfig> {
+  return compressionState.load();
 }
 
 /**
@@ -84,7 +97,7 @@ export async function compressFile(
 
   const content = readFileSync(filePath, 'utf-8');
   const lines = content.split('\n').length;
-  const config = loadCompressionRules();
+  const config = await loadCompressionRules();
 
   // Skip files under minimum line threshold
   if (lines < config.minLinesForCompression) {
@@ -177,7 +190,7 @@ compressed_lines: ${compressed.split('\n').length}
  * Compress all files defined in compression-rules.json
  */
 export async function compressAll(): Promise<Array<{ file: string; success: boolean; ratio?: string; error?: string }>> {
-  const config = loadCompressionRules();
+  const config = await loadCompressionRules();
   const results: Array<{ file: string; success: boolean; ratio?: string; error?: string }> = [];
 
   for (const rule of config.rules) {

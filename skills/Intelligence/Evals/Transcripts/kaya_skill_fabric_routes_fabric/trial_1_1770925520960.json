@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_fabric_routes_fabric",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:44:50.892Z",
+  "completed_at": "2026-02-12T19:45:20.960Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Use fabric to extract the key insights from this article",
+      "timestamp": "2026-02-12T19:44:50.892Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🗣️ Kaya: Ready to extract insights with Fabric. Share the article URL or file path to proceed.",
+      "timestamp": "2026-02-12T19:45:20.959Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 30068,
+    "time_to_first_token_ms": 30067,
+    "time_to_last_token_ms": 30068,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_browser_routes_browser",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:31:49.454Z",
+  "completed_at": "2026-02-12T19:35:12.640Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Open the staging site and take a screenshot",
+      "timestamp": "2026-02-12T19:31:49.454Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📊 STATUS: Waiting for staging URL — no configured staging environment found in system config.\n\n🗣️ Kaya: No staging URL configured in the system. Jm, which site should I open?",
+      "timestamp": "2026-02-12T19:35:12.640Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 203186,
+    "time_to_first_token_ms": 203186,
+    "time_to_last_token_ms": 203186,
+    "tokens_per_second": 0
+  }
+}

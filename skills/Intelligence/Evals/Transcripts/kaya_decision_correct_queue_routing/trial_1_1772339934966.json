@@ -1,0 +1,101 @@
+{
+  "task_id": "kaya_decision_correct_queue_routing",
+  "trial_id": "trial_1",
+  "started_at": "2026-03-01T04:37:59.361Z",
+  "completed_at": "2026-03-01T04:38:54.966Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add these two items to the work queue:\n1. A quick status check of the eval results — takes 5 minutes, read-only, no risk\n2. A full database migration that drops and recreates tables — takes 2 hours, affects production data\n",
+      "timestamp": "2026-03-01T04:37:59.361Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Added two items to the spec-pipeline queue with different risk profiles.\n\n🔍 ANALYSIS:\n1. Both items routed to `spec-pipeline` at `awaiting-context` status (default for new items)\n2. Item 1 (eval check) is low-risk, read-only, ~5 min — will need minimal spec work\n3. Item 2 (db migration) is high-risk, destructive, ~2 hrs — will need thorough spec with backup/rollback strategy\n\n⚡ ACTIONS:\n1. Added `mm79f7x5-vrgh9r` — \"Quick status check of eval results\"\n2. Added `mm79f92o-a3rhnw` — \"Full database migration - drop and recreate tables\"\n\n✅ RESULTS:\n\n| Item | ID | Queue | Status |\n|------|----|-------|--------|\n| Eval status check | `mm79f7x5-vrgh9r` | spec-pipeline | awaiting-context |\n| DB migration | `mm79f92o-a3rhnw` | spec-pipeline | awaiting-context |\n\n📊 STATUS: Both items awaiting context. Run `/queue context` to provide research guidance so they can advance through the spec pipeline.\n\n➡️ NEXT:\n1. `/queue context` to flesh out both items before spec generation\n2. The db migration item will especially benefit from detailed context — backup procedures, which tables, rollback plan\n\n📖 STORY EXPLANATION:\n1. Parsed the two items from your request with their risk/time characteristics\n2. Added both to the spec-pipeline queue via QueueManager CLI\n3. Both landed at `awaiting-context` since descriptions need structured guidance for spec generation\n4. The pipeline will generate specs for review before any work begins — especially important for the destructive migration\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Two items queued in spec-pipeline. Run /queue context to advance them toward spec generation.",
+      "timestamp": "2026-03-01T04:38:54.965Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1772339934965_iwjl8i",
+      "name": "Skill",
+      "params": {
+        "skill": "QueueRouter",
+        "args": "queue add two items: 1) \"Quick status check of eval results\" - 5 minutes, read-only, no risk. 2) \"Full database migration - drop and recreate tables\" - 2 hours, affects production data, destructive"
+      },
+      "started_at": "2026-03-01T04:38:54.965Z",
+      "result": "Launching skill: QueueRouter",
+      "completed_at": "2026-03-01T04:38:54.966Z",
+      "duration_ms": 1
+    },
+    {
+      "id": "tc_1772339934966_umf89u",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/QueueRouter/Workflows/AddItem.md"
+      },
+      "started_at": "2026-03-01T04:38:54.966Z",
+      "result": "     1→# AddItem Workflow\n     2→\n     3→Add an item to the queue system with automatic routing.\n     4→\n     5→## Trigger\n     6→\n     7→- \"add to queue\"\n     8→- \"queue task\"\n     9→- \"/queue add\"\n    10→\n    11→## Steps\n    12→\n    13→1. **Parse input** - Extract title, description, type from user request\n    14→2. **Determine routing** - Items route to spec-pipeline by default (or approvals if `--spec` provided)\n    15→3. **Add item** - Call QueueManager.add() with routing result\n    16→4. **Context sufficiency check** - If description is detailed enough (>=200 chars, 2+ sentences), auto-advances to `researching`\n    17→5. **Notify** - Confirm item added with ID and queue name\n    18→\n    19→## CLI Usage\n    20→\n    21→```bash\n    22→# Basic add (routes to spec-pipeline, awaiting-context)\n    23→bun run Tools/QueueManager.ts add \"Task title\" --desc \"Details\"\n    24→\n    25→# Detailed add (auto-advances to researching if sufficient)\n    26→bun run Tools/QueueManager.ts add \"Task title\" --desc \"Long detailed description with multiple sentences...\"\n    27→\n    28→# With type (triggers routing rules)\n    29→bun run Tools/QueueManager.ts add \"Deploy v2\" --type deploy\n    30→\n    31→# Skip spec-pipeline — attach existing spec (routes to approvals directly)\n    32→bun run Tools/QueueManager.ts add \"My Feature\" --desc \"Details\" --spec plans/my-feature-spec.md\n    33→\n    34→# Direct to specific queue (approvals requires --spec)\n    35→bun run Tools/QueueManager.ts add \"Quick task\" --queue spec-pipeline\n    36→```\n    37→\n    38→## Routing Rules\n    39→\n    40→Items are routed based on patterns in `RoutingRules.yaml`:\n    41→\n    42→| Pattern | Queue | Notes |\n    43→|---------|-------|-------|\n    44→| `spec:*` | spec-pipeline | Direct pipeline entry |\n    45→| `*` (default) | spec-pipeline | All items go through spec generation first |\n    46→| `--spec <path>` | approvals | Items with existing specs bypass pipeline |\n    47→\n    48→## Context Sufficiency Heuristic\n    49→\n    50→When an item enters spec-pipeline, it checks if the description is detailed enough to skip the `awaiting-context` stage:\n    51→\n    52→**Auto-advances to `researching` when ALL of:**\n    53→- Description >= 200 characters\n    54→- Description contains 2+ sentences\n    55→\n    56→**Or when ANY of:**\n    57→- Caller pre-supplied `notes` AND `researchGuidance` in context\n    58→\n    59→**Otherwise:** Item stays at `awaiting-context`. Use `/queue context` to provide structured guidance.\n    60→\n    61→## Programmatic Usage\n    62→\n    63→```typescript\n    64→import { QueueManager } from './Tools/QueueManager.ts';\n    65→\n    66→const qm = new QueueManager();\n    67→\n    68→// Default: routes to spec-pipeline\n    69→const id = await qm.add(\n    70→  { title: \"Review PR #42\", description: \"Auth refactor\" },\n    71→  { type: \"approval\", source: \"GitHub\" }\n    72→);\n    73→\n    74→// With existing spec: routes to approvals directly\n    75→const id2 = await qm.add(\n    76→  { title: \"My Feature\", description: \"Details\" },\n    77→  {\n    78→    spec: {\n    79→      id: \"my-feature-spec\",\n    80→      path: \"/absolute/path/to/my-feature-spec.md\",\n    81→      status: \"approved\",\n    82→      approvedAt: new Date().toISOString(),\n    83→    }\n    84→  }\n    85→);\n    86→```\n    87→\n    88→## Output\n    89→\n    90→Returns the item ID and confirms the target queue:\n    91→\n    92→```\n    93→Added item: ml18vdke-n06t58\n    94→Queue: spec-pipeline (awaiting-context)\n    95→```\n    96→\n    97→Or if auto-advanced:\n    98→```\n    99→Added item: ml18vdke-n06t58\n   100→Queue: spec-pipeline (researching)\n   101→[spec-pipeline] Auto-advanced ml18vdke-n06t58 to researching (sufficient context)\n   102→```\n   103→",
+      "completed_at": "2026-03-01T04:38:54.966Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1772339934966_i844xl",
+      "name": "Read",
+      "params": {
+        "file_path": "~/.claude/skills/QueueRouter/Tools/QueueManager.ts",
+        "limit": 100
+      },
+      "started_at": "2026-03-01T04:38:54.966Z",
+      "result": "     1→#!/usr/bin/env bun\n     2→/**\n     3→ * QueueManager.ts - Universal Queue Management for Kaya\n     4→ *\n     5→ * Core queue operations for the QueueRouter system. Provides add, list, update,\n     6→ * remove, and query operations across all queues with JSONL file persistence.\n     7→ *\n     8→ * Uses CORE infrastructure tools:\n     9→ * - StateManager for global queue state persistence\n    10→ *\n    11→ * Note: Individual queue files use JSONL format (one item per line) for\n    12→ * efficient append operations. This is intentionally different from\n    13→ * StateManager's single JSON file design.\n    14→ *\n    15→ * Usage:\n    16→ *   bun run QueueManager.ts add --title \"Task\" --description \"Details\" [--queue name] [--priority 1-3]\n    17→ *   bun run QueueManager.ts list [--queue name] [--status pending]\n    18→ *   bun run QueueManager.ts get <id>\n    19→ *   bun run QueueManager.ts update <id> --status completed\n    20→ *   bun run QueueManager.ts remove <id>\n    21→ *   bun run QueueManager.ts next [--queue name]\n    22→ *   bun run QueueManager.ts complete <id> [--output \"result\"]\n    23→ *   bun run QueueManager.ts fail <id> --error \"reason\"\n    24→ *   bun run QueueManager.ts approve <id> [--notes \"...\"] [--reviewer \"...\"]\n    25→ *   bun run QueueManager.ts reject <id> [--reason \"...\"] [--reviewer \"...\"]\n    26→ *   bun run QueueManager.ts stats [--queue name]\n    27→ *   bun run QueueManager.ts cleanup [--days 30]\n    28→ *\n    29→ * Progress Tracking:\n    30→ *   bun run QueueManager.ts init-progress <id> <totalPhases>\n    31→ *   bun run QueueManager.ts set-phase <id> <phase>\n    32→ *   bun run QueueManager.ts complete-phase <id> <phase>\n    33→ *   bun run QueueManager.ts update-isc <id> <criterion> <evidence>\n    34→ *   bun run QueueManager.ts progress <id>\n    35→ *\n    36→ * @module QueueManager\n    37→ */\n    38→\n    39→import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, readdirSync, renameSync } from \"fs\";\n    40→import { join, basename } from \"path\";\n    41→import { parse as parseYaml } from \"yaml\";\n    42→import { z } from \"zod\";\n    43→import { createStateManager, type StateManager } from \"../../../lib/core/StateManager.ts\";\n    44→import { memoryStore } from \"../../../lib/core/MemoryStore.ts\";\n    45→import { syncQueueStatus } from \"../../LucidTasks/Tools/TaskManager.ts\";\n    46→\n    47→// ============================================================================\n    48→// Configuration\n    49→// ============================================================================\n    50→\n    51→const KAYA_HOME = process.env.KAYA_HOME || join(process.env.HOME || \"\", \".claude\");\n    52→const QUEUES_DIR = join(KAYA_HOME, \"MEMORY/QUEUES\");\n    53→const STATE_FILE = join(QUEUES_DIR, \"state.json\");\n    54→const ROUTING_RULES_FILE = join(KAYA_HOME, \"skills/QueueRouter/RoutingRules.yaml\");\n    55→const ARCHIVE_DIR = join(QUEUES_DIR, \"archive\");\n    56→\n    57→// ============================================================================\n    58→// Types\n    59→// ============================================================================\n    60→\n    61→export type QueueItemStatus =\n    62→  | \"pending\"\n    63→  | \"in_progress\"\n    64→  | \"awaiting_approval\"\n    65→  | \"completed\"\n    66→  | \"failed\"\n    67→  | \"approved\"\n    68→  | \"rejected\"\n    69→  // spec-pipeline statuses\n    70→  | \"awaiting-context\"\n    71→  | \"researching\"\n    72→  | \"generating-spec\"\n    73→  | \"revision-needed\"\n    74→  | \"escalated\";\n    75→\n    76→/**\n    77→ * Valid status transitions for the spec-pipeline queue.\n    78→ * Enforced by validateSpecPipelineTransition().\n    79→ */\n    80→export const SPEC_PIPELINE_TRANSITIONS: Record<string, readonly string[]> = {\n    81→  \"awaiting-context\": [\"researching\"],\n    82→  \"researching\": [\"generating-spec\"],\n    83→  \"generating-spec\": [\"revision-needed\"],\n    84→  \"revision-needed\": [\"researching\", \"escalated\"],\n    85→  \"escalated\": [], // terminal state — no auto-transitions\n    86→} as const;\n    87→\n    88→/**\n    89→ * Validate a status transition for spec-pipeline items.\n    90→ * Returns null on success, or an error message string on failure.\n    91→ */\n    92→export function validateSpecPipelineTransition(\n    93→  fromStatus: string,\n    94→  toStatus: string\n    95→): string | null {\n    96→  const allowed = SPEC_PIPELINE_TRANSITIONS[fromStatus];\n    97→  if (allowed === undefined) {\n    98→    // fromStatus is not a spec-pipeline status — not our concern\n    99→    return null;\n   100→  }",
+      "completed_at": "2026-03-01T04:38:54.966Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1772339934966_fretin",
+      "name": "Bash",
+      "params": {
+        "command": "cd ~/.claude && bun run skills/QueueRouter/Tools/QueueManager.ts add --title \"Quick status check of eval results\" --description \"Check the current eval results for status and any issues. Read-only operation, no modifications needed. Estimated time: 5 minutes. This is a low-risk, read-only task that just reviews existing eval output data.\"",
+        "description": "Add first queue item - eval status check"
+      },
+      "started_at": "2026-03-01T04:38:54.966Z",
+      "result": "[spec-pipeline] mm79f7x5-vrgh9r held at awaiting-context (insufficient context for spec creation)\nAdded item: mm79f7x5-vrgh9r\n───────────────────────────────────────\nID:       mm79f7x5-vrgh9r\nTitle:    Quick status check of eval results\nQueue:    spec-pipeline\nStatus:   awaiting-context\nPriority: NORMAL\nType:     task\nSource:   manual\nCreated:  2026-03-01T04:38:31.385Z\nDesc:     Check the current eval results for status and any issues. Re...\n───────────────────────────────────────\nShell cwd was reset to /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_decision_correct_queue_routing-q7PZvB",
+      "completed_at": "2026-03-01T04:38:54.966Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1772339934966_qaeedh",
+      "name": "Bash",
+      "params": {
+        "command": "cd ~/.claude && bun run skills/QueueRouter/Tools/QueueManager.ts add --title \"Full database migration - drop and recreate tables\" --description \"Execute a full database migration that drops existing tables and recreates them from scratch. This is a destructive operation affecting production data. Estimated time: 2 hours. Requires careful planning, backup verification, and rollback strategy before execution. All existing data in affected tables will be permanently deleted.\"",
+        "description": "Add second queue item - database migration"
+      },
+      "started_at": "2026-03-01T04:38:54.966Z",
+      "result": "[spec-pipeline] mm79f92o-a3rhnw held at awaiting-context (insufficient context for spec creation)\nAdded item: mm79f92o-a3rhnw\n───────────────────────────────────────\nID:       mm79f92o-a3rhnw\nTitle:    Full database migration - drop and recreate tables\nQueue:    spec-pipeline\nStatus:   awaiting-context\nPriority: NORMAL\nType:     task\nSource:   manual\nCreated:  2026-03-01T04:38:32.880Z\nDesc:     Execute a full database migration that drops existing tables...\n───────────────────────────────────────\nShell cwd was reset to /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_decision_correct_queue_routing-q7PZvB",
+      "completed_at": "2026-03-01T04:38:54.966Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.288598,
+    "duration": 50653,
+    "turns": 7,
+    "inputTokens": 7,
+    "outputTokens": 1225,
+    "cacheReadTokens": 162951,
+    "cacheCreationTokens": 28234
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 5,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 55605,
+    "time_to_first_token_ms": 55604,
+    "time_to_last_token_ms": 55605,
+    "tokens_per_second": 0
+  }
+}

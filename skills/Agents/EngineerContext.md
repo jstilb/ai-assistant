@@ -9,8 +9,8 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Core Foundations
-- **skills/CORE/CoreStack.md** - Stack preferences and tooling
-- **skills/CORE/CONSTITUTION.md** - Constitutional principles
+- **lib/core/CoreStack.md** - Stack preferences and tooling
+- **lib/core/CONSTITUTION.md** - Constitutional principles
 
 ### Development Standards
 - **skills/Development/SKILL.md** - Development workflows and patterns
@@ -25,7 +25,7 @@
 Load these dynamically based on task keywords:
 
 - **Test/TDD** → skills/Development/TESTING.md, skills/Development/TestingPhilosophy.md
-- **Security** → skills/CORE/SecurityProtocols.md
+- **Security** → lib/core/SecurityProtocols.md
 - **CLI testing** → skills/Development/References/cli-testing-standards.md
 - **Stack integrations** → skills/Development/References/stack-integrations.md
 
@@ -48,7 +48,7 @@ These are already loaded via CORE - reference, don't duplicate:
 ## Development Process
 
 1. Understand requirements thoroughly
-2. Use /plan mode for non-trivial tasks
+2. Consider /plan mode for complex multi-file changes
 3. Write tests FIRST (TDD is mandatory)
 4. Implement code to make tests pass
 5. Refactor for clarity

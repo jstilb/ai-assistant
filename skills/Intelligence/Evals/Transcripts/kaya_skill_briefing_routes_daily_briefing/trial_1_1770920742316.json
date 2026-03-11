@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_routes_daily_briefing",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:23:38.216Z",
+  "completed_at": "2026-02-12T18:25:42.316Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Morning briefing please",
+      "timestamp": "2026-02-12T18:23:38.216Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Good morning, Jm. Here's your Thursday briefing.\n\n---\n\n## Weather\n\n**San Diego:** 56°F, partly cloudy. High 67°F / Low 53°F.\nLayer up this morning — 10°F swing by afternoon. Great day for outdoor activity.\n\n---\n\n## Q1 WIG Check-In\n\n| WIG | Current | Target | Gap |\n|-----|---------|--------|-----|\n| G0: Media Consumption | 5.0 hrs/day | 3.0 hrs | -2.0 hrs |\n| G1: Make 2 Good Friends | 0 | 2 | -2 |\n| G2: Alignment Score | 2.0 | 3.0 | -1.0 |\n\nSmall movement: Media down from 5.3 to 5.0, Alignment up from 1.8 to 2.0. Progress.\n\n---\n\n## Strategy Gaps (Critical)\n\n| Strategy | Current | Gap |\n|----------|---------|-----|\n| S4: Social Invitations | 8.6% | -91.4% |\n| S6: Morning Stretch | 0% | -80% |\n| S8: Sleep Hygiene | 0% | -80% |\n| S3: Community Events | 42.9% | -57.1% |\n\n---\n\n## Today's Calendar (16 events)\n\n| Time | Event | Mission |\n|------|-------|---------|\n| 8:00 | Get Board Waxed | -- |\n| 8:00 | Calendar & Tracking | -- |\n| 8:00 | [OPTIONAL] Data + AI = DataAI | M5 |\n| 9:00 | R&I Initiative Sync | M5 |\n| 9:30 | DSA San Diego Day of Caring | M1 |\n| **10:00** | **vday with Julie** | **M3** |\n| 11:00 | Focus Fridays - no meeting | M5 |\n| 12:00 | Call friend | M4 |\n| 14:00 | Meeting with Sarah | M5 |\n| 14:00 | North County Branch Bimonthly Meeting | M5 |\n| 16:00 | Book Club | M2 |\n| 16:00 | Non-Americas Focus Fridays | M5 |\n| 17:00 | DnD | -- |\n| 17:45 | CSDC General Meeting @6pm | M5 |\n| 18:00 | Black History Month - Black Panther Party | M2 |\n| 18:00 | Leadership Council Meeting | M5 |\n\nValentine's Day with Julie is the highlight — everything else is scaffolding around that.\n\n---\n\n## Habits (7-Day Rolling) — Needs Attention\n\nMost habits at 0% this week: habit tracking, workout, sleep 10:30pm, review goals, calendar, no alcohol. Wake at 6:30am at 20%. Floss and read holding at 40%.\n\n---\n\n## Priority Candidates\n\nGiven the packed calendar and Valentine's Day, today is more about showing up than grinding tasks. But if you get pockets:\n\n1. **Vday Letter** — Time-sensitive, meaningful (M3)\n2. **Valentine's Day Cooking** — Prep for tonight (M3)\n3. **Look up writing & publishing events/cons** — 30 min, M2 aligned\n\n---\n\n## Big Picture\n\nIt's a full day, Jm. Sixteen events across 6 missions. The DSA Day of Caring (S3/community) and calling a friend (S4/social) directly hit your two most critical strategy gaps. Lean into those. The Valentine's Day time with Julie is the soul of the day — be present for it.\n\n61 tasks still have no deadlines. Consider a batch deadline-setting session this weekend.\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Sixteen events today. Valentine's Day with Julie is the highlight. Media and alignment scores trending up slightly.",
+      "timestamp": "2026-02-12T18:25:42.316Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 124100,
+    "time_to_first_token_ms": 124100,
+    "time_to_last_token_ms": 124100,
+    "tokens_per_second": 0
+  }
+}

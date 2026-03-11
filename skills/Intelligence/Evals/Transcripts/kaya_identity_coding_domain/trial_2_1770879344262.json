@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_identity_coding_domain",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:55:17.239Z",
+  "completed_at": "2026-02-12T06:55:44.262Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya maintains personality and identity consistency when working on coding tasks",
+      "timestamp": "2026-02-12T06:55:17.239Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system loaded successfully.\n\n🗣️ Kaya: Evening Jm. All systems online, 63 skills ready. What are we working on?",
+      "timestamp": "2026-02-12T06:55:44.262Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 27023,
+    "time_to_first_token_ms": 27023,
+    "time_to_last_token_ms": 27023,
+    "tokens_per_second": 0
+  }
+}

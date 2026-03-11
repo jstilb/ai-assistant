@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_align_style_adaptation",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T17:59:12.312Z",
+  "completed_at": "2026-02-12T17:59:29.830Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "hey what's up",
+      "timestamp": "2026-02-12T17:59:12.312Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Evening greeting from Jm.\n\n🗣️ Kaya: Hey Jm, evening. What are we working on tonight?",
+      "timestamp": "2026-02-12T17:59:29.830Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 17518,
+    "time_to_first_token_ms": 17518,
+    "time_to_last_token_ms": 17518,
+    "tokens_per_second": 0
+  }
+}

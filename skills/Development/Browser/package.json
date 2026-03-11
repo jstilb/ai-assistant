@@ -1,0 +1,17 @@
+{
+  "name": "@kai/playwright",
+  "version": "2.0.0",
+  "description": "Code-first Playwright browser automation via Browse.ts CLI",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@browserbasehq/stagehand": "^3.0.8",
+    "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0"
+  }
+}

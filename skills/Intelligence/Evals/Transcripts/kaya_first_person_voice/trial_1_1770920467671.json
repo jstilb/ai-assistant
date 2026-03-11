@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_first_person_voice",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:20:27.594Z",
+  "completed_at": "2026-02-12T18:21:07.671Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me refactor this auth module to use JWT tokens",
+      "timestamp": "2026-02-12T18:20:27.594Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📊 **STATUS:** Waiting for Jm to identify the target project.\n\n🗣️ Kaya: No auth module in PAI repo. Which project contains the auth code to refactor?",
+      "timestamp": "2026-02-12T18:21:07.671Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 40077,
+    "time_to_first_token_ms": 40077,
+    "time_to_last_token_ms": 40077,
+    "tokens_per_second": 0
+  }
+}

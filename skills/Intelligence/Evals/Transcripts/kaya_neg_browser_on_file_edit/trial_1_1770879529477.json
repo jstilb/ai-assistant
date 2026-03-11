@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_browser_on_file_edit",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:58:24.464Z",
+  "completed_at": "2026-02-12T06:58:49.476Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "File edit request like 'edit the config.ts file' does NOT invoke Browser skill\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T06:58:24.464Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, checking queue status.\n\nGood evening, Jm. I see there's 1 item in the approvals queue and 1 in approved-work. Want me to pull up the queue details, or is there something else you'd like to work on?\n\n🗣️ Kaya: Evening session started. One approved work item and one approval pending in queue.",
+      "timestamp": "2026-02-12T06:58:49.476Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25012,
+    "time_to_first_token_ms": 25012,
+    "time_to_last_token_ms": 25012,
+    "tokens_per_second": 0
+  }
+}

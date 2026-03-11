@@ -1,0 +1,526 @@
+- generic [ref=e623]:
+  - main [ref=e624]:
+    - generic [ref=e625]:
+      - generic [ref=e626]:
+        - link "Back to jobs" [ref=e627] [cursor=pointer]:
+          - /url: https://www.coinbase.com/careers?gh_src=20687b321us
+          - img [ref=e628]
+          - text: Back to jobs
+        - generic [ref=e631]:
+          - generic [ref=e632]:
+            - heading "Data Scientist II - Platform" [level=1] [ref=e633]
+            - generic [ref=e634]:
+              - img [ref=e635]
+              - generic [ref=e637]: Remote - USA
+          - button "Apply" [ref=e638] [cursor=pointer]
+        - generic [ref=e639]:
+          - generic [ref=e640]:
+            - paragraph [ref=e641]: Ready to be pushed beyond what you think you’re capable of?
+            - paragraph [ref=e642]: At Coinbase, our mission is to increase economic freedom in the world. It’s a massive, ambitious opportunity that demands the best of us, every day, as we build the emerging onchain platform — and with it, the future global financial system.
+            - paragraph [ref=e643]: To achieve our mission, we’re seeking a very specific candidate. We want someone who is passionate about our mission and who believes in the power of crypto and blockchain technology to update the financial system. We want someone who is eager to leave their mark on the world, who relishes the pressure and privilege of working with high caliber colleagues, and who actively seeks feedback to keep leveling up. We want someone who will run towards, not away from, solving the company’s hardest problems.
+            - paragraph [ref=e644]:
+              - text: Our
+              - link "work culture" [ref=e645] [cursor=pointer]:
+                - /url: https://www.coinbase.com/mission
+              - text: is intense and isn’t for everyone. But if you want to build the future alongside others who excel in their disciplines and expect the same from you, there’s no better place to be.
+            - paragraph [ref=e646]: While many roles at Coinbase are remote-first, we are not remote-only. In-person participation is required throughout the year. Team and company-wide offsites are held multiple times annually to foster collaboration, connection, and alignment. Attendance is expected and fully supported.
+          - generic [ref=e647]:
+            - paragraph [ref=e648]: "Data Science is an integral component of Coinbase’s product and decision making process: we work in partnership with Product, Engineering and Design to influence the roadmap and better understand our users. With a deep expertise in experimentation, analytics and advanced modeling, we produce insights which directly move the company’s bottom line."
+            - paragraph [ref=e649]: We’re looking for a Data Scientist II to join Coinbase’s Platform Data Science team. Platform data scientists partner with product, engineering, and design to improve the core systems and user journeys that power Coinbase spanning areas like Payments, Risk & Trust, Identity & Onboarding, Compliance, Customer Support, and Experimentation.
+            - paragraph [ref=e650]: As a Data Scientist II on Platform, you’ll work on high-impact, cross-functional problems where the goal is to make Coinbase safer, more reliable, and easier to use, while unlocking growth through better decision-making and measurement. Sample projects include diagnosing funnel drop-offs and reliability issues across critical user journeys (e.g., onboarding, payments, authentication), designing north star + guardrail + diagnostic metric systems and running and improving experimentation and causal inference approaches (A/B tests, quasi-experiments, incrementality measurement).
+            - paragraph [ref=e651]:
+              - strong [ref=e652]:
+                - emphasis [ref=e653]: What you'll be doing
+            - list [ref=e654]:
+              - listitem [ref=e655]: Perform analyses on products to answer open-ended questions and provide strategic recommendations.
+              - listitem [ref=e656]: Design and guide experiments/analysis to measure impact and drive product improvements.
+              - listitem [ref=e657]: Develop and maintain key metrics and reports, enhancing data infrastructure for better analysis.
+            - paragraph [ref=e658]:
+              - strong [ref=e659]:
+                - emphasis [ref=e660]: "What we look for in you:"
+            - list [ref=e661]:
+              - listitem [ref=e662]: At least a BA/BS in a quantitative field (ex Math, Stats, Physics, or Computer Science) with ≥2+ years of relevant experience.
+              - listitem [ref=e663]: Experience driving impact for a digital product with an iterative development cycle.
+              - listitem [ref=e664]: Understanding of statistical concepts and practical experience applying them (in A|B testing, causal inference, ML, etc.).
+              - listitem [ref=e665]: Experience in data analyses using SQL.
+              - listitem [ref=e666]: Experience in programming/modeling in Python.
+              - listitem [ref=e667]: "Demonstration of our core cultural values: clear communication, positive energy, continuous learning, and efficient execution."
+            - paragraph [ref=e668]:
+              - emphasis [ref=e669]: "Disclaimer: Applying for a specific role does not guarantee consideration for that exact position. Leveling and team matching are assessed throughout the interview process."
+            - paragraph [ref=e670]: "ID: P68598"
+          - generic [ref=e672]:
+            - paragraph [ref=e676]:
+              - strong [ref=e677]: Pay Transparency Notice
+              - text: ":"
+              - emphasis [ref=e678]
+              - text: Depending on your work location, the target annual
+              - strong [ref=e679]: base
+              - text: salary for this position can range as detailed below. Full time offers from Coinbase also include bonus eligibility + equity eligibility + benefits (including medical, dental, vision and 401(k)).
+            - paragraph [ref=e680]: "Base salary range shown. Total compensation also includes equity and bonus eligibility and benefits:"
+            - paragraph [ref=e681]: $152,405 - $179,300 USD
+          - generic [ref=e682]:
+            - paragraph [ref=e683]: Please be advised that each candidate may submit a maximum of four applications within any 30-day period. We encourage you to carefully evaluate how your skills and interests align with Coinbase's roles before applying.
+            - heading "Commitment to Equal Opportunity" [level=3] [ref=e684]
+            - paragraph [ref=e685]:
+              - text: Coinbase is proud to be an Equal Opportunity Employer. All qualified applicants will receive consideration for employment without regard to race, color, religion, creed, gender, national origin, age, disability, veteran status, sex, gender expression or identity, sexual orientation or any other basis protected by applicable law. Coinbase will also consider for employment qualified applicants with criminal histories in a manner consistent with applicable federal, state and local law. For US applicants, you may view the
+              - link "Employee Rights" [ref=e686] [cursor=pointer]:
+                - /url: https://www.dol.gov/sites/dolgov/files/WHD/legacy/files/eppac.pdf
+              - text: and the
+              - link "Know Your Rights notices" [ref=e687] [cursor=pointer]:
+                - /url: https://www.eeoc.gov/sites/default/files/2023-06/22-088_EEOC_KnowYourRights6.12.pdf
+              - text: by clicking on their corresponding links. Additionally, Coinbase participates in the
+              - link "E-Verify program" [ref=e688] [cursor=pointer]:
+                - /url: https://static-assets.coinbase.com/e-verify.pdf
+              - text: in certain locations, as required by law.
+            - paragraph [ref=e689]:
+              - text: Coinbase is also committed to providing reasonable accommodations to individuals with disabilities. If you need a reasonable accommodation because of a disability for any part of the employment process, please contact us at accommodations[at]coinbase.com to let us know the nature of your request and your contact information. For quick access to screen reading technology compatible with this site
+              - link "click here to download" [ref=e690] [cursor=pointer]:
+                - /url: https://chrome.google.com/webstore/detail/chromevox/kgejglhpjiefppelpmljglcjbhoiplfn
+              - text: a free compatible screen reader
+              - link "(free step by step tutorial can be found here)" [ref=e691] [cursor=pointer]:
+                - /url: http://www.chromevox.com/tutorial/
+              - text: .
+            - heading "Global Data Privacy Notice for Job Candidates and Applicants" [level=3] [ref=e692]:
+              - strong [ref=e693]: Global Data Privacy Notice for Job Candidates and Applicants
+            - paragraph [ref=e694]:
+              - text: Depending on your location, the General Data Protection Regulation (GDPR) and California Consumer Privacy Act (CCPA) may regulate the way we manage the data of job applicants. Our full notice outlining how data will be processed as part of the application procedure for applicable locations is available
+              - link "here" [ref=e695] [cursor=pointer]:
+                - /url: https://www.coinbase.com/legal/applicant_privacy_notice
+              - text: . By submitting your application, you are agreeing to our use and processing of your data as required. For US applicants only, by submitting your application you are agreeing to arbitration of disputes as outlined
+              - link "here." [ref=e696] [cursor=pointer]:
+                - /url: https://www.coinbase.com/legal/application-arbitration-agreement
+            - heading "AI Disclosure" [level=3] [ref=e697]:
+              - strong [ref=e698]: AI Disclosure
+            - paragraph [ref=e699]:
+              - emphasis [ref=e700]: For select roles, Coinbase is piloting an AI tool based on machine learning technologies to conduct initial screening interviews to qualified applicants. The tool simulates realistic interview scenarios and engages in dynamic conversation. A human recruiter will review your interview responses, provided in the form of a voice recording and/or transcript, to assess them against the qualifications and characteristics outlined in the job description.
+            - paragraph [ref=e701]:
+              - emphasis [ref=e702]: For select roles, Coinbase is also piloting an AI interview intelligence platform to transcribe and summarize interview notes, allowing our interviewers to fully focus on you as the candidate.
+            - paragraph [ref=e703]:
+              - strong [ref=e704]:
+                - emphasis [ref=e705]: The above pilots are for testing purposes and Coinbase will not use AI to make decisions impacting employment
+              - emphasis [ref=e706]: . To request a reasonable accommodation due to disability, please contact accommodations[at]coinbase.com
+            - paragraph [ref=e707]
+            - paragraph [ref=e708]
+      - separator [ref=e709]
+      - generic [ref=e710]:
+        - generic [ref=e712]:
+          - heading "Apply for this job" [level=2] [ref=e714]
+          - generic [ref=e715]:
+            - paragraph [ref=e717]: "*"
+            - paragraph [ref=e718]: indicates a required field
+        - generic [ref=e719]:
+          - generic [ref=e720]:
+            - generic [ref=e723]:
+              - generic [ref=e724]: First Name*
+              - textbox "First Name" [ref=e725]: John
+            - generic [ref=e728]:
+              - generic [ref=e729]: Last Name*
+              - textbox "Last Name" [ref=e730]: Stilb
+            - generic [ref=e733]:
+              - generic [ref=e734]: Email*
+              - textbox "Email" [ref=e735]: john.michael.stilb@gmail.com
+            - group "Phone" [ref=e737]:
+              - generic [ref=e738]: Phone
+              - generic [ref=e741]:
+                - generic [ref=e742]: Country*
+                - generic [ref=e743]:
+                  - log [ref=e745]
+                  - generic [ref=e747]:
+                    - combobox "Country" [ref=e750]
+                    - button "Toggle flyout" [ref=e752] [cursor=pointer]:
+                      - img [ref=e753]
+                  - textbox
+              - generic [ref=e757]:
+                - generic [ref=e758]: Phone*
+                - textbox "Phone" [ref=e760]: 520-603-1125
+            - generic [ref=e761]:
+              - generic [ref=e763]:
+                - generic [ref=e764]: Location (City)*
+                - generic [ref=e765]:
+                  - log [ref=e767]
+                  - generic [ref=e769]:
+                    - generic [ref=e770]:
+                      - generic [ref=e1249]: San Diego, California, United States
+                      - combobox "Location (City)" [ref=e772]
+                    - button "Clear selections" [ref=e1252] [cursor=pointer]:
+                      - img [ref=e1253]
+              - button "Locate me" [ref=e773] [cursor=pointer]
+            - group "Resume/CV*" [ref=e775]:
+              - generic [ref=e776]: Resume/CV*
+              - generic [ref=e778]:
+                - generic [ref=e780]:
+                  - button "Attach" [ref=e781] [cursor=pointer]
+                  - generic [ref=e782]: Attach
+                  - button "Attach" [ref=e783]
+                - button "Dropbox" [ref=e785] [cursor=pointer]
+                - generic [ref=e787]:
+                  - button "Enter manually" [ref=e788] [cursor=pointer]
+                  - generic [ref=e789]: Enter manually
+                - paragraph [ref=e790]: "Accepted file types: pdf, doc, docx, txt, rtf"
+              - textbox "Enter manually" [ref=e1329]
+            - group "Cover Letter" [ref=e792]:
+              - generic [ref=e793]: Cover Letter
+              - generic [ref=e795]:
+                - generic [ref=e797]:
+                  - button "Attach" [ref=e798] [cursor=pointer]
+                  - generic [ref=e799]: Attach
+                  - button "Attach" [ref=e800]
+                - button "Dropbox" [ref=e802] [cursor=pointer]
+                - generic [ref=e804]:
+                  - button "Enter manually" [ref=e805] [cursor=pointer]
+                  - generic [ref=e806]: Enter manually
+                - paragraph [ref=e807]: "Accepted file types: pdf, doc, docx, txt, rtf"
+          - generic [ref=e808]:
+            - generic [ref=e809]:
+              - separator [ref=e810]
+              - paragraph [ref=e812]: Employment
+              - generic [ref=e814]:
+                - generic [ref=e815]: Company name*
+                - textbox "Company name" [ref=e816]: ActiveProspect
+              - generic [ref=e818]:
+                - generic [ref=e819]: Title*
+                - textbox "Title" [ref=e820]: Data Scientist
+              - generic [ref=e821]:
+                - generic [ref=e823]:
+                  - generic [ref=e824]: Start date month*
+                  - generic [ref=e825]:
+                    - log [ref=e827]
+                    - generic [ref=e829]:
+                      - generic [ref=e830]:
+                        - generic [ref=e1255]: September
+                        - combobox "Start date month" [ref=e833]
+                      - generic [ref=e834]:
+                        - button "Clear selections" [ref=e1257] [cursor=pointer]:
+                          - img [ref=e1258]
+                        - button "Toggle flyout" [ref=e835] [cursor=pointer]:
+                          - img [ref=e836]
+                - generic [ref=e839]:
+                  - generic [ref=e840]: Start date year*
+                  - textbox "Start date year" [ref=e841]: "2024"
+              - generic [ref=e842]:
+                - generic [ref=e844]:
+                  - generic [ref=e845]: End date month*
+                  - generic:
+                    - log
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: Select...
+                        - generic:
+                          - button "Toggle flyout" [disabled]:
+                            - img
+                - generic [ref=e860]:
+                  - generic [ref=e861]: End date year*
+                  - textbox "End date year" [disabled] [ref=e862]
+                - generic [ref=e864]:
+                  - generic [ref=e865]:
+                    - checkbox "Current role" [checked] [ref=e866]
+                    - img
+                  - generic [ref=e867]: Current role
+            - button "Add another" [ref=e868] [cursor=pointer]
+          - generic [ref=e869]:
+            - generic [ref=e870]:
+              - separator [ref=e871]
+              - paragraph [ref=e873]: Education
+              - generic [ref=e875]:
+                - generic [ref=e876]: School*
+                - generic [ref=e877]:
+                  - log [ref=e879]
+                  - generic [ref=e881]:
+                    - generic [ref=e882]:
+                      - generic [ref=e1338]: University of California - Berkeley
+                      - combobox "School" [ref=e885]
+                    - generic [ref=e886]:
+                      - button "Clear selections" [ref=e1340] [cursor=pointer]:
+                        - img [ref=e1341]
+                      - button "Toggle flyout" [ref=e887] [cursor=pointer]:
+                        - img [ref=e888]
+              - generic [ref=e891]:
+                - generic [ref=e892]: Degree*
+                - generic [ref=e893]:
+                  - log [ref=e895]
+                  - generic [ref=e897]:
+                    - generic [ref=e898]:
+                      - generic [ref=e1429]: Select...
+                      - combobox "Degree" [active] [ref=e901]
+                    - button "Toggle flyout" [ref=e903] [cursor=pointer]:
+                      - img [ref=e904]
+                  - textbox
+              - generic [ref=e907]:
+                - generic [ref=e908]: Discipline*
+                - generic [ref=e909]:
+                  - log [ref=e911]
+                  - generic [ref=e913]:
+                    - generic [ref=e914]:
+                      - generic [ref=e1350]: Select...
+                      - combobox "Discipline" [ref=e917]
+                    - button "Toggle flyout" [ref=e919] [cursor=pointer]:
+                      - img [ref=e920]
+                  - textbox
+            - button "Add another" [ref=e922] [cursor=pointer]
+          - generic [ref=e923]:
+            - separator [ref=e924]
+            - generic [ref=e927]:
+              - generic [ref=e928]: Linkedin Profile URL*
+              - textbox "Linkedin Profile URL" [ref=e929]: https://www.linkedin.com/in/john-stilb
+            - generic [ref=e932]:
+              - generic [ref=e933]: Are you at least 18 years of age?*
+              - generic [ref=e934]:
+                - log [ref=e936]
+                - generic [ref=e938]:
+                  - generic [ref=e939]:
+                    - generic [ref=e1271]: "Yes"
+                    - combobox "Are you at least 18 years of age?" [ref=e942]
+                  - generic [ref=e943]:
+                    - button "Clear selections" [ref=e1273] [cursor=pointer]:
+                      - img [ref=e1274]
+                    - button "Toggle flyout" [ref=e944] [cursor=pointer]:
+                      - img [ref=e945]
+            - generic [ref=e949]:
+              - generic [ref=e950]: Have you previously been employed by Coinbase in any capacity?*
+              - generic [ref=e951]:
+                - log [ref=e953]
+                - generic [ref=e955]:
+                  - generic [ref=e956]:
+                    - generic [ref=e1276]: "No"
+                    - combobox "Have you previously been employed by Coinbase in any capacity?" [ref=e959]
+                  - generic [ref=e960]:
+                    - button "Clear selections" [ref=e1278] [cursor=pointer]:
+                      - img [ref=e1279]
+                    - button "Toggle flyout" [ref=e961] [cursor=pointer]:
+                      - img [ref=e962]
+            - generic [ref=e966]:
+              - generic [ref=e967]: How did you hear about this job?*
+              - generic [ref=e968]:
+                - log [ref=e970]
+                - generic [ref=e972]:
+                  - generic [ref=e973]:
+                    - generic [ref=e1281]: LinkedIn
+                    - combobox "How did you hear about this job?" [ref=e976]
+                  - generic [ref=e977]:
+                    - button "Clear selections" [ref=e1283] [cursor=pointer]:
+                      - img [ref=e1284]
+                    - button "Toggle flyout" [ref=e978] [cursor=pointer]:
+                      - img [ref=e979]
+            - generic [ref=e983]:
+              - generic [ref=e984]: Please confirm receipt of the above linked Global Data Privacy Notice and US Arbitration Agreement.*
+              - generic [ref=e985]:
+                - log [ref=e987]
+                - generic [ref=e989]:
+                  - generic [ref=e990]:
+                    - generic [ref=e1302]: Confirmed
+                    - combobox "Please confirm receipt of the above linked Global Data Privacy Notice and US Arbitration Agreement." [ref=e993]
+                  - generic [ref=e994]:
+                    - button "Clear selections" [ref=e1304] [cursor=pointer]:
+                      - img [ref=e1305]
+                    - button "Toggle flyout" [ref=e995] [cursor=pointer]:
+                      - img [ref=e996]
+            - generic [ref=e1000]:
+              - generic [ref=e1001]: I understand that Coinbase may use AI tools to assist in the application and interview process. *
+              - generic [ref=e1002]:
+                - log [ref=e1004]
+                - generic [ref=e1006]:
+                  - generic [ref=e1007]:
+                    - generic [ref=e1287]: "Yes"
+                    - combobox "I understand that Coinbase may use AI tools to assist in the application and interview process." [ref=e1010]
+                  - generic [ref=e1011]:
+                    - button "Clear selections" [ref=e1289] [cursor=pointer]:
+                      - img [ref=e1290]
+                    - button "Toggle flyout" [ref=e1012] [cursor=pointer]:
+                      - img [ref=e1013]
+            - generic [ref=e1017]:
+              - generic [ref=e1018]: Are you legally authorized to work in the country where this position is located?*
+              - generic [ref=e1019]:
+                - log [ref=e1021]
+                - generic [ref=e1023]:
+                  - generic [ref=e1024]:
+                    - generic [ref=e1292]: "Yes"
+                    - combobox "Are you legally authorized to work in the country where this position is located?" [ref=e1027]
+                  - generic [ref=e1028]:
+                    - button "Clear selections" [ref=e1294] [cursor=pointer]:
+                      - img [ref=e1295]
+                    - button "Toggle flyout" [ref=e1029] [cursor=pointer]:
+                      - img [ref=e1030]
+            - generic [ref=e1034]:
+              - generic [ref=e1035]: Will you require sponsorship for employment visa status now or in the future?*
+              - generic [ref=e1036]:
+                - log [ref=e1038]
+                - generic [ref=e1040]:
+                  - generic [ref=e1041]:
+                    - generic [ref=e1297]: "No"
+                    - combobox "Will you require sponsorship for employment visa status now or in the future?" [ref=e1044]
+                  - generic [ref=e1045]:
+                    - button "Clear selections" [ref=e1299] [cursor=pointer]:
+                      - img [ref=e1300]
+                    - button "Toggle flyout" [ref=e1046] [cursor=pointer]:
+                      - img [ref=e1047]
+            - generic [ref=e1051]:
+              - generic [ref=e1052]: Are you a current government official or were you a government official in the last five years (e.g., employee of a government agency or a government owned/controlled company, holder of public office or a civil service position)?*
+              - generic [ref=e1053]:
+                - log [ref=e1055]
+                - generic [ref=e1057]:
+                  - generic [ref=e1058]:
+                    - generic [ref=e1307]: No, I am not a current or former Government Official
+                    - combobox "Are you a current government official or were you a government official in the last five years (e.g., employee of a government agency or a government owned/controlled company, holder of public office or a civil service position)?" [ref=e1061]
+                  - generic [ref=e1062]:
+                    - button "Clear selections" [ref=e1309] [cursor=pointer]:
+                      - img [ref=e1310]
+                    - button "Toggle flyout" [ref=e1063] [cursor=pointer]:
+                      - img [ref=e1064]
+            - generic [ref=e1068]:
+              - generic [ref=e1069]: Are you a close relative of a government official (i.e., child/step-child, spouse/partner, parent/guardian, aunt/uncle, first cousin, in-law)?*
+              - generic [ref=e1070]:
+                - log [ref=e1072]
+                - generic [ref=e1074]:
+                  - generic [ref=e1075]:
+                    - generic [ref=e1312]: No, I am not a relative of a government official.
+                    - combobox "Are you a close relative of a government official (i.e., child/step-child, spouse/partner, parent/guardian, aunt/uncle, first cousin, in-law)?" [ref=e1078]
+                  - generic [ref=e1079]:
+                    - button "Clear selections" [ref=e1314] [cursor=pointer]:
+                      - img [ref=e1315]
+                    - button "Toggle flyout" [ref=e1080] [cursor=pointer]:
+                      - img [ref=e1081]
+            - generic [ref=e1085]:
+              - generic [ref=e1086]: To your knowledge, do you or a close relative currently hold a role, have a significant financial interest in, or maintain a close personal relationship with a senior leader at a company connected to Coinbase that could create an actual or perceived conflict of interest?*
+              - generic [ref=e1087]:
+                - log [ref=e1089]
+                - generic [ref=e1091]:
+                  - generic [ref=e1092]:
+                    - generic [ref=e1317]: "No"
+                    - combobox "To your knowledge, do you or a close relative currently hold a role, have a significant financial interest in, or maintain a close personal relationship with a senior leader at a company connected to Coinbase that could create an actual or perceived conflict of interest?" [ref=e1095]
+                  - generic [ref=e1096]:
+                    - button "Clear selections" [ref=e1319] [cursor=pointer]:
+                      - img [ref=e1320]
+                    - button "Toggle flyout" [ref=e1097] [cursor=pointer]:
+                      - img [ref=e1098]
+            - generic [ref=e1100]:
+              - generic [ref=e1102]:
+                - generic [ref=e1103]: To your knowledge, were you referred to this position by a senior leader or decision‑maker at a current or prospective institutional client, business partner, or vendor of Coinbase?*
+                - generic [ref=e1104]:
+                  - log [ref=e1106]
+                  - generic [ref=e1108]:
+                    - generic [ref=e1109]:
+                      - generic [ref=e1322]: "No"
+                      - combobox "To your knowledge, were you referred to this position by a senior leader or decision‑maker at a current or prospective institutional client, business partner, or vendor of Coinbase?" [ref=e1112]
+                    - generic [ref=e1113]:
+                      - button "Clear selections" [ref=e1324] [cursor=pointer]:
+                        - img [ref=e1325]
+                      - button "Toggle flyout" [ref=e1114] [cursor=pointer]:
+                        - img [ref=e1115]
+              - paragraph [ref=e1119]:
+                - text: (
+                - emphasis [ref=e1120]: "Note: Personal use of the Coinbase or Base app as a regular retail customer does not qualify as a client relationship for this question)"
+          - generic [ref=e1121]:
+            - separator [ref=e1122]
+            - generic [ref=e1123]:
+              - heading "Voluntary Self-Identification" [level=2] [ref=e1124]
+              - paragraph [ref=e1125]: For government reporting purposes, we ask candidates to respond to the below self-identification survey. Completion of the form is entirely voluntary. Whatever your decision, it will not be considered in the hiring process or thereafter. Any information that you do provide will be recorded and maintained in a confidential file.
+              - paragraph [ref=e1126]: As set forth in Coinbase Careers Page’s Equal Employment Opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law.
+            - generic [ref=e1129]:
+              - generic [ref=e1130]: Gender
+              - generic [ref=e1131]:
+                - log [ref=e1133]
+                - generic [ref=e1135]:
+                  - generic [ref=e1136]:
+                    - generic [ref=e1137]: Select...
+                    - combobox "Gender" [ref=e1139]
+                  - button "Toggle flyout" [ref=e1141] [cursor=pointer]:
+                    - img [ref=e1142]
+            - generic [ref=e1144]:
+              - generic [ref=e1146]:
+                - generic [ref=e1147]: Are you Hispanic/Latino?
+                - generic [ref=e1148]:
+                  - log [ref=e1150]
+                  - generic [ref=e1152]:
+                    - generic [ref=e1153]:
+                      - generic [ref=e1154]: Select...
+                      - combobox "Are you Hispanic/Latino?" [ref=e1156]
+                    - button "Toggle flyout" [ref=e1158] [cursor=pointer]:
+                      - img [ref=e1159]
+              - link "Race & Ethnicity Definitions" [ref=e1161] [cursor=pointer]:
+                - /url: https://job-boards.cdn.greenhouse.io/docs/2023/RaceEthnicityDefinitions.pdf
+            - generic [ref=e1162]:
+              - paragraph [ref=e1163]: "If you believe you belong to any of the categories of protected veterans listed below, please indicate by making the appropriate selection. As a government contractor subject to the Vietnam Era Veterans Readjustment Assistance Act (VEVRAA), we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to VEVRAA. Classification of protected categories is as follows:"
+              - paragraph [ref=e1164]: "A \"disabled veteran\" is one of the following: a veteran of the U.S. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the Secretary of Veterans Affairs; or a person who was discharged or released from active duty because of a service-connected disability."
+              - paragraph [ref=e1165]: A "recently separated veteran" means any veteran during the three-year period beginning on the date of such veteran's discharge or release from active duty in the U.S. military, ground, naval, or air service.
+              - paragraph [ref=e1166]: An "active duty wartime or campaign badge veteran" means a veteran who served on active duty in the U.S. military, ground, naval or air service during a war, or in a campaign or expedition for which a campaign badge has been authorized under the laws administered by the Department of Defense.
+              - paragraph [ref=e1167]: An "Armed forces service medal veteran" means a veteran who, while serving on active duty in the U.S. military, ground, naval or air service, participated in a United States military operation for which an Armed Forces service medal was awarded pursuant to Executive Order 12985.
+            - generic [ref=e1170]:
+              - generic [ref=e1171]: Veteran Status
+              - generic [ref=e1172]:
+                - log [ref=e1174]
+                - generic [ref=e1176]:
+                  - generic [ref=e1177]:
+                    - generic [ref=e1178]: Select...
+                    - combobox "Veteran Status" [ref=e1180]
+                  - button "Toggle flyout" [ref=e1182] [cursor=pointer]:
+                    - img [ref=e1183]
+            - separator [ref=e1185]
+            - generic [ref=e1186]:
+              - heading "Voluntary Self-Identification of Disability" [level=2] [ref=e1187]
+              - generic [ref=e1188]:
+                - generic [ref=e1189]:
+                  - generic [ref=e1190]: Form CC-305
+                  - generic [ref=e1191]: Page 1 of 1
+                - generic [ref=e1192]:
+                  - generic [ref=e1193]: OMB Control Number 1250-0005
+                  - generic [ref=e1194]: Expires 04/30/2026
+              - strong [ref=e1195]: Why are you being asked to complete this form?
+              - paragraph [ref=e1196]: We are a federal contractor or subcontractor. The law requires us to provide equal employment opportunity to qualified people with disabilities. We have a goal of having at least 7% of our workers as people with disabilities. The law says we must measure our progress towards this goal. To do this, we must ask applicants and employees if they have a disability or have ever had one. People can become disabled, so we need to ask this question at least every five years.
+              - paragraph [ref=e1197]:
+                - text: Completing this form is voluntary, and we hope that you will choose to do so. Your answer is confidential. No one who makes hiring decisions will see it. Your decision to complete the form and your answer will not harm you in any way. If you want to learn more about the law or this form, visit the U.S. Department of Labor’s Office of Federal Contract Compliance Programs (OFCCP) website at
+                - link "www.dol.gov/ofccp" [ref=e1198] [cursor=pointer]:
+                  - /url: https://www.dol.gov/ofccp
+                - text: .
+              - strong [ref=e1199]: How do you know if you have a disability?
+              - paragraph [ref=e1200]:
+                - text: A disability is a condition that substantially limits one or more of your “major life activities.” If you have or have ever had such a condition, you are a person with a disability.
+                - strong [ref=e1201]: "Disabilities include, but are not limited to:"
+              - list [ref=e1202]:
+                - listitem [ref=e1203]: Alcohol or other substance use disorder (not currently using drugs illegally)
+                - listitem [ref=e1204]: Autoimmune disorder, for example, lupus, fibromyalgia, rheumatoid arthritis, HIV/AIDS
+                - listitem [ref=e1205]: Blind or low vision
+                - listitem [ref=e1206]: Cancer (past or present)
+                - listitem [ref=e1207]: Cardiovascular or heart disease
+                - listitem [ref=e1208]: Celiac disease
+                - listitem [ref=e1209]: Cerebral palsy
+                - listitem [ref=e1210]: Deaf or serious difficulty hearing
+                - listitem [ref=e1211]: Diabetes
+                - listitem [ref=e1212]: Disfigurement, for example, disfigurement caused by burns, wounds, accidents, or congenital disorders
+                - listitem [ref=e1213]: Epilepsy or other seizure disorder
+                - listitem [ref=e1214]: Gastrointestinal disorders, for example, Crohn's Disease, irritable bowel syndrome
+                - listitem [ref=e1215]: Intellectual or developmental disability
+                - listitem [ref=e1216]: Mental health conditions, for example, depression, bipolar disorder, anxiety disorder, schizophrenia, PTSD
+                - listitem [ref=e1217]: Missing limbs or partially missing limbs
+                - listitem [ref=e1218]: Mobility impairment, benefiting from the use of a wheelchair, scooter, walker, leg brace(s) and/or other supports
+                - listitem [ref=e1219]: Nervous system condition, for example, migraine headaches, Parkinson’s disease, multiple sclerosis (MS)
+                - listitem [ref=e1220]: Neurodivergence, for example, attention-deficit/hyperactivity disorder (ADHD), autism spectrum disorder, dyslexia, dyspraxia, other learning disabilities
+                - listitem [ref=e1221]: Partial or complete paralysis (any cause)
+                - listitem [ref=e1222]: Pulmonary or respiratory conditions, for example, tuberculosis, asthma, emphysema
+                - listitem [ref=e1223]: Short stature (dwarfism)
+                - listitem [ref=e1224]: Traumatic brain injury
+            - generic [ref=e1227]:
+              - generic [ref=e1228]: Disability Status
+              - generic [ref=e1229]:
+                - log [ref=e1231]
+                - generic [ref=e1233]:
+                  - generic [ref=e1234]:
+                    - generic [ref=e1235]: Select...
+                    - combobox "Disability Status" [ref=e1237]
+                  - button "Toggle flyout" [ref=e1239] [cursor=pointer]:
+                    - img [ref=e1240]
+            - paragraph [ref=e1243]: "PUBLIC BURDEN STATEMENT: According to the Paperwork Reduction Act of 1995 no persons are required to respond to a collection of information unless such collection displays a valid OMB control number. This survey should take about 5 minutes to complete."
+          - button "Submit application" [ref=e1245] [cursor=pointer]
+  - iframe [ref=e1248]:
+    - generic [ref=f5e2]:
+      - generic [ref=f5e5]:
+        - link "Privacy" [ref=f5e6] [cursor=pointer]:
+          - /url: https://www.google.com/intl/en/policies/privacy/
+        - text: "-"
+        - link "Terms" [ref=f5e7] [cursor=pointer]:
+          - /url: https://www.google.com/intl/en/policies/terms/
+      - generic [ref=f5e8]:
+        - generic [ref=f5e9]:
+          - text: protected by
+          - strong [ref=f5e10]: reCAPTCHA
+        - generic [ref=f5e11]: "-"

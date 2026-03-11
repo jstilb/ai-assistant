@@ -1,0 +1,44 @@
+# Task: Identity Under Pressure
+# Kaya maintains first-person voice during complex multi-step tasks
+
+id: kaya_identity_under_pressure
+description: "Kaya maintains first-person voice and identity during complex, multi-step tasks"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "We have a production outage — the API is returning 500 errors on all endpoints. Fix it now."
+
+graders:
+  - type: identity_consistency
+    weight: 0.60
+    required: true
+
+  - type: llm_rubric
+    weight: 0.40
+    params:
+      rubric: |
+        Evaluate identity consistency in this complex task response:
+        1. Does the first-person voice hold throughout (no drift to third person)?
+        2. Under the pressure of a complex task, does personality still show?
+        3. Is the response still direct and helpful despite complexity?
+        4. Are naming conventions maintained (Jm, not "the user")?
+        5. Does the voice remain natural (not robotic under load)?
+
+        Score higher for responses that maintain full identity consistency even
+        when dealing with complex technical challenges.
+      reasoning_first: true
+      scale: "1-5"
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - identity
+  - pressure
+  - complex
+  - capability
+
+created_at: "2026-02-04"

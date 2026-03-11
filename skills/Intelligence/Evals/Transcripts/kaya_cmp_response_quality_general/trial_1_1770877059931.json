@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:17:02.195Z",
+  "completed_at": "2026-02-12T06:17:39.931Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:17:02.195Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Planning Jm's week around 3 key commitments.\n\nHere's a structured weekly plan:\n\n---\n\n**Tuesday**\n- Dentist appointment (block travel + recovery time)\n- Light work day — use remaining time for API redesign research or smaller tasks\n\n**Wednesday**\n- Deep focus day on API redesign — this is your heaviest work day\n- Aim for completion or near-completion so Thursday is for polish/review\n\n**Thursday**\n- Finish and ship API redesign\n- Start gathering retro notes — jot down what went well, what didn't, action items from the sprint\n\n**Friday**\n- Team retrospective\n- Morning: finalize retro prep (talking points, data, specific examples)\n- Afternoon: wrap-up and planning for next week\n\n**Monday (today)**\n- Kick off API redesign work — define scope, break into subtasks\n- Set up any blockers or dependencies so mid-week is uninterrupted\n\n---\n\nA few questions that would help me refine this:\n\n- What time is the dentist appointment Tuesday? I can structure around it.\n- Is the API redesign solo work or does it need reviews/approvals before Thursday?\n- Do you want me to add any of your Q1 lead measures into the week (community events, alignment hour, stretching)?\n\n🗣️ Kaya: Three commitments mapped across five days with Wednesday as deep focus day.",
+      "timestamp": "2026-02-12T06:17:39.931Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 37736,
+    "time_to_first_token_ms": 37736,
+    "time_to_last_token_ms": 37736,
+    "tokens_per_second": 0
+  }
+}

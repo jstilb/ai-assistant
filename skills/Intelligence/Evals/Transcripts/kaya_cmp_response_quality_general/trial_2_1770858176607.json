@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T01:02:24.488Z",
+  "completed_at": "2026-02-12T01:02:56.607Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T01:02:24.488Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Planning Jm's week with three key priorities.\n\n**Week of Feb 11-15, 2026**\n\n| Day | Focus | Details |\n|-----|-------|---------|\n| **Wed Feb 11** (Today) | API Redesign | Start/continue API redesign work — 2 full days before Thursday deadline |\n| **Tue Feb 12** | Dentist + API | Dentist appointment; work API redesign around it |\n| **Wed Feb 13** | API Redesign | Final push — aim to complete and get review by EOD |\n| **Thu Feb 14** | API Deadline | API redesign due — buffer for fixes/feedback |\n| **Fri Feb 15** | Retro Prep + Retro | Morning: prep talking points, gather metrics/notes; Afternoon: team retrospective |\n\n**Retro prep checklist:**\n1. Review what shipped since last retro\n2. Note blockers/friction points\n3. Gather any metrics or data to share\n4. Draft 1-2 improvement proposals\n\n**Suggestions:**\n- Block deep work time Wed-Thu for the API redesign (minimize meetings)\n- Prep retro notes Thu evening so Friday morning is just a quick review\n- What time is the dentist Tuesday? That'll help slot in work blocks around it\n\n🗣️ Kaya: Three priorities mapped across the week. Dentist Tuesday, API by Thursday, retro Friday.",
+      "timestamp": "2026-02-12T01:02:56.607Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32119,
+    "time_to_first_token_ms": 32119,
+    "time_to_last_token_ms": 32119,
+    "tokens_per_second": 0
+  }
+}

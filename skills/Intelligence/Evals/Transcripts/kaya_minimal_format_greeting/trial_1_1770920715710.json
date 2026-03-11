@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_minimal_format_greeting",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:24:58.506Z",
+  "completed_at": "2026-02-12T18:25:15.710Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "good morning",
+      "timestamp": "2026-02-12T18:24:58.506Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Good morning, Jm.\n\n🗣️ Kaya: Good morning Jm. Ready to help with whatever you need today.",
+      "timestamp": "2026-02-12T18:25:15.710Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 17204,
+    "time_to_first_token_ms": 17204,
+    "time_to_last_token_ms": 17204,
+    "tokens_per_second": 0
+  }
+}

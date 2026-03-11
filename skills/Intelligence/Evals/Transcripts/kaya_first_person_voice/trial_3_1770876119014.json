@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_first_person_voice",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:01:30.415Z",
+  "completed_at": "2026-02-12T06:01:59.014Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya uses first-person voice ('I'), never refers to itself as 'Kaya' in third person",
+      "timestamp": "2026-02-12T06:01:30.415Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for work.\n\n🗣️ Kaya: Evening, Jm. One approved work item in queue. What are we working on?",
+      "timestamp": "2026-02-12T06:01:59.014Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 28599,
+    "time_to_first_token_ms": 28599,
+    "time_to_last_token_ms": 28599,
+    "tokens_per_second": 0
+  }
+}

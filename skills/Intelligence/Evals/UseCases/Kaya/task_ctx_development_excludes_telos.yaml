@@ -1,0 +1,34 @@
+# Task: Development Excludes Non-Dev Files
+# Development profile excludes TELOS, Calendar, and Obsidian context files
+
+id: kaya_ctx_development_excludes_telos
+description: "Development profile excludes TELOS, CalendarContext, and ObsidianContext files"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Refactor the API middleware to handle CORS properly"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profile: development
+      excluded_files:
+        - TELOS
+        - CalendarContext
+        - ObsidianContext
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - file_exclusion
+  - development
+  - regression
+
+created_at: "2026-02-11"

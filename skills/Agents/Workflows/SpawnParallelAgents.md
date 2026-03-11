@@ -120,7 +120,7 @@ When Teams mode is active, the orchestrator converts your `AgentSpec[]` into `Te
 
 ```typescript
 // Internal: AgentOrchestrator.spawnAsTeam() handles this automatically
-import { orchestrator } from '~/.claude/skills/CORE/Tools/AgentOrchestrator.ts';
+import { orchestrator } from '~/.claude/lib/core/AgentOrchestrator.ts';
 
 const results = await orchestrator.spawnAsTeam(
   [
@@ -401,4 +401,4 @@ Use **SpawnParallelAgents workflow** when:
 
 - Agent personalities: `~/.claude/skills/Agents/AgentPersonalities.md`
 - Intern agent definition: Line 277-287 in AgentPersonalities.md
-- Delegation patterns: `~/.claude/skills/CORE/Workflows/Delegation.md`
+- Delegation patterns: `~/.claude/docs/workflows/Delegation.md`

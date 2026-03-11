@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_telos_routes_telos",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:50:14.458Z",
+  "completed_at": "2026-02-12T18:50:28.246Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Show me my life goals and project progress",
+      "timestamp": "2026-02-12T18:50:14.458Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:50:28.246Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 13788,
+    "time_to_first_token_ms": 13788,
+    "time_to_last_token_ms": 13788,
+    "tokens_per_second": 0
+  }
+}

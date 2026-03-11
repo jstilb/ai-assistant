@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_output_quality",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:14:00.802Z",
+  "completed_at": "2026-02-12T19:15:33.299Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Give me my morning briefing",
+      "timestamp": "2026-02-12T19:14:00.802Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Morning briefing generated and delivered via Telegram and written log.\n\n🔍 ANALYSIS:\n- **Weather:** 61°F partly cloudy in San Diego, high 67°F — perfect light-layers day\n- **Calendar:** Packed day — 16 events including R&I sync (9am), Meeting with Sarah (2pm), Book Club (4pm), CSDC General Meeting (6pm), V-Day with Julie (10am), DnD (5pm)\n- **Goals:** G0 (Low-Value Media) at 5.0/3hrs, G2 (Alignment Score) at 2.0/3.0 — both in progress\n- **Critical Strategies:** S4 (Social Invitations -91%), S6 (Morning Stretch -80%), S8 (Sleep Hygiene -80%)\n- **Habits:** All 🔴 except floss and read at 40% 🟡 — rough week so far\n- **Tasks:** 7 priority candidates, all goal-aligned, 30-60 min each\n- **Stale Items:** 62 items need attention (mostly tasks without deadlines)\n\n📊 STATUS: Briefing delivered to Telegram + written to MEMORY/BRIEFINGS + uploaded to Drive\n\n📖 STORY EXPLANATION:\n1. Today is a busy Wednesday with 16 calendar events spanning work, community, creative, and personal\n2. Valentine's Day prep is on deck — V-Day with Julie at 10am, V-Day Letter and Cooking in tasks\n3. Habits are almost entirely red this week — a reset opportunity today\n4. Strategy gaps are steep, especially Social Invitations at only 8.6% of target\n5. Priority candidates focus on Creative (M2) and Community (M1) missions — writing events, piano, community research\n6. Weather is classic San Diego — light layers in the morning, comfortable by afternoon\n7. Friday forecast shows overcast with a dip to 60°F, Saturday partly cloudy\n8. 62 stale items flagged, mostly tasks missing deadlines that need triaging\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Busy day ahead Jm. Sixteen events, habits need a reset, and V-Day prep is on deck.",
+      "timestamp": "2026-02-12T19:15:33.299Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 92497,
+    "time_to_first_token_ms": 92497,
+    "time_to_last_token_ms": 92497,
+    "tokens_per_second": 0
+  }
+}

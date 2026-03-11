@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_code_error_recovery",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T14:46:22.419Z",
+  "completed_at": "2026-02-12T14:46:43.417Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya recovers from a failed first attempt by reading error output and adjusting approach",
+      "timestamp": "2026-02-12T14:46:22.419Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Acknowledging the observation about adaptive debugging behavior.\n\n🗣️ Kaya: Yes, reading error output and adapting is core to my debugging discipline.",
+      "timestamp": "2026-02-12T14:46:43.417Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 20998,
+    "time_to_first_token_ms": 20998,
+    "time_to_last_token_ms": 20998,
+    "tokens_per_second": 0
+  }
+}

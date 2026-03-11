@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_routes_daily_briefing",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:10:19.701Z",
+  "completed_at": "2026-02-12T19:12:12.351Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Morning briefing please",
+      "timestamp": "2026-02-12T19:10:19.701Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 **SUMMARY:** Morning briefing generated and delivered to Telegram and Drive.\n\n🔍 **ANALYSIS:**\n1. **Goals:** G0 (Low-Value Media) at 5.0/3hrs, G2 (Alignment) at 2.0→3.0 — both in progress\n2. **Critical strategies:** S4 Social Invitations (-91.4%), S6 Morning Stretch (-80%), S8 Sleep Hygiene (-80%)\n3. **Habits:** Most at 0% for the 7-day window — floss and read leading at 40%\n4. **Calendar:** Busy day — 16 events including R&I sync (9am), Meeting with Sarah (2pm), CSDC General Meeting (6pm), vday with Julie (10am), Book Club (4pm), DnD (5pm)\n5. **Weather:** San Diego 61°F, partly cloudy, high 67°F — light layers recommended\n\n⚡ **ACTIONS:**\n1. Generated full briefing with all blocks\n2. Delivered to Telegram\n3. Written to `MEMORY/BRIEFINGS/2026-02-12.md`\n4. Uploaded to Google Drive\n\n📊 **STATUS:** All delivery channels successful (Telegram, written log, Drive)\n\n📁 **CAPTURE:** Stale items flagged — 61 tasks missing deadlines, 1 memory file 34+ days old\n\n➡️ **NEXT:**\n1. Valentine's Day prep — vday with Julie at 10am, Vday Letter task pending\n2. Consider tackling S4 (Social Invitations) — send at least one invite today\n3. Morning stretch before the day gets going (S6 at 0%)\n4. 7 priority candidates available if you have open slots\n\n📖 **STORY EXPLANATION:**\n1. Three WIGs tracked — G0 media consumption, G1 friendships, G2 alignment score\n2. Strategy gaps are steep — social invitations at 91% below target, morning stretch and sleep hygiene at 80% below\n3. Habit tracking reset — most habits showing 0% for the rolling 7-day window\n4. Calendar is packed with 16 events spanning work syncs, community, creative, and personal\n5. Weather is classic San Diego — mild 61-67°F, light layers, good for outdoor activities\n6. 62 stale items flagged, mostly tasks without deadlines that need triaging\n7. Priority candidates focus on Creative (M2) and Community (M1) missions\n8. Valentine's Day items (letter, cooking, vday with Julie) are time-sensitive for today\n\n⭐ **RATE (1-10):**\n\n🗣️ Kaya: Briefing delivered. Packed day with 16 events, habits need reset, Valentine's Day prep is priority.",
+      "timestamp": "2026-02-12T19:12:12.351Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 112650,
+    "time_to_first_token_ms": 112650,
+    "time_to_last_token_ms": 112650,
+    "tokens_per_second": 0
+  }
+}

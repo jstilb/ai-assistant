@@ -6,8 +6,8 @@
  */
 
 import { isValidVoiceCompletion, getTabFallback } from '../lib/response-format';
-import { inference } from '../../skills/CORE/Tools/Inference';
-import type { ParsedTranscript, ResponseState } from '../../skills/CORE/Tools/TranscriptParser';
+import { inference } from '../../lib/core/Inference';
+import type { ParsedTranscript, ResponseState } from '../../lib/core/TranscriptParser';
 
 // Tab color states for visual feedback (inactive tab only - active tab stays dark blue)
 const TAB_COLORS = {

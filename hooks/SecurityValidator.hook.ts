@@ -60,8 +60,8 @@
  * - All decisions logged for audit trail
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, rmSync } from 'fs';
+import { join, basename } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { kayaPath } from './lib/paths';
@@ -135,6 +135,115 @@ function logSecurityEvent(event: SecurityEvent): void {
 }
 
 // ========================================
+// Chrome Profile Backup & Restore
+// ========================================
+
+const CHROME_PROFILE_DIR = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Default');
+const CHROME_BACKUP_DIR = kayaPath('backups', 'chrome');
+const CHROME_KILL_PATTERN = /pkill.*Chrome|kill.*Chrome|killall.*Chrome/i;
+const MAX_CHROME_BACKUPS = 3;
+
+function backupChromeState(): { success: boolean; path?: string; error?: string } {
+  try {
+    const prefsPath = join(CHROME_PROFILE_DIR, 'Preferences');
+    const securePrefsPath = join(CHROME_PROFILE_DIR, 'Secure Preferences');
+
+    if (!existsSync(prefsPath) || !existsSync(securePrefsPath)) {
+      return { success: false, error: 'Chrome profile files not found' };
+    }
+
+    // Create timestamped backup directory
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = join(CHROME_BACKUP_DIR, timestamp);
+    mkdirSync(backupDir, { recursive: true });
+
+    // Copy both critical files
+    copyFileSync(prefsPath, join(backupDir, 'Preferences'));
+    copyFileSync(securePrefsPath, join(backupDir, 'Secure Preferences'));
+
+    // Rotate: keep only last MAX_CHROME_BACKUPS
+    if (existsSync(CHROME_BACKUP_DIR)) {
+      const backups = readdirSync(CHROME_BACKUP_DIR)
+        .filter(d => d !== '.DS_Store')
+        .sort();
+      while (backups.length > MAX_CHROME_BACKUPS) {
+        const oldest = backups.shift()!;
+        rmSync(join(CHROME_BACKUP_DIR, oldest), { recursive: true, force: true });
+      }
+    }
+
+    console.error(`[Kaya] Chrome state backed up to ${backupDir}`);
+    return { success: true, path: backupDir };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Kaya] Chrome backup failed: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+function restoreChromeState(): void {
+  if (!existsSync(CHROME_BACKUP_DIR)) {
+    console.log('No Chrome backups found.');
+    return;
+  }
+
+  const backups = readdirSync(CHROME_BACKUP_DIR)
+    .filter(d => d !== '.DS_Store')
+    .sort();
+
+  if (backups.length === 0) {
+    console.log('No Chrome backups found.');
+    return;
+  }
+
+  const latest = backups[backups.length - 1];
+  const backupDir = join(CHROME_BACKUP_DIR, latest);
+  const backupPrefsPath = join(backupDir, 'Preferences');
+  const backupSecurePrefsPath = join(backupDir, 'Secure Preferences');
+  const currentPrefsPath = join(CHROME_PROFILE_DIR, 'Preferences');
+
+  if (!existsSync(backupSecurePrefsPath) || !existsSync(currentPrefsPath)) {
+    console.log('Backup or current Preferences file missing.');
+    return;
+  }
+
+  try {
+    // Read backed-up Secure Preferences to extract extensions.settings
+    const backupSecure = JSON.parse(readFileSync(backupSecurePrefsPath, 'utf-8'));
+    const extensionsSettings = backupSecure?.extensions?.settings;
+
+    if (!extensionsSettings || Object.keys(extensionsSettings).length === 0) {
+      console.log('No extensions.settings found in backup Secure Preferences.');
+      return;
+    }
+
+    // Read current Preferences and merge extensions.settings back in
+    const currentPrefs = JSON.parse(readFileSync(currentPrefsPath, 'utf-8'));
+
+    if (!currentPrefs.extensions) {
+      currentPrefs.extensions = {};
+    }
+    currentPrefs.extensions.settings = extensionsSettings;
+
+    // Fix exit flags to prevent Chrome integrity check from wiping again
+    if (currentPrefs.profile) {
+      currentPrefs.profile.exit_type = 'Normal';
+      currentPrefs.profile.exited_cleanly = true;
+    }
+
+    writeFileSync(currentPrefsPath, JSON.stringify(currentPrefs, null, 3));
+
+    const extCount = Object.keys(extensionsSettings).length;
+    console.log(`Restored ${extCount} extensions from backup ${latest}`);
+    console.log(`Set exit_type: Normal, exited_cleanly: true`);
+    console.log(`Backup source: ${backupDir}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Restore failed: ${msg}`);
+  }
+}
+
+// ========================================
 // Types
 // ========================================
 
@@ -178,9 +287,9 @@ interface PatternsConfig {
 
 // Pattern paths in priority order:
 // 1. USER/KAYASECURITYSYSTEM/patterns.yaml (user's custom rules)
-// 2. skills/CORE/SYSTEM/KAYASECURITYSYSTEM/patterns.example.yaml (default template)
-const USER_PATTERNS_PATH = kayaPath('USER', 'KAYASECURITYSYSTEM', 'patterns.yaml');
-const SYSTEM_PATTERNS_PATH = kayaPath('skills', 'CORE', 'SYSTEM', 'KAYASECURITYSYSTEM', 'patterns.example.yaml');
+// 2. docs/system/KAYASECURITYSYSTEM/patterns.example.yaml (default template)
+const USER_PATTERNS_PATH = kayaPath('skills', 'CORE', 'USER', 'KAYASECURITYSYSTEM', 'patterns.yaml');
+const SYSTEM_PATTERNS_PATH = kayaPath('skills', 'CORE', 'SYSTEM', 'PAISECURITYSYSTEM', 'patterns.example.yaml');
 
 let patternsCache: PatternsConfig | null = null;
 let patternsSource: 'user' | 'system' | 'none' = 'none';
@@ -376,6 +485,11 @@ function handleBash(input: HookInput): void {
   if (!command) {
     console.log(JSON.stringify({ continue: true }));
     return;
+  }
+
+  // Chrome kill detection: backup state silently before allowing
+  if (CHROME_KILL_PATTERN.test(command)) {
+    backupChromeState();
   }
 
   const result = validateBashCommand(command);
@@ -576,6 +690,12 @@ function handleRead(input: HookInput): void {
 // ========================================
 
 async function main(): Promise<void> {
+  // CLI mode: --restore-chrome
+  if (process.argv.includes('--restore-chrome')) {
+    restoreChromeState();
+    return;
+  }
+
   let input: HookInput;
 
   try {

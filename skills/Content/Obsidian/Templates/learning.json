@@ -1,0 +1,18 @@
+{
+  "type": "learning",
+  "label": "Learning Note",
+  "description": "Concepts, explanations, examples, and exercises for knowledge acquisition",
+  "requiredSections": ["Overview", "Key Concepts", "Examples"],
+  "optionalSections": ["Prerequisites", "Detailed Explanation", "Code Examples", "Exercises", "Common Mistakes", "Related Topics", "References", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["status", "source", "difficulty", "topic", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["concept", "definition", "example", "exercise", "explain", "understand", "learn", "fundamentals", "theory", "principle", "algorithm", "technique", "method"],
+    "contentPatterns": ["```", "## Example", "## Key Concept", "## Definition"],
+    "folderBias": ["Applied Machine Learning", "Programming", "Python", "Statistics", "Linear Algebra", "Calculus", "Data Science", "NLP with Deep Learning", "ML at Scale", "ML Systems Engineering", "Data Structures & Algorithms", "Trig Fundamentals", "Statistical Rethinking"]
+  },
+  "stubThreshold": 50,
+  "version": 1
+}

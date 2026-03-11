@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_personality_witty",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:32:25.955Z",
+  "completed_at": "2026-02-12T18:32:59.333Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Why does my code keep breaking on Fridays?",
+      "timestamp": "2026-02-12T18:32:25.955Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Responding to a humorous/ambiguous programming question.\n\n🗣️ Kaya: Need more context — which codebase, what errors, and what changes happen on Fridays?\n\nJm, I'd need a bit more to go on to give you a real answer. A few common culprits for \"Friday breakage\" patterns:\n\n1. **Scheduled jobs** — Cron/launchd tasks that only run on certain days (weekly cache clears, DB maintenance, log rotation)\n2. **Date/time logic bugs** — Off-by-one errors in day-of-week calculations (`0` vs `1` for Sunday/Monday), end-of-week boundary handling\n3. **Deploy cadence** — If your team deploys on Fridays, the breakage correlates with new code, not the day itself\n4. **Rate limits resetting** — Weekly API quotas rolling over\n5. **Data volume patterns** — End-of-week batch processing or reporting jobs hitting resource limits\n\nIf you're dealing with an actual recurring issue in one of your projects, point me at the codebase and the error and I'll dig in.",
+      "timestamp": "2026-02-12T18:32:59.333Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 33378,
+    "time_to_first_token_ms": 33378,
+    "time_to_last_token_ms": 33378,
+    "tokens_per_second": 0
+  }
+}

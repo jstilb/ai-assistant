@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_voice_line_factual",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:09:56.591Z",
+  "completed_at": "2026-02-12T06:10:24.951Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya voice line is a factual summary of work done, not conversational filler",
+      "timestamp": "2026-02-12T06:09:56.591Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n🗣️ Kaya: Session active with 1 approved work item in queue. Awaiting instructions.",
+      "timestamp": "2026-02-12T06:10:24.951Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 28360,
+    "time_to_first_token_ms": 28360,
+    "time_to_last_token_ms": 28360,
+    "tokens_per_second": 0
+  }
+}

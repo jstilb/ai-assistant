@@ -1,0 +1,12 @@
+{
+  "source": "obsidian",
+  "title": "Obsidian Vault Context",
+  "output": "context/ObsidianContext.md",
+  "vaultPath": "/Users/[user]/Desktop/obsidian",
+  "excludeFolders": [".", "_"],
+  "metricLabel": "notes",
+  "priority": "Important",
+  "loadWhen": ["notes", "knowledge lookup", "my notes on", "research"],
+  "skipWhen": ["task execution", "scheduling", "system work"],
+  "freshnessRule": "Update weekly; tolerant of staleness"
+}

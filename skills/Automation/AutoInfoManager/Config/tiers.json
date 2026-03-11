@@ -1,0 +1,241 @@
+{
+  "_NOTE": "Authoritative tier configuration. Parsed by AutoInfoRunner with config-driven timeout values.",
+  "version": 1,
+  "description": "AutoInfoManager tier configuration",
+
+  "daily": {
+    "schedule": "7am",
+    "timeout": 300000,
+    "maxParallel": 2,
+    "steps": [
+      {
+        "name": "NotifyStart",
+        "type": "notification",
+        "message": "Starting daily autoinfo workflow"
+      },
+      {
+        "name": "ProcessScratchPad",
+        "type": "internal",
+        "timeout": 120000
+      },
+      {
+        "name": "RefreshContext",
+        "type": "skill",
+        "skill": "InformationManager",
+        "workflow": "RefreshAll",
+        "timeout": 180000,
+        "continueOnError": true,
+        "description": "Refresh stale context files from all sources"
+      },
+      {
+        "name": "LightDriftCheck",
+        "type": "internal",
+        "description": "Check for stale context files (>24h)"
+      },
+      {
+        "name": "DailySynthesize",
+        "type": "internal",
+        "description": "Generate daily summary"
+      },
+      {
+        "name": "LearnerCacheRecompute",
+        "type": "command",
+        "command": "bun ~/.claude/skills/ContextManager/Tools/ContextLearner.ts --analyze --write-cache",
+        "timeout": 120000,
+        "continueOnError": true,
+        "description": "Recompute pre-computed learner cache (learning-cache.json) — ISC 4506"
+      },
+      {
+        "name": "DailyBriefing",
+        "type": "skill",
+        "skill": "DailyBriefing",
+        "workflow": "Generate",
+        "timeout": 600000,
+        "retry": 0,
+        "continueOnError": true,
+        "description": "Generate and deliver morning briefing"
+      }
+    ],
+    "output": {
+      "path": "MEMORY/AUTOINFO/daily/{YYYY-MM-DD}.md",
+      "format": "markdown"
+    }
+  },
+
+  "weekly": {
+    "schedule": "Sunday 6am",
+    "timeout": 1200000,
+    "inherits": "daily",
+    "maxParallel": 5,
+    "steps": [
+      {
+        "name": "NotifyWeeklyStart",
+        "type": "notification",
+        "message": "Starting weekly autoinfo workflow"
+      },
+      {
+        "name": "RefreshContext",
+        "type": "parallel",
+        "agents": [
+          {
+            "type": "Intern",
+            "skill": "InformationManager",
+            "workflow": "RefreshAll"
+          },
+          {
+            "type": "Intern",
+            "skill": "InformationManager",
+            "workflow": "GatherGoogleDrive"
+          }
+        ]
+      },
+      {
+        "name": "SynthesizeAndDocument",
+        "type": "parallel",
+        "agents": [
+          {
+            "type": "Intern",
+            "skill": "ContinualLearning",
+            "workflow": "SynthesizePatterns"
+          },
+          {
+            "type": "Intern",
+            "skill": "System",
+            "workflow": "DocumentRecent"
+          },
+          {
+            "type": "Intern",
+            "skill": "ContinualLearning",
+            "workflow": "SynthesizeWisdom",
+            "description": "Weekly Wisdom Frame synthesis from feedback corpus — ISC 8423"
+          }
+        ]
+      },
+      {
+        "name": "RefreshLearningContext",
+        "type": "internal",
+        "description": "Refresh context files with latest synthesis and graph data",
+        "timeout": 30000,
+        "continueOnError": true
+      },
+      {
+        "name": "ApplyContextLearnings",
+        "type": "internal",
+        "description": "Apply ContextLearner recommendations to profiles.json",
+        "timeout": 30000,
+        "continueOnError": true
+      },
+      {
+        "name": "CheckKayaUpgrade",
+        "type": "internal",
+        "description": "Check for Kaya updates"
+      },
+      {
+        "name": "FullDriftCheck",
+        "type": "internal",
+        "description": "Hash-based drift detection"
+      },
+      {
+        "name": "TriageLucidTasks",
+        "type": "internal",
+        "description": "Scan LucidTasks for @kaya-tagged tasks and add to spec-pipeline queue",
+        "timeout": 120000,
+        "retry": 1
+      },
+      {
+        "name": "WeeklySynthesize",
+        "type": "orchestrator",
+        "strategy": "synthesis",
+        "description": "Generate weekly synthesis"
+      }
+    ],
+    "output": {
+      "path": "MEMORY/AUTOINFO/weekly/{YYYY-WW}.md",
+      "format": "markdown"
+    }
+  },
+
+  "monthly": {
+    "schedule": "1st 5am",
+    "timeout": 900000,
+    "inherits": "weekly",
+    "maxParallel": 5,
+    "steps": [
+      {
+        "name": "NotifyMonthlyStart",
+        "type": "notification",
+        "message": "Starting monthly autoinfo workflow"
+      },
+      {
+        "name": "DeepSynthesis",
+        "type": "skill",
+        "skill": "ContinualLearning",
+        "workflow": "GenerateIntelligence",
+        "timeout": 180000
+      },
+      {
+        "name": "OrphanRecovery",
+        "type": "internal",
+        "description": "Graph-based orphan note detection and recovery"
+      },
+      {
+        "name": "VaultRefresh",
+        "type": "skill",
+        "skill": "InformationManager",
+        "workflow": "SummarizeVault",
+        "timeout": 120000
+      },
+      {
+        "name": "TelosSync",
+        "type": "skill",
+        "skill": "InformationManager",
+        "workflow": "UpdateTelos",
+        "timeout": 60000
+      },
+      {
+        "name": "RegenerateUserContext",
+        "type": "skill",
+        "skill": "InformationManager",
+        "workflow": "RegenerateUserContext",
+        "timeout": 180000
+      },
+      {
+        "name": "ArchitectureUpdate",
+        "type": "conditional",
+        "condition": "architectureChanged",
+        "skill": "SystemFlowchart",
+        "workflow": "Generate"
+      },
+      {
+        "name": "DeepDriftCheck",
+        "type": "internal",
+        "description": "Comprehensive drift check including DTR"
+      },
+      {
+        "name": "MonthlySynthesize",
+        "type": "orchestrator",
+        "strategy": "synthesis",
+        "description": "Generate comprehensive monthly summary"
+      }
+    ],
+    "output": {
+      "path": "MEMORY/AUTOINFO/monthly/{YYYY-MM}.md",
+      "format": "markdown"
+    }
+  },
+
+  "errorHandling": {
+    "retryAttempts": 2,
+    "retryDelayMs": 2000,
+    "logPath": "MEMORY/AUTOINFO/errors/{YYYY-MM-DD}.jsonl",
+    "notifyOnCritical": true,
+    "gracefulDegradation": true
+  },
+
+  "notifications": {
+    "onStart": true,
+    "onComplete": true,
+    "onError": true,
+    "channel": "voice"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_shopping_research_quality",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:54:55.559Z",
+  "completed_at": "2026-02-12T06:55:24.889Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Shopping research output includes product comparisons, price information, and source references",
+      "timestamp": "2026-02-12T06:54:55.559Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, reviewing system state.\n\nGood evening, Jm. System is loaded and ready — 63 skills active. I see 1 item in the approvals queue and 1 in approved-work.\n\nWhat can I help with tonight?\n\n🗣️ Kaya: Evening session started. One approval and one work item queued. Ready for instructions.",
+      "timestamp": "2026-02-12T06:55:24.889Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 29330,
+    "time_to_first_token_ms": 29330,
+    "time_to_last_token_ms": 29330,
+    "tokens_per_second": 0
+  }
+}

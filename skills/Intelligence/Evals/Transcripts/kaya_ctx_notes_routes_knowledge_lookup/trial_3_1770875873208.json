@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_notes_routes_knowledge_lookup",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T05:57:24.136Z",
+  "completed_at": "2026-02-12T05:57:53.207Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Notes query like 'find my notes' routes to knowledge-lookup profile with ObsidianContext loaded",
+      "timestamp": "2026-02-12T05:57:24.136Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Notes query received, routing to knowledge lookup.\n\nLet me help you find your notes. What specifically are you looking for? I can search your Obsidian vault by:\n\n- **Topic** — e.g., \"notes about machine learning\"\n- **Tag** — e.g., \"notes tagged #project\"\n- **Keyword** — e.g., \"anything mentioning deployment\"\n- **Recent** — e.g., \"notes from this week\"\n\n🗣️ Kaya: Ready to search your notes. What topic or keyword should I look for?",
+      "timestamp": "2026-02-12T05:57:53.207Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 29071,
+    "time_to_first_token_ms": 29071,
+    "time_to_last_token_ms": 29071,
+    "tokens_per_second": 0
+  }
+}

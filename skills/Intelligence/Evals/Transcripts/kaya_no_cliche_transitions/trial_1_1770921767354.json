@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_no_cliche_transitions",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:39:53.026Z",
+  "completed_at": "2026-02-12T18:42:47.354Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Explain how the context management system works",
+      "timestamp": "2026-02-12T18:39:53.026Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Here's how it works:\n\n## The Problem It Solves\n\nPreviously, every session loaded ~2,000 lines of static context regardless of what you asked. Ask \"good morning\" — get the full firehose. Ask about code — same firehose. The ContextManager replaced this with **dynamic, intent-aware loading** that respects token budgets.\n\n## Three-Tier Architecture\n\n### Tier 1 — Boot Context (~200 tokens, SessionStart)\n- Fires before any user message via `LoadContext.hook.ts`\n- Injects only date/time + queue summary\n- Minimal footprint — just enough to be functional\n\n### Tier 2 — Profile Context (~800-3200 tokens, UserPromptSubmit)\n- Triggered by your **first message** via `ContextRouter.hook.ts`\n- Classifies your intent → selects a profile → loads relevant files within a token budget\n- This is why you see the `Dynamic Context (Profile: development, 1126/1200 tokens)` banner\n\n### Tier 3 — On-Demand (mid-session)\n- Detects topic changes on subsequent messages\n- Delta-loads only new files not already in context\n- I can also manually load additional context via `ContextLoadTool.ts`\n\n## Intent Classification (Two-Stage)\n\n1. **Stage A — Keyword matching** (<1ms, handles ~80% of prompts): Scores your message against weighted keyword rules in `routing.json`. If the top profile scores 2x the runner-up, it wins immediately.\n\n2. **Stage B — Haiku inference** (~2-5s fallback): For ambiguous prompts, uses the fast inference tool to classify intent. Returns profile + confidence + reasoning.\n\n## Profiles\n\n| Profile | Budget | What Loads |\n|---------|--------|------------|\n| `conversational` | 200 | Nothing extra |\n| `development` | 1200 | CLI-INDEX, Projects, Learnings |\n| `life-coaching` | 2200 | All TELOS files |\n| `scheduling` | 800 | Calendar, Asana |\n| `task-management` | 1000 | Asana, Calendar, Projects |\n| `planning` | 2500 | TELOS Goals/Strategies, Calendar, Asana |\n| `knowledge-lookup` | 1000 | Obsidian, Learnings |\n\n## Budget-Aware File Selection\n\n`ContextSelector.ts` loads files in priority order: **required > recommended > optional**. If a file exceeds remaining budget, it tries a pre-compressed `.compressed.md` version. If that still doesn't fit, it skips with a note (you can see this: `_Skipped: context/LearningsContext.md (exceeds budget)_`).\n\n## Key Design Decisions\n\n- **Fail-open**: Errors never block your prompt — context just won't load\n- **Feature flag**: `settings.json → contextManager.enabled` supports `true`, `false`, or `\"shadow\"` (logs what would load without actually loading)\n- **Subagent isolation**: Hooks skip for spawned agents to avoid double-loading\n- **Hook ordering**: ContextRouter runs FIRST in the UserPromptSubmit chain, before FormatEnforcer and AutoWorkCreation\n\nYour message today was classified as `development` profile, which is why you got CLI-INDEX and ProjectsContext but not TELOS or Calendar context.\n\n📖 STORY EXPLANATION:\n1. The old system dumped ~2,000 lines of static context into every session regardless of intent\n2. ContextManager replaces this with three tiers: boot (minimal), profile (intent-based), and on-demand (mid-session)\n3. When you send your first message, a hook classifies your intent using fast keyword matching (~80% hit rate) or Haiku inference fallback\n4. Classification maps to a profile (development, life-coaching, scheduling, etc.) each with its own token budget\n5. Files load in priority order (required > recommended > optional) until the budget is exhausted\n6. If a file is too large, the system tries a pre-compressed version; if still too large, it skips with a note\n7. On subsequent messages, topic change detection can delta-load additional context without reloading everything\n8. The entire system is fail-open and feature-flagged — errors never block you, and it can be instantly reverted to static loading\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: ContextManager uses three-tier progressive disclosure with intent classification and token budgets to load only relevant context per session.",
+      "timestamp": "2026-02-12T18:42:47.354Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 174328,
+    "time_to_first_token_ms": 174328,
+    "time_to_last_token_ms": 174328,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_development_excludes_telos",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:19:56.339Z",
+  "completed_at": "2026-02-12T06:20:19.607Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Development profile excludes TELOS, CalendarContext, and ObsidianContext files",
+      "timestamp": "2026-02-12T06:19:56.340Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n\n🗣️ Kaya: Evening Jm. Ready when you are.",
+      "timestamp": "2026-02-12T06:20:19.607Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23268,
+    "time_to_first_token_ms": 23268,
+    "time_to_last_token_ms": 23268,
+    "tokens_per_second": 0
+  }
+}

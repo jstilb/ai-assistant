@@ -31,7 +31,8 @@ import { parseArgs } from "util";
 import { existsSync, readFileSync } from "fs";
 import { parse as parseYaml } from "yaml";
 import Handlebars from "handlebars";
-import { loadTieredConfig } from "../../CORE/Tools/ConfigLoader.ts";
+import { loadTieredConfig } from "../../../lib/core/ConfigLoader.ts";
+import { memoryStore } from "../../../lib/core/MemoryStore.ts";
 import { z } from "zod";
 import { registerHelpers } from "../../Prompting/Tools/helpers";
 
@@ -133,8 +134,8 @@ export interface ComposedAgent {
  * Load traits from YAML file with tiered config support
  *
  * Tiering: USER → SYSTEM → Legacy fallback
- * Looks for: ~/.claude/skills/CORE/USER/config/agents-traits.yaml
- *           ~/.claude/skills/CORE/SYSTEM/config/agents-traits.yaml
+ * Looks for: ~/.claude/USER/config/agents-traits.yaml
+ *           ~/.claude/docs/system/config/agents-traits.yaml
  *           ~/.claude/skills/Agents/Data/Traits.yaml (legacy fallback)
  */
 export function loadTraits(): TraitsData {
@@ -156,7 +157,7 @@ export function loadTraits(): TraitsData {
   const legacyPath = `${HOME}/.claude/skills/Agents/Data/Traits.yaml`;
   if (!existsSync(legacyPath)) {
     console.error(`Error: Traits file not found at ${legacyPath}`);
-    console.error(`Consider migrating to: ~/.claude/skills/CORE/SYSTEM/config/agents-traits.yaml`);
+    console.error(`Consider migrating to: ~/.claude/docs/system/config/agents-traits.yaml`);
     process.exit(1);
   }
 
@@ -560,7 +561,7 @@ interface CliOptions {
 /**
  * Run the agent factory with parsed options (testable without CLI args)
  */
-export function run(values: CliOptions): string | null {
+export function run(values: CliOptions & { skipCapture?: boolean }): string | null {
   if (values.help) {
     return HELP_TEXT;
   }
@@ -587,6 +588,28 @@ export function run(values: CliOptions): string | null {
   }
 
   const agent = composeAgent(traitKeys, values.task || "", traits);
+
+  // Fire-and-forget learning capture for ContinualLearning pattern detection
+  if (!values.skipCapture) {
+    memoryStore.capture({
+      type: 'learning',
+      category: 'AGENT_COMPOSITION',
+      title: `Agent composed: ${agent.name} [${traitKeys.join(', ')}]`,
+      content: JSON.stringify({
+        name: agent.name,
+        traits: traitKeys,
+        task: values.task || '',
+        voice: agent.voice,
+        voiceId: agent.voiceId,
+        format: values.output || 'prompt',
+        team: values.team || false,
+      }),
+      tags: ['agents', 'composition', ...traitKeys],
+      tier: 'warm',
+      source: 'Agents/AgentFactory',
+    }).catch(() => {});
+  }
+
   return formatAgentOutput(
     agent,
     values.output || "prompt",

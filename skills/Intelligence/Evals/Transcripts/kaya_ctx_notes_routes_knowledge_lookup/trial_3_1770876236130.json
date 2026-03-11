@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_notes_routes_knowledge_lookup",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:03:29.235Z",
+  "completed_at": "2026-02-12T06:03:56.130Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Notes query like 'find my notes' routes to knowledge-lookup profile with ObsidianContext loaded",
+      "timestamp": "2026-02-12T06:03:29.235Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, checking system status.\n\n🗣️ Kaya: Evening Jm. System online with 63 skills ready. One approved work item in queue.",
+      "timestamp": "2026-02-12T06:03:56.130Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 26895,
+    "time_to_first_token_ms": 26895,
+    "time_to_last_token_ms": 26895,
+    "tokens_per_second": 0
+  }
+}

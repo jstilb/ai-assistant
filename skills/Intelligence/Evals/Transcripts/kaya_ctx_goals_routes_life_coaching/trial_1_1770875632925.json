@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:53:16.270Z",
+  "completed_at": "2026-02-12T05:53:52.925Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:53:16.270Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs/day | -2.3 hrs — still at baseline |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 3.0 | 1.8 | +0.2 from start (1.6) — slow |\n\n**By Mission — Quick Scan:**\n\n- **M0 Adventurer:** No travel milestones logged yet\n- **M1 Community:** 29% unique events, 43% attendance — below target\n- **M2 Creative:** Writing at 36% consistency — stalled\n- **M3 Family:** No therapy started yet\n- **M4 Friend:** 14% success rate on friend-making strategies\n- **M5 Professional:** App dev and AI proficiency in progress (eval work visible)\n- **M6 Self:** Stretching at 0%, media still dominant blocker\n\n**Biggest Blockers:**\n1. **Media consumption (C0)** — root cause for C2, C4, C5. Strategies S0/S2 at 64-71% but not translating to reduced hours\n2. **Physical rehab (C3)** — 0% stretching, no strategy defined\n3. **Social (C1)** — strategies S3/S4 at only 14-29% success\n\n**What's Working:**\n- Historical wins prove you *can* hit hard targets (porn, alcohol, weed, body fat — all conquered)\n- Alignment score moved from 1.6 → 1.8 (small but real)\n- M5 professional work is active\n\n📊 STATUS: Q1 is ~45% elapsed (Feb 11 of Jan 1–Mar 29). Most goals are behind pace. Media reduction is the keystone — solving C0 would unlock C2, C4, and C5.\n\n➡️ NEXT: The TELOS context is 75h stale. Want me to run a refresh to get current numbers? Or dive into a specific goal/challenge?\n\n📖 STORY EXPLANATION:\n1. Q1 WIGs are all behind target with ~55% of the quarter remaining\n2. Media consumption remains the #1 blocker cascading into multiple goals\n3. Friend-making and community engagement have the lowest strategy success rates\n4. Physical rehab has zero infrastructure — no strategy, no consistency\n5. Writing consistency is at 36%, blocked primarily by media competition\n6. Professional mission (M5) shows the most visible activity\n7. Historical challenge victories prove the capability exists when binary rules or tracking systems are applied\n8. The pattern: strategies with 60%+ adherence work, but several critical strategies are below 30%\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Q1 is 45% done. Media is the keystone blocker. Most goals behind pace but recoverable.",
+      "timestamp": "2026-02-12T05:53:52.925Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 36655,
+    "time_to_first_token_ms": 36655,
+    "time_to_last_token_ms": 36655,
+    "tokens_per_second": 0
+  }
+}

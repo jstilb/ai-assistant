@@ -1,0 +1,36 @@
+# Task: Briefing Routes to DailyBriefing
+# Morning briefing request activates DailyBriefing skill
+
+id: kaya_skill_briefing_routes_daily_briefing
+description: "Briefing request like 'morning briefing' activates the DailyBriefing skill"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Morning briefing please"
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: daily-briefing
+
+  - type: voice_line_check
+    weight: 0.40
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - skill_quality
+  - routing
+  - briefing
+  - capability
+
+created_at: "2026-02-11"

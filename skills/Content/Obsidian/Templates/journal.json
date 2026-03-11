@@ -1,0 +1,18 @@
+{
+  "type": "journal",
+  "label": "Journal",
+  "description": "Date-based entries with reflections, mood, and events",
+  "requiredSections": ["Entry"],
+  "optionalSections": ["Mood", "Highlights", "Reflections", "Gratitude", "Goals for Tomorrow", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["mood", "energy", "weather", "location", "aliases"]
+  },
+  "signals": {
+    "keywords": ["today", "yesterday", "morning", "evening", "felt", "feeling", "mood", "grateful", "reflection", "journal", "diary", "week", "day"],
+    "contentPatterns": ["## Reflections", "## Gratitude", "## Mood", "## Highlights"],
+    "folderBias": ["Meta"]
+  },
+  "stubThreshold": 20,
+  "version": 1
+}

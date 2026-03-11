@@ -1,0 +1,96 @@
+{
+  "task_id": "kaya_code_static_analysis_clean",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:37:18.914Z",
+  "completed_at": "2026-02-13T02:38:05.961Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add a retry mechanism to the HTTP client",
+      "timestamp": "2026-02-13T02:37:18.914Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🗣️ Kaya: Working directory is empty. Need the project path or repo to add retry mechanism.",
+      "timestamp": "2026-02-13T02:38:05.961Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770950285961_rc0qjy",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*"
+      },
+      "started_at": "2026-02-13T02:38:05.961Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:38:05.961Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950285961_bxr4d5",
+      "name": "Bash",
+      "params": {
+        "command": "ls -la /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_static_analysis_clean-wLazBz/",
+        "description": "List all files in working directory"
+      },
+      "started_at": "2026-02-13T02:38:05.961Z",
+      "result": "total 0\ndrwx------@   2 [user]  staff    64 Feb 12 18:37 .\ndrwx------@ 228 [user]  staff  7296 Feb 12 18:37 ..",
+      "completed_at": "2026-02-13T02:38:05.961Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950285961_hzni3l",
+      "name": "AskUserQuestion",
+      "params": {
+        "questions": [
+          {
+            "question": "The working directory is empty. Where is the HTTP client you want me to add retry logic to?",
+            "header": "Project path",
+            "options": [
+              {
+                "label": "Provide a path",
+                "description": "I'll tell you the path to the project or file"
+              },
+              {
+                "label": "Create from scratch",
+                "description": "Create a new HTTP client with retry mechanism built in"
+              },
+              {
+                "label": "Specific repo",
+                "description": "I need to clone a repo first"
+              }
+            ],
+            "multiSelect": false
+          }
+        ]
+      },
+      "started_at": "2026-02-13T02:38:05.961Z",
+      "error": "Answer questions?",
+      "completed_at": "2026-02-13T02:38:05.961Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.38810724999999996,
+    "duration": 38578,
+    "turns": 4,
+    "inputTokens": 6,
+    "outputTokens": 475,
+    "cacheReadTokens": 144349,
+    "cacheCreationTokens": 48551
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 3,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 47047,
+    "time_to_first_token_ms": 47047,
+    "time_to_last_token_ms": 47047,
+    "tokens_per_second": 0
+  }
+}

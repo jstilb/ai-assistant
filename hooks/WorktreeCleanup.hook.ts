@@ -9,7 +9,7 @@
  * Registered in settings.json under SubagentStop.
  */
 
-import { listWorktrees, removeWorktree, unlockWorktree, removeStaleGitLock } from "../skills/CORE/Tools/WorktreeManager.ts";
+import { listWorktrees, removeWorktree, unlockWorktree, removeStaleGitLock } from "../lib/core/WorktreeManager.ts";
 import { homedir } from "os";
 import { join } from "path";
 

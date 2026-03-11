@@ -1,0 +1,51 @@
+# Task: Read and Understand Before Edit
+# Kaya reads surrounding context and understands the codebase before making modifications
+
+id: kaya_code_read_understand_before_edit
+description: "Kaya reads surrounding context and understands the codebase before making modifications"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Add pagination to the /api/users endpoint"
+
+graders:
+  - type: tool_calls
+    weight: 0.40
+    required: true
+    params:
+      sequence:
+        - "Read"
+        - "Edit"
+
+  - type: llm_rubric
+    weight: 0.40
+    required: false
+    params:
+      rubric: |
+        Evaluate whether the response demonstrates understanding before modifying:
+        1. Was the relevant file read before editing?
+        2. Were related files consulted for context?
+        3. Does the response show understanding of the existing code patterns?
+        4. Are changes consistent with the codebase conventions?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - coding
+  - read_first
+  - understanding
+  - capability
+
+created_at: "2026-02-11"

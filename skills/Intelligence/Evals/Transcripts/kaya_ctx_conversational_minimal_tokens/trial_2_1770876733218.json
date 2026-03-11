@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_conversational_minimal_tokens",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:11:45.911Z",
+  "completed_at": "2026-02-12T06:12:13.218Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Short conversational input like 'thanks!' uses minimal tokens (<=200) with keyword-stage classification",
+      "timestamp": "2026-02-12T06:11:45.911Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n🗣️ Kaya: Evening Jm. Systems loaded and ready — what are we working on?",
+      "timestamp": "2026-02-12T06:12:13.218Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 27307,
+    "time_to_first_token_ms": 27307,
+    "time_to_last_token_ms": 27307,
+    "tokens_per_second": 0
+  }
+}

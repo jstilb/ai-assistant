@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:53:52.926Z",
+  "completed_at": "2026-02-12T05:54:37.166Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:53:52.926Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Life coaching check-in on goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 2026 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs/day | -2.3 hrs — biggest lever |\n| G1: Make 2 Good Friends | 2 friends | 0 | 14% strategy success rate |\n| G2: Raise Alignment Score | 3.0 | 1.8 | +1.2 needed |\n\n**What's working:**\n- Historical wins prove you can do hard things — porn, alcohol, weed, body fat all conquered with binary rules + tracking\n- Wellbeing score jumped 2.61 → 7.17 with DTR systems before\n\n**What's struggling:**\n- C3 (Physical Rehab): 0% stretching consistency — no strategy even defined yet\n- C1 (Friends): 14% success rate on social strategies — lowest of all\n- C0 (Media): Still the root cause dragging C2, C4, C5 down with it\n- C4 (Writing): 36% consistency, competing directly with media time\n\n**Pattern:** Media (C0) is the bottleneck. It feeds into alignment (C2), writing (C4), wake time (C5), and indirectly friendships (C1) by consuming energy. Your past successes were binary eliminations — but media reduction isn't binary, it's a dial, which is harder for you historically.\n\n📊 STATUS: Q1 is ~6 weeks in. The three WIGs are all behind pace. Context data is 75 hours stale — a refresh would give sharper numbers.\n\n➡️ NEXT: Want me to dig into any specific goal, run a TELOS refresh for current numbers, or work through a strategy adjustment for the media bottleneck?\n\n📖 STORY EXPLANATION:\n1. Three Q1 WIGs are all behind target with ~7 weeks remaining\n2. Media consumption at 5.3 hrs is the central bottleneck affecting multiple goals\n3. Friend-making strategies have the lowest success rate at 14%\n4. Physical rehab has zero strategy defined despite being critical\n5. Your proven method is binary rules + tracking, but media requires graduated reduction\n6. Writing and alignment scores are downstream casualties of the media problem\n7. Historical wins show you absolutely can conquer these — the systems just need rebuilding\n8. A TELOS refresh would give current data instead of 75-hour-old snapshots\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace. Media consumption is the root bottleneck dragging everything down.",
+      "timestamp": "2026-02-12T05:54:37.166Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 44240,
+    "time_to_first_token_ms": 44240,
+    "time_to_last_token_ms": 44240,
+    "tokens_per_second": 0
+  }
+}

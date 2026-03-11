@@ -77,7 +77,7 @@ function main() {
         // No stdin or parse error — assume early in conversation
       }
 
-      // Skip injection for first ~20 turns (format rules are fresh from CORE-ESSENTIAL)
+      // Skip injection for first ~20 turns (format rules are fresh from CLAUDE.md)
       if (turnCount < 20) {
         process.exit(0);
       }

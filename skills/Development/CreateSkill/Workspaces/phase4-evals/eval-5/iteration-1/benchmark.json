@@ -1,0 +1,206 @@
+{
+  "eval_id": "eval-5",
+  "iteration": 1,
+  "skill": "JobEngine",
+  "skill_path": "~/.claude/skills/Commerce/JobEngine/SKILL.md",
+  "skill_version": "2.0.0",
+  "eval_type": "with_skill_vs_baseline",
+  "timestamp": "2026-03-09T18:30:00.000Z",
+  "summary": {
+    "total_scenarios": 3,
+    "with_skill_wins": 3,
+    "baseline_wins": 0,
+    "ties": 0,
+    "average_skill_score": 0.93,
+    "average_baseline_score": 0.28,
+    "delta": 0.65,
+    "verdict": "SKILL_SIGNIFICANTLY_BETTER"
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "job_search",
+      "prompt": "Find data science jobs matching my profile",
+      "intent": "User wants JobEngine to scan configured job boards and return DS/ML opportunities matched to their profile",
+      "with_skill": {
+        "response_summary": "Invokes /jobs scan command. Loads master-profile.yaml and target-companies.yaml for criteria. Scrapes configured boards (indeed, greenhouse, lever, ashby). Applies Phase 1 algorithmic score (title 30%, salary 15%, location 20%, recency 15%, seniority 10%, industry 10%). Jobs ≥50 pass to Phase 2 AI semantic scoring. Routes: ≥80 → tailored, 70-79 → apply, <70 → discard. Dream companies always → tailored. Deduplicates via SHA-256 hash against applications.jsonl + scan-results. Saves to State/scan-results/{source}-{date}.jsonl. Returns digest: 'Scanned 4 sources, found 47 jobs — 8 tailored, 22 auto-apply, 17 filtered.' Applies title blocklist (rejects data engineer, PM, devops) and positive title match (must include data scien, ML, AI, etc).",
+        "command_invoked": "/jobs scan",
+        "cli_used": "bun run ~/.claude/skills/Commerce/JobEngine/Tools/JobScanner.ts scan",
+        "key_behaviors": [
+          "Loads master-profile.yaml for scan criteria",
+          "Runs two-phase scoring: algorithmic then AI semantic",
+          "Applies title blocklist and positive title gating",
+          "Deduplicates against prior applications and scan results",
+          "Routes jobs to correct tier (tailored/apply/discard)",
+          "Dream company override regardless of score",
+          "Saves results to State/scan-results/ as JSONL",
+          "Provides structured digest with counts"
+        ],
+        "correctness": 1.0,
+        "completeness": 0.95,
+        "specificity": 0.95,
+        "score": 0.97,
+        "grading_notes": "Correctly identifies /jobs scan as the workflow, uses correct tools, applies both scoring phases, routes appropriately, handles edge cases (dream companies, dedup). Minor: does not mention scam check (step 4 of workflow)."
+      },
+      "baseline": {
+        "response_summary": "Attempts a generic job search. Might suggest searching Indeed or LinkedIn manually. May ask what kind of data science jobs the user wants. No knowledge of master-profile.yaml, target-companies.yaml, two-phase scoring, or JobEngine tooling. Cannot deduplicate against prior applications. Cannot apply title blocklists. Returns generic advice like 'check job boards and filter by your skills'.",
+        "command_invoked": null,
+        "cli_used": null,
+        "key_behaviors": [
+          "No profile-aware matching",
+          "No algorithmic or AI scoring",
+          "No deduplication",
+          "No title quality gates",
+          "No dream company logic",
+          "No structured output format"
+        ],
+        "correctness": 0.2,
+        "completeness": 0.15,
+        "specificity": 0.1,
+        "score": 0.15,
+        "grading_notes": "Cannot fulfill the request meaningfully without JobEngine. Generic response provides no actionable job matches tied to Jm's actual profile and preferences."
+      },
+      "winner": "with_skill",
+      "delta": 0.82,
+      "wrong_routing_impact": "critical",
+      "rationale": "Without JobEngine, a data science job search returns generic web browsing advice with no profile matching, scoring, deduplication, or routing. The skill provides a complete automated pipeline that is the entire purpose of the request."
+    },
+    {
+      "id": 2,
+      "name": "application_flow",
+      "prompt": "Apply to this job posting: https://jobs.lever.co/plaid/ds-engineer-role",
+      "intent": "User wants JobEngine to auto-apply to a specific job URL using the Phase 2 auto-apply workflow",
+      "with_skill": {
+        "response_summary": "Invokes /jobs apply workflow. Checks URL against problematic ATS domain blocklist (7-day TTL). Verifies company is not on blacklist. Runs scam check on the listing. Scores the job via two-phase scoring. If score ≥70 (apply tier) or dream company, proceeds. Selects correct resume variant from master-profile.yaml. Checks title against blocklist (rejects data engineer, PM, etc.) and positive title match (must contain DS/ML/AI keyword). Detects ATS complexity (multi-step wizard check). Browser skill submits form and uploads resume PDF. Logs to applications.jsonl with workflow: 'auto-apply'. Enforces daily cap (15/day). Reports result: applied, skipped (with reason), or queued.",
+        "command_invoked": "/jobs apply",
+        "cli_used": "bun run ~/.claude/skills/Commerce/JobEngine/Tools/AutoApply.ts",
+        "key_behaviors": [
+          "ATS domain blocklist check before attempting",
+          "Company blacklist gate",
+          "Scam detection",
+          "Two-phase score gate (≥70 required)",
+          "Resume variant selection from master-profile.yaml",
+          "Title blocklist and positive title match",
+          "ATS complexity detection to skip multi-step forms",
+          "Browser-based form submission",
+          "Daily cap enforcement (15/day)",
+          "Logs to applications.jsonl"
+        ],
+        "correctness": 1.0,
+        "completeness": 0.92,
+        "specificity": 0.92,
+        "score": 0.95,
+        "grading_notes": "Correctly routes to AutoApply.ts, applies all gates in proper order, enforces daily cap, logs correctly. Score slightly below perfect because ATS complexity detection detail (multi-step wizard skip) is Phase 2 nuance that may vary by invocation."
+      },
+      "baseline": {
+        "response_summary": "Cannot auto-apply. May suggest manually visiting the URL and filling out the form. Has no knowledge of Jm's resume variants, ATS domain blocklist, daily caps, or application logging. Cannot submit forms. Cannot check if the company is blacklisted or score the listing. At best, opens the URL and says 'please fill this out yourself'.",
+        "command_invoked": null,
+        "cli_used": null,
+        "key_behaviors": [
+          "No automated form submission",
+          "No resume variant selection",
+          "No ATS domain blocklist check",
+          "No daily cap tracking",
+          "No application logging",
+          "No scam or score gate"
+        ],
+        "correctness": 0.1,
+        "completeness": 0.05,
+        "specificity": 0.05,
+        "score": 0.07,
+        "grading_notes": "Baseline cannot perform the core task at all — no browser automation, no profile integration, no gate logic. The job application cannot happen without JobEngine."
+      },
+      "winner": "with_skill",
+      "delta": 0.88,
+      "wrong_routing_impact": "critical",
+      "rationale": "Auto-apply is entirely implemented in JobEngine's Phase 2 pipeline. Without the skill, no application is submitted and all quality gates (ATS blocklist, score threshold, title match, daily cap) are bypassed entirely."
+    },
+    {
+      "id": 3,
+      "name": "scoring_filtering",
+      "prompt": "Show me jobs scoring above 70 from today's scan",
+      "intent": "User wants to review filtered scan results above the auto-apply score threshold",
+      "with_skill": {
+        "response_summary": "Invokes /jobs status or reads State/scan-results/{source}-{today}.jsonl files. Loads all scan results for today, filters to listings where final_score ≥70 (apply or tailored tier). Displays sorted by score descending. Groups into tailored tier (80+) and apply tier (70-79). Shows company name, title, score, tier, and reason for routing. Dream company entries shown regardless of score. Reports how many remain vs. the daily cap. Also indicates which were already deduped (previously seen).",
+        "command_invoked": "/jobs status",
+        "cli_used": "bun run ~/.claude/skills/Commerce/JobEngine/Tools/JobScanner.ts status",
+        "key_behaviors": [
+          "Reads today's scan-results JSONL files",
+          "Filters by score ≥70",
+          "Groups into tailored (80+) vs apply (70-79) tiers",
+          "Sorts by score descending",
+          "Shows score, tier, company, title per listing",
+          "Flags dream company overrides",
+          "Reports daily cap consumption",
+          "Identifies already-applied/deduped entries"
+        ],
+        "correctness": 0.95,
+        "completeness": 0.90,
+        "specificity": 0.88,
+        "score": 0.91,
+        "grading_notes": "Correctly knows score threshold is 70 (not 60 — the raised threshold), reads from correct state files, groups by tier. Slight deduction: status command may not filter by score directly; user may need to read JSONL with jq or a helper. The skill correctly handles this but exact CLI invocation for score-filtered view is not explicitly documented in SKILL.md."
+      },
+      "baseline": {
+        "response_summary": "Has no knowledge of today's scan results, JSONL state files, or what score threshold means in context. May ask 'what scoring system are you using?' or attempt to explain generic ML model scoring. Cannot read State/scan-results/ files. Cannot distinguish between tailored and apply tiers. Cannot report daily cap status. Provides no actionable filtered list.",
+        "command_invoked": null,
+        "cli_used": null,
+        "key_behaviors": [
+          "No knowledge of scan-results JSONL format",
+          "No score threshold awareness (70 vs 60 change unknown)",
+          "No tier grouping",
+          "No daily cap awareness",
+          "No access to today's scan data"
+        ],
+        "correctness": 0.15,
+        "completeness": 0.10,
+        "specificity": 0.05,
+        "score": 0.10,
+        "grading_notes": "Cannot fulfill request. No access to scan results, no knowledge of two-phase scoring, no understanding of the 70/80 tier thresholds. Response would be generic confusion."
+      },
+      "winner": "with_skill",
+      "delta": 0.81,
+      "wrong_routing_impact": "high",
+      "rationale": "Filtering scan results by score requires knowledge of the JSONL state file location, two-phase score structure, the raised threshold (70, not 60), and tier groupings — all encoded only in JobEngine's state schema and SKILL.md."
+    }
+  ],
+  "grading_rubric": {
+    "correctness": "Does the response correctly identify and use the right workflow, tools, and state files?",
+    "completeness": "Does it cover all major steps and edge cases documented in SKILL.md?",
+    "specificity": "Does it provide JobEngine-specific details (CLI commands, thresholds, file paths) vs generic advice?",
+    "score_formula": "(correctness * 0.4) + (completeness * 0.35) + (specificity * 0.25)"
+  },
+  "skill_quality_observations": {
+    "strengths": [
+      "Clear command structure (/jobs scan, /jobs apply, /jobs status) makes routing unambiguous",
+      "Two-phase scoring (algorithmic + AI) is well-documented with thresholds",
+      "Title blocklist + positive match is a strong quality gate not found elsewhere",
+      "State file layout is explicit and complete",
+      "Dream company and blacklist overrides are clearly specified",
+      "Phase status (ACTIVE vs not yet built) prevents misfires on Phase 3/4 requests"
+    ],
+    "weaknesses": [
+      "Score-filtered view (/jobs status by score) is not explicitly shown in Examples section — user has to infer",
+      "Scam check is mentioned in Workflow 1 step 4 but no SKILL.md detail on how to trigger it manually",
+      "The threshold change note (70 raised from 60) is in Workflow 2 prose but not in SKILL.md Examples or the scoring section header",
+      "No explicit description of what the /jobs status output looks like (format, fields shown)"
+    ],
+    "improvement_suggestions": [
+      "Add /jobs status example output to Examples section showing score, tier, company, title columns",
+      "Document the threshold raise prominently in the scoring section, not just in Workflow 2 prose",
+      "Add /jobs scan --filter-score 70 or equivalent flag to make score-filtered views explicit",
+      "Add scam-check trigger to Examples or note it is automatic (not manual)"
+    ]
+  },
+  "metadata": {
+    "evaluator": "Kaya",
+    "model": "claude-sonnet-4-6",
+    "eval_method": "simulated_response_comparison",
+    "eval_basis": "SKILL.md content analysis + existing eval transcript review (kaya_jobengine_scoring_threshold, kaya_jobengine_phase1_gate, kaya_jobengine_browser_submit_dryrun)",
+    "prior_evals_reviewed": [
+      "kaya_jobengine_scoring_threshold",
+      "kaya_jobengine_phase1_gate",
+      "kaya_jobengine_browser_submit_dryrun",
+      "kaya_jobengine_browser_submit_status"
+    ]
+  }
+}

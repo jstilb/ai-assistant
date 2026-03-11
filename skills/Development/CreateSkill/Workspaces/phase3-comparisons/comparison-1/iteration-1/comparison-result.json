@@ -1,0 +1,104 @@
+{
+  "comparison": "Graph vs KnowledgeGraph",
+  "question": "Should these merge, or do 'temporal property graph' and 'Obsidian vault graph' serve distinct purposes?",
+  "skill_a": {
+    "name": "Graph",
+    "path": "skills/Intelligence/Graph/SKILL.md",
+    "summary": "Temporal property graph over Kaya's own operational artifacts: git commits, sessions, errors, decisions, learnings, TELOS goals. Ingests from internal sources (git log, session logs, traces, ISC decisions). Supports BFS/DFS traversal, root-cause tracing, shortest-path, pattern detection, and Mermaid visualization. Cron-scheduled (daily ingest, weekly synthesis). 13 node types, 19 edge types. Data stored in MEMORY/GRAPH/. Feeds ContinualLearning and DailyBriefing. Explicitly notes a future 'Merge with KnowledgeGraph' item."
+  },
+  "skill_b": {
+    "name": "KnowledgeGraph",
+    "path": "skills/Intelligence/KnowledgeGraph/SKILL.md",
+    "summary": "Interactive exploration of the Obsidian vault as a connected knowledge graph. Parses markdown notes, wikilinks, tags, and folders into a graph. Supports semantic search (TF-IDF), community detection (label propagation), knowledge-gap detection, AI note summarization, and interactive D3.js visualization. Data stored in MEMORY/State/knowledge-graph.json. Feeds ContinualLearning, DailyBriefing, and InformationManager. Read-only access to Obsidian vault."
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "prompt": "Show me how concepts in my vault connect",
+      "winner": "KnowledgeGraph",
+      "rationale": "Explicitly about Obsidian vault note connections. KnowledgeGraph's Discover workflow (find connections, bridge notes) and GraphVisualizer D3 canvas are purpose-built for this. Graph skill has no vault awareness.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 2,
+      "prompt": "Build a graph of entity relationships from this document",
+      "winner": "Neither",
+      "rationale": "Neither skill handles arbitrary external documents. Graph ingests only from internal Kaya artifacts; KnowledgeGraph only reads the Obsidian vault. Both would fail to fulfill this request as-designed.",
+      "wrong_routing_impact": "low"
+    },
+    {
+      "id": 3,
+      "prompt": "Map the dependencies between these systems",
+      "winner": "Graph",
+      "rationale": "Graph has explicit 'depends_on' and 'blocks' edge types covering system-level dependency tracing across commits, files, and skills. KnowledgeGraph has no concept of system dependencies.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 4,
+      "prompt": "What caused this bug in my last session?",
+      "winner": "Graph",
+      "rationale": "Root-cause tracing through session logs, error nodes, and fix chains is Graph's core use case (trace --from error:XXX). KnowledgeGraph has no session or error data.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 5,
+      "prompt": "What do I know about machine learning?",
+      "winner": "KnowledgeGraph",
+      "rationale": "Exactly matches KnowledgeGraph's Explore workflow trigger. Searches vault notes for ML-related concepts, clusters, and connections. Graph skill has no personal knowledge/note data.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 6,
+      "prompt": "Show me the graph of my recent work",
+      "winner": "Graph",
+      "rationale": "'Recent work' maps to sessions, commits, and decisions — Graph's temporal data. The word 'graph' alone triggers both, but the content (sessions, commits) resolves to Graph. Wrong routing to KnowledgeGraph would show vault notes, not work artifacts.",
+      "wrong_routing_impact": "medium"
+    },
+    {
+      "id": 7,
+      "prompt": "Where are my knowledge gaps?",
+      "winner": "KnowledgeGraph",
+      "rationale": "Knowledge gaps is a named workflow in KnowledgeGraph (GapDetector, Analyze workflow). Graph has no gap analysis concept. Unambiguous.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 8,
+      "prompt": "Visualize the graph",
+      "winner": "Either",
+      "rationale": "Genuinely ambiguous. Both skills have visualization. Graph uses Mermaid; KnowledgeGraph uses interactive D3.js. Without additional context (vault vs. work artifacts), routing is 50/50. The Graph SKILL.md description keyword 'visualize system graph' vs KnowledgeGraph's 'visualize vault graph' are the only differentiators.",
+      "wrong_routing_impact": "medium"
+    },
+    {
+      "id": 9,
+      "prompt": "How does my NLP research connect to my writing projects?",
+      "winner": "KnowledgeGraph",
+      "rationale": "Connecting personal research topics across the vault is KnowledgeGraph's Discover workflow. Graph has no research/writing topic data. Clear owner.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 10,
+      "prompt": "Show graph stats",
+      "winner": "Either",
+      "rationale": "Both skills expose a stats command. Graph has 'stats' via GraphQuerier; KnowledgeGraph has '--stats' via GraphBuilder. Without additional context, this is genuinely ambiguous. The trigger phrase 'graph stats' appears in Graph's description keywords.",
+      "wrong_routing_impact": "low"
+    }
+  ],
+  "overlap_analysis": {
+    "clear_owner_pct": 0.7,
+    "ambiguous_pct": 0.2,
+    "neither_fits_pct": 0.1,
+    "merge_would_lose": "Critical capability would be lost by merging. Graph is a write-heavy operational system (ingest from git, sessions, decisions; cron-scheduled; 13 node types / 19 edge types with domain-specific semantics). KnowledgeGraph is a read-only Obsidian-consumer with semantic TF-IDF search, community detection, and interactive D3 visualization. Merging would either bloat a single skill with unrelated data pipelines or force one data model to serve radically different node types (markdown notes vs. git commits). The storage structures are also incompatible: Graph uses JSONL-per-type in MEMORY/GRAPH/; KnowledgeGraph uses a single JSON blob in MEMORY/State/. Merging would also dilute the trigger keywords — 'error trace' and 'vault exploration' are very different intents.",
+    "separation_causes_confusion": "Moderate confusion on two prompts: 'visualize the graph' (scenario 8) and 'show graph stats' (scenario 10). The word 'graph' is overloaded in both descriptions. Both skills register 'graph' as a keyword trigger (Graph description: 'graph, graph stats'; KnowledgeGraph description: 'knowledge graph, obsidian graph, graph analysis, visualize vault graph, show graph'). A router could misfire on bare 'graph' requests. Additionally, both skills note a future merge consideration (Graph SKILL.md explicitly lists 'Merge with KnowledgeGraph' as a future enhancement item), suggesting the original authors recognized latent overlap."
+  },
+  "recommendation": {
+    "action": "KEEP_SEPARATE",
+    "rationale": "The two skills operate on entirely different data domains: Graph consumes Kaya's internal operational artifacts (git, sessions, errors, decisions) and is a stateful write system with cron scheduling; KnowledgeGraph consumes the Obsidian vault (read-only markdown notes) and is a read-on-demand semantic search and exploration system. 7 of 10 scenarios have a clear, unambiguous owner with high wrong-routing impact. The 2 ambiguous scenarios arise from keyword overlap on 'graph' and 'visualize', not from functional overlap. Merging would create a bloated skill with incompatible data models and pipelines that serves neither use case well. The future enhancement note in Graph.SKILL.md likely refers to sharing graph infrastructure/types (the general-purpose abstraction KnowledgeGraph already uses), not a functional merge.",
+    "trigger_fixes": [
+      "In Graph SKILL.md description: replace bare 'graph' keyword with 'system graph' or 'work graph' to reduce collision with KnowledgeGraph's 'knowledge graph' trigger.",
+      "In Graph SKILL.md description: change 'visualize system graph' to 'visualize work graph' or 'visualize session graph' to distinguish from KnowledgeGraph's 'visualize vault graph'.",
+      "In KnowledgeGraph SKILL.md description: add 'vault' qualifier to the bare 'show graph' trigger — change to 'show vault graph' to prevent collision.",
+      "In Graph SKILL.md description: add 'graph stats' specificity — change to 'system graph stats' or 'work graph stats' to distinguish from KnowledgeGraph stats.",
+      "Remove the future enhancement bullet 'Merge with KnowledgeGraph' from Graph SKILL.md or replace it with 'Share graph infrastructure types with KnowledgeGraph' to clarify the intent is code reuse, not functional consolidation."
+    ]
+  }
+}

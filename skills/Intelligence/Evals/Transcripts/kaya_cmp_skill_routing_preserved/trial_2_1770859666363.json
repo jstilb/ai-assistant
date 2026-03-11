@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_skill_routing_preserved",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T01:27:05.513Z",
+  "completed_at": "2026-02-12T01:27:46.363Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Send an email to Sarah about the project deadline moving to next Friday",
+      "timestamp": "2026-02-12T01:27:05.513Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 **SUMMARY:** Need Sarah's email and project details to send the email.\n\nI couldn't find Sarah in your contacts directory. Before I send this, I need:\n\n1. **Sarah's email address** - or I can search your Gmail for recent messages from a \"Sarah\" to find it\n2. **Project name** - should I include a specific project name, or will she know from context?\n\n🗣️ Kaya: Need Sarah's email address and project name to compose and send the email.",
+      "timestamp": "2026-02-12T01:27:46.363Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 40850,
+    "time_to_first_token_ms": 40850,
+    "time_to_last_token_ms": 40850,
+    "tokens_per_second": 0
+  }
+}

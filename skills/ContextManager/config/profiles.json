@@ -9,21 +9,19 @@
       "excludes": ["*"]
     },
     "development": {
-      "tokenBudget": 1200,
+      "tokenBudget": 1800,
       "description": "Code, projects, bugs, features",
       "required": [
-        "skills/CORE/CLI-INDEX.md"
+        "skills/Development/UnixCLI/CLI-INDEX.md"
       ],
       "recommended": [
         "context/ProjectsContext.md",
         "context/LearningPatternsContext.md",
         "context/LearningsContext.md"
       ],
-      "optional": [
-        "context/SkillsContext.md"
-      ],
+      "optional": [],
       "excludes": [
-        "skills/CORE/USER/TELOS/*",
+        "USER/TELOS/*",
         "context/CalendarContext.md",
         "context/ObsidianContext.md"
       ]
@@ -32,39 +30,38 @@
       "tokenBudget": 2200,
       "description": "Goals, challenges, strategies, progress",
       "required": [
-        "skills/CORE/USER/TELOS/MISSIONS.md",
-        "skills/CORE/USER/TELOS/GOALS.md",
-        "skills/CORE/USER/TELOS/CHALLENGES.md",
-        "skills/CORE/USER/TELOS/STATUS.md",
-        "skills/CORE/USER/TELOS/STRATEGIES.md"
+        "USER/TELOS/STATUS.md",
+        "USER/TELOS/GOALS.md",
+        "USER/TELOS/MISSIONS.md",
+        "USER/TELOS/CHALLENGES.md",
+        "USER/TELOS/STRATEGIES.md"
       ],
       "recommended": [
         "context/TelosContext.md"
       ],
       "optional": [],
       "excludes": [
-        "context/ProjectsContext.md",
-        "context/SkillsContext.md"
+        "context/ProjectsContext.md"
       ]
     },
     "planning": {
       "tokenBudget": 2500,
       "description": "Weekly/monthly planning combining goals, calendar, and tasks",
       "required": [
-        "skills/CORE/USER/TELOS/GOALS.md",
-        "skills/CORE/USER/TELOS/STRATEGIES.md",
+        "USER/TELOS/GOALS.md",
+        "USER/TELOS/STRATEGIES.md",
         "context/CalendarContext.md"
       ],
       "recommended": [
         "context/LucidTasksContext.md",
-        "skills/CORE/USER/TELOS/STATUS.md"
+        "USER/TELOS/STATUS.md",
+        "context/LearningsContext.md"
       ],
       "optional": [
-        "skills/CORE/USER/TELOS/MISSIONS.md"
+        "USER/TELOS/MISSIONS.md"
       ],
       "excludes": [
-        "context/ObsidianContext.md",
-        "context/LearningsContext.md"
+        "context/ObsidianContext.md"
       ]
     },
     "scheduling": {
@@ -78,7 +75,7 @@
       ],
       "optional": [],
       "excludes": [
-        "skills/CORE/USER/TELOS/*",
+        "USER/TELOS/*",
         "context/ProjectsContext.md",
         "context/ObsidianContext.md"
       ]
@@ -93,10 +90,11 @@
         "context/CalendarContext.md",
         "context/ProjectsContext.md"
       ],
-      "optional": [],
-      "excludes": [
-        "context/ObsidianContext.md",
+      "optional": [
         "context/LearningsContext.md"
+      ],
+      "excludes": [
+        "context/ObsidianContext.md"
       ]
     },
     "knowledge-lookup": {
@@ -118,9 +116,7 @@
       "tokenBudget": 800,
       "description": "Ambiguous or mixed-intent requests",
       "required": [],
-      "recommended": [
-        "skills/CORE/CONTEXT-INDEX.md"
-      ],
+      "recommended": [],
       "optional": [],
       "excludes": []
     },
@@ -138,7 +134,7 @@
       "required": [],
       "recommended": ["context/TelosContext.md"],
       "optional": ["context/CalendarContext.md"],
-      "excludes": ["context/ProjectsContext.md", "context/SkillsContext.md", "skills/CORE/CLI-INDEX.md"]
+      "excludes": ["context/ProjectsContext.md", "skills/Development/UnixCLI/CLI-INDEX.md"]
     }
   }
 }

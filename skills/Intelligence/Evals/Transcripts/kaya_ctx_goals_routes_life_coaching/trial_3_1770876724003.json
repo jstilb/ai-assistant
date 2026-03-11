@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:11:42.764Z",
+  "completed_at": "2026-02-12T06:12:04.003Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:11:42.764Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Life coaching context loaded with current goals, missions, and challenges.\n\n🗣️ Kaya: Your Q1 goals data is loaded. What would you like to discuss, Jm?",
+      "timestamp": "2026-02-12T06:12:04.003Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21239,
+    "time_to_first_token_ms": 21239,
+    "time_to_last_token_ms": 21239,
+    "tokens_per_second": 0
+  }
+}

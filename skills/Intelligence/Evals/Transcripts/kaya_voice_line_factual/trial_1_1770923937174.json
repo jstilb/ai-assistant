@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_voice_line_factual",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:18:20.056Z",
+  "completed_at": "2026-02-12T19:18:57.173Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add input validation to the user registration form",
+      "timestamp": "2026-02-12T19:18:20.056Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: No user registration form found in the current codebase (~/.claude is the PAI system).\n🔍 ANALYSIS: Searched for registration-related files and patterns across all source files — only found internal PAI references (eval graders, voice interaction, agent factories), no registration form.\n\nJm, I need to know which project contains the registration form, or if you'd like me to create one from scratch somewhere specific.\n\n🗣️ Kaya: No registration form found in this repo. Which project should I look in?",
+      "timestamp": "2026-02-12T19:18:57.173Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 37117,
+    "time_to_first_token_ms": 37117,
+    "time_to_last_token_ms": 37117,
+    "tokens_per_second": 0
+  }
+}

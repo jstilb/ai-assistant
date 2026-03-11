@@ -37,6 +37,31 @@ import { getSessionState } from '../skills/ContextManager/Tools/ContextManagerSt
 const kayaDir = getKayaDir();
 
 /**
+ * Look up session ratings from ratings.jsonl and compute average
+ */
+function getSessionRating(sessionId: string): number | undefined {
+  const ratingsPath = join(kayaDir, 'MEMORY', 'LEARNING', 'SIGNALS', 'ratings.jsonl');
+  if (!existsSync(ratingsPath)) return undefined;
+
+  const lines = readFileSync(ratingsPath, 'utf-8').trim().split('\n');
+  const sessionRatings: number[] = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      const id = entry.session_id || entry.sessionId;
+      if (id === sessionId && typeof entry.rating === 'number') {
+        sessionRatings.push(entry.rating);
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  if (sessionRatings.length === 0) return undefined;
+  return sessionRatings.reduce((a, b) => a + b, 0) / sessionRatings.length;
+}
+
+/**
  * Check if ContextManager is enabled (shadow or full)
  */
 function isContextManagerActive(): boolean {
@@ -74,8 +99,9 @@ async function main() {
       process.exit(0);
     }
 
-    // Calculate session duration from state
+    // Calculate session duration and rating from state
     let durationMinutes: number | undefined;
+    let rating: number | undefined;
     try {
       const state = await getSessionState();
       if (state.sessionStarted) {
@@ -83,18 +109,94 @@ async function main() {
         const now = Date.now();
         durationMinutes = Math.round((now - started) / 60000);
       }
+      if (state.sessionId) {
+        rating = getSessionRating(state.sessionId);
+      }
     } catch {
-      // Non-fatal — duration is optional
+      // Non-fatal — duration and rating are optional
     }
 
     // Capture feedback (appends to JSONL)
-    const feedback = await captureSessionFeedback({ durationMinutes });
+    const feedback = await captureSessionFeedback({ durationMinutes, rating });
 
     if (feedback) {
-      console.error(`[ContextFeedback] Captured: profile=${feedback.profile}, confidence=${feedback.classificationConfidence}, tokens=${feedback.totalTokensUsed}/${feedback.tokenBudget}`);
+      console.error(`[ContextFeedback] Captured: profile=${feedback.profile}, confidence=${feedback.classificationConfidence}, tokens=${feedback.totalTokensUsed}/${feedback.tokenBudget}, rating=${feedback.sessionRating ?? 'none'}`);
     } else {
       console.error('[ContextFeedback] No session state to capture (no classification this session)');
     }
+
+    // Pre-computed learner cache check (ISC 2496, 4104)
+    // Replace the 50-session counter with 24h cache staleness check.
+    // Read learning-cache.json; if fresh (< 24h), skip ContextLearner entirely.
+    // If stale or missing, spawn ContextLearner --analyze --write-cache (fire-and-forget).
+    try {
+      // Check if learnerCache feature is enabled (defaults to true)
+      const settingsPath = join(kayaDir, 'settings.json');
+      let learnerCacheEnabled = true;
+      if (existsSync(settingsPath)) {
+        try {
+          const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+          if (settings.learnerCache && settings.learnerCache.enabled === false) {
+            learnerCacheEnabled = false;
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      if (learnerCacheEnabled) {
+        const cachePath = join(kayaDir, 'MEMORY', 'State', 'learning-cache.json');
+        const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+        let cacheIsStale = true;
+
+        if (existsSync(cachePath)) {
+          try {
+            const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'));
+            // Must have _version field and computed_at (ISC 2496 staleness check)
+            if (cacheData._version && cacheData.computed_at) {
+              const computedAt = new Date(cacheData.computed_at).getTime();
+              const ageMs = Date.now() - computedAt;
+              if (ageMs < STALE_THRESHOLD_MS) {
+                cacheIsStale = false;
+                console.error(`[ContextFeedback] Cache hit — skipping ContextLearner (age: ${Math.round(ageMs / 60000)}m)`);
+              } else {
+                console.error(`[ContextFeedback] Cache stale (age: ${Math.round(ageMs / 3600000)}h) — spawning ContextLearner`);
+              }
+            } else {
+              console.error('[ContextFeedback] Cache missing _version or computed_at — treating as stale');
+            }
+          } catch {
+            console.error('[ContextFeedback] Cache corrupted — treating as stale, triggering recompute');
+          }
+        } else {
+          console.error('[ContextFeedback] learning-cache.json missing — triggering background recompute');
+        }
+
+        if (cacheIsStale) {
+          // Fire-and-forget: spawn ContextLearner in background (ISC 4104: hook still exits fast)
+          Bun.spawn(
+            ['bun', join(kayaDir, 'skills/ContextManager/Tools/ContextLearner.ts'), '--analyze', '--write-cache'],
+            { stdout: 'ignore', stderr: 'ignore' }
+          );
+        }
+      } else {
+        // Fallback: every-50-sessions legacy behavior when cache disabled
+        const feedbackPath = join(kayaDir, 'MEMORY', 'LEARNING', 'SIGNALS', 'context-feedback.jsonl');
+        if (existsSync(feedbackPath)) {
+          const lineCount = readFileSync(feedbackPath, 'utf-8').split('\n').filter(Boolean).length;
+          const learningsPath = join(kayaDir, 'MEMORY', 'State', 'context-learnings.json');
+          const lastAnalyzedAt = existsSync(learningsPath)
+            ? (JSON.parse(readFileSync(learningsPath, 'utf-8')).totalSessionsAnalyzed ?? 0)
+            : 0;
+          const sessionsSinceLastAnalysis = lineCount - lastAnalyzedAt;
+          if (sessionsSinceLastAnalysis >= 50) {
+            console.error(`[ContextFeedback] ${sessionsSinceLastAnalysis} new sessions — spawning ContextLearner (legacy mode)`);
+            Bun.spawn(['bun', join(kayaDir, 'skills/ContextManager/Tools/ContextLearner.ts'), '--analyze'], {
+              stdout: 'ignore', stderr: 'ignore',
+            });
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
 
     process.exit(0);
   } catch (err) {

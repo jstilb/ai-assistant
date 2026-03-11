@@ -1,0 +1,168 @@
+{
+  "description": "SRD 5.1 magic items. Open Game Content (D&D 5e 2014). 20+ items across rarity tiers.",
+  "items": [
+    {
+      "name": "Bag of Holding",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "This bag has an interior space considerably larger than its outside dimensions, roughly 2 feet in diameter at the mouth and 4 feet deep. The bag can hold up to 500 pounds, not exceeding a volume of 64 cubic feet. The bag weighs 15 pounds, regardless of its contents. Retrieving an item from the bag requires an action."
+    },
+    {
+      "name": "Cloak of Protection",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": true,
+      "description": "You gain a +1 bonus to AC and saving throws while you wear this cloak."
+    },
+    {
+      "name": "Boots of Elvenkind",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "While you wear these boots, your steps make no sound, regardless of the surface you are moving across. You also have advantage on Dexterity (Stealth) checks that rely on moving silently."
+    },
+    {
+      "name": "Gauntlets of Ogre Power",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": true,
+      "description": "Your Strength score is 19 while you wear these gauntlets. They have no effect on you if your Strength is already 19 or higher."
+    },
+    {
+      "name": "Wand of Magic Missiles",
+      "type": "Wand",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "This wand has 7 charges. While holding it, you can use an action to expend 1 or more of its charges to cast the magic missile spell from it. For 1 charge, you cast the 1st-level version of the spell. You can increase the spell slot level by one for each additional charge you expend. The wand regains 1d6 + 1 expended charges daily at dawn."
+    },
+    {
+      "name": "Potion of Healing",
+      "type": "Potion",
+      "rarity": "common",
+      "attunement": false,
+      "description": "You regain 2d4 + 2 hit points when you drink this potion. The potion's red liquid glimmers when agitated."
+    },
+    {
+      "name": "Potion of Greater Healing",
+      "type": "Potion",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "You regain 4d4 + 4 hit points when you drink this potion."
+    },
+    {
+      "name": "+1 Weapon",
+      "type": "Weapon (any)",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "You have a +1 bonus to attack and damage rolls made with this magic weapon."
+    },
+    {
+      "name": "+1 Armor",
+      "type": "Armor (any)",
+      "rarity": "rare",
+      "attunement": false,
+      "description": "You have a +1 bonus to AC while wearing this armor."
+    },
+    {
+      "name": "+1 Shield",
+      "type": "Armor (shield)",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "While holding this shield, you have a +1 bonus to AC. This bonus is in addition to the shield's normal bonus to AC."
+    },
+    {
+      "name": "Ring of Protection",
+      "type": "Ring",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "You gain a +1 bonus to AC and saving throws while wearing this ring."
+    },
+    {
+      "name": "Bracers of Defense",
+      "type": "Wondrous item",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "While wearing these bracers, you gain a +2 bonus to AC if you are wearing no armor and using no shield."
+    },
+    {
+      "name": "Cloak of Displacement",
+      "type": "Wondrous item",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "While you wear this cloak, it projects an illusion that makes you appear to be standing in a place near your actual location, causing any creature to have disadvantage on attack rolls against you. If you take damage, the property ceases to function until the start of your next turn."
+    },
+    {
+      "name": "Belt of Giant Strength (Hill)",
+      "type": "Wondrous item",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "While wearing this belt, your Strength score changes to 21. The item has no effect on you if your Strength without the belt is equal to or greater than the belt's score."
+    },
+    {
+      "name": "Flame Tongue",
+      "type": "Weapon (any sword)",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "You can use a bonus action to speak this magic sword's command word, causing flames to erupt from the blade. These flames shed bright light in a 40-foot radius and dim light for an additional 40 feet. While the sword is ablaze, it deals an extra 2d6 fire damage to any target it hits. The flames last until you use a bonus action to speak the command word again or until you drop or sheathe the sword."
+    },
+    {
+      "name": "Staff of the Magi",
+      "type": "Staff",
+      "rarity": "legendary",
+      "attunement": true,
+      "attunement_requirement": "requires attunement by a sorcerer, warlock, or wizard",
+      "description": "This staff has 50 charges and can be used as a magic quarterstaff that grants a +2 bonus to attack and damage rolls. While holding it, you gain a +2 bonus to spell attack rolls and to the saving throw DCs of your spells. The staff regains 4d6 + 2 charges daily at dawn."
+    },
+    {
+      "name": "Vorpal Sword",
+      "type": "Weapon (any sword that deals slashing damage)",
+      "rarity": "legendary",
+      "attunement": true,
+      "description": "You gain a +3 bonus to attack and damage rolls made with this magic weapon. In addition, the weapon ignores resistance to slashing damage. When you attack a creature that has at least one head with this weapon and roll a 20 on the attack roll, you cut off one of the creature's heads."
+    },
+    {
+      "name": "Deck of Many Things",
+      "type": "Wondrous item",
+      "rarity": "legendary",
+      "attunement": false,
+      "description": "Usually found in a box or pouch, this deck contains a number of cards made of ivory or vellum. Most (75 percent) of these decks have only thirteen cards, but the rest have twenty-two. Before you draw a card, you must declare how many cards you intend to draw and then draw them randomly."
+    },
+    {
+      "name": "Amulet of Health",
+      "type": "Wondrous item",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "Your Constitution score is 19 while you wear this amulet. It has no effect on you if your Constitution is already 19 or higher without it."
+    },
+    {
+      "name": "Pearl of Power",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": true,
+      "attunement_requirement": "requires attunement by a spellcaster",
+      "description": "While this pearl is on your person, you can use an action to speak its command word and regain one expended spell slot. If the expended slot was of 4th level or higher, the new slot is 3rd level. Once you use the pearl, it can't be used again until the next dawn."
+    },
+    {
+      "name": "Boots of Speed",
+      "type": "Wondrous item",
+      "rarity": "rare",
+      "attunement": true,
+      "description": "While you wear these boots, you can use a bonus action to click the boots' heels together. If you do, the boots double your walking speed, and any creature that makes an opportunity attack against you has disadvantage on the attack roll. The effect lasts for 10 minutes."
+    },
+    {
+      "name": "Immovable Rod",
+      "type": "Rod",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "This flat iron rod has a button on one end. You can use an action to press the button, which causes the rod to become magically fixed in place. Until you or another creature uses an action to push the button again, the rod doesn't move, even if it is defying gravity."
+    },
+    {
+      "name": "Driftglobe",
+      "type": "Wondrous item",
+      "rarity": "uncommon",
+      "attunement": false,
+      "description": "This small sphere of thick glass weighs 1 pound. If you are within 60 feet of it, you can speak its command word and cause it to emanate the light or daylight spell. Once used, the daylight effect can't be used again until the next dawn."
+    }
+  ]
+}

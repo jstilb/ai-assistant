@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T03:03:22.836Z",
+  "completed_at": "2026-02-13T03:04:03.363Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "How am I doing on my Q1 goals?",
+      "timestamp": "2026-02-13T03:03:22.836Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Q1 2026 WIG progress review — all three goals showing gaps but with momentum.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — Target: 3/29/26**\n\n| WIG | Metric | Current | Target | Gap | Trend |\n|-----|--------|---------|--------|-----|-------|\n| **G0: Decrease Low-Value Media** | Daily avg hours | 5.3 hrs | 3.0 hrs | -2.3 hrs | S0 at 64%, S2 at 71% — strategies working but not enough |\n| **G1: Make 2 Good Friends** | Good friends | 0 | 2 | -2 | S3 at 29%, S4 at 14% — critical gap in social initiation |\n| **G2: Raise Alignment Score** | Score | 1.8 | 3.0 | -1.2 | S1 at 50%, S5 at 50% — moderate effort, needs consistency |\n\n**Lead Measure Performance (7-Day Rolling):**\n\n| Strategy | Current | Target | Status |\n|----------|---------|--------|--------|\n| S0 Boredom Blocks | 64% | 100% | Moderate |\n| S1 Pomodoro | 50% | 100% | Struggling |\n| S2 STORER | 71% | 100% | Moderate |\n| S3 Community Events | 29% | 100% | Critical |\n| S4 Social Invitations | 14% | 100% | Critical |\n| S5 Alignment Hour | 50% | 100% | Struggling |\n\n⚡ ACTIONS: Reviewed TELOS goals, challenges, strategies, and current status data.\n\n✅ RESULTS: Clear picture — **G1 (friends) is most off-track**, G0 (media) has the strongest lead measures but still far from target, G2 (alignment) is middling.\n\n📊 STATUS:\n- **6 weeks remaining** in Q1 (today is Feb 12, target March 29)\n- **Biggest bottleneck:** S3 and S4 — you're only attending ~29% of community events and sending invitations 14% of the time. Without these, G1 can't move.\n- **Strongest area:** S2 (STORER) at 71% — you're catching yourself before media consumption more often than not.\n- **Historical proof you can do this:** You've beaten harder challenges (porn addiction 100%, alcohol/weed elimination, body fat 19.7%→13.7%, wellbeing 2.61→7.17). Binary rules and tracking work for you.\n\n📁 CAPTURE: Q1 has 6 weeks left. G1 is the most at-risk WIG. S3/S4 are the critical lead measures to focus on.\n\n➡️ NEXT:\n1. **G1 is the fire** — Can you commit to 2 events + 2 invitations this week? That's the single biggest lever.\n2. **G0** — S0/S2 are working at ~67%. Pushing those to 85%+ would likely close the 2.3hr gap meaningfully.\n3. **G2** — Alignment hour and pomodoros at 50% means every other day. What's blocking the off-days?\n\n📖 STORY EXPLANATION:\n1. You set three Q1 WIGs: reduce media to 3hrs, make 2 friends, raise alignment score to 3.0\n2. Six weeks remain — roughly 42 days to close the gaps\n3. Media consumption (G0) has the best-performing strategies at 64-71%, but you're still at 5.3 hrs vs 3.0 target\n4. Friend-making (G1) is most at-risk — 0 friends, with community events at 29% and invitations at 14%\n5. Alignment score (G2) moved from 1.6 to 1.8 — progress, but slow at current 50% lead measure execution\n6. Your historical wins prove you can hit targets when you commit fully — binary rules and consistent tracking are your superpowers\n7. The critical bottleneck across all three WIGs is showing up: events drive friends, structure drives alignment, and both compete with media for your time\n8. The next 6 weeks are make-or-break — S3/S4 need the most urgent attention\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Six weeks left in Q1. Friends goal most at-risk. Community events and invitations need urgent focus.",
+      "timestamp": "2026-02-13T03:04:03.363Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.22638825,
+    "duration": 35090,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 1119,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 30145
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 40527,
+    "time_to_first_token_ms": 40527,
+    "time_to_last_token_ms": 40527,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T01:40:52.717Z",
+  "completed_at": "2026-02-12T01:41:29.601Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T01:40:52.717Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 11-15, 2026\n\n🔍 ANALYSIS: Three commitments this week — dentist (Tue), API redesign deadline (Thu), retro prep (Fri). Cross-referencing with your current goals and strategies.\n\n⚡ ACTIONS: Built weekly plan below.\n\n---\n\n## Week of Feb 11-15, 2026\n\n### Tuesday, Feb 12\n- **Dentist appointment** — block travel time before/after\n- Light work day around appointment\n- **S0/S5:** Use remaining time for an alignment hour or pomodoro session\n\n### Wednesday, Feb 13\n- **API redesign** — deep focus day, this is your biggest block of uninterrupted time before the Thursday deadline\n- **S1:** Run at least 1 pomodoro session on the redesign\n- **S3:** Check for any midweek community events to attend in the evening (currently at 28.6%, critical)\n\n### Thursday, Feb 14\n- **API redesign deadline** — finalize, review, submit/merge\n- Morning: polish and final testing\n- Afternoon: buffer for any issues\n- **S4:** If you met anyone at a Wednesday event, send a follow-up invitation (14.3%, critical)\n\n### Friday, Feb 15\n- **Retro prep** — morning block to gather notes, metrics, talking points\n- **Team retrospective** — attend and contribute\n- Afternoon: wrap up the week, do a quick alignment check\n\n### Daily Threads (Mon-Fri)\n- **S6 (Morning Stretch):** 10 min on waking — you're at 0%, even 3/5 days this week is a win\n- **S8 (Sleep Hygiene):** Devices off 1hr before bed — also at 0%\n- **S5 (Alignment Hour):** 1 protected hour/day for goal work\n\n### Weekend Consideration\n- **S3/S4:** Plan one social or community event for Saturday — your friendship goals (G1) are the biggest gap right now\n\n---\n\n📊 STATUS: Plan drafted, no calendar sync available (context is 8 days stale)\n\n📁 CAPTURE: Dentist Tue, API redesign due Thu, retro Fri\n\n➡️ NEXT: Want me to add these to LucidTasks or sync to your calendar?\n\n🗣️ Kaya: Three priorities mapped across the week with daily strategy targets included.",
+      "timestamp": "2026-02-12T01:41:29.601Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 36884,
+    "time_to_first_token_ms": 36884,
+    "time_to_last_token_ms": 36884,
+    "tokens_per_second": 0
+  }
+}

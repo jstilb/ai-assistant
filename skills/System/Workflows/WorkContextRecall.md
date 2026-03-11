@@ -52,7 +52,7 @@ Search these locations IN PARALLEL using Intern agents:
 | **MEMORY/STATE/progress/** | Active multi-session projects | `cat ~/.claude/MEMORY/STATE/progress/*.json \| grep -i [keyword]` |
 | **MEMORY/LEARNING/** | Related learnings and patterns | `grep -r [keyword] ~/.claude/MEMORY/LEARNING/` |
 | **MEMORY/RESEARCH/** | Agent output captures | `grep -r [keyword] ~/.claude/MEMORY/RESEARCH/` |
-| **projects/-Users-your-username--claude/** | Session transcripts (last 30 days) | `grep -l [keyword] ~/.claude/projects/-Users-your-username--claude/*.jsonl` |
+| **projects/-Users-[user]--claude/** | Session transcripts (last 30 days) | `grep -l [keyword] ~/.claude/projects/-Users-[user]--claude/*.jsonl` |
 | **Plans/** | Planning documents | `grep -r [keyword] ~/.claude/Plans/` |
 | **WORK/** | Root work scratch files | `ls ~/.claude/WORK/` |
 
@@ -129,7 +129,7 @@ cat ~/.claude/MEMORY/WORK/*/META.yaml | grep -A5 -B5 "[keyword]"
 ### For Session Transcripts
 ```bash
 # Find sessions mentioning the topic (recent first)
-ls -t ~/.claude/projects/-Users-your-username--claude/*.jsonl | head -20 | xargs -I{} sh -c 'grep -l "[keyword]" "{}" 2>/dev/null && echo {}'
+ls -t ~/.claude/projects/-Users-[user]--claude/*.jsonl | head -20 | xargs -I{} sh -c 'grep -l "[keyword]" "{}" 2>/dev/null && echo {}'
 
 # Read matching session content (use jq for parsing)
 jq -r '.content // .text' session.jsonl | grep -i "[keyword]" -B2 -A2

@@ -1,0 +1,42 @@
+# Task: DnD Routes to DnD
+# D&D request triggers DnD skill
+
+id: kaya_skill_dnd_routes_dnd
+description: "D&D request like 'let us play D&D, create a character' invokes DnD skill"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Let's play D&D, create a level 5 wizard character"
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: dnd
+      max_calls: 20
+
+  - type: response_format_check
+    weight: 0.20
+    params:
+      format: full
+
+  - type: voice_line_check
+    weight: 0.20
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - skill_routing
+  - routing
+  - dnd
+  - capability
+
+created_at: "2026-02-11"

@@ -1,0 +1,14 @@
+{
+  "source": "drive",
+  "title": "Google Drive Context",
+  "output": "context/GoogleDriveContext.md",
+  "remoteName": "gdrive",
+  "excludedFolders": [".Trash", "Backups", "Colab Notebooks"],
+  "timeout": 120000,
+  "recursiveTimeout": 90000,
+  "metricLabel": "files",
+  "priority": "Optional",
+  "loadWhen": ["files", "document management", "where's my file"],
+  "skipWhen": ["most tasks"],
+  "freshnessRule": "Update weekly; tolerant of staleness"
+}

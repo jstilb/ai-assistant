@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T05:48:15.400Z",
+  "completed_at": "2026-02-12T05:48:37.317Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Calendar query like 'what's on my calendar' routes to scheduling profile with CalendarContext loaded",
+      "timestamp": "2026-02-12T05:48:15.400Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, calendar context loaded but outdated.\n\n🔍 ANALYSIS: Calendar context is 200+ hours old and shows no data. Asana context also outdated.\n\n🗣️ Kaya: Calendar context is stale. Want me to refresh it, or what can I help with tonight?",
+      "timestamp": "2026-02-12T05:48:37.317Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21917,
+    "time_to_first_token_ms": 21917,
+    "time_to_last_token_ms": 21917,
+    "tokens_per_second": 0
+  }
+}

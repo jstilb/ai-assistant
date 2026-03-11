@@ -1,0 +1,32 @@
+# Task: Goals Routes to Life Coaching
+# Goals/progress query routes to life-coaching profile with TELOS files
+
+id: kaya_ctx_goals_routes_life_coaching
+description: "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "How am I doing on my Q1 goals?"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profile: life-coaching
+      required_files:
+        - TELOS
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - life_coaching
+  - capability
+
+created_at: "2026-02-11"

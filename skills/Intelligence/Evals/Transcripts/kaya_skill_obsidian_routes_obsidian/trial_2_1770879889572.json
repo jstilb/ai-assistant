@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_obsidian_routes_obsidian",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:04:27.635Z",
+  "completed_at": "2026-02-12T07:04:49.572Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Note structuring request like 'structure my ML notes' invokes Obsidian skill",
+      "timestamp": "2026-02-12T07:04:27.635Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, system loaded successfully.\n🗣️ Kaya: Evening Jm. Ready when you are — one approved item in queue.",
+      "timestamp": "2026-02-12T07:04:49.572Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21937,
+    "time_to_first_token_ms": 21937,
+    "time_to_last_token_ms": 21937,
+    "tokens_per_second": 0
+  }
+}

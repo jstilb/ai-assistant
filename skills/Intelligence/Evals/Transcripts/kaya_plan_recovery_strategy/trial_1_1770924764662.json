@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_plan_recovery_strategy",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:32:12.326Z",
+  "completed_at": "2026-02-12T19:32:44.662Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Set up automatic failover for our database cluster",
+      "timestamp": "2026-02-12T19:32:12.326Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🗣️ Kaya: Need to know which project and database system before designing the failover architecture.",
+      "timestamp": "2026-02-12T19:32:44.662Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32336,
+    "time_to_first_token_ms": 32336,
+    "time_to_last_token_ms": 32336,
+    "tokens_per_second": 0
+  }
+}

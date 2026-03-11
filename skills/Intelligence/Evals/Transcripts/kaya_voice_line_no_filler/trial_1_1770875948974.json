@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_voice_line_no_filler",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:58:49.506Z",
+  "completed_at": "2026-02-12T05:59:08.974Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya voice line does not use conversational filler like 'Done.', 'Happy to help!', 'Got it.'",
+      "timestamp": "2026-02-12T05:58:49.506Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, ready for work.\n\n🗣️ Kaya: System online, all skills loaded. What are we working on tonight, Jm?",
+      "timestamp": "2026-02-12T05:59:08.974Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 19468,
+    "time_to_first_token_ms": 19468,
+    "time_to_last_token_ms": 19468,
+    "tokens_per_second": 0
+  }
+}

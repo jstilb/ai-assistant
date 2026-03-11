@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_focus_greeting",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T00:56:35.943Z",
+  "completed_at": "2026-02-12T00:56:53.333Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Hey, good morning!",
+      "timestamp": "2026-02-12T00:56:35.943Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Morning greeting from Jm.\n🗣️ Kaya: Good morning Jm, ready to help with whatever you need today.",
+      "timestamp": "2026-02-12T00:56:53.333Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 17390,
+    "time_to_first_token_ms": 17390,
+    "time_to_last_token_ms": 17390,
+    "tokens_per_second": 0
+  }
+}

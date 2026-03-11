@@ -1,0 +1,62 @@
+# QueueRouter Routing Rules
+# 4-queue model: spec-pipeline → approvals → approved-work + jm-tasks (human-only)
+
+version: 1
+
+defaults:
+  priority: 2
+  expiryDays: 30
+
+routes:
+  # spec-pipeline items route directly (no approval gate at entry)
+  - pattern: "spec:*"
+    queue: spec-pipeline
+    priority: 2
+    requiresApproval: false
+
+  # Everything else enters spec-pipeline for spec generation first
+  - pattern: "*"
+    queue: spec-pipeline
+    priority: 2
+    requiresApproval: false
+
+queues:
+  approvals:
+    description: "Items with draft specs awaiting Jm review and approval"
+    autoProcess: false
+    enrichOnAdd: false
+    expiryDays: 30
+
+  approved-work:
+    description: "Work with approved specs - ready for execution"
+    autoProcess: true
+    requiresSpec: true
+    expiryDays: 14
+
+  jm-tasks:
+    description: "Tasks requiring Jm's direct action — human-only, never auto-processed"
+    autoProcess: false
+    enrichOnAdd: false
+    expiryDays: 90
+
+  spec-pipeline:
+    description: "Spec generation pipeline: LucidTasks items progressing from context gathering through research to spec generation"
+    autoProcess: false
+    enrichOnAdd: false
+    expiryDays: 90
+    validStatuses:
+      - awaiting-context
+      - researching
+      - generating-spec
+      - revision-needed
+      - escalated
+    statusTransitions:
+      awaiting-context:
+        - researching
+      researching:
+        - generating-spec
+      generating-spec:
+        - revision-needed
+      revision-needed:
+        - researching
+        - escalated

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_no_cliche_transitions",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:21:53.465Z",
+  "completed_at": "2026-02-12T19:24:50.317Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Explain how the context management system works",
+      "timestamp": "2026-02-12T19:21:53.465Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: The ContextManager is a three-tier progressive disclosure system that minimizes token waste by loading only relevant context per session.\n\n⚡ ACTIONS: Deep exploration of all ContextManager components, configs, hooks, and state files.\n\n✅ RESULTS: Full architecture mapped below.\n\n📖 STORY EXPLANATION:\n\n1. **Three tiers load context progressively** — Boot (SessionStart, ~200 tokens for date/time), Profile (UserPromptSubmit, first message, 800-3200 tokens), and On-Demand (mid-session delta loading).\n\n2. **Intent classification is two-stage** — Fast keyword match against `routing.json` handles ~80% of cases in <1ms. Ambiguous prompts fall back to Haiku inference (2-5s). Result stored in `MEMORY/State/context-classification.json` for cross-hook use.\n\n3. **Nine profiles define what loads** — `conversational` (200 tokens, basically nothing), `development` (1200 tokens, CLI tools + projects), `life-coaching` (2200 tokens, TELOS goals), `planning` (2500 tokens), etc. Each profile has required/recommended/optional file tiers with explicit excludes.\n\n4. **Token budgets enforce limits** — Files load in priority order (required → recommended → optional). If a file exceeds remaining budget, the system checks for a `.compressed.md` version. Token estimation uses `Math.ceil(chars / 3.5)`.\n\n5. **Delta loading prevents duplication** — On subsequent messages, topic change detection runs keyword-only. If confidence >0.7 for a new profile, only files not already loaded get injected.\n\n6. **Freshness tracking warns about stale data** — Fresh <24h, Stale 24-72h, Outdated >72h. You saw the \"⚠️ Stale (68h old)\" warning on CLI-INDEX.md in this session's context.\n\n7. **Cross-session learning improves over time** — `ContextFeedback.hook.ts` captures session data at end. `ContextLearner.ts` analyzes patterns: files frequently loaded manually get suggested for promotion to profiles, unused files get flagged for removal.\n\n8. **Fail-open design** — Every hook exits cleanly on errors, never blocking the session. Feature flag supports `true`, `false`, or `\"shadow\"` (classify but don't inject, for validation).\n\n**Key files:**\n- Hook entry points: `hooks/ContextRouter.hook.ts`, `hooks/LoadContext.hook.ts`\n- Core logic: `skills/ContextManager/Tools/IntentClassifier.ts`, `ContextSelector.ts`\n- Config: `skills/ContextManager/config/profiles.json`, `routing.json`\n- State: `MEMORY/State/context-session.json`, `context-classification.json`\n\n📊 STATUS: System is currently active (`enabled: true`). This session loaded the `development` profile at 1126/1200 tokens with 2 context files.\n\n➡️ NEXT: Ask if you want to dive deeper into any specific component, or if you want to tune profiles/routing.\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Three-tier context system loads relevant files per intent within token budgets, learning across sessions.",
+      "timestamp": "2026-02-12T19:24:50.317Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 176852,
+    "time_to_first_token_ms": 176852,
+    "time_to_last_token_ms": 176852,
+    "tokens_per_second": 0
+  }
+}

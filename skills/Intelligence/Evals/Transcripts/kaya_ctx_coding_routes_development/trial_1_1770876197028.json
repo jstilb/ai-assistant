@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_coding_routes_development",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:02:55.700Z",
+  "completed_at": "2026-02-12T06:03:17.028Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Coding request like 'fix this bug' routes to development profile, loads CLI-INDEX, excludes TELOS",
+      "timestamp": "2026-02-12T06:02:55.700Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, development profile loaded.\n\n🗣️ Kaya: Development context loaded. Ready for your coding request, Jm.",
+      "timestamp": "2026-02-12T06:03:17.028Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21328,
+    "time_to_first_token_ms": 21328,
+    "time_to_last_token_ms": 21328,
+    "tokens_per_second": 0
+  }
+}

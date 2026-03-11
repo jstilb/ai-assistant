@@ -1,0 +1,103 @@
+{
+  "comparison": "Art vs SystemFlowchart",
+  "question": "Who owns mermaid/flowchart/technical diagram?",
+  "skill_a": {
+    "name": "Art",
+    "path": "~/.claude/skills/Content/Art/SKILL.md",
+    "summary": "General-purpose visual content creation system. Handles a wide range of output types: blog headers, illustrations, Mermaid flowcharts, technical/architecture diagrams, D3 dashboards, timelines, taxonomies, comparisons, comics, recipe cards, stat cards, annotated screenshots, pack icons, and more. Generates images via Gemini API (nano-banana-pro). Routes internally to typed sub-workflows (Mermaid.md, TechnicalDiagrams.md, Visualize.md, etc.). Outputs to ~/Downloads/ for user preview. Domain-agnostic — works for any content, any project."
+  },
+  "skill_b": {
+    "name": "SystemFlowchart",
+    "path": "~/.claude/skills/Content/SystemFlowchart/SKILL.md",
+    "summary": "Narrowly scoped Kaya-system documentation tool. Generates diagrams exclusively about Kaya's own architecture: system overview, session lifecycle, skill ecosystem, memory structure, configuration flow, agent architecture. Produces Mermaid markdown (for GitHub/Obsidian rendering) and optionally PNGs via the Art skill's TechnicalDiagrams workflow. Has its own scanner, categorizer, cache manager, and diagram builder tools. Triggers are Kaya-specific: 'system diagram', 'architecture flowchart', 'skill map', 'session lifecycle', 'hook flow', 'memory diagram'. Not a general-purpose diagramming tool."
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "prompt": "Create a flowchart of this onboarding process",
+      "winner": "Art",
+      "rationale": "Generic process flowchart with no Kaya-system subject matter. Art owns the Mermaid.md sub-workflow for flowcharts. SystemFlowchart only handles Kaya's own architecture — it would produce an irrelevant Kaya diagram or simply not apply.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 2,
+      "prompt": "Generate a mermaid diagram of the system architecture",
+      "winner": "Art",
+      "rationale": "Ambiguous: 'system architecture' could mean Kaya or any other system. However, SystemFlowchart only knows how to describe Kaya's architecture. If the user means a different system, routing to SystemFlowchart is wrong. Art can produce a Mermaid diagram of any architecture the user describes. Default owner: Art, with a disambiguation question if context is unclear.",
+      "wrong_routing_impact": "medium"
+    },
+    {
+      "id": 3,
+      "prompt": "Show me the Kaya system architecture",
+      "winner": "SystemFlowchart",
+      "rationale": "Explicit Kaya-system subject matter and an exact trigger phrase. SystemFlowchart scans the live filesystem, categorizes skills, checks cache staleness, and produces up-to-date Mermaid+PNG documentation. Art could draw a generic diagram, but would lack actual system knowledge.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 4,
+      "prompt": "Make me a technical diagram showing data flow between microservices",
+      "winner": "Art",
+      "rationale": "User-supplied content about external microservices. Art's TechnicalDiagrams.md workflow handles architecture/data-flow diagrams for any subject. SystemFlowchart cannot represent non-Kaya systems.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 5,
+      "prompt": "Visualize the Kaya skill ecosystem",
+      "winner": "SystemFlowchart",
+      "rationale": "Exact match for SystemFlowchart's 'skill map' trigger and SkillCategorizer.ts tool. It produces a live-scanned, categorized ecosystem diagram. Routing to Art would yield a generic illustration with no actual data.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 6,
+      "prompt": "Create art for my blog post about distributed systems",
+      "winner": "Art",
+      "rationale": "Clearly an editorial illustration request. SystemFlowchart has no blog content capability. Art routes to Essay.md or Visualize.md as appropriate.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 7,
+      "prompt": "Visualize the deployment pipeline",
+      "winner": "Art",
+      "rationale": "User-described pipeline with no Kaya qualifier. Art's TechnicalDiagrams or Mermaid workflow handles this. SystemFlowchart would only output Kaya's own deployment-adjacent diagrams (if any), which would be irrelevant.",
+      "wrong_routing_impact": "medium"
+    },
+    {
+      "id": 8,
+      "prompt": "Is the architecture diagram up to date?",
+      "winner": "SystemFlowchart",
+      "rationale": "References SystemFlowchart's cache management capability (CacheManager.ts check). No equivalent concept exists in Art. Art does not track staleness.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 9,
+      "prompt": "Draw a sequence diagram for our API authentication flow",
+      "winner": "Art",
+      "rationale": "Sequence diagram is a sub-type of Mermaid content owned by Art's Mermaid.md workflow. Subject is an external API (not Kaya internals). SystemFlowchart has no sequence diagram capability.",
+      "wrong_routing_impact": "high"
+    },
+    {
+      "id": 10,
+      "prompt": "Generate a mermaid diagram of how Kaya hooks work",
+      "winner": "SystemFlowchart",
+      "rationale": "Kaya hooks are explicitly covered by SystemFlowchart's 'hook flow' trigger and SessionLifecycle.md workflow, which scans actual hook configuration. Art would produce a Mermaid diagram, but without scanning hooks/ it would be generic and potentially inaccurate.",
+      "wrong_routing_impact": "high"
+    }
+  ],
+  "overlap_analysis": {
+    "clear_owner_pct": 90.0,
+    "ambiguous_pct": 10.0,
+    "merge_would_lose": "SystemFlowchart's core value is live-system introspection: it scans the filesystem, categorizes skills, checks cache staleness, and produces accurate documentation of Kaya's current state. Merging into Art would lose these tools entirely. Art has no concept of 'is this diagram stale?' or 'what skills exist right now?'. The two skills have different output contracts: Art produces visual content from user-supplied descriptions; SystemFlowchart produces data-driven documentation of a specific known subject.",
+    "separation_causes_confusion": "Yes, but only at the trigger layer. The word 'mermaid' appears in both skills' scope — Art owns general Mermaid flowcharts while SystemFlowchart owns Kaya-specific Mermaid diagrams. The phrase 'technical diagram' is claimed by Art's TechnicalDiagrams workflow AND could match SystemFlowchart's 'architecture flowchart' trigger. A router without Kaya-context awareness could incorrectly send a Kaya query to Art or a generic diagram query to SystemFlowchart. Approximately 1 in 10 requests sits in the ambiguous zone (scenario 2)."
+  },
+  "recommendation": {
+    "action": "KEEP_SEPARATE",
+    "rationale": "The two skills are architecturally and functionally distinct. Art is a general-purpose visual content generator driven by user-provided descriptions. SystemFlowchart is a Kaya-system documentation tool driven by live filesystem data. They cannot be merged without losing SystemFlowchart's introspection capability. The 10% ambiguity is resolvable with trigger precision, not merging. The root cause of confusion is that SystemFlowchart's description uses generic terms ('system diagram', 'architecture flowchart') without requiring a Kaya qualifier, causing it to compete with Art for generic diagram requests. The fix is trigger scoping, not consolidation.",
+    "trigger_fixes": [
+      "SystemFlowchart SKILL.md description should add 'Kaya' qualifier to all triggers: change 'system diagram' to 'Kaya system diagram', 'architecture flowchart' to 'Kaya architecture flowchart'.",
+      "SystemFlowchart USE WHEN should read: 'USE WHEN user asks about Kaya system architecture, Kaya skill map, Kaya session lifecycle, Kaya hook flow, Kaya memory structure, or wants to update/check Kaya architecture diagrams.'",
+      "Art SKILL.md description already correctly omits Kaya-system qualifiers. No changes needed. Its internal routing (Mermaid.md, TechnicalDiagrams.md) correctly handles all non-Kaya diagram requests.",
+      "When the router sees 'mermaid', 'flowchart', 'technical diagram', or 'sequence diagram' WITHOUT an explicit 'Kaya' subject qualifier, it should route to Art.",
+      "When the router sees 'Kaya architecture', 'Kaya system', 'skill ecosystem', 'hook flow', 'session lifecycle', 'memory structure', or 'are diagrams up to date', it should route to SystemFlowchart."
+    ]
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "task_id": "kaya_code_error_recovery",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-13T02:42:14.448Z",
+  "completed_at": "2026-02-13T02:42:52.147Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Run the test suite and fix any failures",
+      "timestamp": "2026-02-13T02:42:14.448Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: The working directory is empty — no project files, test suite, or code exist here.\n\n🔍 ANALYSIS: The eval directory `/private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7/` contains no files at all. There's no test suite to run.\n\n📊 STATUS: Empty directory — nothing to test or fix.\n\n➡️ NEXT: Jm, could you point me to the project or repo you'd like me to test? I can either:\n- Clone a repo into this directory\n- Work in a different directory where your project lives\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Working directory is empty. No project or test files found to run.",
+      "timestamp": "2026-02-13T02:42:52.147Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770950572147_d8d7s4",
+      "name": "Bash",
+      "params": {
+        "command": "ls /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7/",
+        "description": "List project files"
+      },
+      "started_at": "2026-02-13T02:42:52.147Z",
+      "result": "",
+      "completed_at": "2026-02-13T02:42:52.147Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950572147_3quuk6",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*.{test,spec}.{js,ts,jsx,tsx}",
+        "path": "/private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7"
+      },
+      "started_at": "2026-02-13T02:42:52.147Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:42:52.147Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950572147_atplt2",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/package.json",
+        "path": "/private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7"
+      },
+      "started_at": "2026-02-13T02:42:52.147Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:42:52.147Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950572147_m0ifw6",
+      "name": "Bash",
+      "params": {
+        "command": "ls -la /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7/",
+        "description": "List all files including hidden"
+      },
+      "started_at": "2026-02-13T02:42:52.147Z",
+      "result": "total 0\ndrwx------@   2 [user]  staff    64 Feb 12 18:42 .\ndrwx------@ 228 [user]  staff  7296 Feb 12 18:42 ..",
+      "completed_at": "2026-02-13T02:42:52.147Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950572147_iwf5fg",
+      "name": "Glob",
+      "params": {
+        "pattern": "**/*",
+        "path": "/private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_error_recovery-nis3A7"
+      },
+      "started_at": "2026-02-13T02:42:52.147Z",
+      "result": "No files found",
+      "completed_at": "2026-02-13T02:42:52.147Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.29577899999999996,
+    "duration": 31905,
+    "turns": 6,
+    "inputTokens": 6,
+    "outputTokens": 827,
+    "cacheReadTokens": 169488,
+    "cacheCreationTokens": 30276
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 5,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 37699,
+    "time_to_first_token_ms": 37699,
+    "time_to_last_token_ms": 37699,
+    "tokens_per_second": 0
+  }
+}

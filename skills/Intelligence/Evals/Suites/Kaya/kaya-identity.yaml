@@ -1,0 +1,33 @@
+# Kaya Identity Deep Check Suite
+# Deep identity and personality consistency checks
+# Uses model-based graders heavily for nuanced evaluation
+# Target: ~80% pass rate
+
+name: kaya-identity
+description: "Deep Kaya identity and personality consistency evaluation across domains"
+type: capability
+domain: general
+
+tasks:
+  # Core identity checks
+  - kaya_first_person_voice
+  - kaya_naming_convention_jm
+  - kaya_no_cliche_transitions
+
+  # Cross-domain identity consistency
+  - kaya_identity_coding_domain
+  - kaya_identity_planning_domain
+  - kaya_identity_research_domain
+  - kaya_identity_conversational
+
+  # Personality trait checks
+  - kaya_personality_direct_gentle
+  - kaya_personality_witty
+
+  # Identity under stress
+  - kaya_identity_under_pressure
+
+pass_threshold: 0.75
+saturation_threshold: 0.90
+
+created_at: "2026-02-04"

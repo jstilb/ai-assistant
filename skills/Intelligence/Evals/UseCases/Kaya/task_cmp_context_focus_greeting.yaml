@@ -1,0 +1,36 @@
+# Task: Compare Context Focus for Greeting
+# Pairwise comparison of greeting response brevity before/after context changes
+
+id: kaya_cmp_context_focus_greeting
+description: "Compare greeting response brevity - more appropriate lightness and brevity after changes"
+type: capability
+domain: conversational
+source: manual
+
+setup:
+  scenario_prompt: "Hey, good morning!"
+  baseline_ref: "pre-streamline"
+
+graders:
+  - type: pairwise_comparison
+    weight: 1.0
+    required: true
+    params:
+      reference: "skills/Evals/References/Kaya/baselines/pre-streamline/kaya_cmp_context_focus_greeting.md"
+      position_swap: true
+      criteria:
+        - brevity
+        - appropriateness
+        - warmth
+
+trials: 3
+pass_threshold: 0.9
+
+tags:
+  - kaya
+  - comparison
+  - before_after
+  - greeting
+  - context_focus
+
+created_at: "2026-02-11"

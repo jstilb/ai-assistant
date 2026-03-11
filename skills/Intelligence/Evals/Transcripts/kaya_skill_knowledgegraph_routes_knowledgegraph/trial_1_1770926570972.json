@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_knowledgegraph_routes_knowledgegraph",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:00:58.536Z",
+  "completed_at": "2026-02-12T20:02:50.972Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Show me the knowledge graph connections for machine learning",
+      "timestamp": "2026-02-12T20:00:58.536Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Now I have a comprehensive picture. Here's the full knowledge graph map for machine learning:\n\n📋 SUMMARY: Mapped machine learning connections across your Obsidian vault — 474 notes, 74 tagged #machine-learning, spanning 6 major knowledge domains.\n\n🔍 ANALYSIS: Machine learning is one of the most connected topics in your vault, anchored in **Data Science** (41 notes) with strong bridges to Applied ML, NLP, Statistics, ML at Scale, and PyTorch.\n\n⚡ ACTIONS: Built graph, ran semantic search, cluster analysis, and path tracing across domains.\n\n✅ RESULTS:\n\n## Knowledge Graph: Machine Learning Connections\n\n```\n                          ┌─────────────────────┐\n                          │     STATISTICS       │\n                          │  (19 notes)          │\n                          │  Probability, OLS,   │\n                          │  Hypothesis Testing  │\n                          └──────────┬───────────┘\n                                     │\n                    Linear Regression Learning Rate\n                    → OLS Estimation → Crash Course\n                                     │\n┌──────────────────┐    ┌────────────┴────────────┐    ┌──────────────────────┐\n│  ML AT SCALE     │    │   DATA SCIENCE (core)   │    │  APPLIED ML          │\n│  (13 notes)      │◄───│      (41 notes)         │───►│  (14 notes)          │\n│  Distributed ML, │    │  Bias/Variance,         │    │  Gradient Descent,   │\n│  MapReduce,      │    │  Decision Trees,        │    │  Decision Trees,     │\n│  Spark           │    │  Random Forests,        │    │  Neural Networks     │\n└──────────────────┘    │  Regression, KNN,       │    └──────────┬───────────┘\n        ▲               │  Deep Learning          │               │\n        │               └────────────┬────────────┘               │\n   Gradient Descent                  │                    Week 7 Neural Networks\n   → Distributed ML                  │                    → Pretrained Transformers\n                                     │                            │\n                          ┌──────────┴───────────┐    ┌───────────┴──────────┐\n                          │   PYTORCH            │    │  NLP + DEEP LEARNING │\n                          │   (2 notes)          │    │  (25 notes)          │\n                          │   Neural Networks,   │    │  Transformers, Text  │\n                          │   Tensors            │    │  Classification,     │\n                          └──────────────────────┘    │  MultiModality       │\n                                                      └──────────────────────┘\n```\n\n### Key Connection Paths\n\n| Path | Hops | Route |\n|------|------|-------|\n| ML → Neural Networks | 2 | Bias & Variance → AML Intro → Week 7 Neural Networks |\n| ML → Statistics | 3 | Bias & Variance → Linear Regression → OLS Estimation → Crash Course |\n| ML → NLP | 4 | Bias & Variance → AML Intro → Neural Networks → Transformers → Text Classification |\n| ML → ML at Scale | 3 | Bias & Variance → Linear Regression → Gradient Descent → Distributed ML |\n| ML → Logistic Regression | 1 | Direct link (same cluster) |\n\n### Bridge Notes (connecting domains)\n- **Bias & Variance** — most connected ML note, links Data Science ↔ Applied ML\n- **Linear Regression Learning Rate** — bridges Data Science ↔ Statistics\n- **Deep Learning** — bridges fundamentals ↔ neural architectures\n- **Week 6 Gradient Descent** — bridges Applied ML ↔ ML at Scale\n- **Week 7 Neural Networks** — bridges Applied ML ↔ NLP\n\n### Top Tags in ML Ecosystem\n| Tag | Count |\n|-----|-------|\n| #machine-learning | 74 |\n| #data-science | 70 |\n| #nlp | 24 |\n| #statistics | 22 |\n| #python | 28 |\n| #algorithms | 24 |\n\n### Gap: ML Systems Engineering is disconnected\nNo path exists from the core ML cluster to **ML Systems Engineering** (21 notes). This folder covers deployment, APIs, and MLOps but lacks wikilinks back to the theory notes. Adding links from deployment notes to model training concepts would close this gap.\n\n📊 STATUS: Graph built with 474 nodes, 8,588 edges. ML spans 6 folders with 74 directly tagged notes.\n\n📁 CAPTURE: ML knowledge anchored in Data Science folder; ML Systems Engineering is an island needing bridge notes.\n\n➡️ NEXT:\n- Add wikilinks from ML Systems Engineering → Data Science to connect deployment with theory\n- Consider creating a \"Machine Learning Overview\" hub note linking all 6 domains\n- Run `bun Tools/GraphVisualizer.ts --folder \"Data Science\" --max-nodes 100` to see an interactive view\n\n📖 STORY EXPLANATION:\n1. Rebuilt the knowledge graph from your full Obsidian vault (474 notes)\n2. Semantic search found 10 ML-related notes across 6 folders as entry points\n3. Cluster analysis identified bridge notes connecting ML domains\n4. Path tracing mapped how ML fundamentals connect to Neural Networks (2 hops), Statistics (3 hops), NLP (4 hops), and ML at Scale (3 hops)\n5. Data Science folder is the central hub with 41 notes and the most connected nodes\n6. ML Systems Engineering (21 notes on deployment/MLOps) is disconnected — no graph paths exist to the theory cluster\n7. Key bridge notes: Bias & Variance, Linear Regression, Gradient Descent, Neural Networks\n8. Your #machine-learning tag (74 notes) is the 4th most used tag in the entire vault\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Machine learning spans six domains with 74 tagged notes. ML Systems Engineering is disconnected and needs bridging.",
+      "timestamp": "2026-02-12T20:02:50.972Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 112436,
+    "time_to_first_token_ms": 112436,
+    "time_to_last_token_ms": 112436,
+    "tokens_per_second": 0
+  }
+}

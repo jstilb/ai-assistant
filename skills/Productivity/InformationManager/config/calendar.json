@@ -1,0 +1,12 @@
+{
+  "source": "calendar",
+  "title": "Calendar Context",
+  "output": "context/CalendarContext.md",
+  "cli": "kaya-cli calendar list --days 7",
+  "timeout": 10000,
+  "metricLabel": "events",
+  "priority": "Critical",
+  "loadWhen": ["scheduling", "availability", "meetings", "when am I free"],
+  "skipWhen": ["non-time-sensitive tasks", "knowledge lookup"],
+  "freshnessRule": "Update daily; stale after 24h for scheduling"
+}

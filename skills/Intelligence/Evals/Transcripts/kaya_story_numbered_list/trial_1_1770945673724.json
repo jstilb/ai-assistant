@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T01:20:35.123Z",
+  "completed_at": "2026-02-13T01:21:13.724Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Walk me through the steps to debug a Node.js application that's running slowly",
+      "timestamp": "2026-02-13T01:20:35.123Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Guide to debugging a slow Node.js application.\n\n📖 STORY EXPLANATION:\n1. **Start with profiling, not guessing** — Run `node --prof your-app.js`, then process the output with `node --prof-process isolate-*.log > processed.txt` to see where CPU time is spent\n2. **Use Chrome DevTools** — Launch with `node --inspect your-app.js`, open `chrome://inspect` in Chrome, and use the Performance tab to record and analyze flame charts\n3. **Check the event loop** — Install `clinic.js` (`npx clinic doctor -- node your-app.js`) to detect event loop delays, I/O bottlenecks, and active handle issues\n4. **Look for synchronous blockers** — Search your codebase for `readFileSync`, `execSync`, `JSON.parse` on large payloads, or CPU-heavy loops that block the event loop\n5. **Profile memory** — Use `node --inspect` with Chrome DevTools' Memory tab to take heap snapshots, compare them over time, and identify leaks or excessive allocations\n6. **Instrument specific routes** — Add timing with `console.time`/`console.timeEnd` or `perf_hooks.performance.mark()` around suspect code paths to isolate which operations are slow\n7. **Check external dependencies** — Slow databases, APIs, or DNS lookups are common culprits. Log response times for every external call. Use `autocannon` or `wrk` to load test and reproduce slowness under concurrency\n8. **Iterate one fix at a time** — Change one thing, benchmark again, confirm improvement. Avoid stacking multiple changes without measuring each one's impact\n\n🗣️ Kaya: Profile first with --inspect and clinic.js, then isolate blockers one change at a time.",
+      "timestamp": "2026-02-13T01:21:13.723Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 38601,
+    "time_to_first_token_ms": 38600,
+    "time_to_last_token_ms": 38601,
+    "tokens_per_second": 0
+  }
+}

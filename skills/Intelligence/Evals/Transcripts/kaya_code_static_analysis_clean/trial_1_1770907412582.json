@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_code_static_analysis_clean",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T14:43:07.071Z",
+  "completed_at": "2026-02-12T14:43:32.581Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "No new lint or type errors introduced by code changes",
+      "timestamp": "2026-02-12T14:43:07.071Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system initialized successfully.\n🗣️ Kaya: Good morning Jm. All systems online, ready for your first request.",
+      "timestamp": "2026-02-12T14:43:32.581Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25510,
+    "time_to_first_token_ms": 25510,
+    "time_to_last_token_ms": 25510,
+    "tokens_per_second": 0
+  }
+}

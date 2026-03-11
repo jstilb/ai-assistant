@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_rate_left_blank",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:29:01.731Z",
+  "completed_at": "2026-02-12T18:29:44.541Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add a dark mode toggle to the settings page",
+      "timestamp": "2026-02-12T18:29:01.731Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Need clarification on which \"settings page\" to add dark mode to — PAI has no settings UI.\n\n🗣️ Kaya: PAI is CLI-based with no settings page. Which component needs the dark mode toggle?",
+      "timestamp": "2026-02-12T18:29:44.541Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 42810,
+    "time_to_first_token_ms": 42810,
+    "time_to_last_token_ms": 42810,
+    "tokens_per_second": 0
+  }
+}

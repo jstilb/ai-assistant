@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T02:36:00.009Z",
+  "completed_at": "2026-02-13T02:36:33.749Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Walk me through the steps to debug a Node.js application that's running slowly",
+      "timestamp": "2026-02-13T02:36:00.009Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Guide to debugging slow Node.js applications.\n\n📖 STORY EXPLANATION:\n1. **Start with profiling** — Run `node --prof app.js` to generate a V8 tick file, then `node --prof-process isolate-*.log > processed.txt` to get a human-readable CPU profile showing where time is spent\n2. **Use Chrome DevTools** — Launch with `node --inspect app.js`, open `chrome://inspect`, connect, and use the Performance tab to record and analyze flame charts showing call stacks over time\n3. **Check the event loop** — Install `clinic.js` (`npx clinic doctor -- node app.js`) which detects event loop delays, I/O bottlenecks, and blocked threads automatically with visual reports\n4. **Profile memory** — Take heap snapshots via DevTools (Memory tab) to find leaks — compare two snapshots taken minutes apart and look for objects that grow but never shrink\n5. **Audit async operations** — Look for `await` inside loops (N+1 queries), missing `Promise.all` for independent async calls, and unintentional sequential I/O that should be parallel\n6. **Measure specific code paths** — Use `console.time('label')` / `console.timeEnd('label')` or `perf_hooks.performance.mark()` / `performance.measure()` to isolate slow functions without full profiling overhead\n7. **Check external dependencies** — Slow apps often aren't CPU-bound but waiting on databases, APIs, or file I/O. Log response times for all external calls. Tools like `0x` generate flame graphs that highlight I/O wait vs CPU time\n8. **Fix and verify** — After identifying the bottleneck, fix one thing at a time. Re-profile after each change to confirm improvement. Common wins: adding database indexes, caching repeated queries, switching sequential awaits to `Promise.all`, and streaming large payloads instead of buffering\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Eight-step Node.js debugging guide covering profiling, DevTools, event loop, memory, and async patterns.",
+      "timestamp": "2026-02-13T02:36:33.749Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.20665075000000002,
+    "duration": 25462,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 496,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 29479
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 33740,
+    "time_to_first_token_ms": 33740,
+    "time_to_last_token_ms": 33740,
+    "tokens_per_second": 0
+  }
+}

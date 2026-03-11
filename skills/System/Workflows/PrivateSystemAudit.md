@@ -8,7 +8,7 @@
 
 ## Voice Notification
 
--> Use `notifySync()` from `skills/CORE/Tools/NotificationService.ts`
+-> Use `notifySync()` from `lib/core/NotificationService.ts`
 
 ```typescript
 notifySync("Running comprehensive system audit");
@@ -59,7 +59,7 @@ Execute `SecretScanning.md`:
 trufflehog filesystem ~/.claude --no-update 2>/dev/null || echo "TruffleHog not installed"
 
 # Run Kaya SecretScan tool
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts
+bun ~/.claude/lib/core/SecretScan.ts
 ```
 
 **Pass criteria:**
@@ -77,7 +77,7 @@ bun ~/.claude/skills/System/Tools/IntegrityCheck.ts 2>/dev/null || echo "Running
 
 # Verify critical files exist
 ls ~/.claude/settings.json
-ls ~/.claude/skills/CORE/SKILL.md
+ls ~/.claude/CLAUDE.md
 ls ~/.claude/hooks/LoadContext.hook.ts
 ```
 

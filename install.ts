@@ -330,7 +330,7 @@ async function verifyPort8888(): Promise<{ listening: boolean; canConnect: boole
 // ============================================================================
 
 function setupShellAlias(): void {
-  const aliasLine = `alias kaya='bun run ${CLAUDE_DIR}/skills/CORE/Tools/Kaya.ts'`;
+  const aliasLine = `alias kaya='bun run ${CLAUDE_DIR}/lib/core/kaya.ts'`;
   const marker = '# Kaya alias';
   const rcFileName = IS_ZSH ? '.zshrc' : '.bashrc';
 
@@ -1098,8 +1098,8 @@ function generateSettingsJson(config: Config): string {
 
 function createDirectoryStructure(targetDir: string): void {
   const dirs = [
-    'skills/CORE/USER',
-    'skills/CORE/SYSTEM',
+    'USER',
+    'docs/system',
     'MEMORY/STATE',
     'MEMORY/SIGNALS',
     'MEMORY/CAPTURES',

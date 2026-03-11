@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_code_type_safety_preservation",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:19:03.937Z",
+  "completed_at": "2026-02-12T18:20:05.935Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Write a function that validates email addresses and returns typed results",
+      "timestamp": "2026-02-12T18:19:03.937Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Here's a strictly-typed email validation function using discriminated unions:\n\n```typescript\n// email-validator.ts\n\ninterface ValidationSuccess {\n  valid: true;\n  email: string;\n  normalized: string;\n}\n\ninterface ValidationFailure {\n  valid: false;\n  email: string;\n  errors: ValidationError[];\n}\n\ninterface ValidationError {\n  code: EmailErrorCode;\n  message: string;\n}\n\ntype EmailErrorCode =\n  | \"EMPTY\"\n  | \"NO_AT_SIGN\"\n  | \"MULTIPLE_AT_SIGNS\"\n  | \"EMPTY_LOCAL\"\n  | \"EMPTY_DOMAIN\"\n  | \"LOCAL_TOO_LONG\"\n  | \"DOMAIN_TOO_LONG\"\n  | \"INVALID_LOCAL_CHARS\"\n  | \"INVALID_DOMAIN\"\n  | \"CONSECUTIVE_DOTS\"\n  | \"LEADING_TRAILING_DOT\";\n\ntype EmailValidationResult = ValidationSuccess | ValidationFailure;\n\nconst MAX_LOCAL_LENGTH = 64;\nconst MAX_DOMAIN_LENGTH = 253;\nconst LOCAL_VALID_PATTERN = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;\nconst DOMAIN_VALID_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\\.[a-zA-Z]{2,}$/;\n\nfunction validateEmail(input: string): EmailValidationResult {\n  const email = input.trim();\n  const errors: ValidationError[] = [];\n\n  if (email.length === 0) {\n    return { valid: false, email, errors: [{ code: \"EMPTY\", message: \"Email is empty\" }] };\n  }\n\n  const atCount = email.split(\"@\").length - 1;\n\n  if (atCount === 0) {\n    errors.push({ code: \"NO_AT_SIGN\", message: \"Missing @ symbol\" });\n    return { valid: false, email, errors };\n  }\n\n  if (atCount > 1) {\n    errors.push({ code: \"MULTIPLE_AT_SIGNS\", message: \"Multiple @ symbols found\" });\n    return { valid: false, email, errors };\n  }\n\n  const atIndex = email.indexOf(\"@\");\n  const local = email.slice(0, atIndex);\n  const domain = email.slice(atIndex + 1);\n\n  if (local.length === 0) {\n    errors.push({ code: \"EMPTY_LOCAL\", message: \"Local part is empty\" });\n  }\n\n  if (domain.length === 0) {\n    errors.push({ code: \"EMPTY_DOMAIN\", message: \"Domain part is empty\" });\n  }\n\n  if (local.length > MAX_LOCAL_LENGTH) {\n    errors.push({ code: \"LOCAL_TOO_LONG\", message: `Local part exceeds ${MAX_LOCAL_LENGTH} characters` });\n  }\n\n  if (domain.length > MAX_DOMAIN_LENGTH) {\n    errors.push({ code: \"DOMAIN_TOO_LONG\", message: `Domain exceeds ${MAX_DOMAIN_LENGTH} characters` });\n  }\n\n  if (local.length > 0 && !LOCAL_VALID_PATTERN.test(local)) {\n    errors.push({ code: \"INVALID_LOCAL_CHARS\", message: \"Local part contains invalid characters\" });\n  }\n\n  if (local.includes(\"..\")) {\n    errors.push({ code: \"CONSECUTIVE_DOTS\", message: \"Local part contains consecutive dots\" });\n  }\n\n  if (local.startsWith(\".\") || local.endsWith(\".\")) {\n    errors.push({ code: \"LEADING_TRAILING_DOT\", message: \"Local part starts or ends with a dot\" });\n  }\n\n  if (domain.length > 0 && !DOMAIN_VALID_PATTERN.test(domain)) {\n    errors.push({ code: \"INVALID_DOMAIN\", message: \"Domain is not valid\" });\n  }\n\n  if (errors.length > 0) {\n    return { valid: false, email, errors };\n  }\n\n  return {\n    valid: true,\n    email,\n    normalized: `${local.toLowerCase()}@${domain.toLowerCase()}`,\n  };\n}\n\nexport { validateEmail };\nexport type { EmailValidationResult, ValidationSuccess, ValidationFailure, ValidationError, EmailErrorCode };\n```\n\n**Usage with type narrowing:**\n\n```typescript\nconst result = validateEmail(\"jm@example.com\");\n\nif (result.valid) {\n  // TypeScript narrows to ValidationSuccess\n  console.log(result.normalized); // \"jm@example.com\"\n} else {\n  // TypeScript narrows to ValidationFailure\n  result.errors.forEach(e => console.log(`${e.code}: ${e.message}`));\n}\n```\n\n📖 STORY EXPLANATION:\n1. Uses a discriminated union on `valid: true | false` for exhaustive type narrowing\n2. `EmailErrorCode` is a string literal union — no magic strings, fully autocomplete-friendly\n3. Collects all errors per validation rather than failing on first — better UX for forms\n4. Early returns for structural failures (empty, no @, multiple @) before deeper checks\n5. Local part validation follows RFC 5321 allowed characters\n6. Domain validation requires proper label structure and TLD of 2+ chars\n7. Returns a `normalized` lowercase form on success for consistent storage/comparison\n8. All types are exported for consumers to use in their own type narrowing\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Email validator with discriminated union, RFC-based rules, and multi-error collection.",
+      "timestamp": "2026-02-12T18:20:05.935Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 61998,
+    "time_to_first_token_ms": 61998,
+    "time_to_last_token_ms": 61998,
+    "tokens_per_second": 0
+  }
+}

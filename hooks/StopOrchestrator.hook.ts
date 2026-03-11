@@ -53,13 +53,11 @@
  * - Isolated failures (Promise.allSettled)
  */
 
-import { parseTranscript } from '../skills/CORE/Tools/TranscriptParser';
+import { parseTranscript } from '../lib/core/TranscriptParser';
 import { handleVoice } from './handlers/VoiceNotification';
 import { handleCapture } from './handlers/ResponseCapture';
 import { handleTabState } from './handlers/TabState';
 import { handleSystemIntegrity } from './handlers/SystemIntegrity';
-import { handleISCValidation } from './handlers/ISCValidator';
-
 interface HookInput {
   session_id: string;
   transcript_path: string;
@@ -123,23 +121,6 @@ async function main() {
       console.error(`[StopOrchestrator] ${handlerNames[index]} handler failed:`, result.reason);
     }
   });
-
-  // Run ISC validation (potentially blocking)
-  try {
-    const iscResult = await handleISCValidation(parsed, hookInput);
-
-    if (iscResult.shouldBlock && iscResult.blockReason) {
-      // Output blocking decision to stdout (Claude Code reads this)
-      console.log(JSON.stringify({
-        decision: 'block',
-        reason: iscResult.blockReason,
-      }));
-      console.error('[StopOrchestrator] ISC validation BLOCKED response');
-      process.exit(0);
-    }
-  } catch (err) {
-    console.error('[StopOrchestrator] ISCValidator handler failed:', err);
-  }
 
   process.exit(0);
 }

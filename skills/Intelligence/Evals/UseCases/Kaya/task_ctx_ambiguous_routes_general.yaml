@@ -1,0 +1,32 @@
+# Task: Ambiguous Input Routes to General
+# Ambiguous input routes to general or conversational profile
+
+id: kaya_ctx_ambiguous_routes_general
+description: "Ambiguous input like 'I need help' routes to general or conversational profile"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "I need help"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profiles:
+        - general
+        - conversational
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - ambiguous
+  - capability
+
+created_at: "2026-02-11"

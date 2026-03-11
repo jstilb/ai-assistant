@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:10:27.100Z",
+  "completed_at": "2026-02-12T06:11:07.525Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:10:27.100Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5→3 hrs/day | 5.3 hrs | Going wrong direction |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6→3.0 | 1.8 | Slight improvement |\n\n**Key Patterns from Challenges:**\n- **Media (C0)** is the root blocker — it's above baseline at 5.3 hrs, feeding into C2 (alignment), C4 (writing), and C5 (wake time)\n- **Physical rehab (C3)** is at 0% stretching consistency — a critical gap with no strategy defined\n- **Friends (C1)** at 14% success rate — social anxiety in a new area\n- **Writing (C4)** at 36% consistency — competing with media time\n\n**What's working:** Historical wins show you crush binary elimination challenges (porn, alcohol, weed all 100%). Tracking-based goals also work (body fat, wellbeing). The pattern: clear rules + consistent measurement = results.\n\n**What's not working:** Reduction goals (media from 5→3) and social goals (making friends) have the lowest success rates. These require behavior substitution, not elimination.\n\n📊 STATUS: All three Q1 WIGs are behind pace with ~7 weeks remaining (deadline 3/29/26).\n\n📖 STORY EXPLANATION:\n1. Media consumption is the keystone problem — at 5.3 hrs it's worse than the 5hr starting point\n2. Strategies S0 and S2 are hitting 64-71% but clearly not enough to move the number\n3. Alignment score barely moved (1.6→1.8) because media eats the time needed for aligned action\n4. Zero good friends made — 14% conversion rate on social efforts suggests the approach needs rethinking\n5. Physical rehab has no strategy at all, yet chronic pain limits activities across missions\n6. Your proven pattern is binary rules + tracking — reduction goals fight your wiring\n7. The context data is 75 hours stale — a refresh would give more accurate numbers\n8. With 7 weeks left, all three WIGs need intervention, not just continuation\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace. Media consumption is the root blocker at 5.3 hours daily.",
+      "timestamp": "2026-02-12T06:11:07.524Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 40425,
+    "time_to_first_token_ms": 40424,
+    "time_to_last_token_ms": 40425,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "source": "lucidtasks",
+  "title": "LucidTasks Context",
+  "output": "context/LucidTasksContext.md",
+  "cli": "kaya-cli tasks --json",
+  "timeout": 10000,
+  "metricLabel": "active tasks",
+  "priority": "high",
+  "loadWhen": ["task", "todo", "project"],
+  "freshnessRule": "1h"
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:03:39.651Z",
+  "completed_at": "2026-02-12T06:04:11.362Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:03:39.651Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 11-15 with dentist, API redesign deadline, and retro prep.\n\nHere's a structured plan for your week, Jm:\n\n**Tuesday (Feb 12)**\n- Dentist appointment — block recovery time after if needed\n- Start/continue API redesign work (lighter day around appointment)\n\n**Wednesday (Feb 13)**\n- Deep focus day on API redesign — this is your critical push day\n- Aim for 1-2 Pomodoro sessions (supports S1)\n- Get to \"reviewable\" state by end of day\n\n**Thursday (Feb 14)**\n- Morning: Final API redesign polish and any review feedback\n- API redesign deadline — ship it\n- Afternoon: Start gathering retro notes (what went well, what didn't, action items)\n\n**Friday (Feb 15)**\n- Morning: Finalize retro prep — talking points, data, proposals\n- Team retrospective\n- Weekly review / wrap-up\n\n**Threading in your lead measures:**\n- S3/S4 (Community Events & Social Invitations) — these are flagged critical. Is there anything mid-week you could attend or someone you could reach out to?\n- S1/S5 (Pomodoro & Alignment Hour) — Wed is ideal for stacking these with the API push\n- S6 (Morning Stretch) — currently at 0%. Even 10 min each morning this week would be a start\n\nAnything you want me to add to your calendar or break down further?\n\n🗣️ Kaya: Week planned around dentist Tuesday, API deadline Thursday, retro Friday. Lead measures threaded in.",
+      "timestamp": "2026-02-12T06:04:11.362Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31711,
+    "time_to_first_token_ms": 31711,
+    "time_to_last_token_ms": 31711,
+    "tokens_per_second": 0
+  }
+}

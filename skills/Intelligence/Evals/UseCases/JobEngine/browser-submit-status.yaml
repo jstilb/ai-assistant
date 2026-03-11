@@ -1,0 +1,42 @@
+# Task: Browser-submit status code path coverage
+# WHY: Missing status codes cause silent failures — AutoApply misinterprets results
+
+id: kaya_jobengine_browser_submit_status
+description: "Verify all 4 BrowserSubmitResult status codes have distinct code paths"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Use grep to search for "submitted", "incomplete_form", "skipped_complex", and "failed" in ~/.claude/skills/Commerce/JobEngine/Tools/lib/browser-submit.ts.
+    For each of the 4 status codes, identify what condition triggers that status by reading the surrounding code context.
+    Then grep for those same status strings in ~/.claude/skills/Commerce/JobEngine/Tools/AutoApply.ts to check if AutoApply handles all 4.
+    Summarize: which status codes exist, what triggers each, and does AutoApply handle them all?
+
+graders:
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required: [{ tool: Grep }]
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent identified distinct code path for 'submitted' status"
+        - "Agent identified distinct code path for 'incomplete_form' status"
+        - "Agent identified distinct code path for 'skipped_complex' status"
+        - "Agent identified distinct code path for 'failed' status"
+        - "Agent checked whether AutoApply handles all 4 statuses"
+
+trials: 3
+pass_threshold: 0.70
+
+tags:
+  - kaya
+  - jobengine
+  - browser-submit
+  - capability
+
+created_at: "2026-03-09"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_notes_routes_knowledge_lookup",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:21:19.235Z",
+  "completed_at": "2026-02-12T06:21:43.365Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Notes query like 'find my notes' routes to knowledge-lookup profile with ObsidianContext loaded",
+      "timestamp": "2026-02-12T06:21:19.235Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, reviewing system state.\n\nLooking at the queue — you have 1 approved work item ready. Want me to pull it up with `/queue list`, or did you have something else in mind?\n\n🗣️ Kaya: One approved work item in queue. Ready for your direction, Jm.",
+      "timestamp": "2026-02-12T06:21:43.365Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24130,
+    "time_to_first_token_ms": 24130,
+    "time_to_last_token_ms": 24130,
+    "tokens_per_second": 0
+  }
+}

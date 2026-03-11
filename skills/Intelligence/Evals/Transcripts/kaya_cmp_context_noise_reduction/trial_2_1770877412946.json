@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:22:06.843Z",
+  "completed_at": "2026-02-12T06:23:32.946Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T06:22:06.843Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: None of your Asana tasks have due dates set for this week (Feb 11-15). Most of your open tasks don't have explicit due dates assigned -- they're just in your backlog.\n\nThat said, a few are time-sensitive based on their nature:\n\n- **Vday Letter** -- Valentine's Day is Saturday Feb 14\n- **Valentine's Day Cooking** -- also Feb 14\n- **book hotel in Sedona** -- depends on travel date\n- **Followup on Therapist Progress** -- recurring/ongoing\n\n⚡ ACTIONS: If you want, I can set due dates on the Valentine's Day tasks (Feb 13-14) or any others.\n\n📊 STATUS: 61 incomplete tasks in Asana, 0 with due dates this week.\n\n📖 STORY EXPLANATION:\n1. Pulled all Asana tasks via API\n2. Filtered for due dates between now and Feb 15\n3. None of your open tasks have due dates set\n4. Two tasks are implicitly urgent -- both Valentine's Day related (Feb 14)\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: No tasks have due dates this week. Valentine's Day letter and cooking are implicitly urgent for Saturday.",
+      "timestamp": "2026-02-12T06:23:32.946Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 86103,
+    "time_to_first_token_ms": 86103,
+    "time_to_last_token_ms": 86103,
+    "tokens_per_second": 0
+  }
+}

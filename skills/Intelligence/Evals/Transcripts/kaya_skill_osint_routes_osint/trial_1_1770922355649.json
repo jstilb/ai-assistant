@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_osint_routes_osint",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:52:21.022Z",
+  "completed_at": "2026-02-12T18:52:35.649Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Do a background check on TechStartup Inc before our meeting",
+      "timestamp": "2026-02-12T18:52:21.022Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:52:35.649Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 14627,
+    "time_to_first_token_ms": 14627,
+    "time_to_last_token_ms": 14627,
+    "tokens_per_second": 0
+  }
+}

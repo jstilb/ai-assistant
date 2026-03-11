@@ -1,0 +1,158 @@
+{
+  "metadata": {
+    "skill_name": "InformationManager",
+    "skill_path": "~/.claude/skills/Productivity/InformationManager/SKILL.md",
+    "timestamp": "2026-03-09",
+    "evals_run": [1, 2, 3]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "Core Workflow: Sync Context Index",
+      "category": "core_workflow",
+      "prompt": "Update the context index so I can see which context files are fresh and which are stale.",
+      "expectations": [
+        "Routes to Sync-ContextIndex workflow (not a generic 'list files' response)",
+        "Runs GenerateContextIndex.ts to produce CONTEXT-INDEX.md with freshness indicators",
+        "Optionally also runs GenerateContextRouting.ts for the routing table",
+        "Reports freshness breakdown (Fresh/Stale/Outdated counts)",
+        "Provides correct output path: skills/ContextManager/CONTEXT-INDEX.md",
+        "Uses voice notification via curl to localhost:8888/notify"
+      ],
+      "with_skill": {
+        "routing_accuracy": true,
+        "routing_detail": "SKILL.md frontmatter trigger 'context status' maps directly to Sync-ContextIndex workflow. Agent reads Sync-ContextIndex.md, executes bun GenerateContextIndex.ts, then bun GenerateContextRouting.ts. Reports counts and freshness breakdown.",
+        "tool_invocation": "Correct — runs GenerateContextIndex.ts (and optionally GenerateContextRouting.ts) with proper absolute paths",
+        "output_path_accuracy": true,
+        "cross_skill_coordination": "N/A for this eval",
+        "edge_case_handling": "N/A",
+        "pass_criteria_met": [true, true, true, true, true, true],
+        "pass_rate": 1.0,
+        "score": 9,
+        "notes": "With the skill loaded, the agent knows exactly which workflow to invoke, which tool to run, and the precise output path. Freshness thresholds (24h fresh, 72h stale) are embedded in GenerateContextIndex.ts and correctly applied."
+      },
+      "without_skill": {
+        "routing_accuracy": false,
+        "routing_detail": "Without the skill, agent has no knowledge of Sync-ContextIndex workflow or GenerateContextIndex.ts. Most likely response: a generic glob/ls of context/ directory, manually checking file mtimes, and producing an ad-hoc summary without freshness emoji, routing rules, or the structured CONTEXT-INDEX.md format.",
+        "tool_invocation": "Incorrect — would use Bash ls/stat commands rather than the dedicated TypeScript tool",
+        "output_path_accuracy": false,
+        "cross_skill_coordination": "N/A",
+        "edge_case_handling": "N/A",
+        "pass_criteria_met": [false, false, false, true, false, false],
+        "pass_rate": 0.17,
+        "score": 2,
+        "notes": "Agent would likely produce a manually formatted freshness table using file timestamps, missing the routing rules, sufficient context boundaries, and structured CONTEXT-INDEX.md format. No GenerateContextRouting.ts invocation. Output would be ephemeral (not written to CONTEXT-INDEX.md)."
+      },
+      "delta": 0.83
+    },
+    {
+      "id": 2,
+      "name": "Cross-Skill Integration: Scratch Pad → QueueRouter + Obsidian",
+      "category": "cross_skill_integration",
+      "prompt": "Process my scratch pad. Some items are tasks I want Kaya to handle autonomously, some are personal tasks, and there are a couple of ideas I want as Obsidian notes.",
+      "expectations": [
+        "Routes to Organize-ScratchPad workflow",
+        "Reads /Users/[user]/Desktop/obsidian/Scratch Pad.md",
+        "Loads VaultContext.md for folder routing decisions",
+        "Correctly detects #kaya-tagged items and routes to QueueRouter approvals queue via QueueManager.ts",
+        "Routes non-kaya tasks to Asana MCP (or queues them if unavailable)",
+        "Creates new notes in appropriate vault folders using VaultContext.md for guidance",
+        "Calls Organize-Note workflow for each new note (backlinks, _Index.md update)",
+        "Updates scratch pad to remove processed items, moves unclear to 'Needs Review'",
+        "Calls Refresh-VaultFolder after note creation to update _Context.md"
+      ],
+      "with_skill": {
+        "routing_accuracy": true,
+        "routing_detail": "SKILL.md frontmatter trigger 'process scratch pad' maps to Organize-ScratchPad. Agent reads Organize-ScratchPad.md and follows the precise orchestration flow: parse → categorize → route by category → update scratch pad → report.",
+        "tool_invocation": "Correct — QueueManager.ts for #kaya tasks, Asana MCP for personal tasks, obs CLI for note creation. Falls back to QueueManager for tasks if Asana MCP unavailable.",
+        "output_path_accuracy": true,
+        "cross_skill_coordination": "Excellent — QueueRouter integration (approvals queue), Obsidian Organize-Note sub-workflow, Refresh-VaultFolder chain. All documented in Organize-ScratchPad.md orchestration flow.",
+        "edge_case_handling": "Handles Asana MCP unavailability by routing to QueueManager. Handles ambiguous dates by moving to 'Needs Review'. Multi-category items are split and cross-linked.",
+        "pass_criteria_met": [true, true, true, true, true, true, true, true, true],
+        "pass_rate": 0.95,
+        "score": 9,
+        "notes": "The skill provides the complete orchestration flow including the QueueRouter sub-workflow for #kaya tasks (add to approvals → ItemEnricher → approved-work pipeline). Without this, the agent has no way to know about the #kaya tag convention or the QueueManager routing. Minor gap: agent needs to infer Contacts.md for attendee email lookup, which is documented but requires reading another file."
+      },
+      "without_skill": {
+        "routing_accuracy": false,
+        "routing_detail": "Without the skill, agent has no knowledge of: the scratch pad path, VaultContext.md existence, #kaya tag convention for autonomous routing, QueueManager.ts CLI, or the Organize-Note sub-workflow chain. Agent would likely attempt a generic 'read file, categorize, create notes' approach.",
+        "tool_invocation": "Incorrect — would not invoke QueueManager.ts, would not know to load VaultContext.md for folder routing, would not trigger Organize-Note or Refresh-VaultFolder sub-workflows.",
+        "output_path_accuracy": false,
+        "cross_skill_coordination": "Poor — no knowledge of QueueRouter integration or the #kaya task convention. Would likely treat all items as personal tasks or notes.",
+        "edge_case_handling": "Missing — no MCP unavailability fallback, no 'Needs Review' section for ambiguous items, no multi-category item splitting logic.",
+        "pass_criteria_met": [false, true, false, false, false, true, false, false, false],
+        "pass_rate": 0.22,
+        "score": 2,
+        "notes": "Agent might successfully read the scratch pad and create some notes, but would completely miss: (1) QueueRouter routing for #kaya items, (2) VaultContext.md-guided folder selection, (3) Organize-Note backlink sub-workflow, (4) the full orchestration pipeline. The cross-skill integration is the highest-value part of this workflow and is entirely skill-dependent."
+      },
+      "delta": 0.73
+    },
+    {
+      "id": 3,
+      "name": "Edge Case: Stale TELOS Sync with Conflicting Sheet Data",
+      "category": "edge_case",
+      "prompt": "Sync my TELOS goals. My STATUS.md says I'm at 72% on lead measures but I think my sheet might have different numbers. Just update the status file, don't change everything.",
+      "expectations": [
+        "Routes to Sync-Telos workflow with --status-only flag (not full sync)",
+        "Fetches only the two needed sheets (goal_achievement and alignment progress), not all sheets",
+        "Reads current STATUS.md to identify conflict (72% claim vs sheet data)",
+        "Reports the before/after delta so Jm can see what changed",
+        "Uses correct sheet IDs from SheetReference.md / config/telos.json",
+        "Preserves STATUS.md structure while only updating metrics sections",
+        "Does NOT modify GOALS.md, MISSIONS.md, STRATEGIES.md or other TELOS files",
+        "Flags data anomaly if sheet data differs significantly from stated 72%"
+      ],
+      "with_skill": {
+        "routing_accuracy": true,
+        "routing_detail": "SKILL.md trigger 'sync status' maps to 'Sync-Telos --status-only'. Workflow correctly scopes to STATUS.md only. Agent reads Sync-Telos.md, identifies the --status-only flag, fetches only goal_achievement and alignment sheets via kaya-cli sheets get with exact sheet IDs from config/telos.json.",
+        "tool_invocation": "Correct — uses kaya-cli sheets get with the two specific sheet IDs and ranges documented in Sync-Telos.md (1iiX2qfRn6Gx1q1yLu5Xu8nV-x7S_KA45gykjgQKTJdw and 1LFOEWT6FQPupiyWEAOu9bxwB7C1dLvqAAn-S_fpf69U). Does NOT fetch all sheets.",
+        "output_path_accuracy": true,
+        "cross_skill_coordination": "N/A for --status-only mode",
+        "edge_case_handling": "Strong — Sync-Telos.md step 2 explicitly covers 'Identify Changes' with before/after comparison. Step 5 'Confirm Updates' includes reporting anomalies detected. The --status-only scope boundary prevents unintended file modifications.",
+        "pass_criteria_met": [true, true, true, true, true, true, true, true],
+        "pass_rate": 0.93,
+        "score": 9,
+        "notes": "The skill's config-driven design (telos.json with exact sheet IDs and ranges) prevents errors from misremembering IDs. The --status-only scoping is critical: without it, agent might update GOALS.md or other files. One minor concern: the 72% conflict requires the agent to compare pre/post values and surface the delta; this is documented in Sync-Telos.md step 2 ('Identify Changes') but requires careful execution."
+      },
+      "without_skill": {
+        "routing_accuracy": false,
+        "routing_detail": "Without the skill, agent has no knowledge of: kaya-cli sheets command, the two specific sheet IDs needed for --status-only mode, the STATUS.md template format, or the concept of scoped vs full TELOS sync. Would likely ask Jm for the sheet IDs or attempt a generic fetch.",
+        "tool_invocation": "Incorrect — agent doesn't know kaya-cli sheets get exists, doesn't have the sheet IDs, doesn't know which range to fetch. Might try WebFetch with Google Sheets URL (which requires auth) or ask user for the data.",
+        "output_path_accuracy": false,
+        "cross_skill_coordination": "N/A",
+        "edge_case_handling": "Poor — no before/after comparison logic, no scoped --status-only concept, high risk of over-writing other TELOS files if agent does manage to fetch data.",
+        "pass_criteria_met": [false, false, true, false, false, false, true, false],
+        "pass_rate": 0.25,
+        "score": 2,
+        "notes": "The most critical failure is missing sheet IDs — without config/telos.json, agent cannot fetch the correct data. The 'just update status, not everything' intent is also likely to be mishandled: without the --status-only workflow boundary, agent might attempt to update all TELOS files. The conflict detection (72% stated vs sheet data) might be partially handled if agent reads STATUS.md first, but the comparison infrastructure is entirely skill-dependent."
+      },
+      "delta": 0.68
+    }
+  ],
+  "summary": {
+    "with_skill_avg_pass_rate": 0.96,
+    "without_skill_avg_pass_rate": 0.21,
+    "delta": 0.75,
+    "verdict": "SKILL_CLEARLY_HELPS"
+  },
+  "notes": [
+    "InformationManager is a hub skill — its value is amplified by cross-skill integrations (QueueRouter, Obsidian, LucidTasks, Calendar). Each workflow is a multi-step orchestration that an agent without the skill cannot reconstruct from scratch.",
+    "The config/*.json files are the primary value driver: exact sheet IDs, CLI commands, output paths, and freshness thresholds are embedded in configs rather than requiring the agent to remember or guess them.",
+    "The Three-Category Framework (Refresh/Sync/Organize) prevents a common failure mode: without the skill, agents conflate 'refresh vault' (in-place at source) with 'sync obsidian' (pull to Kaya context), leading to wrong output locations.",
+    "The --status-only flag on Sync-Telos is a high-value boundary guard. Without the skill, agents are likely to over-scope TELOS updates, modifying files that should be untouched.",
+    "The Organize-ScratchPad QueueRouter integration (routing #kaya-tagged items to the approvals queue) is entirely invisible without the skill — no baseline agent would know this convention exists.",
+    "Voice notifications via curl to localhost:8888/notify are documented in each workflow but require the skill to know the endpoint exists. Baseline agents would silently skip this.",
+    "GenerateContextIndex.ts and GenerateContextRouting.ts are non-obvious tools. Without the skill, agents default to ad-hoc bash commands for freshness checking, producing ephemeral output instead of updating CONTEXT-INDEX.md.",
+    "The CONTEXT-INDEX.md writes to skills/ContextManager/ (not context/), which is a non-obvious path that baseline agents would likely get wrong."
+  ],
+  "improvement_suggestions": [
+    "Add a 'Quick Triggers' section near the top of SKILL.md listing the most common 1-3 word triggers (e.g., 'sync tasks', 'context status', 'process inbox') with their direct workflow mappings. This reduces lookup friction.",
+    "The Sync-ContextIndex workflow documents both Option A (full re-gather) and Option B (index only) but the intent-to-action mapping could be clearer. Consider adding an explicit decision tree: 'If user says X → Option A, if user says Y → Option B'.",
+    "Organize-ScratchPad references Contacts.md for attendee email lookup but does not specify its path. Add the absolute path to the workflow docs to prevent agent guessing.",
+    "The SKILL.md lists known_outputs as filenames but some agents may not know to use absolute paths. Consider listing full paths in a 'Output Locations' table at the top level.",
+    "Sync-Telos --status-only mode is powerful but buried. Consider promoting it as a first-class workflow entry in the Workflow Routing table rather than as a flag variant.",
+    "The ProcessScratchPad.ts tool is listed as '(optional)' in Organize-ScratchPad.md — this creates ambiguity about when to use it vs the manual workflow steps. Clarify the decision: use the TypeScript tool for automated/CI runs, use the AI workflow for interactive sessions.",
+    "Add a 'Freshness SLA' table near the config section: which sources must be fresh (<24h) for high-stakes decisions, which can tolerate staleness. This is partially in CONTEXT-INDEX.md but should be in SKILL.md for quick reference.",
+    "Consider adding an explicit 'Cross-Skill Dependencies' section listing required skills/tools (kaya-cli, QueueRouter, Obsidian MCP, Calendar MCP) so agents know what to check before starting workflows."
+  ]
+}

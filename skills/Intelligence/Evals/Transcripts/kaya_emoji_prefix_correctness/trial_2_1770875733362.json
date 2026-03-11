@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_emoji_prefix_correctness",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:55:05.584Z",
+  "completed_at": "2026-02-12T05:55:33.361Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Each response format section uses its correct emoji prefix",
+      "timestamp": "2026-02-12T05:55:05.584Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session initialized, system ready.\n\n🗣️ Kaya: All systems online. What are we working on tonight, Jm?",
+      "timestamp": "2026-02-12T05:55:33.361Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 27777,
+    "time_to_first_token_ms": 27777,
+    "time_to_last_token_ms": 27777,
+    "tokens_per_second": 0
+  }
+}

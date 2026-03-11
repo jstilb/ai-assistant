@@ -1,0 +1,81 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T02:59:28.677Z",
+  "completed_at": "2026-02-13T03:01:13.320Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What's on my calendar today?",
+      "timestamp": "2026-02-13T02:59:28.677Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Here's your Thursday, February 12th schedule.\n\n🔍 ANALYSIS: Full day with 17 events — mix of work sessions, wellness, and personal time.\n\n⚡ ACTIONS: Pulled live calendar via gcalcli.\n\n✅ RESULTS:\n\n| Time | Event |\n|------|-------|\n| 6:30 AM | Morning Routine |\n| 7:00 AM | Walk |\n| 7:15 AM | Work Session - Focus |\n| 8:00 AM | [OPTIONAL] Data + AI = DataAI |\n| 8:45 AM | Salsa Practice |\n| 9:00 AM | R&I Initiative Sync |\n| 9:00 AM | Work Session - Flex |\n| 10:30 AM | Rehab |\n| 10:45 AM | Workout |\n| 12:00 PM | Lunch |\n| 12:30 PM | Decompress |\n| 1:30 PM | Walk |\n| 2:00 PM | Personal Tasks |\n| 3:00 PM | Project Time |\n| 4:30 PM | Evening Prep |\n| 5:00 PM | Dinner |\n| 9:30 PM | Evening Routine |\n\n📊 STATUS: It's currently ~7:00 PM — you're past dinner, heading toward evening routine at 9:30.\n\n📁 CAPTURE: Calendar context refreshed live. Note the R&I Initiative Sync and DataAI meeting overlap at 9 AM.\n\n➡️ NEXT: Evening routine at 9:30 PM. Anything you want to plan for tomorrow?\n\n📖 STORY EXPLANATION:\n1. Calendar context was outdated (222h old), so I pulled live data\n2. 17 events spanning 6:30 AM to 9:30 PM\n3. Morning block: routine, walk, focused work session\n4. Mid-morning: optional DataAI meeting, salsa practice, R&I sync\n5. Overlap: R&I Initiative Sync and Work Session - Flex both at 9:00 AM\n6. Midday: rehab, workout, lunch, decompress\n7. Afternoon: personal tasks and project time\n8. Evening: you're currently between dinner and evening routine\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Seventeen events today. You're past dinner, evening routine at nine-thirty is next up.",
+      "timestamp": "2026-02-13T03:01:13.320Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770951673320_bzf892",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli gcal today 2>&1",
+        "description": "Get today's calendar events",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:01:13.320Z",
+      "error": "Exit code 2\nusage: gcalcli [-h] [--version] [--client-id CLIENT_ID]\n               [--client-secret CLIENT_SECRET] [--noauth_local_server]\n               [--config-folder CONFIG_FOLDER] [--noincluderc]\n               [--calendar GLOBAL_CALENDARS]\n               [--default-calendar DEFAULT_CALENDARS] [--locale LOCALE]\n               [--refresh] [--nocache] [--conky] [--nocolor]\n               [--lineart {fancy,unicode,ascii}]\n               {init,list,search,edit,delete,agenda,agendaupdate,updates,conflicts,calw,calm,quick,add,import,remind,config,util} ...\ngcalcli: error: argument command: invalid choice: 'today' (choose from init, list, search, edit, delete, agenda, agendaupdate, updates, conflicts, calw, calm, quick, add, import, remind, config, util)",
+      "completed_at": "2026-02-13T03:01:13.320Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951673320_usp197",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli gcal agenda --no-started 2>&1 || pai-cli calendar today 2>&1",
+        "description": "Get today's calendar agenda",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:01:13.320Z",
+      "error": "Exit code 2\nusage: gcalcli [-h] [--client-id CLIENT_ID] [--client-secret CLIENT_SECRET]\n               [--noauth_local_server] [--config-folder CONFIG_FOLDER]\n               [--noincluderc] [--calendar GLOBAL_CALENDARS]\n               [--default-calendar DEFAULT_CALENDARS] [--locale LOCALE]\n               [--refresh] [--nocache] [--conky] [--nocolor]\n               [--lineart {fancy,unicode,ascii}]\ngcalcli: error: unrecognized arguments: --no-started\nusage: gcalcli [-h] [--version] [--client-id CLIENT_ID]\n               [--client-secret CLIENT_SECRET] [--noauth_local_server]\n               [--config-folder CONFIG_FOLDER] [--noincluderc]\n               [--calendar GLOBAL_CALENDARS]\n               [--default-calendar DEFAULT_CALENDARS] [--locale LOCALE]\n               [--refresh] [--nocache] [--conky] [--nocolor]\n               [--lineart {fancy,unicode,ascii}]\n               {init,list,search,edit,delete,agenda,agendaupdate,updates,conflicts,calw,calm,quick,add,import,remind,config,util} ...\ngcalcli: error: argument command: invalid choice: 'today' (choose from init, list, search, edit, delete, agenda, agendaupdate, updates, conflicts, calw, calm, quick, add, import, remind, config, util)",
+      "completed_at": "2026-02-13T03:01:13.320Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951673320_5tgly4",
+      "name": "Bash",
+      "params": {
+        "command": "gcalcli agenda \"2026-02-12\" \"2026-02-13\" 2>&1",
+        "description": "Get today's calendar agenda with date range",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:01:13.320Z",
+      "result": "\u001b[0;33m\nThu Feb 12\u001b[0m\u001b[0;36m         Home\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  6:30           Morning Routine\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  7:00           Walk\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  7:15           Work Session - Focus\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  8:00           [OPTIONAL] Data + AI = DataAI\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  8:45           salsa practice\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  9:00           R&I initative sync\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  9:00           Work Session - Flex\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  10:30          Rehab\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  10:45          Workout\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  12:00          Lunch\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  12:30          Decompress\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  13:30          walk\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  14:00          personal tasks\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  15:00          Project Time\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  16:30          evening prep\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  17:00          Dinner\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  21:30          Evening Routine\n\u001b[0m",
+      "completed_at": "2026-02-13T03:01:13.320Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.302537,
+    "duration": 94110,
+    "turns": 4,
+    "inputTokens": 6,
+    "outputTokens": 940,
+    "cacheReadTokens": 167056,
+    "cacheCreationTokens": 30104
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 3,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 104643,
+    "time_to_first_token_ms": 104643,
+    "time_to_last_token_ms": 104643,
+    "tokens_per_second": 0
+  }
+}

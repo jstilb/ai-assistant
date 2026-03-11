@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_routes_daily_briefing",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:48:25.496Z",
+  "completed_at": "2026-02-12T06:48:50.202Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Briefing request like 'morning briefing' activates the DailyBriefing skill",
+      "timestamp": "2026-02-12T06:48:25.496Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Good evening, Jm.\n\n🗣️ Kaya: Evening check-in — ready for whatever you need, queue has one approved work item.",
+      "timestamp": "2026-02-12T06:48:50.202Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24706,
+    "time_to_first_token_ms": 24706,
+    "time_to_last_token_ms": 24706,
+    "tokens_per_second": 0
+  }
+}

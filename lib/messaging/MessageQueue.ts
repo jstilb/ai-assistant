@@ -46,7 +46,7 @@ import {
   type NotificationChannel,
   type NotificationPriority,
   type NotificationService,
-} from '../../skills/CORE/Tools/NotificationService';
+} from '../core/NotificationService';
 
 // ============================================================================
 // Types

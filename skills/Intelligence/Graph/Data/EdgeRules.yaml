@@ -1,0 +1,68 @@
+# ContextGraph Edge Rules
+# Defines automatic edge creation rules between decision nodes
+# Applied during extraction to build the graph structure
+
+rules:
+  # Temporal edges - nodes close in time
+  - name: temporal_proximity
+    edgeType: preceded
+    defaultWeight: 0.5
+    condition:
+      type: temporal
+      maxDeltaMinutes: 60
+      sameField: session_id
+    description: "Two decisions in the same session within 1 hour"
+
+  # Causal edges - outcome linked to decision
+  - name: outcome_linkage
+    edgeType: outcome_of
+    defaultWeight: 0.8
+    condition:
+      type: temporal
+      maxDeltaMinutes: 5
+    description: "Rating/outcome within 5 minutes of a decision"
+
+  # Session context edges
+  - name: session_context
+    edgeType: context_for
+    defaultWeight: 0.6
+    condition:
+      type: session
+      sameField: session_id
+    description: "Session node provides context for all decisions in that session"
+
+  # Correction/supersession edges
+  - name: correction_chain
+    edgeType: supersedes
+    defaultWeight: 0.9
+    condition:
+      type: correction
+      maxDeltaMinutes: 30
+    description: "A high-rated decision following a low-rated one supersedes it"
+
+  # Tag-based influence edges
+  - name: tag_influence
+    edgeType: influenced
+    defaultWeight: 0.4
+    condition:
+      type: tag_overlap
+      minTagOverlap: 2
+    description: "Decisions sharing 2+ tags likely influenced each other"
+
+  # Goal alignment edges
+  - name: goal_alignment
+    edgeType: goal_aligned
+    defaultWeight: 0.6
+    condition:
+      type: tag_overlap
+      minTagOverlap: 1
+    description: "Decision tags overlapping with TELOS goal keywords"
+
+  # Pattern membership edges
+  - name: pattern_grouping
+    edgeType: pattern_member
+    defaultWeight: 0.7
+    condition:
+      type: tag_overlap
+      minTagOverlap: 2
+    description: "Pattern nodes link to decisions sharing the same tags"

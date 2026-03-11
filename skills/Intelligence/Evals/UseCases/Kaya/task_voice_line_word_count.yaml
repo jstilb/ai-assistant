@@ -1,0 +1,27 @@
+# Task: Voice Line Word Count
+# Kaya voice line stays within 16 word maximum
+
+id: kaya_voice_line_word_count
+description: "Kaya voice line does not exceed 16 words"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Update the README with the new API endpoints"
+
+graders:
+  - type: voice_line_check
+    weight: 1.0
+    required: true
+
+trials: 1
+pass_threshold: 0.90
+
+tags:
+  - kaya
+  - voice_line
+  - word_count
+  - regression
+
+created_at: "2026-02-04"

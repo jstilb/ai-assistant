@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T01:30:08.602Z",
+  "completed_at": "2026-02-12T01:30:50.812Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T01:30:08.602Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 11-15, 2026\n\n🔍 ANALYSIS: Three key commitments this week — dentist (Tue), API redesign deadline (Thu), retro prep (Fri). Cross-referencing with your TELOS lead measures, several critical strategies need attention too.\n\n⚡ ACTIONS: Structured weekly plan below.\n\n---\n\n## Week of Feb 11-15, 2026\n\n### Tuesday, Feb 12\n- **Dentist appointment** — block travel time before/after\n- API redesign: deep work session (morning before appt or afternoon after)\n- **S3 (Community Event)** — check for any evening events to attend (28.6% → target 100%)\n\n### Wednesday, Feb 13\n- **API redesign: heads-down day** — this is your critical delivery day\n  - Use Pomodoro sessions (**S1** — currently 50%) to maintain focus\n  - **Alignment Hour (S5)** — dedicate 1hr to highest-priority alignment goal\n- **S6 (Morning Stretch)** — 10 min on wake (currently 0%, any start counts)\n\n### Thursday, Feb 14\n- **API redesign: finalize & deliver**\n  - Morning: final review, tests, documentation\n  - Afternoon: submit/present, handle feedback\n- **S4 (Social Invitation)** — reach out to someone from a recent event (14.3% → needs boost)\n\n### Friday, Feb 15\n- **Team retrospective prep** (morning)\n  - Gather sprint metrics, blockers, wins\n  - Draft talking points / facilitation notes\n- **Retro meeting** (confirm time)\n- End-of-week review: track lead measures for the week\n\n### Daily Habits to Layer In\n| Habit | Status | Action |\n|-------|--------|--------|\n| Wake 6:30am | 57% | Set alarm, device cutoff 1hr before bed (S8) |\n| Morning stretch (S6) | 0% | Even 5 min counts — start Wed |\n| Boredom blocks (S0) | 64% | Designate lunch + evening blocks |\n| STORER before media (S2) | 71% | Keep the streak going |\n\n### Priority Stack\n1. **API redesign** — non-negotiable Thu deadline\n2. **Retro prep** — Friday deliverable\n3. **Dentist** — fixed time commitment\n4. **Lead measures** — S3/S4 are critical, find one event + one invitation this week\n\n📊 STATUS: Plan drafted, not yet on calendar\n\n📁 CAPTURE: API redesign due Thu Feb 14, retro Fri Feb 15, dentist Tue Feb 12\n\n➡️ NEXT: Want me to add these to your Google Calendar? I can also create LucidTasks for the API redesign milestones.\n\n📖 STORY EXPLANATION:\n1. Tuesday is split between dentist and API work\n2. Wednesday is your power day for the API redesign — protect it\n3. Thursday is deadline day — finalize and ship\n4. Friday shifts to retro prep and delivery\n5. Daily habits (stretch, wake time, boredom blocks) layered in without overloading\n6. Lead measures S3 and S4 are critical gaps — one event and one invitation targeted\n7. STORER and boredom blocks maintain existing momentum\n8. Weekend buffer intentionally left open for recovery\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Three deadlines this week. API redesign gets Wednesday and Thursday priority. Lead measures need one event and one invite.",
+      "timestamp": "2026-02-12T01:30:50.812Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 42210,
+    "time_to_first_token_ms": 42210,
+    "time_to_last_token_ms": 42210,
+    "tokens_per_second": 0
+  }
+}

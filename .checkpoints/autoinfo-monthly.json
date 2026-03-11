@@ -1,0 +1,87 @@
+{
+  "workflowName": "autoinfo-monthly",
+  "completedSteps": [
+    "NotifyStart",
+    "LightDriftCheck",
+    "DailySynthesize",
+    "DailyBriefing",
+    "ProcessScratchPad",
+    "NotifyWeeklyStart",
+    "FullDriftCheck",
+    "CheckKayaUpgrade"
+  ],
+  "stepResults": {
+    "NotifyStart": {
+      "success": true,
+      "message": "Notification sent"
+    },
+    "LightDriftCheck": {
+      "success": true,
+      "message": "7 stale context files detected",
+      "metrics": {
+        "staleFiles": 7
+      }
+    },
+    "DailySynthesize": {
+      "success": true,
+      "message": "Daily synthesis: insufficient execution history",
+      "data": {
+        "insights": [
+          "Insufficient execution history for trend analysis"
+        ],
+        "trends": [],
+        "anomalies": []
+      },
+      "metrics": {
+        "totalReports": 0
+      }
+    },
+    "DailyBriefing": {
+      "success": true,
+      "message": "[non-blocking] DailyBriefing/Generate failed: Error: Claude Code cannot be launched inside another Claude Code session.\nNested sessions share runtime resources and will crash all active sessions.\nTo bypass this check, unset the CLAUDECODE environment variable.\n"
+    },
+    "ProcessScratchPad": {
+      "success": true,
+      "message": "Processed 0 items",
+      "metrics": {
+        "itemsProcessed": 0,
+        "tasksCreated": 0
+      }
+    },
+    "NotifyWeeklyStart": {
+      "success": true,
+      "message": "Notification sent"
+    },
+    "FullDriftCheck": {
+      "success": true,
+      "message": "Checked 7 context files",
+      "data": {
+        "hashes": {
+          "GoogleDriveContext.md": "e331afb1",
+          "ProjectsContext.md": "d0893ebc",
+          "LearningsContext.md": "07526f11",
+          "TelosContext.md": "025b2ff6",
+          "CalendarContext.md": "af55fca1",
+          "LearningPatternsContext.md": "e4d9ebea",
+          "ObsidianContext.md": "1a8a413d"
+        }
+      },
+      "metrics": {
+        "filesChecked": 7
+      }
+    },
+    "RefreshContext": {
+      "success": false,
+      "message": "0/2 agents completed"
+    },
+    "SynthesizeAndDocument": {
+      "success": false,
+      "message": "0/2 agents completed"
+    },
+    "CheckKayaUpgrade": {
+      "success": true,
+      "message": "Kaya upgrade check complete"
+    }
+  },
+  "startedAt": "2026-02-27T00:49:42.773Z"
+}

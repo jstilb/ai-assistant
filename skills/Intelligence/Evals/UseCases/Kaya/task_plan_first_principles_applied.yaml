@@ -1,0 +1,51 @@
+# Task: First Principles Applied
+# First principles thinking is applied when complexity warrants it
+
+id: kaya_plan_first_principles_applied
+description: "First principles thinking is applied when complexity warrants it"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Our CI/CD pipeline takes 45 minutes. How can we make it faster?"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: false
+    params:
+      rubric: |
+        Evaluate first-principles application:
+        1. Does the response break down the problem to fundamentals?
+        2. Are assumptions questioned rather than accepted?
+        3. Is the reasoning built up from basics?
+        4. Does it consider 'am I making this simpler or more complex?'
+        5. Is the analysis depth appropriate for the complexity?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The response applies first-principles thinking to the problem"
+        - "Assumptions are questioned and reasoning is built from fundamentals"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - planning
+  - first_principles
+  - capability
+
+created_at: "2026-02-11"

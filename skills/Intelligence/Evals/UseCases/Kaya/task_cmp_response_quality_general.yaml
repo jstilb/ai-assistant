@@ -1,0 +1,35 @@
+# Task: Compare General Response Quality
+# Pairwise comparison of overall response quality before/after changes
+
+id: kaya_cmp_response_quality_general
+description: "Compare overall response quality - verify quality maintained or improved after changes"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday."
+  baseline_ref: "pre-streamline"
+
+graders:
+  - type: pairwise_comparison
+    weight: 1.0
+    required: true
+    params:
+      reference: "skills/Evals/References/Kaya/baselines/pre-streamline/kaya_cmp_response_quality_general.md"
+      position_swap: true
+      criteria:
+        - quality
+        - helpfulness
+        - format_compliance
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - comparison
+  - before_after
+  - response_quality
+
+created_at: "2026-02-11"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T01:04:21.465Z",
+  "completed_at": "2026-02-12T01:05:18.587Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T01:04:21.465Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 **SUMMARY:** Here are your tasks due this week (Feb 11-15, 2026).\n\n---\n\n### LucidTasks — Due This Week\n\n| Priority | Task | Due |\n|----------|------|-----|\n| 🔴 !!! | **Write chapter 3 of On Set** | Feb 14 (Fri) |\n| 🟡 !! | **Call the dentist** | Feb 12 (Tomorrow) |\n\n### Asana — Due This Week (no due dates set, but time-sensitive)\n\n| Task | Notes |\n|------|-------|\n| 💌 **Vday Letter** | Valentine's Day is Feb 14 |\n| 🍳 **Valentine's Day Cooking** | Also Feb 14 |\n\n---\n\n📊 **STATUS:** 2 LucidTasks with explicit due dates this week. 2 Asana tasks that are Valentine's-related and effectively due by Saturday.\n\n➡️ **NEXT:** Call the dentist is the most urgent (tomorrow). The Valentine's items and chapter 3 all converge on Friday.\n\n🗣️ Kaya: Four tasks this week — dentist tomorrow, then Valentine's letter, cooking, and chapter 3 by Friday.",
+      "timestamp": "2026-02-12T01:05:18.587Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 57122,
+    "time_to_first_token_ms": 57122,
+    "time_to_last_token_ms": 57122,
+    "tokens_per_second": 0
+  }
+}

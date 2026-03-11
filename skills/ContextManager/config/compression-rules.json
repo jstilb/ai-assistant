@@ -1,35 +1,7 @@
 {
   "rules": [
     {
-      "pattern": "skills/CORE/SKILL.md",
-      "targetLines": 100,
-      "preserveKeys": [
-        "response format",
-        "identity",
-        "workflow routing",
-        "security rules",
-        "core rules"
-      ]
-    },
-    {
-      "pattern": "skills/CORE/SYSTEM/AISTEERINGRULES.md",
-      "targetLines": 30,
-      "preserveKeys": [
-        "rule names",
-        "one-line summaries"
-      ]
-    },
-    {
-      "pattern": "skills/CORE/SKILL-INDEX.md",
-      "targetLines": 40,
-      "preserveKeys": [
-        "skill names",
-        "triggers",
-        "descriptions"
-      ]
-    },
-    {
-      "pattern": "skills/CORE/CLI-INDEX.md",
+      "pattern": "skills/UnixCLI/CLI-INDEX.md",
       "targetLines": 25,
       "preserveKeys": [
         "command names",
@@ -37,7 +9,7 @@
       ]
     },
     {
-      "pattern": "skills/CORE/CONTEXT-INDEX.md",
+      "pattern": "skills/ContextManager/CONTEXT-INDEX.md",
       "targetLines": 40,
       "preserveKeys": [
         "source names",
@@ -46,7 +18,7 @@
       ]
     },
     {
-      "pattern": "skills/CORE/USER/TELOS/*.md",
+      "pattern": "USER/TELOS/*.md",
       "targetLines": 30,
       "preserveKeys": [
         "mission names",

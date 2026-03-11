@@ -1,0 +1,39 @@
+{
+  "channels": [
+    {
+      "name": "Anthropic Official",
+      "channel_id": "@AnthropicAI",
+      "url": "https://www.youtube.com/@AnthropicAI",
+      "priority": "HIGH",
+      "description": "Official Anthropic channel - Claude announcements, tutorials, and technical deep dives"
+    },
+    {
+      "name": "AI Explained",
+      "channel_id": "@aiexplained-official",
+      "url": "https://www.youtube.com/@aiexplained-official",
+      "priority": "HIGH",
+      "description": "In-depth analysis of AI papers, models, and developments. High technical depth."
+    },
+    {
+      "name": "David Ondrej",
+      "channel_id": "@DavidOndrej",
+      "url": "https://www.youtube.com/@DavidOndrej",
+      "priority": "MEDIUM",
+      "description": "AI development tutorials, Claude Code usage, practical AI workflows"
+    },
+    {
+      "name": "Matt Wolfe",
+      "channel_id": "@maboroshi87",
+      "url": "https://www.youtube.com/@maboroshi87",
+      "priority": "MEDIUM",
+      "description": "AI tools and news coverage, practical applications, tool comparisons"
+    },
+    {
+      "name": "Fireship",
+      "channel_id": "@Fireship",
+      "url": "https://www.youtube.com/@Fireship",
+      "priority": "LOW",
+      "description": "Quick tech explainers, development trends, occasionally covers AI tools"
+    }
+  ]
+}

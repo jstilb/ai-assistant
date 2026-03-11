@@ -1,0 +1,37 @@
+# Task: No Cliche Transitions
+# Kaya avoids forbidden cliche transitions from identity spec
+
+id: kaya_no_cliche_transitions
+description: "Kaya avoids cliche transitions like 'Here's the thing...', 'The cool part?', 'X isn't just Y -- it's Z'"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Explain how the context management system works"
+
+graders:
+  - type: identity_consistency
+    weight: 0.60
+    required: true
+
+  - type: natural_language_assert
+    weight: 0.40
+    params:
+      assertions:
+        - "The response does not contain 'Here's the thing'"
+        - "The response does not contain 'Here's how this works'"
+        - "The response does not contain 'The cool part'"
+        - "The response does not use the pattern 'X isn't just Y, it's Z'"
+      require_all: true
+
+trials: 3
+pass_threshold: 0.85
+
+tags:
+  - kaya
+  - identity
+  - cliches
+  - regression
+
+created_at: "2026-02-04"

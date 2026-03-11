@@ -8,6 +8,19 @@
  */
 
 import AgentContextLoader from "./LoadAgentContext";
+import { z } from "zod";
+
+const SpawnAgentOptionsSchema = z.object({
+  agentType: z.string().min(1, "agentType is required").regex(
+    /^[a-zA-Z0-9_-]+$/,
+    "agentType must be alphanumeric (plus hyphens/underscores)",
+  ),
+  taskDescription: z.string().min(1, "taskDescription is required"),
+  projectPath: z.string().optional(),
+  model: z.enum(["opus", "sonnet", "haiku"]).optional(),
+  runInBackground: z.boolean().optional(),
+  description: z.string().optional(),
+});
 
 export interface SpawnAgentOptions {
   agentType: string;
@@ -30,6 +43,7 @@ export interface AgentPrompt {
 export async function generateAgentPrompt(
   options: SpawnAgentOptions
 ): Promise<AgentPrompt> {
+  SpawnAgentOptionsSchema.parse(options);
   const loader = new AgentContextLoader();
 
   // Generate enriched prompt with task context

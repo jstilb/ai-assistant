@@ -1,0 +1,21 @@
+{
+  "source": "dtr",
+  "title": "DTR Metrics Context",
+  "output": "context/DtrContext.md",
+  "sheets": {
+    "alignment": "1LFOEWT6FQPupiyWEAOu9bxwB7C1dLvqAAn-S_fpf69U",
+    "goal_achievement": "1iiX2qfRn6Gx1q1yLu5Xu8nV-x7S_KA45gykjgQKTJdw",
+    "habit_building": "1xrGAGvKlgckHbjnMevs9ZhlwtNWaUL5CzzgRQ82X9LA",
+    "health": "1cY_1c5pJxyPBiQNlXeYGo9CFAJ8Khl91qQXhyP6ztBc",
+    "skill_mastery": "1DWv7VCy-a7lOqAZNWud8aEUDDF0hvtM3rCwUVrCjrTk"
+  },
+  "sheetRanges": {
+    "goal_achievement": "A1:Z20",
+    "habit_building": "A1:AM10"
+  },
+  "metricLabel": "metrics",
+  "priority": "Important",
+  "loadWhen": ["dtr", "metrics", "habits", "tracking", "WIG", "lead measures"],
+  "skipWhen": ["use telos for goal context"],
+  "freshnessRule": "Update weekly; stale after 7 days"
+}

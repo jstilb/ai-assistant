@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_telos_routes_telos",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T07:05:11.154Z",
+  "completed_at": "2026-02-12T07:05:57.733Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Life goals request like 'show me my life goals and projects' invokes Telos skill",
+      "timestamp": "2026-02-12T07:05:11.154Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Full overview of Jm's 7 life missions, 37 goals, 7 active projects, and current status.\n\n🔍 ANALYSIS:\n\n**7 Missions** across all life domains — Adventurer, Community, Creative, Family, Friend, Professional, Self.\n\n**Q1 2026 WIGs (Wildly Important Goals):**\n\n| WIG | Current | Target | Gap |\n|-----|---------|--------|-----|\n| G0: Media Consumption | 5.3 hrs/day | 3.0 hrs | -2.3 hrs |\n| G1: Make 2 Friends | 0 | 2 | -2 |\n| G2: Alignment Score | 1.8 | 3.0 | -1.2 |\n\n**Mission Health:**\n\n| Mission | Status | Key Metric |\n|---------|--------|------------|\n| M0: Adventurer | 🟡 Yellow | Planning phase |\n| M1: Community | 🟡 Yellow | 29% event attendance |\n| M2: Creative | 🟡 Yellow | 36% writing consistency |\n| M3: Family | 🟢 Green | Strong relationship, therapy in progress |\n| M4: Friend | 🔴 Red | 0 friends, 14% invitation success |\n| M5: Professional | 🟡 Yellow | Projects in progress |\n| M6: Self | 🟡 Yellow | 5.3 hrs media, 0% stretching |\n\n**37 Goals** across missions — all In Progress.\n\n**Active Projects (Asana-managed):**\n- Creative (On Set novel), Adventurer, Self, Professional (Lucidview), Community (DSA), Friend, Family\n- Side projects: D&D, YouTube, EP\n\n**Critical Gaps:** Physical rehab (0-14%), Writing (36%), Social invitations (14%)\n\n**Historical Wins:** Porn, alcohol, weed all overcome — proof that binary rules and consistent tracking work.\n\n📊 STATUS: Q1 is 6 weeks in. All 3 WIGs behind pace. M4 (Friend) is the only red mission. M3 (Family) is the only green. Status data is from Jan 19 — 23 days stale.\n\n➡️ NEXT: Consider running a TELOS refresh to update status metrics, or focus on the critical gaps (stretching, friend invitations, writing).\n\n🗣️ Kaya: Seven missions, 37 goals loaded. All Q1 WIGs behind pace — Friend mission is critical red.",
+      "timestamp": "2026-02-12T07:05:57.733Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 46579,
+    "time_to_first_token_ms": 46579,
+    "time_to_last_token_ms": 46579,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_minimal_format_greeting",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T15:35:53.628Z",
+  "completed_at": "2026-02-12T15:36:16.971Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya uses minimal format (SUMMARY + voice line) for a simple greeting",
+      "timestamp": "2026-02-12T15:35:53.628Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Good morning, Jm. Ready for whatever you need today.\n\n🗣️ Kaya: Morning Jm — standing by, what are we working on today?",
+      "timestamp": "2026-02-12T15:36:16.971Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23343,
+    "time_to_first_token_ms": 23343,
+    "time_to_last_token_ms": 23343,
+    "tokens_per_second": 0
+  }
+}

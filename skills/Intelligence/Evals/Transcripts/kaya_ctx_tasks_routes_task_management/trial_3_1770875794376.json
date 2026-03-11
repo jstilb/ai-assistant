@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T05:56:08.494Z",
+  "completed_at": "2026-02-12T05:56:34.376Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Task query like 'tasks due this week' routes to task-management profile with AsanaContext loaded",
+      "timestamp": "2026-02-12T05:56:08.494Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, checking queue and system status.\n\n🗣️ Kaya: Good evening Jm. One approved work item in queue, contexts are outdated by 201 hours.",
+      "timestamp": "2026-02-12T05:56:34.376Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25882,
+    "time_to_first_token_ms": 25882,
+    "time_to_last_token_ms": 25882,
+    "tokens_per_second": 0
+  }
+}

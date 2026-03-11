@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { getSessionState } from './ContextManagerState';
-import { emitEvalSignal } from '../../CORE/Tools/SkillIntegrationBridge';
+import { emitEvalSignal } from '../../../lib/core/SkillIntegrationBridge';
 
 const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
 const FEEDBACK_DIR = join(KAYA_DIR, 'MEMORY', 'LEARNING', 'SIGNALS');
@@ -77,6 +77,14 @@ export async function captureSessionFeedback(
   // Append to JSONL file
   if (!existsSync(FEEDBACK_DIR)) mkdirSync(FEEDBACK_DIR, { recursive: true });
   appendFileSync(FEEDBACK_FILE, JSON.stringify(feedback) + '\n');
+
+  // Window: keep last 500 entries to bound file growth
+  const MAX_FEEDBACK_ENTRIES = 500;
+  const allLines = readFileSync(FEEDBACK_FILE, 'utf-8').trim().split('\n').filter(Boolean);
+  if (allLines.length > MAX_FEEDBACK_ENTRIES) {
+    writeFileSync(FEEDBACK_FILE, allLines.slice(-MAX_FEEDBACK_ENTRIES).join('\n') + '\n');
+    console.error(`[FeedbackCollector] Windowed feedback from ${allLines.length} to ${MAX_FEEDBACK_ENTRIES} entries`);
+  }
 
   console.error(`[FeedbackCollector] Captured feedback for session ${state.sessionId}`);
   return feedback;

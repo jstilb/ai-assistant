@@ -1,0 +1,46 @@
+# Task: Read Before Modify
+# Kaya reads a file before editing it - tool sequence shows Read before Edit
+
+id: kaya_exec_read_before_modify
+description: "Kaya reads a file before editing it - tool sequence shows Read before Edit"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Fix the bug in src/auth.ts — the login function returns true for empty passwords"
+  setup_commands:
+    - "mkdir -p src"
+    - |
+      cat > src/auth.ts << 'ENDFILE'
+      export function login(username: string, password: string): boolean {
+        // BUG: should reject empty passwords
+        if (!username) return false;
+        return password === 'admin123';
+      }
+      ENDFILE
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      sequence:
+        - Read
+        - Edit
+
+  - type: response_format_check
+    weight: 0.40
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - execution_fidelity
+  - tool_sequence
+  - regression
+
+created_at: "2026-02-11"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:18:48.155Z",
+  "completed_at": "2026-02-12T06:19:27.185Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:18:48.155Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap | Status |\n|-----|--------|---------|-----|--------|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs/day | -2.3 hrs | Behind pace |\n| G1: Make 2 Good Friends | 2 friends | 0 | -2 | Behind pace |\n| G2: Raise Alignment Score | 3.0 | 1.8 | -1.2 | Behind pace |\n\n**Key Challenges Blocking Progress:**\n- **C0 (Media)** remains the root cause — 5.3 hrs/day drains time from alignment, writing, community\n- **C3 (Physical Rehab)** at 0% stretching consistency — critical gap with no strategy defined\n- **C1 (Friends)** at 14% success rate — social anxiety + new area\n- **C5 (Wake Time)** at 57% — reduces productive morning hours\n\n**What's Working:**\n- Strategies S0/S2 for media at 64-71% success — there's a foundation to build on\n- Historical wins prove you can do hard things: porn (100%), alcohol, weed, body fat (19.7→13.7%)\n\n**What's Not:**\n- All three WIGs are behind pace with Q1 ending March 29\n- No strategy defined for C3 (physical rehab)\n- Writing consistency at 36%\n- Community engagement at 29% unique events\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are behind target with ~7 weeks remaining\n2. Media consumption (5.3 hrs) is the central blocker — it cascades into alignment, writing, and community time\n3. Friendship goal has the steepest hill — 0 of 2 with 14% strategy success rate\n4. Physical rehab has no strategy at all despite being critical\n5. Your historical challenge data shows you succeed with binary rules (alcohol, weed) and consistent tracking (body fat, wellbeing)\n6. The media challenge doesn't lend itself to binary elimination — needs structured reduction\n7. Biggest lever: reducing media frees time for alignment activities, writing, and community events\n8. Consider whether any WIG needs scope adjustment given the 7-week runway\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 WIGs behind pace — media consumption is the root blocker across goals.",
+      "timestamp": "2026-02-12T06:19:27.185Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 39030,
+    "time_to_first_token_ms": 39030,
+    "time_to_last_token_ms": 39030,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,19 @@
+# LucidTasks AI Trust Configuration
+# Controls which AI operations run automatically vs. require confirmation.
+#
+# copilot:  AI suggests, user confirms (or uses --ai flag)
+# autopilot: AI acts autonomously (opt-in, used by cron jobs)
+#
+# All autopilot options default to false for safety.
+
+copilot:
+  extract_metadata: true      # AI parses task text into fields (--ai flag on add)
+  suggest_decomposition: true # Suggest subtasks (decompose --dry-run)
+  suggest_priority: true      # Suggest priority adjustments (prioritize)
+  weekly_review: true         # Generate weekly review (review command)
+
+autopilot:
+  auto_extract: false         # Auto-parse all new tasks without --ai flag
+  auto_decompose: false       # Auto-decompose tasks with estimated_minutes > 120
+  auto_prioritize: false      # Re-score priorities daily via cron
+  reschedule_overdue: false   # Auto-reschedule overdue tasks

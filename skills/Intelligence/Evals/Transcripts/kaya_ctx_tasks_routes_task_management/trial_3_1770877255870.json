@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:20:27.068Z",
+  "completed_at": "2026-02-12T06:20:55.870Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Task query like 'tasks due this week' routes to task-management profile with AsanaContext loaded",
+      "timestamp": "2026-02-12T06:20:27.068Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, task management context loaded with queue items available.\n\n🗣️ Kaya: Evening Jm. One approved work item in queue. Asana context is 8 days stale.",
+      "timestamp": "2026-02-12T06:20:55.870Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 28802,
+    "time_to_first_token_ms": 28802,
+    "time_to_last_token_ms": 28802,
+    "tokens_per_second": 0
+  }
+}

@@ -20,7 +20,7 @@ import { sendEventToObservability, getCurrentTimestamp, getSourceApp } from '../
 import { notifyTaskComplete, notifyError, getSessionDurationMinutes } from '../lib/notifications';
 import { getLearningCategory, isLearningCapture } from '../lib/learning-utils';
 import { getPSTTimestamp, getPSTDate, getYearMonth, getISOTimestamp } from '../lib/time';
-import type { ParsedTranscript, StructuredResponse } from '../../skills/CORE/Tools/TranscriptParser';
+import type { ParsedTranscript, StructuredResponse } from '../../lib/core/TranscriptParser';
 
 const BASE_DIR = getKayaDir();
 const WORK_DIR = join(BASE_DIR, 'MEMORY', 'WORK');

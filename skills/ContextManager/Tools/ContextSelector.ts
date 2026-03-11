@@ -11,6 +11,8 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, basename, extname } from 'path';
+import { z } from 'zod';
+import { createStateManager } from '../../../lib/core/StateManager';
 import { estimateTokens, estimateFileTokens } from './TokenEstimator';
 
 const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
@@ -49,20 +51,32 @@ interface ProfilesConfig {
   profiles: Record<string, ProfileConfig>;
 }
 
+const ProfileConfigSchema = z.object({
+  tokenBudget: z.number(),
+  description: z.string().default(''),
+  required: z.array(z.string()).default([]),
+  recommended: z.array(z.string()).default([]),
+  optional: z.array(z.string()).default([]),
+  excludes: z.array(z.string()).default([]),
+});
+
+const ProfilesConfigSchema = z.object({
+  profiles: z.record(z.string(), ProfileConfigSchema),
+});
+
+const profilesState = createStateManager({
+  path: PROFILES_CONFIG_PATH,
+  schema: ProfilesConfigSchema,
+  defaults: { profiles: {} },
+});
+
 // Cache profiles config
 let cachedProfiles: ProfilesConfig | null = null;
 
-function loadProfiles(): ProfilesConfig {
+async function loadProfiles(): Promise<ProfilesConfig> {
   if (cachedProfiles) return cachedProfiles;
-
-  if (!existsSync(PROFILES_CONFIG_PATH)) {
-    console.error('[ContextSelector] profiles.json not found');
-    cachedProfiles = { profiles: {} };
-    return cachedProfiles;
-  }
-
-  cachedProfiles = JSON.parse(readFileSync(PROFILES_CONFIG_PATH, 'utf-8'));
-  return cachedProfiles!;
+  cachedProfiles = await profilesState.load();
+  return cachedProfiles;
 }
 
 /**
@@ -79,7 +93,7 @@ function getCompressedPath(filePath: string): string {
  * Resolve a relative path to absolute, expanding globs
  */
 function resolveFilePaths(relativePath: string): string[] {
-  // Handle glob patterns like "skills/CORE/USER/TELOS/*.md"
+  // Handle glob patterns like "USER/TELOS/*.md"
   if (relativePath.includes('*')) {
     // Simple glob expansion for common patterns
     const dir = join(KAYA_DIR, dirname(relativePath));
@@ -226,8 +240,8 @@ function estimateTierTokens(paths: string[]): number {
 /**
  * Select context files for a profile within token budget
  */
-export function selectContext(profileName: string): ContextSelection {
-  const config = loadProfiles();
+export async function selectContext(profileName: string): Promise<ContextSelection> {
+  const config = await loadProfiles();
   const profile = config.profiles[profileName];
 
   if (!profile) {
@@ -364,7 +378,7 @@ export function maybeConvertContentToToon(content: string): ToonConversionResult
     }
 
     // Lazy import ToonHelper to avoid circular dependencies
-    const { maybeEncode } = require("../../CORE/Tools/ToonHelper") as typeof import("../../CORE/Tools/ToonHelper");
+    const { maybeEncode } = require("../../../lib/core/ToonHelper") as typeof import("../../../lib/core/ToonHelper");
 
     const result = maybeEncode(parsed);
     if (result.format === 'toon') {
@@ -381,16 +395,16 @@ export function maybeConvertContentToToon(content: string): ToonConversionResult
 /**
  * Get profile configuration
  */
-export function getProfile(profileName: string): ProfileConfig | null {
-  const config = loadProfiles();
+export async function getProfile(profileName: string): Promise<ProfileConfig | null> {
+  const config = await loadProfiles();
   return config.profiles[profileName] || null;
 }
 
 /**
  * List all available profiles
  */
-export function listProfiles(): Array<{ name: string; budget: number; description: string }> {
-  const config = loadProfiles();
+export async function listProfiles(): Promise<Array<{ name: string; budget: number; description: string }>> {
+  const config = await loadProfiles();
   return Object.entries(config.profiles).map(([name, p]) => ({
     name,
     budget: p.tokenBudget,
@@ -403,7 +417,7 @@ if (import.meta.main) {
   const profileName = process.argv[2];
 
   if (!profileName || profileName === '--list') {
-    const profiles = listProfiles();
+    const profiles = await listProfiles();
     if (profileName === '--list') {
       console.log(JSON.stringify(profiles, null, 2));
     } else {
@@ -417,7 +431,7 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  const selection = selectContext(profileName);
+  const selection = await selectContext(profileName);
   // Output without content for CLI display
   const display = {
     ...selection,

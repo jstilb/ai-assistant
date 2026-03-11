@@ -1,0 +1,45 @@
+{
+  "workflowName": "autoinfo-weekly",
+  "completedSteps": [
+    "NotifyStart",
+    "LightDriftCheck",
+    "DailySynthesize",
+    "ProcessScratchPad"
+  ],
+  "stepResults": {
+    "NotifyStart": {
+      "success": true,
+      "message": "Notification sent"
+    },
+    "LightDriftCheck": {
+      "success": true,
+      "message": "8 stale context files detected",
+      "metrics": {
+        "staleFiles": 8
+      }
+    },
+    "DailySynthesize": {
+      "success": true,
+      "message": "Daily synthesis: insufficient execution history",
+      "data": {
+        "insights": [
+          "Insufficient execution history for trend analysis"
+        ],
+        "trends": [],
+        "anomalies": []
+      },
+      "metrics": {
+        "totalReports": 0
+      }
+    },
+    "ProcessScratchPad": {
+      "success": true,
+      "message": "Processed 0 items",
+      "metrics": {
+        "itemsProcessed": 0,
+        "tasksCreated": 0
+      }
+    }
+  },
+  "startedAt": "2026-02-22T14:10:42.732Z"
+}

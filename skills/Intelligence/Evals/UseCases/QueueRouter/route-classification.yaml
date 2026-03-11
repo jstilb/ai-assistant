@@ -1,0 +1,46 @@
+# Task: QueueRouter route classification verification
+# WHY: Misroutes send items to wrong queues, bypassing approval gates or losing specs
+
+id: kaya_queuerouter_route_classification
+description: "Verify items route correctly: no-spec→spec-pipeline, with-spec→approvals, approved→approved-work"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Read skills/Automation/QueueRouter/Tools/QueueManager.ts.
+    Verify the routing logic:
+    1. An item added WITHOUT a spec goes to spec-pipeline queue
+    2. An item added WITH a spec goes to approvals queue
+    3. Items cannot enter approvals without a spec (hard constraint)
+    4. On approval, items are promoted from approvals to approved-work with status "pending"
+    5. On rejection, items transfer back to spec-pipeline with status "revision-needed"
+    Trace the code paths and confirm each routing rule. Run any existing tests.
+
+graders:
+  - type: natural_language_assert
+    weight: 0.60
+    params:
+      assertions:
+        - "Agent confirmed no-spec items route to spec-pipeline"
+        - "Agent confirmed with-spec items route to approvals"
+        - "Agent confirmed approvals guard rejects items without specs"
+        - "Agent confirmed approval promotes to approved-work with pending status"
+        - "Agent confirmed rejection sends back to spec-pipeline with revision-needed status"
+  - type: tool_calls
+    weight: 0.40
+    required: true
+    params:
+      required: [{ tool: Read }]
+
+trials: 3
+pass_threshold: 0.85
+
+tags:
+  - kaya
+  - queuerouter
+  - routing
+  - regression
+
+created_at: "2026-03-09"

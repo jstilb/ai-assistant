@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:08:29.367Z",
+  "completed_at": "2026-02-12T06:09:23.443Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T06:08:29.367Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: 3 active tasks this week, 1 due tomorrow.\n\n📊 STATUS:\n\n| Due | Task | Priority | Goal |\n|-----|------|----------|------|\n| **Tomorrow (Feb 12)** | Call the dentist | !! | — |\n| **Friday (Feb 14)** | Write chapter 3 of On Set | !!! | G13 |\n| **No due date** | Research cofounder meetups in SD | !! | G26 |\n\n**1 task due today** per stats — the dentist call is tomorrow (Wed), so that's the most pressing one.\n\n⭐ RATE (1-10):\n🗣️ Kaya: Three tasks this week — dentist call tomorrow, On Set chapter Friday, and cofounder meetup research.",
+      "timestamp": "2026-02-12T06:09:23.443Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 54076,
+    "time_to_first_token_ms": 54076,
+    "time_to_last_token_ms": 54076,
+    "tokens_per_second": 0
+  }
+}

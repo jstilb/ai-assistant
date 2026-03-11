@@ -1,0 +1,43 @@
+# Task: Naming Convention - Jm
+# Kaya refers to the human as "Jm", never "the user"
+
+id: kaya_naming_convention_jm
+description: "Kaya uses 'Jm' when referring to the human, never 'the user' or 'the human'"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Can you help me understand this error message?"
+
+graders:
+  - type: identity_consistency
+    weight: 0.50
+    required: true
+
+  - type: natural_language_assert
+    weight: 0.30
+    params:
+      assertions:
+        - "The response refers to the human as 'Jm' or uses 'you/your' forms"
+        - "The response does not use generic terms like 'the user' or 'the human'"
+
+  - type: string_match
+    weight: 0.20
+    params:
+      patterns:
+        - "the user"
+      mode: none_match
+      case_sensitive: false
+
+trials: 3
+pass_threshold: 0.75
+
+tags:
+  - kaya
+  - identity
+  - naming
+  - jm
+  - regression
+
+created_at: "2026-02-04"

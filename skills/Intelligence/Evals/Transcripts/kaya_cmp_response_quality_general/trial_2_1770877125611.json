@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:18:08.676Z",
+  "completed_at": "2026-02-12T06:18:45.611Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:18:08.676Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 12-15\n\n🔍 ANALYSIS: Three key items this week — dentist Tuesday, API redesign deadline Thursday, retro prep Friday. Your context data is stale (75h+), so I'm working from what you've shared directly.\n\n⚡ ACTIONS: Here's a structured week:\n\n**Tuesday, Feb 12**\n- Dentist appointment (block travel + buffer time)\n- Light API redesign work — review current state, identify remaining tasks\n\n**Wednesday, Feb 13**\n- Deep focus day on API redesign — this is your crunch day\n- Break the remaining work into morning/afternoon blocks\n- End of day: self-check on whether Thursday is realistic or needs scope cut\n\n**Thursday, Feb 14**\n- Finish and ship API redesign\n- Final testing/review in the morning, polish in the afternoon\n- If ahead of schedule, start drafting retro notes\n\n**Friday, Feb 15**\n- Morning: Prep for team retrospective (gather data, draft talking points)\n- Retrospective meeting\n- Week wrap-up\n\n📊 STATUS: Plan drafted, not yet on calendar\n\n📖 STORY EXPLANATION:\n1. Wednesday is your most critical day — protect it from meetings and distractions\n2. Tuesday post-dentist is lighter work to ease into the API push\n3. Thursday is the deadline so buffer real work into Wednesday\n4. Friday retro prep works best as a morning task while the week is fresh\n5. Consider your S1 (Pomodoro) strategy for the API deep-work sessions\n6. S0 (Boredom Blocks) — watch for media drift on lighter Tuesday\n7. If the API scope is large, identify what's \"must ship\" vs \"nice to have\" now\n8. Block calendar time for each focus session to protect the plan\n\n➡️ NEXT: Want me to add these to your calendar? I can also help break down the API redesign into specific subtasks if you share what's remaining.\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Wednesday is your crunch day for API work. Protect it from interruptions and meetings.",
+      "timestamp": "2026-02-12T06:18:45.611Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 36935,
+    "time_to_first_token_ms": 36935,
+    "time_to_last_token_ms": 36935,
+    "tokens_per_second": 0
+  }
+}

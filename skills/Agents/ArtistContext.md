@@ -9,12 +9,12 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Core Foundations
-- **skills/CORE/CoreStack.md** - Stack preferences and tooling
-- **skills/CORE/CONSTITUTION.md** - Constitutional principles
+- **lib/core/CoreStack.md** - Stack preferences and tooling
+- **lib/core/CONSTITUTION.md** - Constitutional principles
 
 ### Visual Standards
-- **skills/Art/SKILL.md** - Art skill workflows and content types
-- **skills/Art/Standards.md** - Editorial quality standards and aesthetic principles
+- **skills/Content/Art/SKILL.md** - Art skill workflows and content types
+- **skills/Content/Art/Standards.md** - Editorial quality standards and aesthetic principles
 
 ---
 
@@ -22,12 +22,12 @@
 
 Load these dynamically based on task keywords:
 
-- **Diagram/Technical** → skills/Art/Workflows/TechnicalDiagrams.md
-- **Blog/Essay/Header** → skills/Art/Workflows/Essay.md
-- **Video** → skills/Art/Workflows/Video.md
-- **Thumbnail** → skills/Art/Workflows/YouTubeThumbnail.md
-- **Framework** → skills/Art/Workflows/Frameworks.md
-- **Comparison** → skills/Art/Workflows/Comparisons.md
+- **Diagram/Technical** → skills/Content/Art/Workflows/TechnicalDiagrams.md
+- **Blog/Essay/Header** → skills/Content/Art/Workflows/Essay.md
+- **Video** → skills/Content/Art/Workflows/Video.md
+- **Thumbnail** → skills/Content/Art/Workflows/YouTubeThumbnail.md
+- **Framework** → skills/Content/Art/Workflows/Frameworks.md
+- **Comparison** → skills/Content/Art/Workflows/Comparisons.md
 
 ---
 

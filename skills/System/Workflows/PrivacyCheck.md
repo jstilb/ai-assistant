@@ -8,7 +8,7 @@
 
 ## Voice Notification
 
--> Use `notifySync()` from `skills/CORE/Tools/NotificationService.ts`
+-> Use `notifySync()` from `lib/core/NotificationService.ts`
 
 ```typescript
 notifySync("Running privacy check for sensitive data leakage");
@@ -22,8 +22,8 @@ Running the **PrivacyCheck** workflow from the **System** skill...
 
 | Directory | Contains | Protection Level |
 |-----------|----------|------------------|
-| `skills/CORE/USER/` | Personal data, finances, health, contacts | RESTRICTED |
-| `skills/CORE/WORK/` | Customer data, consulting, client deliverables | RESTRICTED |
+| `USER/` | Personal data, finances, health, contacts | RESTRICTED |
+| `USER/WORK/` | Customer data, consulting, client deliverables | RESTRICTED |
 
 **Rule:** Content from these directories must NEVER appear outside of them.
 
@@ -37,7 +37,7 @@ Build a list of sensitive patterns to search for:
 
 ```bash
 # Extract potentially sensitive identifiers from USER/
-cd ~/.claude/skills/CORE/USER
+cd ~/.claude/USER
 
 # Customer names (if any)
 CUSTOMERS=$(ls ../WORK/Customers/ 2>/dev/null | head -10)
@@ -79,8 +79,8 @@ cd ~/.claude
 echo "=== Checking for customer data outside WORK/ ==="
 
 # If we have customer directories, check their names don't appear elsewhere
-if [ -d "skills/CORE/WORK/Customers" ]; then
-  for customer in skills/CORE/WORK/Customers/*/; do
+if [ -d "USER/WORK/Customers" ]; then
+  for customer in USER/WORK/Customers/*/; do
     CUST_NAME=$(basename "$customer")
     # Search outside of WORK for this customer name
     grep -ri "$CUST_NAME" skills/ --exclude-dir="CORE/WORK" --exclude-dir=".git" 2>/dev/null && echo "LEAKED: $CUST_NAME"

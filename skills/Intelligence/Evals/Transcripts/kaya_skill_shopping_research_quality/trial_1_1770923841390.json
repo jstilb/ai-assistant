@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_shopping_research_quality",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:16:27.911Z",
+  "completed_at": "2026-02-12T19:17:21.390Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Research the best noise-cancelling headphones under $300",
+      "timestamp": "2026-02-12T19:16:27.911Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: Compiled current 2026 rankings from RTINGS, What Hi-Fi?, TechRadar, and SoundGuys.\n\n📖 STORY EXPLANATION:\n1. **Sony WH-1000XM5** (~$250-280) — Still a top contender. Industry-leading ANC, 30hr battery, lightweight at 250g, multipoint Bluetooth. Frequently on sale well under $300.\n2. **Bose QuietComfort Ultra** (~$280-300 on sale) — Best-in-class noise cancellation with spatial audio. Regularly discounted from $429 to around $300. Premium build and comfort.\n3. **Bose QuietComfort Headphones** (~$249) — ANC nearly as good as models costing $100-200 more. Excellent value pick if you don't need spatial audio.\n4. **Sony WH-1000XM6** (~$300-350) — The newest Sony flagship. Superior ANC and sound, but sits right at or slightly above the $300 mark. Worth watching for sales.\n5. **Soundcore Space One Pro** (~$130) — Folds to half size, 40hr battery with ANC, 5-min quick charge = 8hrs. Incredible value for the price.\n6. **Sony WH-CH720N** (~$100-150) — Three consecutive What Hi-Fi? awards. Solid ANC for commuters on a tighter budget. Lightweight and comfortable.\n7. **1More SonoFlow Pro** (~$80-100) — Punches way above its weight class. ANC rivals $200+ headphones at a fraction of the cost.\n8. **Sony WF-1000XM5 earbuds** (~$230) — If you prefer earbuds over over-ear, these deliver class-leading ANC in a compact form factor.\n\n**My picks:** Bose QC Ultra if you can catch a sale, Sony XM5 for the safest all-around choice, Soundcore Space One Pro if you want to save money without major compromises.\n\n📊 STATUS: Research complete\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Bose QC Ultra and Sony XM5 lead under $300. Soundcore Space One Pro is the budget king.\n\nSources:\n- [RTINGS - Best Noise Cancelling Headphones 2026](https://www.rtings.com/headphones/reviews/best/by-feature/noise-cancelling)\n- [What Hi-Fi? - Best Noise-Cancelling Headphones 2026](https://www.whathifi.com/best-buys/headphones/best-noise-cancelling-headphones)\n- [TechRadar - Best Noise Cancelling Headphones](https://www.techradar.com/audio/headphones/best-noise-cancelling-headphones)\n- [SoundGuys - Best Bluetooth Headphones Under $300](https://www.soundguys.com/best-bluetooth-headphones-under-300-29466/)\n- [Headphones.com - Best ANC Headphones](https://headphones.com/blogs/buying-guides/the-best-anc-headphones-to-buy-in-2025-and-what-to-avoid)",
+      "timestamp": "2026-02-12T19:17:21.390Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 53479,
+    "time_to_first_token_ms": 53479,
+    "time_to_last_token_ms": 53479,
+    "tokens_per_second": 0
+  }
+}

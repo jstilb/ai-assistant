@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_briefing_routes_daily_briefing",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:45:47.568Z",
+  "completed_at": "2026-02-12T06:48:25.496Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Briefing request like 'morning briefing' activates the DailyBriefing skill",
+      "timestamp": "2026-02-12T06:45:47.568Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Briefing already exists on disk from earlier. Here's your evening briefing, Jm:\n\n---\n\n📋 **SUMMARY:** Evening briefing for Wed Feb 11 — 18 events, 3 WIGs all behind pace, habits need attention.\n\n---\n\n## Goals & WIGs\n\n| WIG | Current | Target | Deadline |\n|-----|---------|--------|----------|\n| **G0** Decrease Low-Value Media | 5.0 hrs | 3 hrs | 3/29 |\n| **G1** Make 2 Good Friends | 0 | 2 | 3/29 |\n| **G2** Raise Alignment Score | 2.0 | 3.0 | 3/29 |\n\n**Focus recommendation:** G0 — Decrease Low-Value Media Consumption\n\n## Strategy Gaps (Critical)\n\n- **S4 Social Invitations** — 8.6% of 100% target (-91.4%)\n- **S6 Morning Stretch** — 0% of 80% (-80%)\n- **S8 Sleep Hygiene** — 0% of 80% (-80%)\n\n## Habits (7-day averages — all need work)\n\nMost at 0%: habit tracking, workout, sleep, review goals, calendar, no alcohol. Best: floss & read at 40%.\n\n## Tomorrow's Calendar Highlights\n\n- **8:00** Get Board Waxed, Calendar & Tracking\n- **10:00** Team Sync, Vday with Julie\n- **12:00** Call Mom\n- **16:00** Book Club\n- **17:00** DnD\n- **17:45** CSDC General Meeting\n- **18:00** Julie & Market, DSA 101, Black History Month Series\n- **19:00** Labor Working Group\n\n## Weather — San Diego\n\n**Now:** 56°F, Partly cloudy (93% humidity)\n**Tomorrow:** High 63°F / Low 55°F — light layers, perfect for morning outdoor activity\n\n## Priority Tasks (no deadline — suggested for free windows)\n\n1. Look up writing & publishing events/cons (M2)\n2. Add piano pieces to music software (M2/G18)\n3. Community research — become expert, find experts (G1/S3)\n\n## Stale Items\n\n62 tasks have no deadlines set. Consider a batch deadline-setting session.\n\n---\n\n📊 **STATUS:** All 3 WIGs behind pace. Habits at critically low adherence. Valentine's prep (letter, cooking) on the list. Busy evening schedule tomorrow.\n\n📁 **CAPTURE:** Strategy S4 (Social Invitations) has the widest gap at -91.4%. Habit tracking itself isn't being tracked.\n\n➡️ **NEXT:** Tomorrow morning — board wax + calendar review early, then Team Sync at 10. Vday with Julie also at 10, so check for conflicts. Evening is packed: DnD, CSDC, Julie & Market, DSA 101, and Labor Working Group all overlap 5-7pm — triage which to attend.\n\n📖 **STORY EXPLANATION:**\n1. Three WIGs are all behind pace with ~6 weeks to deadline\n2. Strategy S4 (Social Invitations) is the biggest gap at -91.4%\n3. Habit adherence is near zero across the board — the tracking habit itself isn't happening\n4. Tomorrow has 18 events with major evening conflicts (5 events between 5-7pm)\n5. Valentine's Day is Saturday — Vday letter and cooking prep are on the task list\n6. Weather is mild (56-63°F), good for morning outdoor activity before meetings\n7. 62 tasks have no deadlines — consider batch-setting them\n8. Free window is early morning before 9am — best slot for board wax and personal habits\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three WIGs behind pace. Habits near zero. Tomorrow evening has five overlapping events to triage.",
+      "timestamp": "2026-02-12T06:48:25.496Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 157928,
+    "time_to_first_token_ms": 157928,
+    "time_to_last_token_ms": 157928,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_telos_routes_telos",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:36:39.108Z",
+  "completed_at": "2026-02-12T19:37:24.888Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Show me my life goals and project progress",
+      "timestamp": "2026-02-12T19:36:39.108Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Displaying Jm's life goals, missions, and progress from TELOS data.\n\n🔍 ANALYSIS:\n\n## Missions (North Stars)\n\n| Mission | Focus | 2026 Theme |\n|---------|-------|------------|\n| **M0: Adventurer** | Regional & International Travel | Mexico, 3 new countries, 1 national park |\n| **M1: Community Member** | Deep Involvement | DSA, vball, surf, writing; find music & professional communities |\n| **M2: Creative** | Writing & Piano | Complete novel drafts, publish short story, build piano practice |\n| **M3: Family Man** | Nourish & Flourish | Great partner to Julie, family therapy |\n| **M4: Friend** | Meaningful Friendships | 3+ good friends in SD, boys trip, consistent calls |\n| **M5: Professional** | App Dev & AI | Lucidview beta, find cofounder, promotion, AI proficiency |\n| **M6: Self** | Mental Fortitude | Reduce media noise, rebuild DTR systems, PT for back/shoulder |\n\n## Q1 2026 WIGs (Wildly Important Goals)\n\n| Goal | Target | Current | Status |\n|------|--------|---------|--------|\n| **G0: Decrease Low-Value Media** | 5hrs → 3hrs/day | 5.3 hrs | 🔴 Behind |\n| **G1: Make 2 Good Friends** | 2 friends | 0 | 🔴 Behind |\n| **G2: Raise Alignment Score** | 1.6 → 3.0 | 1.8 | 🟡 Slow progress |\n\n## Active Challenges\n\n| Challenge | Current | Target | Success Rate |\n|-----------|---------|--------|--------------|\n| **C0: Media Consumption** | 5.3 hrs/day | 3 hrs | 64-71% |\n| **C1: Making Friends** | 0 good friends | Build community | 14% |\n| **C2: Alignment Execution** | Score 1.8 | Score 3.0 | 50% |\n| **C3: Physical Rehab** | 0% stretching | Establish routine | 0-14% |\n| **C4: Writing Habit** | 36% consistency | Increase | 36% |\n| **C5: Wake Time** | 57% at 6:30am | 90%+ | 57% |\n| **C6: Community Engagement** | 29% unique events | Increase | 29% |\n\n## What's Working (Overcome Challenges)\n- Porn addiction: **100% consistency** (2+ years)\n- Alcohol: **Eliminated** (7+ months)\n- Weed: **Eliminated** (1.5+ years)\n- Body fat: **19.7% → 13.7%** (~6 months)\n- Wellbeing score: **2.61 → 7.17** (~6 months)\n\n## Key Insight\nBinary elimination strategies (alcohol, weed, porn) have been highly effective. Gradual reduction strategies (media, friends, alignment) are showing slower progress. C3 (physical rehab) is a critical gap at 0% — no strategy defined yet.\n\n📊 STATUS: Q1 2026 is ~6 weeks in. WIGs are behind target. TELOS data is 88 hours stale — consider running `refresh`.\n\n➡️ NEXT: Want me to dive deeper into any mission, run a TELOS refresh, or help strategize on a specific challenge?\n\n📖 STORY EXPLANATION:\n1. You have 7 active missions spanning adventure, community, creativity, family, friendship, career, and self\n2. Q1 has 3 WIGs — media reduction, friendships, and alignment score — all behind target\n3. Media consumption at 5.3 hrs/day is the root blocker for multiple other goals\n4. Friend-making in SD has 14% success rate — needs strategy adjustment\n5. Physical rehab has zero traction — no strategy even defined\n6. Your proven strength is binary rules (quit entirely) — working brilliantly for addictions\n7. Gradual behavior change is harder — media and alignment need different approaches\n8. Historical wins prove you can transform dramatically when systems are in place\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Q1 WIGs behind target. Media consumption and friend-making need strategy adjustments. Physical rehab at zero.",
+      "timestamp": "2026-02-12T19:37:24.888Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 45780,
+    "time_to_first_token_ms": 45780,
+    "time_to_last_token_ms": 45780,
+    "tokens_per_second": 0
+  }
+}

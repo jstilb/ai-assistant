@@ -1,0 +1,22 @@
+[
+  {"query": "Find data science jobs in San Francisco", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Auto-apply to all matching opportunities", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Scan greenhouse for new postings", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Tailor my resume for this role at Stripe", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Check my application status on lever", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Write a cover letter for the PM position", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Run a fresh job scan on indeed and ashby", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Score this job listing against my profile", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Find connections at Plaid for a referral", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Show my recent auto-apply results", "should_trigger": true, "skill": "JobEngine"},
+  {"query": "Add a task to fix the login bug", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Queue this spec for approval", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Route this item to the approvals queue", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Research competitor pricing strategies", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Schedule a meeting for tomorrow", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Check the background queue status", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Start autonomous work on the next item", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Scrape product data from Amazon", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "Process the pending approval queue", "should_trigger": false, "skill": "JobEngine"},
+  {"query": "What's the job of this function in the codebase?", "should_trigger": false, "skill": "JobEngine"}
+]

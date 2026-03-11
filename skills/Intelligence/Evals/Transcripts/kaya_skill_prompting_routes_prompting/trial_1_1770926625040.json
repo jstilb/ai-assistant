@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_prompting_routes_prompting",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:02:50.976Z",
+  "completed_at": "2026-02-12T20:03:45.040Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me write a better prompt for code review",
+      "timestamp": "2026-02-12T20:02:50.976Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Building a code review prompt — need to know the use case and persona to optimize it.\n\n🗣️ Kaya: Two quick questions to tailor the code review prompt to your actual workflow.\n\nWhat's the primary use case and reviewer persona you want? Let me know and I'll build the prompt applying Claude 4.x best practices from our Standards.md — positive framing, 1-3 calibrated examples, minimal context, and soft tool language.",
+      "timestamp": "2026-02-12T20:03:45.040Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 54064,
+    "time_to_first_token_ms": 54064,
+    "time_to_last_token_ms": 54064,
+    "tokens_per_second": 0
+  }
+}

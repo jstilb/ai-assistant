@@ -120,7 +120,7 @@ interface StopPayload extends BasePayload {
 | Hook | Purpose | Blocking | Dependencies |
 |------|---------|----------|--------------|
 | `StartupGreeting.hook.ts` | Display Kaya banner with system stats | No | None |
-| `LoadContext.hook.ts` | Inject CORE skill into context | Yes (stdout) | `skills/CORE/SKILL.md` |
+| `LoadContext.hook.ts` | Inject context at session start | Yes (stdout) | `CLAUDE.md` |
 | `CheckVersion.hook.ts` | Notify if CC update available | No | npm registry |
 
 ### UserPromptSubmit Hooks
@@ -298,7 +298,6 @@ Located in `hooks/lib/`:
 | `learning-utils.ts` | Learning categorization | Rating hooks, WorkCompletion |
 | `observability.ts` | Trace emitting | Future use |
 | `TraceEmitter.ts` | OpenTelemetry-style traces | Future use |
-| `IdealState.ts` | ISC tracking utilities | Algorithm integration |
 | `metadata-extraction.ts` | Parse assistant responses | Stop handlers |
 | `recovery-types.ts` | Recovery journal types | Security system |
 

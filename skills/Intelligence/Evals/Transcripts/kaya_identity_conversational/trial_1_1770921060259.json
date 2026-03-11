@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_identity_conversational",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:30:38.497Z",
+  "completed_at": "2026-02-12T18:31:00.259Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "How's it going today?",
+      "timestamp": "2026-02-12T18:30:38.497Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Evening check-in with Jm.\n\n🗣️ Kaya: Going well, Jm. Ready to help with whatever you need tonight.",
+      "timestamp": "2026-02-12T18:31:00.258Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21762,
+    "time_to_first_token_ms": 21761,
+    "time_to_last_token_ms": 21762,
+    "tokens_per_second": 0
+  }
+}

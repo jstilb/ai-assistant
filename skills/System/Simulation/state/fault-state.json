@@ -1,0 +1,33 @@
+{
+  "rules": [
+    {
+      "tool": "Read",
+      "mode": "network_timeout",
+      "trigger": "random_probability",
+      "probability": 0.3,
+      "delay_ms": 5000
+    },
+    {
+      "tool": "Bash",
+      "mode": "tool_unavailable",
+      "trigger": "random_probability",
+      "probability": 0.15
+    },
+    {
+      "tool": "WebFetch",
+      "mode": "malformed_response",
+      "trigger": "random_probability",
+      "probability": 0.2
+    },
+    {
+      "tool": "Read",
+      "mode": "rate_limit",
+      "trigger": "call_count",
+      "call_count_threshold": 5
+    }
+  ],
+  "callCounts": {},
+  "faultsInjected": 0,
+  "faultLog": [],
+  "simulationStartedAt": "2026-02-27T19:06:26.183Z"
+}

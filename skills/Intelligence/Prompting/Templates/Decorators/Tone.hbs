@@ -1,0 +1,94 @@
+{{!--
+  TONE DECORATOR - Tone & Voice Modifiers
+
+  Purpose: Stackable directives that modify HOW the LLM expresses responses.
+
+  Research Foundation: Prompt Decorators (arXiv:2510.19850v1)
+  - Tone decorators are independent of task content
+  - Composable with reasoning and format decorators
+  - Based on Claude 4.x Standards (positive framing, soft language)
+
+  Input Data Structure:
+  ```yaml
+  modifier: string (concise | explanatory | executive | technical | conversational)
+  task_description: string (optional - the task being modified)
+  ```
+
+  Usage:
+  {{> Decorators/Tone modifier="executive"}}
+
+  ## Your Task
+  [Your task here]
+--}}
+
+{{#if (eq modifier "concise")}}
+## Communication Style
+
+Maximize information density. Every sentence should carry weight:
+- Eliminate filler words and redundancy
+- Use precise, direct language
+- Prefer short sentences over complex ones
+- Cut anything that doesn't add value
+- Dense, economical prose
+
+Think like you're writing a telegram where every word costs money.
+{{/if}}
+
+{{#if (eq modifier "explanatory")}}
+## Communication Style
+
+Teach the concepts as you go. Your audience may be encountering this material for the first time:
+- Define technical terms when you introduce them
+- Use analogies to make complex ideas accessible
+- Explain the "why" behind recommendations, not just the "what"
+- Build from simpler concepts to more complex ones
+- Assume curiosity but not prior knowledge
+
+Think like you're writing a textbook chapter, not just providing answers.
+{{/if}}
+
+{{#if (eq modifier "executive")}}
+## Communication Style
+
+Lead with what matters most. Your audience makes decisions and values clarity:
+- **Bottom-line-up-front:** Start with the answer or recommendation
+- **Key metrics:** Quantify impact where possible (time, cost, risk)
+- **Decision points:** Highlight choices that need to be made
+- **Action items:** Make next steps explicit
+- Avoid lengthy background unless critical for the decision
+
+Think like you're presenting to someone with 5 minutes before their next meeting.
+{{/if}}
+
+{{#if (eq modifier "technical")}}
+## Communication Style
+
+Precision and implementation details matter. Your audience values technical accuracy:
+- Use precise, domain-specific terminology without oversimplifying
+- Include implementation details, not just high-level concepts
+- Reference specific APIs, tools, commands, or configurations
+- Discuss edge cases and technical constraints
+- Assume technical competence
+
+Think like you're writing documentation for engineers who will build this.
+{{/if}}
+
+{{#if (eq modifier "conversational")}}
+## Communication Style
+
+Natural, approachable communication. Your audience values connection:
+- Write like you're explaining to a colleague over coffee
+- Use contractions and natural phrasing
+- Ask rhetorical questions to engage
+- Share relevant context or analogies naturally
+- Friendly tone without being overly casual
+
+Think like you're having a helpful conversation, not delivering a formal report.
+{{/if}}
+
+{{#unless modifier}}
+{{!-- Fallback if no valid modifier provided --}}
+## Communication Style
+
+[No tone decorator applied - specify modifier: concise, explanatory, executive, technical, or conversational]
+{{/unless}}

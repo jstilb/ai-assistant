@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_ambiguous_routes_general",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:22:58.161Z",
+  "completed_at": "2026-02-12T06:23:26.115Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Ambiguous input like 'I need help' routes to general or conversational profile",
+      "timestamp": "2026-02-12T06:22:58.161Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, ready for instructions.\n\n🗣️ Kaya: Evening Jm. Systems loaded, 63 skills ready. What are we working on?",
+      "timestamp": "2026-02-12T06:23:26.115Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 27954,
+    "time_to_first_token_ms": 27954,
+    "time_to_last_token_ms": 27954,
+    "tokens_per_second": 0
+  }
+}

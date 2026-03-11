@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_calendar_routes_calendar_assistant",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:39:07.913Z",
+  "completed_at": "2026-02-12T06:39:31.856Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Scheduling request like 'schedule a meeting' invokes the CalendarAssistant skill",
+      "timestamp": "2026-02-12T06:39:07.913Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, reviewing queue status.\n\nYou have 2 items in queue (1 approval, 1 approved-work). Calendar and Asana contexts are outdated (201h+).\n\n🗣️ Kaya: Evening Jm. Two queue items active, calendar context needs refresh.",
+      "timestamp": "2026-02-12T06:39:31.856Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23943,
+    "time_to_first_token_ms": 23943,
+    "time_to_last_token_ms": 23943,
+    "tokens_per_second": 0
+  }
+}

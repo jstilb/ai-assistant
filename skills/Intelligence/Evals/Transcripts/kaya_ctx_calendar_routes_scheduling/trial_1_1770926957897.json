@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:08:23.090Z",
+  "completed_at": "2026-02-12T20:09:17.897Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What's on my calendar today?",
+      "timestamp": "2026-02-12T20:08:23.090Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Here's your Thursday, Jm:\n\n| Time | Event |\n|------|-------|\n| 🏠 All Day | Home |\n| 9:00 – 9:30 | R&I Initiative Sync |\n| 9:00 – 10:30 | Work Session – Flex |\n| 10:30 – 10:45 | Rehab |\n| 10:45 – 11:45 | Workout |\n| 12:00 – 12:30 | Lunch |\n| 12:30 – 13:30 | Decompress |\n| 13:30 – 14:00 | Walk |\n| 14:00 – 14:45 | Personal Tasks |\n| 15:00 – 16:00 | Project Time |\n| 16:30 – 17:00 | Evening Prep |\n| 17:00 – 18:00 | Dinner |\n| 21:30 – 22:30 | Evening Routine |\n\nIt's 12:08 PM now — you're in the **Lunch** block, with **Decompress** coming up at 12:30.\n\n📊 STATUS: 3 blocks done (R&I sync, flex work, workout), 7 remaining today.\n\n🗣️ Kaya: Lunch block now. Decompress at twelve-thirty, then walk, personal tasks, and project time this afternoon.",
+      "timestamp": "2026-02-12T20:09:17.897Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 54807,
+    "time_to_first_token_ms": 54807,
+    "time_to_last_token_ms": 54807,
+    "tokens_per_second": 0
+  }
+}

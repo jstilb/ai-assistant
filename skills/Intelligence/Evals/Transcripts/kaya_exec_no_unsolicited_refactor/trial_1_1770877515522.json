@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_exec_no_unsolicited_refactor",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:24:42.367Z",
+  "completed_at": "2026-02-12T06:25:15.521Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya fixes only the requested bug without refactoring or cleaning up surrounding code",
+      "timestamp": "2026-02-12T06:24:42.367Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, ready for instructions.\n\n🗣️ Kaya: Standing by for your next request, Jm.",
+      "timestamp": "2026-02-12T06:25:15.521Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 33154,
+    "time_to_first_token_ms": 33154,
+    "time_to_last_token_ms": 33154,
+    "tokens_per_second": 0
+  }
+}

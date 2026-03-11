@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_calendar_on_research_request",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:28:43.084Z",
+  "completed_at": "2026-02-12T19:29:38.210Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Research the latest developments in quantum computing\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T19:28:43.084Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: Significant momentum across hardware, error correction, industry consolidation, and commercial deployments in early 2026.\n\n⚡ ACTIONS: Searched multiple sources for the latest quantum computing developments.\n\n✅ RESULTS: Compiled key findings below.\n\n📊 STATUS: Research complete.\n\n📖 STORY EXPLANATION:\n1. **Error-corrected quantum computers shipping** — Microsoft + Atom Computing delivering level-two error-corrected systems to Denmark's Novo Nordisk Foundation. QuEra shipped one to Japan's AIST and plans global availability in 2026.\n2. **D-Wave's scalability breakthrough** — Demonstrated industry-first on-chip cryogenic control for gate-model qubits, solving a major barrier to commercially viable quantum hardware.\n3. **D-Wave acquires Quantum Circuits** — $550M merger to bring superconducting gate-model systems to market, positioning D-Wave as the largest quantum computing company.\n4. **Neutral-atom systems scaling fast** — Arrays now exceed 6,100 atoms with 99.98% single-qubit accuracy, making neutral atoms the breakout platform of 2026.\n5. **Stanford's million-qubit pathway** — Miniature optical cavities that read many qubits simultaneously; 500-cavity prototypes already built, with a realistic route to million-qubit networks.\n6. **IBM Quantum Loon processor** — Experimental chip validating a new architecture for practical, high-efficiency fault-tolerant quantum error correction.\n7. **Quantum security vulnerabilities found** — Researchers warn that quantum computers themselves have serious security flaws that need addressing before widespread deployment.\n8. **Government investing heavily** — Los Alamos launched a Center for Quantum Computing; Infleqtion secured $6.2M ARPA-E contract to optimize the US power grid with quantum; adoption still early (only 13% of orgs have quantum in production).\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Error-corrected quantum computers now shipping commercially. D-Wave, Microsoft, and neutral-atom platforms leading 2026 breakthroughs.\n\n---\n\nSources:\n- [D-Wave's First Major Breakthrough of 2026](https://www.fastcompany.com/91469364/d-wave-quantum-computing-first-major-breakthrough-of-2026-scalable-technology)\n- [Neutral Atom Quantum Computing: 2026's Big Leap — IEEE Spectrum](https://spectrum.ieee.org/neutral-atom-quantum-computing)\n- [Stanford's Tiny Light Trap for Million-Qubit Computers](https://www.sciencedaily.com/releases/2026/02/260201223737.htm)\n- [D-Wave Acquires Quantum Circuits Inc.](https://ir.dwavequantum.com/news/news-details/2026/D-Wave-Announces-Agreement-to-Acquire-Quantum-Circuits-Inc--Establishing-Worlds-Leading-Quantum-Computing-Company/default.aspx)\n- [Quantum Computers Have Serious Security Flaws](https://www.sciencedaily.com/releases/2026/01/260120000330.htm)\n- [Los Alamos Quantum Computing Research Center](https://thequantuminsider.com/2026/02/06/los-alamos-forms-quantum-computing-focused-research-center/)\n- [IBM Quantum Processors & Algorithm Breakthroughs](https://newsroom.ibm.com/2025-11-12-ibm-delivers-new-quantum-processors,-software,-and-algorithm-breakthroughs-on-path-to-advantage-and-fault-tolerance)\n- [7 Quantum Trends Shaping 2026 — Bernard Marr](https://bernardmarr.com/7-quantum-computing-trends-that-will-shape-every-industry-in-2026/)\n- [GQI Top Predictions for 2026](https://quantumcomputingreport.com/gqis-top-predictions-for-quantum-technology-in-2026/)\n- [Quantum's Transistor Moment](https://www.sciencedaily.com/releases/2026/01/260127010136.htm)",
+      "timestamp": "2026-02-12T19:29:38.210Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 55126,
+    "time_to_first_token_ms": 55126,
+    "time_to_last_token_ms": 55126,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_skill_routing_preserved",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:23:33.627Z",
+  "completed_at": "2026-02-12T06:24:10.000Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Send an email to Sarah about the project deadline moving to next Friday",
+      "timestamp": "2026-02-12T06:23:33.627Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "I don't have a \"Sarah\" in your contacts with an email address.\n\n📋 **SUMMARY:** Can't send email — no contact info for Sarah.\n\n🔍 **ANALYSIS:** Your contacts directory doesn't have an entry for Sarah. I need her email address to send the message.\n\n🗣️ Kaya: No email address found for Sarah in contacts. What's her email?",
+      "timestamp": "2026-02-12T06:24:10.000Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 36373,
+    "time_to_first_token_ms": 36373,
+    "time_to_last_token_ms": 36373,
+    "tokens_per_second": 0
+  }
+}

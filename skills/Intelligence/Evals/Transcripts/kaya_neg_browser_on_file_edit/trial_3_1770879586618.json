@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_browser_on_file_edit",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:59:20.919Z",
+  "completed_at": "2026-02-12T06:59:46.618Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "File edit request like 'edit the config.ts file' does NOT invoke Browser skill\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T06:59:20.919Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n🗣️ Kaya: Evening Jm. What are we working on tonight?",
+      "timestamp": "2026-02-12T06:59:46.618Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25699,
+    "time_to_first_token_ms": 25699,
+    "time_to_last_token_ms": 25699,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:57:38.844Z",
+  "completed_at": "2026-02-13T02:59:28.677Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What's on my calendar today?",
+      "timestamp": "2026-02-13T02:57:38.844Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Here's your full schedule for today, Thursday Feb 12.\n\n| Time | Event |\n|------|-------|\n| 6:30 | Morning Routine |\n| 7:00 | Walk |\n| 7:15 | Work Session - Focus |\n| 8:00 | [OPTIONAL] Data + AI = DataAI |\n| 8:45 | Salsa Practice |\n| 9:00 | R&I Initiative Sync |\n| 9:00 | Work Session - Flex |\n| 10:30 | Rehab |\n| 10:45 | Workout |\n| 12:00 | Lunch |\n| 12:30 | Decompress |\n| 1:30 | Walk |\n| 2:00 | Personal Tasks |\n| 3:00 | Project Time |\n| 4:30 | Evening Prep |\n| 5:00 | Dinner |\n| 9:30 | Evening Routine |\n\nIt's currently ~7pm, so you're past dinner and heading toward your evening routine at 9:30. Looks like a well-structured day, Jm — rehab block at 10:30 is good to see given C3 goals.\n\n🗣️ Kaya: Seventeen events today. You're past dinner now, evening routine at nine-thirty remains.",
+      "timestamp": "2026-02-13T02:59:28.677Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770951568677_jta9lb",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli gcal today 2>/dev/null || pai-cli calendar today 2>/dev/null || echo \"CALENDAR_CLI_UNAVAILABLE\"",
+        "description": "Check today's calendar events via CLI",
+        "timeout": 15000
+      },
+      "started_at": "2026-02-13T02:59:28.677Z",
+      "result": "CALENDAR_CLI_UNAVAILABLE",
+      "completed_at": "2026-02-13T02:59:28.677Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951568677_rq0sry",
+      "name": "Bash",
+      "params": {
+        "command": "which pai-cli 2>/dev/null && pai-cli --help 2>/dev/null | head -20 || echo \"PAI_CLI_NOT_FOUND\"",
+        "description": "Check if pai-cli is available",
+        "timeout": 10000
+      },
+      "started_at": "2026-02-13T02:59:28.677Z",
+      "result": "~/.claude/bin/pai-cli\n\\033[0;36mpai-cli\\033[0m - Unified CLI wrapper for PAI Unix tools\n\n\\033[0;34mUsage:\\033[0m\n  pai-cli <service> [options]\n\n\\033[0;34mAvailable Services:\\033[0m\n  \\033[0;32myoutube, yt\\033[0m        YouTube video operations (via yt-dlp)\n  \\033[0;32mcalendar, gcal\\033[0m     Google Calendar operations (via gcalcli)\n  \\033[0;32mdrive\\033[0m              Google Drive operations (via rclone)\n  \\033[0;32mgmail\\033[0m              Gmail operations (via gog)\n  \\033[0;32mgemini, ai\\033[0m         Gemini AI operations (via gemini-cli)\n  \\033[0;32msheets\\033[0m             Google Sheets operations\n  \\033[0;32mplaces\\033[0m             Google Places discovery\n  \\033[0;32masana\\033[0m              Asana task management (full CRUD)\n  \\033[0;32mplaywright, pw\\033[0m     Browser automation (via Browse.ts)\n  \\033[0;32mbrowser\\033[0m            Browser automation (alias for playwright)\n  \\033[0;32mbluesky, bsky\\033[0m      Bluesky social operations (via bsky)\n  \\033[0;32mweather\\033[0m            Weather information (via wttr.in)\n  \\033[0;32mlinear\\033[0m             Linear issue tracking (via linearis)\n  \\033[0;32mslack\\033[0m              Slack messaging (via slackcat)",
+      "completed_at": "2026-02-13T02:59:28.677Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951568677_wtcwgp",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli gcal today 2>&1",
+        "description": "Get today's calendar events with full error output",
+        "timeout": 15000
+      },
+      "started_at": "2026-02-13T02:59:28.677Z",
+      "error": "Exit code 2\nusage: gcalcli [-h] [--version] [--client-id CLIENT_ID]\n               [--client-secret CLIENT_SECRET] [--noauth_local_server]\n               [--config-folder CONFIG_FOLDER] [--noincluderc]\n               [--calendar GLOBAL_CALENDARS]\n               [--default-calendar DEFAULT_CALENDARS] [--locale LOCALE]\n               [--refresh] [--nocache] [--conky] [--nocolor]\n               [--lineart {fancy,unicode,ascii}]\n               {init,list,search,edit,delete,agenda,agendaupdate,updates,conflicts,calw,calm,quick,add,import,remind,config,util} ...\ngcalcli: error: argument command: invalid choice: 'today' (choose from init, list, search, edit, delete, agenda, agendaupdate, updates, conflicts, calw, calm, quick, add, import, remind, config, util)",
+      "completed_at": "2026-02-13T02:59:28.677Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951568677_p4b5j2",
+      "name": "Bash",
+      "params": {
+        "command": "gcalcli agenda \"2026-02-12\" \"2026-02-13\" 2>&1",
+        "description": "Get today's calendar agenda",
+        "timeout": 15000
+      },
+      "started_at": "2026-02-13T02:59:28.677Z",
+      "result": "\u001b[0;33m\nThu Feb 12\u001b[0m\u001b[0;36m         Home\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  6:30           Morning Routine\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  7:00           Walk\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  7:15           Work Session - Focus\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  8:00           [OPTIONAL] Data + AI = DataAI\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  8:45           salsa practice\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  9:00           R&I initative sync\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  9:00           Work Session - Flex\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  10:30          Rehab\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  10:45          Workout\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  12:00          Lunch\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  12:30          Decompress\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  13:30          walk\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  14:00          personal tasks\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  15:00          Project Time\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  16:30          evening prep\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  17:00          Dinner\n\u001b[0m\u001b[0;33m          \u001b[0m\u001b[0;36m  21:30          Evening Routine\n\u001b[0m",
+      "completed_at": "2026-02-13T02:59:28.677Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.32974974999999995,
+    "duration": 98654,
+    "turns": 5,
+    "inputTokens": 7,
+    "outputTokens": 819,
+    "cacheReadTokens": 216438,
+    "cacheCreationTokens": 30331
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 4,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 109833,
+    "time_to_first_token_ms": 109833,
+    "time_to_last_token_ms": 109833,
+    "tokens_per_second": 0
+  }
+}

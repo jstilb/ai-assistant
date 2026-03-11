@@ -1,0 +1,22 @@
+[
+  {"query": "Add this task to the spec pipeline", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Show me pending approvals", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Approve the top item in the queue", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Reject this spec back to pipeline", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "What's the queue status right now?", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Promote this item to approved-work", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Route this new task to the right queue", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "List all items in the background queue", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Queue this work item for context gathering", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "How many items are in the approvals queue?", "should_trigger": true, "skill": "QueueRouter"},
+  {"query": "Find senior engineer jobs at Google", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Auto-apply to data science roles", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Add a task to my inbox", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Complete the deployment task", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Scrape this website for pricing data", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Send an email to the team", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Start autonomous work on the next item", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Research how message queues work in RabbitMQ", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "What tasks are due today?", "should_trigger": false, "skill": "QueueRouter"},
+  {"query": "Run the daily briefing", "should_trigger": false, "skill": "QueueRouter"}
+]

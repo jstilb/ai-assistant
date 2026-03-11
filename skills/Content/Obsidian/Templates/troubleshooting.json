@@ -1,0 +1,18 @@
+{
+  "type": "troubleshooting",
+  "label": "Troubleshooting",
+  "description": "Problem-solution records with environment details and root cause analysis",
+  "requiredSections": ["Problem", "Solution"],
+  "optionalSections": ["Environment", "Symptoms", "Steps Tried", "Root Cause", "Prevention", "Related Issues", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["status", "severity", "platform", "tool", "error_code", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["error", "bug", "fix", "issue", "problem", "solution", "workaround", "debug", "troubleshoot", "stack trace", "exception", "crash", "broken", "resolved"],
+    "contentPatterns": ["## Problem", "## Solution", "## Error", "## Steps", "```error", "```log"],
+    "folderBias": ["Programming", "Data Engineering"]
+  },
+  "stubThreshold": 30,
+  "version": 1
+}

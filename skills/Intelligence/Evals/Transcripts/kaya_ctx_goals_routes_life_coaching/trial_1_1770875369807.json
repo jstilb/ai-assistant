@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:48:37.320Z",
+  "completed_at": "2026-02-12T05:49:29.807Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:48:37.320Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs/day | -2.3 hrs — primary blocker |\n| G1: Make 2 Good Friends | 2 friends | 0 | Full gap remaining |\n| G2: Raise Alignment Score | 3.0 | 1.8 | +1.2 needed |\n\n**By Mission — Quick Health Check:**\n\n| Mission | Status | Concern Level |\n|---------|--------|---------------|\n| M0: Adventurer | Goals defined, no travel yet | Medium |\n| M1: Community | 29% unique events, 43% attendance | High |\n| M2: Creative | Writing at 36% consistency | High |\n| M3: Family | Active but therapy not started | Medium |\n| M4: Friend | 14% success rate on friend-making | High |\n| M5: Professional | In progress | Medium |\n| M6: Self | 0% stretching, 14% rehab consistency | Critical |\n\n**Root Pattern:** C0 (media at 5.3 hrs/day) is the upstream blocker for C2 (alignment), C4 (writing), and C5 (wake time). Fixing media consumption cascades into multiple goal areas.\n\n**What's working:** Strategies S0 and S2 for media are at 64-71% success. Your historical wins (porn, alcohol, weed, body fat) prove you can execute binary rules and tracking-based approaches.\n\n**What's not working:** Friend-making (14%), stretching/rehab (0-14%), community engagement (29%). These lack defined strategies or have low-frequency triggers.\n\n📊 STATUS: 6.5 weeks into Q1. TELOS data is 75 hours stale — a refresh would give more accurate numbers.\n\n➡️ NEXT:\n1. Refresh TELOS data for current metrics (`refresh`)\n2. Focus energy on C0 — it's the keystone blocker\n3. C3 (rehab) needs a strategy defined — it's at 0% with no plan\n4. C1 (friends) — 14% suggests the current approach needs rethinking\n\n🗣️ Kaya: Media consumption remains your keystone blocker. Fixing it unlocks writing, alignment, and wake goals.",
+      "timestamp": "2026-02-12T05:49:29.807Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 52487,
+    "time_to_first_token_ms": 52486,
+    "time_to_last_token_ms": 52487,
+    "tokens_per_second": 0
+  }
+}

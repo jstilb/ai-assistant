@@ -1,0 +1,24 @@
+# Comparison Scenarios
+# Defines user prompts for each pairwise comparison task.
+# The task YAML `description` is for the grader; these prompts are sent to the model.
+
+scenarios:
+  kaya_cmp_context_focus_coding:
+    prompt: "I have a bug in my authentication middleware where JWT tokens aren't being refreshed properly. The refresh endpoint returns 401 instead of a new token. Can you help me debug this?"
+    criteria: [relevance, focus, noise_reduction]
+
+  kaya_cmp_context_focus_greeting:
+    prompt: "Hey, good morning!"
+    criteria: [brevity, appropriateness, warmth]
+
+  kaya_cmp_skill_routing_preserved:
+    prompt: "Send an email to Sarah about the project deadline moving to next Friday"
+    criteria: [routing_accuracy, tool_invocation, completeness]
+
+  kaya_cmp_response_quality_general:
+    prompt: "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday."
+    criteria: [quality, helpfulness, format_compliance]
+
+  kaya_cmp_context_noise_reduction:
+    prompt: "What tasks do I have due this week?"
+    criteria: [focus, relevance, context_efficiency]

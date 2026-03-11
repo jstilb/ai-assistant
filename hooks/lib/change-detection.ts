@@ -70,8 +70,8 @@ const EXCLUDED_PATHS = [
 
 // High-priority paths that always warrant documentation
 const HIGH_PRIORITY_PATHS = [
-  'skills/CORE/SYSTEM/',
-  'skills/CORE/USER/',
+  'docs/system/',
+  'USER/',
   'KAYASYSTEMARCHITECTURE.md',
   'SKILLSYSTEM.md',
   'MEMORYSYSTEM.md',

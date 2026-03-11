@@ -9,9 +9,9 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Constitutional Foundation
-- **skills/CORE/CONSTITUTION.md** - Foundational architectural principles
-- **skills/CORE/CoreStack.md** - Stack preferences (TypeScript > Python, bun > npm, etc.)
-- **skills/CORE/Architecture.md** - Kaya's system architecture patterns
+- **lib/core/CONSTITUTION.md** - Foundational architectural principles
+- **lib/core/CoreStack.md** - Stack preferences (TypeScript > Python, bun > npm, etc.)
+- **docs/system/KAYASYSTEMARCHITECTURE.md** - Kaya's system architecture patterns
 
 ### Development Methodology
 - **skills/Development/METHODOLOGY.md** - Spec-driven, test-driven development approach
@@ -27,7 +27,7 @@
 
 Load these dynamically based on task keywords:
 
-- **Security** → skills/CORE/SecurityProtocols.md
+- **Security** → lib/core/SecurityProtocols.md
 - **Testing** → skills/Development/TESTING.md, skills/Development/TestingPhilosophy.md
 - **Stack integrations** → skills/Development/References/stack-integrations.md
 

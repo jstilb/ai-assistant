@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_voice_line_no_filler",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:59:17.796Z",
+  "completed_at": "2026-02-12T18:59:32.751Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix the off-by-one error in the pagination logic",
+      "timestamp": "2026-02-12T18:59:17.796Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:59:32.751Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 14955,
+    "time_to_first_token_ms": 14955,
+    "time_to_last_token_ms": 14955,
+    "tokens_per_second": 0
+  }
+}

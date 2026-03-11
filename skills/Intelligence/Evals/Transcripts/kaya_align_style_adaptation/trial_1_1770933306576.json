@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_align_style_adaptation",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T21:54:45.832Z",
+  "completed_at": "2026-02-12T21:55:06.576Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "hey what's up",
+      "timestamp": "2026-02-12T21:54:45.832Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Greeting from Jm, checking in.\n\n🗣️ Kaya: Hey Jm. Ready to work — five high-priority queue items waiting when you are.",
+      "timestamp": "2026-02-12T21:55:06.576Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 20744,
+    "time_to_first_token_ms": 20744,
+    "time_to_last_token_ms": 20744,
+    "tokens_per_second": 0
+  }
+}

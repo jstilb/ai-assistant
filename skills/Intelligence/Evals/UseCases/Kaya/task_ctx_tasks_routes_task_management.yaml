@@ -1,0 +1,32 @@
+# Task: Tasks Routes to Task Management
+# Task query routes to task-management profile with AsanaContext loaded
+
+id: kaya_ctx_tasks_routes_task_management
+description: "Task query like 'tasks due this week' routes to task-management profile with AsanaContext loaded"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "What tasks are due this week?"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profile: task-management
+      required_files:
+        - AsanaContext
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - task_management
+  - regression
+
+created_at: "2026-02-11"

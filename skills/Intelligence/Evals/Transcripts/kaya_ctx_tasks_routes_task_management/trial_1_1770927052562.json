@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:09:57.879Z",
+  "completed_at": "2026-02-12T20:10:52.562Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks are due this week?",
+      "timestamp": "2026-02-12T20:09:57.879Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Jm has 4 tasks due this week across LucidTasks.\n\n**Due Today (Feb 12) - 3 tasks:**\n| Priority | Task | ID |\n|----------|------|----|\n| `!!` | Review the PR by end of day | `t-mljuacng-ohf3h` |\n| `!!` | Review the PR | `t-mljsqr9h-m1osa` |\n| `!!` | Call the dentist | `t-mlhda0i6-syc1j` |\n\n**Due Friday (Feb 14) - 1 task:**\n| Priority | Task | ID | Goal |\n|----------|------|----|------|\n| `!!!` | Write chapter 3 of On Set | `t-mlhda0fw-g7dt3` | G13 |\n\n**No due date (but in inbox):**\n| Priority | Task | ID | Goal |\n|----------|------|----|------|\n| `!!` | Fix login page bug | `t-mlju2llj-c7pdf` | - |\n| `!!` | Fix login page bug | `t-mljsekn6-1mobs` | - |\n| `!!` | Research cofounder meetups in SD | `t-mlhda0i6-syc1j` | G26 |\n\nNote: You have 2 duplicate \"Fix login page bug\" and 2 duplicate \"Review the PR\" entries - might want to clean those up.\n\n🗣️ Kaya: Four tasks due this week. Three due today including two PR reviews and dentist call.",
+      "timestamp": "2026-02-12T20:10:52.562Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 54683,
+    "time_to_first_token_ms": 54683,
+    "time_to_last_token_ms": 54683,
+    "tokens_per_second": 0
+  }
+}

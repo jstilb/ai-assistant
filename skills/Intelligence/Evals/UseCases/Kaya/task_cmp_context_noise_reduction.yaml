@@ -1,0 +1,35 @@
+# Task: Compare Context Noise Reduction
+# Pairwise comparison of irrelevant context bleeding before/after changes
+
+id: kaya_cmp_context_noise_reduction
+description: "Compare context noise - verify less irrelevant context bleeding through after changes"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "What tasks do I have due this week?"
+  baseline_ref: "pre-streamline"
+
+graders:
+  - type: pairwise_comparison
+    weight: 1.0
+    required: true
+    params:
+      reference: "skills/Evals/References/Kaya/baselines/pre-streamline/kaya_cmp_context_noise_reduction.md"
+      position_swap: true
+      criteria:
+        - focus
+        - relevance
+        - context_efficiency
+
+trials: 3
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - comparison
+  - before_after
+  - noise_reduction
+
+created_at: "2026-02-11"

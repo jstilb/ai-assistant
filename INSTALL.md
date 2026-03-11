@@ -39,10 +39,10 @@ brew install --cask font-hack-nerd-font
 
 # Copy Kaya's Kitty configuration
 mkdir -p ~/.config/kitty
-cp ~/.claude/skills/CORE/USER/TERMINAL/kitty.conf ~/.config/kitty/
+cp ~/.claude/USER/TERMINAL/kitty.conf ~/.config/kitty/
 
 # Add Kaya alias to your shell
-cat ~/.claude/skills/CORE/USER/TERMINAL/ZSHRC >> ~/.zshrc
+cat ~/.claude/USER/TERMINAL/ZSHRC >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -53,7 +53,7 @@ source ~/.zshrc
 - Vim-style keyboard navigation
 - Remote control for programmatic updates
 
-See `~/.claude/skills/CORE/USER/TERMINAL/README.md` for full documentation.
+See `~/.claude/USER/TERMINAL/README.md` for full documentation.
 
 ---
 
@@ -198,10 +198,7 @@ After installation, your `~/.claude/` will contain:
 ├── .env                   # API keys (ELEVENLABS_API_KEY, etc.)
 ├── CLAUDE.md              # Entry point for Claude
 ├── skills/                # Skill modules
-│   ├── CORE/              # Core system skill
-│   │   ├── USER/          # Your personal content
-│   │   └── SYSTEM/        # System documentation
-│   └── [OtherSkills]/     # Additional skills
+│   └── [Skills]/          # Skill modules
 ├── MEMORY/                # Session history & learnings
 ├── hooks/                 # Lifecycle event handlers
 ├── agents/                # Named agent configurations
@@ -261,7 +258,7 @@ bun run install.ts --migrate
 ## Getting Help
 
 - **In Claude Code**: Ask "Help me with Kaya" or "/help"
-- **Documentation**: See `skills/CORE/SKILL.md`
+- **Documentation**: See `CLAUDE.md`
 - **GitHub**: [github.com/danielmiessler/Kaya](https://github.com/danielmiessler/Kaya)
 
 ---
@@ -273,6 +270,6 @@ After installation:
 1. **Run**: `source ~/.zshrc` then use `pai` command from anywhere
 2. **Explore skills**: Ask "What skills do I have?"
 3. **Create personal skills**: Add `_YOURSKILL` directories for private workflows
-4. **Learn the system**: Read `skills/CORE/SKILL.md` for full documentation
+4. **Learn the system**: Read `CLAUDE.md` for full documentation
 
 Welcome to Kaya!

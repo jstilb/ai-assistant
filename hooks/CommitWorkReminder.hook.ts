@@ -131,7 +131,7 @@ async function main(): Promise<void> {
       : item.title;
     console.error(`    - ${item.id} "${truncTitle}" [${item.status}]`);
   }
-  console.error('    Update status: bun run ~/.claude/skills/AutonomousWork/Tools/WorkOrchestrator.ts complete <id>');
+  console.error('    Update status: bun run ~/.claude/skills/Automation/AutonomousWork/Tools/WorkOrchestrator.ts complete <id>');
   console.error('');
 
   process.exit(0);

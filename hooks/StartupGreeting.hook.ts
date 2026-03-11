@@ -67,7 +67,7 @@ try {
   }
 
   // Run the banner tool — visual output to stderr (terminal only, not context)
-  const bannerPath = join(kayaDir, 'skills/CORE/Tools/Banner.ts');
+  const bannerPath = join(kayaDir, 'lib/core/Banner.ts');
   const result = spawnSync('bun', ['run', bannerPath], {
     encoding: 'utf-8',
     stdio: ['inherit', 'pipe', 'pipe'],

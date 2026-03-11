@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:46:38.884Z",
+  "completed_at": "2026-02-12T05:47:16.098Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Calendar query like 'what's on my calendar' routes to scheduling profile with CalendarContext loaded",
+      "timestamp": "2026-02-12T05:46:38.884Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Here's your schedule for tonight and the rest of the week.\n\n📊 STATUS: It's Wednesday 9:46 PM — you're in your evening routine window.\n\n📖 STORY EXPLANATION:\n1. **Tonight (Wed 2/11):** Evening Routine at 9:30 PM — you're in it now\n2. **Thu 2/12:** Focus work 7:15, optional DataAI talk 8:00, R&I sync 9:00, standard blocks through evening\n3. **Fri 2/13:** Focus Friday (no meetings), laundry x2, sheets x2, get board waxed, CSDC General Meeting at 6 PM\n4. **Sat 2/14:** Valentine's Day — DSA Day of Caring 9:30, V-Day with Julie at 10:00, Book Club at 4 PM\n5. **Sun 2/15:** Ryan Charleston's birthday, North County Branch meeting 2 PM, DnD at 5 PM, Black Panther Party History event at 6 PM\n\n🗣️ Kaya: Evening routine now. Tomorrow has R&I sync at nine. Valentine's Day Saturday with Julie.",
+      "timestamp": "2026-02-12T05:47:16.098Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 37214,
+    "time_to_first_token_ms": 37214,
+    "time_to_last_token_ms": 37214,
+    "tokens_per_second": 0
+  }
+}

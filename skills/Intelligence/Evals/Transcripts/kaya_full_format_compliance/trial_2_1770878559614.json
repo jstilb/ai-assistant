@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_full_format_compliance",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:42:14.168Z",
+  "completed_at": "2026-02-12T06:42:39.614Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya produces a full PAI response format with all required sections for a coding task",
+      "timestamp": "2026-02-12T06:42:14.168Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Ready and standing by for your next request.\n\n🗣️ Kaya: Session active, all systems loaded. What are we working on tonight?",
+      "timestamp": "2026-02-12T06:42:39.614Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25446,
+    "time_to_first_token_ms": 25446,
+    "time_to_last_token_ms": 25446,
+    "tokens_per_second": 0
+  }
+}

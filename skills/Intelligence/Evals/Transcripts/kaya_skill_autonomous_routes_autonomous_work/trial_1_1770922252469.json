@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_autonomous_routes_autonomous_work",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:50:40.143Z",
+  "completed_at": "2026-02-12T18:50:52.469Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Start working on the next item in my queue",
+      "timestamp": "2026-02-12T18:50:40.143Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:50:52.469Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 12326,
+    "time_to_first_token_ms": 12326,
+    "time_to_last_token_ms": 12326,
+    "tokens_per_second": 0
+  }
+}

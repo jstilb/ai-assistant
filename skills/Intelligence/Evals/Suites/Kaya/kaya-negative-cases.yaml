@@ -1,0 +1,20 @@
+# Kaya Negative Cases Suite
+# Verifies skills are NOT incorrectly invoked for unrelated requests
+
+name: kaya-negative-cases
+description: "Negative routing cases - verifies skills are NOT incorrectly invoked"
+type: regression
+domain: general
+
+tasks:
+  - kaya_neg_cooking_on_code_request
+  - kaya_neg_gmail_on_note_request
+  - kaya_neg_calendar_on_research_request
+  - kaya_neg_browser_on_file_edit
+  - kaya_neg_no_skill_on_greeting
+  - kaya_neg_no_skill_on_simple_question
+
+pass_threshold: 0.85
+saturation_threshold: 0.95
+
+created_at: "2026-02-11"

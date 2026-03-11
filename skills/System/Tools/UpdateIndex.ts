@@ -15,7 +15,7 @@ const KAYA_DIR = process.env.KAYA_DIR || `${process.env.HOME}/.claude`;
 const UPDATES_DIR = join(KAYA_DIR, "MEMORY/KAYASYSTEMUPDATES");
 const INDEX_PATH = join(UPDATES_DIR, "index.json");
 const CHANGELOG_PATH = join(UPDATES_DIR, "CHANGELOG.md");
-const RECENT_PATH = join(KAYA_DIR, "skills/CORE/USER/UPGRADES/RECENT.md");
+const RECENT_PATH = join(KAYA_DIR, "USER/UPGRADES/RECENT.md");
 
 type SignificanceLabel = 'trivial' | 'minor' | 'moderate' | 'major' | 'critical';
 type ChangeType = 'skill_update' | 'structure_change' | 'doc_update' | 'hook_update' | 'workflow_update' | 'config_update' | 'tool_update' | 'multi_area';

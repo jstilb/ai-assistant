@@ -1,0 +1,52 @@
+# Task: Static Analysis Clean
+# No new lint or type errors introduced by code changes
+
+id: kaya_code_static_analysis_clean
+description: "No new lint or type errors introduced by code changes"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Add a retry mechanism to the HTTP client"
+
+graders:
+  - type: static_analysis
+    weight: 0.50
+    required: true
+    params:
+      checks:
+        - "no_new_lint_errors"
+        - "type_check_passes"
+        - "no_new_warnings"
+
+  - type: llm_rubric
+    weight: 0.30
+    required: false
+    params:
+      rubric: |
+        Evaluate code quality of the changes:
+        1. Are there any new TypeScript errors?
+        2. Are there any new ESLint violations?
+        3. Is the code style consistent with the surrounding code?
+        4. Are there any obvious code smells?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - coding
+  - static_analysis
+  - lint
+  - capability
+
+created_at: "2026-02-11"

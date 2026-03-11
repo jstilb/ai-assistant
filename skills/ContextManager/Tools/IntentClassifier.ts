@@ -14,10 +14,12 @@
  * API: import { classifyIntent } from "./IntentClassifier"
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { inference } from '../../../skills/CORE/Tools/Inference';
-import { emitInsight } from '../../CORE/Tools/SkillIntegrationBridge';
+import { z } from 'zod';
+import { inference } from '../../../lib/core/Inference';
+import { createStateManager } from '../../../lib/core/StateManager';
+import { emitInsight } from '../../../lib/core/SkillIntegrationBridge';
 
 const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
 const ROUTING_CONFIG_PATH = join(KAYA_DIR, 'skills/ContextManager/config/routing.json');
@@ -45,32 +47,39 @@ interface RoutingConfig {
   defaultProfile: string;
 }
 
+const RoutingRuleSchema = z.object({
+  profile: z.string(),
+  keywords: z.array(z.string()),
+  weight: z.number().default(1.0),
+});
+
+const RoutingConfigSchema = z.object({
+  rules: z.array(RoutingRuleSchema),
+  confidenceThreshold: z.number().default(2.0),
+  defaultProfile: z.string().default('general'),
+});
+
+const routingState = createStateManager({
+  path: ROUTING_CONFIG_PATH,
+  schema: RoutingConfigSchema,
+  defaults: { rules: [], confidenceThreshold: 2.0, defaultProfile: 'general' },
+});
+
 // Cache routing config
 let cachedConfig: RoutingConfig | null = null;
 
-function loadRoutingConfig(): RoutingConfig {
+async function loadRoutingConfig(): Promise<RoutingConfig> {
   if (cachedConfig) return cachedConfig;
-
-  if (!existsSync(ROUTING_CONFIG_PATH)) {
-    console.error('[IntentClassifier] routing.json not found, using defaults');
-    cachedConfig = {
-      rules: [],
-      confidenceThreshold: 2.0,
-      defaultProfile: 'general',
-    };
-    return cachedConfig;
-  }
-
-  cachedConfig = JSON.parse(readFileSync(ROUTING_CONFIG_PATH, 'utf-8'));
-  return cachedConfig!;
+  cachedConfig = await routingState.load();
+  return cachedConfig;
 }
 
 /**
  * Stage A: Fast keyword matching
  * Returns profile if confidence is high enough, null otherwise
  */
-function keywordMatch(prompt: string): { profile: string; confidence: number; scores: Record<string, number> } | null {
-  const config = loadRoutingConfig();
+async function keywordMatch(prompt: string): Promise<{ profile: string; confidence: number; scores: Record<string, number> } | null> {
+  const config = await loadRoutingConfig();
   const lowerPrompt = prompt.toLowerCase();
   const scores: Record<string, number> = {};
 
@@ -122,7 +131,7 @@ function keywordMatch(prompt: string): { profile: string; confidence: number; sc
  * Stage B: Haiku inference fallback
  */
 async function inferenceClassify(prompt: string, hasExistingSession: boolean): Promise<ClassificationResult> {
-  const config = loadRoutingConfig();
+  const config = await loadRoutingConfig();
   const profileNames = config.rules.map(r => r.profile).join(', ');
 
   const systemPrompt = `You are a context routing classifier. Given a user prompt, classify which context profile best matches their intent.
@@ -199,7 +208,7 @@ export async function classifyIntent(
   hasExistingSession: boolean = false
 ): Promise<ClassificationResult> {
   // Stage A: Fast keyword match
-  const keywordResult = keywordMatch(prompt);
+  const keywordResult = await keywordMatch(prompt);
 
   if (keywordResult) {
     const result: ClassificationResult = {
@@ -264,11 +273,11 @@ export async function classifyIntent(
  * Lightweight topic-change detection for subsequent messages
  * Returns new profile only if confident in a change
  */
-export function detectTopicChange(
+export async function detectTopicChange(
   prompt: string,
   currentProfile: string
-): { changed: boolean; newProfile?: string; confidence?: number } {
-  const keywordResult = keywordMatch(prompt);
+): Promise<{ changed: boolean; newProfile?: string; confidence?: number }> {
+  const keywordResult = await keywordMatch(prompt);
 
   if (!keywordResult) {
     return { changed: false };

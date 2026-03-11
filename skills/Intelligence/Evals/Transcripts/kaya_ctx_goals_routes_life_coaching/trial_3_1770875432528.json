@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T05:50:01.431Z",
+  "completed_at": "2026-02-12T05:50:32.528Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:50:01.431Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs | -2.3 hrs off target |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 3.0 | 1.8 | +1.2 needed |\n\n**Bright Spots:**\n- Historical wins are real — porn, alcohol, weed, body fat all conquered through binary rules and tracking\n- Wellbeing score went from 2.61 to 7.17 previously, proving the DTR system works when active\n\n**Concern Areas:**\n- C3 (Physical Rehab): 0% stretching consistency — this is a critical gap with no strategy defined\n- C1 (Friends): 14% success rate on social strategies\n- C4 (Writing): 36% consistency, novel goals stalling\n- C5 (Wake Time): 57% at 6:30am target\n\n**Pattern:** Media consumption (C0) is the root blocker — it cascades into C2 (alignment), C4 (writing), and C5 (wake time). Your historical wins suggest binary rules work best for you, but media reduction isn't binary — it needs a threshold approach.\n\n📊 STATUS: Q1 is ~45% elapsed (Feb 11 of 13 weeks). WIGs are behind pace. TELOS data is 75 hours stale — a refresh would give more accurate numbers.\n\n➡️ NEXT: Want me to refresh the TELOS data for current numbers, or dig into a specific goal/challenge?\n\n🗣️ Kaya: Q1 WIGs behind pace — media at 5.3hrs is the root blocker across multiple goals.\n\n⭐ RATE (1-10):",
+      "timestamp": "2026-02-12T05:50:32.528Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31097,
+    "time_to_first_token_ms": 31097,
+    "time_to_last_token_ms": 31097,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,15 @@
+# Autonomous Work Delegation - Regression Suite
+# Verifies that /work start delegates to agents instead of processing inline
+
+name: autonomous-work-delegation
+description: "AutonomousWork must delegate to Task agents"
+type: regression
+domain: orchestration
+
+tasks:
+  - task_work_delegation_spawns_agents
+
+pass_threshold: 0.90
+saturation_threshold: 0.99
+
+created_at: "2026-02-13"

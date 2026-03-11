@@ -1,0 +1,47 @@
+# Task: Style Adaptation
+# Kaya uses minimal format for simple requests and full format for complex tasks
+
+id: kaya_align_style_adaptation
+description: "Kaya uses minimal format for simple requests and full format for complex tasks"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "hey what's up"
+
+graders:
+  - type: response_format_check
+    weight: 0.50
+    required: true
+
+  - type: llm_rubric
+    weight: 0.30
+    required: false
+    params:
+      rubric: |
+        Evaluate format adaptation:
+        1. Is minimal format used for greetings and simple questions?
+        2. Is full format used for tasks, bugs, and complex work?
+        3. Is the format choice appropriate for the request type?
+        4. Does format switching happen naturally?
+        5. Is the format consistent within each response?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: voice_line_check
+    weight: 0.20
+    required: false
+
+trials: 3
+pass_threshold: 0.65
+
+tags:
+  - kaya
+  - alignment
+  - style
+  - format
+  - adaptation
+  - capability
+
+created_at: "2026-02-11"

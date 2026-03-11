@@ -1,0 +1,501 @@
+{
+  "sources": [
+    {
+      "id": "src-simon-willison",
+      "name": "Simon Willison's Weblog",
+      "type": "blog",
+      "url": "https://simonwillison.net/atom/everything/",
+      "enabled": true,
+      "trustScore": 92,
+      "topics": [
+        "ai",
+        "llm",
+        "python",
+        "technology"
+      ],
+      "pollInterval": 60,
+      "lastPolled": "2026-02-28T02:06:36.725Z",
+      "lastContentHash": "37105b9b1c0c295a",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-openai-blog",
+      "name": "OpenAI Blog",
+      "type": "rss",
+      "url": "https://openai.com/news/rss.xml",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "ai",
+        "research",
+        "llm"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:36.787Z",
+      "lastContentHash": "82e92ace41dd60c3",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-the-gradient",
+      "name": "The Gradient",
+      "type": "blog",
+      "url": "https://thegradient.pub/feed/",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "ai",
+        "research",
+        "machine-learning"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:37.140Z",
+      "lastContentHash": "71912aa651d896e",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-astral-codex-ten",
+      "name": "Astral Codex Ten",
+      "type": "newsletter",
+      "url": "https://astralcodexten.substack.com/feed/",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "rationality",
+        "science",
+        "culture",
+        "analysis"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:37.169Z",
+      "lastContentHash": "ac1ab8c9aa7be5ee",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-hn-best",
+      "name": "Hacker News Best",
+      "type": "hn",
+      "url": "https://hnrss.org/best",
+      "enabled": true,
+      "trustScore": 78,
+      "topics": [
+        "technology",
+        "startups",
+        "programming"
+      ],
+      "pollInterval": 60,
+      "lastPolled": "2026-02-28T02:06:38.673Z",
+      "lastContentHash": "91b8168ab4b20ba",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-ars-technica",
+      "name": "Ars Technica",
+      "type": "rss",
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "enabled": true,
+      "trustScore": 85,
+      "topics": [
+        "technology",
+        "science",
+        "security"
+      ],
+      "pollInterval": 60,
+      "lastPolled": "2026-02-28T02:06:39.863Z",
+      "lastContentHash": "69f26b0ccce867",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-mit-tech-review",
+      "name": "MIT Technology Review",
+      "type": "rss",
+      "url": "https://www.technologyreview.com/feed/",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "ai",
+        "technology",
+        "science",
+        "research"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:39.885Z",
+      "lastContentHash": "6df74d45ecfca730",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-techcrunch",
+      "name": "TechCrunch",
+      "type": "rss",
+      "url": "https://techcrunch.com/feed/",
+      "enabled": true,
+      "trustScore": 72,
+      "topics": [
+        "startups",
+        "technology",
+        "funding"
+      ],
+      "pollInterval": 60,
+      "lastPolled": "2026-02-28T02:06:39.849Z",
+      "lastContentHash": "2c57c34572cad8c1",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-wired",
+      "name": "Wired",
+      "type": "rss",
+      "url": "https://feeds.wired.com/wired/index",
+      "enabled": true,
+      "trustScore": 75,
+      "topics": [
+        "technology",
+        "culture",
+        "science"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:40.772Z",
+      "lastContentHash": "f815a20d3755c94f",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-daring-fireball",
+      "name": "Daring Fireball",
+      "type": "blog",
+      "url": "https://daringfireball.net/feeds/main",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "apple",
+        "technology"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:39.908Z",
+      "lastContentHash": "bec3c65763c8a088",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-krebs-security",
+      "name": "Krebs on Security",
+      "type": "blog",
+      "url": "https://krebsonsecurity.com/feed/",
+      "enabled": true,
+      "trustScore": 92,
+      "topics": [
+        "security",
+        "cybersecurity",
+        "privacy"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:41.462Z",
+      "lastContentHash": "bfc7c8c0c7bf9718",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-schneier",
+      "name": "Schneier on Security",
+      "type": "blog",
+      "url": "https://www.schneier.com/feed/",
+      "enabled": true,
+      "trustScore": 92,
+      "topics": [
+        "security",
+        "privacy",
+        "cryptography"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:41.409Z",
+      "lastContentHash": "c8be989be4a1508d",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-paul-graham",
+      "name": "Paul Graham Essays",
+      "type": "blog",
+      "url": "https://paulgraham.com/rss.html",
+      "enabled": true,
+      "trustScore": 92,
+      "topics": [
+        "startups",
+        "essays",
+        "business",
+        "philosophy"
+      ],
+      "pollInterval": 720,
+      "lastPolled": "2026-02-28T02:06:41.687Z",
+      "lastContentHash": "bda75a54c16a442d",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-first-round",
+      "name": "First Round Review",
+      "type": "blog",
+      "url": "https://firstround.com/review/feed.xml",
+      "enabled": true,
+      "trustScore": 85,
+      "topics": [
+        "startups",
+        "leadership",
+        "management"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:42.546Z",
+      "lastContentHash": "9271c24dac6b9579",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-yc-blog",
+      "name": "Y Combinator Blog",
+      "type": "blog",
+      "url": "https://blog.ycombinator.com/feed/",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "startups",
+        "funding",
+        "technology"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:42.316Z",
+      "lastContentHash": "7e52d1876efdd09d",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-marginal-revolution",
+      "name": "Marginal Revolution",
+      "type": "blog",
+      "url": "https://marginalrevolution.com/feed/",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "economics",
+        "culture",
+        "ideas"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:43.769Z",
+      "lastContentHash": "caa6f338a5df5f4d",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-literary-hub",
+      "name": "Literary Hub",
+      "type": "blog",
+      "url": "https://lithub.com/feed/",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "writing",
+        "literature",
+        "books",
+        "creative"
+      ],
+      "pollInterval": 120,
+      "lastPolled": "2026-02-28T02:06:43.773Z",
+      "lastContentHash": "e1306e061fed239e",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-electric-literature",
+      "name": "Electric Literature",
+      "type": "blog",
+      "url": "https://electricliterature.com/feed",
+      "enabled": true,
+      "trustScore": 80,
+      "topics": [
+        "writing",
+        "fiction",
+        "literature"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:45.125Z",
+      "lastContentHash": "1ea5c1eb45f82e7",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-paris-review",
+      "name": "The Paris Review",
+      "type": "blog",
+      "url": "https://www.theparisreview.org/blog/feed/",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "writing",
+        "literature",
+        "interviews",
+        "creative"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:43.647Z",
+      "lastContentHash": "74726b84d952217c",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-longform",
+      "name": "Longform",
+      "type": "rss",
+      "url": "https://longform.org/?feed=rss",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "journalism",
+        "writing",
+        "longform",
+        "essays"
+      ],
+      "pollInterval": 240,
+      "lastPolled": "2026-02-28T02:06:44.264Z",
+      "lastContentHash": "3acbcc698662428f",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-cal-newport",
+      "name": "Cal Newport",
+      "type": "blog",
+      "url": "https://feeds.feedburner.com/StudyHacks",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "productivity",
+        "deep-work",
+        "focus",
+        "habits"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:46.059Z",
+      "lastContentHash": "1a5337610be54b37",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-james-clear",
+      "name": "James Clear",
+      "type": "blog",
+      "url": "https://feeds.feedburner.com/JamesClear",
+      "enabled": true,
+      "trustScore": 85,
+      "topics": [
+        "habits",
+        "productivity",
+        "self-improvement"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:46.063Z",
+      "lastContentHash": "309971af8e970bad",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-farnam-street",
+      "name": "Farnam Street",
+      "type": "blog",
+      "url": "https://fs.blog/feed/",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "mental-models",
+        "decision-making",
+        "learning",
+        "wisdom"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:45.903Z",
+      "lastContentHash": "67f10eac96cee6ad",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-aeon",
+      "name": "Aeon",
+      "type": "rss",
+      "url": "https://aeon.co/feed",
+      "enabled": true,
+      "trustScore": 88,
+      "topics": [
+        "philosophy",
+        "science",
+        "culture",
+        "ideas"
+      ],
+      "pollInterval": 240,
+      "lastPolled": "2026-02-28T02:06:45.936Z",
+      "lastContentHash": "498ebf88dd4f93a",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-nautilus",
+      "name": "Nautilus",
+      "type": "rss",
+      "url": "https://nautil.us/feed/",
+      "enabled": true,
+      "trustScore": 82,
+      "topics": [
+        "science",
+        "philosophy",
+        "culture"
+      ],
+      "pollInterval": 360,
+      "lastPolled": "2026-02-28T02:06:45.962Z",
+      "lastContentHash": "9273bf63ff2da252",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-wait-but-why",
+      "name": "Wait But Why",
+      "type": "blog",
+      "url": "https://waitbutwhy.com/feed",
+      "enabled": true,
+      "trustScore": 80,
+      "topics": [
+        "science",
+        "philosophy",
+        "future",
+        "essays"
+      ],
+      "pollInterval": 720,
+      "lastPolled": "2026-02-28T02:06:46.607Z",
+      "lastContentHash": "707831c6ad7cfa88",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    },
+    {
+      "id": "src-the-inertia",
+      "name": "The Inertia",
+      "type": "rss",
+      "url": "https://www.theinertia.com/category/news/feed/",
+      "enabled": true,
+      "trustScore": 70,
+      "topics": [
+        "surfing",
+        "ocean",
+        "environment"
+      ],
+      "pollInterval": 240,
+      "lastPolled": "2026-02-28T02:06:46.616Z",
+      "lastContentHash": "dcb36061c93e13b9",
+      "healthStatus": "healthy",
+      "failureCount": 0
+    }
+  ],
+  "lastUpdated": "2026-02-28T02:06:46.620Z"
+}

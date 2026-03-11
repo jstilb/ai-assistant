@@ -1,0 +1,11 @@
+name: high-risk-skills
+description: "Regression suite for highest-risk Kaya skills — scoring, routing, browser automation"
+type: regression
+threshold: 0.85
+tasks:
+  - JobEngine/scoring-threshold
+  - JobEngine/scoring-phase1-gate
+  - JobEngine/browser-submit-dry-run
+  - JobEngine/browser-submit-status
+  - QueueRouter/route-classification
+  - QueueRouter/escalation-gate

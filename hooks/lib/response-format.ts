@@ -10,7 +10,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const CORE_SKILL_PATH = join(process.env.HOME!, '.claude/skills/CORE/SKILL.md');
+const CORE_SKILL_PATH = join(process.env.HOME!, '.claude/CLAUDE.md');
 
 // Cache the format spec
 let formatSpec: string | null = null;

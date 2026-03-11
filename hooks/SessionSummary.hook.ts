@@ -58,9 +58,10 @@ const WORK_DIR = join(MEMORY_DIR, 'WORK');
 
 interface CurrentWork {
   session_id: string;
-  work_dir: string;
+  session_dir: string;
+  current_task: string;
+  task_count: number;
   created_at: string;
-  item_count: number;
 }
 
 /**
@@ -78,14 +79,14 @@ function clearSessionWork(): void {
     const currentWork: CurrentWork = JSON.parse(content);
 
     // Mark work directory as COMPLETED
-    if (currentWork.work_dir) {
-      const metaPath = join(WORK_DIR, currentWork.work_dir, 'META.yaml');
+    if (currentWork.session_dir) {
+      const metaPath = join(WORK_DIR, currentWork.session_dir, 'META.yaml');
       if (existsSync(metaPath)) {
         let metaContent = readFileSync(metaPath, 'utf-8');
-        metaContent = metaContent.replace(/^status: "ACTIVE"$/m, 'status: "COMPLETED"');
-        metaContent = metaContent.replace(/^completed_at: null$/m, `completed_at: "${getISOTimestamp()}"`);
+        metaContent = metaContent.replace(/^status: "ACTIVE"$/m, `status: "COMPLETED"\ncompleted_at: "${getISOTimestamp()}"`);
+        metaContent = metaContent.replace(/^completed_at: null\n?$/m, '');
         writeFileSync(metaPath, metaContent, 'utf-8');
-        console.error(`[SessionSummary] Marked work directory as COMPLETED: ${currentWork.work_dir}`);
+        console.error(`[SessionSummary] Marked work directory as COMPLETED: ${currentWork.session_dir}`);
       }
     }
 

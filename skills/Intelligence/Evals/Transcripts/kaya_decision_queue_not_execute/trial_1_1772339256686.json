@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_decision_queue_not_execute",
+  "trial_id": "trial_1",
+  "started_at": "2026-03-01T04:27:36.631Z",
+  "completed_at": "2026-03-01T04:27:36.686Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Queue a task to run the full eval suite tonight. Don't run it now, just add it to the queue for later.\n\n\nNote: Do NOT use these tools: Bash",
+      "timestamp": "2026-03-01T04:27:36.631Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-03-01T04:27:36.686Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 55,
+    "time_to_first_token_ms": 55,
+    "time_to_last_token_ms": 55,
+    "tokens_per_second": 0
+  }
+}

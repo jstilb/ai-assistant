@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_calendar_routes_scheduling",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:16:40.489Z",
+  "completed_at": "2026-02-12T06:17:02.312Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Calendar query like 'what's on my calendar' routes to scheduling profile with CalendarContext loaded",
+      "timestamp": "2026-02-12T06:16:40.489Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, calendar context loaded but outdated.\n\n🗣️ Kaya: Calendar context is 8 days old. What do you need, Jm?",
+      "timestamp": "2026-02-12T06:17:02.312Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21823,
+    "time_to_first_token_ms": 21823,
+    "time_to_last_token_ms": 21823,
+    "tokens_per_second": 0
+  }
+}

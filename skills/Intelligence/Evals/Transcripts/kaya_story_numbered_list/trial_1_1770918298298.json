@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T17:43:41.630Z",
+  "completed_at": "2026-02-12T17:44:58.298Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Walk me through setting up CI/CD for this project",
+      "timestamp": "2026-02-12T17:43:41.630Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Waiting for your input on CI/CD scope and preferences before designing the pipeline.\n\n🗣️ Kaya: Three questions about CI/CD scope, runner location, and eval integration before planning.",
+      "timestamp": "2026-02-12T17:44:58.298Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 76668,
+    "time_to_first_token_ms": 76668,
+    "time_to_last_token_ms": 76668,
+    "tokens_per_second": 0
+  }
+}

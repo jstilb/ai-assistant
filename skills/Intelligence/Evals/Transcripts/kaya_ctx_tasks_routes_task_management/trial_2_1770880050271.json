@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:07:15.636Z",
+  "completed_at": "2026-02-12T07:07:30.271Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Task query like 'tasks due this week' routes to task-management profile with AsanaContext loaded",
+      "timestamp": "2026-02-12T07:07:15.636Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets 3am (America/Los_Angeles)",
+      "timestamp": "2026-02-12T07:07:30.270Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 14635,
+    "time_to_first_token_ms": 14634,
+    "time_to_last_token_ms": 14635,
+    "tokens_per_second": 0
+  }
+}

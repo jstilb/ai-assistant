@@ -1,0 +1,12 @@
+{
+  "reports": {
+    "resilience-001-1772219188674": {
+      "scenarioId": "resilience-001",
+      "scenarioName": "Tool failure resilience test",
+      "passRate": 1,
+      "totalRuns": 10,
+      "reportPath": "~/.claude/skills/Simulation/Reports/resilience-001-1772219188674.md",
+      "createdAt": "2026-02-27T19:06:28.674Z"
+    }
+  }
+}

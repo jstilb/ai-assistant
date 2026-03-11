@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_voice_line_no_filler",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:26:30.724Z",
+  "completed_at": "2026-02-12T06:27:03.490Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya voice line does not use conversational filler like 'Done.', 'Happy to help!', 'Got it.'",
+      "timestamp": "2026-02-12T06:26:30.724Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system loaded successfully.\n\n🗣️ Kaya: All systems online — 63 skills, 10 workflows, 21 hooks active and ready.",
+      "timestamp": "2026-02-12T06:27:03.490Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32766,
+    "time_to_first_token_ms": 32766,
+    "time_to_last_token_ms": 32766,
+    "tokens_per_second": 0
+  }
+}

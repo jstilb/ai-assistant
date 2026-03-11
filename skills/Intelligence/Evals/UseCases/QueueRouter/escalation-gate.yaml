@@ -1,0 +1,38 @@
+# Task: QueueRouter 3-rejection escalation gate
+# WHY: Without escalation, bad specs loop indefinitely consuming tokens
+
+id: kaya_queuerouter_escalation_gate
+description: "Verify revisionCount >= 3 triggers escalated status (terminal state)"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Read the file at ~/.claude/skills/Automation/QueueRouter/Tools/QueueManager.ts.
+    Search for "escalat" and "revisionCount" in the code.
+    Answer these questions with evidence (quote the relevant code):
+    1. At what revisionCount threshold does an item become "escalated"?
+    2. What status does an item have after 1 rejection? After 2 rejections?
+    3. Is "escalated" a terminal state (i.e., no further automatic transitions)?
+    Show the exact code lines that implement the escalation logic.
+
+graders:
+  - type: natural_language_assert
+    weight: 1.0
+    params:
+      assertions:
+        - "Agent confirmed escalation triggers at revisionCount >= 3"
+        - "Agent confirmed status transitions: revision-needed at 1-2 rejections, escalated at 3"
+        - "Agent confirmed escalated is a terminal state"
+
+trials: 3
+pass_threshold: 0.85
+
+tags:
+  - kaya
+  - queuerouter
+  - escalation
+  - regression
+
+created_at: "2026-03-09"

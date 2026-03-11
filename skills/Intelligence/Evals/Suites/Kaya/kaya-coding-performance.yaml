@@ -1,0 +1,22 @@
+# Kaya Coding Performance
+# Coding performance - edit accuracy, diff minimality, error recovery, type safety
+
+name: kaya-coding-performance
+description: "Coding performance - edit accuracy, diff minimality, error recovery, type safety"
+type: capability
+domain: coding
+
+tasks:
+  - kaya_code_edit_accuracy_simple
+  - kaya_code_edit_accuracy_multifile
+  - kaya_code_diff_minimality
+  - kaya_code_test_pass_after_edit
+  - kaya_code_static_analysis_clean
+  - kaya_code_error_recovery
+  - kaya_code_read_understand_before_edit
+  - kaya_code_type_safety_preservation
+
+pass_threshold: 0.50
+saturation_threshold: 0.85
+
+created_at: "2026-02-11"

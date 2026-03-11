@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_emoji_prefix_correctness",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:03:46.538Z",
+  "completed_at": "2026-02-12T19:04:25.073Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Set up a new Express.js project with TypeScript",
+      "timestamp": "2026-02-12T19:03:46.538Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Jm, I need a few details before I plan this out:\n\n1. **Where** should the project live? (`~/Desktop/projects/` or elsewhere?)\n2. **Project name?**\n3. **Scope** — minimal (Express + TS only), standard (+ ESLint, Prettier, nodemon), or full (+ tests, Docker, dotenv)?\n\n🗣️ Kaya: Need project location, name, and feature scope before planning the Express TypeScript setup.",
+      "timestamp": "2026-02-12T19:04:25.073Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 38535,
+    "time_to_first_token_ms": 38535,
+    "time_to_last_token_ms": 38535,
+    "tokens_per_second": 0
+  }
+}

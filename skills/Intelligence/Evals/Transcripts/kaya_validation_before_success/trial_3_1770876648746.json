@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_validation_before_success",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:10:26.067Z",
+  "completed_at": "2026-02-12T06:10:48.745Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya validates work (runs tests, checks output) before claiming success",
+      "timestamp": "2026-02-12T06:10:26.067Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, system loaded successfully.\n🗣️ Kaya: All systems online. Ready for your next request, Jm.",
+      "timestamp": "2026-02-12T06:10:48.745Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 22678,
+    "time_to_first_token_ms": 22678,
+    "time_to_last_token_ms": 22678,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:59:33.750Z",
+  "completed_at": "2026-02-12T06:00:21.208Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:59:33.750Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — All Behind Pace:**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5hrs → 3hrs/day | 5.3 hrs | Still above starting point |\n| G1: Make 2 Good Friends | 2 friends by 3/29 | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6 → 3.0 | 1.8 | Minimal movement |\n\n**Root Cause Pattern:** C0 (Media Consumption at 5.3hrs/day) is the upstream blocker feeding into C2 (Alignment), C4 (Writing at 36%), and C5 (Wake time at 57%). Your historical wins (porn, alcohol, weed, body fat) all used binary elimination or consistent tracking — neither is fully applied to media yet.\n\n**Bright Spots:**\n- Strategies S0/S2 for media have 64-71% success when used\n- Alignment score moved from 1.6 to 1.8 (small but directional)\n- You've proven you can crush hard challenges — the method just needs application\n\n**Critical Gaps:**\n- C3 (Physical Rehab): 0% stretching consistency, no strategy defined\n- C1 (Friends): 14% success rate on social strategies S3/S4\n- C6 (Community): 29% unique events attended\n\n📊 STATUS: 6.5 weeks remain in Q1. All three WIGs need acceleration.\n\n➡️ NEXT: The data says media is the domino. If you want, I can pull full TELOS status and strategies to map a specific weekly action plan for the remaining Q1 weeks.\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are behind pace with 6.5 weeks remaining\n2. Media consumption (5.3hrs) is above your 5hr starting baseline — it got worse\n3. G1 (friends) has zero progress, G2 (alignment) moved only 0.2 points\n4. Media is the root blocker — it steals time from writing, alignment, and community\n5. Your proven method is binary rules + tracking (worked for addiction, body fat, wellbeing)\n6. Strategies exist but aren't being consistently applied (14-71% range)\n7. Physical rehab has no strategy at all despite being a critical gap\n8. The path forward is focusing on the media domino first, then cascading gains\n\n⭐ RATE (1-10): \n\n🗣️ Kaya: All three Q1 goals behind pace. Media at 5.3 hours is the upstream blocker to fix first.",
+      "timestamp": "2026-02-12T06:00:21.208Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 47458,
+    "time_to_first_token_ms": 47458,
+    "time_to_last_token_ms": 47458,
+    "tokens_per_second": 0
+  }
+}

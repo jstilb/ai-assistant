@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_knowledgegraph_routes_knowledgegraph",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:14:50.509Z",
+  "completed_at": "2026-02-12T07:15:02.263Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Knowledge graph request like 'show knowledge graph for this topic' invokes KnowledgeGraph skill",
+      "timestamp": "2026-02-12T07:14:50.509Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets 3am (America/Los_Angeles)",
+      "timestamp": "2026-02-12T07:15:02.263Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 11754,
+    "time_to_first_token_ms": 11754,
+    "time_to_last_token_ms": 11754,
+    "tokens_per_second": 0
+  }
+}

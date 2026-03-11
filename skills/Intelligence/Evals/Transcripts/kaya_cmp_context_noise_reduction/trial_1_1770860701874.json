@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T01:43:56.309Z",
+  "completed_at": "2026-02-12T01:45:01.874Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T01:43:56.309Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 **SUMMARY:** You have 3 active tasks due this week across LucidTasks and Asana.\n\n---\n\n### LucidTasks (with due dates this week)\n\n| Priority | Task | Due |\n|----------|------|-----|\n| 🔴 Critical | **Write chapter 3 of On Set** | Fri Feb 14 |\n| 🟡 High | **Call the dentist** | Thu Feb 12 |\n| 🟡 High | **Research cofounder meetups in SD** | No date (but active) |\n\n### Asana (no due dates set, but time-sensitive)\n\nThese don't have explicit due dates in Asana, but stand out as this-week relevant:\n\n- **Vday Letter** — Valentine's Day is Saturday Feb 14\n- **Valentine's Day Cooking** — also Feb 14\n- **Call Jesse** — recurring follow-up\n\n📊 **STATUS:** Most Asana tasks have no due dates assigned, so they don't filter by week. The 3 LucidTasks items are your concrete deadlines.\n\n➡️ **NEXT:** Dentist call is tomorrow (Feb 12), and the V-Day items need attention before Saturday.\n\n🗣️ Kaya: Three tasks due this week — dentist call tomorrow, chapter 3 and Valentine's prep by Friday.",
+      "timestamp": "2026-02-12T01:45:01.874Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 65565,
+    "time_to_first_token_ms": 65565,
+    "time_to_last_token_ms": 65565,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:01:19.868Z",
+  "completed_at": "2026-02-12T06:02:03.992Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:01:19.868Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 12-16 with dentist, API redesign deadline, and retro prep.\n\nHere's a structured plan for your week, Jm:\n\n**Monday (Feb 12) — Setup Day**\n- Break the API redesign into discrete tasks with clear acceptance criteria\n- Identify any blockers or dependencies early\n- Start on the highest-risk pieces first\n\n**Tuesday (Feb 13) — Dentist + Continued Work**\n- Dentist appointment (block travel + recovery time around it)\n- Continue API redesign work in remaining focused time\n- Lighter coding day — good for reviews, docs, or smaller tasks\n\n**Wednesday (Feb 14) — Deep Work Day**\n- Full push on API redesign — this is your buffer day\n- Aim to have core implementation done by end of day\n- Flag anything at risk of slipping Thursday's deadline\n\n**Thursday (Feb 15) — API Redesign Deadline**\n- Final testing, cleanup, and delivery\n- Start retrospective prep in the afternoon once API work ships\n- Gather data: what went well, what didn't, action items from last retro\n\n**Friday (Feb 16) — Retro Day**\n- Morning: finalize retro talking points\n- Attend team retrospective\n- Wrap up any loose ends from the week\n\n**A few things to consider:**\n- Your S1 (Pomodoro) and S5 (Alignment Hour) strategies are at 50% — using Pomodoros for the API work could hit both the deadline and the habit\n- S3/S4 (community events/social invitations) are critical — is there anything social you can slot in this week, even briefly?\n- S6 (Morning Stretch) is at 0% — even 5 minutes before the dentist Tuesday could start the streak\n\nWant me to put any of this into your calendar or task system?\n\n🗣️ Kaya: Week planned around dentist Tuesday, API deadline Thursday, retro Friday.",
+      "timestamp": "2026-02-12T06:02:03.992Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 44124,
+    "time_to_first_token_ms": 44124,
+    "time_to_last_token_ms": 44124,
+    "tokens_per_second": 0
+  }
+}

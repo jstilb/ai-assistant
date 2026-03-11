@@ -71,7 +71,7 @@
  */
 
 import { execSync } from 'child_process';
-import { inference } from '../skills/CORE/Tools/Inference';
+import { inference } from '../lib/core/Inference';
 import { isValidTabSummary, getTabFallback } from './lib/response-format';
 import { loadPromptSync } from '../skills/Prompting/Tools/PromptLoader';
 

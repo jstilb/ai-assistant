@@ -1,0 +1,22 @@
+[
+  {"query": "Take a screenshot of this page", "should_trigger": true, "skill": "Browser"},
+  {"query": "Debug why the login form isn't rendering", "should_trigger": true, "skill": "Browser"},
+  {"query": "Click the submit button on this form", "should_trigger": true, "skill": "Browser"},
+  {"query": "Check the console logs on localhost:3000", "should_trigger": true, "skill": "Browser"},
+  {"query": "Navigate to the settings page and screenshot it", "should_trigger": true, "skill": "Browser"},
+  {"query": "Verify the UI matches the design mockup", "should_trigger": true, "skill": "Browser"},
+  {"query": "Extract all product names from this webpage", "should_trigger": true, "skill": "Browser"},
+  {"query": "Troubleshoot why the frontend shows a blank page", "should_trigger": true, "skill": "Browser"},
+  {"query": "Open the browser and check network requests", "should_trigger": true, "skill": "Browser"},
+  {"query": "Interact with the dropdown menu on this site", "should_trigger": true, "skill": "Browser"},
+  {"query": "Scrape 500 product listings from Amazon", "should_trigger": false, "skill": "Browser"},
+  {"query": "Collect competitor pricing data at scale", "should_trigger": false, "skill": "Browser"},
+  {"query": "Auto-apply to jobs on greenhouse", "should_trigger": false, "skill": "Browser"},
+  {"query": "Research the history of web browsers", "should_trigger": false, "skill": "Browser"},
+  {"query": "Build a REST API endpoint", "should_trigger": false, "skill": "Browser"},
+  {"query": "Fix the TypeScript compilation error", "should_trigger": false, "skill": "Browser"},
+  {"query": "Send a Telegram message", "should_trigger": false, "skill": "Browser"},
+  {"query": "Run bright data web scraping for leads", "should_trigger": false, "skill": "Browser"},
+  {"query": "Generate an image of a sunset", "should_trigger": false, "skill": "Browser"},
+  {"query": "What's the weather today?", "should_trigger": false, "skill": "Browser"}
+]

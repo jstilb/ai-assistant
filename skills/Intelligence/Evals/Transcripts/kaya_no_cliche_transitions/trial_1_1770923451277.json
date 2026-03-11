@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_no_cliche_transitions",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:08:33.710Z",
+  "completed_at": "2026-02-12T19:10:51.277Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Explain how the context management system works",
+      "timestamp": "2026-02-12T19:08:33.710Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🔍 ANALYSIS: Deep exploration of the ContextManager system complete. Here's the full breakdown.\n\n⚡ ACTIONS: Read all core components — SKILL.md, hooks, tools, config, state files.\n\n📖 STORY EXPLANATION:\n\n1. **Problem it solves**: Before ContextManager, ~2000 lines of static context loaded every session regardless of task type — wasteful and noisy. Now only relevant context loads, budget-constrained.\n\n2. **Three-tier architecture**:\n   - **Tier 1 (Boot, ~200 tokens)**: Loads at `SessionStart` via `LoadContext.hook.ts` — identity, steering rules, queue summary. Always present.\n   - **Tier 2 (Profile, 200-2500 tokens)**: Loads on first `UserPromptSubmit` via `ContextRouter.hook.ts` — selects a profile based on your message intent.\n   - **Tier 3 (On-demand)**: Mid-session delta loading when topic changes, or when I explicitly call `ContextLoadTool.ts`.\n\n3. **Intent classification is two-stage** (`IntentClassifier.ts`):\n   - **Stage A**: Fast keyword match (<1ms) against `routing.json` weighted rules. If confidence margin is clear → select immediately.\n   - **Stage B**: Haiku inference fallback (~2-5s) for ambiguous prompts. Sends message + profile descriptions to a fast model.\n\n4. **8 profiles** defined in `profiles.json`: `boot` (200t), `conversational` (200t), `scheduling` (800t), `general` (800t), `task-management` (1000t), `knowledge-lookup` (1000t), `development` (1200t), `life-coaching` (2200t), `planning` (2500t). Each has required/recommended/optional file tiers and exclusion rules.\n\n5. **Token budget enforcement** (`ContextSelector.ts`): Loads files in priority order (required → recommended → optional). If a file exceeds remaining budget, tries its `.compressed.md` version. If that doesn't fit either, skips it and reports why.\n\n6. **Freshness checking** (`FreshnessChecker.ts`): Reads YAML frontmatter `last_updated` or file mtime. <24h = fresh, 24-72h = stale (⚠️), >72h = outdated. You saw the warnings in today's context output.\n\n7. **Learning loop**: `FeedbackCollector` captures what context was used + session rating → `context-feedback.jsonl`. `ContextLearner` analyzes patterns cross-session and recommends profile tuning (e.g., promote frequently-loaded optional files to recommended).\n\n8. **Safety**: Feature-flagged (`enabled: true/false/\"shadow\"`), non-blocking (all errors fail-open), subagent bypass, and shadow mode for testing without injecting context.\n\n📊 STATUS: ContextManager is active on this session — your message was classified as `development` profile, loaded CLI-INDEX + ProjectsContext within the 1200-token budget.\n\n🗣️ Kaya: Three-tier progressive context system — classifies intent, selects profile, loads files within token budget.",
+      "timestamp": "2026-02-12T19:10:51.277Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 137567,
+    "time_to_first_token_ms": 137567,
+    "time_to_last_token_ms": 137567,
+    "tokens_per_second": 0
+  }
+}

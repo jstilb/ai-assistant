@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_documents_routes_documents",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:44:22.862Z",
+  "completed_at": "2026-02-12T19:44:50.891Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Process this PDF and extract the key findings",
+      "timestamp": "2026-02-12T19:44:22.862Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Need a PDF file path or URL to process.\n\n🗣️ Kaya: Please share the PDF file path or URL you'd like me to analyze, Jm.",
+      "timestamp": "2026-02-12T19:44:50.891Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 28029,
+    "time_to_first_token_ms": 28029,
+    "time_to_last_token_ms": 28029,
+    "tokens_per_second": 0
+  }
+}

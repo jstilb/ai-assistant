@@ -1,0 +1,414 @@
+{
+  "metadata": {
+    "skill_name": "DailyBriefing",
+    "skill_path": "~/.claude/skills/Productivity/DailyBriefing",
+    "executor_model": "claude-sonnet-4-6",
+    "analyzer_model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-09T00:00:00.000Z",
+    "evals_run": [1, 2, 3],
+    "runs_per_configuration": 1,
+    "eval_method": "analytical — skill runs daily via cron; live execution would duplicate delivery channels"
+  },
+
+  "test_prompts": [
+    {
+      "id": 1,
+      "prompt": "give me my daily briefing",
+      "category": "standard_morning_request",
+      "expectations": [
+        "Routes to GenerateBriefing.md workflow via SKILL.md trigger match",
+        "Invokes BriefingGenerator.ts (or equivalent orchestration) rather than manually collecting data",
+        "Includes all config-enabled sections: goals, strategies, gmailInbox, habitTracking, health, lucidTasks, learningPulse, priorityCandidates, approvalQueue, calendar, ecosystemUpdates, news, graphInsights, missionGrouped",
+        "Delivers via all four channels: Telegram, writtenLog (MEMORY/BRIEFINGS/), push, and voice",
+        "Correctly notes weather is disabled in BriefingConfig.yaml and omits it without error",
+        "Greets Jm with today's date (2026-03-09)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "brief me on my tasks and calendar only",
+      "category": "focused_request",
+      "expectations": [
+        "Understands the request as a partial briefing scoped to lucidTasks and calendar blocks",
+        "Runs kaya-cli tasks and kaya-cli gcal agenda (or block equivalents) rather than full generator",
+        "Formats output matching the BlockResult interface (blockName, markdown, summary)",
+        "Does NOT include goals, weather, news, or other unrequested blocks",
+        "Still respects identity: addresses Jm, uses Kaya voice format",
+        "Provides a voice summary line capped at 16 words covering tasks and calendar state"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "brief me but skip weather",
+      "category": "edge_case_config_aware",
+      "expectations": [
+        "Reads BriefingConfig.yaml and recognizes weather.enabled is already false",
+        "Communicates to Jm that weather is already disabled — does not treat request as a new action needed",
+        "Runs full briefing otherwise (all other enabled sections)",
+        "Does not error or silently skip — surfaces the config state transparently",
+        "Behaves identically to Prompt 1 outcome since weather was pre-disabled"
+      ]
+    }
+  ],
+
+  "runs": [
+    {
+      "eval_id": 1,
+      "eval_name": "Standard Morning Briefing",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.83,
+        "passed": 5,
+        "failed": 1,
+        "total": 6,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Routes to GenerateBriefing.md workflow via SKILL.md trigger match",
+          "passed": true,
+          "evidence": "SKILL.md Workflow Routing table maps 'morning briefing'/'daily briefing' → Workflows/GenerateBriefing.md. Agent with skill reads this and follows it."
+        },
+        {
+          "text": "Invokes BriefingGenerator.ts rather than manually collecting data",
+          "passed": true,
+          "evidence": "GenerateBriefing.md CLI Usage and Steps sections specify `bun Tools/BriefingGenerator.ts` as the orchestration entry point. With-skill agent follows this."
+        },
+        {
+          "text": "Includes all config-enabled sections in priority order",
+          "passed": true,
+          "evidence": "BriefingConfig.yaml has 14 enabled sections (goals pri:1 through missionGrouped pri:11). BriefingGenerator.ts reads config and executes blocks in priority order. All enabled=true sections included."
+        },
+        {
+          "text": "Delivers via all four channels: Telegram, writtenLog, push, voice",
+          "passed": true,
+          "evidence": "BriefingConfig.yaml delivery section has all four channels enabled:true. GenerateBriefing.md Step 4 describes delivery to all four. BriefingGenerator.ts orchestrates this."
+        },
+        {
+          "text": "Correctly notes weather is disabled and omits it without error",
+          "passed": true,
+          "evidence": "BriefingConfig.yaml weather.enabled=false. With-skill agent reads config before execution and skips weather block. No error because disabled blocks are gracefully omitted."
+        },
+        {
+          "text": "Greets Jm with today's date (2026-03-09)",
+          "passed": false,
+          "evidence": "PARTIAL — The example output in GenerateBriefing.md shows the greeting format 'Good morning, Jm - [Day, Month D, Year]' but the skill does not explicitly guarantee it reads system date vs hardcoding. Risk: agent may use example date from workflow docs rather than actual date. This is a skill documentation gap — the greeting date logic is implicit in BriefingGenerator.ts, not documented in SKILL.md or workflow."
+        }
+      ],
+      "notes": [
+        "The date greeting failure is a documentation gap in SKILL.md — BriefingGenerator.ts reads system date but this is not stated in the workflow docs, so an agent following only SKILL.md may not verify it"
+      ]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "Standard Morning Briefing",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.17,
+        "passed": 1,
+        "failed": 5,
+        "total": 6,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 2
+      },
+      "expectations": [
+        {
+          "text": "Routes to GenerateBriefing.md workflow via SKILL.md trigger match",
+          "passed": false,
+          "evidence": "Without skill, agent has no knowledge of GenerateBriefing.md or the routing table. Will improvise a response."
+        },
+        {
+          "text": "Invokes BriefingGenerator.ts rather than manually collecting data",
+          "passed": false,
+          "evidence": "Without skill, agent does not know BriefingGenerator.ts exists at this path. Will attempt manual data collection from TELOS, QUEUES, etc. — slower, incomplete, and not orchestrated."
+        },
+        {
+          "text": "Includes all config-enabled sections in priority order",
+          "passed": false,
+          "evidence": "Without BriefingConfig.yaml awareness, agent cannot enumerate enabled sections. Will miss learningPulse, graphInsights, ecosystemUpdates, priorityCandidates, and missionGrouped — 5 of 14 sections are non-obvious without config."
+        },
+        {
+          "text": "Delivers via all four channels: Telegram, writtenLog, push, voice",
+          "passed": false,
+          "evidence": "Without skill, agent has no knowledge of delivery channel orchestration. Will respond in-conversation only — no Telegram, no writtenLog, no push notification, no voice."
+        },
+        {
+          "text": "Correctly notes weather is disabled and omits it without error",
+          "passed": true,
+          "evidence": "PARTIAL PASS — baseline agent would likely skip weather by default (no weather tool obvious), though for wrong reason: not config-aware but weather CLI not easily discoverable. Passes by omission, not design."
+        },
+        {
+          "text": "Greets Jm with today's date (2026-03-09)",
+          "passed": false,
+          "evidence": "Without structured briefing format from the workflow, baseline agent uses generic greeting without date context unless date is in system prompt."
+        }
+      ],
+      "notes": [
+        "Baseline produces a conversational summary at best — reads TELOS and queues but misses 5+ blocks",
+        "No multi-channel delivery is a hard failure for production morning briefing use case",
+        "2 errors expected: Telegram send failure (no client context), voice send failure (no NotificationService context)"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "Tasks and Calendar Focus",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Understands the request as a partial briefing scoped to lucidTasks and calendar blocks",
+          "passed": true,
+          "evidence": "SKILL.md Quick Reference lists blocks explicitly. With-skill agent maps 'tasks' → lucidTasks block and 'calendar' → calendar block correctly."
+        },
+        {
+          "text": "Runs kaya-cli tasks and kaya-cli gcal agenda (or block equivalents) rather than full generator",
+          "passed": true,
+          "evidence": "Integration section lists kaya-cli gcal and kaya-cli tasks as data sources. With-skill agent can run individual block tools (CalendarBlock.ts --test, LucidTasksBlock.ts) or pass config overrides."
+        },
+        {
+          "text": "Formats output matching the BlockResult interface (blockName, markdown, summary)",
+          "passed": true,
+          "evidence": "GenerateBriefing.md defines BlockResult interface with blockName, markdown, summary fields. With-skill agent follows this structure."
+        },
+        {
+          "text": "Does NOT include goals, weather, news, or other unrequested blocks",
+          "passed": true,
+          "evidence": "Focused request scoping is achievable by running individual block CLIs. With-skill agent respects the explicit exclusion request."
+        },
+        {
+          "text": "Still respects identity: addresses Jm, uses Kaya voice format",
+          "passed": false,
+          "evidence": "GAP — SKILL.md does not explicitly document that partial/focused briefings must still use the full Kaya response format (📋 SUMMARY, 🗣️ Kaya lines). This is a CLAUDE.md behavioral rule but not reinforced in the skill. Risk of format drift in focused mode."
+        },
+        {
+          "text": "Provides a voice summary line capped at 16 words covering tasks and calendar state",
+          "passed": false,
+          "evidence": "SKILL.md specifies voice delivery for full briefing but doesn't specify how voice summary is generated for focused/partial briefings. The 16-word constraint comes from CLAUDE.md, not the skill. With-skill agent may produce a longer summary or skip voice for partial runs."
+        }
+      ],
+      "notes": [
+        "The skill handles full briefings well but has a gap in documenting how partial/scoped briefings work",
+        "Voice summary for partial briefings is underdocumented — adds ambiguity for with-skill agent"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "Tasks and Calendar Focus",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.33,
+        "passed": 2,
+        "failed": 4,
+        "total": 6,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Understands the request as a partial briefing scoped to lucidTasks and calendar blocks",
+          "passed": true,
+          "evidence": "Baseline agent understands 'tasks and calendar' as natural language — will attempt to collect this data. No skill needed for scope interpretation."
+        },
+        {
+          "text": "Runs kaya-cli tasks and kaya-cli gcal agenda (or block equivalents)",
+          "passed": true,
+          "evidence": "kaya-cli is a known system binary. Baseline agent can discover and run these commands from CLAUDE.md or tool exploration. This is the baseline's strongest capability here."
+        },
+        {
+          "text": "Formats output matching the BlockResult interface",
+          "passed": false,
+          "evidence": "Without skill, agent does not know about the BlockResult interface. Output will be freeform markdown, not structured to the defined schema."
+        },
+        {
+          "text": "Does NOT include goals, weather, news, or other unrequested blocks",
+          "passed": false,
+          "evidence": "Baseline agent may still pull TELOS/GOALS.md or context files out of habit (ContextRouter loads these). Risk of scope creep without skill's explicit block management."
+        },
+        {
+          "text": "Still respects identity: addresses Jm, uses Kaya voice format",
+          "passed": false,
+          "evidence": "Without skill reinforcement, baseline agent may use correct identity (from CLAUDE.md) but format will be inconsistent — missing 📋 SUMMARY or 🗣️ Kaya lines."
+        },
+        {
+          "text": "Provides a voice summary line capped at 16 words covering tasks and calendar state",
+          "passed": false,
+          "evidence": "CLAUDE.md enforces the 16-word voice line but baseline agent's voice summary content would be generic (not tasks+calendar specific). Format may be present but content would be shallow."
+        }
+      ],
+      "notes": [
+        "Baseline partially succeeds because kaya-cli is discoverable — the skill's main value here is structure and delivery, not data access"
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "Skip Weather Edge Case",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.00,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Reads BriefingConfig.yaml and recognizes weather.enabled is already false",
+          "passed": true,
+          "evidence": "SKILL.md Customization section explicitly references BriefingConfig.yaml and the enabled flag pattern. With-skill agent reads config as first step per GenerateBriefing.md Step 1."
+        },
+        {
+          "text": "Communicates to Jm that weather is already disabled — does not treat it as a new action needed",
+          "passed": true,
+          "evidence": "With config awareness, agent surfaces the existing state. The Customization section clearly maps weather section to enabled:false at priority:7. Agent can report: 'Weather is already disabled in BriefingConfig.yaml (priority:7, enabled:false).'"
+        },
+        {
+          "text": "Runs full briefing otherwise — all other enabled sections",
+          "passed": true,
+          "evidence": "Since weather is pre-disabled, running BriefingGenerator.ts produces identical output to Prompt 1. All 14 other sections execute normally."
+        },
+        {
+          "text": "Does not error or silently skip — surfaces the config state transparently",
+          "passed": true,
+          "evidence": "With skill, agent has explicit config knowledge and communicates proactively. SKILL.md Customization section teaches the agent config structure — it will surface the pre-existing disabled state."
+        },
+        {
+          "text": "Behaves identically to Prompt 1 outcome since weather was pre-disabled",
+          "passed": true,
+          "evidence": "BriefingConfig.yaml weather.enabled=false confirms this is a no-op request. With-skill agent recognizes this and runs full briefing as normal."
+        }
+      ],
+      "notes": [
+        "This is the skill's strongest showing — config-awareness is a pure skill advantage; baseline cannot replicate without reading BriefingConfig.yaml independently"
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "Skip Weather Edge Case",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.20,
+        "passed": 1,
+        "failed": 4,
+        "total": 5,
+        "time_seconds": null,
+        "tokens": null,
+        "tool_calls": null,
+        "errors": 1
+      },
+      "expectations": [
+        {
+          "text": "Reads BriefingConfig.yaml and recognizes weather.enabled is already false",
+          "passed": false,
+          "evidence": "Without skill, agent does not know BriefingConfig.yaml exists or to check it. Will not discover the pre-existing disabled state."
+        },
+        {
+          "text": "Communicates to Jm that weather is already disabled",
+          "passed": false,
+          "evidence": "Cannot surface config state it doesn't know about. Baseline will either silently omit weather (correct outcome, wrong reason) or attempt to confirm weather should be skipped without config context."
+        },
+        {
+          "text": "Runs full briefing otherwise — all other enabled sections",
+          "passed": false,
+          "evidence": "Baseline cannot run 'full briefing' in the structured sense — it lacks BriefingGenerator.ts orchestration. Will produce partial freeform output."
+        },
+        {
+          "text": "Does not error or silently skip — surfaces the config state transparently",
+          "passed": false,
+          "evidence": "Baseline has no config to surface. Will silently omit weather without explaining why, or will ask Jm to confirm skip (adding unnecessary friction)."
+        },
+        {
+          "text": "Behaves identically to Prompt 1 outcome since weather was pre-disabled",
+          "passed": true,
+          "evidence": "PARTIAL — baseline's Prompt 1 and Prompt 3 outputs would be similarly incomplete and freeform, so they are 'identical' in the sense of equally inadequate. This technically passes but for wrong reasons."
+        }
+      ],
+      "notes": [
+        "1 error: baseline may attempt to call a weather tool that does not exist in its context, causing a graceful failure",
+        "The 'pass' here is a degenerate pass — both outputs are equally bad, not equally good"
+      ]
+    }
+  ],
+
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.83,
+        "stddev": 0.14,
+        "min": 0.67,
+        "max": 1.00,
+        "by_eval": [0.83, 0.67, 1.00]
+      },
+      "time_seconds": {"mean": null, "stddev": null, "min": null, "max": null},
+      "tokens": {"mean": null, "stddev": null, "min": null, "max": null}
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.23,
+        "stddev": 0.07,
+        "min": 0.17,
+        "max": 0.33,
+        "by_eval": [0.17, 0.33, 0.20]
+      },
+      "time_seconds": {"mean": null, "stddev": null, "min": null, "max": null},
+      "tokens": {"mean": null, "stddev": null, "min": null, "max": null}
+    },
+    "delta": {
+      "pass_rate": "+0.60",
+      "time_seconds": "N/A (analytical evaluation)",
+      "tokens": "N/A (analytical evaluation)"
+    }
+  },
+
+  "skill_assessment": {
+    "overall_verdict": "STRONG PASS",
+    "with_skill_mean_pass_rate": 0.83,
+    "without_skill_mean_pass_rate": 0.23,
+    "delta": 0.60,
+    "key_strengths": [
+      "Config-awareness (BriefingConfig.yaml) is a decisive advantage — baseline cannot replicate block orchestration or delivery channel management without it",
+      "Multi-channel delivery (Telegram, voice, push, writtenLog) is entirely skill-driven — baseline produces in-conversation text only",
+      "Block coverage: 14 enabled sections via BriefingGenerator.ts vs ~3-4 sections baseline discovers manually",
+      "Edge case handling: config pre-state awareness (weather already disabled) is clean and transparent with skill"
+    ],
+    "key_gaps": [
+      "Partial/focused briefing workflow is underdocumented — SKILL.md does not specify how to run scoped briefings or which flags override which blocks",
+      "Date greeting logic not documented in workflow — BriefingGenerator.ts reads system date but SKILL.md doesn't state this explicitly, creating ambiguity",
+      "Voice summary for partial briefings has no spec — how to generate a 16-word summary for tasks-only or calendar-only runs is not defined",
+      "Stale items block is disabled in config (enabled:false) but listed in SKILL.md Quick Reference as a named block — creates confusion about active feature set"
+    ]
+  },
+
+  "notes": [
+    "Weather block disabled in BriefingConfig.yaml (priority:7, enabled:false) — Prompt 3 is effectively a no-op, which makes it a good config-awareness test",
+    "Prompt 2 (focused briefing) is where the skill shows its biggest gap — partial briefing workflow is not documented in SKILL.md or GenerateBriefing.md",
+    "Baseline's Prompt 2 partial success (0.33) is driven by kaya-cli discoverability, not skill value — confirms the data layer is reachable without the skill but structure/delivery is not",
+    "All 'tokens' and 'time_seconds' fields are null because this is an analytical evaluation — DailyBriefing runs on a cron schedule and live execution would trigger real Telegram/voice delivery",
+    "Recommendation: add a 'Focused Briefing' workflow to GenerateBriefing.md documenting how to scope block execution (e.g., --only-blocks=lucidTasks,calendar flag or explicit block CLI invocation pattern)",
+    "Recommendation: add one-line note in GenerateBriefing.md Step 1 confirming BriefingGenerator.ts reads system date for the greeting"
+  ]
+}

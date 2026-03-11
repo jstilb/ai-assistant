@@ -1,0 +1,32 @@
+# Task: Calendar Routes to Scheduling
+# Calendar query routes to scheduling profile with CalendarContext loaded
+
+id: kaya_ctx_calendar_routes_scheduling
+description: "Calendar query like 'what's on my calendar' routes to scheduling profile with CalendarContext loaded"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "What's on my calendar today?"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profile: scheduling
+      required_files:
+        - CalendarContext
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - scheduling
+  - regression
+
+created_at: "2026-02-11"

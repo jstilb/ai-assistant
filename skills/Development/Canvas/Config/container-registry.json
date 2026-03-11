@@ -1,0 +1,132 @@
+{
+  "version": "2.0.0",
+  "containers": {
+    "markdown": {
+      "label": "Markdown",
+      "props": {
+        "markdown": { "type": "string", "default": "# Hello\n\nStart writing markdown here." }
+      },
+      "defaultSize": { "w": 4, "h": 4 },
+      "streaming": true,
+      "streamProp": "markdown"
+    },
+    "code": {
+      "label": "Code Editor",
+      "props": {
+        "code": { "type": "string", "default": "// Start coding here\n" },
+        "language": { "type": "string", "default": "typescript" }
+      },
+      "defaultSize": { "w": 6, "h": 5 },
+      "streaming": true,
+      "streamProp": "code"
+    },
+    "terminal": {
+      "label": "Terminal",
+      "props": {
+        "lines": { "type": "array", "items": "string", "default": [] }
+      },
+      "defaultSize": { "w": 6, "h": 3 },
+      "streaming": true,
+      "streamProp": "lines"
+    },
+    "image": {
+      "label": "Image",
+      "props": {
+        "src": { "type": "string", "default": "" },
+        "alt": { "type": "string", "default": "" },
+        "fit": { "type": "string", "enum": ["fit", "fill", "cover"], "default": "fit" }
+      },
+      "defaultSize": { "w": 4, "h": 4 },
+      "streaming": false
+    },
+    "table": {
+      "label": "Table",
+      "props": {
+        "columns": { "type": "array", "items": "string", "default": [] },
+        "rows": { "type": "array", "items": "object", "default": [] }
+      },
+      "defaultSize": { "w": 6, "h": 4 },
+      "streaming": false
+    },
+    "chart": {
+      "label": "Chart",
+      "props": {
+        "chartType": { "type": "string", "enum": ["bar", "line", "area", "dot", "pie", "scatter"], "default": "bar" },
+        "data": { "type": "string", "default": "[]" },
+        "title": { "type": "string", "default": "" }
+      },
+      "defaultSize": { "w": 5, "h": 4 },
+      "streaming": false
+    },
+    "form": {
+      "label": "Form",
+      "props": {
+        "schema": { "type": "string", "default": "{\"fields\":[]}" },
+        "values": { "type": "string", "default": "{}" }
+      },
+      "defaultSize": { "w": 4, "h": 5 },
+      "streaming": false
+    },
+    "json": {
+      "label": "JSON Viewer",
+      "props": {
+        "json": { "type": "string", "default": "{}" }
+      },
+      "defaultSize": { "w": 4, "h": 5 },
+      "streaming": false
+    },
+    "webview": {
+      "label": "Web View",
+      "props": {
+        "url": { "type": "string", "default": "about:blank" }
+      },
+      "defaultSize": { "w": 6, "h": 5 },
+      "streaming": false
+    },
+    "diff": {
+      "label": "Diff Viewer",
+      "props": {
+        "oldText": { "type": "string", "default": "" },
+        "newText": { "type": "string", "default": "" }
+      },
+      "defaultSize": { "w": 6, "h": 5 },
+      "streaming": false
+    },
+    "briefing": {
+      "label": "Briefing",
+      "props": {
+        "html": { "type": "string", "default": "<h2>Daily Briefing</h2><p>No briefing data loaded yet.</p>" }
+      },
+      "defaultSize": { "w": 5, "h": 5 },
+      "streaming": false
+    },
+    "declarative": {
+      "label": "Declarative",
+      "props": {
+        "schemaJson": { "type": "string", "default": "{\"type\":\"metric\",\"title\":\"Sample\",\"data\":{\"label\":\"Value\",\"value\":0}}" }
+      },
+      "defaultSize": { "w": 4, "h": 4 },
+      "streaming": false
+    },
+    "sandpack": {
+      "label": "Sandpack",
+      "props": {
+        "code": { "type": "string", "default": "export default function App() {\n  return <div><h1>Hello!</h1></div>\n}\n" },
+        "dependencies": { "type": "string", "default": "{}" },
+        "files": { "type": "string", "default": "{}" },
+        "entry": { "type": "string", "default": "App" }
+      },
+      "defaultSize": { "w": 5, "h": 5 },
+      "streaming": false
+    },
+    "pty": {
+      "label": "Claude Code",
+      "props": {
+        "command": { "type": "string", "default": "claude" },
+        "args": { "type": "array", "items": "string", "default": [] }
+      },
+      "defaultSize": { "w": 6, "h": 5 },
+      "streaming": false
+    }
+  }
+}

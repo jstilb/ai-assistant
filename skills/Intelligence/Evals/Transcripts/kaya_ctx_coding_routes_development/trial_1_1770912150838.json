@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_coding_routes_development",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T16:01:32.862Z",
+  "completed_at": "2026-02-12T16:02:30.838Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix this bug in src/auth.ts",
+      "timestamp": "2026-02-12T16:01:32.862Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "No `src/auth.ts` file exists in the current working directory (`~/.claude`). \n\nJm, which project is this file in? I see several projects in `~/Desktop/projects/` — could be `local-lens`, `agora`, `sourcerer`, etc. Can you point me to the right repo or give me more context on the bug?\n\n🗣️ Kaya: No src/auth.ts found in current directory. Which project should I look in?",
+      "timestamp": "2026-02-12T16:02:30.838Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 57976,
+    "time_to_first_token_ms": 57976,
+    "time_to_last_token_ms": 57976,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,51 @@
+# Task: Complexity Assessment
+# Correctly identifies when a task requires plan mode vs direct execution
+
+id: kaya_plan_complexity_assessment
+description: "Correctly identifies when a task requires plan mode vs direct execution"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Redesign the auth system to support SSO, OAuth2, and SAML"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: false
+    params:
+      rubric: |
+        Evaluate complexity assessment:
+        1. Does it correctly gauge the task complexity?
+        2. Does it identify when /plan mode is warranted?
+        3. Does it avoid over-planning simple tasks?
+        4. Does it avoid under-planning complex tasks?
+        5. Is the assessment justified?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The response correctly assesses the complexity of the task"
+        - "Plan mode is suggested for complex tasks and not for simple ones"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - planning
+  - complexity
+  - capability
+
+created_at: "2026-02-11"

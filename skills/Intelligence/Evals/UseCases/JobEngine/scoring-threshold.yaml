@@ -1,0 +1,50 @@
+# Task: JobEngine scoring threshold boundary verification
+# WHY: Threshold was raised from 60→70 but tests lagged — caused auto-applies to wrong-tier jobs
+
+id: kaya_jobengine_scoring_threshold
+description: "Verify routeByScore enforces 70/80 boundaries and company tier overrides"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    Read the scoring module at skills/Commerce/JobEngine/Tools/lib/scoring.ts.
+    Then write and run a test that verifies:
+    1. routeByScore(69, "unknown") returns "discard"
+    2. routeByScore(70, "unknown") returns "apply"
+    3. routeByScore(79, "unknown") returns "apply"
+    4. routeByScore(80, "unknown") returns "tailored"
+    5. routeByScore(30, "dream") returns "tailored" (dream override)
+    6. routeByScore(95, "blacklisted") returns "discard" (blacklist override)
+    Run the test with bun test and report pass/fail for each case.
+  setup_commands:
+    - "mkdir -p /tmp/eval-scoring"
+
+graders:
+  - type: tool_calls
+    weight: 0.40
+    required: true
+    params:
+      required: [{ tool: Bash }]
+  - type: natural_language_assert
+    weight: 0.60
+    params:
+      assertions:
+        - "Agent ran tests that verify score 69 maps to discard"
+        - "Agent ran tests that verify score 70 maps to apply"
+        - "Agent ran tests that verify score 80 maps to tailored"
+        - "Agent verified dream company overrides to tailored regardless of score"
+        - "Agent verified blacklisted company overrides to discard regardless of score"
+        - "All 6 boundary cases passed"
+
+trials: 3
+pass_threshold: 0.85
+
+tags:
+  - kaya
+  - jobengine
+  - scoring
+  - regression
+
+created_at: "2026-03-09"

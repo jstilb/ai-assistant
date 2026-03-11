@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:17:33.842Z",
+  "completed_at": "2026-02-12T06:18:01.145Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:17:33.842Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — all three behind pace:**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5hrs → 3hrs avg | 5.3 hrs | Still at starting level |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6 → 3.0 | 1.8 | Minimal movement |\n\n**Key patterns from challenges data:**\n- **Media (C0)** is the root blocker — it directly drains time from alignment (C2), writing (C4), and wake consistency (C5)\n- **Friends (C1)** strategies at 14-29% success — social anxiety + new area remain barriers\n- **Physical rehab (C3)** at 0% stretching — no strategy even defined yet\n- **Writing (C4)** at 36% consistency — competing with media consumption\n\n**What's working:** Your historical wins (porn addiction, alcohol, weed, body fat) all used binary rules or consistent tracking. Current strategies rely more on moderation, which has lower success rates for you.\n\n📊 STATUS: 6 weeks into Q1 with 7 weeks remaining. All three WIGs need acceleration. Context files are 75 hours stale — a refresh would give more current numbers.\n\n➡️ NEXT: Want me to dig into any specific goal, run a TELOS refresh for current data, or help build an action plan for the back half of Q1?\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace — media consumption remains the root blocker across goals.",
+      "timestamp": "2026-02-12T06:18:01.145Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 27303,
+    "time_to_first_token_ms": 27303,
+    "time_to_last_token_ms": 27303,
+    "tokens_per_second": 0
+  }
+}

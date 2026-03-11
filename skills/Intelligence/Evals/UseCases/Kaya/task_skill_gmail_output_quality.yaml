@@ -1,0 +1,37 @@
+# Task: Gmail Output Quality
+# Gmail skill output includes recipient, subject, and confirmation
+
+id: kaya_skill_gmail_output_quality
+description: "Gmail skill output includes recipient field, subject line, and send confirmation or draft status"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Draft an email to the team about Friday's release"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    required: true
+    params:
+      assertions:
+        - "Response includes or references a recipient email address or contact name"
+        - "Response includes or references an email subject line"
+        - "Response includes a confirmation of sending or a draft status update"
+      require_all: true
+
+  - type: voice_line_check
+    weight: 0.30
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - skill_quality
+  - output_quality
+  - gmail
+  - capability
+
+created_at: "2026-02-11"

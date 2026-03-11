@@ -1,0 +1,81 @@
+{
+  "task_id": "kaya_ctx_tasks_routes_task_management",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T03:05:32.088Z",
+  "completed_at": "2026-02-13T03:06:28.149Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks are due this week?",
+      "timestamp": "2026-02-13T03:05:32.088Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: No tasks due this week — or in the next two weeks.\n🔍 ANALYSIS: Checked all 293 Asana tasks. 232 are completed. The remaining 61 open tasks have **no due dates** assigned. Zero overdue, zero upcoming.\n⚡ ACTIONS: Queried Asana live, filtered by due date through Feb 15 and extended to 2 weeks.\n✅ RESULTS: No tasks are due this week.\n📊 STATUS: 61 open tasks, all undated — no deadline pressure this week\n📁 CAPTURE: Asana has 61 open tasks with no due dates across projects\n➡️ NEXT: Consider assigning due dates to open tasks to drive accountability, or I can list the 61 undated tasks by project if you want to triage them.\n\n📖 STORY EXPLANATION:\n1. Pulled live Asana data (293 total tasks)\n2. 232 tasks already completed — solid progress\n3. Filtered remaining 61 open tasks for due dates\n4. Zero tasks have a due date set at all\n5. That means nothing is due this week — or any week\n6. No overdue tasks either, which is clean\n7. The gap: undated tasks don't create urgency or structure\n8. Triaging and dating the 61 open tasks would align with G2 (alignment execution)\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: No tasks due this week. All 61 open Asana tasks are undated — consider triaging them.",
+      "timestamp": "2026-02-13T03:06:28.149Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770951988149_0pljq7",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli asana tasks --due-this-week --json 2>/dev/null || pai-cli asana tasks --json 2>/dev/null | head -200",
+        "description": "Fetch Asana tasks due this week",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:06:28.149Z",
+      "result": "<persisted-output>\nOutput too large (149.8KB). Full output saved to: ~/.claude/projects/-private-var-folders-t2--d-3np7j0y90mfqpk9kcxwx00000gn-T-eval-kaya-ctx-tasks-routes-task-management-lx7dAb/5a41ecc5-89df-4ed2-8ac3-6619e8f6b39f/tool-results/toolu_018pG1jW7Rmt1jWqZvY96if6.txt\n\nPreview (first 2KB):\n[\n  {\n    \"gid\": \"1213216734216535\",\n    \"completed\": false,\n    \"created_at\": \"2026-02-10T15:00:14.219Z\",\n    \"due_on\": null,\n    \"memberships\": [\n      {\n        \"project\": {\n          \"gid\": \"1204453649977963\",\n          \"name\": \"Professional\"\n        },\n        \"section\": {\n          \"gid\": \"1204453649977964\",\n          \"name\": \"Backlog\"\n        }\n      }\n    ],\n    \"modified_at\": \"2026-02-11T17:03:34.060Z\",\n    \"name\": \"Develop a skill/tool/app that takes a person and a topic and scours the Internet for every way they talk about a topic. How do they debate it? Where does their argument go? A second tool can then scour the Internet to validate/refute these claims or at least point to og sources so someone can read them\",\n    \"notes\": \"\"\n  },\n  {\n    \"gid\": \"1213216714236555\",\n    \"completed\": false,\n    \"created_at\": \"2026-02-10T15:00:15.507Z\",\n    \"due_on\": null,\n    \"memberships\": [\n      {\n        \"project\": {\n          \"gid\": \"1204453649977963\",\n          \"name\": \"Professional\"\n        },\n        \"section\": {\n          \"gid\": \"1204453649977964\",\n          \"name\": \"Backlog\"\n        }\n      }\n    ],\n    \"modified_at\": \"2026-02-11T17:03:29.389Z\",\n    \"name\": \"Build my own ai-first asana application for Kaya and replace all asana workflows , move all asaa tasks to it and cancel Asana\",\n    \"notes\": \"\"\n  },\n  {\n    \"gid\": \"1213195404279378\",\n    \"completed\": false,\n    \"created_at\": \"2026-02-10T15:00:18.087Z\",\n    \"due_on\": null,\n    \"memberships\": [\n      {\n        \"project\": {\n          \"gid\": \"1204453649977963\",\n          \"name\": \"Professional\"\n        },\n        \"section\": {\n          \"gid\": \"1204453649977964\",\n          \"name\": \"Backlog\"\n        }\n      }\n    ],\n    \"modified_at\": \"2026-02-11T17:03:27.207Z\",\n    \"name\": \"need a kaya skill/workflow to get mobile and desktop voice notes transcribed and organized into obsidian\",\n    \"notes\": \"\"\n  },\n  {\n    \"gid\": \"1213230450068580\",\n    \"completed\": false,\n    \"created_at\": \"2026-02-11T15:11:09.060Z\",\n...\n</persisted-output>",
+      "completed_at": "2026-02-13T03:06:28.149Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951988149_mqczwi",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli asana tasks --json 2>/dev/null | python3 -c \"\nimport json, sys\nfrom datetime import datetime, timedelta\n\ntasks = json.load(sys.stdin)\ntoday = datetime.now().date()\n# End of this week (Sunday Feb 15)\nend_of_week = today + timedelta(days=(6 - today.weekday()))\n\ndue_this_week = []\nfor t in tasks:\n    if t.get('completed'):\n        continue\n    due = t.get('due_on')\n    if due:\n        due_date = datetime.strptime(due, '%Y-%m-%d').date()\n        if due_date <= end_of_week:\n            due_this_week.append({\n                'name': t['name'],\n                'due_on': due,\n                'project': t.get('memberships', [{}])[0].get('project', {}).get('name', 'Unknown'),\n                'section': t.get('memberships', [{}])[0].get('section', {}).get('name', 'Unknown')\n            })\n\ndue_this_week.sort(key=lambda x: x['due_on'])\nprint(json.dumps(due_this_week, indent=2))\nprint(f'\\nTotal: {len(due_this_week)} tasks due this week (through {end_of_week})')\n\"",
+        "description": "Filter Asana tasks due this week",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:06:28.149Z",
+      "result": "[]\n\nTotal: 0 tasks due this week (through 2026-02-15)",
+      "completed_at": "2026-02-13T03:06:28.149Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770951988149_bbpmcp",
+      "name": "Bash",
+      "params": {
+        "command": "pai-cli asana tasks --json 2>/dev/null | python3 -c \"\nimport json, sys\nfrom datetime import datetime, timedelta\n\ntasks = json.load(sys.stdin)\ntoday = datetime.now().date()\n\n# Check overdue tasks too\noverdue = []\nupcoming = []\nno_date = 0\ncompleted = 0\ntotal = 0\n\nfor t in tasks:\n    total += 1\n    if t.get('completed'):\n        completed += 1\n        continue\n    due = t.get('due_on')\n    if not due:\n        no_date += 1\n        continue\n    due_date = datetime.strptime(due, '%Y-%m-%d').date()\n    if due_date < today:\n        overdue.append({\n            'name': t['name'][:80],\n            'due_on': due,\n            'project': t.get('memberships', [{}])[0].get('project', {}).get('name', 'Unknown'),\n        })\n    elif due_date <= today + timedelta(days=14):\n        upcoming.append({\n            'name': t['name'][:80],\n            'due_on': due,\n            'project': t.get('memberships', [{}])[0].get('project', {}).get('name', 'Unknown'),\n        })\n\noverdue.sort(key=lambda x: x['due_on'])\nupcoming.sort(key=lambda x: x['due_on'])\n\nprint('=== OVERDUE TASKS ===')\nfor t in overdue:\n    print(f'  [{t[\\\"due_on\\\"]}] {t[\\\"name\\\"]} ({t[\\\"project\\\"]})')\nprint(f'  Total overdue: {len(overdue)}')\n\nprint('\\n=== UPCOMING (next 2 weeks) ===')\nfor t in upcoming:\n    print(f'  [{t[\\\"due_on\\\"]}] {t[\\\"name\\\"]} ({t[\\\"project\\\"]})')\nprint(f'  Total upcoming: {len(upcoming)}')\n\nprint(f'\\n=== SUMMARY ===')\nprint(f'  Total tasks: {total}')\nprint(f'  Completed: {completed}')\nprint(f'  No due date: {no_date}')\nprint(f'  Overdue: {len(overdue)}')\nprint(f'  Upcoming (2wk): {len(upcoming)}')\n\"",
+        "description": "Check overdue and upcoming Asana tasks",
+        "timeout": 30000
+      },
+      "started_at": "2026-02-13T03:06:28.149Z",
+      "result": "=== OVERDUE TASKS ===\n  Total overdue: 0\n\n=== UPCOMING (next 2 weeks) ===\n  Total upcoming: 0\n\n=== SUMMARY ===\n  Total tasks: 293\n  Completed: 232\n  No due date: 61\n  Overdue: 0\n  Upcoming (2wk): 0",
+      "completed_at": "2026-02-13T03:06:28.149Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.33839729999999996,
+    "duration": 50730,
+    "turns": 4,
+    "inputTokens": 6,
+    "outputTokens": 1662,
+    "cacheReadTokens": 169265,
+    "cacheCreationTokens": 31212
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 3,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 56061,
+    "time_to_first_token_ms": 56061,
+    "time_to_last_token_ms": 56061,
+    "tokens_per_second": 0
+  }
+}

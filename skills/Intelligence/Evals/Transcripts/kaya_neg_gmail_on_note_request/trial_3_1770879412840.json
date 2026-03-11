@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_gmail_on_note_request",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:56:29.931Z",
+  "completed_at": "2026-02-12T06:56:52.840Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Note-taking request like 'take a note about my meeting' does NOT invoke Gmail skill\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T06:56:29.931Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system initialized.\n\n🗣️ Kaya: Evening Jm. Ready for whatever you need — one approved work item in queue.",
+      "timestamp": "2026-02-12T06:56:52.840Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 22909,
+    "time_to_first_token_ms": 22909,
+    "time_to_last_token_ms": 22909,
+    "tokens_per_second": 0
+  }
+}

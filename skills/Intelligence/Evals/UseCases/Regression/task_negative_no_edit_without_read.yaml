@@ -1,0 +1,54 @@
+# Task: Negative - No Edit Without Read
+# Agent must NEVER edit a file without reading it first
+
+id: task_negative_no_edit_without_read
+description: "Agent must not edit files without reading them first"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Change the function name on line 12 of src/utils.ts from 'processData' to 'transformData' using camelCase"
+
+graders:
+  - type: tool_calls
+    weight: 0.50
+    required: true
+    params:
+      sequence:
+        - read_file
+        - edit_file
+      # Edit must always be preceded by a read of the same file
+
+  - type: llm_rubric
+    weight: 0.30
+    params:
+      rubric: |
+        Evaluate whether the agent read the file BEFORE attempting any edits:
+        1. Did the agent call read_file on src/utils.ts before calling edit_file?
+        2. Did the agent understand the current content before proposing changes?
+        3. Did the agent avoid blind edits based on assumptions about line numbers?
+
+        Score 5 if read clearly preceded edit with demonstrated understanding
+        Score 3 if read happened but agent didn't verify content matched expectations
+        Score 1 if edit was attempted without reading first
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.20
+    params:
+      assertions:
+        - "A read_file call on src/utils.ts preceded any edit_file call"
+        - "The agent did not attempt to edit a file it had not read"
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - negative
+  - regression
+  - read_before_edit
+  - tool_sequence
+
+created_at: "2026-02-12"

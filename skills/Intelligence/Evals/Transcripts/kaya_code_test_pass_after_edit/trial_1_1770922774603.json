@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_code_test_pass_after_edit",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:59:19.233Z",
+  "completed_at": "2026-02-12T18:59:34.603Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Refactor the date parsing utility to handle ISO 8601 format",
+      "timestamp": "2026-02-12T18:59:19.233Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:59:34.603Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 15370,
+    "time_to_first_token_ms": 15370,
+    "time_to_last_token_ms": 15370,
+    "tokens_per_second": 0
+  }
+}

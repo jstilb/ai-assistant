@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_context_noise_reduction",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:29:43.147Z",
+  "completed_at": "2026-02-12T06:30:41.416Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What tasks do I have due this week?",
+      "timestamp": "2026-02-12T06:29:43.147Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: None of your Asana tasks have due dates set — so technically nothing is \"due\" this week.\n\n🔍 ANALYSIS: You have **48 incomplete tasks** across 10 projects, but every single one has `due_on: null`. No deadlines are assigned.\n\n📖 STORY EXPLANATION:\n1. Pulled all incomplete tasks from Asana\n2. Checked every task for a `due_on` date\n3. All 48 tasks have no due date set\n4. Without due dates, nothing is technically \"due\" this week\n\nHowever, here's what looks **time-sensitive** based on context:\n\n| Task | Project | Why it's urgent |\n|------|---------|----------------|\n| **Vday Letter** | Family | Valentine's Day is Feb 14 — 3 days away |\n| **Valentine's Day Cooking** | Self | French onion soup, beef wellington, passionfruit sorbet — also needs prep before Feb 14 |\n| **Call Jesse** | Friend | In Progress, been sitting since Jan |\n\n📊 STATUS: 0 tasks with due dates. 2 tasks are time-sensitive this week (Valentine's Day).\n\n➡️ NEXT: Want me to set due dates on these tasks? I'd suggest Feb 13 for the V-Day cooking prep and Feb 14 for the letter.\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: No due dates set in Asana. Valentine's prep and letter are time-sensitive for this Friday.",
+      "timestamp": "2026-02-12T06:30:41.416Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 58269,
+    "time_to_first_token_ms": 58269,
+    "time_to_last_token_ms": 58269,
+    "tokens_per_second": 0
+  }
+}

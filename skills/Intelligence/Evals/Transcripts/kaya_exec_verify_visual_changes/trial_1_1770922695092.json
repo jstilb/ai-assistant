@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_exec_verify_visual_changes",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:58:01.516Z",
+  "completed_at": "2026-02-12T18:58:15.092Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Change the primary button color to blue and increase the font size",
+      "timestamp": "2026-02-12T18:58:01.516Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:58:15.092Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 13576,
+    "time_to_first_token_ms": 13576,
+    "time_to_last_token_ms": 13576,
+    "tokens_per_second": 0
+  }
+}

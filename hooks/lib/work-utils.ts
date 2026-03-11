@@ -6,8 +6,6 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
-export type AlgorithmPhase = 'OBSERVE' | 'THINK' | 'PLAN' | 'BUILD' | 'EXECUTE' | 'VERIFY' | 'LEARN';
-
 const CLAUDE_DIR = process.env.KAYA_DIR || process.env.HOME + '/.claude';
 const WORK_DIR = join(CLAUDE_DIR, 'MEMORY', 'WORK');
 

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_telegram_routes_telegram",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:35:12.645Z",
+  "completed_at": "2026-02-12T19:35:44.168Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Text me on Telegram when the deploy is done",
+      "timestamp": "2026-02-12T19:35:12.645Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🗣️ Kaya: Which deploy should I monitor? No active deployment found in this session, Jm.",
+      "timestamp": "2026-02-12T19:35:44.168Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31523,
+    "time_to_first_token_ms": 31523,
+    "time_to_last_token_ms": 31523,
+    "tokens_per_second": 0
+  }
+}

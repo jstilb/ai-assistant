@@ -77,7 +77,7 @@ import { join, dirname, basename } from "path";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { parse as parseYaml } from "yaml";
-import { createStateManager } from "../../skills/CORE/Tools/StateManager";
+import { createStateManager } from "../core/StateManager";
 
 // ============================================================================
 // TYPES

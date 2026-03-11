@@ -1,0 +1,292 @@
+---
+name: KayaUpgrade
+description: Extract system improvements from content and monitor Anthropic ecosystem changes. USE WHEN upgrade, improve system, system upgrade, analyze for improvements, check Anthropic, new Claude features.
+context: fork
+---
+# KayaUpgrade Skill
+
+Universal system upgrade skill with two modes:
+1. **Analysis Mode** - Analyze ANY content to identify system improvement opportunities
+2. **Monitoring Mode** - Proactively monitor Anthropic ecosystem and YouTube for updates
+
+## Voice Notification
+
+→ Use `notifySync()` from `lib/core/NotificationService.ts`
+
+## Workflow Routing
+
+Route to the appropriate workflow based on the request.
+
+**When executing a workflow, output this notification directly:**
+
+```
+Running the **WorkflowName** workflow from the **KayaUpgrade** skill...
+```
+
+| Workflow | Trigger | File |
+|----------|---------|------|
+| **CheckForUpgrades** | "check for upgrades", "check sources", "any updates", "check Anthropic", "check YouTube" | `Workflows/CheckForUpgrades.md` |
+| **ResearchUpgrade** | "research this upgrade", "deep dive on [feature]", "further research" | `Workflows/ResearchUpgrade.md` |
+| **ReleaseNotesDeepDive** | "analyze release notes", "deep dive release" | `Workflows/ReleaseNotesDeepDive.md` |
+| **FindSources** | "find upgrade sources", "find new sources", "discover channels" | `Workflows/FindSources.md` |
+
+---
+
+## When to Activate This Skill
+
+### Check for Upgrades Triggers
+- "check for upgrades", "check upgrade sources"
+- "any new updates", "what's new"
+- "check Anthropic", "check YouTube"
+- "any new Claude features"
+
+### Research Triggers
+- "research this upgrade", "dig deeper on this"
+- "further research on [feature]"
+- "analyze release notes", "deep dive the latest release"
+
+### Source Discovery Triggers
+- "find upgrade sources", "find new sources"
+- "discover new channels", "expand monitoring"
+
+### Contextual Triggers
+- After reading interesting technical content, articles, or documentation
+- When discovering new tools, libraries, or techniques
+- During competitive analysis or research into other systems
+- After watching technical talks, tutorials, or demonstrations
+- When exploring new AI/LLM capabilities or patterns
+
+---
+
+## Part 1: Content Analysis Mode
+
+**Universal Input -> System Upgrade Recommendations**
+
+Takes ANY content type and performs deep thinking analysis to extract insights and identify concrete system infrastructure improvement opportunities.
+
+### Analysis Dimensions
+
+Analyzes content across 10 dimensions:
+- **Architectural Patterns** - Could improve the system's structure
+- **Tool/Library Innovations** - New integrations to consider
+- **Workflow Optimizations** - Better processes and patterns
+- **Agent Enhancements** - Improved agent designs or capabilities
+- **Performance Techniques** - Speed and efficiency gains
+- **UX Improvements** - Better user experience patterns
+- **Security Enhancements** - Stronger security approaches
+- **Integration Opportunities** - New services or APIs to connect
+- **Automation Possibilities** - More automation opportunities
+- **Testing Strategies** - Better testing and quality approaches
+
+### Supported Content Types
+
+- URLs (articles, blog posts, documentation, GitHub repos)
+- Files (markdown, code, PDFs, transcripts, text)
+- YouTube videos (automatic transcript extraction)
+- Raw text or code snippets
+- Research papers
+- Tool documentation
+
+### Output Format
+
+**"No Gaps Found" is a VALID and often CORRECT output.**
+
+If analysis shows the system already implements everything in the content:
+- Say "No gaps found - we already do this"
+- Briefly note what the content covers and how the system addresses it
+- **STOP.** Do not generate recommendations.
+
+**Only if genuine gaps exist**, output prioritized recommendations:
+- **HIGH PRIORITY** - High impact, reasonable effort (do this soon)
+- **MEDIUM PRIORITY** - Good ideas with more complexity or moderate impact
+- **ASPIRATIONAL** - Interesting long-term possibilities
+
+**What is NOT a valid recommendation:**
+- "Document what we already do"
+- "Formalize existing patterns"
+- "Add awareness of features we have"
+
+These are busywork, not upgrades. If the system does it, we don't need to "document" it as an upgrade.
+
+---
+
+## Part 2: Source Monitoring Mode
+
+**Proactive ecosystem monitoring for Kaya-relevant updates**
+
+### Anthropic Monitoring (30+ sources)
+
+**Sources Monitored:**
+1. **Blogs & News** (4) - Main blog, Alignment, Research, Interpretability
+2. **GitHub Repositories** (21+) - claude-code, skills, MCP, SDKs, cookbooks
+3. **Changelogs** (5) - Claude Code CHANGELOG, releases, docs notes
+4. **Documentation** (6) - Claude docs, API docs, MCP docs, spec, registry
+5. **Community** (1) - Discord server
+
+**Tool:** `Tools/Anthropic.ts`
+
+### YouTube Monitoring
+
+YouTube channels are configured via `youtube-channels.json` in the KayaUpgrade skill directory.
+
+**Features:**
+- Detection of new videos via yt-dlp
+- Transcript extraction via **VideoTranscript** skill
+- State tracking to avoid duplicate processing
+- User-customizable channel list
+
+---
+
+## Tool Reference
+
+| Tool | Purpose |
+|------|---------|
+| `Tools/Anthropic.ts` | Check Anthropic sources for updates, persist raw findings |
+| `Tools/YouTube.ts` | Check YouTube channels for new videos, persist raw findings |
+| `Tools/UpgradeTriage.ts` | AI-driven analysis of raw findings via `inference()` — routes actionable items to QueueRouter and emits insights |
+
+## Configuration
+
+**Skill Files:**
+- `sources.json` - Anthropic sources config (30+ sources)
+- `youtube-channels.json` - Base YouTube channels (empty - uses customization)
+- `State/last-check.json` - Anthropic state
+- `State/youtube-videos.json` - YouTube state
+- `State/latest-anthropic-findings.json` - Raw findings from last Anthropic check
+- `State/latest-youtube-findings.json` - Raw findings from last YouTube check
+- `State/latest-triage-result.json` - AI triage output (read by DailyBriefing)
+
+**YouTube Channels:** `youtube-channels.json` in skill directory
+
+---
+
+## Core Workflow Overview
+
+The skill has four complementary workflows:
+
+| Workflow | Purpose |
+|----------|---------|
+| **CheckForUpgrades** | Collect raw data (Anthropic + YouTube) → AI triage → route to QueueRouter |
+| **ResearchUpgrade** | Deep dive on discovered features to understand implementation |
+| **ReleaseNotesDeepDive** | Specialized research on Claude Code release notes |
+| **FindSources** | Discover and evaluate new sources to add to monitoring |
+
+**Typical flow:**
+1. Run **CheckForUpgrades** — collects data, runs AI triage, queues actionable items
+2. Review queued items in `/queue list` (or DailyBriefing Ecosystem Updates section)
+3. Use **ResearchUpgrade** to dig deeper on interesting items
+4. Use **FindSources** to expand monitoring over time
+
+**Automated flow (weekly cron):**
+`Anthropic.ts` → `YouTube.ts` → `UpgradeTriage.ts` → QueueRouter spec-pipeline → Jm reviews in approval queue
+
+---
+
+## Integration
+
+### Uses
+
+- **CORE** — `inference()`, `StateManager`, `NotificationService`, `LoadSkillConfig`, `SkillIntegrationBridge`
+- **QueueRouter** — Routes actionable triage items to spec-pipeline via `QueueManager.add()`
+- **VideoTranscript** — YouTube transcript extraction for monitoring workflow
+
+### Feeds Into
+
+- **QueueRouter** — Actionable upgrade items queued for Jm review → spec-pipeline → AutonomousWork
+- **ContinualLearning** — Triage insights via `emitInsight()` → MEMORY/entries/
+- **DailyBriefing** — `EcosystemUpdatesBlock` reads `State/latest-triage-result.json`
+- **Daemon Cron** — Weekly automated run via `MEMORY/daemon/cron/jobs/kayaupgrade-weekly.yaml`
+
+## Customization
+
+- **Inference level:** `bun Tools/UpgradeTriage.ts --level fast|standard|smart` (default: standard/Sonnet)
+- **Dry run:** `bun Tools/UpgradeTriage.ts --dry-run` — preview triage without routing to QueueRouter
+- **Check window:** `bun Tools/Anthropic.ts <days>` — default 30, use 7 or 14 for shorter windows
+- **YouTube channels:** Add channels in `youtube-channels.json` (see `Workflows/CheckForUpgrades.md`)
+
+---
+
+## Examples
+
+**Example 1: Check for upgrades**
+```
+User: "check for upgrades"
+→ Invokes CheckForUpgrades workflow
+→ Runs Anthropic.ts tool (30+ sources)
+→ Checks YouTube channels (from USER config)
+→ Combines into prioritized upgrade report
+```
+
+**Example 2: Research a discovered feature**
+```
+User: "research the new context forking feature"
+→ Invokes ResearchUpgrade workflow
+→ Spawns parallel research agents
+→ Searches GitHub, docs, blog for details
+→ Maps to Kaya architecture opportunities
+→ Outputs implementation recommendations
+```
+
+**Example 3: Deep dive on release notes**
+```
+User: "deep dive the latest release notes"
+→ Invokes ReleaseNotesDeepDive workflow
+→ Runs /release-notes to capture features
+→ Launches parallel research agents for each feature
+→ Maps to Kaya architecture opportunities
+→ Outputs prioritized upgrade roadmap with citations
+```
+
+**Example 4: Find new sources**
+```
+User: "find new upgrade sources"
+→ Invokes FindSources workflow
+→ Searches for relevant YouTube channels
+→ Evaluates and ranks findings
+→ Outputs recommendations with add instructions
+```
+
+---
+
+## Key Principles
+
+1. **Universal Input** - Accept any content type without restriction
+2. **Deep Analysis** - Use extended thinking for thorough examination
+3. **System-Aware** - Understand current system state and constraints
+4. **Action-Oriented** - Every insight maps to concrete next steps
+5. **Prioritized** - Clear ranking by impact vs effort
+6. **Learning System** - Improve recommendations over time
+7. **Synergy-Seeking** - Find combinations that multiply value
+8. **Stack-Aligned** - Respect TypeScript > Python, CLI-First, bun > npm
+9. **NO GAPS = NO RECOMMENDATIONS** - If the system already does everything in the content, say so and STOP
+
+---
+
+## Output Quality Standards
+
+**Every recommendation must have:**
+- Clear value proposition (why this matters)
+- Concrete implementation steps (how to do it)
+- Realistic effort estimate (based on system context)
+- Component mapping (what parts of the system affected)
+- Actionable next steps (specific tasks)
+
+**Avoid:**
+- Vague suggestions without clear value
+- Recommendations without implementation path
+- Ignoring stack preferences or constraints
+- Aspirational ideas in high priority
+- Duplicate existing capabilities without noting enhancement
+
+---
+
+## Workflows
+
+- **CheckForUpgrades.md** - Monitor all configured sources for updates
+- **ResearchUpgrade.md** - Deep dive on discovered upgrade opportunities
+- **ReleaseNotesDeepDive.md** - Specialized research on release notes
+- **FindSources.md** - Discover and evaluate new sources to monitor
+
+---
+
+**This skill embodies the system's commitment to continuous improvement and learning from the broader ecosystem while maintaining our architectural principles and preferences.**

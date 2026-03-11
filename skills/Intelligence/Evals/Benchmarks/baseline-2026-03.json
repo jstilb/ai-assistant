@@ -1,0 +1,40 @@
+{
+  "suite": "high-risk-skills",
+  "date": "2026-03-09",
+  "model": "claude-opus-4-6",
+  "tasks": {
+    "kaya_jobengine_scoring_threshold": {
+      "pass_rate": 1,
+      "mean_score": 1,
+      "trials": 3
+    },
+    "kaya_jobengine_phase1_gate": {
+      "pass_rate": 1,
+      "mean_score": 1,
+      "trials": 3
+    },
+    "kaya_jobengine_browser_submit_dryrun": {
+      "pass_rate": 1,
+      "mean_score": 1,
+      "trials": 3
+    },
+    "kaya_jobengine_browser_submit_status": {
+      "pass_rate": 1,
+      "mean_score": 0.58,
+      "trials": 3
+    },
+    "kaya_queuerouter_route_classification": {
+      "pass_rate": 1,
+      "mean_score": 0.94,
+      "trials": 3
+    },
+    "kaya_queuerouter_escalation_gate": {
+      "pass_rate": 1,
+      "mean_score": 1,
+      "trials": 3
+    }
+  },
+  "overall_pass_rate": 1.0,
+  "total_tasks": 6,
+  "tasks_passed": 6
+}

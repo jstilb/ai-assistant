@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:18:01.146Z",
+  "completed_at": "2026-02-12T06:18:48.153Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:18:01.146Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — All Behind Pace**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5hrs → 3hrs (4wk avg) | 5.3 hrs | Still above starting point |\n| G1: Make 2 Good Friends | 2 friends by 3/29 | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6 → 3.0 | 1.8 | Minimal movement (+0.2) |\n\n**Biggest Blockers (from Challenges):**\n- **C0 (Media)** is the root cause cascading into C2 (alignment), C4 (writing), and C5 (wake time) — 5.3hrs/day is *above* your starting baseline\n- **C3 (Physical Rehab)** at 0% stretching consistency is a critical gap with no strategy defined\n- **C1 (Friends)** at 14% success rate on social strategies — needs a different approach\n\n**What's Working:**\n- Historical wins prove you *can* do this — binary rules crushed addiction challenges, tracking drove body fat from 19.7% → 13.7%, DTR system lifted wellbeing from 2.61 → 7.17\n- Strategies S0/S2 for media are at 64-71% success — the strategies work, execution needs consistency\n\n**7 Weeks Left in Q1** — roughly half the quarter gone.\n\n📊 STATUS: All 3 WIGs behind pace. Media consumption is the linchpin — fixing C0 unblocks C2, C4, and C5. C3 needs a strategy defined ASAP.\n\n➡️ NEXT: Want me to pull the full Strategies file and do a deeper analysis on what's working vs. what needs adjustment? Or focus on building an action plan for a specific WIG?\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are behind pace at the halfway mark\n2. Media consumption (5.3hrs) is worse than baseline and cascades into multiple other goals\n3. Friend-making strategies are at 14% — current approach isn't generating results\n4. Alignment score moved only 0.2 points toward a 1.4-point target\n5. Physical rehab has zero consistency and no defined strategy\n6. Your historical wins show binary rules and tracking systems work best for you\n7. Media reduction is the highest-leverage fix — it unblocks alignment, writing, and wake time\n8. 7 weeks remain — aggressive course correction is still possible but requires focus\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace at halfway. Media consumption is the root blocker to fix first.",
+      "timestamp": "2026-02-12T06:18:48.153Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 47007,
+    "time_to_first_token_ms": 47007,
+    "time_to_last_token_ms": 47007,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "ref": "HEAD",
+  "commit": "71e47884f82730844aa40932b36496978befb58b",
+  "captured_at": "2026-02-12T00:25:40.470Z",
+  "context_files": [
+    "skills/CORE/SKILL.md",
+    "skills/CORE/USER/TELOS/MISSIONS.md",
+    "skills/CORE/USER/TELOS/GOALS.md",
+    "skills/CORE/USER/TELOS/CHALLENGES.md",
+    "skills/CORE/USER/TELOS/STATUS.md",
+    "skills/CORE/USER/TELOS/STRATEGIES.md",
+    "skills/CORE/CLI-INDEX.md",
+    "skills/CORE/CONTEXT-INDEX.md"
+  ],
+  "total_context_chars": 51288,
+  "tasks": {
+    "kaya_cmp_context_focus_coding": {
+      "prompt": "I have a bug in my authentication middleware where JWT tokens aren't being refreshed properly. The refresh endpoint returns 401 instead of a new token. Can you help me debug this?",
+      "response_file": "kaya_cmp_context_focus_coding.md",
+      "captured_at": "2026-02-12T00:25:49.591Z",
+      "latency_ms": 9121
+    },
+    "kaya_cmp_context_focus_greeting": {
+      "prompt": "Hey, good morning!",
+      "response_file": "kaya_cmp_context_focus_greeting.md",
+      "captured_at": "2026-02-12T00:25:54.381Z",
+      "latency_ms": 4790
+    },
+    "kaya_cmp_skill_routing_preserved": {
+      "prompt": "Send an email to Sarah about the project deadline moving to next Friday",
+      "response_file": "kaya_cmp_skill_routing_preserved.md",
+      "captured_at": "2026-02-12T00:26:11.443Z",
+      "latency_ms": 17062
+    },
+    "kaya_cmp_response_quality_general": {
+      "prompt": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "response_file": "kaya_cmp_response_quality_general.md",
+      "captured_at": "2026-02-12T00:26:32.210Z",
+      "latency_ms": 20767
+    },
+    "kaya_cmp_context_noise_reduction": {
+      "prompt": "What tasks do I have due this week?",
+      "response_file": "kaya_cmp_context_noise_reduction.md",
+      "captured_at": "2026-02-12T00:26:48.367Z",
+      "latency_ms": 16157
+    }
+  }
+}

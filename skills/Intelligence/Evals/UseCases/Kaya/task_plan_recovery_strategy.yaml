@@ -1,0 +1,52 @@
+# Task: Recovery Strategy
+# Plan includes fallback strategies for likely failure points
+
+id: kaya_plan_recovery_strategy
+description: "Plan includes fallback strategies for likely failure points"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Set up automatic failover for our database cluster"
+
+graders:
+  - type: llm_rubric
+    weight: 0.50
+    required: false
+    params:
+      rubric: |
+        Evaluate recovery strategy quality:
+        1. Are likely failure points identified?
+        2. Are fallback strategies provided for each?
+        3. Are the fallbacks realistic and actionable?
+        4. Is error handling considered in the plan?
+        5. Does the plan account for partial failures?
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.30
+    required: false
+    params:
+      assertions:
+        - "The plan includes fallback strategies for potential failure points"
+        - "Recovery approaches are realistic and actionable"
+
+  - type: response_format_check
+    weight: 0.20
+    required: false
+    params:
+      format: full
+
+trials: 3
+pass_threshold: 0.35
+
+tags:
+  - kaya
+  - planning
+  - recovery
+  - fallback
+  - capability
+
+created_at: "2026-02-11"

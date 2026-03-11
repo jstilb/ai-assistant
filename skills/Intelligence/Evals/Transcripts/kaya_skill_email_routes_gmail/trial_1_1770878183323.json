@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_email_routes_gmail",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:35:59.092Z",
+  "completed_at": "2026-02-12T06:36:23.323Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Email request like 'send an email' invokes Gmail tools for composing and sending",
+      "timestamp": "2026-02-12T06:35:59.092Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, reviewing queue status.\n\n🗣️ Kaya: Evening Jm. One approved work item in queue. Ready when you are.",
+      "timestamp": "2026-02-12T06:36:23.323Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24231,
+    "time_to_first_token_ms": 24231,
+    "time_to_last_token_ms": 24231,
+    "tokens_per_second": 0
+  }
+}

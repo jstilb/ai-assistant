@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T20:09:17.899Z",
+  "completed_at": "2026-02-12T20:09:57.877Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "How am I doing on my Q1 goals?",
+      "timestamp": "2026-02-12T20:09:17.899Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 WIG progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 Wildly Important Goals (WIGs)**\n\n| Goal | Target | Current | Gap | Status |\n|------|--------|---------|-----|--------|\n| **G0: Decrease Low-Value Media** | 5hrs → 3hrs (4wk avg) | 5.3 hrs | 2.3 hrs over target | ⚠️ Behind |\n| **G1: Make 2 Good Friends** | 2 good friends by 3/29 | 0 | 2 friends to go | ⚠️ Behind |\n| **G2: Raise Alignment Score** | 1.6 → 3.0 | 1.8 | +1.2 needed | ⚠️ Slight progress |\n\n**Deadline: March 29, 2026 — ~6.5 weeks remaining.**\n\n---\n\n**Key Observations:**\n\n- **Media (G0):** 5.3 hrs is still at baseline. Strategies S0/S2 are working at 64-71% but haven't moved the number yet. This is your highest-leverage goal since it blocks C2 (alignment) and C4 (writing).\n- **Friends (G1):** 0/2 with a 14% success rate on social strategies. S3/S4 need a different approach — the current one isn't converting.\n- **Alignment (G2):** 1.8 vs 1.6 start = +0.2 improvement in ~6 weeks. At this rate you'd hit ~2.2 by end of Q1, not 3.0.\n\n**Root cause pattern:** C0 (media) is the upstream blocker for both C2 and C4. Your historical wins (porn, alcohol, weed) all used **binary elimination rules**, but media reduction is a moderation goal — harder to execute.\n\n📊 STATUS: All three WIGs are behind pace with 6.5 weeks left. Not impossible but requires acceleration.\n\n➡️ NEXT:\n- Want me to pull fresh data from your alignment sheet for updated numbers? (Context is 89h stale)\n- Or dive into strategy adjustments for any specific WIG?\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are currently behind their targets\n2. Media consumption hasn't moved from baseline despite 64-71% strategy adherence\n3. Friend-making strategies are converting at only 14% — lowest success rate\n4. Alignment score gained +0.2 but needs +1.2 more in 6.5 weeks\n5. Media is the upstream blocker — it cascades into alignment and writing challenges\n6. Your proven wins all used binary rules, but media is a moderation goal\n7. The TELOS data is 89 hours old so actual numbers may have shifted\n8. Acceleration or strategy pivots needed to hit any of the three targets\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 WIGs behind pace. Media remains the upstream blocker with six weeks left.",
+      "timestamp": "2026-02-12T20:09:57.877Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 39978,
+    "time_to_first_token_ms": 39978,
+    "time_to_last_token_ms": 39978,
+    "tokens_per_second": 0
+  }
+}

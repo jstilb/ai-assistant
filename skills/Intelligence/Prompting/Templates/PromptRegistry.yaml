@@ -1,0 +1,291 @@
+# PromptRegistry.yaml
+# Central prompt inventory for Kaya Prompting Skill
+#
+# Purpose:
+# - Single source of truth for all managed prompts
+# - Maps registry IDs to template files
+# - Tracks versions, usage, and model hints
+# - Enables prompt discovery and audit
+#
+# Key Differentiation from Fabric:
+# - Fabric: Pattern Library (Consumption) - Apply 239 pre-built patterns to content
+# - Prompting: Template System (Creation) - Generate prompts from templates + data
+#
+# Usage:
+# - PromptLoader.ts uses this registry to resolve prompt IDs
+# - PromptAudit.ts validates all registered prompts against Standards.md
+# - hooks/ and skills/ reference prompts by registry ID
+
+version: "1.0.0"
+last_updated: "2026-02-01"
+
+prompts:
+  # ==========================================================================
+  # Hook Prompts - Used by lifecycle event handlers
+  # ==========================================================================
+
+  sentiment_analysis:
+    template: Hooks/SentimentAnalysis.hbs
+    version: "1.0.0"
+    description: "Detect emotional sentiment in user messages for implicit rating capture"
+    used_by:
+      - "hooks/ImplicitSentimentCapture.hook.ts"
+    model_hint: fast  # Haiku - quick sentiment detection
+    required_data:
+      - principal.name
+      - assistant.name
+    output_format: json
+
+  tab_title:
+    template: Hooks/TabTitleGeneration.hbs
+    version: "1.0.0"
+    description: "Generate 3-5 word gerund summaries for terminal tab titles"
+    used_by:
+      - "hooks/UpdateTabTitle.hook.ts"
+    model_hint: standard  # Sonnet - better characterization
+    required_data: []
+    output_format: text
+
+  # ==========================================================================
+  # Agent Prompts - Used for agent context and orchestration
+  # ==========================================================================
+
+  agent_context:
+    template: Agents/AgentContext.hbs
+    version: "1.0.0"
+    description: "Generate unified agent context for spawning specialized agents"
+    used_by:
+      - "skills/CORE/Tools/AgentOrchestrator.ts"
+      - "skills/Agents/Tools/AgentFactory.ts"
+    model_hint: standard
+    required_data:
+      - agent.id
+      - agent.name
+      - agent.personality
+      - task.description
+    output_format: text
+
+  orchestration:
+    template: Agents/Orchestration.hbs
+    version: "1.0.0"
+    description: "Aggregation prompts for multi-agent output synthesis"
+    used_by:
+      - "skills/CORE/Tools/AgentOrchestrator.ts"
+    model_hint: standard
+    required_data:
+      - agents
+      - outputs
+      - synthesis_mode
+    output_format: text
+
+  # ==========================================================================
+  # Research Prompts - Used for query decomposition and synthesis
+  # ==========================================================================
+
+  query_decomposition:
+    template: Research/QueryDecomposition.hbs
+    version: "1.0.0"
+    description: "Decompose complex research queries into parallel search strategies"
+    used_by:
+      - "skills/Research/Tools/QueryPlanner.ts"
+    model_hint: standard
+    required_data:
+      - query
+      - domain_hints
+    output_format: json
+
+  synthesis:
+    template: Research/Synthesis.hbs
+    version: "1.0.0"
+    description: "Synthesize findings from multiple research sources"
+    used_by:
+      - "skills/Research/Tools/Synthesizer.ts"
+    model_hint: smart  # Opus - complex reasoning
+    required_data:
+      - sources
+      - original_query
+    output_format: text
+
+  # ==========================================================================
+  # Core Primitives (existing) - Referenced for completeness
+  # ==========================================================================
+
+  briefing:
+    template: Primitives/Briefing.hbs
+    version: "1.0.0"
+    description: "Agent context handoff for task delegation"
+    used_by:
+      - "skills/Agents/Tools/AgentFactory.ts"
+    model_hint: standard
+    required_data:
+      - briefing.type
+      - agent
+      - task
+    output_format: text
+
+  roster:
+    template: Primitives/Roster.hbs
+    version: "1.0.0"
+    description: "Data-driven agent/skill definitions"
+    used_by:
+      - "skills/RedTeam/SKILL.md"
+    model_hint: null  # Static rendering
+    required_data:
+      - agents
+    output_format: text
+
+  voice:
+    template: Primitives/Voice.hbs
+    version: "1.0.0"
+    description: "Personality calibration and voice parameters"
+    used_by:
+      - "skills/Agents/Tools/AgentFactory.ts"
+    model_hint: null  # Static rendering
+    required_data:
+      - voice
+    output_format: text
+
+  structure:
+    template: Primitives/Structure.hbs
+    version: "1.0.0"
+    description: "Multi-step workflow patterns and pipelines"
+    used_by:
+      - "skills/Development/SKILL.md"
+    model_hint: null  # Static rendering
+    required_data:
+      - phases
+    output_format: text
+
+  gate:
+    template: Primitives/Gate.hbs
+    version: "1.0.0"
+    description: "Validation checklists and quality gates"
+    used_by:
+      - "skills/Development/SKILL.md"
+    model_hint: null  # Static rendering
+    required_data:
+      - checks
+    output_format: text
+
+  # ==========================================================================
+  # Eval Prompts (existing) - Referenced for completeness
+  # ==========================================================================
+
+  judge:
+    template: Evals/Judge.hbs
+    version: "1.0.0"
+    description: "LLM-as-Judge evaluation prompts"
+    used_by:
+      - "skills/Evals/Graders/ModelBased/LLMRubric.ts"
+    model_hint: smart  # Opus for judge quality
+    required_data:
+      - criteria
+      - response
+    output_format: json
+
+  rubric:
+    template: Evals/Rubric.hbs
+    version: "1.0.0"
+    description: "Evaluation rubric templates"
+    used_by:
+      - "skills/Evals/SKILL.md"
+    model_hint: null
+    required_data:
+      - rubric
+    output_format: text
+
+  testcase:
+    template: Evals/TestCase.hbs
+    version: "1.0.0"
+    description: "Test case generation templates"
+    used_by:
+      - "skills/Evals/SKILL.md"
+    model_hint: standard
+    required_data:
+      - scenario
+    output_format: json
+
+  comparison:
+    template: Evals/Comparison.hbs
+    version: "1.0.0"
+    description: "A/B comparison evaluation templates"
+    used_by:
+      - "skills/Evals/SKILL.md"
+    model_hint: smart
+    required_data:
+      - response_a
+      - response_b
+      - criteria
+    output_format: json
+
+  report:
+    template: Evals/Report.hbs
+    version: "1.0.0"
+    description: "Evaluation report generation"
+    used_by:
+      - "skills/Evals/SKILL.md"
+    model_hint: null
+    required_data:
+      - results
+    output_format: text
+
+  # ==========================================================================
+  # Decorators (existing) - Referenced for completeness
+  # ==========================================================================
+
+  reasoning:
+    template: Decorators/Reasoning.hbs
+    version: "1.0.0"
+    description: "Chain-of-thought and reasoning patterns"
+    used_by: []
+    model_hint: null
+    required_data:
+      - reasoning_type
+    output_format: text
+
+  tone:
+    template: Decorators/Tone.hbs
+    version: "1.0.0"
+    description: "Output tone and style modifiers"
+    used_by: []
+    model_hint: null
+    required_data:
+      - tone
+    output_format: text
+
+  format:
+    template: Decorators/Format.hbs
+    version: "1.0.0"
+    description: "Output format specifications"
+    used_by: []
+    model_hint: null
+    required_data:
+      - format
+    output_format: text
+
+# ==========================================================================
+# Registry Metadata
+# ==========================================================================
+
+categories:
+  hooks:
+    description: "Prompts used by lifecycle event handlers"
+    prompts: [sentiment_analysis, tab_title]
+  agents:
+    description: "Prompts for agent context and orchestration"
+    prompts: [agent_context, orchestration, briefing, roster, voice]
+  research:
+    description: "Prompts for research workflows"
+    prompts: [query_decomposition, synthesis]
+  evals:
+    description: "Prompts for evaluation and testing"
+    prompts: [judge, rubric, testcase, comparison, report]
+  structure:
+    description: "Structural and formatting prompts"
+    prompts: [structure, gate, reasoning, tone, format]
+
+model_hints:
+  fast: "Use Haiku - quick, cheap operations (sentiment, classification)"
+  standard: "Use Sonnet - balanced quality/speed (summaries, generation)"
+  smart: "Use Opus - complex reasoning (synthesis, judging)"
+  null: "Static rendering - no inference needed"

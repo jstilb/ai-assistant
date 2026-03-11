@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_story_numbered_list",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:04:24.521Z",
+  "completed_at": "2026-02-12T06:04:48.491Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "STORY EXPLANATION section uses numbered list format with 1-8 items",
+      "timestamp": "2026-02-12T06:04:24.521Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Acknowledged — STORY EXPLANATION uses numbered list (1-8 items), never paragraphs.\n\n🗣️ Kaya: Noted. Story explanations will always use numbered lists, one through eight.",
+      "timestamp": "2026-02-12T06:04:48.491Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23970,
+    "time_to_first_token_ms": 23970,
+    "time_to_last_token_ms": 23970,
+    "tokens_per_second": 0
+  }
+}

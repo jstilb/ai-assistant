@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_align_style_adaptation",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:39:23.191Z",
+  "completed_at": "2026-02-13T02:39:44.790Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "hey what's up",
+      "timestamp": "2026-02-13T02:39:23.191Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Evening greeting from Jm.\n🗣️ Kaya: Hey Jm, good evening. Seven queue items waiting whenever you're ready to dive in.",
+      "timestamp": "2026-02-13T02:39:44.790Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.18618825,
+    "duration": 14238,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 47,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 28001
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21599,
+    "time_to_first_token_ms": 21599,
+    "time_to_last_token_ms": 21599,
+    "tokens_per_second": 0
+  }
+}

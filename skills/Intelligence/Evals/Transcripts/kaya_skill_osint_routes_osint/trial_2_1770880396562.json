@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_osint_routes_osint",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:13:04.898Z",
+  "completed_at": "2026-02-12T07:13:16.562Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "OSINT request like 'background check on this company' invokes OSINT skill",
+      "timestamp": "2026-02-12T07:13:04.898Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets 3am (America/Los_Angeles)",
+      "timestamp": "2026-02-12T07:13:16.562Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 11664,
+    "time_to_first_token_ms": 11664,
+    "time_to_last_token_ms": 11664,
+    "tokens_per_second": 0
+  }
+}

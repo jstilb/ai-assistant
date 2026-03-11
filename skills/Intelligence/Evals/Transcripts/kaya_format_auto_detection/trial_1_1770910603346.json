@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_format_auto_detection",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T15:36:16.975Z",
+  "completed_at": "2026-02-12T15:36:43.346Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya auto-selects appropriate response format based on task type",
+      "timestamp": "2026-02-12T15:36:16.975Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, ready for instructions.\n\n🗣️ Kaya: Good morning Jm. Systems loaded, 63 skills ready. What are we working on?",
+      "timestamp": "2026-02-12T15:36:43.346Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 26371,
+    "time_to_first_token_ms": 26371,
+    "time_to_last_token_ms": 26371,
+    "tokens_per_second": 0
+  }
+}

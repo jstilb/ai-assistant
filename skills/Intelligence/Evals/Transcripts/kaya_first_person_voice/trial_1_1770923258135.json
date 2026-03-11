@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_first_person_voice",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:07:05.282Z",
+  "completed_at": "2026-02-12T19:07:38.135Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me refactor this auth module to use JWT tokens",
+      "timestamp": "2026-02-12T19:07:05.282Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "I need to know which project the auth module lives in before I can explore and plan the refactoring. Which project should I be looking at, Jm?",
+      "timestamp": "2026-02-12T19:07:38.135Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32853,
+    "time_to_first_token_ms": 32853,
+    "time_to_last_token_ms": 32853,
+    "tokens_per_second": 0
+  }
+}

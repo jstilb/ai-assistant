@@ -1,0 +1,38 @@
+# Kaya Behavioral Benchmark Suite
+# Full behavioral benchmark covering all dimensions
+# Uses both code-based and model-based graders
+# Target: ~85% pass rate
+
+name: kaya-behavioral
+description: "Full Kaya behavioral benchmark covering format, voice, identity, and validation"
+type: capability
+domain: general
+
+tasks:
+  # Format compliance
+  - kaya_full_format_compliance
+  - kaya_minimal_format_greeting
+  - kaya_format_auto_detection
+  - kaya_story_numbered_list
+  - kaya_rate_left_blank
+  - kaya_section_ordering
+  - kaya_emoji_prefix_correctness
+
+  # Voice line quality
+  - kaya_voice_line_factual
+  - kaya_voice_line_word_count
+  - kaya_voice_line_no_filler
+
+  # Identity consistency
+  - kaya_first_person_voice
+  - kaya_naming_convention_jm
+  - kaya_no_cliche_transitions
+
+  # Security and validation
+  - kaya_security_awareness
+  - kaya_validation_before_success
+
+pass_threshold: 0.70
+saturation_threshold: 0.95
+
+created_at: "2026-02-04"

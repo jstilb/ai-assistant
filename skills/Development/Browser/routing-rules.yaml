@@ -1,0 +1,269 @@
+# Browser Automation Routing Rules
+# Generated from experiments: ~/.claude/MEMORY/experiments/browser-automation-2026-02-22.json
+# Date: 2026-02-22
+# Methodology: 10 scenarios, 3 runs per tool (60 total), measured wall-clock time, success rate, and LLM cost.
+#
+# TL;DR:
+#   Browse.ts  - Deterministic, $0 LLM cost, fast for known pages (90% success)
+#   Stagehand  - AI-powered, ~$0.001/action, handles dynamic/unknown pages (100% success)
+
+version: "2.0.0"
+updated: "2026-02-22"
+source_data: "MEMORY/experiments/browser-automation-2026-02-22.json"
+
+summary:
+  total_runs: 60
+  runs_per_scenario: 3
+  browse_overall_success: "27/30 (90%)"
+  stagehand_overall_success: "30/30 (100%)"
+  browse_avg_speed_ms: 7912
+  stagehand_avg_speed_ms: 8921
+  browse_total_llm_cost: "$0.00"
+  stagehand_total_llm_cost: "$0.066 (30 runs)"
+  browse_wins_scenarios: 6
+  stagehand_wins_scenarios: 3
+  tie_scenarios: 1
+  key_insight: "Browse.ts wins 6/10 scenarios on speed when it succeeds. Stagehand wins on SPA, error recovery, and form fills. Stagehand has 100% success rate vs Browse's 90% (fails only on SPA)."
+
+rules:
+  # ================================================================
+  # HIGH CONFIDENCE RULES (data-backed, 3 runs per scenario)
+  # ================================================================
+
+  - id: "use-browse-for-screenshots"
+    condition: "Taking a screenshot or capturing visual state"
+    tool: browse
+    command: "bun run ~/.claude/skills/Browser/Tools/Browse.ts screenshot [path]"
+    reason: "Direct Playwright call, zero LLM overhead, 2.5x faster than Stagehand"
+    confidence: high
+    evidence:
+      scenario: "Navigate and screenshot"
+      runs: 3
+      browse_result: "3/3 PASS, avg 640ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 1630ms, $0.003"
+      winner: browse
+      speedup: "2.5x"
+
+  - id: "use-browse-for-diagnostics"
+    condition: "Checking console errors, network logs, or page load diagnostics"
+    tool: browse
+    command: "bun run ~/.claude/skills/Browser/Tools/Browse.ts errors|network|failed"
+    reason: "Always-on capture built into BrowserSession. No AI needed for structured log data."
+    confidence: high
+    evidence: "Browse.ts captures all diagnostics by default; Stagehand has no equivalent"
+
+  - id: "use-stagehand-for-dynamic-elements"
+    condition: "Target element is in a SPA, React/Vue component, iframe, or dynamically rendered by JS"
+    tool: stagehand
+    command: "bun run ~/.claude/skills/Browser/Tools/Stagehand.ts act \"<natural language description>\""
+    reason: "Browse.ts fails 100% on SPA elements (30s timeout). Stagehand AI finds them in <1s."
+    confidence: high
+    evidence:
+      scenario: "Complex SPA interaction"
+      runs: 3
+      browse_result: "0/3 PASS, avg 30931ms (all timeout), $0.00"
+      stagehand_result: "3/3 PASS, avg 874ms, $0.003"
+      winner: stagehand
+      speedup: "35x (and only tool that works)"
+
+  - id: "use-stagehand-for-dynamic-dropdowns"
+    condition: "Interacting with JS-rendered dropdowns (React Select, Material UI, Ant Design, etc.)"
+    tool: stagehand
+    command: "bun run ~/.claude/skills/Browser/Tools/Stagehand.ts act \"Select <option> from the <dropdown name> dropdown\""
+    reason: "Equal speed on standard dropdowns. Stagehand is preferred for complex custom components where Browse.ts selectors may break."
+    confidence: medium
+    evidence:
+      scenario: "Dynamic dropdown"
+      runs: 3
+      browse_result: "3/3 PASS, avg 879ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 867ms, $0.003"
+      winner: tie
+      note: "Both tools now succeed on standard dropdowns. Stagehand preferred for custom components where selectors are fragile."
+
+  - id: "use-browse-for-state-persistence"
+    condition: "Saving or loading authenticated browser sessions (cookies, localStorage, sessionStorage)"
+    tool: browse
+    command: "bun run ~/.claude/skills/Browser/Tools/Browse.ts state-save <name> | state-load <name>"
+    reason: "24x faster than Stagehand for auth flows. Deterministic cookie/storage persistence."
+    confidence: high
+    evidence:
+      scenario: "Authenticated flow"
+      runs: 3
+      browse_result: "3/3 PASS, avg 2502ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 60709ms, $0.003"
+      winner: browse
+      speedup: "24x"
+      note: "Stagehand CDP sharing works but has 60s overhead from session handoff"
+
+  - id: "use-browse-for-batch-operations"
+    condition: "10+ sequential deterministic operations (navigation, clicks, form fills with known selectors)"
+    tool: browse
+    command: "Multiple bun run ~/.claude/skills/Browser/Tools/Browse.ts <command> calls"
+    reason: "2.1x faster than Stagehand, $0 LLM cost vs $0.03 for 10 operations."
+    confidence: high
+    evidence:
+      scenario: "Batch operations"
+      runs: 3
+      browse_result: "3/3 PASS, avg 7414ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 15501ms, $0.030"
+      winner: browse
+      speedup: "2.1x"
+
+  - id: "use-stagehand-for-error-recovery"
+    condition: "Element may have moved, been renamed, or page layout has changed"
+    tool: stagehand
+    command: "bun run ~/.claude/skills/Browser/Tools/Stagehand.ts act \"<flexible description of what to click>\""
+    reason: "29x faster recovery than Browse.ts selector fallback (1069ms vs 30852ms). Stagehand finds by intent not selector."
+    confidence: high
+    evidence:
+      scenario: "Error recovery"
+      runs: 3
+      browse_result: "3/3 PASS but avg 30852ms (30s selector timeout before fallback)"
+      stagehand_result: "3/3 PASS, avg 1069ms"
+      winner: stagehand
+      speedup: "29x"
+
+  - id: "use-browse-for-data-extraction"
+    condition: "Extracting structured data from pages with known, stable selectors"
+    tool: browse
+    command: "bun run ~/.claude/skills/Browser/Tools/Browse.ts eval \"document.querySelectorAll(...)\""
+    reason: "2.9x faster than Stagehand when selectors are known. $0 cost."
+    confidence: high
+    evidence:
+      scenario: "Extract product data"
+      runs: 3
+      browse_result: "3/3 PASS, avg 762ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 2194ms, $0.003"
+      winner: browse
+      speedup: "2.9x"
+
+  - id: "use-stagehand-for-data-extraction-unknown"
+    condition: "Extracting structured data from pages with unpredictable or varying HTML structure"
+    tool: stagehand
+    command: "bun run ~/.claude/skills/Browser/Tools/Stagehand.ts extract \"<description of data to get>\""
+    reason: "AI understands semantic content regardless of CSS class names. Use when selectors are unknown or page structure varies."
+    confidence: high
+    evidence:
+      scenario: "Extract product data"
+      note: "Browse.ts is faster (762ms vs 2194ms) when selectors are known, but requires manual selector identification. Stagehand works without selectors."
+
+  - id: "use-browse-for-visual-verification"
+    condition: "Verifying page loaded correctly, checking specific text or element presence"
+    tool: browse
+    command: "bun run ~/.claude/skills/Browser/Tools/Browse.ts eval \"document.querySelector(...).textContent\" && screenshot"
+    reason: "1.9x faster, $0 cost. Use screenshot + eval for deterministic verification."
+    confidence: high
+    evidence:
+      scenario: "Visual verification"
+      runs: 3
+      browse_result: "3/3 PASS, avg 817ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 1540ms, $0.003"
+      winner: browse
+      speedup: "1.9x"
+
+  - id: "use-stagehand-for-form-fill-speed"
+    condition: "Filling multi-field forms in a single operation where field selectors are uncertain"
+    tool: stagehand
+    command: "bun run ~/.claude/skills/Browser/Tools/Stagehand.ts act \"Fill <field1> with <val1>, <field2> with <val2>, then click <button>\""
+    reason: "Stagehand completes multi-field form fill 1.5x faster (872ms vs 1275ms) as a single AI action."
+    confidence: high
+    evidence:
+      scenario: "Fill a login form"
+      runs: 3
+      browse_result: "3/3 PASS, avg 1275ms, $0.00 (multiple CLI calls)"
+      stagehand_result: "3/3 PASS, avg 872ms, $0.006 (single AI instruction)"
+      winner: stagehand
+      speedup: "1.5x"
+
+  - id: "use-browse-for-multi-step-known-navigation"
+    condition: "Multi-step navigation where all URLs and selectors are known in advance"
+    tool: browse
+    command: "Multiple bun run Browse.ts navigate <url> | click <selector>"
+    reason: "1.3x faster than Stagehand for known navigation paths, $0 cost."
+    confidence: high
+    evidence:
+      scenario: "Multi-step navigation"
+      runs: 3
+      browse_result: "3/3 PASS, avg 3048ms, $0.00"
+      stagehand_result: "3/3 PASS, avg 3958ms, $0.009"
+      winner: browse
+      speedup: "1.3x"
+
+  # ================================================================
+  # GENERAL PRINCIPLES (from experiment patterns)
+  # ================================================================
+
+  - id: "general-known-selector"
+    condition: "CSS/XPath selector is known and stable"
+    tool: browse
+    reason: "Zero LLM cost. Direct Playwright execution. Fastest path for deterministic interaction."
+
+  - id: "general-unknown-selector"
+    condition: "Selector is unknown, unstable, or described in natural language"
+    tool: stagehand
+    reason: "AI finds elements by intent. Auto-caches selector on first run for subsequent $0 cost."
+
+  - id: "general-recurring-workflow"
+    condition: "Same actions performed more than 3 times (e.g., daily automation)"
+    tool: stagehand
+    reason: "Stagehand auto-caching: first run costs ~$0.001, all subsequent runs are $0. Cost amortizes quickly."
+
+  - id: "general-one-time-script"
+    condition: "One-off deterministic script (write-once, run-once)"
+    tool: browse
+    reason: "No cache benefit from Stagehand. Browse.ts is faster and free."
+
+  - id: "general-real-browser-SPA"
+    condition: "Page uses React, Vue, Angular, Svelte, or any modern frontend framework"
+    tool: stagehand
+    reason: "Experiment evidence: Browse.ts timed out 3/3 on demoqa.com SPA (30.9s avg). Stagehand succeeded 3/3 in 874ms avg."
+    note: "Exception: if selectors were identified via DevTools snapshot first, Browse.ts may work"
+
+  - id: "general-trace-debugging"
+    condition: "Debugging browser automation failures - need trace recording"
+    tool: browse
+    command: "bun run Browse.ts trace start && <actions> && bun run Browse.ts trace stop"
+    reason: "Browse.ts has built-in Playwright trace support. Open trace in playwright show-trace."
+
+# ================================================================
+# DECISION FLOWCHART
+# ================================================================
+decision_flowchart: |
+  Is a CSS/XPath selector known?
+    YES --> Is it a recurring workflow (3+ times)?
+              YES --> stagehand (auto-cache eliminates LLM cost)
+              NO  --> browse (fastest, $0)
+    NO  --> Is the page a SPA/dynamic framework?
+              YES --> stagehand (AI finds elements regardless of render)
+              NO  --> Does it need multi-field form fill?
+                        YES --> stagehand (1 AI call vs 4+ CLI calls)
+                        NO  --> stagehand (observe or act with natural language)
+
+  Special cases:
+    Screenshots/diagnostics --> always browse
+    State save/load          --> always browse (24x faster)
+    Batch 10+ operations     --> always browse (2.1x faster, $0)
+    Error recovery           --> prefer stagehand (29x faster recovery)
+    Data extraction          --> browse if selectors known, stagehand if not
+
+# ================================================================
+# COST MODEL
+# ================================================================
+cost_model:
+  browse_per_operation: "$0.00"
+  stagehand_per_action_first_run: "~$0.001 (Gemini 3 Flash Preview)"
+  stagehand_per_action_cached: "$0.00"
+  stagehand_batch_10: "~$0.01"
+  stagehand_total_30_runs: "$0.066"
+  break_even_point: "Stagehand becomes cheaper than Browse.ts engineering time when selectors require >5min to identify manually"
+
+# ================================================================
+# KNOWN LIMITATIONS
+# ================================================================
+limitations:
+  stagehand_cdp_sharing: "FIXED (v2.1). BrowserSession proxies CDP WebSocket on port 9222 to Chrome's internal debugging port 9223. Stagehand --session browse connects via CDP. Redundant navigation now skipped when already on target URL — re-run experiments to measure improvement."
+  stagehand_schema_nulls: "FIXED (v2.2). Null values from model are now coerced to type-appropriate defaults ([] for arrays, '' for strings, 0 for numbers, false for booleans). Schema mode is safe to use."
+  browse_spa_timeout: "MITIGATED. Default timeout increased to 120s (was 30s). Playwright auto-waits for elements to appear in DOM. SPAs that render within 120s should now succeed. Elements requiring prior user interaction still need Stagehand."
+  stagehand_agent_cua: "WORKING (v2.3). Auto-selects CUA provider: Anthropic (if ANTHROPIC_API_KEY in secrets.json) or Gemini (via GEMINI_API_KEY, current default). Override via STAGEHAND_CUA_MODEL env var. Tested: google/gemini-2.5-computer-use-preview-10-2025 confirmed working."
+  stagehand_auth_flow_slow: "MITIGATED. Redundant navigation skipped when Stagehand connects to CDP session already on target URL. Timing diagnostics added — re-run experiments to measure improvement."
+  gemini_model: "Using gemini-2.0-flash (Google Gemini 2.0 Flash). Gemini 3 Flash not yet in Stagehand SDK whitelist; gemini-2.5-flash-preview-04-17 in whitelist but returns 404 from Google API. Will upgrade when newer models become available."

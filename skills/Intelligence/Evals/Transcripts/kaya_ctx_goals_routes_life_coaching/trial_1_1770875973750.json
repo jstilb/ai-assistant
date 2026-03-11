@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:59:02.066Z",
+  "completed_at": "2026-02-12T05:59:33.750Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:59:02.066Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals) — all three behind pace:**\n\n| WIG | Target | Current | Gap |\n|-----|--------|---------|-----|\n| G0: Decrease Low-Value Media | 5→3 hrs/day | 5.3 hrs | Going wrong direction |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 1.6→3.0 | 1.8 | Minimal movement |\n\n**Root cause pattern:** C0 (media consumption at 5.3 hrs) is the upstream blocker for C2 (alignment) and C4 (writing), and competes for time that could go toward C1 (friendship) and C3 (physical rehab).\n\n**Bright spots from history:** You've beaten harder challenges — porn addiction (2+ years committed), alcohol and weed elimination, body fat from 19.7%→13.7%. Binary rules and consistent tracking are your proven tools.\n\n**Critical gaps:**\n- C3 (Physical rehab): 0% stretching consistency, no strategy defined\n- C5 (Wake time): 57% at 6:30am target\n- C6 (Community engagement): 29% unique events\n\n📖 STORY EXPLANATION:\n1. All three Q1 WIGs are behind pace with 7 weeks remaining (deadline 3/29)\n2. Media consumption is the root blocker — it's *increased* to 5.3 hrs against a 3 hr target\n3. Strategies S0 and S2 for media are at 64-71% success — decent but not enough to bend the curve\n4. Friend-making strategies S3/S4 are at 14-29% — the lowest success rates across all strategies\n5. Physical rehab has no defined strategy and 0% consistency — the biggest unaddressed gap\n6. Your historical wins prove you can beat hard challenges when you commit to binary rules and tracking\n7. The Q1 WIGs are interconnected: fixing media frees time for alignment, writing, friends, and rehab\n8. Honest question: are the lead measures for G0 aggressive enough, or do they need escalation?\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace. Media consumption is the upstream blocker at 5.3 hours daily.",
+      "timestamp": "2026-02-12T05:59:33.750Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31684,
+    "time_to_first_token_ms": 31684,
+    "time_to_last_token_ms": 31684,
+    "tokens_per_second": 0
+  }
+}

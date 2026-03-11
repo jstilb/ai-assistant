@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_ctx_greeting_routes_conversational",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-13T02:55:02.463Z",
+  "completed_at": "2026-02-13T02:55:20.893Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "hello",
+      "timestamp": "2026-02-13T02:55:02.463Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Evening greeting from Jm.\n🗣️ Kaya: Hey Jm, good evening. What are we working on tonight?",
+      "timestamp": "2026-02-13T02:55:20.893Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.1855945,
+    "duration": 13208,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 42,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 27926
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 18430,
+    "time_to_first_token_ms": 18430,
+    "time_to_last_token_ms": 18430,
+    "tokens_per_second": 0
+  }
+}

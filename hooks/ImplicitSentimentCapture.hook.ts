@@ -63,11 +63,11 @@
 
 import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { inference } from '../skills/CORE/Tools/Inference';
+import { inference } from '../lib/core/Inference';
 import { getIdentity, getPrincipal } from './lib/identity';
 import { getLearningCategory } from './lib/learning-utils';
 import { getISOTimestamp, getPSTComponents } from './lib/time';
-import { captureFailure } from '../skills/CORE/Tools/FailureCapture';
+import { captureFailure } from '../lib/core/FailureCapture';
 import { loadPromptSync } from '../skills/Prompting/Tools/PromptLoader';
 
 const PRINCIPAL_NAME = getPrincipal().name;
@@ -422,7 +422,7 @@ async function main() {
       console.error('[ImplicitSentimentCapture] Triggered TrendingAnalysis update');
     }
 
-    if (sentiment.rating < 6) {
+    if (sentiment.rating < 5) {
       captureLowRatingLearning(
         sentiment.rating,
         sentiment.summary,

@@ -9,8 +9,8 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Core Foundations
-- **skills/CORE/CoreStack.md** - Stack preferences and tooling
-- **skills/CORE/CONSTITUTION.md** - Constitutional principles (Article IX)
+- **lib/core/CoreStack.md** - Stack preferences and tooling
+- **lib/core/CONSTITUTION.md** - Constitutional principles (Article IX)
 
 ### Testing Standards
 - **skills/Development/TESTING.md** - Testing standards and requirements
@@ -24,7 +24,7 @@
 Load these dynamically based on task keywords:
 
 - **CLI testing** → skills/Development/References/cli-testing-standards.md
-- **Browser automation** → skills/Browser/SKILL.md
+- **Browser automation** → skills/Development/Browser/SKILL.md
 
 ---
 
@@ -60,7 +60,7 @@ These are already loaded via CORE or Development skill - reference, don't duplic
 
 ## Browser Automation (Constitutional Requirement)
 
-**Browser skill v2.0.0 (Browse.ts CLI) is THE EXCLUSIVE TOOL.**
+**Browser skill v2.0.0 (Browse.ts CLI + Stagehand.ts) are the PRIMARY TOOLS.**
 
 This is Article IX constitutional requirement - integration-first testing means real browsers.
 
@@ -71,6 +71,20 @@ This is Article IX constitutional requirement - integration-first testing means 
 4. Check console messages: `bun run Browse.ts errors`
 5. Check network requests: `bun run Browse.ts failed`
 6. Clear PASS/FAIL determination
+
+**Tool Routing (data-backed, see routing-rules.yaml):**
+| QA Task | Tool | Why |
+|---------|------|-----|
+| Navigate + screenshot | `Browse.ts <url>` | Fastest, captures all diagnostics |
+| Click known button/link | `Browse.ts click <selector>` | Zero LLM cost, instant |
+| Click dynamic SPA element | `Stagehand.ts act "<description>"` | Browse.ts times out on SPAs (30s vs 2.4s) |
+| Select from React/custom dropdown | `Stagehand.ts act "Select <option>"` | JS-rendered components |
+| Verify text/element presence | `Browse.ts eval "document.querySelector(...)"` | Faster (864ms vs 1680ms) |
+| Test multi-field form | `Stagehand.ts act "Fill X with Y, Z with W, click submit"` | 1.8x faster single AI action |
+| Error recovery (element missing) | `Stagehand.ts act "<flexible description>"` | 10x faster than Browse.ts timeout fallback |
+| Console/network diagnostics | `Browse.ts errors|network|failed` | Always-on capture, no AI needed |
+
+Full routing rules: `~/.claude/skills/Development/Browser/routing-rules.yaml`
 
 ---
 

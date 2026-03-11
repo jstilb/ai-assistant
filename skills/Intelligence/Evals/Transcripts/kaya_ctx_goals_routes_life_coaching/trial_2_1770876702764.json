@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:11:07.525Z",
+  "completed_at": "2026-02-12T06:11:42.763Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:11:07.525Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Life coaching session — reviewing your Q1 2026 goal progress.\n\n🔍 ANALYSIS:\n\nLooking at your Q1 WIGs (ending 3/29/26), we're about 6 weeks in:\n\n| WIG | Target | Current | Gap | Pace |\n|-----|--------|---------|-----|------|\n| **G0: Decrease Media** | 5→3 hrs/day | 5.3 hrs | Going wrong direction | Behind |\n| **G1: Make 2 Friends** | 2 good friends | 0 | No progress | Behind |\n| **G2: Alignment Score** | 1.6→3.0 | 1.8 | +0.2 of needed +1.4 | Behind |\n\nAll three WIGs are behind pace with ~7 weeks remaining.\n\n**Biggest lever: C0 (Media Consumption).** Your challenges file shows it clearly — media at 5.3 hrs/day is the root blocker for C2 (alignment), C4 (writing), C5 (wake time), and indirectly C1 (friends, since time freed = time for community events).\n\n**What's working:**\n- Strategies S0/S2 for media have 64-71% success rate — decent, just not enough yet\n- Historical wins show you *can* do hard things (porn, alcohol, weed, body fat — all conquered)\n\n**What's not working:**\n- Stretching/rehab at 0% consistency (C3)\n- Friend-making strategies S3/S4 at only 14-29% success\n- Community attendance at 43%\n\n**Honest take:** The context data is 75 hours stale, so numbers may have shifted. But the pattern is clear — media consumption is eating the time that every other goal needs. Your own history proves binary rules work best for you (alcohol, weed). A hard cap or structured replacement might be more effective than gradual reduction.\n\n📖 STORY EXPLANATION:\n1. All 3 Q1 WIGs are behind pace at the ~6 week mark\n2. Media consumption increased to 5.3 hrs (target was decreasing to 3)\n3. Media is the root cause blocking alignment, writing, and wake time goals\n4. Friend-making has 0 progress with low strategy success rates (14-29%)\n5. Your strongest historical wins came from binary elimination, not gradual change\n6. Physical rehab (C3) is at 0% — a critical gap with no strategy defined\n7. Community attendance at 43% limits friend opportunities\n8. 7 weeks remain — still recoverable, but requires immediate course correction\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: All three Q1 goals behind pace. Media consumption is the root blocker across the board.",
+      "timestamp": "2026-02-12T06:11:42.763Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 35238,
+    "time_to_first_token_ms": 35238,
+    "time_to_last_token_ms": 35238,
+    "tokens_per_second": 0
+  }
+}

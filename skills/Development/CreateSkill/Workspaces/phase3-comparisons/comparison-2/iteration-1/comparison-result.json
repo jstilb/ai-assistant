@@ -1,0 +1,117 @@
+{
+  "comparison": "AutoInfoManager vs AutoMaintenance",
+  "question": "Are these distinct enough despite both using 'maintenance' terminology?",
+  "skill_a": {
+    "name": "AutoInfoManager",
+    "path": "skills/Automation/AutoInfoManager/SKILL.md",
+    "summary": "Autonomous information context maintenance. Orchestrates InformationManager sync/refresh workflows (calendar, tasks, Obsidian, Telos, learnings, drive), runs daily briefing, weekly vault refresh across 48 folders, and monthly orphan recovery. Output domain: MEMORY/AUTOINFO/. Schedule: 7am daily, Sunday 6am weekly, 1st of month 5am monthly. Primary concern: INFORMATION FRESHNESS — keeping context files up to date."
+  },
+  "skill_b": {
+    "name": "AutoMaintenance",
+    "path": "skills/Automation/AutoMaintenance/SKILL.md",
+    "summary": "Autonomous system health maintenance. Runs integrity checks, Claude CLI updates, security audits (TruffleHog secret scanning, privacy validation), state/log cleanup, memory consolidation, and workspace cleanup (stale branches, temp files). Output domain: MEMORY/AutoMaintenance/. Schedule: 8am daily, staggered Sun/Mon/Tue weekly, staggered Thu/Fri/Sat monthly. Primary concern: SYSTEM HEALTH — keeping the Kaya infrastructure clean, secure, and operational."
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "prompt": "Run daily maintenance",
+      "winner": "AutoMaintenance",
+      "rationale": "The word 'maintenance' without 'autoinfo' prefix maps directly to AutoMaintenance triggers (/maintenance daily). AutoInfoManager uses 'autoinfo' as its trigger keyword, not bare 'maintenance'. AutoMaintenance examples explicitly show 'run maintenance daily'.",
+      "wrong_routing_impact": "medium",
+      "notes": "If routed to AutoInfoManager: runs context sync instead of integrity check + CLI update. Task is not done. User wanted system health, got info refresh."
+    },
+    {
+      "id": 2,
+      "prompt": "Run autoinfo daily",
+      "winner": "AutoInfoManager",
+      "rationale": "Exact AutoInfoManager trigger keyword. AutoMaintenance has no 'autoinfo' trigger. Unambiguous.",
+      "wrong_routing_impact": "high",
+      "notes": "Routing to AutoMaintenance would skip 8+ InformationManager sync workflows, context updates, and daily briefing delivery. Major data loss of daily context sync."
+    },
+    {
+      "id": 3,
+      "prompt": "Sync my calendar and tasks",
+      "winner": "AutoInfoManager",
+      "rationale": "AutoInfoManager explicitly runs Sync-Calendar and Sync-LucidTasks. AutoMaintenance explicitly excludes context refresh — its SKILL.md says 'Context refresh: handled by InformationManager'.",
+      "wrong_routing_impact": "high",
+      "notes": "AutoMaintenance would do nothing useful for this request."
+    },
+    {
+      "id": 4,
+      "prompt": "Run the security audit",
+      "winner": "AutoMaintenance",
+      "rationale": "AutoMaintenance's weekly-security tier runs TruffleHog secret scanning, Kaya sync, privacy validation. AutoInfoManager has no security audit capability.",
+      "wrong_routing_impact": "high",
+      "notes": "AutoInfoManager cannot fulfill this — it has no security tooling."
+    },
+    {
+      "id": 5,
+      "prompt": "Clean up old logs and state files",
+      "winner": "AutoMaintenance",
+      "rationale": "AutoMaintenance's weekly-cleanup tier explicitly handles state cleanup and log rotation (debug logs: 14 days, file history: 30 days). AutoInfoManager has no cleanup operations.",
+      "wrong_routing_impact": "high",
+      "notes": "AutoInfoManager has no log/state cleanup capability."
+    },
+    {
+      "id": 6,
+      "prompt": "Update my context index",
+      "winner": "AutoInfoManager",
+      "rationale": "AutoInfoManager runs Sync-ContextIndex as a named step. AutoMaintenance explicitly defers 'Context refresh' to InformationManager.",
+      "wrong_routing_impact": "high",
+      "notes": "Unambiguous — AutoMaintenance cannot do context operations."
+    },
+    {
+      "id": 7,
+      "prompt": "Run scheduled maintenance",
+      "winner": "AutoMaintenance",
+      "rationale": "The bare phrase 'scheduled maintenance' maps to system maintenance conventions. AutoMaintenance trigger includes 'scheduled maintenance' in its USE WHEN. However, both skills do scheduled maintenance — this is genuinely ambiguous.",
+      "wrong_routing_impact": "medium",
+      "notes": "Genuine ambiguity. If Jm wants system health: AutoMaintenance. If Jm wants info sync: AutoInfoManager. Without context, AutoMaintenance is the safer default since AutoInfoManager has a distinct keyword ('autoinfo')."
+    },
+    {
+      "id": 8,
+      "prompt": "Check system health",
+      "winner": "AutoMaintenance",
+      "rationale": "AutoMaintenance explicitly covers 'system health check' in its USE WHEN. It runs integrity checks and has a status command showing system health. AutoInfoManager status shows autoinfo run times, not system health.",
+      "wrong_routing_impact": "medium",
+      "notes": "If routed to AutoInfoManager, Jm would get context sync status rather than system integrity status."
+    },
+    {
+      "id": 9,
+      "prompt": "Do the weekly Obsidian refresh",
+      "winner": "AutoInfoManager",
+      "rationale": "AutoInfoManager's weekly tier dynamically refreshes all 48 Obsidian vault folders via parallel agents and aggregates into VaultContext.md. AutoMaintenance explicitly delegates 'Context refresh' to InformationManager and has no vault operations.",
+      "wrong_routing_impact": "high",
+      "notes": "Unambiguous — AutoMaintenance cannot touch Obsidian."
+    },
+    {
+      "id": 10,
+      "prompt": "Run the monthly cleanup",
+      "winner": "AutoMaintenance",
+      "rationale": "'Cleanup' is AutoMaintenance's vocabulary — it handles workspace cleanup, stale branches, temp files, log rotation. AutoInfoManager's monthly tier focuses on deep synthesis and orphan recovery (MEMORY graph), not system cleanup.",
+      "wrong_routing_impact": "medium",
+      "notes": "Minor overlap: AutoInfoManager's OrphanRecovery does detect unreferenced MEMORY files, which is a form of cleanup. But 'cleanup' as a user intent clearly points to AutoMaintenance."
+    }
+  ],
+  "overlap_analysis": {
+    "clear_owner_pct": 0.9,
+    "ambiguous_pct": 0.1,
+    "merge_would_lose": "Significant capability would be obscured. AutoInfoManager has deep InformationManager integration (14+ distinct sync/refresh workflows), AgentOrchestrator-driven parallel vault refresh (48 folders), and daily briefing delivery. AutoMaintenance has security auditing (TruffleHog), log rotation, state cleanup, staggered multi-day scheduling, and skill health audits. These are architecturally and functionally different execution paths that serve distinct purposes. Merging would create an oversized skill with confusing routing and would likely require mode-splitting anyway.",
+    "separation_causes_confusion": "The 'maintenance' keyword collision is real but manageable. Both appear in 'maintenance daily/weekly/monthly' patterns. The primary confusion vector is bare 'maintenance' requests — a user saying 'run maintenance' could mean either. However, AutoInfoManager deliberately uses 'autoinfo' as its primary trigger prefix, so the collision is mainly in the description text, not in actual user-facing commands. The two skills also write to different output directories (MEMORY/AUTOINFO/ vs MEMORY/AutoMaintenance/) and have different schedules (7am vs 8am), which themselves reduce operational confusion.",
+    "domain_separation": {
+      "AutoInfoManager": "Information freshness — context sync, source refresh, briefing delivery, learning synthesis orchestration",
+      "AutoMaintenance": "System health — integrity checks, security audits, log/state cleanup, workspace hygiene, CLI updates"
+    },
+    "key_distinction": "AutoInfoManager is a content workflow orchestrator (what Kaya knows). AutoMaintenance is a system operations maintainer (how Kaya runs). These are fundamentally different concerns."
+  },
+  "recommendation": {
+    "action": "KEEP_SEPARATE",
+    "rationale": "9/10 scenarios (90%) have a clear single owner with no meaningful overlap. The one ambiguous case ('scheduled maintenance') resolves correctly to AutoMaintenance by default, since AutoInfoManager's canonical trigger is 'autoinfo' not 'maintenance'. The two skills serve orthogonal concerns — information currency vs system health — and merging would obscure both domains without providing routing benefit. The trigger keyword collision exists only in description text; actual user commands are distinct ('autoinfo daily' vs 'maintenance daily').",
+    "trigger_fixes": [
+      "AutoInfoManager description: Remove 'scheduled maintenance' from USE WHEN — it creates false overlap with AutoMaintenance. Replace with 'autoinfo sync, context refresh, information sync, vault refresh, daily briefing'.",
+      "AutoMaintenance description: Remove 'scheduled maintenance' from USE WHEN (too generic) and add 'system integrity, security audit, log cleanup, workspace cleanup, CLI update, kaya health' to sharpen its identity.",
+      "AutoInfoManager: Add 'autoinfo' as a required prefix signal in routing docs to prevent bare 'maintenance' from being ambiguous.",
+      "Both skills: Their examples already use distinct vocabulary. Ensure ContextRouter sees 'autoinfo' as an AutoInfoManager-exclusive signal and 'security audit', 'log cleanup', 'integrity' as AutoMaintenance-exclusive signals."
+    ]
+  }
+}

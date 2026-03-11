@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_personality_witty",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:20:32.755Z",
+  "completed_at": "2026-02-12T19:21:15.857Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Why does my code keep breaking on Fridays?",
+      "timestamp": "2026-02-12T19:20:32.755Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Answering a lighthearted/ambiguous question about Friday code breakage.\n\n🗣️ Kaya: Hard to say without specifics, Jm. Could be cron jobs, deploys, caches, or weekend date logic.\n\nThere are a few classic culprits for \"Friday-only\" bugs:\n\n1. **Scheduled jobs** — Cron or CI/CD pipelines that run weekly on Fridays (deploys, DB migrations, cache purges)\n2. **Date/time logic** — Off-by-one errors in week calculations, `getDay()` returning 5 for Friday, or business-day logic that miscounts weekends\n3. **End-of-week aggregations** — Reports or batch jobs that process weekly data and hit edge cases at week boundaries\n4. **Deploy cadence** — If your team ships on Fridays, the breakage isn't Friday-specific, it's deploy-specific\n5. **Timezone drift** — A job scheduled for \"Friday midnight UTC\" might run Thursday evening or Saturday morning depending on locale\n6. **Rate limits resetting** — Weekly API quotas or rate limits that reset on a specific day\n\nIf you're seeing actual Friday breakage in a specific project, Jm, point me at the code or logs and I can dig into the root cause.",
+      "timestamp": "2026-02-12T19:21:15.857Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 43102,
+    "time_to_first_token_ms": 43102,
+    "time_to_last_token_ms": 43102,
+    "tokens_per_second": 0
+  }
+}

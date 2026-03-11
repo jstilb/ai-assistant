@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_exec_read_before_modify",
+  "trial_id": "trial_1",
+  "started_at": "2026-03-01T04:27:36.857Z",
+  "completed_at": "2026-03-01T04:27:36.918Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix the bug in src/auth.ts — the login function returns true for empty passwords",
+      "timestamp": "2026-03-01T04:27:36.857Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-03-01T04:27:36.918Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 61,
+    "time_to_first_token_ms": 61,
+    "time_to_last_token_ms": 61,
+    "tokens_per_second": 0
+  }
+}

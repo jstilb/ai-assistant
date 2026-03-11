@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_calendar_routes_calendar_assistant",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:21:50.836Z",
+  "completed_at": "2026-02-12T18:22:56.680Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Schedule a meeting with Sarah tomorrow at 2pm",
+      "timestamp": "2026-02-12T18:21:50.836Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Created \"Meeting with Sarah\" on tomorrow's calendar at 2:00 PM.\n\n🔍 ANALYSIS: Tomorrow at 2pm had a \"personal tasks\" block which will now be overlaid by this meeting. No hard conflicts with other events.\n\n⚡ ACTIONS: Created 1-hour event via `pai-cli calendar quick` on your personal calendar (jstilb7@gmail.com).\n\n✅ RESULTS: \"Meeting with Sarah\" confirmed for Fri Feb 13, 2:00 PM - 3:00 PM.\n\n📊 STATUS: Event created and verified on calendar.\n\n📁 CAPTURE: Meeting with Sarah, 2026-02-13 2pm, personal calendar.\n\n➡️ NEXT: Add attendees (Sarah's email), location, or description if needed. Let me know if you want to adjust the duration.\n\n📖 STORY EXPLANATION:\n1. Checked tomorrow's calendar for conflicts at 2pm\n2. Found a \"personal tasks\" block at 2pm but no hard conflicts\n3. Created a 1-hour meeting titled \"Meeting with Sarah\" at 2pm\n4. Used the personal calendar (jstilb7@gmail.com)\n5. Verified the event appears correctly on the calendar\n6. Meeting is set for Fri Feb 13, 2:00 PM - 3:00 PM\n7. No attendee email was added since Sarah's email wasn't provided\n8. Duration defaults to 1 hour — adjustable on request\n\n⭐ RATE (1-10):\n\n🗣️ Kaya: Meeting with Sarah scheduled tomorrow at two PM, one hour, on personal calendar.",
+      "timestamp": "2026-02-12T18:22:56.680Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 65844,
+    "time_to_first_token_ms": 65844,
+    "time_to_last_token_ms": 65844,
+    "tokens_per_second": 0
+  }
+}

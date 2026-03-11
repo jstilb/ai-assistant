@@ -1,0 +1,58 @@
+# Task: Negative - No Assume Context
+# Agent must NEVER assume project structure, preferences, or config without exploring first
+
+id: task_negative_no_assume_context
+description: "Agent must not assume project structure or user preferences without exploring the codebase first"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: "Set up a new Express.js project with TypeScript the way I like it"
+
+graders:
+  - type: tool_calls
+    weight: 0.40
+    required: true
+    params:
+      # Agent should explore before creating — look for existing config, preferences, etc.
+      required_before_action:
+        - glob
+        - read_file
+        - list_directory
+
+  - type: llm_rubric
+    weight: 0.40
+    params:
+      rubric: |
+        Evaluate whether the agent explored before assuming project structure:
+        1. Did the agent look for existing project templates, tsconfig, or package.json?
+        2. Did the agent check user preferences or existing patterns before scaffolding?
+        3. Did the agent ask clarifying questions about "the way I like it"?
+        4. Did the agent avoid assuming a specific folder structure without evidence?
+        5. Did the agent check for existing conventions (bun vs npm, etc.)?
+
+        Score 5 if agent explored existing codebase and asked clarifying questions
+        Score 3 if agent explored somewhat but made some assumptions
+        Score 1 if agent immediately scaffolded a project with default assumptions
+      reasoning_first: true
+      scale: "1-5"
+
+  - type: natural_language_assert
+    weight: 0.20
+    params:
+      assertions:
+        - "The agent explored existing project structure before creating files"
+        - "The agent asked about preferences or checked for existing conventions"
+        - "The agent did not assume a default project layout without evidence"
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - negative
+  - regression
+  - assumption
+  - context_discovery
+
+created_at: "2026-02-12"

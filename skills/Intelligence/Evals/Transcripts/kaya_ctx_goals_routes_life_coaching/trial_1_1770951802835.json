@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T03:02:30.949Z",
+  "completed_at": "2026-02-13T03:03:22.835Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "How am I doing on my Q1 goals?",
+      "timestamp": "2026-02-13T03:02:30.949Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Q1 2026 WIG progress review across all three wildly important goals.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs — Current vs Target**\n\n| WIG | Metric | Current | Target | Gap | Status |\n|-----|--------|---------|--------|-----|--------|\n| **G0: Decrease Low-Value Media** | Daily avg hours | 5.3 hrs | 3.0 hrs | -2.3 hrs | 🔴 Behind |\n| **G1: Make 2 Good Friends** | Good friends | 0 | 2 | -2 | 🔴 Behind |\n| **G2: Raise Alignment Score** | Score | 1.8 | 3.0 | -1.2 | 🔴 Behind |\n\n**Lead Measure Performance (7-day rolling):**\n\n| Strategy | Current | Target | Gap |\n|----------|---------|--------|-----|\n| S0 Boredom Blocks | 64% | 100% | -36% |\n| S1 Pomodoro | 50% | 100% | -50% |\n| S2 STORER | 71% | 100% | -29% |\n| S3 Community Events | 29% | 100% | -71% |\n| S4 Social Invitations | 14% | 100% | -86% |\n| S5 Alignment Hour | 50% | 100% | -50% |\n\n**We're 6 weeks into Q1 (target: 3/29). That's ~55% through the quarter.**\n\n⚡ ACTIONS: Reviewed TELOS goals, challenges, strategies, and status data.\n\n✅ RESULTS: All three WIGs are behind pace. The lead measures tell the story — the inputs aren't consistent enough yet to move the outputs.\n\n📊 STATUS: \n- **G0 (Media):** S0 and S2 are your best-performing leads at 64-71%, but still not enough to bend the 5.3hr average down to 3.\n- **G1 (Friends):** S3 and S4 are critically low at 14-29%. This is the most at-risk WIG — you can't make friends without showing up and initiating.\n- **G2 (Alignment):** S1 and S5 at 50% — half the days. The alignment score nudged from 1.6 to 1.8, so there's movement, but slow.\n\n📁 CAPTURE: All three WIGs behind at Q1 midpoint. Lead measures are the bottleneck, not the goals themselves.\n\n➡️ NEXT: \n- **Biggest lever:** S3 (events) and S4 (invitations) — these are at 14-29% and directly block G1\n- **Quick win:** S2 (STORER) is already at 71% — pushing to 85%+ could accelerate G0\n- **Systemic fix:** S5 (Alignment Hour) at 50% is the single lead that feeds both G0 and G2\n\n📖 STORY EXPLANATION:\n1. You set three ambitious WIGs for Q1: cut media to 3hrs, make 2 friends, raise alignment to 3.0\n2. You're 55% through the quarter and all three are behind target\n3. Media consumption sits at 5.3 hrs vs 3.0 target — a 2.3 hour gap\n4. Friend-making is the most critical gap: 0 friends, with only 14% social invitation rate\n5. Alignment score moved slightly (1.6→1.8) but far from the 3.0 target\n6. The root issue is lead measure consistency — none of the 6 strategies hit target\n7. Your best leads (STORER at 71%, Boredom Blocks at 64%) show the system works when you execute\n8. The historical wins (porn, alcohol, weed, body fat) prove you can hit 100% — the capacity is there\n\n⭐ RATE (1-10): \n\n🗣️ Kaya: All three Q1 WIGs behind at midpoint. Lead measure consistency is the core bottleneck.",
+      "timestamp": "2026-02-13T03:03:22.835Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.22377575,
+    "duration": 44251,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 1014,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 30147
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 51886,
+    "time_to_first_token_ms": 51886,
+    "time_to_last_token_ms": 51886,
+    "tokens_per_second": 0
+  }
+}

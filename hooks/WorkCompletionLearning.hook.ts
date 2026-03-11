@@ -12,7 +12,7 @@
  *
  * INPUT:
  * - stdin: Hook input JSON (session_id, transcript_path)
- * - Files: MEMORY/STATE/current-work.json, MEMORY/WORK/<dir>/META.yaml
+ * - Files: MEMORY/STATE/current-work.json, MEMORY/WORK/<dir>/META.yaml, MEMORY/WORK/audit.jsonl
  *
  * OUTPUT:
  * - stdout: None
@@ -33,7 +33,8 @@
  * A learning is only captured if:
  * - Files were changed, OR
  * - Multiple items exist in work directory, OR
- * - Work was manually created (source: MANUAL)
+ * - Work was manually created (source: MANUAL), OR
+ * - Audit entries exist with non-trivial verdicts (FAIL, NEEDS_REVIEW, or multi-tier)
  *
  * LEARNING CATEGORIES:
  * - ALGORITHM: Insights about process/approach improvement
@@ -59,6 +60,7 @@ const MEMORY_DIR = join(process.env.HOME!, '.claude', 'MEMORY');
 const STATE_DIR = join(MEMORY_DIR, 'STATE');
 const CURRENT_WORK_FILE = join(STATE_DIR, 'current-work.json');
 const WORK_DIR = join(MEMORY_DIR, 'WORK');
+const AUDIT_PATH = join(WORK_DIR, 'audit.jsonl');
 const LEARNING_DIR = join(MEMORY_DIR, 'LEARNING');
 
 interface CurrentWork {
@@ -66,6 +68,19 @@ interface CurrentWork {
   work_dir: string;
   created_at: string;
   item_count: number;
+}
+
+interface AuditEntry {
+  timestamp: string;
+  itemId: string;
+  itemTitle: string;
+  verdict: string;
+  concerns: string[];
+  tiersExecuted: number[];
+  verificationCost: number;
+  iscRowSummary: string[];
+  failureReason?: string;
+  adversarialConcerns?: string[];
 }
 
 interface WorkMeta {
@@ -152,6 +167,73 @@ function parseYaml(content: string): WorkMeta {
   return meta as WorkMeta;
 }
 
+function readAuditEntries(sessionCreatedAt: string): AuditEntry[] {
+  if (!existsSync(AUDIT_PATH)) return [];
+  try {
+    const raw = readFileSync(AUDIT_PATH, 'utf-8');
+    const lines = raw.trim().split('\n');
+    // Read last 200 lines max
+    const tail = lines.slice(-200);
+    const sessionStart = new Date(sessionCreatedAt).getTime();
+    const now = Date.now();
+    const entries: AuditEntry[] = [];
+    for (const line of tail) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as AuditEntry;
+        const ts = new Date(entry.timestamp).getTime();
+        if (ts >= sessionStart && ts <= now) {
+          entries.push(entry);
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+function formatVerificationTable(entries: AuditEntry[]): string {
+  if (entries.length === 0) return '';
+  const rows = entries.map(e => {
+    const tiers = e.tiersExecuted.length > 0 ? e.tiersExecuted.join(',') : '-';
+    const concerns = e.concerns.length > 0 ? e.concerns.slice(0, 2).join('; ') : '-';
+    return `| ${e.itemTitle.slice(0, 30)} | ${e.verdict} | ${tiers} | $${e.verificationCost.toFixed(2)} | ${concerns} |`;
+  });
+  return `| Item | Verdict | Tiers | Cost | Concerns |
+|------|---------|-------|------|----------|
+${rows.join('\n')}`;
+}
+
+function formatPatternSignals(entries: AuditEntry[]): string {
+  if (entries.length === 0) return '';
+  const total = entries.length;
+  const passed = entries.filter(e => e.verdict === 'PASS').length;
+  const failed = entries.filter(e => e.verdict === 'FAIL').length;
+  const needsReview = entries.filter(e => e.verdict === 'NEEDS_REVIEW').length;
+  const totalCost = entries.reduce((sum, e) => sum + e.verificationCost, 0);
+  const avgCost = totalCost / total;
+
+  // Top concern categories
+  const allConcerns = entries.flatMap(e => e.concerns);
+  const concernCounts = new Map<string, number>();
+  for (const c of allConcerns) {
+    const key = c.slice(0, 50);
+    concernCounts.set(key, (concernCounts.get(key) || 0) + 1);
+  }
+  const topConcerns = [...concernCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([concern, count]) => `  - ${concern} (${count}x)`);
+
+  return `- **Pass Rate:** ${passed}/${total} (${Math.round(passed / total * 100)}%)
+- **Failed:** ${failed} | **Needs Review:** ${needsReview}
+- **Total Verification Cost:** $${totalCost.toFixed(2)} (avg $${avgCost.toFixed(2)}/item)
+${topConcerns.length > 0 ? `- **Top Concerns:**\n${topConcerns.join('\n')}` : ''}`;
+}
+
 function getMonthDir(category: 'SYSTEM' | 'ALGORITHM'): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -166,7 +248,7 @@ function getMonthDir(category: 'SYSTEM' | 'ALGORITHM'): string {
   return monthDir;
 }
 
-function writeLearning(workMeta: WorkMeta, idealContent: string): void {
+function writeLearning(workMeta: WorkMeta, idealContent: string, auditEntries: AuditEntry[] = []): void {
   const category = getLearningCategory(workMeta.title);
   const monthDir = getMonthDir(category);
 
@@ -201,6 +283,42 @@ function writeLearning(workMeta: WorkMeta, idealContent: string): void {
     }
   }
 
+  // Build audit sections conditionally
+  let verificationSection = '';
+  let adversarialSection = '';
+  let iscOutcomesSection = '';
+  let patternSection = '';
+
+  if (auditEntries.length > 0) {
+    const table = formatVerificationTable(auditEntries);
+    if (table) {
+      verificationSection = `\n## Verification Outcomes\n\n${table}\n`;
+    }
+
+    // Deduplicated adversarial concerns across all entries
+    const allAdversarial = [...new Set(auditEntries.flatMap(e => e.adversarialConcerns || []))];
+    if (allAdversarial.length > 0) {
+      adversarialSection = `\n## Adversarial Concerns\n\n${allAdversarial.map(c => `- ${c}`).join('\n')}\n`;
+    }
+
+    // Aggregated ISC row outcomes
+    const allIscRows = auditEntries.flatMap(e => e.iscRowSummary);
+    if (allIscRows.length > 0) {
+      const statusCounts = new Map<string, number>();
+      for (const row of allIscRows) {
+        const status = row.split(':')[1] || 'UNKNOWN';
+        statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+      }
+      const statusLines = [...statusCounts.entries()].map(([s, c]) => `- ${s}: ${c}`);
+      iscOutcomesSection = `\n## ISC Row Outcomes\n\n${statusLines.join('\n')}\n`;
+    }
+
+    const signals = formatPatternSignals(auditEntries);
+    if (signals) {
+      patternSection = `\n## Pattern Signals\n\n${signals}\n`;
+    }
+  }
+
   const content = `# Work Completion Learning
 
 **Title:** ${workMeta.title}
@@ -219,7 +337,7 @@ ${idealContent || 'Not specified'}
 - **Files Changed:** ${workMeta.lineage?.files_changed?.length || 0}
 - **Tools Used:** ${workMeta.lineage?.tools_used?.join(', ') || 'None tracked'}
 - **Agents Spawned:** ${workMeta.lineage?.agents_spawned?.length || 0}
-
+${verificationSection}${adversarialSection}${iscOutcomesSection}${patternSection}
 ## Insights
 
 *This work session completed successfully. Consider what made it effective:*
@@ -298,15 +416,20 @@ async function main() {
       }
     }
 
-    // Check if this was significant work (has files changed or was manually created)
+    // Read audit entries for this session
+    const auditEntries = readAuditEntries(currentWork.created_at);
+
+    // Check if this was significant work (has files changed, was manually created, or has non-trivial audit entries)
+    const hasNonTrivialAudit = auditEntries.some(e => e.verdict !== 'PASS' || e.tiersExecuted.length > 1);
     const hasSignificantWork = (
       (workMeta.lineage?.files_changed?.length || 0) > 0 ||
       currentWork.item_count > 1 ||
-      workMeta.source === 'MANUAL'
+      workMeta.source === 'MANUAL' ||
+      hasNonTrivialAudit
     );
 
     if (hasSignificantWork) {
-      writeLearning(workMeta, idealContent);
+      writeLearning(workMeta, idealContent, auditEntries);
     } else {
       console.error('[WorkCompletionLearning] Trivial work session, skipping learning capture');
     }

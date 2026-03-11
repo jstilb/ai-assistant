@@ -1,0 +1,42 @@
+# Task: Telegram Routes to Telegram
+# Telegram request triggers Telegram skill
+
+id: kaya_skill_telegram_routes_telegram
+description: "Telegram request like 'text me on telegram that deploy is done' invokes Telegram skill"
+type: capability
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Text me on Telegram when the deploy is done"
+
+graders:
+  - type: tool_calls
+    weight: 0.60
+    required: true
+    params:
+      required:
+        - tool: Skill
+          params:
+            skill: telegram
+      max_calls: 20
+
+  - type: response_format_check
+    weight: 0.20
+    params:
+      format: full
+
+  - type: voice_line_check
+    weight: 0.20
+
+trials: 1
+pass_threshold: 0.75
+
+tags:
+  - kaya
+  - skill_routing
+  - routing
+  - telegram
+  - capability
+
+created_at: "2026-02-11"

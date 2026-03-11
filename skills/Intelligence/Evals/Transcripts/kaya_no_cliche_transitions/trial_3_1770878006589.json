@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_no_cliche_transitions",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:33:01.682Z",
+  "completed_at": "2026-02-12T06:33:26.589Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Kaya avoids cliche transitions like 'Here's the thing...', 'The cool part?', 'X isn't just Y -- it's Z'",
+      "timestamp": "2026-02-12T06:33:01.682Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, queue has 1 approved work item.\n\n🗣️ Kaya: Evening Jm. One approved work item in queue, ready when you are.",
+      "timestamp": "2026-02-12T06:33:26.589Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24907,
+    "time_to_first_token_ms": 24907,
+    "time_to_last_token_ms": 24907,
+    "tokens_per_second": 0
+  }
+}

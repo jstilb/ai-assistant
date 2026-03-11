@@ -1,0 +1,102 @@
+{{!--
+  REASONING DECORATOR - Reasoning Style Modifiers
+
+  Purpose: Stackable directives that modify HOW the LLM reasons without changing the task.
+
+  Research Foundation: Prompt Decorators (arXiv:2510.19850v1)
+  - Decorators are modular and composable
+  - Apply reasoning patterns without task coupling
+  - Stack with other decorators for combined effects
+
+  Input Data Structure:
+  ```yaml
+  style: string (step-by-step | pros-cons | devil-advocate | first-principles | hypothesis-driven)
+  task_description: string (optional - the task being modified)
+  ```
+
+  Usage:
+  {{> Decorators/Reasoning style="step-by-step"}}
+
+  ## Your Task
+  [Your task here]
+--}}
+
+{{#if (eq style "step-by-step")}}
+## Reasoning Approach
+
+Break down your analysis into clear, numbered steps. For each step:
+1. State what you are analyzing or deciding
+2. Show your reasoning process
+3. Reach an intermediate conclusion before moving to the next step
+
+Work methodically through the problem, building each step on the previous ones.
+{{/if}}
+
+{{#if (eq style "pros-cons")}}
+## Reasoning Approach
+
+Before reaching any conclusion, systematically analyze both sides:
+
+**Consider advantages first:**
+- List all benefits, strengths, or positive aspects
+- Include both obvious and subtle advantages
+- Weight them by significance
+
+**Then examine disadvantages:**
+- List all drawbacks, weaknesses, or negative aspects
+- Include both obvious and subtle disadvantages
+- Weight them by significance
+
+**Only then** synthesize these into your conclusion, explaining which factors were most decisive.
+{{/if}}
+
+{{#if (eq style "devil-advocate")}}
+## Reasoning Approach
+
+Apply adversarial thinking to test your reasoning:
+
+1. **Initial Position:** State what your immediate conclusion would be
+2. **Challenge It:** Argue forcefully AGAINST that conclusion
+   - What evidence contradicts it?
+   - What assumptions might be wrong?
+   - What alternative interpretations exist?
+3. **Defend or Revise:** Either defend your original position against these challenges, or revise it based on the strongest counterarguments
+
+This adversarial process produces more robust conclusions.
+{{/if}}
+
+{{#if (eq style "first-principles")}}
+## Reasoning Approach
+
+Decompose the problem to fundamental truths and build up from there:
+
+1. **Strip Away Assumptions:** Identify and question every assumption in the problem
+2. **Find Bedrock Truth:** What are the irreducible, verifiable facts?
+3. **Reason Up From Fundamentals:** Build your analysis step by step from these foundational truths
+4. **Question Conventional Wisdom:** Consider whether "how it's usually done" is actually optimal
+
+Think like a physicist would - get to the atomic level, then reconstruct.
+{{/if}}
+
+{{#if (eq style "hypothesis-driven")}}
+## Reasoning Approach
+
+Apply the scientific method to your analysis:
+
+1. **State Hypothesis:** Based on initial information, what do you predict or expect?
+2. **Test Against Evidence:** Systematically check each piece of evidence
+   - Does it support the hypothesis?
+   - Does it contradict it?
+   - Is it neutral or ambiguous?
+3. **Revise if Needed:** If evidence contradicts your hypothesis, form a new one and test again
+4. **Conclude with Confidence Level:** State your final conclusion and how confident you are based on the evidence
+
+Treat analysis as an experiment testing your hypothesis.
+{{/if}}
+
+{{#unless style}}
+{{!-- Fallback if no valid style provided --}}
+## Reasoning Approach
+
+[No reasoning decorator applied - specify style: step-by-step, pros-cons, devil-advocate, first-principles, or hypothesis-driven]
+{{/unless}}

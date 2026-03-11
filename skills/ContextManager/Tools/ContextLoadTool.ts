@@ -36,13 +36,13 @@ const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME!, '.claude');
  * Load a context profile - outputs file contents to stdout
  */
 async function loadProfile(profileName: string): Promise<void> {
-  const profile = getProfile(profileName);
+  const profile = await getProfile(profileName);
   if (!profile) {
     console.error(`Profile "${profileName}" not found`);
     process.exit(1);
   }
 
-  const selection = selectContext(profileName);
+  const selection = await selectContext(profileName);
   const state = await getSessionState();
 
   // Track what's already loaded to avoid duplicates

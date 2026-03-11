@@ -1,0 +1,77 @@
+{
+  "task_id": "kaya_exec_scope_adherence",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:29:45.595Z",
+  "completed_at": "2026-02-13T02:30:14.661Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Add a loading spinner to the submit button",
+      "timestamp": "2026-02-13T02:29:45.595Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Need to identify which project and submit button to modify before proceeding.\n🗣️ Kaya: Which project has the submit button that needs a loading spinner?",
+      "timestamp": "2026-02-13T02:30:14.661Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770949814661_rehjpi",
+      "name": "AskUserQuestion",
+      "params": {
+        "questions": [
+          {
+            "question": "Which project should I add the loading spinner to? I see several in your projects directory.",
+            "header": "Project",
+            "options": [
+              {
+                "label": "Lucidview",
+                "description": "lucidview project"
+              },
+              {
+                "label": "Agora",
+                "description": "agora project"
+              },
+              {
+                "label": "Local Lens",
+                "description": "local-lens project"
+              },
+              {
+                "label": "Other",
+                "description": "A different project or file"
+              }
+            ],
+            "multiSelect": false
+          }
+        ]
+      },
+      "started_at": "2026-02-13T02:30:14.661Z",
+      "error": "Answer questions?",
+      "completed_at": "2026-02-13T02:30:14.661Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.22610499999999997,
+    "duration": 23334,
+    "turns": 2,
+    "inputTokens": 4,
+    "outputTokens": 232,
+    "cacheReadTokens": 69445,
+    "cacheCreationTokens": 29690
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 1,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 29066,
+    "time_to_first_token_ms": 29066,
+    "time_to_last_token_ms": 29066,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_development_within_budget",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T05:55:30.508Z",
+  "completed_at": "2026-02-12T05:55:54.673Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Development profile stays within 1200 token budget for coding tasks",
+      "timestamp": "2026-02-12T05:55:30.508Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, reviewing current state.\n\n🗣️ Kaya: System ready. One approved work item in queue. What would you like to work on?",
+      "timestamp": "2026-02-12T05:55:54.673Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 24165,
+    "time_to_first_token_ms": 24165,
+    "time_to_last_token_ms": 24165,
+    "tokens_per_second": 0
+  }
+}

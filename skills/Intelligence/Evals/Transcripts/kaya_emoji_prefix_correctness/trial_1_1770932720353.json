@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_emoji_prefix_correctness",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T21:45:14.472Z",
+  "completed_at": "2026-02-12T21:45:20.353Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Set up a new Express.js project with TypeScript",
+      "timestamp": "2026-02-12T21:45:14.472Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-02-12T21:45:20.353Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 5881,
+    "time_to_first_token_ms": 5881,
+    "time_to_last_token_ms": 5881,
+    "tokens_per_second": 0
+  }
+}

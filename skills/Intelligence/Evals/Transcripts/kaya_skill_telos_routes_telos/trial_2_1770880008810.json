@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_telos_routes_telos",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:05:57.733Z",
+  "completed_at": "2026-02-12T07:06:48.810Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Life goals request like 'show me my life goals and projects' invokes Telos skill",
+      "timestamp": "2026-02-12T07:05:57.733Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Full view of Jm's 7 life missions, 37 goals, and 10 projects for 2026.\n\n---\n\n## 7 Missions (Life Roles)\n\n| # | Mission | 2026 Focus | Goals |\n|---|---------|------------|-------|\n| M0 | **Adventurer** | Mexico, 3 countries, 1 national park | 4 goals |\n| M1 | **Community Member** | DSA, vball, surf, writing, music, professional | 6 goals |\n| M2 | **Creative** | Novel drafts, short story, piano routine | 6 goals |\n| M3 | **Family Man** | Great partner to Julie, family therapy | 2 goals |\n| M4 | **Friend** | 3+ good friends, boys trip, consistent calls | 5 goals |\n| M5 | **Professional** | Lucidview beta, cofounder, promotion, AI | 4 goals |\n| M6 | **Self** | Media reduction, DTR systems, PT, wellbeing | 11 goals |\n\n---\n\n## Q1 WIGs (Wildly Important Goals)\n\n| WIG | Metric | Current | Target | Due |\n|-----|--------|---------|--------|-----|\n| **G0:** Decrease Low-Value Media | 4wk avg daily hrs | **5.3 hrs** | 3 hrs | 3/29 |\n| **G1:** Make 2 Good Friends | Friends made | **0** | 2 | 3/29 |\n| **G2:** Raise Alignment Score | Score | **1.8** | 3.0 | 3/29 |\n\n---\n\n## All 37 Goals by Mission\n\n**M0 Adventurer:** G3 Tijuana, G4 Mexico City, G5 3 New Countries, G6 1 National Park\n\n**M1 Community:** G7 DSA, G8 Vball, G9 Surf, G10 Writing, G11 Music Community, G12 Professional Community\n\n**M2 Creative:** G13 Draft 2 On Set, G14 Draft 3 On Set, G15 Draft 1 Book 2, G16 Publish Short Story, G17 Write a Lot, G18 Piano Routine\n\n**M3 Family:** G19 Family Therapy, G20 Great Partner to Julie\n\n**M4 Friend:** G1 2 Good Friends (WIG), G21 3+ Good Friends, G22 Acquaintance Per Community, G23 Boys Trip, G24 Call Friends Consistently\n\n**M5 Professional:** G25 Lucidview Beta, G26 Find Cofounder, G27 Get Promotion, G28 AI Proficiency\n\n**M6 Self:** G0 Media Reduction (WIG), G2 Alignment Score (WIG), G29 Reduce Media Noise, G30 Maximize Valuable Media, G31 Meaningful Time Use, G32 Rebuild DTR, G33 Back Recovery, G34 Shoulder Recovery, G35 Stretching (0% consistency), G36 Reduce Unhealthy Eating\n\n---\n\n## 10 Projects (Asana-Managed)\n\n| Project | Mission | Key Sub-Projects |\n|---------|---------|-----------------|\n| Adventurer | M0 | — |\n| Community | M1 | DSA |\n| Creative | M2 | On Set (novel) |\n| Family | M3 | — |\n| Friend | M4 | — |\n| Professional | M5 | Lucidview |\n| Self | M6 | — |\n| D&D | Side | Campaign planning |\n| YouTube | Side | Content ideas |\n| EP | Side | Music EP |\n\n---\n\n📊 STATUS: All 37 goals show \"In Progress\". Q1 WIGs are behind pace — media at 5.3hrs (target 3), friends at 0 (target 2), alignment at 1.8 (target 3.0). Stretching at 0% consistency is a critical gap.\n\n➡️ NEXT: Review strategies (S0-S5) to accelerate Q1 WIGs, or drill into any specific mission/goal.\n\n🗣️ Kaya: Seven missions, thirty-seven goals, three Q1 WIGs all behind pace. Stretching at zero percent.",
+      "timestamp": "2026-02-12T07:06:48.810Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 51077,
+    "time_to_first_token_ms": 51077,
+    "time_to_last_token_ms": 51077,
+    "tokens_per_second": 0
+  }
+}

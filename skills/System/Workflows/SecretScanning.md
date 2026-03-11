@@ -8,7 +8,7 @@
 
 ## Voice Notification
 
--> Use `notifySync()` from `skills/CORE/Tools/NotificationService.ts`
+-> Use `notifySync()` from `lib/core/NotificationService.ts`
 
 ```typescript
 notifySync("Running secret scanning workflow");
@@ -20,7 +20,7 @@ Running the **SecretScanning** workflow from the **System** skill...
 
 ## Tool Location
 
-**Scanner:** `~/.claude/skills/CORE/Tools/SecretScan.ts`
+**Scanner:** `~/.claude/lib/core/SecretScan.ts`
 
 ---
 
@@ -28,19 +28,19 @@ Running the **SecretScanning** workflow from the **System** skill...
 
 ```bash
 # Scan current directory
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts
+bun ~/.claude/lib/core/SecretScan.ts
 
 # Scan specific directory
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts /path/to/project
+bun ~/.claude/lib/core/SecretScan.ts /path/to/project
 
 # Verbose output (show redacted secrets)
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts /path/to/project --verbose
+bun ~/.claude/lib/core/SecretScan.ts /path/to/project --verbose
 
 # JSON output for parsing
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts /path/to/project --json
+bun ~/.claude/lib/core/SecretScan.ts /path/to/project --json
 
 # Verify if credentials are active
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts /path/to/project --verify
+bun ~/.claude/lib/core/SecretScan.ts /path/to/project --verify
 ```
 
 ---
@@ -68,13 +68,13 @@ TruffleHog detects 700+ credential types:
 Before pushing to any repository:
 
 ```bash
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts .
+bun ~/.claude/lib/core/SecretScan.ts .
 ```
 
 ### 2. Audit Private Kaya Instance
 
 ```bash
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts ~/.claude --verbose
+bun ~/.claude/lib/core/SecretScan.ts ~/.claude --verbose
 ```
 
 ### 3. Audit Public Kaya Before Push
@@ -82,13 +82,13 @@ bun ~/.claude/skills/CORE/Tools/SecretScan.ts ~/.claude --verbose
 **CRITICAL - Always run before pushing to public Kaya:**
 
 ```bash
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts ~/Projects/Kaya --verbose
+bun ~/.claude/lib/core/SecretScan.ts ~/Projects/Kaya --verbose
 ```
 
 ### 4. Full Verification (Active Credential Check)
 
 ```bash
-bun ~/.claude/skills/CORE/Tools/SecretScan.ts . --verify
+bun ~/.claude/lib/core/SecretScan.ts . --verify
 ```
 
 ---

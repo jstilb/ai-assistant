@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:25:42.338Z",
+  "completed_at": "2026-02-12T06:26:19.828Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:25:42.338Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 12-16\n\n🔍 ANALYSIS:\nThree key items this week:\n- **Tuesday (Feb 12):** Dentist appointment\n- **Thursday (Feb 14):** API redesign deadline\n- **Friday (Feb 15):** Team retrospective prep\n\nLooking at your current context, your Q1 strategies suggest protecting focused work time (S1: Pomodoro, S5: Alignment Hour) and community events (S3, S4) are areas needing attention.\n\n⚡ ACTIONS: Suggested weekly structure\n\n**Monday (Feb 11 - today):**\n- Scope remaining API redesign work, break into tasks\n- Identify any blockers early\n\n**Tuesday (Feb 12):**\n- Dentist appointment (block travel + buffer time)\n- Lighter API work around the appointment — review-level tasks, not deep coding\n\n**Wednesday (Feb 13):**\n- Deep focus day for API redesign (use Pomodoro blocks — supports S1)\n- Aim to have core changes done by end of day\n\n**Thursday (Feb 14):**\n- Morning: Final API redesign polish, testing, PR\n- Afternoon: Start retro prep — gather notes on what went well/blockers\n\n**Friday (Feb 15):**\n- Finalize retro talking points\n- Team retrospective\n\n**Throughout the week:**\n- Morning stretch routine (S6 — currently at 0%, even 2-3 days helps)\n- One community event or social invitation (S3/S4 — currently critical)\n- Alignment hour daily if possible (S5)\n\n📊 STATUS: Plan drafted, not yet scheduled\n\n➡️ NEXT: Want me to add these to your calendar using the Calendar skill, create tasks in LucidTasks, or both? I can also help break down the API redesign into subtasks if you share where the work stands.\n\n🗣️ Kaya: Three commitments mapped across the week with buffer for strategies and stretch goals.",
+      "timestamp": "2026-02-12T06:26:19.828Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 37490,
+    "time_to_first_token_ms": 37490,
+    "time_to_last_token_ms": 37490,
+    "tokens_per_second": 0
+  }
+}

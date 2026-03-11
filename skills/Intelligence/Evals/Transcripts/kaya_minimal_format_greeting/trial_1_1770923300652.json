@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_minimal_format_greeting",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:08:02.757Z",
+  "completed_at": "2026-02-12T19:08:20.652Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "good morning",
+      "timestamp": "2026-02-12T19:08:02.757Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Morning greeting from Jm.\n\n🗣️ Kaya: Good morning, Jm. You have 2 items in your queue — 1 approval and 1 approved work item.",
+      "timestamp": "2026-02-12T19:08:20.652Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 17895,
+    "time_to_first_token_ms": 17895,
+    "time_to_last_token_ms": 17895,
+    "tokens_per_second": 0
+  }
+}

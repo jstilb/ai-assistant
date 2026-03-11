@@ -1,0 +1,32 @@
+# Task: Notes Routes to Knowledge Lookup
+# Notes query routes to knowledge-lookup profile with ObsidianContext loaded
+
+id: kaya_ctx_notes_routes_knowledge_lookup
+description: "Notes query like 'find my notes' routes to knowledge-lookup profile with ObsidianContext loaded"
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "Find my notes about machine learning"
+
+graders:
+  - type: context_efficiency_check
+    weight: 1.0
+    required: true
+    params:
+      expected_profile: knowledge-lookup
+      required_files:
+        - ObsidianContext
+
+trials: 1
+pass_threshold: 0.50
+
+tags:
+  - kaya
+  - context_efficiency
+  - routing
+  - knowledge_lookup
+  - regression
+
+created_at: "2026-02-11"

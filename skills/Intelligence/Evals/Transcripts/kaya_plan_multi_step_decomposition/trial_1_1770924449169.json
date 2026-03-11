@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_plan_multi_step_decomposition",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T19:26:49.441Z",
+  "completed_at": "2026-02-12T19:27:29.169Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Migrate the monolithic app to microservices",
+      "timestamp": "2026-02-12T19:26:49.441Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "🗣️ Kaya: Need to know which project to migrate before I can plan the microservices architecture.",
+      "timestamp": "2026-02-12T19:27:29.169Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 39728,
+    "time_to_first_token_ms": 39728,
+    "time_to_last_token_ms": 39728,
+    "tokens_per_second": 0
+  }
+}

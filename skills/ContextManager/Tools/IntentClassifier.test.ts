@@ -2,13 +2,13 @@ import { describe, test, expect, beforeEach, mock, spyOn } from 'bun:test';
 import { classifyIntent, detectTopicChange, type ClassificationResult } from './IntentClassifier';
 
 // Mock emitInsight to prevent side effects during tests
-mock.module('../../CORE/Tools/SkillIntegrationBridge', () => ({
+mock.module('../../../lib/core/SkillIntegrationBridge', () => ({
   emitInsight: () => Promise.resolve(''),
 }));
 
 // Mock inference to avoid real API calls
 const mockInferenceResult = { success: true, parsed: { profile: 'general', confidence: 0.7, reasoning: 'test' } };
-mock.module('../../../skills/CORE/Tools/Inference', () => ({
+mock.module('../../../lib/core/Inference', () => ({
   inference: () => Promise.resolve(mockInferenceResult),
 }));
 

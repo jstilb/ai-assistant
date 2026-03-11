@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_cooking_output_quality",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T06:48:50.213Z",
+  "completed_at": "2026-02-12T06:49:13.740Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Cooking skill output includes ingredients list, preparation steps, and structured recipe format",
+      "timestamp": "2026-02-12T06:48:50.213Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Acknowledged — Cooking skill output format noted.\n🗣️ Kaya: Cooking skill outputs ingredients, prep steps, and structured recipe format. Noted.",
+      "timestamp": "2026-02-12T06:49:13.740Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23527,
+    "time_to_first_token_ms": 23527,
+    "time_to_last_token_ms": 23527,
+    "tokens_per_second": 0
+  }
+}

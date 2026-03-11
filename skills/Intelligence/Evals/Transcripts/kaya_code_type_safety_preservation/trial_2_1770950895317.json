@@ -1,0 +1,66 @@
+{
+  "task_id": "kaya_code_type_safety_preservation",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-13T02:47:11.864Z",
+  "completed_at": "2026-02-13T02:48:15.317Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Write a function that validates email addresses and returns typed results",
+      "timestamp": "2026-02-13T02:47:11.864Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Created a type-safe email validation function using a discriminated union for results.\n🔍 ANALYSIS: Used `valid: true | false` as the discriminant property so TypeScript can narrow the result type automatically — when `result.valid` is `true`, you get `local` and `domain`; when `false`, you get `error`.\n⚡ ACTIONS: Created `emailValidator.ts` with three exported types and the `validateEmail` function.\n✅ RESULTS: The function validates:\n- Empty input\n- Missing `@` symbol\n- Empty local/domain parts\n- Length limits (local 64, domain 253, label 63)\n- Domain format (labels, dots, allowed characters)\n- Local part format (RFC 5321 allowed chars, no leading/trailing/consecutive dots)\n📊 STATUS: Complete\n📁 CAPTURE: Discriminated union pattern — `ValidationSuccess | ValidationFailure` with `valid` as discriminant\n➡️ NEXT: Import and use with type narrowing:\n```typescript\nconst result = validateEmail(\"jm@example.com\");\nif (result.valid) {\n  console.log(result.local, result.domain); // TS knows these exist\n} else {\n  console.log(result.error); // TS knows this exists\n}\n```\n📖 STORY EXPLANATION:\n1. Defined `ValidationSuccess` with `valid: true` plus parsed `local` and `domain` fields\n2. Defined `ValidationFailure` with `valid: false` plus descriptive `error` string\n3. Combined them into `ValidationResult` discriminated union\n4. Function checks empty input and missing `@` first\n5. Splits into local and domain parts, validates each independently\n6. Domain validation checks structure: dots, label lengths, allowed characters per RFC\n7. Local part validation checks allowed characters and dot placement rules\n8. Returns typed success with parsed parts or typed failure with specific error message\n⭐ RATE (1-10): \n🗣️ Kaya: Type-safe email validator using discriminated union. Narrows to success or failure automatically.",
+      "timestamp": "2026-02-13T02:48:15.317Z"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tc_1770950895317_tu3exy",
+      "name": "Bash",
+      "params": {
+        "command": "ls /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_type_safety_preservation-hSwYka",
+        "description": "List working directory contents"
+      },
+      "started_at": "2026-02-13T02:48:15.317Z",
+      "result": "",
+      "completed_at": "2026-02-13T02:48:15.317Z",
+      "duration_ms": 0
+    },
+    {
+      "id": "tc_1770950895317_gx5tj2",
+      "name": "Write",
+      "params": {
+        "file_path": "/private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_type_safety_preservation-hSwYka/emailValidator.ts",
+        "content": "type ValidationSuccess = {\n  valid: true;\n  email: string;\n  local: string;\n  domain: string;\n};\n\ntype ValidationFailure = {\n  valid: false;\n  email: string;\n  error: string;\n};\n\ntype ValidationResult = ValidationSuccess | ValidationFailure;\n\nfunction validateEmail(email: string): ValidationResult {\n  const trimmed = email.trim();\n\n  if (trimmed.length === 0) {\n    return { valid: false, email: trimmed, error: \"Email cannot be empty\" };\n  }\n\n  const atIndex = trimmed.lastIndexOf(\"@\");\n\n  if (atIndex === -1) {\n    return { valid: false, email: trimmed, error: \"Missing @ symbol\" };\n  }\n\n  const local = trimmed.slice(0, atIndex);\n  const domain = trimmed.slice(atIndex + 1);\n\n  if (local.length === 0) {\n    return { valid: false, email: trimmed, error: \"Local part cannot be empty\" };\n  }\n\n  if (local.length > 64) {\n    return { valid: false, email: trimmed, error: \"Local part exceeds 64 characters\" };\n  }\n\n  if (domain.length === 0) {\n    return { valid: false, email: trimmed, error: \"Domain cannot be empty\" };\n  }\n\n  if (domain.length > 253) {\n    return { valid: false, email: trimmed, error: \"Domain exceeds 253 characters\" };\n  }\n\n  if (!domain.includes(\".\")) {\n    return { valid: false, email: trimmed, error: \"Domain must contain at least one dot\" };\n  }\n\n  const domainParts = domain.split(\".\");\n  for (const part of domainParts) {\n    if (part.length === 0) {\n      return { valid: false, email: trimmed, error: \"Domain contains empty label\" };\n    }\n    if (part.length > 63) {\n      return { valid: false, email: trimmed, error: \"Domain label exceeds 63 characters\" };\n    }\n    if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(part)) {\n      return { valid: false, email: trimmed, error: `Invalid domain label: \"${part}\"` };\n    }\n  }\n\n  const localRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;\n  if (!localRegex.test(local)) {\n    return { valid: false, email: trimmed, error: \"Local part contains invalid characters\" };\n  }\n\n  if (local.startsWith(\".\") || local.endsWith(\".\") || local.includes(\"..\")) {\n    return { valid: false, email: trimmed, error: \"Local part has invalid dot placement\" };\n  }\n\n  return { valid: true, email: trimmed, local, domain };\n}\n\nexport { validateEmail, ValidationResult, ValidationSuccess, ValidationFailure };\n"
+      },
+      "started_at": "2026-02-13T02:48:15.317Z",
+      "result": "File created successfully at: /private/var/folders/t2/_d_3np7j0y90mfqpk9kcxwx00000gn/T/eval-kaya_code_type_safety_preservation-hSwYka/emailValidator.ts",
+      "completed_at": "2026-02-13T02:48:15.317Z",
+      "duration_ms": 0
+    }
+  ],
+  "final_outcome": {
+    "cost": 0.28971575,
+    "duration": 58220,
+    "turns": 3,
+    "inputTokens": 5,
+    "outputTokens": 1531,
+    "cacheReadTokens": 119073,
+    "cacheCreationTokens": 30617
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 2,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 63453,
+    "time_to_first_token_ms": 63453,
+    "time_to_last_token_ms": 63453,
+    "tokens_per_second": 0
+  }
+}

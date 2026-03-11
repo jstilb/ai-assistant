@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_skill_research_routes_research",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T07:01:09.485Z",
+  "completed_at": "2026-02-12T07:01:33.010Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Research request like 'do extensive research on RAG developments' invokes Research skill",
+      "timestamp": "2026-02-12T07:01:09.485Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system initialized.\n\n🗣️ Kaya: Systems online, ready for your request Jm.",
+      "timestamp": "2026-02-12T07:01:33.010Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23525,
+    "time_to_first_token_ms": 23525,
+    "time_to_last_token_ms": 23525,
+    "tokens_per_second": 0
+  }
+}

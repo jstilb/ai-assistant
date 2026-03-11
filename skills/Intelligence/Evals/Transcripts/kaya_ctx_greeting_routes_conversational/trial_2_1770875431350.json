@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_greeting_routes_conversational",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:50:08.754Z",
+  "completed_at": "2026-02-12T05:50:31.350Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Simple greeting like 'hello' routes to conversational or boot profile with minimal token usage",
+      "timestamp": "2026-02-12T05:50:08.754Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "📋 SUMMARY: Session started, system ready.\n🗣️ Kaya: Hey Jm, all systems online. What are we working on tonight?",
+      "timestamp": "2026-02-12T05:50:31.350Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 22596,
+    "time_to_first_token_ms": 22596,
+    "time_to_last_token_ms": 22596,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-12T06:00:21.208Z",
+  "completed_at": "2026-02-12T06:01:02.789Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T06:00:21.208Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Life coaching session — reviewing your Q1 2026 goal progress.\n\n🔍 ANALYSIS:\n\nLooking at your three Q1 WIGs (Wildly Important Goals) due **March 29, 2026** — you're about 7 weeks in with ~7 weeks remaining:\n\n| WIG | Target | Current | Gap | Pace |\n|-----|--------|---------|-----|------|\n| **G0: Decrease Low-Value Media** | 5hrs → 3hrs (4wk avg) | 5.3 hrs | +2.3 hrs over target | Behind — trending wrong direction |\n| **G1: Make 2 Good Friends** | 2 good friends | 0 | 2 remaining | Behind — no progress yet |\n| **G2: Raise Alignment Score** | 1.6 → 3.0 | 1.8 | 1.2 points to go | Behind — minimal movement |\n\n**All three WIGs are behind pace at the midpoint.**\n\nThe challenges data tells the story clearly — **C0 (Media Consumption) is the root blocker**. It directly feeds C2 (alignment stalling) and C4 (writing habit), and indirectly blocks C1 (making friends) by consuming the time and energy needed for community engagement.\n\nYour strategies S0 and S2 for media are at 64-71% success — decent but not enough to move the needle from 5.3 to 3 hrs. Your friend-making strategies S3/S4 are at 14-29% — that's the weakest area.\n\nThe good news: your historical wins (porn addiction, alcohol, weed, body fat) show you absolutely can execute when you commit. The pattern from those wins is **binary rules + consistent tracking**.\n\n**Key question for you, Jm:** The data suggests media consumption is the domino — knock that down and alignment and friendships get easier. Do you want to dig into what's specifically filling those 5.3 hours and build a more aggressive intervention, or is there a different angle you want to focus on?\n\n🗣️ Kaya: All three Q1 goals behind pace at midpoint. Media consumption is the root blocker to address first.",
+      "timestamp": "2026-02-12T06:01:02.789Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 41581,
+    "time_to_first_token_ms": 41581,
+    "time_to_last_token_ms": 41581,
+    "tokens_per_second": 0
+  }
+}

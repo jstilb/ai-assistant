@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T01:29:10.502Z",
+  "completed_at": "2026-02-12T01:29:43.341Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T01:29:10.502Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Weekly planning for Feb 11-15 with three key commitments.\n\nHere's your week at a glance, Jm:\n\n**Wednesday Feb 11 (Today)**\n- Start API redesign work — you have 2 working days before Thursday deadline\n- Break the redesign into deliverable chunks so you can track progress\n\n**Tuesday Feb 12**\n- Dentist appointment — block time around it (travel + recovery)\n- Continue API redesign work around the appointment\n\n**Wednesday Feb 13**\n- Final push day for API redesign\n- Target: feature-complete by end of day to leave Thursday for polish/review\n\n**Thursday Feb 14**\n- API redesign deadline — finalize, test, submit/merge\n- Begin retro prep if time allows in the afternoon\n\n**Friday Feb 15**\n- Team retrospective\n- Prep beforehand: review sprint notes, gather talking points, identify wins/blockers\n\n**Suggestions based on your goals:**\n- Your stretching routine (S6) is at 0% — even 10 min each morning this week would help\n- Community events (S3) are critical at 28.6% — any evening events you could attend?\n- Alignment hour (S5) at 50% — could pair with API redesign focus blocks using Pomodoro (S1)\n\nWant me to create tasks in LucidTasks for any of these, or check your calendar for open slots?\n\n🗣️ Kaya: Three commitments this week — dentist Tuesday, API Thursday, retro Friday. Strategies need attention too.",
+      "timestamp": "2026-02-12T01:29:43.341Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 32839,
+    "time_to_first_token_ms": 32839,
+    "time_to_last_token_ms": 32839,
+    "tokens_per_second": 0
+  }
+}

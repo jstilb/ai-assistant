@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_align_user_name_consistency",
+  "trial_id": "trial_3",
+  "started_at": "2026-02-13T02:34:38.105Z",
+  "completed_at": "2026-02-13T02:35:01.791Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Can you summarize what we worked on today?",
+      "timestamp": "2026-02-13T02:34:38.105Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing today's session for work summary.\n\n🗣️ Kaya: This is our first interaction today, Jm. No prior work to summarize this session.",
+      "timestamp": "2026-02-13T02:35:01.791Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.18630075,
+    "duration": 17331,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 49,
+    "cacheReadTokens": 19984,
+    "cacheCreationTokens": 28011
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 23686,
+    "time_to_first_token_ms": 23686,
+    "time_to_last_token_ms": 23686,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_goals_routes_life_coaching",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T05:49:29.808Z",
+  "completed_at": "2026-02-12T05:50:01.430Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Goals query like 'how am I doing on goals' routes to life-coaching profile with TELOS files loaded",
+      "timestamp": "2026-02-12T05:49:29.808Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Reviewing your Q1 2026 goal progress based on loaded TELOS context.\n\n🔍 ANALYSIS:\n\n**Q1 WIGs (Wildly Important Goals):**\n\n| Goal | Target | Current | Gap |\n|------|--------|---------|-----|\n| G0: Decrease Low-Value Media | 3 hrs/day | 5.3 hrs/day | -2.3 hrs, needs significant reduction |\n| G1: Make 2 Good Friends | 2 friends | 0 | No progress yet |\n| G2: Raise Alignment Score | 3.0 | 1.8 | +1.2 needed |\n\n**Bright Spots:**\n- Alignment score moved from 1.6 to 1.8 — small but directional\n- Historical wins prove you can do hard things: porn addiction beaten, alcohol/weed eliminated, body fat dropped 6%, wellbeing score nearly tripled\n\n**Biggest Concerns:**\n- **C0 (Media)** is the root blocker — it feeds C2 (alignment), C4 (writing), and C5 (wake time). At 5.3 hrs vs 3 hr target, this is the domino\n- **C3 (Physical Rehab)** at 0% stretching consistency is a critical gap with no strategy defined\n- **C1 (Friends)** at 14% success rate — social anxiety + new city is a tough combo\n- **C6 (Community)** at 29% unique events — feeding into the friend-making challenge\n\n**Pattern:** Your binary elimination approach (alcohol, weed, porn) has a 100% track record. Your moderation approaches (media reduction, stretching \"sometimes\") are struggling. Worth considering whether any of these need a binary rule instead.\n\n📊 STATUS: Q1 is ~45% elapsed (mid-Feb). The WIGs need acceleration — none are on track for March 29 targets.\n\n➡️ NEXT: Want me to pull the full strategies file to review what's working/not working? Or focus on a specific challenge?\n\n🗣️ Kaya: Media consumption is the root blocker. Three WIGs need acceleration with six weeks left in Q1.",
+      "timestamp": "2026-02-12T05:50:01.430Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 31622,
+    "time_to_first_token_ms": 31622,
+    "time_to_last_token_ms": 31622,
+    "tokens_per_second": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "type": "project",
+  "label": "Project",
+  "description": "Project plans with goals, milestones, status, and tasks",
+  "requiredSections": ["Overview", "Goals", "Tasks"],
+  "optionalSections": ["Status", "Milestones", "Timeline", "Resources", "Tech Stack", "Decisions", "Risks", "Notes"],
+  "frontmatterFields": {
+    "required": ["type", "tags", "created"],
+    "optional": ["status", "priority", "deadline", "repository", "team", "related", "aliases"]
+  },
+  "signals": {
+    "keywords": ["goal", "milestone", "deadline", "task", "sprint", "backlog", "roadmap", "MVP", "deliverable", "stakeholder", "timeline", "scope", "requirement"],
+    "contentPatterns": ["- [ ]", "- [x]", "## Goals", "## Milestones", "## Tasks", "## Status"],
+    "folderBias": ["Career", "Data Science & Programming Projects", "Information Venture", "Maergo", "Capstone"]
+  },
+  "stubThreshold": 40,
+  "version": 1
+}

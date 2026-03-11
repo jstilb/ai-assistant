@@ -1,0 +1,118 @@
+{
+  "comparison": "Research vs Fabric",
+  "question": "Where does Research end and Fabric begin?",
+  "skill_a": {
+    "name": "Research",
+    "path": "skills/Intelligence/Research/SKILL.md",
+    "summary": "Multi-mode research system (quick/standard/extensive) with URL verification, confidence scoring, and multi-agent parallelism. Covers information retrieval from the web, deep alpha extraction, YouTube extraction, web scraping, and content enhancement. Also contains a Fabric.md workflow internally, blurring its own boundary. Primary mode: go out and FIND information, then analyze it."
+  },
+  "skill_b": {
+    "name": "Fabric",
+    "path": "skills/Intelligence/Fabric/SKILL.md",
+    "summary": "Pattern-execution engine with 237+ pre-built prompts for content transformation. Takes content already in hand and applies a named pattern (extract_wisdom, summarize, create_threat_model, etc.) via native system.md execution. Primary mode: TRANSFORM content that already exists using a specialized prompt template. No web retrieval, no multi-agent orchestration."
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "prompt": "Extract the key insights from this article [pasted text]",
+      "winner": "Fabric",
+      "rationale": "Content is already provided — no retrieval needed. 'Extract insights' maps directly to extract_wisdom or extract_insights pattern. Research would waste agent setup time; Fabric executes natively in seconds.",
+      "wrong_routing_impact": "medium",
+      "notes": "Research's ExtractKnowledge.md workflow exists but is lower-fidelity than Fabric's dedicated extraction patterns. Routing to Research isn't catastrophic but is suboptimal."
+    },
+    {
+      "id": 2,
+      "prompt": "Analyze this document and summarize the main points [pasted PDF text]",
+      "winner": "Fabric",
+      "rationale": "User has the content. 'Summarize' + 'main points' are canonical Fabric pattern triggers (summarize, extract_main_idea). Research adds no value here — there's nothing to retrieve.",
+      "wrong_routing_impact": "medium",
+      "notes": "Research could handle this via ExtractAlpha but Fabric's pattern catalog is more structured and faster for pure summarization tasks."
+    },
+    {
+      "id": 3,
+      "prompt": "What are the wisdom nuggets in this podcast transcript?",
+      "winner": "Fabric",
+      "rationale": "'Wisdom' is a direct keyword match for extract_wisdom pattern. Content is already provided. This is the canonical Fabric use case per the SKILL.md example.",
+      "wrong_routing_impact": "high",
+      "notes": "Routing to Research here would be clearly wrong — Research would attempt web queries rather than processing the provided transcript."
+    },
+    {
+      "id": 4,
+      "prompt": "Research the pros and cons of React vs Vue for my startup",
+      "winner": "Research",
+      "rationale": "No content provided. Requires active web retrieval, multi-source synthesis, confidence scoring across conflicting opinions. Research's standard mode (2-agent Claude+Gemini) is the right tool.",
+      "wrong_routing_impact": "high",
+      "notes": "Fabric has no retrieval capability. Routing here would fail — Fabric needs input content, which doesn't exist yet."
+    },
+    {
+      "id": 5,
+      "prompt": "Analyze this threat report and identify the key IOCs [pasted content]",
+      "winner": "Fabric",
+      "rationale": "Content provided. 'Analyze threat report' maps to analyze_threat_report pattern. Fabric has 15 dedicated security patterns. Research has no specialized security analysis patterns.",
+      "wrong_routing_impact": "medium",
+      "notes": "Research's ExtractAlpha could do this generically, but Fabric's pattern produces structured output with specific security artifact types."
+    },
+    {
+      "id": 6,
+      "prompt": "Extract key insights from this YouTube video [URL]",
+      "winner": "Research",
+      "rationale": "A URL is provided, not content. Research's YoutubeExtraction workflow uses fabric -y CLI to fetch transcript first, then processes it. Fabric alone cannot fetch the transcript — it needs content handed to it.",
+      "wrong_routing_impact": "high",
+      "notes": "Ironically, Research's YoutubeExtraction internally calls fabric -y, making Research the correct top-level entry point for YouTube URLs. Fabric's description mentions -y but as an internal CLI detail."
+    },
+    {
+      "id": 7,
+      "prompt": "Summarize this article for me [pasted article]",
+      "winner": "Either",
+      "rationale": "Content provided, generic summarize request. Fabric's summarize pattern is cleaner and faster. Research's ExtractAlpha is deeper but overkill. Either works; Fabric is slightly preferred for efficiency.",
+      "wrong_routing_impact": "low",
+      "notes": "This is the purest overlap case. Both produce acceptable results. Fabric is marginally better due to pattern structure."
+    },
+    {
+      "id": 8,
+      "prompt": "Do a deep analysis of the AI landscape in 2025",
+      "winner": "Research",
+      "rationale": "No content provided. Requires web retrieval across many sources, synthesis of current trends, multi-angle investigation. Research's AnalyzeAiTrends workflow is explicitly designed for this. Fabric cannot retrieve information.",
+      "wrong_routing_impact": "high",
+      "notes": "Research has a dedicated AnalyzeAiTrends workflow. Fabric has no equivalent and no retrieval capability."
+    },
+    {
+      "id": 9,
+      "prompt": "Use fabric to analyze this code for security issues [pasted code]",
+      "winner": "Fabric",
+      "rationale": "User explicitly said 'use fabric'. Content provided. Maps to analyze_code or review_code pattern. Explicit invocation overrides any ambiguity.",
+      "wrong_routing_impact": "low",
+      "notes": "Explicit 'fabric' keyword is a hard trigger. No ambiguity."
+    },
+    {
+      "id": 10,
+      "prompt": "Investigate and analyze how transformer attention works",
+      "winner": "Research",
+      "rationale": "'Investigate' signals active retrieval intent. No content provided. Research's standard mode would retrieve and synthesize authoritative sources. Fabric has no relevant pattern for conceptual technical education and no retrieval.",
+      "wrong_routing_impact": "medium",
+      "notes": "Some Fabric patterns like analyze_paper could apply IF a paper were provided, but the bare request implies go-find-it intent."
+    }
+  ],
+  "overlap_analysis": {
+    "clear_owner_pct": 80.0,
+    "ambiguous_pct": 20.0,
+    "ambiguous_scenarios": [1, 2, 7],
+    "merge_would_lose": "Merging would lose Fabric's 237-pattern precision library and the clean 'pattern execution' mental model. Research's internal Fabric.md workflow already exists as an escape hatch, but it doesn't surface pattern selection or pattern-specific output structure. The 237 patterns are Fabric's core value — Research has no equivalent catalog. Merging would collapse this to generic analysis.",
+    "separation_causes_confusion": "Yes — moderate confusion in the 'content provided + analyze/extract/summarize' quadrant. Users with content in hand and vague language like 'analyze this' or 'summarize this' may route either way. Research's description says 'analyze content' as a trigger, which overlaps directly with Fabric's triggers. Research also has an internal Workflows/Fabric.md and Workflows/ExtractKnowledge.md that duplicate Fabric territory. The cross-reference in Research ('For Fabric patterns use Fabric skill') is the right instinct but not consistently enforced.",
+    "core_distinction": "Research = RETRIEVE then analyze (input: topic/question). Fabric = TRANSFORM what you have (input: content). The axis is whether content already exists at invocation time.",
+    "root_confusion": "Research's description lists 'analyze content' as a USE WHEN trigger, which is Fabric's domain. Research also internally hosts Workflows/Fabric.md and Workflows/ExtractKnowledge.md, creating jurisdictional overlap. The boundary is clear conceptually but the triggers are written to compete."
+  },
+  "recommendation": {
+    "action": "KEEP_SEPARATE",
+    "rationale": "The skills serve fundamentally different axes: Research retrieves+analyzes (topic in → findings out), Fabric transforms+extracts (content in → structured output out). Merging would destroy Fabric's 237-pattern library value and make the combined skill confusing to route. The ~20% ambiguity is addressable via trigger fixes, not merging. The confusion is trigger-language confusion, not architectural confusion.",
+    "trigger_fixes": [
+      "Research description: Remove 'analyze content' from USE WHEN triggers — it competes directly with Fabric. Replace with 'analyze a topic' or 'research and analyze' to signal retrieval intent.",
+      "Research description: Add explicit negative signal — 'NOT for content-in-hand extraction: use Fabric skill for that'.",
+      "Fabric description: Add positive content-presence signal — 'USE WHEN you already have content (article, transcript, document, code) and want to extract/summarize/transform it'.",
+      "Fabric description: Add 'extract insights', 'extract wisdom', 'summarize this', 'analyze this [provided content]' to USE WHEN triggers to more aggressively claim content-transformation requests.",
+      "Research SKILL.md: Audit and consider removing or redirecting Workflows/ExtractKnowledge.md — it duplicates Fabric's extraction patterns and muddies the boundary.",
+      "Research SKILL.md: The internal Workflows/Fabric.md workflow is fine as an escape hatch from within Research, but should note it delegates to Fabric patterns rather than competing with them.",
+      "QueueRouter (if applicable): Add disambiguation rule — if content is pasted/provided AND request is extract/summarize/analyze → prefer Fabric; if no content provided AND request is research/investigate/find → prefer Research."
+    ]
+  }
+}

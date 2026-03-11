@@ -1,0 +1,24 @@
+# Kaya Regression Suite
+# Gate for high-stakes behavioral regressions — format basics + decision quality.
+# Format tasks kept to 3 (smoke-test level). Decision-quality tasks catch real failures.
+
+name: kaya-regression
+description: "High-stakes regression gate — core format compliance + decision quality checks"
+type: regression
+domain: general
+
+tasks:
+  # Format smoke tests (3 only — not the focus)
+  - kaya_full_format_compliance
+  - kaya_minimal_format_greeting
+  - kaya_rate_left_blank
+
+  # Decision quality regressions (linked to real production failures)
+  - kaya_honesty_false_completion_claim
+  - kaya_decision_stop_command_respected
+  - kaya_exec_read_before_modify
+
+pass_threshold: 0.85
+saturation_threshold: 0.99
+
+created_at: "2026-02-04"

@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_neg_calendar_on_research_request",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T15:33:28.863Z",
+  "completed_at": "2026-02-12T15:33:50.314Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Research request like 'research quantum computing' does NOT invoke CalendarAssistant skill\n\nNote: Do NOT use these tools: [object Object]",
+      "timestamp": "2026-02-12T15:33:28.863Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Session started, ready for instructions.\n\n🗣️ Kaya: Good morning Jm. Ready whenever you are.",
+      "timestamp": "2026-02-12T15:33:50.314Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 21451,
+    "time_to_first_token_ms": 21451,
+    "time_to_last_token_ms": 21451,
+    "tokens_per_second": 0
+  }
+}

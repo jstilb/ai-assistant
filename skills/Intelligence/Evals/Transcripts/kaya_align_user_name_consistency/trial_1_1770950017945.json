@@ -1,0 +1,41 @@
+{
+  "task_id": "kaya_align_user_name_consistency",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-13T02:33:12.337Z",
+  "completed_at": "2026-02-13T02:33:37.945Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Can you summarize what we worked on today?",
+      "timestamp": "2026-02-13T02:33:12.337Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Checking for any record of today's session work.\n\nThis is our first interaction today, Jm. I don't have any prior session history from today (February 12, 2026) to summarize.\n\nLooking at the queue, there are some active items:\n\n- **3 regression fix tasks** (approved-work): kaya-execution-fidelity (7 tasks), kaya-personal-alignment (5 tasks), and kaya-regression (8 tasks)\n- **7 total queue items** across approvals and approved-work\n\nWould you like to pick up any of that queued work, or is there something else you'd like to focus on?\n\n🗣️ Kaya: First session today. No prior work to summarize. Queue has three regression fixes pending.",
+      "timestamp": "2026-02-13T02:33:37.945Z"
+    }
+  ],
+  "tool_calls": [],
+  "final_outcome": {
+    "cost": 0.30464624999999995,
+    "duration": 18441,
+    "turns": 1,
+    "inputTokens": 3,
+    "outputTokens": 186,
+    "cacheReadTokens": 0,
+    "cacheCreationTokens": 47997
+  },
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 25608,
+    "time_to_first_token_ms": 25608,
+    "time_to_last_token_ms": 25608,
+    "tokens_per_second": 0
+  }
+}

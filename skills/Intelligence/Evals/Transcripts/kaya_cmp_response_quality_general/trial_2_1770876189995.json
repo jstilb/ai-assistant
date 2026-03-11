@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_cmp_response_quality_general",
+  "trial_id": "trial_2",
+  "started_at": "2026-02-12T06:02:35.981Z",
+  "completed_at": "2026-02-12T06:03:09.995Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Help me plan my week. I have a dentist appointment Tuesday, need to finish the API redesign by Thursday, and want to prep for the team retrospective on Friday.",
+      "timestamp": "2026-02-12T06:02:35.981Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "\n\n📋 SUMMARY: Planning your week around 3 key commitments.\n\nHere's a structured week plan, Jm:\n\n**Monday (Today)**\n- Map out API redesign remaining work — identify blockers and estimate effort\n- Break API work into daily chunks for Tue–Thu\n\n**Tuesday**\n- Dentist appointment (block travel + buffer time)\n- Lighter API work — handle smaller tasks or reviews around the appointment\n\n**Wednesday**\n- Deep focus day on API redesign — tackle the heaviest remaining pieces\n- Aim to have core implementation done by end of day\n\n**Thursday**\n- API redesign finish line — final testing, documentation, any cleanup\n- Deadline: ship/merge by EOD\n\n**Friday**\n- Morning: prep retro talking points (what went well, what didn't, action items)\n- Retro meeting\n- Wrap up loose ends from the week\n\n**Key risks:**\n- If the API redesign is larger than expected, Wednesday is your pressure valve — protect that deep focus time\n- Don't let Tuesday's appointment eat more time than needed; timebox it\n\nWant me to create calendar blocks for any of this, or break down the API redesign into specific tasks?\n\n🗣️ Kaya: Week structured around dentist Tuesday, API deadline Thursday, retro Friday.",
+      "timestamp": "2026-02-12T06:03:09.995Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 34014,
+    "time_to_first_token_ms": 34014,
+    "time_to_last_token_ms": 34014,
+    "tokens_per_second": 0
+  }
+}

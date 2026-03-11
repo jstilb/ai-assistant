@@ -1,0 +1,32 @@
+{
+  "task_id": "kaya_ctx_coding_routes_development",
+  "trial_id": "trial_1",
+  "started_at": "2026-02-12T18:53:52.962Z",
+  "completed_at": "2026-02-12T18:54:05.767Z",
+  "turns": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "Fix this bug in src/auth.ts",
+      "timestamp": "2026-02-12T18:53:52.962Z"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "You've hit your limit · resets Feb 16, 6pm (America/Los_Angeles)",
+      "timestamp": "2026-02-12T18:54:05.767Z"
+    }
+  ],
+  "tool_calls": [],
+  "metrics": {
+    "n_turns": 2,
+    "n_tool_calls": 0,
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "wall_time_ms": 12805,
+    "time_to_first_token_ms": 12805,
+    "time_to_last_token_ms": 12805,
+    "tokens_per_second": 0
+  }
+}
