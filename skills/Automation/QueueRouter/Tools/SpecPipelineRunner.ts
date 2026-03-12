@@ -533,23 +533,37 @@ ${specLearnings}
 ## Task
 Generate a comprehensive Current Work specification for this item. Include:
 
-1. **Summary** — What we're building and why
+1. **Summary** — What we're building/researching and why
 2. **Current State Analysis** — What exists today, what's missing
 3. **Target State** — What success looks like
 4. **Scope** — In scope / out of scope
-5. **Ideal State Criteria (ISC)** — Numbered, verifiable criteria
-6. **Implementation Approach** — Technical decisions and steps
+5. **Ideal State Criteria (ISC)** — MUST use this EXACT format:
+
+## 5. Ideal State Criteria (ISC)
+
+| # | What Ideal Looks Like | Verify Method |
+|---|----------------------|---------------|
+| 1 | [specific, measurable outcome] | [how to confirm it] |
+| 2 | ... | ... |
+
+Include at least 6 rows numbered starting at 1. Each row must have an integer ID in the first column.
+For research/discovery tasks, rows describe deliverables and outcomes:
+  - "Comparison table with 5+ options across all evaluation criteria" | "File exists at path, table has 5+ rows"
+  - "Step-by-step checklist with specific calendar dates" | "All dates present, no TBDs"
+  - "Recommended solution with rationale documented" | "Recommendation section present with pros/cons"
+
+6. **Implementation Approach** — Technical decisions and steps (or research methodology for non-code tasks)
 7. **Verification Plan** — How to verify each ISC criterion
 8. **Risks and Mitigations** — Key risks with mitigations
 
-Format as structured markdown following the CurrentWork spec template.
-This spec will be reviewed by Jm before execution.`;
+Use numbered section headings (## 1. Summary, ## 2. Current State Analysis, etc.).
+Format as structured markdown. This spec will be reviewed by Jm before execution.`;
 
   const inferenceMode = complexity === "low" ? "fast" : complexity === "high" ? "smart" : "standard";
 
   try {
     const result = await inference({
-      systemPrompt: "You are a technical specification writer creating detailed implementation specs.",
+      systemPrompt: "You are a specification writer creating detailed, structured specs for implementation, research, and discovery tasks.",
       userPrompt: specPrompt,
       level: inferenceMode as "fast" | "standard" | "smart",
     });
@@ -809,7 +823,10 @@ export async function processItem(itemId: string): Promise<StepResult> {
 
 /**
  * Process all spec-pipeline items that are in a processable state.
- * Runs "researching", "generating-spec", and "revision-needed" items.
+ * First re-evaluates "awaiting-context" items (enriched after creation or
+ * bounced back from the ISC quality gate) and auto-advances them if they
+ * now have sufficient context. Then runs "researching", "generating-spec",
+ * and "revision-needed" items.
  */
 export async function processAll(): Promise<{
   processed: number;
@@ -818,8 +835,26 @@ export async function processAll(): Promise<{
   results: Array<{ id: string; status: string; result: StepResult }>;
 }> {
   const items = loadQueueItems("spec-pipeline");
+
+  // Pre-pass: re-evaluate awaiting-context items for auto-advance
+  // State machine only allows awaiting-context → researching, so always
+  // advance to "researching". The normal processItem flow will then handle
+  // researching → generating-spec (skipping research if canDeriveISCDirectly).
+  const qm = new QueueManager();
+  const awaitingItems = items.filter((i) => i.status === "awaiting-context");
+  let advanced = 0;
+  for (const item of awaitingItems) {
+    if (qm.hassufficientContext(item.payload, item.payload.context)) {
+      await qm.updateSpecPipelineStatus(item.id, "researching");
+      console.log(`[spec-pipeline] Pre-pass: advanced ${item.id} to researching`);
+      advanced++;
+    }
+  }
+
+  // Re-load after pre-pass to include newly advanced items
+  const refreshedItems = advanced > 0 ? loadQueueItems("spec-pipeline") : items;
   const processableStatuses = new Set(["researching", "generating-spec", "revision-needed"]);
-  const processable = items.filter((i) => processableStatuses.has(i.status));
+  const processable = refreshedItems.filter((i) => processableStatuses.has(i.status));
 
   if (processable.length === 0) {
     notifySync("No spec pipeline items ready to process");
