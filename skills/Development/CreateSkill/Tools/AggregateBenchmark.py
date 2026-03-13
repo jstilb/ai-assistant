@@ -335,6 +335,53 @@ def generate_markdown(benchmark: dict) -> str:
     return "\n".join(lines)
 
 
+def generate_batch_report(batch_dir: Path, output: Path | None = None) -> dict:
+    """Aggregate benchmarks from multiple skills into a unified batch report.
+
+    Scans batch_dir for skill subdirectories containing benchmark.json files
+    and produces a combined report with per-skill summaries.
+    """
+    results: dict[str, dict] = {}
+
+    for skill_dir in sorted(batch_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        benchmark_file = skill_dir / "benchmark.json"
+        if not benchmark_file.exists():
+            continue
+
+        try:
+            with open(benchmark_file) as f:
+                benchmark = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        skill_name = benchmark.get("metadata", {}).get("skill_name", skill_dir.name)
+        run_summary = benchmark.get("run_summary", {})
+        configs = [k for k in run_summary if k != "delta"]
+
+        entry: dict = {"skill_name": skill_name, "configs": {}, "delta": run_summary.get("delta", {})}
+        for config in configs:
+            entry["configs"][config] = {
+                "pass_rate": run_summary[config].get("pass_rate", {}).get("mean", 0),
+                "time_seconds": run_summary[config].get("time_seconds", {}).get("mean", 0),
+            }
+        results[skill_name] = entry
+
+    batch_report = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "total_skills": len(results),
+        "skills": results,
+    }
+
+    out_path = output or (batch_dir / "batch-report.json")
+    with open(out_path, "w") as f:
+        json.dump(batch_report, f, indent=2)
+    print(f"Batch report: {out_path} ({len(results)} skills)")
+
+    return batch_report
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Aggregate benchmark run results into summary statistics"
@@ -359,12 +406,22 @@ def main():
         type=Path,
         help="Output path for benchmark.json (default: <benchmark_dir>/benchmark.json)"
     )
+    parser.add_argument(
+        "--batch-report",
+        action="store_true",
+        help="Aggregate multiple skill benchmarks from subdirectories into a unified report"
+    )
 
     args = parser.parse_args()
 
     if not args.benchmark_dir.exists():
         print(f"Directory not found: {args.benchmark_dir}")
         sys.exit(1)
+
+    # Batch mode: aggregate multiple skill benchmarks
+    if args.batch_report:
+        generate_batch_report(args.benchmark_dir, args.output)
+        return
 
     # Generate benchmark
     benchmark = generate_benchmark(args.benchmark_dir, args.skill_name, args.skill_path)

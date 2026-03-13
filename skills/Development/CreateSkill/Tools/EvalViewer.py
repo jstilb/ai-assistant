@@ -384,6 +384,37 @@ class ReviewHandler(BaseHTTPRequestHandler):
         pass
 
 
+def generate_batch_html(batch_dir: Path) -> str:
+    """Generate a batch-mode HTML page that aggregates dashboard.json from the batch directory."""
+    dashboard_path = batch_dir / "dashboard.json"
+    if not dashboard_path.exists():
+        # Try dashboard.html directly
+        html_path = batch_dir / "dashboard.html"
+        if html_path.exists():
+            return html_path.read_text()
+        return f"<html><body><h1>No dashboard.json found in {batch_dir}</h1></body></html>"
+
+    dashboard = json.loads(dashboard_path.read_text())
+    # Serve the pre-generated dashboard.html if it exists alongside dashboard.json
+    html_path = batch_dir / "dashboard.html"
+    if html_path.exists():
+        return html_path.read_text()
+
+    # Minimal fallback
+    skills = dashboard.get("skills", [])
+    rows = ""
+    for s in skills:
+        structural = s.get("structural") or {}
+        rows += f"<tr><td>{s.get('name','?')}</td><td>{s.get('path','?')}</td>"
+        rows += f"<td>{structural.get('score','—')}</td><td>{structural.get('health','—')}</td></tr>\n"
+
+    return f"""<!DOCTYPE html>
+<html><head><title>Batch Eval Dashboard</title></head>
+<body><h1>Batch Eval Dashboard</h1>
+<table border=1><tr><th>Skill</th><th>Path</th><th>Score</th><th>Health</th></tr>
+{rows}</table></body></html>"""
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate and serve eval review")
     parser.add_argument("workspace", type=Path, help="Path to workspace directory")
@@ -401,12 +432,55 @@ def main() -> None:
         "--static", "-s", type=Path, default=None,
         help="Write standalone HTML to this path instead of starting a server",
     )
+    parser.add_argument(
+        "--batch-mode",
+        action="store_true",
+        help="Batch mode: serve the batch eval dashboard from the workspace directory",
+    )
     args = parser.parse_args()
 
     workspace = args.workspace.resolve()
     if not workspace.is_dir():
         print(f"Error: {workspace} is not a directory", file=sys.stderr)
         sys.exit(1)
+
+    # Batch mode: serve dashboard directly
+    if args.batch_mode:
+        html = generate_batch_html(workspace)
+        if args.static:
+            args.static.parent.mkdir(parents=True, exist_ok=True)
+            args.static.write_text(html)
+            print(f"\n  Batch dashboard written to: {args.static}\n")
+            sys.exit(0)
+
+        port = args.port
+        _kill_port(port)
+
+        class BatchHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                content = generate_batch_html(workspace).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            def log_message(self, format: str, *args: object) -> None:
+                pass
+
+        try:
+            server = HTTPServer(("127.0.0.1", port), BatchHandler)
+        except OSError:
+            server = HTTPServer(("127.0.0.1", 0), BatchHandler)
+            port = server.server_address[1]
+        url = f"http://localhost:{port}"
+        print(f"\n  Batch Eval Dashboard: {url}\n  Press Ctrl+C to stop.\n")
+        webbrowser.open(url)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
+            server.server_close()
+        sys.exit(0)
 
     runs = find_runs(workspace)
     if not runs:
