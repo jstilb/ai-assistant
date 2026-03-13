@@ -48,7 +48,7 @@ export interface WorkItemVerification {
   iscRowsTotal: number;
   verificationCost: number;
   /** Who set this verification — only "skeptical_verifier" is trusted for non-TRIVIAL items. "human_proxy" for resolved human tasks. */
-  verifiedBy: "skeptical_verifier" | "manual" | "human_proxy";
+  verifiedBy: "skeptical_verifier" | "human_proxy";
   /** Which tiers of the SkepticalVerifier pipeline actually executed, e.g. [1, 2] or [1, 2, 3] */
   tiersExecuted: number[];
 }
@@ -356,11 +356,12 @@ export class WorkQueue {
   }
 
   getItem(id: string): WorkItem | undefined {
-    return this.resolveItem(id);
+    const item = this.resolveItem(id);
+    return item ? structuredClone(item) : undefined;
   }
 
   getAllItems(): WorkItem[] {
-    return [...this.state.items];
+    return this.state.items.map(i => structuredClone(i));
   }
 
   hasWork(): boolean {
@@ -486,7 +487,8 @@ export class WorkQueue {
     if (!item) return;
     if (!item.metadata) item.metadata = {};
     for (const [key, value] of Object.entries(entries)) {
-      item.metadata[key] = value;
+      if (value === undefined) delete item.metadata[key];
+      else item.metadata[key] = value;
     }
     this.markDirty(item.id);
     this.save();
@@ -513,9 +515,8 @@ export class WorkQueue {
   }
 
   /**
-   * Resolve a blocked item to completed.
-   * For proxy items (humanTaskRef): uses verifiedBy: "human_proxy".
-   * For non-proxy items (former awaiting_manual): uses verifiedBy: "manual" with TRIVIAL effort override.
+   * Resolve a blocked proxy item to completed.
+   * Only items with humanTaskRef can be resolved — uses verifiedBy: "human_proxy".
    */
   resolveBlocked(id: string, result?: string): WorkItem | null {
     const item = this.resolveItem(id);
@@ -526,36 +527,25 @@ export class WorkQueue {
       );
     }
 
-    if (item.humanTaskRef) {
-      // Proxy path: human_proxy verification (allowed when humanTaskRef exists)
-      this.setVerification(id, {
-        status: "verified",
-        verifiedAt: new Date().toISOString(),
-        verdict: "PASS",
-        concerns: [],
-        iscRowsVerified: 0,
-        iscRowsTotal: 0,
-        verificationCost: 0,
-        verifiedBy: "human_proxy" as WorkItemVerification["verifiedBy"],
-        tiersExecuted: [],
-      });
-    } else {
-      // Non-proxy path: manual verification for items without humanTaskRef
-      // Set effort to TRIVIAL so the provenance gate allows manual verifiedBy
-      item.effort = "TRIVIAL";
-      this.markDirty(item.id);
-      this.setVerification(id, {
-        status: "verified",
-        verifiedAt: new Date().toISOString(),
-        verdict: "PASS",
-        concerns: [],
-        iscRowsVerified: 0,
-        iscRowsTotal: 0,
-        verificationCost: 0,
-        verifiedBy: "manual",
-        tiersExecuted: [],
-      });
+    if (!item.humanTaskRef) {
+      throw new Error(
+        `resolveBlocked rejected: item "${item.title}" [${item.id}] has no humanTaskRef. ` +
+        `Only proxy items (with humanTaskRef) can be resolved via resolveBlocked().`
+      );
     }
+
+    // Proxy path: human_proxy verification (allowed when humanTaskRef exists)
+    this.setVerification(id, {
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 0,
+      iscRowsTotal: 0,
+      verificationCost: 0,
+      verifiedBy: "human_proxy",
+      tiersExecuted: [],
+    });
 
     // Complete via updateStatus (which checks verification gate)
     return this.updateStatus(id, "completed", result || "Blocked item resolved by Jm");
@@ -564,6 +554,15 @@ export class WorkQueue {
   /** Get all items with status blocked */
   getBlockedItems(): WorkItem[] {
     return this.state.items.filter(i => i.status === "blocked");
+  }
+
+  /** Remove a dependency from an existing item (idempotent) */
+  removeDependency(id: string, depId: string): void {
+    const item = this.resolveItem(id);
+    if (!item) return;
+    item.dependencies = item.dependencies.filter(d => d !== depId);
+    this.markDirty(item.id);
+    this.save();
   }
 
   /** Append a dependency to an existing item (additive, idempotent) */

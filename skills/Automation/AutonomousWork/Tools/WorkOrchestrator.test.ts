@@ -393,39 +393,26 @@ describe("complete() gate", () => {
 // ---------------------------------------------------------------------------
 
 describe("complete() provenance gate", () => {
-  it("rejects verifiedBy: 'manual' for STANDARD effort items", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
+  it("setVerification rejects verifiedBy: 'manual' — cannot bypass provenance guard", () => {
+    const { queue } = createTestOrchestratorWithQueue([
       makeItem({ id: "a", effort: "STANDARD" }),
     ]);
-    // Bypass setVerification guard by setting directly on item (simulates corrupted state)
-    const item = queue.getItem("a")!;
-    item.verification = {
+    expect(() => queue.setVerification("a", {
       status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
       concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0.02,
-      verifiedBy: "manual", tiersExecuted: [1, 2],
-    };
+      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [1, 2],
+    })).toThrow('is not "skeptical_verifier"');
+  });
+
+  it("complete() rejects items without verification record", async () => {
+    const { orch } = createTestOrchestratorWithQueue([
+      makeItem({ id: "a", effort: "TRIVIAL", status: "in_progress" }),
+    ]);
     orch.setItemISC("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
     const result = await orch.complete("a");
     expect(result.success).toBe(false);
-    expect(result.reason).toContain("not \"skeptical_verifier\"");
-  });
-
-  it("allows verifiedBy: 'manual' for TRIVIAL effort items", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", effort: "TRIVIAL", status: "in_progress" }),
-    ]);
-    // Bypass setVerification guard by setting directly on item (simulates corrupted state)
-    const item = queue.getItem("a")!;
-    item.verification = {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual", tiersExecuted: [],
-    };
-    orch.setItemISC("a", [makeRow({ id: 1, status: "VERIFIED" })]);
-
-    const result = await orch.complete("a");
-    expect(result.success).toBe(true);
+    expect(result.reason).toContain("No verification record found");
   });
 
   it("rejects when tiersExecuted does not include Tier 1 for non-TRIVIAL", async () => {

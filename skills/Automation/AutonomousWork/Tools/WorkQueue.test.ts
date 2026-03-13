@@ -733,13 +733,13 @@ describe("WorkQueue.setVerification() whitelist", () => {
 // ---------------------------------------------------------------------------
 
 describe("WorkQueue.setVerification() provenance guard", () => {
-  it("throws on verifiedBy: 'manual'", () => {
+  it("throws on verifiedBy: 'manual' (fabricated provenance)", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a" })]);
     expect(() => wq.setVerification("a", {
       status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
       concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual", tiersExecuted: [],
-    })).toThrow('verifiedBy "manual" is not "skeptical_verifier"');
+      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
+    })).toThrow('is not "skeptical_verifier"');
   });
 
   it("throws on verifiedBy: 'agent_report_verification' (fabricated provenance)", () => {
@@ -778,28 +778,42 @@ describe("WorkQueue.setVerification() provenance guard", () => {
 // ---------------------------------------------------------------------------
 
 describe("WorkQueue.updateStatus() provenance guard", () => {
-  it("throws when completing non-TRIVIAL item with verifiedBy !== 'skeptical_verifier'", () => {
+  it("getItem() clone prevents verification injection bypass", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", effort: "STANDARD", status: "in_progress" })]);
-    // Bypass setVerification guard by setting directly on item (simulates corrupted state)
+    // Attempt to bypass setVerification guard by mutating getItem() result
     const item = wq.getItem("a")!;
     item.verification = {
       status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
       concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual", tiersExecuted: [],
+      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
     };
-    expect(() => wq.updateStatus("a", "completed")).toThrow("Non-TRIVIAL items require pipeline verification");
+    // Clone means internal state is unaffected — completion is blocked
+    expect(() => wq.updateStatus("a", "completed")).toThrow("no verification record exists");
   });
 
-  it("allows TRIVIAL items with verifiedBy: 'manual' to complete", () => {
-    const wq = WorkQueue._createForTesting([makeItem({ id: "a", effort: "TRIVIAL", status: "in_progress" })]);
-    const item = wq.getItem("a")!;
-    item.verification = {
+  it("setVerification rejects verifiedBy: 'manual' for non-TRIVIAL items", () => {
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", effort: "STANDARD", status: "in_progress" })]);
+    expect(() => wq.setVerification("a", {
       status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
       concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual", tiersExecuted: [],
-    };
-    const updated = wq.updateStatus("a", "completed");
+      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
+    })).toThrow("not \"skeptical_verifier\"");
+  });
+
+  it("resolveBlocked throws for items without humanTaskRef", () => {
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "blocked" })]);
+    expect(() => wq.resolveBlocked("a")).toThrow("has no humanTaskRef");
+  });
+
+  it("allows humanTaskRef proxy items to complete via resolveBlocked", () => {
+    const wq = WorkQueue._createForTesting([makeItem({
+      id: "a",
+      status: "blocked",
+      humanTaskRef: { queueItemId: "parent-1", guideFilePath: "/tmp/guide.md", createdAt: new Date().toISOString() },
+    })]);
+    const updated = wq.resolveBlocked("a", "Resolved by Jm");
     expect(updated?.status).toBe("completed");
+    expect(updated?.verification?.verifiedBy).toBe("human_proxy");
   });
 });
 
@@ -1047,5 +1061,110 @@ describe("recordAttempt transition matrix", () => {
       error: "test error",
       strategy: "standard",
     })).toThrow("Illegal transition");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getItem() / getAllItems() immutability (structuredClone)
+// ---------------------------------------------------------------------------
+
+describe("getItem / getAllItems immutability", () => {
+  it("getItem returns a deep clone — mutations do not affect internal state", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", status: "in_progress" }),
+    ]);
+
+    const item = wq.getItem("a");
+    expect(item).toBeDefined();
+
+    // Mutate the returned clone
+    item!.status = "completed" as WorkStatus;
+    item!.verification = {
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 0,
+      iscRowsTotal: 0,
+      verificationCost: 0,
+      verifiedBy: "manual" as "skeptical_verifier",
+      tiersExecuted: [],
+    };
+
+    // Internal state should be unchanged
+    const fresh = wq.getItem("a");
+    expect(fresh!.status).toBe("in_progress");
+    expect(fresh!.verification).toBeUndefined();
+  });
+
+  it("getAllItems returns deep clones — mutations do not affect internal state", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", status: "pending" }),
+      makeItem({ id: "b", status: "pending" }),
+    ]);
+
+    const items = wq.getAllItems();
+    items[0].status = "completed" as WorkStatus;
+    items[0].dependencies.push("injected");
+
+    const fresh = wq.getItem("a");
+    expect(fresh!.status).toBe("pending");
+    expect(fresh!.dependencies).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeDependency
+// ---------------------------------------------------------------------------
+
+describe("removeDependency", () => {
+  it("removes an existing dependency", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", status: "pending", dependencies: ["b", "c"] }),
+      makeItem({ id: "b", status: "completed" }),
+      makeItem({ id: "c", status: "completed" }),
+    ]);
+
+    wq.removeDependency("a", "b");
+    const item = wq.getItem("a");
+    expect(item!.dependencies).toEqual(["c"]);
+  });
+
+  it("is idempotent for non-existent dependency", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", status: "pending", dependencies: ["b"] }),
+      makeItem({ id: "b", status: "completed" }),
+    ]);
+
+    wq.removeDependency("a", "nonexistent");
+    const item = wq.getItem("a");
+    expect(item!.dependencies).toEqual(["b"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setMetadata: undefined value deletion
+// ---------------------------------------------------------------------------
+
+describe("setMetadata undefined handling", () => {
+  it("deletes keys when value is undefined", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", metadata: { keepMe: "yes", removeMe: "bye" } }),
+    ]);
+
+    wq.setMetadata("a", { removeMe: undefined });
+    const item = wq.getItem("a");
+    expect(item!.metadata).toEqual({ keepMe: "yes" });
+    expect("removeMe" in item!.metadata!).toBe(false);
+  });
+
+  it("sets keys when value is defined", () => {
+    const wq = WorkQueue._createForTesting([
+      makeItem({ id: "a", metadata: {} }),
+    ]);
+
+    wq.setMetadata("a", { newKey: "hello" });
+    const item = wq.getItem("a");
+    expect(item!.metadata!.newKey).toBe("hello");
   });
 });
