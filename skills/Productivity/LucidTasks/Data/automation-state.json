@@ -1,0 +1,12 @@
+{
+  "lastMorningRun": null,
+  "lastEveningRun": "2026-03-13T04:00:43.521Z",
+  "lastWeeklyRun": null,
+  "lastRecurrenceCheck": null,
+  "stats": {
+    "totalRecurrencesGenerated": 0,
+    "totalAutoRescheduled": 0,
+    "totalAutoExtracted": 0,
+    "totalReviewsGenerated": 0
+  }
+}
