@@ -286,9 +286,9 @@ interface PatternsConfig {
 // ========================================
 
 // Pattern paths in priority order:
-// 1. USER/KAYASECURITYSYSTEM/patterns.yaml (user's custom rules)
+// 1. KAYASECURITYSYSTEM/patterns.yaml (custom rules)
 // 2. docs/system/KAYASECURITYSYSTEM/patterns.example.yaml (default template)
-const USER_PATTERNS_PATH = kayaPath('skills', 'CORE', 'USER', 'KAYASECURITYSYSTEM', 'patterns.yaml');
+const USER_PATTERNS_PATH = kayaPath('KAYASECURITYSYSTEM', 'patterns.yaml');
 const SYSTEM_PATTERNS_PATH = kayaPath('skills', 'CORE', 'SYSTEM', 'PAISECURITYSYSTEM', 'patterns.example.yaml');
 
 let patternsCache: PatternsConfig | null = null;

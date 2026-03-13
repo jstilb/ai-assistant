@@ -2,16 +2,11 @@
  * Pattern Loader - SYSTEM/USER Cascade
  * ======================================
  *
- * Loads injection patterns and configuration following Kaya's two-tier
- * SYSTEM/USER architecture. USER overrides take precedence.
+ * Loads injection patterns and configuration from KAYASECURITYSYSTEM/.
  *
- * Search order for patterns:
- *   1. USER/KAYASECURITYSYSTEM/injection-patterns.yaml
- *   2. KAYASECURITYSYSTEM/injection-patterns.yaml (SYSTEM default)
- *
- * Search order for config:
- *   1. USER/KAYASECURITYSYSTEM/injection-config.yaml
- *   2. KAYASECURITYSYSTEM/injection-config.yaml (SYSTEM default)
+ * Paths:
+ *   - KAYASECURITYSYSTEM/injection-patterns.yaml
+ *   - KAYASECURITYSYSTEM/injection-config.yaml
  */
 
 import { existsSync, readFileSync } from "fs";
@@ -29,57 +24,24 @@ let cachedPatterns: InjectionPatternsConfig | null = null;
 let cachedConfig: InjectionDefenderConfig | null = null;
 
 /**
- * Load injection patterns with SYSTEM/USER cascade.
- * USER patterns override SYSTEM patterns on a per-category basis.
+ * Load injection patterns from KAYASECURITYSYSTEM/.
  */
 export function loadPatterns(): InjectionPatternsConfig {
   if (cachedPatterns) return cachedPatterns;
 
   const kayaDir = getKayaDir();
+  const patternsPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-patterns.yaml");
 
-  // SYSTEM default path
-  const systemPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-patterns.yaml");
-  // USER override path
-  const userPath = join(kayaDir, "USER", "KAYASECURITYSYSTEM", "injection-patterns.yaml");
-
-  let systemPatterns: InjectionPatternsConfig | null = null;
-  let userPatterns: InjectionPatternsConfig | null = null;
-
-  // Load SYSTEM patterns (required)
-  if (existsSync(systemPath)) {
+  if (existsSync(patternsPath)) {
     try {
-      const content = readFileSync(systemPath, "utf-8");
-      systemPatterns = parseYaml(content) as InjectionPatternsConfig;
+      const content = readFileSync(patternsPath, "utf-8");
+      cachedPatterns = parseYaml(content) as InjectionPatternsConfig;
     } catch {
       // Fall through to defaults
     }
   }
 
-  // Load USER patterns (optional override)
-  if (existsSync(userPath)) {
-    try {
-      const content = readFileSync(userPath, "utf-8");
-      userPatterns = parseYaml(content) as InjectionPatternsConfig;
-    } catch {
-      // Fall through, use SYSTEM
-    }
-  }
-
-  // Merge: USER categories override SYSTEM categories
-  if (systemPatterns && userPatterns) {
-    cachedPatterns = {
-      ...systemPatterns,
-      categories: {
-        ...systemPatterns.categories,
-        ...userPatterns.categories,
-      },
-    };
-  } else if (userPatterns) {
-    cachedPatterns = userPatterns;
-  } else if (systemPatterns) {
-    cachedPatterns = systemPatterns;
-  } else {
-    // Fallback: empty config (no patterns loaded)
+  if (!cachedPatterns) {
     cachedPatterns = {
       version: "1.0",
       last_updated: new Date().toISOString().split("T")[0],
@@ -91,44 +53,27 @@ export function loadPatterns(): InjectionPatternsConfig {
 }
 
 /**
- * Load defender configuration with SYSTEM/USER cascade.
+ * Load defender configuration from KAYASECURITYSYSTEM/.
  */
 export function loadConfig(): InjectionDefenderConfig {
   if (cachedConfig) return cachedConfig;
 
   const kayaDir = getKayaDir();
+  const configPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-config.yaml");
 
-  const systemPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-config.yaml");
-  const userPath = join(kayaDir, "USER", "KAYASECURITYSYSTEM", "injection-config.yaml");
-
-  let config: InjectionDefenderConfig | null = null;
-
-  // Try USER first (higher priority)
-  if (existsSync(userPath)) {
+  if (existsSync(configPath)) {
     try {
-      const content = readFileSync(userPath, "utf-8");
-      config = parseYaml(content) as InjectionDefenderConfig;
+      const content = readFileSync(configPath, "utf-8");
+      cachedConfig = parseYaml(content) as InjectionDefenderConfig;
     } catch {
-      // Fall through
+      // Fall through to defaults
     }
   }
 
-  // Fall back to SYSTEM
-  if (!config && existsSync(systemPath)) {
-    try {
-      const content = readFileSync(systemPath, "utf-8");
-      config = parseYaml(content) as InjectionDefenderConfig;
-    } catch {
-      // Fall through
-    }
+  if (!cachedConfig) {
+    cachedConfig = getDefaultConfig();
   }
 
-  // Fallback: safe defaults
-  if (!config) {
-    config = getDefaultConfig();
-  }
-
-  cachedConfig = config;
   return cachedConfig;
 }
 
