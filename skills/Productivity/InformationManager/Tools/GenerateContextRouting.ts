@@ -429,7 +429,7 @@ function buildConfiguration(): RouteEntry[] {
   const configFiles: Array<{ topic: string; rel: string }> = [
     { topic: "Settings", rel: "settings.json" },
     { topic: "Asset management", rel: "USER/ASSETMANAGEMENT.md" },
-    { topic: "Security rules", rel: "USER/KAYASECURITYSYSTEM/README.md" },
+    { topic: "Security rules", rel: "KAYASECURITYSYSTEM/README.md" },
     { topic: "Productivity preferences", rel: "USER/PRODUCTIVITY.md" },
     { topic: "Tech stack preferences", rel: "USER/TECHSTACKPREFERENCES.md" },
     { topic: "Response format preferences", rel: "USER/RESPONSEFORMAT.md" },

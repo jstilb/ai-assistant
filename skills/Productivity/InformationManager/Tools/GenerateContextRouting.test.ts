@@ -14,13 +14,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+const SCRIPT_DIR = import.meta.dir;
 const SCRIPT_PATH = path.join(
-  import.meta.dir,
+  SCRIPT_DIR,
   "GenerateContextRouting.ts"
 );
 
@@ -29,18 +29,24 @@ const KAYA_DIR = path.join(HOME, ".claude");
 const OUTPUT_PATH = path.join(KAYA_DIR, "CONTEXT-ROUTING.md");
 
 // ============================================================================
-// Helper: run the script
+// Helper: run the script (uses Bun.spawnSync for correct stdout capture in test runner)
 // ============================================================================
 
 function runScript(args: string[] = []): { stdout: string; stderr: string; exitCode: number } {
-  const result = spawnSync("bun", [SCRIPT_PATH, ...args], {
-    encoding: "utf8",
+  const tmpOut = path.join(os.tmpdir(), `gcr-test-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  const result = Bun.spawnSync(["bash", "-c", `bun "${SCRIPT_PATH}" ${args.map(a => `"${a}"`).join(" ")} > "${tmpOut}" 2>&1`], {
+    cwd: SCRIPT_DIR,
     env: { ...process.env },
   });
+  let stdout = "";
+  try {
+    stdout = fs.readFileSync(tmpOut, "utf8");
+    fs.unlinkSync(tmpOut);
+  } catch {}
   return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    exitCode: result.status ?? 1,
+    stdout,
+    stderr: "",
+    exitCode: result.exitCode ?? 1,
   };
 }
 
