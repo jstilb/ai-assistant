@@ -277,7 +277,7 @@ console.log(settings.daidentity.voiceId);
 
 // Load tiered config (checks USER first, then SYSTEM)
 const securityConfig = loadTieredConfig({
-  userPath: '~/.claude/USER/KAYASECURITYSYSTEM/patterns.yaml',
+  userPath: '~/.claude/KAYASECURITYSYSTEM/patterns.yaml',
   systemPath: '~/.claude/KAYASECURITYSYSTEM/patterns.example.yaml',
 });
 

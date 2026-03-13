@@ -19,8 +19,8 @@ import { z } from 'zod';
 
 // Test directory setup
 const TEST_DIR = join(tmpdir(), `config-loader-test-${Date.now()}`);
-const SYSTEM_CONFIG_DIR = join(TEST_DIR, 'skills', 'CORE', 'SYSTEM', 'config');
-const USER_CONFIG_DIR = join(TEST_DIR, 'skills', 'CORE', 'USER', 'config');
+const SYSTEM_CONFIG_DIR = join(TEST_DIR, 'docs', 'system', 'config');
+const USER_CONFIG_DIR = join(TEST_DIR, 'USER', 'config');
 const SETTINGS_PATH = join(TEST_DIR, 'settings.json');
 
 // Setup test environment

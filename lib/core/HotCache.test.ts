@@ -55,7 +55,7 @@ describe("HotCache", () => {
   describe("resolve", () => {
     test("resolves exact match", async () => {
       const cache = await HotCache.create(TEST_DIR);
-      expect(cache.resolve("Kaya")).toBe("Personal AI Infrastructure");
+      expect(cache.resolve("Kaya")).toBe("Personal AI Assistant");
     });
 
     test("resolves case-insensitive for short keys", async () => {

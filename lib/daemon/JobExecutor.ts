@@ -135,7 +135,7 @@ export function createJobExecutor(config: JobExecutorConfig): JobExecutor {
     logExecution(job.id, { event: 'spawn.start', prompt: prompt.slice(0, 200) });
 
     try {
-      const proc = Bun.spawn(['claude', '-p', prompt, '--allowedTools', 'Bash,Read,Write,Edit,Glob,Grep'], {
+      const proc = Bun.spawn(['/Users/[user]/.local/bin/claude', '-p', prompt, '--allowedTools', 'Bash,Read,Write,Edit,Glob,Grep'], {
         cwd: join(homedir(), '.claude'),
         stdout: 'pipe',
         stderr: 'pipe',
