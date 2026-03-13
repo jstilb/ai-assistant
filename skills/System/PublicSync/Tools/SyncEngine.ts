@@ -573,8 +573,8 @@ export class SyncEngine {
       const parts = file.split("/");
       let skill: string;
 
-      if (parts[0] === "skills" && parts.length >= 3) {
-        skill = parts[1]; // skills/<SkillName>/...
+      if (parts[0] === "skills" && parts.length >= 4) {
+        skill = parts[2]; // skills/<Category>/<SkillName>/...
       } else if (parts.length > 1) {
         skill = parts[0]; // top-level directory
       } else {
