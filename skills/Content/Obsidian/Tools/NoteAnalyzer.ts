@@ -219,7 +219,7 @@ function scoreTemplate(
   // 4. Existing frontmatter type match (strong boost)
   if (existingType) {
     if (existingType.toLowerCase() === template.type.toLowerCase()) {
-      score += 0.35; // Existing type is authoritative
+      score = Math.max(score, 0.75); // Existing type is authoritative
     }
   }
 
