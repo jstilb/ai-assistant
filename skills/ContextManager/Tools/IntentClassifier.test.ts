@@ -160,25 +160,25 @@ describe('IntentClassifier', () => {
   });
 
   describe('detectTopicChange', () => {
-    test('detects change from development to scheduling', () => {
-      const result = detectTopicChange('schedule a meeting for tomorrow', 'development');
+    test('detects change from development to scheduling', async () => {
+      const result = await detectTopicChange('schedule a meeting for tomorrow', 'development');
       expect(result.changed).toBe(true);
       expect(result.newProfile).toBe('scheduling');
     });
 
-    test('no change for same-profile prompt', () => {
-      const result = detectTopicChange('fix another bug', 'development');
+    test('no change for same-profile prompt', async () => {
+      const result = await detectTopicChange('fix another bug', 'development');
       expect(result.changed).toBe(false);
     });
 
-    test('no change for ambiguous prompt', () => {
-      const result = detectTopicChange('tell me something interesting', 'development');
+    test('no change for ambiguous prompt', async () => {
+      const result = await detectTopicChange('tell me something interesting', 'development');
       expect(result.changed).toBe(false);
     });
 
-    test('requires confidence > 0.7 for topic change', () => {
+    test('requires confidence > 0.7 for topic change', async () => {
       // A prompt that weakly matches a different profile shouldn't trigger change
-      const result = detectTopicChange('maybe check the calendar', 'development');
+      const result = await detectTopicChange('maybe check the calendar', 'development');
       // If confidence is low, changed should be false
       if (result.changed) {
         expect(result.confidence).toBeGreaterThan(0.7);
