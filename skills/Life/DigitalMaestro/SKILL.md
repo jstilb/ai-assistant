@@ -18,6 +18,7 @@ AI-powered learning system that combines FSRS v4 spaced repetition, concept grap
 | "quiz me on [topic]" | **PracticeOnly** | Generate and evaluate exercises |
 | "my progress", "learning stats" | **ProgressReport** | Show progress across all topics |
 | "teach me [concept]" | **ConceptIntro** | Introduce a specific concept with exercises |
+| New concept encountered with isNewConcept AND conceptComplexity >= MODERATE AND NOT learnerRequestedDirect | **MotivatingProblem** | USE WHEN: learner encounters a concept for the first time, concept has non-trivial depth, and learner has not requested direct explanation. Pre-phase before ConceptIntro: presents concrete problem, guides through naive attempts, surfaces aha moment, then names the concept. Skip if learner says "just tell me" or "skip this." |
 
 ---
 
