@@ -11,9 +11,20 @@ Complete Dungeon Master support for D&D 5th Edition (2014 rules). 12 tools spann
 ---
 ---
 
+## Customization
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| CR range | 1–20 | Default challenge rating range for generated monsters and encounters |
+| art style | fantasy illustration | Default art style for MonsterArt and MapPrompt image generation |
+| VTT format | foundry | Default VTT export format (foundry or roll20) |
+| Campaign save location | `~/.claude/MEMORY/State/` | Where CampaignState persists campaign data |
+
+---
+
 ## Voice Notification
 
-Use `notifySync()` from `lib/core/NotificationService.ts` on major completions:
+Use `notifySync()` from `../lib/core/NotificationService.ts` on major completions:
 
 - Monster generated: `"Frost Wyrm generated at Challenge Rating 12"`
 - Encounter designed: `"Hard encounter designed with 4 monsters for 3200 XP"`
