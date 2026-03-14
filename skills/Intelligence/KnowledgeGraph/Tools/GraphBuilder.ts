@@ -656,8 +656,8 @@ const GraphStatsSchema = z.object({
   mostConnected: z.array(z.string()),
   leastConnected: z.array(z.string()),
   clusterCount: z.number(),
-  tagCounts: z.record(z.number()),
-  folderCounts: z.record(z.number()),
+  tagCounts: z.record(z.string(), z.number()),
+  folderCounts: z.record(z.string(), z.number()),
 });
 
 const GraphStateSchema = z.object({
