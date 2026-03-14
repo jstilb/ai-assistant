@@ -15,10 +15,31 @@
  * @version 1.0.0
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
-import { execSync, spawnSync } from "child_process";
+import { execSync } from "child_process";
+
+const CLI_TMP_DIR = join('/tmp', 'test-cli-migratetomemorystore-' + Math.random().toString(36).slice(2));
+
+function runMigrateCli(args: string[]): { stdout: string; stderr: string; exitCode: number } {
+  mkdirSync(CLI_TMP_DIR, { recursive: true });
+  const stdoutFile = join(CLI_TMP_DIR, 'stdout.txt');
+  const stderrFile = join(CLI_TMP_DIR, 'stderr.txt');
+  const scriptPath = join(import.meta.dir, 'MigrateToMemoryStore.ts');
+  const cmdArgs = ['bun', scriptPath, ...args].map(a => `"${a}"`).join(' ');
+  let exitCode = 0;
+  try {
+    execSync(`${cmdArgs} 1>"${stdoutFile}" 2>"${stderrFile}"`, { timeout: 10000 });
+  } catch (e: unknown) {
+    exitCode = (e as { status?: number }).status ?? 1;
+  }
+  const stdout = readFileSync(stdoutFile, 'utf-8');
+  const stderr = readFileSync(stderrFile, 'utf-8');
+  return { stdout, stderr, exitCode };
+}
+
+afterAll(() => { try { rmSync(CLI_TMP_DIR, { recursive: true }); } catch {} });
 
 // Test fixtures directory
 const TEST_DIR = join(import.meta.dir, "test-fixtures", "migration");
@@ -400,10 +421,8 @@ describe("MigrateToMemoryStore", () => {
 
   describe("CLI Interface", () => {
     test("should show help with --help flag", () => {
-      const result = Bun.spawnSync(
-        ["bun", join(import.meta.dir, "MigrateToMemoryStore.ts"), "--help"],
-      );
-      const output = result.stdout.toString() + result.stderr.toString();
+      const result = runMigrateCli(["--help"]);
+      const output = result.stdout + result.stderr;
 
       expect(output).toContain("MigrateToMemoryStore");
       expect(output).toContain("--source");
@@ -412,25 +431,17 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should require --source or --all", () => {
-      expect(() => {
-        execSync(
-          `bun ${join(import.meta.dir, "MigrateToMemoryStore.ts")} --type learning`,
-          { encoding: "utf-8" }
-        );
-      }).toThrow();
+      const result = runMigrateCli(["--type", "learning"]);
+      expect(result.exitCode).not.toBe(0);
     });
 
     test("should execute dry-run successfully", () => {
-      const result = Bun.spawnSync(
-        [
-          "bun",
-          join(import.meta.dir, "MigrateToMemoryStore.ts"),
-          "--source", join(TEST_MEMORY_DIR, "LEARNING"),
-          "--type", "learning",
-          "--dry-run",
-        ],
-      );
-      const output = result.stdout.toString() + result.stderr.toString();
+      const result = runMigrateCli([
+        "--source", join(TEST_MEMORY_DIR, "LEARNING"),
+        "--type", "learning",
+        "--dry-run",
+      ]);
+      const output = result.stdout + result.stderr;
 
       expect(output).toContain("DRY RUN");
       expect(output).toContain("Scanned:");

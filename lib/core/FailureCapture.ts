@@ -77,9 +77,15 @@ interface ToolCallsJson {
 // Constants
 // ============================================================================
 
-const KAYA_DIR = process.env.KAYA_DIR || join(process.env.HOME || '', '.claude');
-const FAILURES_DIR = join(KAYA_DIR, 'MEMORY', 'LEARNING', 'FAILURES');
-const CONTEXT_SESSION_PATH = join(KAYA_DIR, 'MEMORY', 'State', 'context-session.json');
+function getKayaDir(): string {
+  return process.env.KAYA_DIR || join(process.env.HOME || '', '.claude');
+}
+function getFailuresDir(): string {
+  return join(getKayaDir(), 'MEMORY', 'LEARNING', 'FAILURES');
+}
+function getContextSessionPath(): string {
+  return join(getKayaDir(), 'MEMORY', 'State', 'context-session.json');
+}
 const MAX_PACKAGE_SIZE_BYTES = 50 * 1024; // 50KB
 const HAIKU_TIMEOUT_MS = 5000;
 
@@ -247,7 +253,7 @@ function getTranscriptLastLines(transcriptPath: string, n: number = 20): string 
  * Returns the response text, or null on timeout/error.
  */
 function callHaikuWithTimeout(prompt: string): string | null {
-  const inferencePath = join(KAYA_DIR, 'tools', 'Inference.ts');
+  const inferencePath = join(getKayaDir(), 'tools', 'Inference.ts');
   if (!existsSync(inferencePath)) return null;
 
   try {
@@ -305,14 +311,14 @@ export async function captureFailureDump(input: FailureDumpInput): Promise<strin
   const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   const slug = input.sessionId.replace(/-/g, '').slice(0, 6);
 
-  const packageDir = join(FAILURES_DIR, yearMonth, `${datePart}-${timePart}_${slug}`);
+  const packageDir = join(getFailuresDir(), yearMonth, `${datePart}-${timePart}_${slug}`);
   mkdirSync(packageDir, { recursive: true });
 
   // --- context-snapshot.json ---
   let contextSnapshot: unknown = null;
-  if (existsSync(CONTEXT_SESSION_PATH)) {
+  if (existsSync(getContextSessionPath())) {
     try {
-      contextSnapshot = JSON.parse(readFileSync(CONTEXT_SESSION_PATH, 'utf-8'));
+      contextSnapshot = JSON.parse(readFileSync(getContextSessionPath(), 'utf-8'));
     } catch {
       contextSnapshot = { error: 'Failed to parse context-session.json' };
     }
