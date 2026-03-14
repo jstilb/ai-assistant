@@ -43,6 +43,7 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 import { getKayaDir } from './lib/paths';
 import { recordSessionStart } from './lib/notifications';
+import { toToon } from '../lib/core/ToonHelper';
 
 // ============================================================================
 // Wisdom Frame Types & Constants (ISC 7500, 5832, 5544)
@@ -72,6 +73,18 @@ const WISDOM_TOKEN_BUDGET = 500;
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
+}
+
+/**
+ * Format queue items as TOON (Token-Oriented Object Notation) for token-efficient
+ * queue summary injection. Returns empty string for empty arrays.
+ *
+ * @param items - Array of queue item objects to encode
+ * @returns TOON-formatted string, or "" if items is empty
+ */
+export function formatQueueItemsAsToon(items: unknown[]): string {
+  if (items.length === 0) return '';
+  return toToon(items);
 }
 
 /**
@@ -498,4 +511,6 @@ This context is now active. Additional context loads dynamically as needed.
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

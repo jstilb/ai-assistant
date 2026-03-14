@@ -109,8 +109,12 @@ describe('ContextRouter.hook', () => {
       test('enabled mode: classifies conversational prompts without context', () => {
         const result = runHook({ session_id: `test-conv-${Date.now()}`, prompt: 'hello good morning' });
         expect(result.stderr).toContain('conversational');
-        // Conversational should not load extra context
-        expect(result.stdout).toBe('');
+        // Conversational profile injects routing pointer but no extra context files
+        // stdout is either empty or contains only the routing pointer system-reminder
+        if (result.stdout.length > 0) {
+          expect(result.stdout).toContain('system-reminder');
+          expect(result.stdout).not.toContain('Dynamic Context');
+        }
       });
 
       test('enabled mode: injects context for development prompts', () => {
