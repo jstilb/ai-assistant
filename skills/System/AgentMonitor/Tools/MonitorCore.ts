@@ -550,7 +550,7 @@ async function main(): Promise<void> {
 
         case 'list-pending': {
           const approvalManager = createApprovalManager();
-          const pending = await approvalManager.listPending();
+          const pending = approvalManager.getPendingApprovals();
           console.log(JSON.stringify({ pending, count: pending.length }, null, 2));
           break;
         }
