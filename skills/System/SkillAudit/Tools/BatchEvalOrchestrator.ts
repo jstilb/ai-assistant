@@ -525,6 +525,247 @@ function planPhase2(
 }
 
 // ============================================================================
+// Phase 2: Execution
+// ============================================================================
+
+interface Phase2Result {
+  skillName: string;
+  accuracy: number;
+  trainAccuracy: number;
+  testAccuracy: number | null;
+  improved: boolean;
+  bestDescription: string;
+  iterationsRun: number;
+  exitReason: string;
+}
+
+const RUNLOOP_PY = join(SKILLS_DIR, 'Development/CreateSkill/Tools/RunLoop.py');
+const EVALSET_GENERATOR = join(SKILLS_DIR, 'System/SkillAudit/Tools/BatchEvalSetGenerator.ts');
+
+async function generateEvalSets(batchDir: string, registry: Registry): Promise<string> {
+  const evalsDir = join(batchDir, 'phase2-trigger', 'eval-sets');
+  ensureDirectory(evalsDir);
+
+  const registryPath = join(batchDir, 'registry.json');
+  if (!existsSync(registryPath)) {
+    writeFileSync(registryPath, JSON.stringify(registry, null, 2));
+  }
+
+  console.log(`  Generating eval sets...`);
+  const proc = Bun.spawn(
+    ['bun', 'run', EVALSET_GENERATOR, registryPath, evalsDir],
+    { stdout: 'pipe', stderr: 'pipe' }
+  );
+  const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+
+  if (exitCode !== 0) {
+    console.error(`  Eval set generation failed: ${stderr}`);
+    throw new Error(`Eval set generation failed with code ${exitCode}`);
+  }
+
+  const lineCount = stdout.trim().split('\n').length;
+  console.log(`  Generated ${lineCount} eval sets`);
+  return evalsDir;
+}
+
+async function runPhase2ForSkill(
+  entry: RegistryEntry,
+  evalsDir: string,
+  phase2Dir: string,
+  iterations: number
+): Promise<Phase2Result> {
+  const skillPath = join(SKILLS_DIR, entry.canonicalPath);
+  const evalSetPath = join(evalsDir, `${entry.name}-evals.json`);
+  const resultsDir = join(phase2Dir, entry.name);
+  ensureDirectory(resultsDir);
+
+  if (!existsSync(evalSetPath)) {
+    return {
+      skillName: entry.name,
+      accuracy: 0,
+      trainAccuracy: 0,
+      testAccuracy: null,
+      improved: false,
+      bestDescription: '',
+      iterationsRun: 0,
+      exitReason: 'no_eval_set',
+    };
+  }
+
+  const args = [
+    'python3', RUNLOOP_PY,
+    '--eval-set', evalSetPath,
+    '--skill-path', skillPath,
+    '--max-iterations', iterations.toString(),
+    '--num-workers', '2',
+    '--timeout', '30',
+    '--runs-per-query', '1',
+    '--trigger-threshold', '0.5',
+    '--holdout', '0.4',
+    '--model', 'claude-sonnet-4-6',
+    '--verbose',
+    '--report', 'none',
+    '--results-dir', resultsDir,
+  ];
+
+  const proc = Bun.spawn(args, {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: { ...process.env, HOME: process.env.HOME },
+  });
+
+  const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+
+  if (exitCode !== 0) {
+    console.error(`    RunLoop failed for ${entry.name}: ${stderr.slice(-200)}`);
+    return {
+      skillName: entry.name,
+      accuracy: 0,
+      trainAccuracy: 0,
+      testAccuracy: null,
+      improved: false,
+      bestDescription: '',
+      iterationsRun: 0,
+      exitReason: `error: exit code ${exitCode}`,
+    };
+  }
+
+  // Parse RunLoop.py JSON output
+  try {
+    const output = JSON.parse(stdout);
+    const bestScore = output.best_score || '0/0';
+    const [passed, total] = bestScore.split('/').map(Number);
+    const accuracy = total > 0 ? passed / total : 0;
+
+    const trainScore = output.best_train_score || '0/0';
+    const [tPassed, tTotal] = trainScore.split('/').map(Number);
+    const trainAccuracy = tTotal > 0 ? tPassed / tTotal : 0;
+
+    let testAccuracy: number | null = null;
+    if (output.best_test_score) {
+      const [testPassed, testTotal] = output.best_test_score.split('/').map(Number);
+      testAccuracy = testTotal > 0 ? testPassed / testTotal : 0;
+    }
+
+    const improved = output.best_description !== output.original_description;
+
+    // Save results
+    const result: Phase2Result = {
+      skillName: entry.name,
+      accuracy,
+      trainAccuracy,
+      testAccuracy,
+      improved,
+      bestDescription: output.best_description || '',
+      iterationsRun: output.iterations_run || 0,
+      exitReason: output.exit_reason || 'unknown',
+    };
+
+    writeFileSync(join(resultsDir, 'results.json'), JSON.stringify(result, null, 2));
+    return result;
+  } catch (parseErr) {
+    console.error(`    Failed to parse RunLoop output for ${entry.name}`);
+    return {
+      skillName: entry.name,
+      accuracy: 0,
+      trainAccuracy: 0,
+      testAccuracy: null,
+      improved: false,
+      bestDescription: '',
+      iterationsRun: 0,
+      exitReason: 'parse_error',
+    };
+  }
+}
+
+async function executePhase2(
+  plan: Phase2Plan,
+  registry: Registry,
+  batchDir: string,
+  state: OrchestratorState,
+  parallel: number
+): Promise<Phase2Result[]> {
+  const phase2Dir = join(batchDir, 'phase2-trigger');
+  ensureDirectory(phase2Dir);
+
+  // Step 1: Generate eval sets
+  const evalsDir = await generateEvalSets(batchDir, registry);
+
+  // Step 2: Execute batches
+  const allResults: Phase2Result[] = [];
+
+  for (const batch of plan.batches) {
+    console.log(`\n  Batch ${batch.batchNum}/${plan.batches.length} (${batch.iterations} iterations):`);
+
+    // Skip already-done skills
+    const toRun = batch.skills.filter(s => {
+      const skillState = state.skills[s.name];
+      return !skillState || skillState.phase2 !== 'done';
+    });
+
+    if (toRun.length === 0) {
+      console.log(`    All skills in batch already done, skipping`);
+      continue;
+    }
+
+    // Run skills in this batch with limited parallelism
+    const batchSize = Math.min(parallel, toRun.length);
+    const chunks: Array<typeof toRun> = [];
+    for (let i = 0; i < toRun.length; i += batchSize) {
+      chunks.push(toRun.slice(i, i + batchSize));
+    }
+
+    for (const chunk of chunks) {
+      const promises = chunk.map(async (skill) => {
+        const entry = registry.entries.find(e => e.name === skill.name);
+        if (!entry) return null;
+
+        console.log(`    Running ${entry.name}...`);
+        if (state.skills[entry.name]) {
+          state.skills[entry.name].phase2 = 'running';
+        }
+        saveState(state);
+
+        const result = await runPhase2ForSkill(entry, evalsDir, phase2Dir, batch.iterations);
+
+        if (state.skills[entry.name]) {
+          state.skills[entry.name].phase2 = result.accuracy > 0 ? 'done' : 'failed';
+        }
+        saveState(state);
+
+        const emoji = result.accuracy >= 0.8 ? '✅' : result.accuracy >= 0.5 ? '🟡' : '❌';
+        const testStr = result.testAccuracy !== null ? ` (test: ${(result.testAccuracy * 100).toFixed(0)}%)` : '';
+        console.log(`    ${emoji} ${entry.name}: ${(result.accuracy * 100).toFixed(0)}%${testStr} [${result.exitReason}]`);
+
+        return result;
+      });
+
+      const results = await Promise.all(promises);
+      for (const r of results) {
+        if (r) allResults.push(r);
+      }
+    }
+  }
+
+  // Summary
+  const passing = allResults.filter(r => r.accuracy >= 0.8).length;
+  const failing = allResults.filter(r => r.accuracy < 0.8).length;
+  const improved = allResults.filter(r => r.improved).length;
+
+  console.log(`\n## Phase 2 Summary`);
+  console.log(`  ✅ Passing (>=80%): ${passing}`);
+  console.log(`  ❌ Below threshold: ${failing}`);
+  console.log(`  📝 Descriptions improved: ${improved}`);
+  console.log(`  Results: ${phase2Dir}/`);
+
+  return allResults;
+}
+
+// ============================================================================
 // Phase 3: Output Quality (generates execution plan)
 // ============================================================================
 
@@ -939,7 +1180,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // Phase 2: Trigger accuracy (plan only — execution requires subagents)
+  // Phase 2: Trigger accuracy
   if (phaseArg === '2') {
     // Load phase 1 results for triage
     const phase1Dir = join(batchDir, 'phase1-structural');
@@ -951,7 +1192,13 @@ async function main(): Promise<void> {
         } catch { /* skip */ }
       }
     }
-    planPhase2(registry, phase1Results, dryRun, batchDir);
+    const plan = planPhase2(registry, phase1Results, dryRun, batchDir);
+
+    if (!dryRun) {
+      console.log(`\n## Phase 2: Trigger Accuracy Evaluation`);
+      console.log(`  Skills: ${plan.totalSkills} | Batches: ${plan.batches.length} | Parallel: ${parallelArg}`);
+      await executePhase2(plan, registry, batchDir, state!, parallelArg);
+    }
   }
 
   // Phase 3: Output quality (plan only)
@@ -1018,6 +1265,7 @@ export {
   runPhase1,
   runPhase1ForSkill,
   planPhase2,
+  executePhase2,
   planPhase3,
   buildDashboard,
   generateDashboardHtml,
