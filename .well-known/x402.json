@@ -1,0 +1,12 @@
+{
+  "name": "jstilb/ai-assistant",
+  "description": "Personal AI Infrastructure — 60+ composable skills, autonomous task execution, voice interaction, and persistent memory. Built on Claude Code.",
+  "accepts": [
+    {
+      "network": "eip155:8453",
+      "asset": "USDC",
+      "address": "YOUR_WALLET_ADDRESS"
+    }
+  ],
+  "resources": []
+}
