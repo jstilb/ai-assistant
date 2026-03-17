@@ -75,7 +75,7 @@ interface TriageResult {
 // ============================================================================
 
 const HOME = homedir();
-const SKILL_DIR = join(HOME, '.claude', 'skills', 'KayaUpgrade');
+const SKILL_DIR = join(HOME, '.claude', 'skills', 'System', 'KayaUpgrade');
 const STATE_DIR = join(SKILL_DIR, 'State');
 
 const args = process.argv.slice(2);

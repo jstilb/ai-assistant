@@ -73,7 +73,7 @@ interface NewVideo {
 
 // Config
 const HOME = homedir();
-const SKILL_DIR = join(HOME, '.claude', 'skills', 'KayaUpgrade');
+const SKILL_DIR = join(HOME, '.claude', 'skills', 'System', 'KayaUpgrade');
 const STATE_DIR = join(SKILL_DIR, 'State');
 const STATE_FILE = join(STATE_DIR, 'youtube-videos.json');
 const CHANNELS_FILE = 'youtube-channels.json';
