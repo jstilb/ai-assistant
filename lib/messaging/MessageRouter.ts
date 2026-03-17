@@ -23,6 +23,8 @@
  */
 
 import type { MessageQueue, MessageChannel, MessagePriority } from './MessageQueue';
+import type { CallDetectorConfig, CallDetectionResult } from '../core/CallDetector';
+import { detectActiveCall } from '../core/CallDetector';
 
 // ============================================================================
 // Types
@@ -63,6 +65,8 @@ export interface MessageRouterConfig {
     start: number; // Hour 0-23
     end: number;   // Hour 0-23
   };
+  /** Call detection guard — downgrades voice to push during active calls */
+  callGuard?: CallDetectorConfig;
 }
 
 /**
@@ -123,7 +127,36 @@ function isQuietHours(config?: { enabled: boolean; start: number; end: number })
  * Create a MessageRouter instance
  */
 export function createMessageRouter(config: MessageRouterConfig): MessageRouter {
-  const { messageQueue, escalationThresholdMs = 300000, quietHours } = config;
+  const { messageQueue, escalationThresholdMs = 300000, quietHours, callGuard } = config;
+
+  // ── Call detection cache (30s TTL) ──
+  const CALL_CACHE_TTL_MS = 30_000;
+  let cachedCallState: CallDetectionResult = { onCall: false, detectedVia: null };
+  let callStateCheckedAt = 0;
+
+  function refreshCallStateCache(): void {
+    if (!callGuard?.enabled) return;
+    detectActiveCall(callGuard).then(result => {
+      const changed = cachedCallState.onCall !== result.onCall;
+      cachedCallState = result;
+      callStateCheckedAt = Date.now();
+      if (changed) {
+        console.log(`[CallGuard] ${result.onCall ? `Call detected via ${result.detectedVia}` : 'Call ended'}`);
+      }
+    }).catch((err) => {
+      console.log(`[CallGuard] Detection error (fail-open): ${err}`);
+    });
+  }
+
+  function isOnCall(): boolean {
+    if (!callGuard?.enabled) return false;
+    const stale = Date.now() - callStateCheckedAt > CALL_CACHE_TTL_MS;
+    if (stale) refreshCallStateCache();
+    return cachedCallState.onCall;
+  }
+
+  // Warm the cache on creation
+  refreshCallStateCache();
 
   function route(request: RouteRequest): string[] {
     const { content, outputMode, priority, jobDuration, jobId } = request;
@@ -140,8 +173,14 @@ export function createMessageRouter(config: MessageRouterConfig): MessageRouter 
     // During quiet hours, downgrade voice to push (unless critical)
     if (isQuietHours(quietHours) && priority !== 'critical') {
       channels = channels.map(ch => ch === 'voice' ? 'push' : ch);
-      // Deduplicate
       channels = [...new Set(channels)];
+    }
+
+    // During active calls, downgrade voice to push
+    if (isOnCall() && !(callGuard?.allowCriticalOverride && priority === 'critical')) {
+      channels = channels.map(ch => ch === 'voice' ? 'push' : ch);
+      channels = [...new Set(channels)];
+      console.log(`[CallGuard] Downgraded voice→push for ${jobId ?? 'unknown'} (detected via ${cachedCallState.detectedVia})`);
     }
 
     // Duration-aware escalation: if job took longer than threshold, also push

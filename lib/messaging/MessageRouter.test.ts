@@ -122,4 +122,48 @@ describe('MessageRouter', () => {
 
     expect(ids.length).toBeGreaterThan(0);
   });
+
+  it('callGuard config does not crash', () => {
+    const mq = createMessageQueue({ maxSize: 100 });
+    const router = createMessageRouter({
+      messageQueue: mq,
+      callGuard: {
+        enabled: true,
+        detectApps: ['zoom'],
+        useMicDetection: false,
+        timeoutMs: 500,
+        allowCriticalOverride: true,
+      },
+    });
+
+    expect(() => {
+      router.route({
+        content: 'During potential call',
+        outputMode: 'voice',
+        priority: 'normal',
+      });
+    }).not.toThrow();
+  });
+
+  it('callGuard disabled does not affect routing', () => {
+    const mq = createMessageQueue({ maxSize: 100 });
+    const router = createMessageRouter({
+      messageQueue: mq,
+      callGuard: {
+        enabled: false,
+        detectApps: [],
+        useMicDetection: false,
+        timeoutMs: 500,
+        allowCriticalOverride: true,
+      },
+    });
+
+    const ids = router.route({
+      content: 'Voice with guard disabled',
+      outputMode: 'voice',
+      priority: 'normal',
+    });
+
+    expect(ids.length).toBeGreaterThan(0);
+  });
 });
