@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@google/genai": "^1.41.0",
+    "@google/genai": "^2.3.0",
     "@toon-format/toon": "^2.1.0",
     "csv-parse": "^6.1.0",
     "handlebars": "^4.7.8",
