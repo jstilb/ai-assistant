@@ -1,0 +1,5 @@
+# Protect prompt/workflow files from worktree merge overwrites.
+# When feature branches (created before prompt edits) merge back to main,
+# main's version of these files wins on conflict.
+skills/Automation/AutonomousWork/Workflows/Orchestrate.md merge=ours
+skills/Automation/AutonomousWork/Prompts/*.md merge=ours

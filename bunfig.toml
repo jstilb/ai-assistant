@@ -1,0 +1,5 @@
+[test]
+
+# Limit test discovery to avoid scanning worktrees (which are full repo copies)
+# Without this, bun test scans 5x+ files causing EMFILE errors
+root = "."

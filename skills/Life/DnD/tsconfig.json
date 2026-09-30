@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "types": ["bun-types"],
+    "typeRoots": ["~/.claude/node_modules/@types", "~/.claude/node_modules"]
+  },
+  "files": [
+    "Tools/CampaignState.ts",
+    "Tools/CRCalculator.ts",
+    "Tools/EncounterBalancer.ts",
+    "Tools/HomebrewValidator.ts",
+    "Tools/LootGenerator.ts",
+    "Tools/MapPrompt.ts",
+    "Tools/MonsterArt.ts",
+    "Tools/MonsterGenerator.ts",
+    "Tools/SpellForge.ts",
+    "Tools/StatBlock.ts",
+    "Tools/VTTExporter.ts",
+    "Tools/shared/DnDData.ts",
+    "Tools/__tests__/DnDData.test.ts",
+    "Tools/__tests__/paths.test.ts"
+  ]
+}

@@ -1,0 +1,169 @@
+# Task: MemoryStore retrieval-quality golden regression — recall@k and MRR
+#
+# WHY (Context Integrity Program, Slice D1): nothing in Kaya measured whether
+# retrieval is still USEFUL. FreshnessGuard measures recency, which is not
+# usefulness. lib/core/MemoryStore.ts's search() has no relevance ranking and
+# no embeddings — it filters the index to fullText-substring candidates, then
+# sorts strictly by `timestamp` descending (see search()'s
+# `entries.sort((a,b) => ... b.timestamp - a.timestamp)`). A grep of the whole
+# repo before this task was written found zero hits for
+# recall@k/recallAtK/MRR/reciprocal-rank/NDCG anywhere in Kaya's own code —
+# this is the first retrieval-quality metric that exists.
+#
+# H2 STATIC-INPUT PATTERN, LIVE-PRODUCED INPUT (same pattern as
+# kaya_agent_trace_error_rate_golden.yaml): no agent is spawned. The real
+# work — calling the REAL, unmodified memoryStore.search({fullText}) against
+# the REAL ~/.claude/MEMORY entry corpus, then scoring it with the pure,
+# unit-tested recallAtK()/reciprocalRank() functions — happens in
+# setup_commands (deterministic code, zero LLM calls, zero live agent spawn).
+# The fixture_accuracy grader below only reads the JSON record that already
+# wrote.
+#
+# GOLDEN SET (Data/golden/retrieval-quality-fixtures.jsonl, N=11): real
+# queries, hand-labelled. 10 are "known-item" queries — the verbatim,
+# recurring title of a real historical Kaya work item (AutonomousWork retry
+# logs sharing a real metadata.itemId, or a real QueueRouter decision
+# cluster) — ground truth was derived MECHANICALLY (exact itemId or exact
+# title-substring match across entries/*/*.json), zero LLM judgment in the
+# labelling. 1 is a genuine historical Jm prompt verbatim from
+# ~/.claude/history.jsonl (a real record of past Claude Code session inputs,
+# not invented for this eval), hand-verified against real entry content. See
+# the golden JSONL's per-fixture `notes` field for the full trail on each of
+# the 11 — several other candidate real queries were investigated and
+# DROPPED (not padded in) because MemoryStore's corpus turned out to hold no
+# genuinely relevant document for them (e.g. queries referencing LucidTasks
+# task IDs — that DB is a different corpus MemoryStore never indexes).
+#
+# WHAT "accuracy" MEANS HERE — READ BEFORE CHANGING min_accuracy: the reused
+# fixture_accuracy grader needs a single boolean-per-query `correct` signal
+# to compute its required top-level `accuracy` field. That signal here is
+# hit-rate@10 (>=1 relevant doc found anywhere in the top 10) — it is NOT
+# recall@k or MRR. The real headline metrics this slice exists to produce are
+# mean_recall_at_5, mean_recall_at_10, and mrr — extra fields
+# RetrievalQualityFixtureRunner.ts appends to the same JSON record, read by
+# humans/the program ledger, not by this grader.
+
+id: kaya_retrieval_quality_golden
+description: >
+  Regression eval: recall@k and MRR for MemoryStore.search()'s fullText
+  retrieval path, measured against an 11-query hand-labelled golden set of
+  real queries against the real ~/.claude/MEMORY entry corpus.
+
+type: regression
+domain: general
+source: manual
+
+setup:
+  # HISTORY — read before re-raising this: the original D1 build measured
+  # ~60s PER QUERY (11 queries ≈ 11 real minutes) and set a 20-minute budget
+  # for it, which is why this eval was left out of the nightly suite. That
+  # cost was NOT an inherent property of search(): loadEntry() re-read and
+  # re-parsed the whole 4.2MB MEMORY/index.json for EVERY candidate, inside a
+  # loop over all ~6.9k indexed entries. Fixed 2026-07-30 in
+  # lib/core/MemoryStore.ts (loadEntryFromIndex + per-call archive cache);
+  # measured on the same live corpus, the same single query went 59.24s ->
+  # 0.18s and the full 11-query run 11min -> 1.87s, with byte-identical
+  # metrics. Full run re-measured 2026-07-31 after the index rebuild grew the
+  # corpus 6,937 -> 7,998 entries: 3.0s. 5 minutes is ~100x headroom over that;
+  # a run that actually needs more than this has regressed, not grown.
+  timeout_ms: 300000
+  scenario_prompt: "No agent run required. Live MemoryStore.search() retrieval + recall@k/MRR computation is performed by setup_commands; see the fixture_accuracy grader's record_path."
+  setup_commands:
+    - "bun ~/.claude/skills/Intelligence/Evals/Tools/RetrievalQualityFixtureRunner.ts --fixtures ~/.claude/skills/Intelligence/Evals/Data/golden/retrieval-quality-fixtures.jsonl --out ~/.claude/MEMORY/EVALS/live-fixture-runs/retrieval-quality.json"
+
+graders:
+  - type: fixture_accuracy
+    weight: 1.0
+    required: true
+    params:
+      record_path: "~/.claude/MEMORY/EVALS/live-fixture-runs/retrieval-quality.json"
+      # hit-rate@10 gate (see header) — NOT recall@k or MRR. Baseline live
+      # run: hit-rate@10 = 90.9% (10/11) as of the 2026-07-31 index rebuild
+      # (was 72.7% / 8-of-11 against the orphaned index — see
+      # reference_solution). A future DROP below this line means fewer real
+      # queries find ANYTHING relevant in the top 10 — a real regression, not
+      # noise.
+      #
+      # RAISED 0.60 -> 0.80 with the rebuild, deliberately, to PRESERVE the
+      # original tolerance rather than inherit a now-slack gate. One fixture is
+      # 1/11 = 9.1 points. The old pairing (baseline 0.727, floor 0.60)
+      # tolerated exactly one fixture regressing and failed on two; 0.80
+      # against a 0.909 baseline reproduces that shape. Leaving it at 0.60
+      # would have let the corpus silently re-orphan all the way back to the
+      # pre-rebuild 8/11 without failing — i.e. the eval would no longer detect
+      # the very defect this rebuild fixed.
+      min_accuracy: 0.80
+
+trials: 1
+# Matches min_accuracy above — see that param's comment for why 0.80.
+# runGraders() applies this against the grader's weighted aggregate score
+# (== the hit-rate@10 accuracy here, single grader, weight 1.0), so this must
+# stay <= min_accuracy or a passing grader could still fail the trial.
+pass_threshold: 0.80
+
+reference_solution: |
+  CURRENT BASELINE — live run against the real ~/.claude/MEMORY corpus,
+  2026-07-31, immediately after the index rebuild described below (11 real,
+  hand-labelled queries — see Data/golden/retrieval-quality-fixtures.jsonl for
+  the exact labelling method per fixture):
+    mean recall@5:  0.6833
+    mean recall@10: 0.8939
+    MRR:            0.7727
+    hit-rate@10:    90.9% (10/11) — the fixture_accuracy grader's pass/fail signal
+  These are the headline numbers the Context Integrity Program ledger
+  tracks. A change in them reflects a real change in MemoryStore's retrieval
+  behavior or its corpus — this eval is a scaffold-quality baseline
+  (N=11, single corpus, single fullText query strategy), not a
+  precision instrument; see the Slice D1 build report for the honest
+  read on what it can and cannot detect.
+
+  PRIOR BASELINE, and why it moved (2026-07-31 index rebuild, Item C):
+    mean recall@5 0.4966 · recall@10 0.6227 · MRR 0.6818 · hit-rate@10
+    72.7% (8/11), first measured 2026-07-29 and reproduced to the digit on
+    07-30 and again on 07-31 immediately before the rebuild.
+  MEMORY/entries/ held 7,668 entry files while index.json held 6,937 ids —
+  1,062 entries existed on disk and were absent from the index. search()
+  iterates only Object.keys(index.entries), so those 1,062 were unreachable by
+  ANY query. `bun lib/core/MemoryStore.ts rebuild` took the index to 7,998
+  (+1,062 recovered; exactly 1 id dropped, mr3pb67n-hFLFPF, which had no
+  backing file in entries/ OR archive/ — already unloadable, so the rebuild
+  made the index honest rather than losing anything). Orphans: 1,062 -> 0.
+  The metric movement is therefore a corpus repair, NOT a retrieval-algorithm
+  change: search() is byte-identical across the two runs.
+
+  Re-verified 2026-07-30 after the MemoryStore.search() index-reparse fix:
+  all four numbers reproduced to the digit, confirming that change was
+  purely a performance fix with no retrieval-behavior change.
+
+  KNOWN, ROOT-CAUSED FLOOR — 1 of the 11 fixtures retrieves zero candidates:
+    - retq-11: NOT an orphan problem — 3 of its 4 relevant ids were already
+      indexed before the rebuild. It is a 234-char verbatim Jm prompt, and
+      search() requires an entry's content or title to contain that ENTIRE
+      string as one substring. The relevant entries contain the distinctive
+      token "scratchpadprocessing" but not the whole sentence, so
+      `includes(wholeQuery)` cannot match. The grep-derived ground truth
+      matched on distinctive substrings; the production search matches on the
+      whole query. Changing that is a retrieval-semantics decision, not an
+      eval fix — deliberately still unfixed, and deliberately left in the
+      golden set, since removing it would inflate the baseline.
+
+  RESOLVED FLOOR (was 3 fixtures, now 1): retq-05 and retq-06 retrieved zero
+  purely because every one of their hand-labelled relevant entries sat in
+  MEMORY/entries/2026-03/ outside the index. The rebuild took them to 5 and 7
+  retrieved respectively, both MISS -> HIT at recall@10 = 1.000. retq-07 and
+  retq-10 improved for the same reason without changing verdict (4->7 and
+  4->9 retrieved). That retq-11 did NOT move is the discriminating evidence
+  that it was always a separate cause, exactly as diagnosed on 07-30 — had it
+  also improved, the two-causes reading would have been wrong.
+
+tags:
+  - kaya
+  - memorystore
+  - retrieval
+  - recall
+  - mrr
+  - context-integrity
+  - regression
+  - pipeline
+
+created_at: "2026-07-29"

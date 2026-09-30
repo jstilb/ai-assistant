@@ -1,0 +1,8 @@
+# Fable 5.1 tuning review (2026-09-03) flagged CLAUDE_CODE_EFFORT_LEVEL=xhigh
+# in settings.json env as the single biggest cost lever. This profile drops
+# just that key so the effort default (high) applies.
+name: no-effort-pin
+description: "Full setup minus the CLAUDE_CODE_EFFORT_LEVEL env pin (model default effort applies)"
+base: full
+remove:
+  env: [CLAUDE_CODE_EFFORT_LEVEL]

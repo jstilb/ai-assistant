@@ -1,0 +1,144 @@
+# Task: AutonomousWork SkepticalVerifier Verdict Accuracy
+# WHY: Catches verifier drift — when the SkepticalVerifier issues PASS verdicts with
+#      unresolved mandatory concerns, or FAILs work that was clearly complete.
+#      The signal is verdict-justification consistency, not ground-truth correctness.
+#
+# META-JUDGMENT FRAMING:
+# This eval does NOT re-run the verifier. It asks: "Given the verifier's own recorded
+# evidence (verdict + concerns + ISC coverage + transcript), was the verdict JUSTIFIED?"
+# This is a consistency/plausibility check — a PASS with serious unaddressed requirements
+# and no debunking is unjustified regardless of whether the work was actually done.
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The nightly_judge grader reads the
+# golden JSONL directly from record_path and scores it for internal consistency and
+# rubric alignment.
+#
+# LIVE-SOURCE WIRING:
+# The live verification records are in MEMORY/WORK/work-queue.json under
+# verification.{verdict,concerns,iscRowsVerified,iscRowsTotal} per item.
+# To wire live records: export recent items with a verdict via:
+#   python3 -c "
+#     import json; d=json.load(open('MEMORY/WORK/work-queue.json'))
+#     items = d if isinstance(d, list) else d.get('items', d.get('queue', []))
+#     recent = [i for i in items if isinstance(i,dict) and i.get('verification',{}).get('verdict')][-20:]
+#     [print(json.dumps({'id':i['id'],'title':i.get('title',''),'verification':i.get('verification',{})})) for i in recent]
+#   "
+# Until a dedicated exporter is built, this UseCase runs as a golden-set regression
+# (re-scoring the trusted ensemble labels via the rubric) — meaningful as a sanity-check
+# that current verdicts remain consistent with the justification rubric.
+#
+# PHASE-L COVERAGE:
+# Phase-L live verification snapshots are in MEMORY/AutonomousWork/live-verification/<itemId>/.
+# The golden also includes 7 Phase-L cases labeled via ensemble.
+# A separate monitor for Phase-L drift: check that live FAIL snapshots have concrete
+# failing scenarios (not all-passing but FAIL verdict, or vice versa).
+
+id: kaya_verifier_accuracy_golden
+description: >
+  Regression eval: score the verifier-accuracy golden set for internal consistency
+  and rubric alignment. Passes when the judge finds the golden justification labels
+  coherent and consistent with the verdict-justification rubric.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the golden JSONL directly. The scenario_prompt below is a stub that satisfies
+  # the schema; execution is driven by the grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The golden JSONL is the record to evaluate — nightly_judge reads this file
+      # and scores its quality against the rubric below.
+      record_path: "skills/Intelligence/Evals/Data/golden/verifier-accuracy-golden.jsonl"
+
+      # record_source maps to a live canonical directory for future wiring.
+      # When a work-queue exporter exists, set record_path to a JSONL sidecar from
+      # MEMORY/WORK/work-queue.json and remove the static golden_set_path.
+      record_source: "work-queue"
+
+      rubric: |
+        You are evaluating a golden set of verifier-verdict justification labels for the
+        AutonomousWork SkepticalVerifier. Each record in the golden set contains:
+          - id: the work item or Phase-L snapshot identifier
+          - type: "verifier" (from work-queue.json) or "phase-l" (live snapshot)
+          - verdict: the verifier's stated verdict (PASS / FAIL / PASS_MANUAL)
+          - isc_verified / isc_total: ISC row coverage
+          - concerns: the verifier's own concern list
+          - justified: ensemble label ("justified" or "unjustified", or null if divergent)
+          - expected_reasoning: human-curated explanation of why the label is correct
+
+        SCORING CRITERIA (score 0.0–1.0):
+        1. Coverage (0.25): The golden has ≥15 verifier cases + ≥5 Phase-L cases.
+        2. Verdict mix (0.25): Both PASS and FAIL/PASS_MANUAL verdicts are represented.
+           A golden set with only PASS verdicts would be blind to verifier miss-rates.
+        3. Label coherence (0.30): The justified/unjustified labels are consistent with
+           the rubric:
+           - "justified" FAIL with concrete failing evidence = correct
+           - "justified" PASS with full ISC + no unresolved concerns = correct
+           - "justified" PASS with infra failures (Tier-2 timeout, nested-session error)
+             but full ISC = correct (infra issues ≠ implementation gaps)
+           - "unjustified" PASS with serious unresolved mandatory requirements = correct
+           - The expected_reasoning must explain the label plausibly
+        4. Divergent handling (0.10): Divergent cases are flagged (divergent:true)
+           and their justified field is null — this is correct behavior, not a deficiency.
+        5. Phase-L accuracy (0.10): Phase-L "justified" FAIL entries have concrete
+           failing scenario evidence; Phase-L "justified" PASS entries have all-passing
+           scenarios.
+
+        RUBRIC FOR JUSTIFIED vs UNJUSTIFIED:
+        Justified PASS: concerns are infra failures, false-positives (self-debunked), or
+          minor gaps; ISC coverage ≥80% OR low ISC explained by era/manual-verify.
+        Unjustified PASS: unresolved mandatory spec requirements flagged in concerns with
+          no debunking; 0/N ISC with no explanation.
+        Justified FAIL: concrete failing test evidence, missing mandatory deliverables,
+          0/N ISC with no debunking.
+        Unjustified FAIL: all concerns are debunked false positives but verdict is FAIL.
+
+        Return a score 0.0–1.0 where:
+          0.9–1.0: All criteria met, labels are coherent, mix is good
+          0.7–0.8: Minor issues (slight imbalance, 1-2 borderline labels)
+          0.5–0.6: Coverage thin or label coherence questionable
+          <0.5: Significant problems
+
+pass_threshold: 0.80
+
+trials: 1
+
+tags:
+  - kaya
+  - autonomouswork
+  - verifier
+  - accuracy
+  - regression
+  - phase-l
+
+created_at: "2026-06-18"
+
+notes: |
+  KNOWN LIMITATIONS OF THIS EVAL:
+  1. Meta-judgment fuzziness: The ensemble labels "justification" not ground-truth
+     correctness. A well-reasoned but wrong verdict could score as "justified."
+  2. PASS skew: The work-queue has 147 PASS, 1 FAIL, 2 PASS_MANUAL. The golden
+     oversamples from interesting PASS sub-types to compensate. This means the golden
+     does NOT represent the true base rate — it is a stratified sample.
+  3. Infra vs. implementation: Tier-2/3 timeout errors are structural (Claude-Code-in-
+     Claude-Code nesting constraint), not implementation failures. The rubric correctly
+     treats these as "justified PASS" but this could mask systematic Tier-2 degradation.
+  4. Phase-L completeness: Only 10 Phase-L item dirs exist; live-smoke and mnt5gb50
+     dominate the FAIL examples. More Phase-L FAILs would strengthen the signal.
+  5. Self-debunking reliability: The rubric trusts the verifier's own debunking language.
+     If the verifier learns to add boilerplate debunking to avoid FAILs, this eval would
+     miss it. Pairing with a code-coverage or test-execution audit would close this gap.
+  6. Unjustified coverage (2026-06-19): the real work-queue is so PASS-skewed and its
+     concerns so often debunked that the golden had no CLEAN unjustified-PASS exemplar.
+     mn3q0a01-path-a / mn3q0a02-path-b were originally labeled unjustified but their
+     unaddressed-requirement concerns are explicitly DEBUNKED as false positives, so per
+     the rubric they are justified (corrected). To keep the unjustified-detection direction
+     exercised, one hand-authored adversarial record (id: synthetic-unjustified-pass-01,
+     source: "synthetic-adversarial") was added: a PASS with 5/5 undebunked mandatory gaps,
+     1/9 ISC, and no tests. Future work: mine more real unjustified PASSes as the queue grows.

@@ -1,0 +1,117 @@
+# Task: ISC Quality Golden Regression
+# WHY: Monitors the pipeline's spec-quality judgment — whether generated specs have
+#      substantive ISC (concrete verify commands, observable outcomes) vs. barren ISC
+#      (vague skeleton rows). Previously, a regex gate caused false-positive "barren spec"
+#      rejections on known-grilled specs (mq5vmjmh, mq647gx0). This eval guards against
+#      that regression and validates the rubric stays calibrated.
+#
+# FINDING NOTE: 4 of the 13 real specs in the golden set were labeled FAIL by the ensemble
+# (eval-regression-kaya-coding-performance, eval-regression-kaya-execution-fidelity,
+#  eval-regression-kaya-personal-alignment, eval-regression-kaya-regression). These are
+# legitimate findings — those specs use thin ISC formats ("Eval run" / "Inspect CLAUDE.md"
+# without concrete commands) that the rubric correctly classifies as barren. The ensemble
+# is working as intended. (eval-regression-kaya-security is labeled PASS in the golden, NOT
+# fail — it was previously mislisted here; the JSONL and reference_solution both count 4 fails.)
+# NOTE ON `expected_hint`: that JSONL field records the spec's INTENT (these specs aim to
+# do good work), NOT the ground-truth ISC-quality label. The authoritative label is the
+# `quality` field. So `expected_hint:"pass"` + `quality:"fail"` on these 4 is intentional,
+# not a contradiction — the spec is well-intentioned but its ISC section is barren. Graders
+# read `quality`; `expected_hint` is provenance only.
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The nightly_judge grader reads the
+# golden JSONL directly from record_path and scores it for quality, distribution,
+# and internal consistency.
+#
+# LIVE-SOURCE WIRING NOTE:
+# The live judgment is now made by judgeSpecQuality() in QueueRouter (main branch).
+# To wire live records: export recent spec-quality decisions from the spec-pipeline
+# decision log and update record_path. Currently runs as golden-set regression
+# (re-scoring trusted labels against the rubric) — still meaningful as a sanity-check
+# that the rubric and golden labels are internally consistent across iterations.
+
+id: kaya_isc_quality_golden
+description: >
+  Regression eval: score the ISC-quality golden set for correctness and coverage
+  using the RICH/BARREN rubric. Passes when the judge finds the golden labels
+  coherent, well-distributed, and consistent with the ISC quality rubric.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the golden JSONL directly from record_path. The scenario_prompt below is a stub
+  # that satisfies the schema; execution is driven by the grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The golden JSONL is the record to evaluate — nightly_judge reads this file
+      # and scores its quality against the rubric below.
+      record_path: "skills/Intelligence/Evals/Data/golden/isc-quality-golden.jsonl"
+      rubric: |
+        You are evaluating a golden set of ISC-quality labels for a spec-pipeline
+        quality classifier. The golden set is a JSONL file where each line is a
+        quality judgment for a software spec's ISC (Ideal State Criteria) section.
+
+        Valid quality values: "pass" (RICH ISC) | "fail" (BARREN ISC) | null (divergent)
+
+        SCORING CRITERIA (all must hold for a high score):
+
+        1. COVERAGE: The golden set has ≥15 total entries.
+
+        2. DISTRIBUTION: Both "pass" and "fail" values are represented. At minimum:
+           - ≥8 entries labeled "pass" (RICH ISC with concrete verify steps)
+           - ≥5 entries labeled "fail" (BARREN ISC — vague, stub, or no verify steps)
+
+        3. CORRECTNESS SAMPLING: Sample 5 representative entries with their specId.
+           Verify the label direction is plausible given the specId context:
+           - Specs with IDs like "synthetic-barren-*" should be labeled "fail"
+           - Known grilled specs (mq5vmjmh, mq647gx0) should be labeled "pass"
+           - Specs labeled "pass" should logically represent production-quality criteria
+           - Specs labeled "fail" should logically represent thin/skeleton criteria
+
+        4. KNOWN GRILLED SPECS: The entries for specId "mq5vmjmh" and "mq647gx0"
+           must both have quality: "pass". If either is labeled "fail" or null,
+           deduct 0.3 from the final score (these are confirmed-grilled rich specs
+           that previously suffered false-negative barren detection).
+
+        5. CONSENSUS QUALITY: No divergent entries (quality: null) should be present
+           for clearly unambiguous cases (synthetic-barren-* entries should never diverge).
+
+        SCORE (0.0 to 1.0):
+          1.0 — All criteria met, both grilled specs pass, good distribution
+          0.8 — Coverage and distribution met; 1-2 marginal labels; grilled specs pass
+          0.6 — Coverage met but distribution thin or one grilled spec missed
+          0.0 — Coverage < 15, or systematic misclassification, or grilled specs fail
+
+      # Reference: the ISC rubric (same rubric the spec-quality judge uses)
+      golden_set_path: "skills/Intelligence/Evals/Data/golden/isc-quality-golden.jsonl"
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  The golden JSONL should contain 21 entries:
+  - 9 consensus PASS (7 real rich specs + 2 additional rich specs), 12 FAIL (4 real
+    thin-ISC specs + 8 synthetic barren), 0 divergent.
+  - Known grilled specs mq5vmjmh and mq647gx0 both labeled "pass" (confirmed correct).
+  - 4 real specs with thin ISC (eval-regression-kaya-*) labeled "fail" — this is a
+    legitimate finding: those specs use vague verify methods ("Eval run", "Inspect CLAUDE.md")
+    without concrete commands, which the rubric correctly classifies as barren.
+  - All 8 synthetic-barren-* entries labeled "fail" (0 divergent on these).
+  - Real: 13 entries, Synthetic: 8 entries.
+  - All labeled with source: "ensemble", criteria_version: 1.
+
+tags:
+  - kaya
+  - specsheet
+  - isc-quality
+  - golden
+  - regression
+  - pipeline
+
+created_at: "2026-06-18"

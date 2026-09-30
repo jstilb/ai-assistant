@@ -1,0 +1,144 @@
+# Task: ISC-Extraction-Fidelity LIVE Monitor (Slice 4)
+# WHY: Monitors that the LIVE LLM ISC-extraction step (comprehendSpec / LLMSpecComprehension)
+#      keeps faithfully extracting structured rows from real specs the pipeline processes —
+#      catching degradation (0-row extractions, empty descriptions, structural corruption)
+#      BEFORE it produces false-PASS-with-zero-verification work.
+#
+# REPOINTED TO LIVE — 2026-06-21 (was a golden regression baseline through 2026-06-20):
+#   record_path now reads the live source MEMORY/MONITORING/comprehension-parity.jsonl
+#   (windowed to the most recent 200 records via max_records). This is the monitor doing
+#   its actual job — scoring REAL extractions — rather than regression-testing a static
+#   golden file. The repoint was gated on volume and is now cleared (≥20 healthy records).
+#
+#   PRODUCER: `comprehendSpec()` (LLMSpecComprehension.ts) appends each LIVE extraction
+#   {specId, rowCount, rowDescriptions, complexityHint, truncated, source:"comprehension-live",
+#   ts} via ComprehensionFidelityLog.appendComprehensionFidelity. Gated to real (non-mock)
+#   runs with a specId — the sole live caller is ISCGenerator.generateISC (passes item.id).
+#   NON-FATAL: a logging failure never breaks comprehension.
+#
+#   "Parity" is a MISNOMER kept for the historical filename: the deterministic SpecParser
+#   was DELETED (comprehension is the SOLE ISC source), so there is no parser to compare
+#   against. This scores live extraction FIDELITY, not comprehension-vs-parser parity.
+#
+#   GOLDEN AS ANCHOR REFERENCE: the 25-fixture hand-verified golden
+#   (skills/Intelligence/Evals/Data/golden/isc-extraction-golden.jsonl) is retained as
+#   golden_set_path and provides the plausible-rowCount ballparks the live rubric uses for
+#   its soft anchor-sanity check. The golden's own structure is still regression-tested by
+#   the Slice4ISCExtractionWiring companion test.
+#
+#   SEED: 2026-06-21 the live source was seeded with 24 real fixture-spec comprehensions
+#   (the production comprehendSpec path on the real spec files) so the monitor had a healthy
+#   baseline; organic pipeline records accrue on top and the max_records window ages the
+#   seed out over time.
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The nightly_judge grader reads the live
+# JSONL directly from record_path. The scenario_prompt below is a stub that satisfies the
+# schema; execution is driven by the grader, not an agent run.
+
+id: kaya_isc_extraction_golden
+description: >
+  Live monitor: score the most recent comprehension-parity.jsonl extractions for
+  structural validity, absence of degenerate (0-row / empty-description) extractions,
+  and description substance. Passes when live ISC extraction is healthy; fails on a
+  systematic degradation the pipeline would otherwise turn into zero-verification work.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the live JSONL directly from record_path.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # LIVE source — the most recent extractions the pipeline produced.
+      record_path: "MEMORY/MONITORING/comprehension-parity.jsonl"
+      # Window an append-only source so the judge prompt stays bounded and reflects
+      # CURRENT extraction health, not ancient records.
+      max_records: 200
+      rubric: |
+        You are evaluating a LIVE stream of ISC-extraction records produced by the
+        spec-pipeline ISC-extraction step (comprehendSpec / LLMSpecComprehension). Each
+        line is the extraction summary of one real spec the pipeline comprehended. You are
+        scoring whether LIVE extraction is HEALTHY — this is a monitor, not a golden
+        regression. Do NOT require an exact match to any fixed golden.
+
+        Each record has:
+          - specId: the spec/item identifier
+          - rowCount: number of ISC rows extracted
+          - rowDescriptions: array of up to 8 row descriptions (verbatim criterion text)
+          - complexityHint, truncated, ts
+          - source: "comprehension-live"
+
+        SCORING CRITERIA:
+
+        1. VOLUME: There are at least 20 records. Fewer means the producer has barely run —
+           note it, but do not fail on low volume alone if the records present are healthy.
+
+        2. STRUCTURAL VALIDITY: Every record has specId (non-empty string), rowCount
+           (non-negative integer), rowDescriptions (array of strings), and source =
+           "comprehension-live". Records missing/mistyping these are structural failures.
+
+        3. NO DEGENERATE EXTRACTIONS (the core regression this monitor catches): real
+           software specs always have acceptance criteria, so a healthy stream has very few
+           rowCount=0 records. If MORE THAN 20% of records have rowCount=0, extraction is
+           degrading toward false-PASS-with-zero-verification — fail. A handful of 0-row
+           records (thin/odd specs) is tolerable.
+
+        4. DESCRIPTION SUBSTANCE: records with rowCount > 0 have non-empty rowDescriptions
+           whose strings are substantive criterion text (not just "row 1", "1", or empty).
+           A spike in empty-description records is a regression.
+
+        5. ANCHOR SANITY (only when present in the window): if a well-known spec appears,
+           its rowCount should be in a plausible range, not wildly off. Reference ballparks
+           (from the hand-verified golden in golden_set_path): mq5vmjmh-8rf97i-spec ≈ 8,
+           browser-audit-remediation ≈ 11, Agora-spec ≈ 4, kaya-evals-001-spec ≈ 30.
+           Treat as a SOFT check — live comprehension is non-deterministic, so ±50% is
+           fine; only a gross deviation (e.g. 0 or 50 rows for an ~8-row spec) counts
+           against the score. Skip silently if no anchor is in the window.
+
+        SCORE (0.0 to 1.0):
+          1.0 — ≥20 records, all structurally valid, ~0% degenerate, substantive descriptions, anchors sane
+          0.8 — minor issues (a few thin descriptions, 1 odd anchor) but no systematic degradation
+          0.6 — some structural gaps OR a noticeable (but <20%) rise in 0-row/empty-description records
+          0.0 — systematic structural failures, >20% degenerate extractions, or anchors grossly wrong
+
+        This monitor exists to catch the LIVE ISC-extraction step degrading (0-row
+        extractions, empty descriptions, structural corruption) — NOT to match a static
+        golden exactly.
+
+      # The hand-verified golden supplies the plausible-rowCount ballparks for criterion 5.
+      golden_set_path: "skills/Intelligence/Evals/Data/golden/isc-extraction-golden.jsonl"
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  A healthy LIVE comprehension stream (MEMORY/MONITORING/comprehension-parity.jsonl,
+  windowed to the most recent 200 records via max_records) looks like:
+  - ≥ 20 records, each source = "comprehension-live"
+  - every record structurally valid (specId, integer rowCount ≥ 0, rowDescriptions array)
+  - very few rowCount = 0 (real specs have acceptance criteria)
+  - substantive rowDescriptions for rowCount > 0 records
+  - known specs within a plausible rowCount range (golden ballparks in golden_set_path)
+
+  Seeded 2026-06-21 with 24 real fixture-spec comprehensions (the production comprehendSpec
+  path on the real spec files); organic pipeline records accrue on top.
+
+  Anchor ballparks (hand-verified golden): mq5vmjmh-8rf97i-spec≈8, kaya-evals-001-spec≈30,
+  argumentmapper-001-spec≈24, Agora-spec≈4, browser-audit-remediation≈11.
+
+tags:
+  - kaya
+  - specsheet
+  - isc-extraction
+  - live
+  - monitor
+  - pipeline
+  - slice4
+
+created_at: "2026-06-18"

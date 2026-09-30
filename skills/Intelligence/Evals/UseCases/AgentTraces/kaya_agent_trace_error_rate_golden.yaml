@@ -1,0 +1,100 @@
+# Task: AgentMonitor ErrorRate signal — deterministic protocol-parse regression
+#
+# WHY (evals-rebuild slice C2 — AgentMonitor consolidation): AgentMonitor's
+# Phase-1 batch-evaluation pipeline (EvaluatorPipeline.ts, MonitorCore's
+# evaluate/evaluate-all/retro commands, and its five Evaluator classes) is
+# deleted. Of the five, ErrorRateEvaluator had real signal in the live trace
+# corpus (554/1096 MEMORY/MONITORING/traces/*.jsonl files carry at least one
+# error event as of the 2026-07-12 C1 audit) — the other three
+# (ResourceEfficiency/Latency/Compliance) had structurally-empty inputs
+# (tokensUsed/latencyMs/skillDir populated in only ~4/1096 files) and were
+# deleted with no replacement.
+#
+# H2 STATIC-INPUT PATTERN, LIVE-PRODUCED INPUT: no agent is spawned. The
+# live work happens in setup_commands — AgentTraceErrorRateFixtureRunner.ts
+# re-parses 5 curated real trace files (copied verbatim into
+# Data/golden/agent-trace-error-rate-fixtures.jsonl as the `input` field of
+# each fixture — hermetic, not a dependency on the live, churning
+# MEMORY/MONITORING/traces/ directory) through
+# AgentMonitor/Tools/TraceCollector.ts's parseTraceLine — the SAME
+# dual-format parser (legacy {timestamp,eventType,metadata,context} + newer
+# UnifiedEventSink {ts,category,payload}) AgentMonitor's live trace readers
+# use, fixed in this slice to stop silently dropping the new-format ~53% of
+# real trace volume — and computes errorEvents/totalEvents against the
+# deleted evaluator's 15%-max-error-rate threshold. The fixture_accuracy
+# grader then reads the freshly-written accuracy record; it never reads
+# context.output. `min_accuracy: 1.0` — this is fully deterministic code, no
+# LLM variance, so any mismatch against the hand-verified `expected` values
+# (totalEvents/errorEvents/withinThreshold, not just the pass/fail boolean)
+# is a real regression, not noise.
+#
+# Runs nightly as part of the kaya-pipeline-nightly suite (the existing
+# evals-nightly cron slot) — no new cron job was minted for this.
+
+id: kaya_agent_trace_error_rate_golden
+description: >
+  Regression eval: AgentMonitor's ErrorRate signal (migrated from the
+  deleted ErrorRateEvaluator/EvaluatorPipeline Phase-1 batch system),
+  computed deterministically over 5 curated real historical trace files.
+  Locks in both the dual-format (legacy + UnifiedEventSink) trace parse and
+  the >15% error-rate threshold logic that used to live in
+  AgentMonitor/Tools/evaluators/ErrorRateEvaluator.ts.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # No agent run does the classification — the live work happens in
+  # setup_commands (real parseTraceLine() + error-rate computation). The
+  # scenario_prompt is a stub satisfying the schema; see FixtureAccuracy.ts's
+  # module header for why this is NOT the fully-static H2 pattern
+  # (record_path here is regenerated on every invocation, not a frozen
+  # golden file).
+  scenario_prompt: "No agent run required. Live per-fixture error-rate computation is performed by setup_commands; see the fixture_accuracy grader's record_path."
+  setup_commands:
+    - "bun ~/.claude/skills/Intelligence/Evals/Tools/AgentTraceErrorRateFixtureRunner.ts --fixtures ~/.claude/skills/Intelligence/Evals/Data/golden/agent-trace-error-rate-fixtures.jsonl --out ~/.claude/MEMORY/EVALS/live-fixture-runs/agent-trace-error-rate.json"
+
+graders:
+  - type: fixture_accuracy
+    weight: 1.0
+    required: true
+    params:
+      record_path: "~/.claude/MEMORY/EVALS/live-fixture-runs/agent-trace-error-rate.json"
+      # Deterministic code, not an LLM judgment — no headroom needed.
+      min_accuracy: 1.0
+
+trials: 1
+pass_threshold: 1.0
+
+reference_solution: |
+  5 real trace files from MEMORY/MONITORING/traces/, hand-verified against
+  AgentMonitor/Tools/TraceCollector.ts's fixed parseTraceLine():
+  - f4u4v1-mixed-with-error: 4 total events (2 legacy + 2 new-format —
+    requires the dual-format fix to see all 4), 1 error -> 25% -> exceeds
+    threshold
+  - up1mjx-mixed-clean: 9 total events (3 legacy + 6 new-format), 0 errors
+    -> 0% -> within threshold
+  - pathc-legacy-high-error: 10 total events (legacy-only), 5 errors -> 50%
+    -> exceeds threshold
+  - ubyae-legacy-high-error: 9 total events (legacy-only), 4 errors -> 44.4%
+    -> exceeds threshold
+  - kjdmv-legacy-trivial-clean: 1 total event (legacy-only), 0 errors -> 0%
+    -> within threshold
+
+tags:
+  - agent-monitor
+  - evals-rebuild
+  - error-rate
+  - regression
+  - pipeline
+
+notes: |
+  C1-verified migration (evals-rebuild slice C2 build report): the deleted
+  ErrorRateEvaluator's core logic — errorRate = errorEvents/totalEvents*100,
+  threshold 15% (DEFAULT_CONFIG.maxErrorRatePercent) — is reproduced exactly
+  in AgentTraceErrorRateFixtureRunner.ts. The per-agent-error-rate and
+  error-clustering/categorization sub-checks from the original evaluator
+  were NOT ported (no real signal beyond the top-line rate per the C1 audit;
+  reviving them is a future slice if warranted).
+
+created_at: "2026-07-12"

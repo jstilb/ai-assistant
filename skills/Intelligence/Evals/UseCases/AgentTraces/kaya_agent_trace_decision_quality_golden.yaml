@@ -1,0 +1,146 @@
+# Task: AgentMonitor DecisionQuality signal — whole-workflow-trace judge
+#
+# WHY (evals-rebuild slice C2 — AgentMonitor consolidation): AgentMonitor's
+# deleted DecisionQualityEvaluator was a hybrid: a deterministic rule-half
+# (ISC completion rate, tool-call frequency, error recovery, workflow
+# completion) weighted 70%, plus an LLM-as-judge weighted 30%. The C1 audit
+# found 226/1096 trace files carry ISC-completion-rate signal (real, but
+# thin), and — critically — the rule-half is BLUNT: see fixture
+# f4u4v1-stalled-failure below, whose rule-half alone would score 90/100
+# (no ISC-decision events to penalize, and its single error doesn't trip the
+# `errors.length > 1` guard) despite the workflow visibly stalling and never
+# reaching completion. This migration inverts the old weighting: the
+# rule-half signal (ISC rate, tool-call count, error-recovery rate,
+# hasStart/hasCompletion) becomes INPUT FEATURES fed to the judge, not a
+# separate deterministic score — the judge makes the actual quality call,
+# using the trace + the pre-computed features together, so a workflow like
+# f4u4v1 can't hide behind a favorable feature vector.
+#
+# H2 STATIC-INPUT PATTERN (fully static, like kaya_router_disposition_golden.yaml):
+# no agent is spawned, no setup_commands — the golden JSONL IS the record.
+# nightly_judge reads the whole file as one record (5 real historical
+# workflow traces, MEMORY/MONITORING/traces/*.jsonl, copied verbatim +
+# pre-computed features) and scores the SET's labeling coherence: does the
+# judge, given the same features+trace a human labeler saw, agree with the
+# hand-assigned expectedTier for each entry?
+
+id: kaya_agent_trace_decision_quality_golden
+description: >
+  Regression eval: AgentMonitor's DecisionQuality signal (migrated from the
+  deleted DecisionQualityEvaluator's LLM-half; the rule-half is now input
+  features, not a separate score) scores a golden set of 5 real historical
+  workflow traces (2 good, 3 poor) for label coherence via an LLM judge over
+  the whole-workflow trace + computed features.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader
+  # reads the golden JSONL directly from record_path. The scenario_prompt
+  # below is a stub that satisfies the schema; execution is driven by the
+  # grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      record_path: "skills/Intelligence/Evals/Data/golden/agent-trace-decision-quality-golden.jsonl"
+      rubric: |
+        You are evaluating a golden set of agent-workflow decision-quality
+        labels. Each line is a JSON record for one real historical
+        AgentMonitor-traced workflow: {id, workflowId, title, expectedTier
+        ("good"|"poor"), labelRationale, features, traceSummary, rawTrace}.
+
+        `features` is a DETERMINISTIC rule-based signal (mirrors the deleted
+        DecisionQualityEvaluator's rule-half): avgIscCompletionRate (null if
+        no decision events), toolCallCount, errorCount, errorRecoveryRate
+        (fraction of errors followed by a tool_call/completion from the same
+        agent within 60s; null if zero errors), hasStart, hasCompletion.
+
+        IMPORTANT: `features` alone is NOT sufficient to judge quality — it
+        is a blunt, gameable signal. A workflow with zero ISC-decision
+        events and few errors can look good on `features` alone while the
+        `rawTrace`/`traceSummary` shows a stalled, unresolved failure. Read
+        the actual trace content (error messages, whether a completion
+        event exists, whether errors describe genuine unresolved problems
+        vs. transient/recovered ones) to judge quality, using `features` as
+        supporting evidence, not the verdict.
+
+        SCORING CRITERIA (all must hold for a high score):
+
+        1. COVERAGE: the golden set has >= 5 entries.
+        2. DISTRIBUTION: both "good" and "poor" tiers are represented.
+        3. CORRECTNESS SAMPLING: for EVERY entry, verify expectedTier is
+           plausible given rawTrace + traceSummary + features:
+             - "good": reaches a completion event, no unresolved
+               errors, ISC completion rate (when present) is high.
+             - "poor": either never reaches completion, has unresolved
+               error(s) describing a genuine unresolved failure (not a
+               transient one that recovered), or an ISC completion rate
+               near 0 when decision events exist.
+        4. Flag (and lower the score for) any entry where a HIGH
+           `features` score coexists with a "poor" label backed only by a
+           trace that looks fine — that would mean the golden label is
+           wrong, not that features should be trusted over the trace.
+
+        SCORE (0.0 to 1.0):
+          1.0 - All 5 entries' labels are well-supported by their rawTrace,
+                coverage and distribution both met.
+          0.7 - Coverage/distribution met; 1 entry's label is debatable but
+                defensible.
+          0.4 - Coverage met but >= 2 labels look wrong given the trace, or
+                distribution is skewed to one tier.
+          0.0 - Coverage < 5, or systematic mislabeling (features trusted
+                over trace content).
+
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  5 real trace files from MEMORY/MONITORING/traces/, hand-labeled and
+  cross-checked against AgentMonitor/Tools/TraceCollector.ts's fixed
+  parseTraceLine() output (evals-rebuild slice C2 build report):
+
+  - up1mjx-happy-path (good): 9 events, isc=1.0, 0 errors, reaches completion,
+    two verification-done PASS phase-transitions.
+  - p5t17s-canvas-ws3 (good): 9 events, isc=1.0 (x2), 0 errors, reaches
+    completion, two verification-done PASS phase-transitions.
+  - pathc-verifier-retry-loop (poor): 10 events, 5/10 are errors (verifier
+    cwd/relative-path failures, repeated restart), NEVER reaches completion.
+    No ISC-decision events at all, so the OLD rule-half would have scored
+    this 75/100 (isc-check skipped entirely; only the error-recovery and
+    incomplete-workflow deductions apply).
+  - ubyae-verification-unresolved (poor): 9 events, 4/9 are errors (SHA
+    mismatch, PyPI/benchmark verification gaps), isc=0 on both decision
+    events, never reaches completion.
+  - f4u4v1-stalled-failure (poor): 4 events, 1 error ("stall: stalled fake
+    failure"), no completion event, no ISC-decision events. The OLD
+    rule-half would have scored this 90/100 (no ISC penalty applies with
+    zero decision events; the single error doesn't trip the
+    `errors.length > 1` guard on the error-recovery deduction) — the
+    deliberate stress case proving the LLM judge is now load-bearing where
+    the rule-half alone would have called a stalled failure "good."
+
+tags:
+  - agent-monitor
+  - evals-rebuild
+  - decision-quality
+  - regression
+  - pipeline
+
+notes: |
+  C1-verified migration (evals-rebuild slice C2 build report): the deleted
+  DecisionQualityEvaluator's 70/30 rule/LLM weighting is replaced —
+  features-as-input, judge-makes-the-call. The rule-half's tool-call-
+  frequency check ports over as a feature (toolCallCount) but real trace
+  data in this corpus rarely populates tool_call events at the
+  AgentMonitor-trace level (0 across all 5 fixtures here — granular tool
+  calls live in the agent's own transcript, not the AgentMonitor trace
+  stream), so it is present as a feature but did not drive any fixture's
+  label in this golden set.
+
+created_at: "2026-07-12"

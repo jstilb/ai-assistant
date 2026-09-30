@@ -1,0 +1,22 @@
+# LucidTasks AI Trust Configuration
+# Controls which AI operations run automatically vs. require confirmation.
+#
+# copilot:  AI runs by DEFAULT on `add`/`next` (opt out per-invocation with
+#           --no-ai; --ai is accepted as a harmless no-op). These flags gate
+#           whether the default AI attempt happens at all.
+# autopilot: AI acts autonomously (opt-in, used by cron jobs)
+#
+# All autopilot options currently default to true (see values below).
+
+copilot:
+  extract_metadata: true      # AI parses task text into fields (default on `add`; opt out with --no-ai)
+  suggest_decomposition: true # Suggest subtasks (decompose --dry-run)
+  suggest_priority: true      # Suggest priority adjustments (prioritize)
+  weekly_review: true         # Generate weekly review (review command)
+
+autopilot:
+  auto_extract: true          # Auto-parse inbox tasks missing metadata (morning cron; runs regardless of inbox size — no count veto)
+  auto_decompose: true        # Auto-decompose tasks with estimated_minutes > 120
+  auto_prioritize: true       # Re-score priorities daily via cron
+  reschedule_overdue: true    # Auto-reschedule overdue tasks
+  auto_estimate: true         # Fill energy + time estimates for Jm's lane AND Kaya's lane each morning (Kaya lane calibrated to measured actuals — Jm's ruling 2026-09-10)

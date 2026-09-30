@@ -1,0 +1,5 @@
+name: claudemd-no-principles
+description: "Full setup with CLAUDE.md's 'Guiding Principles' section removed"
+base: full
+claudemd:
+  drop_sections: ["Guiding Principles"]

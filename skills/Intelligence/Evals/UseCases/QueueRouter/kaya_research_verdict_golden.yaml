@@ -1,0 +1,114 @@
+# Task: Research-verdict golden regression
+# WHY: Monitors that the spec-pipeline research phase correctly classifies whether
+#      a queued item should be implemented, skipped, or deferred.
+#      Prevents silent misclassifications that cause wasted build work (false implement)
+#      or missed work (false skip/defer).
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The nightly_judge grader reads the
+# golden set directly and scores it for coverage, correctness, and per-class balance.
+#
+# LIVE-SOURCE WIRING NOTE:
+# The live verdict field lives at:
+#   MEMORY/QUEUES/spec-pipeline.jsonl → payload.context._meta.verdict
+# nightly_judge can read this JSONL directly with record_source:'spec-pipeline' and
+# record_id lookup. With only 3 live rows at time of authoring (all `implement`),
+# the golden set is padded with 19 well-reasoned synthetic cases covering all 3
+# classes. As more rows accumulate verdicts, the labeling script
+# (scripts/label-research-verdict-golden.ts) can be re-run to refresh the golden set.
+
+id: kaya_research_verdict_golden
+description: >
+  Regression eval: score the research-verdict golden set for correctness and
+  coverage using the 3-way verdict rubric (implement / skip / defer).
+  Passes when the judge finds the golden labels coherent, well-distributed,
+  and internally consistent with the rubric.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the golden JSONL directly from record_path. The scenario_prompt below is a stub
+  # that satisfies the schema; execution is driven by the grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The golden JSONL is the record to evaluate — nightly_judge reads this file
+      # and scores its quality against the rubric below.
+      record_path: "skills/Intelligence/Evals/Data/golden/research-verdict-golden.jsonl"
+      rubric: |
+        You are evaluating a golden set of research verdict labels for a 3-way
+        verdict classifier used in a software spec pipeline.
+
+        The golden set is a JSONL file where each line is a verdict decision.
+
+        Valid verdicts: implement | skip | defer
+
+        Verdict definitions:
+          - implement: The premise is confirmed, path is clear, building now is right.
+            Evidence shows real need and feasibility. No significant blockers.
+          - skip: The premise is false or the need is already met. Building would be
+            wasteful (duplicate work, existing feature covers it).
+          - defer: The work is blocked by an external dependency, missing prerequisite,
+            or timing conflict. Worth revisiting later but not actionable now.
+
+        SCORING CRITERIA (all must hold for a high score):
+
+        1. COVERAGE: The golden set has ≥18 total entries.
+        2. CLASS BALANCE: All 3 verdict classes (implement, skip, defer) are represented
+           with at least 3 entries each in consensus cases.
+        3. CONSENSUS QUALITY: Consensus entries (verdict != null) use a recognized verdict
+           from the 3-way enum. Divergent entries (verdict: null, divergent: true) are
+           correctly flagged.
+        4. CORRECTNESS SAMPLING: Sample 6 representative entries (2 per class) and verify
+           each label is plausible given the research text and the rubric above.
+        5. REAL + SYNTHETIC MIX: The golden set may mix real pipeline rows (origin:'real')
+           and synthetic cases (origin:'synthetic'). Both are acceptable; synthetic cases
+           must still be internally consistent.
+
+        SCORE (0.0 to 1.0):
+          1.0 — All criteria met, labels correct and well-distributed across 3 classes
+          0.8 — Coverage and distribution met; 1-2 marginal labels but defensible
+          0.6 — Coverage met, distribution thin, a few suspect labels
+          0.0 — Coverage < 18, or not all 3 classes present, or systematic misclassification
+
+      # The live spec-pipeline JSONL is the authoritative source for real verdict records.
+      # wire it so nightly_judge can look up specific item verdicts by ID.
+      record_source: "spec-pipeline"
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  The golden JSONL should contain ≥22 entries (3 real + 19 synthetic) with:
+  - Consensus cases covering all 3 classes:
+      implement: ≥10 (3 real + 7 synthetic)
+      skip:      ≥6  (all synthetic)
+      defer:     ≥6  (1 real mnt5gly1 + 5 synthetic)
+  - Real rows labeled from on-disk research artifacts (truncated to 2000 chars)
+  - Synthetic rows labeled from hand-authored research finding summaries
+  - All consensus entries have source: "ensemble", criteria_version: 1
+  - Divergent entries have verdict: null, divergent: true
+
+  Note on mnt5gly1 (Kaya v3 rebuild):
+    The pipeline recorded verdict:"implement" but ensemble labeling may return
+    "defer" — the research artifact explicitly surfaces the ADR-0001 conflict
+    and in-flight retrofit work as blockers, which points to defer. This
+    disagreement is NOT an error; it is a real signal worth investigating.
+    The ensemble label takes precedence in the golden set as it reflects
+    the rubric more accurately than the pipeline's original verdict.
+
+tags:
+  - kaya
+  - research
+  - verdict
+  - spec-pipeline
+  - golden
+  - regression
+  - pipeline
+
+created_at: "2026-06-18"

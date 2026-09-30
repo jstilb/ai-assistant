@@ -1,0 +1,76 @@
+# WHY: a real, tiny coding task so the matrix has a capability axis that
+# is NOT about Kaya's config text — the cell that separates "the new model
+# got better at coding" from "our setup got in the way". One failing
+# bun test in a fixture dir; the agent must fix the implementation, not
+# the test. state_check keeps the test file honest (a deleted assertion
+# would otherwise pass binary_tests).
+#
+# isolation: none + fixed working_dir: sandbox trials delete their temp dir
+# before graders run (EvalExecutor.executeTask's finally), so binary_tests
+# could never see the agent's edit. setup_commands recreate the fixture
+# from scratch every trial (overwrites, no deletes — keeps
+# DestructiveScenarioGuard trivially satisfied).
+id: ablation_fix_failing_test
+description: "Agent fixes the bug in slugify.ts so the existing bun test passes, without editing the test"
+type: capability
+domain: coding
+source: manual
+
+setup:
+  isolation: none
+  working_dir: /tmp/kaya-ablation-fixtures/fix-failing-test
+  timeout_ms: 300000
+  setup_commands:
+    - "mkdir -p /tmp/kaya-ablation-fixtures/fix-failing-test"
+    - |
+      cat > /tmp/kaya-ablation-fixtures/fix-failing-test/slugify.ts <<'TS'
+      /** Turn free text into a URL slug: lowercase, non-alphanumerics → single hyphen. */
+      export function slugify(input: string): string {
+        return input.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      }
+      TS
+    - |
+      cat > /tmp/kaya-ablation-fixtures/fix-failing-test/slugify.test.ts <<'TS'
+      import { test, expect } from 'bun:test';
+      import { slugify } from './slugify';
+
+      test('lowercases and hyphenates', () => {
+        expect(slugify('Hello World')).toBe('hello-world');
+      });
+
+      test('collapses runs of separators', () => {
+        expect(slugify('a  --  b')).toBe('a-b');
+      });
+
+      test('trims leading and trailing separators', () => {
+        expect(slugify('  --hi there--  ')).toBe('hi-there');
+      });
+      TS
+    - "printf 'name: fixture\\n' > /tmp/kaya-ablation-fixtures/fix-failing-test/bunfig.toml"
+  scenario_prompt: "One of the tests in /tmp/kaya-ablation-fixtures/fix-failing-test/slugify.test.ts fails. Fix the bug in slugify.ts so that `bun test` passes in that directory. Do not modify the test file."
+
+graders:
+  - type: binary_tests
+    weight: 0.7
+    required: true
+    params:
+      test_command: "bun test"
+      test_files:
+        - /tmp/kaya-ablation-fixtures/fix-failing-test/slugify.test.ts
+      timeout_ms: 60000
+  - type: state_check
+    weight: 0.3
+    required: true
+    params:
+      check_files:
+        - path: slugify.test.ts
+          contains:
+            - "trims leading and trailing separators"
+            - "collapses runs of separators"
+            - "lowercases and hyphenates"
+
+trials: 1
+pass_threshold: 0.80
+
+tags: [ablation, coding, capability]
+created_at: "2026-09-04"

@@ -1,0 +1,5 @@
+name: no-agents
+description: "Full setup minus custom agent definitions (agents/*.md)"
+base: full
+remove:
+  agents: ["*"]

@@ -1,0 +1,116 @@
+# Task: KayaRouter 3-way clarity-verdict golden regression
+# WHY: Monitors that the clarity classifier correctly labels tasks as
+#      clear | needs-grill | not-executable. Prevents silent misclassifications
+#      that would either send underspecified tasks to the build queue (clarity
+#      false-positive) or block well-scoped tasks behind unnecessary grilling
+#      (clarity false-negative).
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The grader reads the golden set
+# directly and scores it for coverage, correctness, and per-class balance.
+#
+# disposition→verdict mapping (for reading archived daily-runs logs):
+#   clear          → clear
+#   needs-grilling → needs-grill
+#   skip           → not-executable
+#
+# SOURCE NOTE (updated 2026-07-05):
+# The daily-runs feed is FROZEN — the AutoInfo tier that wrote
+# MEMORY/AUTOINFO/daily-runs/<date>.json (field: disposition) was deleted
+# 2026-07-04; the history (last write 2026-06-18) now lives at
+# MEMORY/AUTOINFO/_archive/daily-runs/. label-clarity-golden.ts reads the
+# archive and falls back to synthetic-only cases if it's absent. This UseCase
+# runs as a golden-set regression — scores the trusted ensemble labels for
+# coherence and coverage.
+
+id: kaya_clarity_verdict_golden
+description: >
+  Regression eval: score the clarity-verdict golden set for correctness and
+  coverage using the 3-way clarity rubric. Passes when the judge finds the
+  golden labels coherent, well-distributed, and consistent with the rubric.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the golden JSONL directly from record_path. The scenario_prompt below is a stub
+  # that satisfies the schema; execution is driven by the grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The golden JSONL is the record to evaluate — nightly_judge reads this file
+      # and scores its quality against the rubric below.
+      record_path: "skills/Intelligence/Evals/Data/golden/clarity-verdict-golden.jsonl"
+
+      # candidate_field: the JSON key holding the verdict in each golden entry
+      candidate_field: verdict
+
+      # record_source: live monitoring source directory for future wiring
+      record_source: autoinfo
+
+      rubric: |
+        You are evaluating a golden set of clarity-verdict labels for a 3-way
+        task classifier. The golden set is a JSONL file where each line is a
+        clarity decision for a task from the pipeline.
+
+        Valid verdicts: clear | needs-grill | not-executable
+
+        CLARITY VERDICT DEFINITIONS:
+        - clear: task is well-scoped, has a defined deliverable, and Kaya can
+          execute it autonomously right now
+        - needs-grill: task is actionable in principle but underspecified —
+          needs clarifying questions before it can be spec'd
+        - not-executable: task is not something Kaya can execute (personal action
+          for Jm, vague idea, journaling, entertainment, physical errand, etc.)
+
+        SCORING CRITERIA (all must hold for a high score):
+
+        1. COVERAGE: The golden set has ≥25 total entries.
+        2. CONSENSUS QUALITY: All consensus entries (verdict != null) have a
+           recognized verdict from the 3-way enum. Divergent entries
+           (verdict: null, divergent: true) are correctly flagged.
+        3. DISTRIBUTION: All 3 verdict classes are represented in consensus cases.
+        4. CORRECTNESS SAMPLING: Sample 6 representative entries and verify each
+           label is plausible given the title and the clarity rubric:
+             - clear: "research cooking courses in san diego (in person)" or
+               "research best standing desks under $500" → clear scope, defined output
+             - needs-grill: "look into massage course (in person)" or
+               "Add local library events pages to EventScout skill" → actionable
+               but missing key parameters
+             - not-executable: "Take Car in for Oil Change", "buy groceries",
+               "call mom this weekend" → physical/personal, Kaya cannot execute
+
+        SCORE (0.0 to 1.0):
+          1.0 — All criteria met, labels correct and well-distributed
+          0.8 — Coverage and distribution met; 1-2 marginal labels but defensible
+          0.6 — Coverage met, distribution thin, a few suspect labels
+          0.0 — Coverage < 25, or systematic misclassification detected
+
+      # Anchor the judge to the routing criteria
+      golden_set_path: "skills/Intelligence/Evals/Data/golden/clarity-verdict-golden.jsonl"
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  The golden JSONL should contain 30 entries with:
+  - 30 consensus cases (0 divergent — ensemble unanimously agreed on all cases)
+  - Per-verdict distribution: clear(6), needs-grill(13), not-executable(11)
+  - Mix of real daily-run tasks (17) and synthetic rubric cases (13)
+  - All labeled with source: "ensemble", criteria_version: 1
+  - Real tasks include clear routing reasoning from the daily-run log
+
+tags:
+  - kaya
+  - router
+  - clarity
+  - verdict
+  - golden
+  - regression
+  - pipeline
+
+created_at: "2026-06-18"

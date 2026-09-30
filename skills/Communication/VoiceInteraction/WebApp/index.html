@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Kaya Voice</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* ================================================================
+       CSS Custom Properties — Telegram theme or defaults
+       ================================================================ */
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --mic-idle: #6b7280;
+      --listening: #22c55e;
+      --thinking: #f59e0b;
+      --speaking: #3b82f6;
+      --error: #ef4444;
+      --user-bubble: #1e3a5f;
+      --assistant-bubble: #2d1b4e;
+      --border: rgba(255,255,255,0.08);
+      --shadow: rgba(0,0,0,0.4);
+    }
+
+    /* ================================================================
+       Reset & Base
+       ================================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: none;
+    }
+
+    /* ================================================================
+       Layout
+       ================================================================ */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      height: 100vh;
+      position: relative;
+    }
+
+    /* Header */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    #header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Status dot */
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+      transition: background 0.3s ease;
+      flex-shrink: 0;
+    }
+    #status-dot.connected { background: var(--listening); }
+    #status-dot.connecting { background: var(--thinking); }
+
+    /* Settings button */
+    #settings-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: color 0.2s, background 0.2s;
+    }
+    #settings-btn:hover, #settings-btn:active {
+      color: var(--text-primary);
+      background: var(--border);
+    }
+
+    /* Transcript area */
+    #transcript {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+    }
+
+    /* Scrollbar */
+    #transcript::-webkit-scrollbar { width: 3px; }
+    #transcript::-webkit-scrollbar-track { background: transparent; }
+    #transcript::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Message bubbles */
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      animation: bubble-in 0.2s ease-out;
+    }
+    .message.user { align-self: flex-end; }
+    .message.assistant { align-self: flex-start; }
+
+    .message-bubble {
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 15px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .message.user .message-bubble {
+      background: var(--user-bubble);
+      border-bottom-right-radius: 4px;
+    }
+    .message.assistant .message-bubble {
+      background: var(--assistant-bubble);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      padding: 0 4px;
+    }
+    .message.user .message-label { text-align: right; }
+
+    /* Empty state */
+    #empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      text-align: center;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    #empty-state svg { opacity: 0.4; }
+
+    /* Mic area */
+    #mic-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 16px 32px;
+      flex-shrink: 0;
+    }
+
+    /* Mic button container */
+    #mic-container {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Animated ring */
+    #mic-ring {
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      transition: border-color 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+    #mic-ring.listening {
+      border-color: var(--listening);
+      opacity: 1;
+      animation: pulse-green 1.5s ease-in-out infinite;
+    }
+    #mic-ring.speaking {
+      border-color: var(--speaking);
+      opacity: 1;
+      animation: pulse-blue 2s ease-in-out infinite;
+    }
+
+    /* Second outer ring */
+    #mic-ring-outer {
+      position: absolute;
+      inset: -18px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      transition: border-color 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+    #mic-ring-outer.listening {
+      border-color: rgba(34, 197, 94, 0.3);
+      opacity: 1;
+      animation: pulse-green 1.5s ease-in-out infinite 0.3s;
+    }
+    #mic-ring-outer.speaking {
+      border-color: rgba(59, 130, 246, 0.3);
+      opacity: 1;
+      animation: pulse-blue 2s ease-in-out infinite 0.4s;
+    }
+
+    /* Mic button itself */
+    #mic-btn {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      transition: background 0.3s ease, transform 0.1s ease;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+      z-index: 1;
+    }
+    #mic-btn:active { transform: scale(0.95); }
+    #mic-btn.idle { background: var(--surface); }
+    #mic-btn.listening { background: rgba(34, 197, 94, 0.15); }
+    #mic-btn.speaking { background: rgba(59, 130, 246, 0.15); }
+    #mic-btn.thinking { background: rgba(245, 158, 11, 0.15); }
+    #mic-btn.error { background: rgba(239, 68, 68, 0.15); }
+    #mic-btn.ptt-mode {
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #mic-btn.ptt-recording {
+      background: rgba(34, 197, 94, 0.25);
+      transform: scale(1.05);
+    }
+
+    #mic-icon {
+      transition: color 0.3s ease;
+      color: var(--mic-idle);
+    }
+    #mic-icon.listening { color: var(--listening); }
+    #mic-icon.speaking { color: var(--speaking); }
+    #mic-icon.thinking { color: var(--thinking); }
+    #mic-icon.error { color: var(--error); }
+
+    /* Thinking dots */
+    #thinking-dots {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      position: absolute;
+    }
+    #thinking-dots.active { display: flex; }
+    #thinking-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--thinking);
+      animation: dot-pulse 1.2s ease-in-out infinite;
+    }
+    #thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    #thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    /* State label */
+    #state-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      min-height: 20px;
+      transition: opacity 0.3s ease;
+      text-align: center;
+    }
+
+    /* PTT hint */
+    #ptt-hint {
+      display: none;
+      font-size: 12px;
+      color: var(--text-secondary);
+      opacity: 0.7;
+      text-align: center;
+    }
+    #ptt-hint.visible { display: block; }
+
+    /* ================================================================
+       Settings panel
+       ================================================================ */
+    #settings-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(300px, 90vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transform: translateX(100%);
+      transition: transform 0.25s ease-out;
+      z-index: 100;
+      overflow-y: auto;
+    }
+    #settings-panel.open { transform: translateX(0); }
+
+    #settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #settings-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    #settings-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      padding: 4px;
+      display: flex;
+      border-radius: 6px;
+    }
+    #settings-close:hover { color: var(--text-primary); }
+
+    .setting-group { display: flex; flex-direction: column; gap: 8px; }
+    .setting-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+    }
+
+    select, .toggle-row {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      width: 100%;
+      appearance: none;
+      cursor: pointer;
+    }
+    select:focus { outline: 2px solid var(--speaking); }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+    }
+    .toggle-row span { font-size: 14px; }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      background: var(--border);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle input:checked + .toggle-track { background: var(--speaking); }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .toggle-track::after { transform: translateX(20px); }
+
+    .setting-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      opacity: 0.7;
+    }
+
+    /* ================================================================
+       Overlays
+       ================================================================ */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: var(--bg);
+      padding: 24px;
+      text-align: center;
+    }
+    .overlay.hidden { display: none; }
+
+    .overlay-icon { opacity: 0.6; }
+    .overlay h2 { font-size: 18px; font-weight: 600; }
+    .overlay p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      max-width: 280px;
+      line-height: 1.6;
+    }
+
+    .btn-primary {
+      background: var(--speaking);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      min-width: 140px;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:active { opacity: 0.7; }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .btn-secondary:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+    /* Loading spinner */
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--speaking);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Warning badge */
+    .warning-badge {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--thinking);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* ================================================================
+       Animations
+       ================================================================ */
+    @keyframes pulse-green {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.7; }
+    }
+    @keyframes pulse-blue {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; }
+    }
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes bubble-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes flash-red {
+      0%, 100% { background: var(--surface); }
+      50% { background: rgba(239, 68, 68, 0.25); }
+    }
+
+    .interrupt-flash {
+      animation: flash-red 0.4s ease-out;
+    }
+
+    /* ================================================================
+       Waveform visualization
+       ================================================================ */
+    #waveform {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 24px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #waveform.active { opacity: 1; }
+    #waveform .bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--listening);
+      height: 4px;
+      transition: height 0.05s linear;
+    }
+    #waveform.speaking .bar { background: var(--speaking); }
+
+    /* ================================================================
+       Responsive
+       ================================================================ */
+    @media (max-height: 600px) {
+      #mic-area { padding: 12px 16px 20px; gap: 10px; }
+      #mic-btn { width: 80px; height: 80px; }
+      #mic-container { width: 80px; height: 80px; }
+      #transcript { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <span id="header-title">Kaya Voice</span>
+    <div id="header-controls">
+      <div id="status-dot" title="Disconnected"></div>
+      <button id="settings-btn" aria-label="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Transcript -->
+  <div id="transcript" role="log" aria-live="polite" aria-label="Conversation transcript">
+    <div id="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+      <p>Tap the mic and start talking</p>
+    </div>
+  </div>
+
+  <!-- Mic area -->
+  <div id="mic-area">
+    <!-- Waveform visualization -->
+    <div id="waveform" aria-hidden="true">
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+    </div>
+
+    <!-- Mic button with rings -->
+    <div id="mic-container">
+      <div id="mic-ring-outer"></div>
+      <div id="mic-ring"></div>
+      <button id="mic-btn" class="idle" aria-label="Microphone" aria-pressed="false">
+        <!-- Mic SVG icon -->
+        <svg id="mic-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <!-- Thinking dots (overlay inside button) -->
+        <div id="thinking-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </button>
+    </div>
+
+    <!-- State label -->
+    <div id="state-label">Initializing...</div>
+
+    <!-- PTT hint -->
+    <div id="ptt-hint">Hold button to talk</div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" role="dialog" aria-label="Settings" aria-hidden="true">
+    <div id="settings-header">
+      <h2>Settings</h2>
+      <button id="settings-close" aria-label="Close settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Voice</div>
+      <select id="voice-select" aria-label="Select voice">
+        <option value="af_heart">af_heart (default)</option>
+        <option value="af_bella">af_bella</option>
+        <option value="af_nicole">af_nicole</option>
+        <option value="af_sarah">af_sarah</option>
+        <option value="am_adam">am_adam</option>
+        <option value="am_michael">am_michael</option>
+        <option value="bf_emma">bf_emma</option>
+        <option value="bf_isabella">bf_isabella</option>
+        <option value="bm_george">bm_george</option>
+        <option value="bm_lewis">bm_lewis</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Auto-listen</div>
+      <div class="toggle-row">
+        <span>Resume listening after response</span>
+        <label class="toggle">
+          <input type="checkbox" id="auto-listen-toggle" checked>
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+    </div>
+
+    <div class="setting-group" id="vad-status-group">
+      <div class="setting-label">Voice Detection</div>
+      <div id="vad-status-badge" class="warning-badge">Loading...</div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Connection</div>
+      <div id="ws-url-display" class="setting-hint" style="padding: 8px 0;"></div>
+    </div>
+  </div>
+
+  <!-- Overlays -->
+
+  <!-- Loading overlay -->
+  <div class="overlay" id="overlay-loading">
+    <div class="spinner"></div>
+    <h2>Loading Kaya Voice</h2>
+    <p id="loading-status">Initializing...</p>
+  </div>
+
+  <!-- Mic permission overlay -->
+  <div class="overlay hidden" id="overlay-mic">
+    <div class="overlay-icon">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+        <line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444"/>
+      </svg>
+    </div>
+    <h2>Microphone Required</h2>
+    <p>Please allow microphone access so Kaya can hear you. Look for a permission prompt at the top of your browser.</p>
+    <button class="btn-primary" id="mic-retry-btn">Try Again</button>
+  </div>
+
+  <!-- Error overlay -->
+  <div class="overlay hidden" id="overlay-error">
+    <div class="overlay-icon">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+    <h2>Something went wrong</h2>
+    <p id="error-message">An unexpected error occurred.</p>
+    <button class="btn-primary" id="error-retry-btn">Retry</button>
+  </div>
+
+  <!-- Audio unlock overlay (mobile) -->
+  <div class="overlay hidden" id="overlay-audio-unlock">
+    <div class="overlay-icon">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      </svg>
+    </div>
+    <h2>Tap to Enable Audio</h2>
+    <p>Your browser requires a tap to enable audio playback.</p>
+    <button class="btn-primary" id="audio-unlock-btn">Enable Audio</button>
+  </div>
+
+</div>
+
+<script type="module">
+// ============================================================================
+// KAYA VOICE MINI APP
+// Single-file voice conversation UI
+// ============================================================================
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+const WS_URL = (() => {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host || 'localhost:8882';
+  return `${proto}//${host}/ws`;
+})();
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_MS = 1000;
+const MAX_AUDIO_DURATION_MS = 60_000;
+const MIN_SPEECH_DURATION_MS = 300;
+const AUDIO_CONTEXT_RESET_INTERVAL = 20;
+const VAD_TIMEOUT_MS = 12_000;
+
+// ============================================================================
+// State Machine
+// ============================================================================
+
+/** @type {'INIT'|'IDLE'|'LISTENING'|'SENDING'|'SPEAKING'|'DISCONNECTED'|'ERROR'} */
+let appState = 'INIT';
+let exchangeCount = 0;
+let audioContextCreatedAt = 0;
+
+// ============================================================================
+// Settings (persisted)
+// ============================================================================
+
+const settings = {
+  voice: localStorage.getItem('kaya_voice') || 'af_heart',
+  autoListen: localStorage.getItem('kaya_auto_listen') !== 'false',
+};
+
+function saveSettings() {
+  localStorage.setItem('kaya_voice', settings.voice);
+  localStorage.setItem('kaya_auto_listen', String(settings.autoListen));
+}
+
+// ============================================================================
+// Telegram Integration
+// ============================================================================
+
+function initTelegram() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return;
+
+  try {
+    tg.ready();
+    tg.expand();
+
+    const p = tg.themeParams;
+    if (p) {
+      const root = document.documentElement.style;
+      if (p.bg_color) root.setProperty('--bg', p.bg_color);
+      if (p.secondary_bg_color) root.setProperty('--surface', p.secondary_bg_color);
+      if (p.text_color) root.setProperty('--text-primary', p.text_color);
+      if (p.hint_color) root.setProperty('--text-secondary', p.hint_color);
+      if (p.button_color) root.setProperty('--speaking', p.button_color);
+    }
+
+    tg.onEvent('themeChanged', () => {
+      const tp = tg.themeParams;
+      if (!tp) return;
+      const root = document.documentElement.style;
+      if (tp.bg_color) root.setProperty('--bg', tp.bg_color);
+      if (tp.secondary_bg_color) root.setProperty('--surface', tp.secondary_bg_color);
+      if (tp.text_color) root.setProperty('--text-primary', tp.text_color);
+      if (tp.hint_color) root.setProperty('--text-secondary', tp.hint_color);
+      if (tp.button_color) root.setProperty('--speaking', tp.button_color);
+    });
+
+    console.log('[Telegram] WebApp initialized');
+  } catch (err) {
+    console.warn('[Telegram] Failed to init:', err);
+  }
+}
+
+function haptic(type = 'impact') {
+  try {
+    const fb = window.Telegram?.WebApp?.HapticFeedback;
+    if (!fb) return;
+    if (type === 'impact') fb.impactOccurred('light');
+    else if (type === 'success') fb.notificationOccurred('success');
+    else if (type === 'error') fb.notificationOccurred('error');
+  } catch { /* ignore */ }
+}
+
+// ============================================================================
+// UI Elements
+// ============================================================================
+
+const el = {
+  app: document.getElementById('app'),
+  statusDot: document.getElementById('status-dot'),
+  micBtn: document.getElementById('mic-btn'),
+  micIcon: document.getElementById('mic-icon'),
+  micRing: document.getElementById('mic-ring'),
+  micRingOuter: document.getElementById('mic-ring-outer'),
+  thinkingDots: document.getElementById('thinking-dots'),
+  stateLabel: document.getElementById('state-label'),
+  pttHint: document.getElementById('ptt-hint'),
+  transcript: document.getElementById('transcript'),
+  emptyState: document.getElementById('empty-state'),
+  waveform: document.getElementById('waveform'),
+  waveformBars: document.querySelectorAll('#waveform .bar'),
+  settingsBtn: document.getElementById('settings-btn'),
+  settingsPanel: document.getElementById('settings-panel'),
+  settingsClose: document.getElementById('settings-close'),
+  voiceSelect: document.getElementById('voice-select'),
+  autoListenToggle: document.getElementById('auto-listen-toggle'),
+  vadStatusBadge: document.getElementById('vad-status-badge'),
+  wsUrlDisplay: document.getElementById('ws-url-display'),
+  overlayLoading: document.getElementById('overlay-loading'),
+  loadingStatus: document.getElementById('loading-status'),
+  overlayMic: document.getElementById('overlay-mic'),
+  micRetryBtn: document.getElementById('mic-retry-btn'),
+  overlayError: document.getElementById('overlay-error'),
+  errorMessage: document.getElementById('error-message'),
+  errorRetryBtn: document.getElementById('error-retry-btn'),
+  overlayAudioUnlock: document.getElementById('overlay-audio-unlock'),
+  audioUnlockBtn: document.getElementById('audio-unlock-btn'),
+};
+
+function setLoadingStatus(msg) {
+  el.loadingStatus.textContent = msg;
+}
+
+function showOverlay(id) {
+  ['overlay-loading', 'overlay-mic', 'overlay-error', 'overlay-audio-unlock'].forEach(name => {
+    const ov = document.getElementById(name);
+    if (ov) ov.classList.toggle('hidden', name !== id);
+  });
+}
+
+function hideAllOverlays() {
+  ['overlay-loading', 'overlay-mic', 'overlay-error', 'overlay-audio-unlock'].forEach(name => {
+    const ov = document.getElementById(name);
+    if (ov) ov.classList.add('hidden');
+  });
+}
+
+// ============================================================================
+// UI State Updates
+// ============================================================================
+
+const stateLabels = {
+  INIT: 'Initializing...',
+  IDLE: 'Ready',
+  LISTENING: 'Listening...',
+  SENDING: 'Processing...',
+  SPEAKING: 'Speaking...',
+  DISCONNECTED: 'Reconnecting...',
+  ERROR: 'Error',
+};
+
+function transitionState(newState) {
+  appState = newState;
+  el.stateLabel.textContent = stateLabels[newState] || newState;
+
+  // Mic button class
+  const btnClass = {
+    INIT: 'idle',
+    IDLE: 'idle',
+    LISTENING: 'listening',
+    SENDING: 'thinking',
+    SPEAKING: 'speaking',
+    DISCONNECTED: 'error',
+    ERROR: 'error',
+  }[newState] || 'idle';
+
+  el.micBtn.className = pttMode ? `${btnClass} ptt-mode` : btnClass;
+  el.micBtn.setAttribute('aria-pressed', newState === 'LISTENING' ? 'true' : 'false');
+
+  // Icon class (SVG elements need setAttribute, not .className)
+  el.micIcon.setAttribute('class', {
+    INIT: '',
+    IDLE: '',
+    LISTENING: 'listening',
+    SENDING: 'thinking',
+    SPEAKING: 'speaking',
+    DISCONNECTED: 'error',
+    ERROR: 'error',
+  }[newState] || '');
+
+  // Ring animations
+  const ringClass = newState === 'LISTENING' ? 'listening' : newState === 'SPEAKING' ? 'speaking' : '';
+  el.micRing.className = ringClass;
+  el.micRingOuter.className = ringClass;
+
+  // Thinking dots
+  el.thinkingDots.classList.toggle('active', newState === 'SENDING');
+  el.micIcon.style.display = newState === 'SENDING' ? 'none' : '';
+
+  // Waveform
+  const waveformActive = newState === 'LISTENING' || newState === 'SPEAKING';
+  el.waveform.classList.toggle('active', waveformActive);
+  el.waveform.classList.toggle('speaking', newState === 'SPEAKING');
+  if (!waveformActive) resetWaveform();
+
+  // Status dot
+  el.statusDot.className = wsConnected ? 'connected' : newState === 'DISCONNECTED' ? 'connecting' : '';
+  el.statusDot.title = wsConnected ? 'Connected' : 'Disconnected';
+}
+
+function resetWaveform() {
+  el.waveformBars.forEach(bar => { bar.style.height = '4px'; });
+}
+
+function animateWaveform(amplitude) {
+  el.waveformBars.forEach((bar, i) => {
+    const noise = 0.6 + Math.random() * 0.8;
+    const h = Math.max(4, Math.min(24, amplitude * noise * 24));
+    bar.style.height = `${h}px`;
+  });
+}
+
+// ============================================================================
+// Transcript
+// ============================================================================
+
+function addMessage(role, text) {
+  // Remove empty state
+  el.emptyState.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = `message ${role}`;
+
+  const label = document.createElement('div');
+  label.className = 'message-label';
+  label.textContent = role === 'user' ? 'You' : 'Kaya';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bubble';
+  bubble.textContent = text;
+
+  wrap.appendChild(label);
+  wrap.appendChild(bubble);
+  el.transcript.appendChild(wrap);
+  el.transcript.scrollTop = el.transcript.scrollHeight;
+
+  return wrap;
+}
+
+// ============================================================================
+// Audio Playback (Web Audio API)
+// ============================================================================
+
+/** @type {AudioContext|null} */
+let audioCtx = null;
+/** @type {AudioBufferSourceNode[]} */
+let audioSources = [];
+let audioQueue = Promise.resolve();
+let nextPlayTime = 0;
+
+function getAudioContext() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new AudioContext({ sampleRate: 24000 });
+    nextPlayTime = 0;
+    audioContextCreatedAt = exchangeCount;
+  }
+  return audioCtx;
+}
+
+async function ensureAudioContextResumed() {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume();
+    } catch {
+      showOverlay('overlay-audio-unlock');
+      return false;
+    }
+  }
+  return true;
+}
+
+function stopAllAudio() {
+  audioSources.forEach(src => {
+    try { src.stop(); } catch { /* already stopped */ }
+    try { src.disconnect(); } catch { /* ignore */ }
+  });
+  audioSources = [];
+  audioQueue = Promise.resolve();
+  nextPlayTime = 0;
+}
+
+/**
+ * Wait for all queued audio to finish playing.
+ * Resolves when audioSources is empty (all onended callbacks fired).
+ */
+function waitForAudioDrain() {
+  return new Promise((resolve) => {
+    // First wait for the queue to finish scheduling
+    audioQueue.then(() => {
+      // Then poll until all sources have finished playing
+      function check() {
+        if (audioSources.length === 0) {
+          resolve();
+        } else {
+          setTimeout(check, 100);
+        }
+      }
+      check();
+    });
+  });
+}
+
+async function playAudioChunk(base64Data) {
+  const ready = await ensureAudioContextResumed();
+  if (!ready) return;
+
+  // Reset AudioContext periodically to prevent memory leaks
+  if (exchangeCount - audioContextCreatedAt >= AUDIO_CONTEXT_RESET_INTERVAL) {
+    try { audioCtx?.close(); } catch { /* ignore */ }
+    audioCtx = null;
+  }
+
+  const ctx = getAudioContext();
+
+  audioQueue = audioQueue.then(async () => {
+    if (appState !== 'SPEAKING') return; // Interrupted
+
+    try {
+      // Decode base64 WAV
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
+
+      if (appState !== 'SPEAKING') return; // Check again after async decode
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      audioSources.push(source);
+
+      // Schedule sequential playback
+      const startTime = Math.max(ctx.currentTime + 0.05, nextPlayTime);
+      source.start(startTime);
+      nextPlayTime = startTime + audioBuffer.duration;
+
+      // Clean up when done
+      source.onended = () => {
+        const idx = audioSources.indexOf(source);
+        if (idx !== -1) audioSources.splice(idx, 1);
+        try { source.disconnect(); } catch { /* ignore */ }
+
+        // Animate waveform during playback
+        if (audioSources.length === 0 && appState === 'SPEAKING') {
+          resetWaveform();
+        }
+      };
+    } catch (err) {
+      console.error('[Audio] Decode error:', err);
+    }
+  });
+}
+
+// Waveform animation timer for speaking state
+let waveformTimer = null;
+
+function startWaveformAnimation() {
+  stopWaveformAnimation();
+  waveformTimer = setInterval(() => {
+    if (appState === 'LISTENING' || appState === 'SPEAKING') {
+      animateWaveform(0.3 + Math.random() * 0.7);
+    }
+  }, 100);
+}
+
+function stopWaveformAnimation() {
+  if (waveformTimer) {
+    clearInterval(waveformTimer);
+    waveformTimer = null;
+  }
+  resetWaveform();
+}
+
+// ============================================================================
+// WebSocket Client
+// ============================================================================
+
+/** @type {WebSocket|null} */
+let ws = null;
+let wsConnected = false;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let reconnectStopped = false;
+
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  console.log(`[WS] Connecting to ${WS_URL}`);
+  el.wsUrlDisplay.textContent = WS_URL;
+  transitionState('DISCONNECTED');
+
+  try {
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = 'arraybuffer';
+  } catch (err) {
+    console.error('[WS] Failed to create WebSocket:', err);
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    console.log('[WS] Connected');
+    wsConnected = true;
+    reconnectAttempts = 0;
+    reconnectStopped = false;
+    transitionState('IDLE');
+
+    // Send current config
+    ws.send(JSON.stringify({
+      type: 'config',
+      voice: settings.voice,
+    }));
+
+    // Start keepalive ping
+    startPingInterval();
+  };
+
+  ws.onclose = (evt) => {
+    console.log(`[WS] Closed: code=${evt.code}`);
+    wsConnected = false;
+    stopPingInterval();
+    stopAllAudio();
+
+    if (appState !== 'ERROR') {
+      transitionState('DISCONNECTED');
+      scheduleReconnect();
+    }
+  };
+
+  ws.onerror = (err) => {
+    console.error('[WS] Error:', err);
+    wsConnected = false;
+  };
+
+  ws.onmessage = handleServerMessage;
+}
+
+function scheduleReconnect() {
+  if (reconnectStopped) return;
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    reconnectStopped = true;
+    showFatalError('Voice server unavailable. Is the server running on port 8882?');
+    return;
+  }
+
+  const delay = RECONNECT_BASE_MS * Math.pow(2, reconnectAttempts);
+  reconnectAttempts++;
+  console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+  el.stateLabel.textContent = `Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
+
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => connectWebSocket(), delay);
+}
+
+function sendWsMessage(data) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+  }
+}
+
+// Keepalive
+let pingTimer = null;
+function startPingInterval() {
+  stopPingInterval();
+  pingTimer = setInterval(() => {
+    if (ws?.readyState === WebSocket.OPEN) {
+      sendWsMessage({ type: 'ping' });
+    }
+  }, 30_000);
+}
+function stopPingInterval() {
+  if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+}
+
+// ============================================================================
+// Server Message Handler
+// ============================================================================
+
+function handleServerMessage(event) {
+  const data = event.data;
+
+  // Text JSON messages
+  if (typeof data === 'string') {
+    let msg;
+    try {
+      msg = JSON.parse(data);
+    } catch {
+      console.warn('[WS] Non-JSON text message:', data);
+      return;
+    }
+
+    switch (msg.type) {
+      case 'status':
+        handleStatusMessage(msg.state);
+        break;
+      case 'transcript':
+        if (msg.text) addMessage('user', msg.text);
+        break;
+      case 'response_text':
+        if (msg.text) addMessage('assistant', msg.text);
+        break;
+      case 'audio':
+        // Audio is sent as base64 JSON from the server
+        if (msg.data && appState === 'SPEAKING') {
+          playAudioChunk(msg.data);
+        }
+        break;
+      case 'error':
+        console.error('[Server]', msg.message);
+        el.stateLabel.textContent = `Error: ${msg.message}`;
+        setTimeout(() => {
+          if (appState !== 'DISCONNECTED') transitionState('IDLE');
+        }, 3000);
+        break;
+      case 'pong':
+        // keepalive response
+        break;
+      default:
+        console.warn('[WS] Unknown message type:', msg.type);
+    }
+    return;
+  }
+
+  // Binary messages (future: binary audio frames)
+  if (data instanceof ArrayBuffer) {
+    // Reserved for future binary audio protocol
+    console.log('[WS] Binary frame received:', data.byteLength, 'bytes');
+  }
+}
+
+function handleStatusMessage(state) {
+  console.log(`[Status] Server state: ${state}`);
+
+  switch (state) {
+    case 'thinking':
+      transitionState('SENDING');
+      stopWaveformAnimation();
+      break;
+
+    case 'speaking':
+      transitionState('SPEAKING');
+      startWaveformAnimation();
+      exchangeCount++;
+      break;
+
+    case 'listening':
+      // Don't stopAllAudio() here — let queued audio finish playing.
+      // Audio is only killed on user-initiated interrupts (triggerInterrupt).
+      // Wait for audio queue to drain, then transition to IDLE.
+      waitForAudioDrain().then(() => {
+        stopWaveformAnimation();
+        transitionState('IDLE');
+      });
+      break;
+  }
+}
+
+// ============================================================================
+// VAD (Voice Activity Detection)
+// ============================================================================
+
+let vadInstance = null;
+let vadReady = false;
+let pttMode = false; // Fallback to push-to-talk
+
+async function initVAD() {
+  setLoadingStatus('Loading voice detection...');
+
+  const vadTimeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('VAD load timeout')), VAD_TIMEOUT_MS)
+  );
+
+  try {
+    const vadModule = await Promise.race([
+      loadVADModule(),
+      vadTimeout,
+    ]);
+
+    if (!vadModule) throw new Error('VAD module is null');
+
+    setLoadingStatus('Requesting microphone...');
+    await requestMicPermission();
+
+    setLoadingStatus('Initializing voice detection...');
+
+    vadInstance = await vadModule.MicVAD.new({
+      positiveSpeechThreshold: 0.8,
+      negativeSpeechThreshold: 0.15,
+      minSpeechFrames: 3,
+      preSpeechPadFrames: 5,
+      redemptionFrames: 8,
+      onSpeechStart: onSpeechStart,
+      onSpeechEnd: onSpeechEnd,
+      // Explicit asset paths for CDN bundle — prevents ONNX WASM 404s
+      baseAssetPath: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.30/dist/',
+      onnxWASMBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/',
+    });
+
+    await vadInstance.start();
+    vadReady = true;
+    console.log('[VAD] Ready');
+    el.vadStatusBadge.textContent = 'Active (Silero VAD)';
+    el.vadStatusBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+    el.vadStatusBadge.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+    el.vadStatusBadge.style.color = 'var(--listening)';
+  } catch (err) {
+    console.warn('[VAD] Failed, falling back to push-to-talk:', err);
+    enablePTTFallback(err.message);
+  }
+}
+
+async function loadVADModule() {
+  return new Promise((resolve, reject) => {
+    // Load ONNX Runtime first (required by vad-web for WASM inference)
+    const onnxScript = document.createElement('script');
+    onnxScript.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js';
+    onnxScript.onload = () => {
+      console.log('[VAD] ONNX Runtime loaded');
+      loadVADBundle(resolve, reject);
+    };
+    onnxScript.onerror = () => {
+      console.warn('[VAD] ONNX Runtime failed to load from CDN');
+      reject(new Error('ONNX Runtime CDN load failed'));
+    };
+    document.head.appendChild(onnxScript);
+  });
+}
+
+function loadVADBundle(resolve, reject) {
+  const scriptUrls = [
+    'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.30/dist/bundle.min.js',
+    'https://unpkg.com/@ricky0123/vad-web@0.0.30/dist/bundle.min.js',
+  ];
+
+  let idx = 0;
+
+  function tryNext() {
+    if (idx >= scriptUrls.length) {
+      reject(new Error('All CDN sources failed'));
+      return;
+    }
+
+    const url = scriptUrls[idx++];
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => {
+      const vad = window.vad || window.VAD;
+      if (vad?.MicVAD) {
+        resolve(vad);
+      } else {
+        console.warn(`[VAD] Module loaded from ${url} but MicVAD not found`);
+        tryNext();
+      }
+    };
+    script.onerror = () => {
+      console.warn(`[VAD] Failed to load from ${url}`);
+      tryNext();
+    };
+    document.head.appendChild(script);
+  }
+
+  tryNext();
+}
+
+async function requestMicPermission() {
+  try {
+    // Just check permissions — VAD will request its own stream
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    });
+    // Release immediately; VAD will create its own stream
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (err) {
+    console.error('[Mic] Permission denied:', err);
+    showOverlay('overlay-mic');
+    throw err;
+  }
+}
+
+function enablePTTFallback(reason) {
+  pttMode = true;
+  vadReady = false;
+
+  el.vadStatusBadge.textContent = `Push-to-talk mode (${reason || 'VAD unavailable'})`;
+  el.vadStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+  el.vadStatusBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+  el.vadStatusBadge.style.color = 'var(--thinking)';
+
+  el.pttHint.classList.add('visible');
+  el.micBtn.classList.add('ptt-mode');
+  el.micBtn.title = 'Hold to talk';
+
+  // Set up PTT event listeners
+  setupPTT();
+}
+
+// ============================================================================
+// Speech callbacks
+// ============================================================================
+
+let speechStartTime = 0;
+let currentAudioBuffer = null; // Holds Float32Array from VAD
+
+function onSpeechStart() {
+  console.log('[VAD] Speech start');
+  speechStartTime = Date.now();
+
+  // If speaking, trigger interrupt
+  if (appState === 'SPEAKING') {
+    triggerInterrupt();
+    return;
+  }
+
+  if (appState !== 'IDLE' && appState !== 'LISTENING') return;
+
+  haptic('impact');
+  transitionState('LISTENING');
+  startWaveformAnimation();
+}
+
+function onSpeechEnd(audioFloat32) {
+  console.log('[VAD] Speech end, duration:', Date.now() - speechStartTime, 'ms');
+
+  const duration = Date.now() - speechStartTime;
+
+  // Discard very short utterances (likely noise)
+  if (duration < MIN_SPEECH_DURATION_MS) {
+    console.log('[VAD] Too short, discarding');
+    if (appState === 'LISTENING') transitionState('IDLE');
+    stopWaveformAnimation();
+    return;
+  }
+
+  if (appState !== 'LISTENING') return;
+
+  stopWaveformAnimation();
+  sendAudioToServer(audioFloat32);
+}
+
+function triggerInterrupt() {
+  console.log('[Interrupt] Stopping playback');
+  haptic('impact');
+
+  // Flash interrupt UI
+  el.micBtn.classList.add('interrupt-flash');
+  setTimeout(() => el.micBtn.classList.remove('interrupt-flash'), 400);
+
+  stopAllAudio();
+  stopWaveformAnimation();
+  sendWsMessage({ type: 'interrupt' });
+  transitionState('LISTENING');
+  startWaveformAnimation();
+}
+
+// ============================================================================
+// Audio encoding and transmission
+// ============================================================================
+
+function sendAudioToServer(audioFloat32) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.warn('[Audio] WebSocket not open');
+    transitionState('IDLE');
+    return;
+  }
+
+  transitionState('SENDING');
+
+  // Convert Float32Array to WAV ArrayBuffer
+  const wavBuffer = encodeWAV(audioFloat32, 16000);
+  ws.send(wavBuffer);
+
+  console.log(`[Audio] Sent ${wavBuffer.byteLength} bytes to server`);
+
+  // Clear audio buffer (privacy)
+  currentAudioBuffer = null;
+}
+
+/**
+ * Encode Float32Array PCM samples as a WAV file
+ * @param {Float32Array} samples - PCM audio samples
+ * @param {number} sampleRate - Sample rate in Hz
+ * @returns {ArrayBuffer} WAV file bytes
+ */
+function encodeWAV(samples, sampleRate) {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = samples.length * 2; // 16-bit = 2 bytes per sample
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF chunk
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+
+  // fmt chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);       // chunk size
+  view.setUint16(20, 1, true);        // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  // Convert float32 to int16
+  const offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+
+  return buffer;
+}
+
+function writeString(view, offset, str) {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
+}
+
+// ============================================================================
+// Push-to-talk (PTT) fallback
+// ============================================================================
+
+let mediaRecorder = null;
+let recordedChunks = [];
+let pttRecording = false;
+let pttStream = null;
+
+function setupPTT() {
+  el.micBtn.addEventListener('pointerdown', startPTT, { passive: true });
+  el.micBtn.addEventListener('pointerup', stopPTT, { passive: true });
+  el.micBtn.addEventListener('pointercancel', stopPTT, { passive: true });
+  el.micBtn.addEventListener('pointerleave', stopPTT, { passive: true });
+}
+
+async function startPTT() {
+  if (pttRecording) return;
+  if (appState === 'SPEAKING') { triggerInterrupt(); return; }
+  if (!['IDLE', 'LISTENING'].includes(appState)) return;
+
+  try {
+    pttStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    });
+
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(pttStream, {
+      mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm',
+    });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+      const arrayBuffer = await blob.arrayBuffer();
+
+      if (arrayBuffer.byteLength > 100) {
+        transitionState('SENDING');
+        ws?.send(arrayBuffer);
+      } else {
+        transitionState('IDLE');
+      }
+
+      pttStream?.getTracks().forEach(t => t.stop());
+      pttStream = null;
+      recordedChunks = [];
+    };
+
+    mediaRecorder.start(100);
+    pttRecording = true;
+    haptic('impact');
+    el.micBtn.classList.add('ptt-recording');
+    transitionState('LISTENING');
+    startWaveformAnimation();
+    speechStartTime = Date.now();
+
+    // Auto-stop after max duration
+    setTimeout(() => { if (pttRecording) stopPTT(); }, MAX_AUDIO_DURATION_MS);
+  } catch (err) {
+    console.error('[PTT] Error:', err);
+    showOverlay('overlay-mic');
+  }
+}
+
+function stopPTT() {
+  if (!pttRecording) return;
+  pttRecording = false;
+  el.micBtn.classList.remove('ptt-recording');
+
+  const duration = Date.now() - speechStartTime;
+  stopWaveformAnimation();
+
+  if (mediaRecorder?.state === 'recording') {
+    mediaRecorder.stop();
+  }
+
+  if (duration < MIN_SPEECH_DURATION_MS) {
+    transitionState('IDLE');
+  }
+}
+
+// ============================================================================
+// Settings UI
+// ============================================================================
+
+function initSettingsUI() {
+  el.voiceSelect.value = settings.voice;
+  el.autoListenToggle.checked = settings.autoListen;
+  el.wsUrlDisplay.textContent = WS_URL;
+
+  el.voiceSelect.addEventListener('change', () => {
+    settings.voice = el.voiceSelect.value;
+    saveSettings();
+    sendWsMessage({ type: 'config', voice: settings.voice });
+  });
+
+  el.autoListenToggle.addEventListener('change', () => {
+    settings.autoListen = el.autoListenToggle.checked;
+    saveSettings();
+  });
+
+  el.settingsBtn.addEventListener('click', () => {
+    const isOpen = el.settingsPanel.classList.contains('open');
+    el.settingsPanel.classList.toggle('open', !isOpen);
+    el.settingsPanel.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+  });
+
+  el.settingsClose.addEventListener('click', () => {
+    el.settingsPanel.classList.remove('open');
+    el.settingsPanel.setAttribute('aria-hidden', 'true');
+  });
+
+  // Close settings when clicking outside
+  document.addEventListener('click', (e) => {
+    if (el.settingsPanel.classList.contains('open') &&
+        !el.settingsPanel.contains(e.target) &&
+        e.target !== el.settingsBtn) {
+      el.settingsPanel.classList.remove('open');
+      el.settingsPanel.setAttribute('aria-hidden', 'true');
+    }
+  });
+}
+
+// ============================================================================
+// Overlay actions
+// ============================================================================
+
+el.micRetryBtn.addEventListener('click', () => {
+  hideAllOverlays();
+  showOverlay('overlay-loading');
+  initApp();
+});
+
+el.errorRetryBtn.addEventListener('click', () => {
+  hideAllOverlays();
+  reconnectAttempts = 0;
+  reconnectStopped = false;
+  connectWebSocket();
+});
+
+el.audioUnlockBtn.addEventListener('click', async () => {
+  try {
+    const ctx = getAudioContext();
+    await ctx.resume();
+    hideAllOverlays();
+  } catch (err) {
+    console.error('[Audio] Failed to resume context:', err);
+  }
+});
+
+function showFatalError(msg) {
+  el.errorMessage.textContent = msg;
+  showOverlay('overlay-error');
+}
+
+// ============================================================================
+// Initialization
+// ============================================================================
+
+async function initApp() {
+  try {
+    // Step 1: Detect Telegram context
+    setLoadingStatus('Checking context...');
+    initTelegram();
+
+    // Step 2: Load VAD (with fallback to PTT)
+    setLoadingStatus('Loading voice detection...');
+    await initVAD();
+
+    // Step 3: Connect WebSocket
+    setLoadingStatus('Connecting to voice server...');
+    connectWebSocket();
+
+    // Step 4: Init settings UI
+    initSettingsUI();
+
+    // Step 5: Done
+    hideAllOverlays();
+    transitionState('IDLE');
+
+  } catch (err) {
+    console.error('[Init] Fatal error:', err);
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      showOverlay('overlay-mic');
+    } else {
+      el.errorMessage.textContent = err.message || 'Initialization failed';
+      showOverlay('overlay-error');
+    }
+  }
+}
+
+// Start the app
+initApp();
+
+// Log session info
+console.log('[Kaya Voice] Mini App loaded');
+console.log(`[Kaya Voice] WebSocket: ${WS_URL}`);
+console.log('[Kaya Voice] VAD: @ricky0123/vad-web (Silero WASM)');
+</script>
+</body>
+</html>

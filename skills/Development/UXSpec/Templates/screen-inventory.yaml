@@ -1,0 +1,47 @@
+# Screen Inventory Template
+#
+# Copy this block into your UX Spec, tagged as "yaml screen-inventory".
+# The block is parsed by skills/Agents/SpecSheet/Tools/ScreenInventory.ts.
+#
+# CONTRACT RULES (enforced by the parser):
+# - Every screen MUST include "default" in its states array.
+# - Valid states: default, empty, loading, error, success, edge
+# - Screen `id` values must be unique.
+# - At least one entry point and one exit per screen.
+#
+# In your spec, wrap this in a fenced block:
+#
+#   ```yaml screen-inventory
+#   screens:
+#     - id: ...
+#   ```
+
+screens:
+  - id: screen-id-kebab-case           # unique, lowercase kebab-case
+    name: Screen Display Name          # human-readable name
+    purpose: One sentence explaining what this screen does and why it exists.
+    route: /optional/route             # optional: URL route (browser) or nav path (native)
+    entry:
+      - Entry point description 1      # how a user arrives at this screen
+      - Entry point description 2
+    exits:
+      - Exit description 1             # where a user goes from here
+      - Exit description 2
+    states:
+      - default                        # REQUIRED: always include default
+      - loading                        # optional: async data fetch in progress
+      - empty                          # optional: zero items / no content state
+      - error                          # optional: request failed or validation error
+      - success                        # optional: action completed successfully
+      - edge                           # optional: unusual/boundary condition
+
+  - id: second-screen
+    name: Second Screen Name
+    purpose: Purpose of this screen.
+    entry:
+      - Navigate from Screen Display Name
+    exits:
+      - Navigate back
+    states:
+      - default
+      - error

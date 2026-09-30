@@ -1,0 +1,76 @@
+# Task: Learning-Capture Judgment — LLM vs. hooks/lib/learning-utils.ts regexes
+#
+# WHY (determinism-remediation S0): isLearningCapture() (2-of-4 regex
+# indicator count) and getLearningCategory() (ALGORITHM-first keyword
+# dictionaries, default ALGORITHM) decide whether a session produces a
+# LEARNING record and which category it lands in. Both are deterministic
+# keyword cascades — provably wrong in both directions (see the fixtures'
+# notes): they MISS genuine learnings phrased outside their vocabulary
+# (lc06-lc08 — the anti-gaming cases S8 depends on), and they FALSE-POSITIVE
+# on frustration-worded venting that happens to hit 2 indicator categories
+# with nothing actually resolved (lc09-lc10).
+#
+# This eval does NOT call learning-utils.ts (no production code exercised or
+# modified in this slice). It asks a live LLM (via lib/core/Inference.ts,
+# Sonnet/"standard" level — see LearningCaptureFixtureRunner.ts) the exact
+# same semantic question the regex answers today: is this a learning, and if
+# so SYSTEM or ALGORITHM? A high baseline accuracy here — especially on the
+# outside-vocabulary and frustration-non-learning cases the regex gets
+# WRONG — is the evidence a later slice needs to replace the regex cascade
+# with LLM judgment.
+
+id: kaya_learning_capture
+description: >
+  Live-classify 10 fixtures (in-vocabulary SYSTEM/ALGORITHM cases, plain
+  non-learnings, learnings phrased outside the regex vocabulary, and
+  frustration-worded non-learnings) through a live LLM judgment prompt and
+  grade is_learning + category against expected labels.
+type: regression
+domain: general
+source: manual
+
+setup:
+  scenario_prompt: "No agent run required. Live per-fixture LLM judgment is performed by setup_commands; see the fixture_accuracy grader's record_path."
+  setup_commands:
+    - "bun ~/.claude/skills/Intelligence/Evals/Tools/LearningCaptureFixtureRunner.ts --fixtures ~/.claude/skills/Intelligence/Evals/Data/golden/learning-capture-fixtures.jsonl --out ~/.claude/MEMORY/EVALS/live-fixture-runs/learning-capture.json"
+
+graders:
+  - type: fixture_accuracy
+    weight: 1.0
+    required: true
+    params:
+      record_path: "~/.claude/MEMORY/EVALS/live-fixture-runs/learning-capture.json"
+      min_accuracy: 0.80
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - learning
+  - hooks
+  - dedeterminize
+  - eval-net
+  - anti-gaming
+  - regression
+
+notes: |
+  Red-Green evidence (S0, ahead of a later slice replacing learning-utils.ts):
+
+  OLD deterministic classifier (hooks/lib/learning-utils.ts, still live in
+  production): isLearningCapture() counts hits across 4 fixed regex
+  dictionaries (>=2 => learning); getLearningCategory() checks an
+  ALGORITHM-keyword dictionary first, then a SYSTEM-keyword dictionary,
+  defaulting to ALGORITHM. Both are enumerated keyword lists — silently
+  wrong on any phrasing outside the list (lc06-lc08 are TRUE learnings the
+  regex would MISS entirely) and silently wrong the other way on
+  frustration text that incidentally hits 2 categories without any
+  resolution (lc09-lc10 are NON-learnings the regex would FALSE-POSITIVE on).
+
+  NEW behavior this eval baselines: a live LLM asked to judge the actual
+  semantic content (was there a problem AND a resolution/insight?) rather
+  than keyword presence. This is the anti-gaming property S8 depends on —
+  a learning capture pipeline gated only on keyword presence can be gamed by
+  simply avoiding/including trigger words; an LLM judging substance cannot.
+
+created_at: "2026-07-04"

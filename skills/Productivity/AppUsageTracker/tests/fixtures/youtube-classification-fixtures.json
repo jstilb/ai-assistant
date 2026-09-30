@@ -1,0 +1,117 @@
+{
+  "_doc": "10 synthetic YouTube sessions used to verify Classifier accuracy. Run with RUN_LLM_TESTS=1 bun test (gated to avoid LLM cost on default `bun test`).",
+  "expected_low_value": [
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 18.5,
+      "titles": [
+        "I tried EVERY popular fast food breakfast and ranked them",
+        "10 CELEBRITIES Who Were CAUGHT On Live TV",
+        "Reacting to my OLDEST Videos *cringe*"
+      ]
+    },
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 32.1,
+      "titles": [
+        "MrBeast: I Spent 50 Hours Buried Alive",
+        "Among Us logic but it's a soap opera",
+        "Rating EVERY Costco hot dog combo from worst to best"
+      ]
+    },
+    {
+      "device": "mac",
+      "app": "Google Chrome",
+      "duration_min": 12.0,
+      "titles": [
+        "Top 10 Anime Plot Twists That Made Us SCREAM",
+        "Drama Channel Tea: What REALLY Happened With...",
+        "Funniest TikTok compilation #487"
+      ],
+      "urls": [
+        "https://www.youtube.com/watch?v=abc1",
+        "https://www.youtube.com/watch?v=abc2"
+      ]
+    },
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 8.7,
+      "titles": [
+        "WORST haircuts in NBA history (you won't believe #3)"
+      ]
+    },
+    {
+      "device": "mac",
+      "app": "Google Chrome",
+      "duration_min": 22.3,
+      "titles": [
+        "I bought every weird gadget on Amazon",
+        "Trying viral life hacks #6",
+        "Logan Paul vs KSI fight reaction"
+      ],
+      "urls": [
+        "https://www.youtube.com/watch?v=fff1"
+      ]
+    }
+  ],
+  "expected_not_low_value": [
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 28.0,
+      "titles": [
+        "Building a Rust HTTP server from scratch (part 3)",
+        "Why Postgres beats MongoDB for most applications",
+        "TypeScript generics: a deep dive"
+      ]
+    },
+    {
+      "device": "mac",
+      "app": "Google Chrome",
+      "duration_min": 45.2,
+      "titles": [
+        "Andrej Karpathy: Let's reproduce GPT-2 (124M)",
+        "Stanford CS224N | Lecture 8: Attention",
+        "3Blue1Brown: But what is a neural network?"
+      ],
+      "urls": [
+        "https://www.youtube.com/watch?v=edu1",
+        "https://www.youtube.com/watch?v=edu2"
+      ]
+    },
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 14.5,
+      "titles": [
+        "Veritasium: The Fastest Growing Number in Mathematics"
+      ]
+    },
+    {
+      "device": "mac",
+      "app": "Google Chrome",
+      "duration_min": 33.0,
+      "titles": [
+        "PG Talk: How to start a startup, lecture 1",
+        "Patrick McKenzie on pricing software",
+        "Naval: How to get rich without getting lucky"
+      ],
+      "urls": [
+        "https://www.youtube.com/watch?v=biz1"
+      ]
+    },
+    {
+      "device": "phone",
+      "app": "com.google.android.youtube",
+      "duration_min": 19.8,
+      "titles": [
+        "BBC News: in-depth analysis of Federal Reserve rate decision",
+        "Bloomberg Markets: Q3 earnings preview",
+        "Wall Street Journal: How chip shortages reshape supply chains"
+      ]
+    }
+  ]
+}

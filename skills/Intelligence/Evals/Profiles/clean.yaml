@@ -1,0 +1,6 @@
+# Vanilla Claude Code: no CLAUDE.md, no skills/commands/agents, no hooks,
+# no settings env, no plugins/MCP, no auto-memory. The floor every other
+# profile is measured against — "what does the bare model+harness do?"
+name: clean
+description: "Bare Claude Code — none of Kaya's setup"
+base: clean

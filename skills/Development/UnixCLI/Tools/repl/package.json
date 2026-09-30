@@ -1,0 +1,17 @@
+{
+  "name": "kaya-cli-repl",
+  "version": "1.0.0",
+  "description": "Interactive REPL for kaya-cli",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch src/index.ts"
+  },
+  "dependencies": {
+    "readline": "^1.3.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.0.0"
+  }
+}

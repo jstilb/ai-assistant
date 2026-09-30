@@ -1,0 +1,662 @@
+[
+  {
+    "id": "padres-mlb",
+    "url": "https://www.mlb.com/padres/schedule",
+    "name": "San Diego Padres",
+    "fetchTier": "api",
+    "categoryHint": "sports",
+    "geoHint": "Petco Park, San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "enabled": true
+  },
+  {
+    "id": "sd-press-club",
+    "url": "https://sdpressclub.org/category/news-events/feed/",
+    "name": "San Diego Press Club",
+    "fetchTier": "rss",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "comedy-store-la-jolla",
+    "url": "https://thecomedystore.com/la-jolla/calendar",
+    "name": "The Comedy Store La Jolla",
+    "fetchTier": "spa",
+    "categoryHint": "comedy",
+    "geoHint": "916 Pearl St, La Jolla, CA 92037",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "dosd",
+    "url": "https://dosd.com/",
+    "name": "Do San Diego (DoSD)",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sandiego-org-events",
+    "url": "https://www.sandiego.org/events-festivals",
+    "name": "San Diego Tourism Authority Events",
+    "fetchTier": "spa",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "maxLlmWindows": 8,
+    "enabled": true
+  },
+  {
+    "id": "rady-shell",
+    "url": "https://www.theshell.org/performances/rady-shell-calendar",
+    "name": "Rady Shell at Jacobs Park",
+    "fetchTier": "spa",
+    "categoryHint": "music",
+    "geoHint": "Rady Shell at Jacobs Park, San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "songkick-sd",
+    "url": "https://www.songkick.com/metro-areas/11086-us-san-diego",
+    "name": "Songkick San Diego",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "bandsintown-sd",
+    "url": "https://www.bandsintown.com/c/san-diego-ca",
+    "name": "Bandsintown San Diego",
+    "fetchTier": "spa",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "eventbrite-sd",
+    "url": "https://www.eventbrite.com/d/ca--san-diego/all-events/",
+    "name": "Eventbrite San Diego",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "paginate": {
+      "param": "page",
+      "pages": 20
+    },
+    "enabled": true
+  },
+  {
+    "id": "meetup-sd",
+    "url": "https://www.meetup.com/find/us--ca--san-diego/",
+    "name": "Meetup San Diego",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sd-reader-events",
+    "url": "https://www.sandiegoreader.com/rss/events/",
+    "name": "San Diego Reader — Events",
+    "fetchTier": "rss",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sd-reader-bestbets",
+    "url": "https://www.sandiegoreader.com/events/bestbets/",
+    "name": "San Diego Reader — Best Bets",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "balboa-park",
+    "url": "https://balboapark.org/",
+    "name": "Balboa Park",
+    "fetchTier": "wp-tribe",
+    "categoryHint": "arts",
+    "geoHint": "Balboa Park, San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "enabled": true
+  },
+  {
+    "id": "sd-union-tribune-todo",
+    "url": "https://www.sandiegouniontribune.com/things-to-do/",
+    "name": "San Diego Union-Tribune — Things To Do",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sd-union-tribune-music",
+    "url": "https://www.sandiegouniontribune.com/things-to-do/music-concerts/",
+    "name": "San Diego Union-Tribune — Music & Concerts",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sd-union-tribune-arts",
+    "url": "https://www.sandiegouniontribune.com/tag/visual-arts/",
+    "name": "San Diego Union-Tribune — Visual Arts",
+    "fetchTier": "html-llm",
+    "categoryHint": "arts",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sd-gulls",
+    "url": "https://www.sandiegogulls.com/games",
+    "name": "San Diego Gulls (AHL Hockey)",
+    "fetchTier": "html-llm",
+    "categoryHint": "sports",
+    "geoHint": "Pechanga Arena San Diego, San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sandiego-fc",
+    "url": "https://www.sandiegofc.com/schedule/",
+    "name": "San Diego FC (MLS Soccer)",
+    "fetchTier": "api",
+    "categoryHint": "sports",
+    "geoHint": "Snapdragon Stadium, San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sd-wave-fc",
+    "url": "https://sandiegowavefc.com/single-match-tickets/",
+    "name": "San Diego Wave FC (NWSL)",
+    "fetchTier": "spa",
+    "categoryHint": "sports",
+    "geoHint": "Snapdragon Stadium, San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "mic-drop-comedy",
+    "url": "https://www.micdropcomedysandiego.com/calendar",
+    "name": "Mic Drop Comedy San Diego",
+    "fetchTier": "spa",
+    "categoryHint": "comedy",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "american-comedy-co",
+    "url": "https://americancomedyco.com/collections/shows",
+    "name": "American Comedy Co",
+    "fetchTier": "html-llm",
+    "categoryHint": "comedy",
+    "geoHint": "909 Prospect St, La Jolla, CA 92037",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "sd-theatres",
+    "url": "https://www.sandiegotheatres.org/events",
+    "name": "San Diego Theatres",
+    "fetchTier": "spa",
+    "categoryHint": "theater",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "voice-of-sd-events",
+    "url": "https://voiceofsandiego.org/events/",
+    "name": "Voice of San Diego Events",
+    "fetchTier": "html-llm",
+    "categoryHint": "talk",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "inewsource-events",
+    "url": "https://discovery.evvnt.com/api/publisher/11515/home_page_events?hitsPerPage=50&multipleEventInstances=true&publisher_id=11515",
+    "name": "inewsource Events (Evvnt)",
+    "fetchTier": "evvnt",
+    "categoryHint": "talk",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "daylight-sd",
+    "url": "https://calendar.google.com/calendar/ical/32abf07c1554d428dc1df425788663d7b6f41c158b5ab492a64de1ef1add1726%40group.calendar.google.com/public/basic.ics",
+    "name": "Daylight San Diego Events",
+    "fetchTier": "ics",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "kpbs-events",
+    "url": "https://www.kpbs.org/events/all",
+    "name": "KPBS Events",
+    "fetchTier": "html-llm",
+    "categoryHint": "talk",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 20,
+    "enabled": true
+  },
+  {
+    "id": "cultureshock-sd",
+    "url": "https://cultureshocksandiego.org/hip-hop-class-schedule/",
+    "name": "Culture Shock San Diego — Dance Classes",
+    "fetchTier": "pike13",
+    "categoryHint": "arts",
+    "geoHint": "2110 Hancock St #200, San Diego, CA 92110",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "liberty-station",
+    "url": "https://libertystation.com/events/calendar",
+    "name": "Liberty Station",
+    "fetchTier": "ctycms",
+    "categoryHint": "community",
+    "geoHint": "Liberty Station, San Diego, CA 92106",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "good-news-bar",
+    "url": "https://www.goodnewssd.com/events",
+    "name": "Good News Bar (Alcohol-Free)",
+    "fetchTier": "spa",
+    "categoryHint": "community",
+    "geoHint": "Good News Bar, 3821 Park Blvd, San Diego, CA 92103",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "birch-aquarium-allages",
+    "url": "https://aquarium.ucsd.edu/events/all?field_event_category_target_id%5B%5D=182&title=",
+    "name": "Birch Aquarium at Scripps — All Ages",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "Birch Aquarium at Scripps, 2300 Expedition Way, La Jolla, CA 92037",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "obtemplate-com-events-1",
+    "url": "https://www.obtemplate.com/events-1",
+    "name": "The Template (Ocean Beach)",
+    "fetchTier": "html-llm",
+    "geoHint": "5032 Niagara Ave, San Diego, CA 92107",
+    "pollInterval": 720,
+    "maxLlmWindows": 25,
+    "enabled": true
+  },
+  {
+    "id": "sd-dsa",
+    "url": "https://www.solidarity.tech/calendar/o/75REFuHAYoHn9sfRt16JURFGthCzxUkhNJ0JRQH_qGo.ics",
+    "name": "San Diego DSA",
+    "fetchTier": "ics",
+    "categoryHint": "community",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "songkick-tracked-jm",
+    "url": "https://www.songkick.com/users/jm-stilb/calendars.ics?filter=tracked_artist",
+    "name": "Songkick — Jm's Tracked Artists",
+    "fetchTier": "ics",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "unblock": true,
+    "enabled": true
+  },
+  {
+    "id": "sdpl-library-events",
+    "url": "https://sandiego.events.mylibrary.digital/",
+    "name": "San Diego Public Library Events",
+    "fetchTier": "spa",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 20,
+    "enabled": true
+  },
+  {
+    "id": "sdcl-library-events",
+    "url": "https://sdcl.bibliocommons.com/v2/events",
+    "name": "San Diego County Library Events",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "paginate": {
+      "param": "page",
+      "pages": 20
+    },
+    "enabled": true
+  },
+  {
+    "id": "majestyinmotion-events",
+    "url": "https://majestyinmotion.com/events/",
+    "name": "Majesty in Motion — Salsa & Bachata Socials",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 10,
+    "enabled": true
+  },
+  {
+    "id": "majestyinmotion-classes",
+    "url": "https://member.life/majestyinmotion/schedule",
+    "name": "Majesty in Motion — Salsa & Bachata Classes",
+    "fetchTier": "api",
+    "categoryHint": "arts",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "tangodelrey-com-event-calendar",
+    "url": "https://www.tangodelrey.com/event-calendar",
+    "name": "Tango Del Rey",
+    "fetchTier": "spa",
+    "categoryHint": "community",
+    "geoHint": "Tango Del Rey, 3567 Del Rey St, San Diego, CA 92109",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "tangodelrey-com-upcoming-events",
+    "url": "https://www.tangodelrey.com/upcoming-events",
+    "name": "Tango Del Rey — Upcoming Events",
+    "fetchTier": "spa",
+    "categoryHint": "community",
+    "geoHint": "Tango Del Rey, 3567 Del Rey St, San Diego, CA 92109",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "tangodelrey-com-weekly-events",
+    "url": "https://www.tangodelrey.com/weekly-events",
+    "name": "Tango Del Rey — Weekly Events",
+    "fetchTier": "spa",
+    "categoryHint": "community",
+    "geoHint": "Tango Del Rey, 3567 Del Rey St, San Diego, CA 92109",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "thedancehouse-schedule",
+    "url": "https://dancestudio-pro.com/apps/api_classes.php?id=zaqlxajd29jd262a3d5852549209jasdklj21dx62a3d585254d1&s=99627",
+    "name": "The Dancehouse — Class Schedule",
+    "fetchTier": "dancestudio-pro",
+    "categoryHint": "community",
+    "geoHint": "The Dancehouse, 2180 Chatsworth Blvd, San Diego, CA 92107",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "apressurf-club",
+    "url": "https://www.apressurf.club/",
+    "name": "Après Surf Club",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "dancehouse-eventbrite",
+    "url": "https://www.eventbrite.com/o/the-dancehouse-san-diego-8308861728",
+    "name": "The Dancehouse — Classes & Primo Open Floor (Eventbrite)",
+    "fetchTier": "html-llm",
+    "categoryHint": "arts",
+    "geoHint": "2176 Chatsworth Blvd, San Diego, CA 92107",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "civic-dance-arts",
+    "url": "https://civicdancearts.org/enrollment/classes.html",
+    "name": "SD Civic Dance Arts (Parks & Rec)",
+    "fetchTier": "spa",
+    "categoryHint": "arts",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "culture-of-4",
+    "url": "https://www.finestcitydance.com/cultureof4",
+    "name": "Culture of 4 / Freestyle Session SD",
+    "fetchTier": "spa",
+    "categoryHint": "festival",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "19hz-socal",
+    "url": "https://19hz.info/eventlisting_LosAngeles.php",
+    "name": "19hz — SoCal Electronic Music Listings",
+    "fetchTier": "nineteenhz",
+    "categoryHint": "music",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "ledpresents",
+    "url": "https://ledpresents.com/",
+    "name": "LED Presents (EDM Promoter)",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "highValue": true,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "edmtrain-sd",
+    "url": "https://edmtrain.com/san-diego-ca",
+    "name": "EDMTrain San Diego",
+    "fetchTier": "api",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "spin-nightclub",
+    "url": "https://www.spinnightclub.com/",
+    "name": "Spin Nightclub",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "Spin Nightclub, 2028 Hancock St, San Diego, CA 92110",
+    "pollInterval": 720,
+    "maxLlmWindows": 10,
+    "enabled": true
+  },
+  {
+    "id": "quartyard-events",
+    "url": "https://quartyardsd.com/events/",
+    "name": "Quartyard",
+    "fetchTier": "html-llm",
+    "geoHint": "Quartyard, 1301 Market St, San Diego, CA 92101",
+    "pollInterval": 720,
+    "maxLlmWindows": 10,
+    "enabled": true
+  },
+  {
+    "id": "musicbox-calendar",
+    "url": "https://musicboxsd.com/calendar/",
+    "name": "Music Box (Little Italy)",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "Music Box, 1337 India St, San Diego, CA 92101",
+    "pollInterval": 720,
+    "maxLlmWindows": 12,
+    "enabled": true
+  },
+  {
+    "id": "shuffle-vault-classes",
+    "url": "https://www.theshufflevault.com/classes",
+    "name": "The Shuffle Vault — Shuffle Dance Classes",
+    "fetchTier": "html-llm",
+    "categoryHint": "arts",
+    "geoHint": "The Dancehouse, 2176 Chatsworth Blvd, San Diego, CA 92107",
+    "pollInterval": 720,
+    "maxLlmWindows": 8,
+    "enabled": true
+  },
+  {
+    "id": "schoolofconsent-calendar",
+    "url": "https://www.schoolofconsent.org/calendar",
+    "name": "School of Consent (Wheel of Consent workshops)",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sdparkandrec-activenet",
+    "url": "https://anc.apm.activecommunities.com/sdparkandrec/activity/search?onlineSiteId=0&activity_select_param=2&drop_in=0&viewMode=list",
+    "name": "SD Parks & Recreation Activities (ActiveNet)",
+    "fetchTier": "activenet",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "ra-co-sandiego",
+    "url": "https://ra.co/events/us/sandiego",
+    "name": "Resident Advisor — San Diego",
+    "fetchTier": "api",
+    "categoryHint": "music",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sevilla-nightclub-sd",
+    "url": "https://sevillanightclub.com/san-diego/calendar/",
+    "name": "Sevilla Nightclub — Latin Nights & Bachata Room",
+    "fetchTier": "html-llm",
+    "categoryHint": "music",
+    "geoHint": "Gaslamp Quarter, San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "melomano-events",
+    "url": "https://melomano.com/events",
+    "name": "Melómano Dance Studio — Salsa & Bachata Events",
+    "fetchTier": "html-llm",
+    "categoryHint": "community",
+    "geoHint": "Kearny Mesa, San Diego, CA",
+    "pollInterval": 720,
+    "maxLlmWindows": 8,
+    "enabled": true
+  },
+  {
+    "id": "sdwritersink-classes",
+    "url": "https://writeyourstorynow.org/classes-workshops-sitemap.xml",
+    "name": "San Diego Writers, Ink — Classes & Workshops",
+    "fetchTier": "sitemap-llm",
+    "categoryHint": "arts",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sdwritersink-readings",
+    "url": "https://writeyourstorynow.org/readings-events-sitemap.xml",
+    "name": "San Diego Writers, Ink — Readings & Events",
+    "fetchTier": "sitemap-llm",
+    "categoryHint": "talk",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sdwritersink-certificates",
+    "url": "https://writeyourstorynow.org/certificates-wrkshps-sitemap.xml",
+    "name": "San Diego Writers, Ink — Certificate Programs",
+    "fetchTier": "sitemap-llm",
+    "categoryHint": "arts",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sdwritersink-writing-groups",
+    "url": "https://writeyourstorynow.org/writing-reading-sitemap.xml",
+    "name": "San Diego Writers, Ink — Writing & Reading Groups",
+    "fetchTier": "sitemap-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  },
+  {
+    "id": "sdwritersink-critique-groups",
+    "url": "https://writeyourstorynow.org/read-critiques-sitemap.xml",
+    "name": "San Diego Writers, Ink — Read & Critique Groups",
+    "fetchTier": "sitemap-llm",
+    "categoryHint": "community",
+    "geoHint": "San Diego, CA",
+    "pollInterval": 720,
+    "enabled": true
+  }
+]

@@ -1,0 +1,32 @@
+# WHY: "## LifeOS Capture Routing — HIGH PRIORITY" is the one CLAUDE.md
+# section that changes what the agent DOES with an ordinary sentence (a
+# rated experience must go through Capture/Router.ts before anything
+# else). This asks the agent to name its routing decision WITHOUT
+# executing it, so the probe never writes to the live LifeOS store. It
+# isolates that section: `claudemd-no-routing`-style ablations (or dropping
+# lines 39-47) should flip it while identity/format stay intact.
+id: ablation_capture_routing_awareness
+description: "Agent knows a capture-shaped input routes through the LifeOS Capture Router before anything else"
+type: capability
+domain: conversational
+source: manual
+
+setup:
+  scenario_prompt: "Do NOT run or execute anything for this question — I only want the routing decision. If I sent you the message: \"Had lunch at Blue Bottle today, solid 8/10\", what is the FIRST thing you are required to route it through before doing anything else? Answer with the exact file path or skill name, one line."
+
+graders:
+  - type: regex_match
+    weight: 1.0
+    required: true
+    params:
+      mode: any
+      flags: "i"
+      patterns:
+        - "Capture/Router\\.ts"
+        - "LifeOS"
+
+trials: 1
+pass_threshold: 0.80
+
+tags: [ablation, claudemd, capture-routing]
+created_at: "2026-09-04"

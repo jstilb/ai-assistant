@@ -1,0 +1,14 @@
+name: setup-ablation
+description: "Setup-ablation probe suite — five cheap, mostly deterministic tasks that each isolate one component of the Kaya setup (CLAUDE.md identity, capture routing, skills, guiding principles) plus one raw coding task. Run through Tools/Ablation/AblationRunner.ts across profiles × models; never as a nightly regression gate."
+version: 1.0.0
+type: capability
+domain: general
+
+pass_threshold: 0.80
+
+tasks:
+  - ablation_identity        # CLAUDE.md loaded at all (matrix sanity check: clean MUST fail, full MUST pass)
+  - ablation_capture_routing_awareness  # CLAUDE.md "LifeOS Capture Routing" section
+  - ablation_skill_awareness            # skills/ component
+  - ablation_scope_discipline           # CLAUDE.md "Guiding Principles" (match scope to the request)
+  - ablation_fix_failing_test           # raw coding capability (model axis)

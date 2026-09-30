@@ -1,0 +1,6 @@
+# Faithful mirror of the live setup (CLAUDE.md, skills, commands, agents,
+# hooks, settings env, plugins, MCP servers, auto-memory snapshot). The
+# default baseline for ablation deltas.
+name: full
+description: "Full Kaya setup, mirrored from the source home"
+base: full

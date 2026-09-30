@@ -1,0 +1,91 @@
+# Task: LifeOS Capture-Routing — live classifier vs. NON_CAPTURE_HEURISTICS
+#
+# WHY (determinism-remediation S0, "let-the-model-speak"): CaptureGate.ts's
+# NON_CAPTURE_HEURISTICS is a 7-regex deterministic pre-filter that runs
+# BEFORE Router.classify() is ever called, in voice sessions. Every regex
+# encodes a real fear (a WH-question mis-logged as a habit, a greeting
+# mis-routed as a task, ...). A later slice (S6) folds/removes this
+# heuristic layer and adds a first-class NOT_A_CAPTURE label to the
+# classifier itself. This eval proves — NOW, before that deletion — that the
+# raw LLM classifier (classify(), unprotected by the heuristic) already
+# handles every regex class's cases correctly, plus two heuristic
+# FALSE-POSITIVE cases where the regex would have wrongly blocked a genuine
+# capture (cr22/cr23, "Thanks..."/"Please..." — the politeness regex fires on
+# real captures that happen to open with gratitude language).
+#
+# LIVE, NOT STATIC: unlike the H2 static-input pattern (nightly_judge reading
+# a pre-baked golden file), this task's setup_commands step calls the REAL
+# Router.classify() (Sonnet) once per fixture, every time the eval runs —
+# CaptureRoutingFixtureRunner.ts. The fixture_accuracy grader then reads the
+# freshly-written accuracy record; it never reads context.output.
+#
+# Expected outcome for every non-capture fixture is "label in
+# {UNKNOWN, NOT_A_CAPTURE}" — forward-compatible with S6, which will make
+# NOT_A_CAPTURE a real label. Today only UNKNOWN is possible, so a fixture
+# that comes back UNKNOWN is a pass; NOT_A_CAPTURE would also pass once S6
+# lands (no eval update needed). Grading a raw label match, never the
+# confidence float, per S6 deleting the confidence gate.
+
+id: kaya_capture_routing
+description: >
+  Live-classify 23 fixtures (2+ per NON_CAPTURE_HEURISTICS regex class, plus
+  true captures across 5 label types, plus 2 heuristic-false-positive-risk
+  cases) through the real Router.classify() and grade each returned label
+  against its expected acceptable-label set.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # No agent run does the classification — the live work happens in
+  # setup_commands (real classify() calls). The scenario_prompt is a stub
+  # satisfying the schema; see FixtureAccuracy.ts's module header for why
+  # this is NOT the same as the fully-static H2 pattern (record_path here is
+  # regenerated on every invocation, not a frozen golden file).
+  scenario_prompt: "No agent run required. Live per-fixture classification is performed by setup_commands; see the fixture_accuracy grader's record_path."
+  setup_commands:
+    - "bun ~/.claude/skills/Intelligence/Evals/Tools/CaptureRoutingFixtureRunner.ts --fixtures ~/.claude/skills/Intelligence/Evals/Data/golden/capture-routing-fixtures.jsonl --out ~/.claude/MEMORY/EVALS/live-fixture-runs/capture-routing.json"
+
+graders:
+  - type: fixture_accuracy
+    weight: 1.0
+    required: true
+    params:
+      record_path: "~/.claude/MEMORY/EVALS/live-fixture-runs/capture-routing.json"
+      # Baseline threshold: heuristic-class fixtures should reliably land on
+      # UNKNOWN and true-capture fixtures on their specific label. Set below
+      # 1.0 for headroom on live-model variance. Actual baseline (2026-07-04,
+      # two independent runs): 21/23 and 22/23 — the stable miss is cr08
+      # ("Search for good ramen spots near me" → TASK); cr12 flaked once.
+      # cr15/cr16 (<3-word inputs) PASSED at baseline. S6's NOT_A_CAPTURE
+      # prompt work is expected to fix cr08/cr12-class misses.
+      min_accuracy: 0.80
+
+trials: 1
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - lifeos
+  - capture
+  - router
+  - dedeterminize
+  - eval-net
+  - regression
+
+notes: |
+  Red-Green evidence (S0, ahead of S6's deletion):
+
+  OLD deterministic gate (CaptureGate.ts's NON_CAPTURE_HEURISTICS, still
+  live in production as of this slice): 7 regexes run BEFORE classify() is
+  ever invoked in a voice session. A match on any of them means Router.
+  classify() is never called at all for that turn — the heuristic's
+  decision is final and unreviewable.
+
+  NEW behavior this eval baselines: calling classify() directly (as if the
+  heuristic layer did not exist) on the SAME fixtures the regexes were
+  written to catch, plus cases the regexes get wrong. A high accuracy here
+  is the evidence S6 needs to fold or delete NON_CAPTURE_HEURISTICS without
+  a functional regression once NOT_A_CAPTURE exists as a label.
+
+created_at: "2026-07-04"

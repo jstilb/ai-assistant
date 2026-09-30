@@ -1,0 +1,47 @@
+{
+  "lastGenerated": "2026-02-28T01:13:42.038Z",
+  "systemHash": "d279d4cad138911b",
+  "generatedFiles": [
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/session-lifecycle.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "5b64e219d85b49cc"
+    },
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/configuration-flow.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "c4a6e853259bbf36"
+    },
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/agent-architecture.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "08fa7fac490da1a9"
+    },
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/memory-structure.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "f37353b94c2bf220"
+    },
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/system-overview.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "6e32a8dbb9e6a2d6"
+    },
+    {
+      "path": "~/.claude/skills/SystemFlowchart/Output/markdown/skill-ecosystem.md",
+      "type": "markdown",
+      "generatedAt": "2026-02-28T01:13:42.038Z",
+      "hash": "d56940c3d113657e"
+    }
+  ],
+  "stats": {
+    "skillCount": 54,
+    "hookCount": 31,
+    "memoryDirs": 46
+  }
+}

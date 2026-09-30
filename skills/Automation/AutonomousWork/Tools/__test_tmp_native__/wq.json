@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "nosurf",
+      "title": "x",
+      "description": "",
+      "priority": "normal",
+      "status": "pending",
+      "dependencies": [],
+      "workType": "dev",
+      "source": "approval_queue",
+      "createdAt": "2026-06-22T15:54:56.339Z",
+      "metadata": {}
+    }
+  ],
+  "lastUpdated": "2026-06-22T15:54:56.339Z",
+  "totalProcessed": 0,
+  "totalFailed": 0
+}

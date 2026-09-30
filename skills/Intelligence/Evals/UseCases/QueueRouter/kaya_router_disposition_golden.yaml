@@ -1,0 +1,124 @@
+# Task: InboxTriage 4-way disposition golden regression
+# WHY: Monitors that the InboxTriage/scratchpad-pad agents assign captures to the correct
+#      disposition. Prevents silent misroutes that silently lose work items or bypass
+#      approval gates.
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The grader reads the golden set
+# directly and scores it for coverage, correctness, and per-disposition balance.
+#
+# LIVE-SOURCE WIRING NOTE:
+# The live 4-way dispositions are stored in TaskDB (SQLite) at:
+#   skills/Productivity/LucidTasks/Data/lucidtasks.db  (column: disposition)
+# The nightly_judge grader accepts JSON/JSONL only, not raw SQLite.
+#
+# The exporter NOW EXISTS (2026-06-19):
+#   bun skills/Productivity/LucidTasks/Tools/TaskDB.ts export-dispositions \
+#       --out MEMORY/EVALS/router-dispositions-live.jsonl [--since <ISO>] [--limit N]
+# It emits judge-compatible records: {capture, disposition, source:"taskdb-live", ...}.
+#
+# PRODUCER NOTE: KayaRouter.ts was retired. Dispositions are now assigned by the
+# InboxTriage agent (Workflows/Triage-Inbox.md) and the scratchpad workflow
+# (Workflows/Organize-ScratchPad.md), both reading InformationLayout.md for routing
+# context. Captures land in the inbox with disposition=null; the InboxTriage agent
+# assigns disposition at 04:30 daily. The --disposition flag on `tasks add` also
+# writes it directly.
+#
+# REPOINT IS GATED ON LIVE VOLUME (intentionally NOT yet repointed): as of 2026-06-19
+# only 6 tasks carry a disposition and all 6 are "autonomous". The rubric below requires
+# COVERAGE ≥30 and DISTRIBUTION ≥3-of-4 dispositions — pointing record_path at the live
+# export today would FAIL the monitor on thin data (false alarm). Until live routing
+# accrues ≥30 decisions across ≥3 dispositions, this UseCase stays a golden-set
+# regression (re-scoring trusted labels) — a meaningful sanity-check that the rubric
+# and golden labels are internally consistent. To go live: run the exporter on a
+# schedule and set record_path to the exported JSONL.
+
+id: kaya_router_disposition_golden
+description: >
+  Regression eval: score the router-disposition golden set for correctness and
+  coverage using the 4-way routing rubric. Passes when the judge finds the golden
+  labels coherent, well-distributed, and consistent with the routing rubric.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader reads
+  # the golden JSONL directly from record_path. The scenario_prompt below is a stub
+  # that satisfies the schema; execution is driven by the grader, not an agent run.
+  scenario_prompt: "No agent run required. Static input grading."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The golden JSONL is the record to evaluate — nightly_judge reads this file
+      # and scores its quality against the rubric below.
+      record_path: "skills/Intelligence/Evals/Data/golden/router-disposition-golden.jsonl"
+      rubric: |
+        You are evaluating a golden set of routing labels for a 4-way capture→disposition
+        classifier. The golden set is a JSONL file where each line is a routing decision.
+        Dispositions are assigned by the InboxTriage agent (Triage-Inbox.md) and the
+        scratchpad workflow (Organize-ScratchPad.md).
+
+        Valid dispositions: autonomous | needs-jm | personal-todo | drop
+
+        NOTE: lifeos-idea and note are NOT valid dispositions. The InboxTriage agent
+        moves those captures to their real home (LifeOS vault / Obsidian notes) rather
+        than tagging a task with a disposition value.
+
+        SCORING CRITERIA (all must hold for a high score):
+
+        1. COVERAGE: The golden set has ≥30 total entries.
+        2. CONSENSUS QUALITY: Consensus entries (disposition != null) have a recognized
+           disposition from the 4-way enum. Divergent entries (disposition: null, divergent: true)
+           are correctly flagged rather than guessed.
+        3. DISTRIBUTION: At least 3 of the 4 dispositions are represented in consensus cases.
+        4. CORRECTNESS SAMPLING: Sample 5 representative entries and verify each
+           label is plausible given the capture string and the routing rubric below:
+             - autonomous: Kaya can do it via computer (research, code, scripts, info lookup)
+             - needs-jm: physical presence, credentials, or consequential real-world action required
+             - personal-todo: errand Jm must do himself (physical/personal, but no special credentials)
+             - drop: throwaway, test, empty, noise
+
+        SCORE (0.0 to 1.0):
+          1.0 — All criteria met, labels correct and well-distributed
+          0.8 — Coverage and distribution met; 1-2 marginal labels but defensible
+          0.6 — Coverage met, distribution thin, a few suspect labels
+          0.0 — Coverage < 30, or systematic misclassification detected
+
+      # Reference solution: the routing criteria (same rubric KayaRouter uses)
+      # This anchors the judge to the actual router design spec.
+      golden_set_path: "skills/Intelligence/Evals/Data/golden/router-disposition-golden.jsonl"
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  The golden JSONL should contain ≥30 entries with:
+  - 33 consensus cases (1 divergent: "set up a launchd cron..." — genuinely ambiguous)
+  - Per-disposition distribution across 4 values: autonomous, personal-todo, drop, needs-jm
+    (lifeos-idea and note captures map to drop or autonomous in the 4-way scheme, or are
+    excluded from golden set since agents move them to vault/notes without a task disposition)
+  - All labeled with source: "ensemble", criteria_version: 1
+  - Divergent entries have disposition: null, divergent: true
+
+  RESOLVED 2026-07-07 (G1 — evals-nightly-truth): the 12 invalid entries (8 lifeos-idea +
+  4 note) flagged above were remapped to `autonomous`. Rationale: per the PRODUCER NOTE
+  above, both lifeos-idea captures (filed to the LifeOS vault by InboxTriage) and note
+  captures (filed to Obsidian by the scratchpad workflow) are handled entirely by an agent
+  via computer — no Jm physical presence, credentials, or personal errand required. That is
+  exactly the `autonomous` definition in the rubric above. `drop` was rejected as the target
+  because these captures are meaningful, preserved content, not "throwaway, test, empty,
+  noise". This keeps the golden set at 34 total entries (33 consensus + 1 divergent),
+  clearing the ≥30 coverage bar with margin.
+
+tags:
+  - kaya
+  - router
+  - disposition
+  - golden
+  - regression
+  - pipeline
+
+created_at: "2026-06-18"

@@ -1,0 +1,131 @@
+# Task: Judge Calibration Meta-Eval (Discrimination + Drift)
+# WHY: Keeps the eval system itself honest. Two concerns:
+#
+#   (a) DISCRIMINATION — the nightly_judge must score high when a record
+#       matches its golden expectation (aligned cases) and low when it
+#       clearly contradicts the expectation (wrong cases). A rubber-stamp
+#       judge that always returns PASS is useless.
+#
+#   (b) ENSEMBLE CALIBRATION DRIFT — the EnsembleValidator calibration
+#       gate must maintain ≥80% per-class agreement against the
+#       known-truth fixture. If a model update or prompt change degrades
+#       the ensemble, this catches it before it silently corrupts routing,
+#       ISC quality, or research verdict decisions.
+#
+# H2 STATIC-INPUT PATTERN: No agent run required. The nightly_judge grader
+# reads judge-calibration-cases.jsonl directly (record_path) and scores
+# the adversarial case set for discrimination fidelity: aligned records
+# should score HIGH, wrong records should score LOW. Any score average
+# < 0.80 signals the judge is non-discriminating (rubber stamp or inversion).
+#
+# ENSEMBLE DRIFT NOTE (KNOWN GAP — not yet wired; follow-up for Jm):
+# This UseCase covers JUDGE-discrimination drift only. ENSEMBLE-labeler drift is
+# a separate check that is NOT currently auto-run:
+#   bun skills/Intelligence/Evals/Tools/EnsembleValidator.ts
+# (writes MEMORY/MONITORING/ensemble-calibration.json; exits non-zero if any class
+# drops below 80% agreement). Verified 2026-06-20: nothing in bin/kaya-evals-nightly.ts
+# or any cron/plist invokes it — the calibration gate only runs when called by hand.
+# TO CLOSE: add it as a post-suite step in bin/kaya-evals-nightly.ts (STEP ~4.5) with a
+# digest-tier alert on non-zero exit, plus a runner test. Deferred because it adds
+# ensemble LLM cost + a failure-policy choice (page vs digest) to every nightly run —
+# Jm's call, like the digest-only vs page policy elsewhere in this harness.
+#
+# ADVERSARIAL CASES:
+# File: skills/Intelligence/Evals/Data/golden/judge-calibration-cases.jsonl
+# 6 cases total:
+#   - 3 ALIGNED (jcc-r-aligned-01, jcc-isc-aligned-02, jcc-res-aligned-03):
+#     record correctly matches expectation → judge should PASS these
+#   - 3 WRONG (jcc-r-wrong-04, jcc-isc-wrong-05, jcc-res-wrong-06):
+#     record contradicts expectation → judge should FAIL these
+# Decision types covered: routing (2), isc (2), research (2)
+
+id: kaya_judge_calibration
+description: >
+  Meta-eval: score the adversarial calibration case set to verify the
+  nightly_judge discriminates correctly between aligned records (high score)
+  and wrong records (low score). Passes when the judge is non-trivially
+  discriminating across routing, ISC, and research decision types.
+type: regression
+domain: general
+source: manual
+
+setup:
+  # H2: static-input pattern — no agent is spawned. The nightly_judge grader
+  # reads the adversarial cases JSONL directly from record_path.
+  scenario_prompt: "No agent run required. Static input grading — adversarial case set."
+
+graders:
+  - type: nightly_judge
+    weight: 1.0
+    params:
+      # The adversarial calibration cases are the record to evaluate.
+      # nightly_judge reads this file and scores the set for discrimination:
+      # aligned cases should receive high scores, wrong cases low scores.
+      record_path: "skills/Intelligence/Evals/Data/golden/judge-calibration-cases.jsonl"
+      rubric: |
+        You are evaluating a set of adversarial calibration cases used to verify
+        that a judge (you) correctly discriminates between good and bad decisions.
+
+        Each case in the JSONL file has:
+          - id: unique identifier
+          - kind: "aligned" (record matches expectation) or "wrong" (record contradicts it)
+          - decision_type: "routing" | "isc" | "research"
+          - record: the decision record being evaluated
+          - expectation: the golden/correct answer describing what the record SHOULD contain
+
+        SCORING CRITERIA:
+        1. ALIGNED cases: the record's actual decision matches what the expectation says
+           it should be. These should receive individual scores >= 0.7.
+        2. WRONG cases: the record's actual decision contradicts the expectation.
+           These should receive individual scores <= 0.3.
+        3. DISCRIMINATION: The average score for aligned cases must be substantially
+           higher than the average score for wrong cases (gap >= 0.4).
+        4. COVERAGE: All 3 decision types (routing, isc, research) are represented
+           with at least one aligned and one wrong case each.
+
+        For each case, mentally evaluate whether the record's decision field matches
+        the expectation's stated correct answer, then assign an aggregate score.
+
+        SCORE (0.0 to 1.0):
+          1.0 — All aligned cases score high, all wrong cases score low, clear gap
+          0.8 — Mostly correct discrimination; 1 marginal case but gap is maintained
+          0.5 — Partial discrimination; some alignment detected but inconsistent
+          0.2 — Poor discrimination; judge is rubber-stamping or inverting
+          0.0 — No discrimination; identical scores for aligned and wrong cases
+
+      judge_level: standard
+
+trials: 1
+pass_threshold: 0.80
+
+reference_solution: |
+  The adversarial case set contains 6 cases (3 aligned, 3 wrong) across
+  routing, ISC, and research decision types:
+
+  ALIGNED (should score HIGH):
+  - jcc-r-aligned-01: routing → autonomous (correct: research task Kaya can do)
+  - jcc-isc-aligned-02: isc → quality=pass (correct: RICH ISC with real bun test commands)
+  - jcc-res-aligned-03: research → verdict=implement (correct: confirmed premise + clear path)
+
+  WRONG (should score LOW):
+  - jcc-r-wrong-04: routing → autonomous (wrong: buying groceries = personal-todo)
+  - jcc-isc-wrong-05: isc → quality=pass (wrong: BARREN ISC, no real commands)
+  - jcc-res-wrong-06: research → verdict=implement (wrong: DEMONSTRABLY FALSE premise — the record claims WorkQueue does not exist, but it does)
+
+  A discriminating judge produces score >= 0.80 on the aggregate case set.
+
+  ENSEMBLE DRIFT: After this UseCase runs, the nightly runner should also invoke:
+    bun skills/Intelligence/Evals/Tools/EnsembleValidator.ts
+  That tool exits non-zero if any ensemble class drops below 80% agreement.
+
+tags:
+  - kaya
+  - evals
+  - meta-eval
+  - judge-calibration
+  - discrimination
+  - drift
+  - regression
+  - pipeline
+
+created_at: "2026-06-18"

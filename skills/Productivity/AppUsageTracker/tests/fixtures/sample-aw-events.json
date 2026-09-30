@@ -1,0 +1,48 @@
+{
+  "buckets": {
+    "aw-watcher-window_test-host": {
+      "id": "aw-watcher-window_test-host",
+      "type": "currentwindow",
+      "client": "aw-watcher-window",
+      "hostname": "test-host"
+    },
+    "aw-watcher-afk_test-host": {
+      "id": "aw-watcher-afk_test-host",
+      "type": "afkstatus",
+      "client": "aw-watcher-afk",
+      "hostname": "test-host"
+    },
+    "aw-watcher-android-usage_test-phone": {
+      "id": "aw-watcher-android-usage_test-phone",
+      "type": "currentwindow",
+      "client": "aw-watcher-android-usage",
+      "hostname": "test-phone"
+    },
+    "aw-watcher-web-chrome": {
+      "id": "aw-watcher-web-chrome",
+      "type": "web.tab.current",
+      "client": "aw-watcher-web",
+      "hostname": "test-host"
+    }
+  },
+  "events": {
+    "aw-watcher-window_test-host": [
+      { "id": 1, "timestamp": "2026-04-28T10:00:00.000Z", "duration": 600, "data": { "app": "Reddit", "title": "r/all" } },
+      { "id": 2, "timestamp": "2026-04-28T10:10:00.000Z", "duration": 1500, "data": { "app": "Reddit", "title": "r/programming" } }
+    ],
+    "aw-watcher-afk_test-host": [
+      { "id": 101, "timestamp": "2026-04-28T10:00:00.000Z", "duration": 1800, "data": { "status": "not-afk" } },
+      { "id": 102, "timestamp": "2026-04-28T10:30:00.000Z", "duration": 600,  "data": { "status": "afk" } },
+      { "id": 103, "timestamp": "2026-04-28T10:40:00.000Z", "duration": 7200, "data": { "status": "not-afk" } }
+    ],
+    "aw-watcher-android-usage_test-phone": [
+      { "id": 11, "timestamp": "2026-04-28T15:00:00.000Z", "duration": 1200, "data": { "app": "com.reddit.frontpage" } },
+      { "id": 12, "timestamp": "2026-04-28T16:00:00.000Z", "duration": 600, "data": { "app": "com.google.android.apps.maps" } },
+      { "id": 13, "timestamp": "2026-04-28T17:00:00.000Z", "duration": 900, "data": { "app": "com.twitter.android" } }
+    ],
+    "aw-watcher-web-chrome": [
+      { "id": 21, "timestamp": "2026-04-28T11:00:00.000Z", "duration": 900, "data": { "url": "https://www.reddit.com/r/all", "title": "r/all", "audible": false } },
+      { "id": 22, "timestamp": "2026-04-28T11:15:00.000Z", "duration": 300, "data": { "url": "https://news.ycombinator.com", "title": "HN", "audible": false } }
+    ]
+  }
+}
