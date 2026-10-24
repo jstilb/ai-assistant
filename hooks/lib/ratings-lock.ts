@@ -1,7 +1,7 @@
 /**
  * ratings-lock.ts - Advisory file lock for ratings.jsonl coordination
  *
- * Provides mutual exclusion between ExplicitRatingCapture and ImplicitSentimentCapture
+ * Provides mutual exclusion between ExplicitRatingRecord and ImplicitSentimentCapture
  * when writing to ratings.jsonl. Uses a .lock file as an advisory lock.
  */
 
@@ -47,7 +47,7 @@ export async function acquireRatingsLock(): Promise<() => void> {
 
 /**
  * Check if a rating for the given session_id already exists in ratings.jsonl.
- * Used by ImplicitSentimentCapture to skip if ExplicitRatingCapture already wrote.
+ * Used by ImplicitSentimentCapture to skip if ExplicitRatingRecord already wrote.
  */
 export function sessionHasRating(sessionId: string): boolean {
   try {

@@ -48,7 +48,7 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 │  SessionStart ──┬──► LoadContext (date/time reminder)               │
 │                 └──► SessionEnvGuard (env-contamination guard)      │
 │                                                                     │
-│  UserPromptSubmit ──► ExplicitRatingCapture (1-10 ratings)          │
+│  UserPromptSubmit ──► ExplicitRatingRecord (1-10 ratings)          │
 │                                                                     │
 │  PreToolUse ──► SecurityValidator (Bash/Edit/Write)                 │
 │                                                                     │
@@ -59,11 +59,11 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 │  SubagentStart ──┬──► BackgroundAgentStarted                        │
 │                  └──► SubagentVerbosityHint                         │
 │                                                                     │
-│  SubagentStop ──► AgentOutputCapture (subagent results)             │
+│  SubagentStop ──► AgentOutputRecord (subagent results)             │
 │                                                                     │
 │  StopFailure ──► StopFailure (failure dump capture)                 │
 │                                                                     │
-│  SessionEnd ──► SessionRatingCapture (rating + learnings)           │
+│  SessionEnd ──► SessionRatingRecord (rating + learnings)           │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -127,7 +127,7 @@ interface PreToolUsePayload extends BasePayload {
 
 | Hook | Purpose | Blocking | Dependencies |
 |------|---------|----------|--------------|
-| `ExplicitRatingCapture.hook.ts` | Capture 1-10 ratings; ratings < 6 also write an `UNCATEGORIZED` learning file (deferred category — see [Learning Capture Flow](#learning-capture-flow)) | No | `MEMORY/LEARNING/SIGNALS/ratings.jsonl`, `MEMORY/LEARNING/UNCATEGORIZED/` |
+| `ExplicitRatingRecord.hook.ts` | Record 1-10 ratings; ratings < 6 also write an `UNCATEGORIZED` learning file (deferred category — see [Learning Capture Flow](#learning-capture-flow)) | No | `MEMORY/LEARNING/SIGNALS/ratings.jsonl`, `MEMORY/LEARNING/UNCATEGORIZED/` |
 
 ### PreToolUse Hooks
 
@@ -154,7 +154,7 @@ interface PreToolUsePayload extends BasePayload {
 
 | Hook | Purpose | Blocking | Dependencies |
 |------|---------|----------|--------------|
-| `AgentOutputCapture.hook.ts` | Capture subagent results; debug file log is opt-in via `KAYA_HOOK_DEBUG=1` | No | `MEMORY/STATE/` |
+| `AgentOutputRecord.hook.ts` | Record subagent results; debug file log is opt-in via `KAYA_HOOK_DEBUG=1` | No | `MEMORY/STATE/` |
 
 ### StopFailure Hooks
 
@@ -166,7 +166,7 @@ interface PreToolUsePayload extends BasePayload {
 
 | Hook | Purpose | Blocking | Dependencies |
 |------|---------|----------|--------------|
-| `SessionRatingCapture.hook.ts` | Infer session rating AND extract categorized learnings at teardown (one combined LLM call, detached worker) | No | Inference API, `ratings.jsonl`, `MEMORY/LEARNING/<SYSTEM\|ALGORITHM>/` |
+| `SessionRatingRecord.hook.ts` | Infer session rating AND extract categorized learnings at teardown (one combined LLM call, detached worker) | No | Inference API, `ratings.jsonl`, `MEMORY/LEARNING/<SYSTEM\|ALGORITHM>/` |
 
 ---
 
@@ -177,14 +177,14 @@ interface PreToolUsePayload extends BasePayload {
 ```
 User Message
     │
-    ├─► ExplicitRatingCapture ─── detects "8 - great work" ───┐
+    ├─► ExplicitRatingRecord ─── detects "8 - great work" ───┐
     │                                                         ▼
     │                                              ratings.jsonl
     │                                                         │
     │                                                         ▼
     │                                            Status Line Display
     │                                            (statusline-command.sh)
-    └─► SessionRatingCapture (SessionEnd) infers a rating at teardown
+    └─► SessionRatingRecord (SessionEnd) infers a rating at teardown
         when no explicit rating was given
 ```
 
@@ -199,7 +199,7 @@ regex-indicator classifier (`isLearningCapture()` / `getLearningCategory()`)
 — it was provably wrong in both directions (missed genuine learnings phrased
 outside its keyword lists, false-positived on frustration text that happened
 to hit two indicator categories with nothing resolved; see
-`skills/Intelligence/Evals/Data/golden/learning-capture-fixtures.jsonl` and
+`skills/Development/Evals/Data/golden/learning-capture-fixtures.jsonl` and
 `docs/decisions/015-let-the-model-speak-s8-learning-inversion.md`). There is
 no longer a single "learning capture" hook — three writers now handle it,
 each documented at its own seam:
@@ -207,7 +207,7 @@ each documented at its own seam:
 ```
 SessionEnd
     │
-    ├─► SessionRatingCapture ─► ONE inference call rates the session AND
+    ├─► SessionRatingRecord ─► ONE inference call rates the session AND
     │       (detached worker)    extracts `learnings: [{summary, category,
     │                            evidence}]` from the SAME call ─► writes
     │                            MEMORY/LEARNING/<SYSTEM|ALGORITHM>/<yearMonth>/*.md
@@ -215,7 +215,7 @@ SessionEnd
     │                            sessions have no genuine learning)
 UserPromptSubmit
     │
-    └─► ExplicitRatingCapture ─► rating < 6 ─► writes an UNCATEGORIZED
+    └─► ExplicitRatingRecord ─► rating < 6 ─► writes an UNCATEGORIZED
             learning file synchronously (same deferred-category rationale:
             this hook has a <50ms budget and zero external API calls today;
             a per-turn inference call just to categorize would blow that
@@ -233,8 +233,8 @@ Manual (batch CLI, not a hook)
 
 `lib/core/LearningJudgment.ts` is the one place the judgment criteria, the
 `LearningItem` shape, and the shared `UNCATEGORIZED` literal live, so the two
-writers that DO call an LLM (SessionRatingCapture, SessionHarvester) stay
-aligned, and the one that deliberately doesn't (ExplicitRatingCapture) writes
+writers that DO call an LLM (SessionRatingRecord, SessionHarvester) stay
+aligned, and the one that deliberately doesn't (ExplicitRatingRecord) writes
 the neutral value instead of drifting into a different placeholder string.
 
 ### Security Validation Flow
@@ -273,11 +273,11 @@ All events logged to: MEMORY/SECURITY/security-events.jsonl
 ┌───────────┴───────────────────────┴───────────┐
 │                     HOOKS                     │
 │                                               │
-│  ExplicitRatingCapture ──► ratings.jsonl +    │
+│  ExplicitRatingRecord ──► ratings.jsonl +    │
 │                            LEARNING/UNCATEGORIZED/ │
-│  SessionRatingCapture ───► ratings.jsonl +    │
+│  SessionRatingRecord ───► ratings.jsonl +    │
 │                            LEARNING/SYSTEM|ALGORITHM/ │
-│  AgentOutputCapture ─────► STATE/             │
+│  AgentOutputRecord ─────► STATE/             │
 │  BackgroundAgentStarted ─► STATE/             │
 │  StopFailure ────────────► LEARNING/FAILURES/ │
 └───────────────────────────────────────────────┘

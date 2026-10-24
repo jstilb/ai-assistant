@@ -173,7 +173,7 @@ export function getActiveAgents(sessionId: string): { agents: SessionAgents; cou
 
 /**
  * Look up a single agent's registered entry (undefined if never registered,
- * already unregistered, or pruned as stale). Used by AgentOutputCapture as a
+ * already unregistered, or pruned as stale). Used by AgentOutputRecord as a
  * transcript-independent source of `isBackground` when the completing
  * agent's original Task/Agent tool_use (and its `run_in_background` field)
  * could not be located in the parent transcript — the tracker's own
