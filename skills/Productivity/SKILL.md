@@ -11,7 +11,6 @@ Personal productivity tools — covering task management with Lucid, calendar as
 
 | Sub-Skill | Triggers | Load |
 |-----------|----------|------|
-| **AgentMetacognition** | find patterns, what patterns have you noticed, connect to goals, enrich knowledge, what should i know, weekly intelligence, synthesize learnings | `Productivity/AgentMetacognition/SKILL.md` |
 | **AppUsageTracker** | appusagetracker | `Productivity/AppUsageTracker/SKILL.md` |
 | **CalendarAssistant** | schedule meeting, calendar, list events, add event, find free time, time blocking, calendar agenda, kaya scheduler, calendar blocks, day plan | `Productivity/CalendarAssistant/SKILL.md` |
 | **DailyBriefing** | morning briefing, daily briefing, start my day, what's on my schedule, daily summary | `Productivity/DailyBriefing/SKILL.md` |
@@ -19,9 +18,6 @@ Personal productivity tools — covering task management with Lucid, calendar as
 | **InformationManager** | gather context, refresh context, dtr, telos data, obsidian context, learnings, lucidtasks tasks, calendar events, projects context, sync all context | `Productivity/InformationManager/SKILL.md` |
 | **LifeOS** | capturing habits, leads, experiences (ate/went/watched/read), ideas, tasks, decisions, insights, reflections, or calendar events;, when viewing the loop dashboard (the live web dashboard at http://localhost:31337);, when pre-populating a weekly/monthly/quarterly/annual review | `Productivity/LifeOS/SKILL.md` |
 | **LucidTasks** | tasks, task management, add task, complete task, task inbox, task projects, task search, task stats, lucid tasks, lt, todo, to-do, my tasks, next task, task migration | `Productivity/LucidTasks/SKILL.md` |
-| **Media** | media | `Productivity/Media/SKILL.md` |
-| **PRD** | prd, write a prd, product requirements document, /prd, capture this as a prd, turn this into a prd, requirements doc, spec from context | `Productivity/PRD/SKILL.md` |
-| **YouTube** | youtube | `Productivity/YouTube/SKILL.md` |
 | **YouTubeCuration** | youtubecuration | `Productivity/YouTubeCuration/SKILL.md` |
 
 ## Workflow Routing

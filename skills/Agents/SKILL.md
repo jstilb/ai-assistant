@@ -1,11 +1,11 @@
 ---
 name: Agents
-description: Agent context files and spec-pipeline support (screen-inventory parsing, UX/UI structural validation, grill research directives) backing the automated QueueRouter spec-pipeline. USE WHEN agents, multi-agent, the algorithm, optimize, spec-pipeline gating, screen inventory coverage, grill directive generation, OR agent orchestration.
+description: Agent Briefs and spec-pipeline support (screen-inventory parsing, UX/UI structural validation, grill research directives) backing the automated QueueRouter spec-pipeline. USE WHEN agents, multi-agent, the algorithm, optimize, spec-pipeline gating, screen inventory coverage, grill directive generation, OR agent orchestration.
 ---
 
 # Agents
 
-Agent context files (loaded by the native `agents/*.md` definitions) and spec sheet generation for new features.
+Agent Briefs (`*Brief.md`, loaded by the native `agents/*.md` definitions) and spec sheet generation for new features.
 
 ## Sub-Skills
 

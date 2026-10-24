@@ -1,6 +1,6 @@
 ---
 name: Development
-description: Skill creation, CLI tools, UI building, browser automation, and Unix CLI. USE WHEN create skill, create CLI, UI builder, browser, unix, shell, OR developer tools.
+description: Skill creation, CLI tools, UI building, browser automation, Unix CLI, agent evals, and PRDs. USE WHEN create skill, create CLI, UI builder, browser, unix, shell, evals, evaluate agents, prd, OR developer tools.
 ---
 
 # Development
@@ -16,8 +16,10 @@ Software development tools — covering skill creation scaffolding, CLI tool gen
 | **CreateSkill** | create skill, new skill, validate skill, canonicalize skill, eval skill, test skill, optimize skill description, compare skill versions, a/b skill test, skill structure audit | `Development/CreateSkill/SKILL.md` |
 | **Diagnose** | diagnose, debug this, hard bug, broken, throwing, failing, performance regression, flaky test, build a feedback loop, ranked hypotheses, post-mortem, root cause analysis | `Development/Diagnose/SKILL.md` |
 | **DomainModeling** | the user wants to pin down domain terminology, a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model | `Development/DomainModeling/SKILL.md` |
+| **Evals** | eval, evaluate, test agent, benchmark, verify behavior, regression test, capability test | `Development/Evals/SKILL.md` |
 | **GrillWithDocs** | grill with docs, stress-test plan against codebase, sharpen vocabulary, update context | `Development/GrillWithDocs/SKILL.md` |
 | **ImproveCodebaseArchitecture** | improve architecture, find refactoring opportunities, deepen modules, consolidate tightly-coupled code, make codebase more testable, ai-navigable architecture, deletion test, find shallow modules, surface friction, design it twice | `Development/ImproveCodebaseArchitecture/SKILL.md` |
+| **PRD** | prd, write a prd, product requirements document, /prd, capture this as a prd, turn this into a prd, requirements doc, spec from context | `Development/PRD/SKILL.md` |
 | **Prototype** | the user wants to sanity-check whether a state model, logic feels right, or explore what a ui should look like | `Development/Prototype/SKILL.md` |
 | **RecallPlan** | recall last plan, what plans did i write, list my plans, find a plan, resume a plan, show me plan x, which plan was that | `Development/RecallPlan/SKILL.md` |
 | **ReverseSpec** | reverse spec, reverse-engineer a spec, spec this skill, spec this hook, spec this module, rebuild-from-scratch spec, spec coverage, which modules lack specs, stale specs, cross-spec analysis, find redundancies across skills, spec contradictions, spec synergies, spec sweep | `Development/ReverseSpec/SKILL.md` |

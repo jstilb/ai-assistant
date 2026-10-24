@@ -1,6 +1,6 @@
 ---
 name: System
-description: System integrity, agent monitoring, Kaya upgrades, and public sync. USE WHEN system check, agent monitor, upgrade kaya, public sync, OR infrastructure management.
+description: System integrity, agent monitoring, Kaya dashboard, Kaya upgrades, and public sync. USE WHEN system check, agent monitor, kaya dashboard, toggle job, upgrade kaya, public sync, OR infrastructure management.
 ---
 
 # System
@@ -12,6 +12,7 @@ Core infrastructure management — covering system integrity checks, agent monit
 | Sub-Skill | Triggers | Load |
 |-----------|----------|------|
 | **AgentMonitor** | monitor agent, agent performance, agent alerts, live monitoring, watch agents, anomaly detection | `System/AgentMonitor/SKILL.md` |
+| **KayaDashboard** | kaya dashboard, open dashboard, toggle job, turn off cron, run job now, what is kaya doing | `System/KayaDashboard/SKILL.md` |
 | **KayaUpgrade** | upgrade, improve system, system upgrade, analyze for improvements, check anthropic, new claude features | `System/KayaUpgrade/SKILL.md` |
 | **PublicSync** | sync public repo, mirror to github, push to ai-assistant, public sync, sync skills to github | `System/PublicSync/SKILL.md` |
 

@@ -1,6 +1,6 @@
 ---
 name: Life
-description: Cooking, adventure & travel, design, Telos life goals, Dungeons and Dragons, Anki flashcards, and randomized rewards for motivation. USE WHEN cooking, recipe, travel, trip, itinerary, adventure, date planning, camping, packing list, design, telos, goals, dnd, dungeons dragons, anki, flashcards, reward me, incentivize good work, motivate me, OR lifestyle tools.
+description: Cooking, adventure & travel, interior design, Ocean Beach rental search, Telos life goals, Dungeons and Dragons, Anki flashcards, and randomized rewards for motivation. USE WHEN cooking, recipe, travel, trip, itinerary, adventure, date planning, camping, packing list, interior design, telos, goals, dnd, dungeons dragons, anki, flashcards, rental, apartment hunt, ocean beach rentals, reward me, incentivize good work, motivate me, OR lifestyle tools.
 ---
 
 # Life
@@ -13,9 +13,10 @@ Personal lifestyle tools — covering cooking and recipes, adventure & travel pl
 |-----------|----------|------|
 | **Adventure** | travel, trip, itinerary, adventure, date idea, date night, plan a date, spontaneous, road trip, camping, backpacking, packing list, what to pack, national park, weekend trip, baja, mexico, surf trip, getaway, vacation, explore | `Life/Adventure/SKILL.md` |
 | **Anki** | create flashcard, anki card, deck management, review stats, note type, batch cards, anki sync, voice review, quiz me, review my cards out loud, answer flashcards verbally | `Life/Anki/SKILL.md` |
-| **Cooking** | cooking, recipe, meal plan, what to make, dinner ideas, grocery list, what's in season, substitute, cuisine, meal prep, fermentation, sourdough, kimchi, kombucha, sauerkraut, ferment | `Life/Cooking/SKILL.md` |
-| **Designer** | interior design, decorate, room layout, furniture, cozy, color scheme, reading nook, home decor, style room, room analysis, mood board, lighting, cozify | `Life/Designer/SKILL.md` |
+| **Cooking** | cooking, recipe, meal plan, what to make, dinner ideas, grocery list, what's in season, substitute, cuisine, meal prep, fermentation, sourdough, kimchi, kombucha, sauerkraut, ferment, recipe search, cooking playlist, ingredients from video | `Life/Cooking/SKILL.md` |
 | **DnD** | d&d, dungeon master, dm, encounter, monster, stat block, campaign, session prep, spell lookup, homebrew, vtt | `Life/DnD/SKILL.md` |
+| **InteriorDesign** | interior design, decorate, room layout, furniture, cozy, color scheme, reading nook, home decor, style room, room analysis, lighting, cozify | `Life/InteriorDesign/SKILL.md` |
+| **RentalTracker** | rental, apartment hunt, ocean beach rentals, OB apartments, places for rent, housing search, rental listings, rental board, shortlist apartment, moving, new place to live | `Life/RentalTracker/SKILL.md` |
 | **RewardEngine** | reward me, claim reward, roll reward, randomized reward, variable reward, incentivize good work, treat myself, i earned a reward, loot box, gamify habits, motivate me | `Life/RewardEngine/SKILL.md` |
 | **Telos** | telos, life goals, goal dashboard, projects, dependencies, weekly review, goal progress, books, movies, life direction | `Life/Telos/SKILL.md` |
 
