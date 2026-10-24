@@ -7,7 +7,7 @@
  * ResourceEfficiencyEvaluator/LatencyEvaluator/ComplianceEvaluator;
  * EvaluatorPipeline.ts; ReportGenerator.ts) is DELETED. ErrorRate and
  * DecisionQuality signal now live as Evals UseCases (see
- * skills/Intelligence/Evals/UseCases/AgentTraces/), run nightly via the
+ * skills/Development/Evals/UseCases/AgentTraces/), run nightly via the
  * kaya-pipeline-nightly suite. ResourceEfficiency/Latency/Compliance had no
  * real signal (inputs structurally empty across the live trace corpus) and
  * are gone with no replacement. This file now orchestrates trace

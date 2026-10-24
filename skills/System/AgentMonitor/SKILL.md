@@ -5,7 +5,7 @@ description: Live agent trace monitoring and anomaly detection. USE WHEN monitor
 
 # AgentMonitor - Agent Workflow Monitoring (v3.0)
 
-Live monitoring system for agent workflows: file watching, anomaly detection, real-time dashboards, and streaming alerts. Trace collection (TraceCollector/TraceEmitter) is shared infrastructure. The Phase-1 batch-evaluation pipeline (evaluate/evaluate-all/retro, the five Evaluator classes, EvaluatorPipeline, ReportGenerator) was deleted in evals-rebuild slice C2 — the two signals with real data (ErrorRate, DecisionQuality) now live as Evals UseCases under `skills/Intelligence/Evals/UseCases/AgentTraces/`, run nightly via the `kaya-pipeline-nightly` suite (see that skill's SKILL.md). ResourceEfficiency/Latency/Compliance had no real signal in the live trace corpus (tokensUsed/latencyMs/skillDir populated in only ~4/1096 files) and were deleted with no replacement.
+Live monitoring system for agent workflows: file watching, anomaly detection, real-time dashboards, and streaming alerts. Trace collection (TraceCollector/TraceEmitter) is shared infrastructure. The Phase-1 batch-evaluation pipeline (evaluate/evaluate-all/retro, the five Evaluator classes, EvaluatorPipeline, ReportGenerator) was deleted in evals-rebuild slice C2 — the two signals with real data (ErrorRate, DecisionQuality) now live as Evals UseCases under `skills/Development/Evals/UseCases/AgentTraces/`, run nightly via the `kaya-pipeline-nightly` suite (see that skill's SKILL.md). ResourceEfficiency/Latency/Compliance had no real signal in the live trace corpus (tokensUsed/latencyMs/skillDir populated in only ~4/1096 files) and were deleted with no replacement.
 
 **USE WHEN:** monitor agent, review live workflow status, agent alerts, live monitoring, watch agents, anomaly detection. For ErrorRate/DecisionQuality regression signal, see the Evals skill instead.
 ## Workflow Routing
@@ -84,7 +84,7 @@ bun run ~/.claude/skills/System/AgentMonitor/Tools/StreamingPipeline.ts --no-das
 | `MEMORY/MONITORING/audits/{workflowId}-audit.json` | TraceAuditor LLM root-cause analyses (manual CLI / GraphQuerier) |
 
 For ErrorRate and DecisionQuality regression signal (formerly Phase-1 evaluators), see
-`skills/Intelligence/Evals/UseCases/AgentTraces/` and the `kaya-pipeline-nightly` suite —
+`skills/Development/Evals/UseCases/AgentTraces/` and the `kaya-pipeline-nightly` suite —
 results land in `MEMORY/VALIDATION/evals/`, not this skill's storage.
 
 ## Live Monitoring Details
@@ -158,7 +158,7 @@ User: "Why did workflow <id> fail?"
 - **NotificationService** - Alert notifications via AlertManager
 
 ### Feeds Into
-- **Evals** - ErrorRate/DecisionQuality regression signal (`skills/Intelligence/Evals/UseCases/AgentTraces/`)
+- **Evals** - ErrorRate/DecisionQuality regression signal (`skills/Development/Evals/UseCases/AgentTraces/`)
 - **Graph** - GraphQuerier's `audit` command reads TraceAuditor's `loadAudit()`
 - **AgentMetacognition** - Patterns feed learning captures
 
