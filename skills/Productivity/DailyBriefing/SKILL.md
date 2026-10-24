@@ -45,7 +45,7 @@ independent fallback sentinel the agent cannot game.
 | `Tools/CalendarBlock.ts` | gcalcli agenda → events; failure = `success:false` (never "calendar clear") |
 | `Tools/GoalsBlock.ts` | TELOS WIGs/missions + live G-metric overrides; failures carried in data (`parseError`, `unavailableLiveMetrics`) |
 | `Tools/WeatherService.ts` | wttr.in + NWS: current, 3-day, hourly, astronomy, alerts. `fetchWeatherReport()` imported directly by `DataGatherer.ts`'s `gatherWeather` |
-| `Tools/AutonomousDeliverableBlock.ts` | Lane-A deliverables awaiting Jm |
+| `Tools/AutonomousDeliverableBlock.ts` | Task Executor (Lane A) deliverables awaiting Jm |
 | `Tools/ClaudeCodeUpdatesBlock.ts` | Claude Code changelog, deduped + significance-tiered (`--dry-run` to test) |
 | `Tools/DeliveryUtils.ts` | Shared Telegram/voice send mechanics (in-process, non-exiting secrets loader) |
 | `Tools/ActivationLogger.ts` | Used by the six `activation-s*` cron jobs (not the briefing itself) |
@@ -65,6 +65,6 @@ config yaml: channel enablement is payload field-presence in `Deliver.ts`.
 
 ## Evals
 
-`skills/Intelligence/Evals/Suites/dailybriefing-markdown-first.yaml` — the deleted
+`skills/Development/Evals/Suites/dailybriefing-markdown-first.yaml` — the deleted
 deterministic rules' fears live on as fixtures: calendar-outage honesty, no fabricated
 numbers, telegram-limit awareness, capped-count drill-down judgment. Run via EvalExecutor.

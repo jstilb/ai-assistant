@@ -54,6 +54,9 @@ import { readRunLock, defaultRunLocksDir } from "../../../../lib/cron/RunLock.ts
  */
 export const FALLBACK_MARKER = "deterministic fallback";
 
+/** Telegram's hard message limit is 4096 chars; stay under it. */
+const TELEGRAM_CAP = 4000;
+
 /** Exactly what the fallback path delivers — one field per Deliver.ts payload
  *  channel it uses. The failure signal is the AlertGate page below, not a
  *  delivery channel. */
@@ -77,23 +80,6 @@ export function renderFallbackEditorial(
 
   if (data.weather?.current) {
     lines.push(`\n🌤️  ${data.weather.current}`);
-  }
-
-  // Day plan (2026-07-31). scheduler-daily stopped sending its own ~05:44
-  // Telegram message and now publishes to MEMORY/BRIEFINGS/day-plan-{date}.md
-  // for the briefing to carry. THIS path must include it too: the agent run
-  // fails often enough to matter (3 of the 12 days to 07-31, failureClass
-  // 'timeout'), and if only the agent path carried the plan, every one of
-  // those days would silently lose it. Read here rather than threaded through
-  // BriefingData because the plan is not gathered data — it is another job's
-  // published artifact, and a missing file is a normal, reportable state.
-  const dayPlan = readPublishedDayPlan(
-    new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })
-  );
-  if (dayPlan) {
-    lines.push(`\n${dayPlan}`);
-  } else {
-    lines.push("\n🗓️ No day plan published today (scheduler-daily did not produce one).");
   }
 
   const events = data.calendar?.events ?? [];
@@ -136,7 +122,37 @@ export function renderFallbackEditorial(
     );
   }
 
-  const telegram = lines.join("\n").slice(0, 4000);
+  // Day plan (2026-07-31). scheduler-daily stopped sending its own ~05:44
+  // Telegram message and now publishes to MEMORY/BRIEFINGS/day-plan-{date}.md
+  // for the briefing to carry. THIS path must include it too: the agent run
+  // fails often enough to matter (3 of the 12 days to 07-31, failureClass
+  // 'timeout'), and if only the agent path carried the plan, every one of
+  // those days would silently lose it. Read here rather than threaded through
+  // BriefingData because the plan is not gathered data — it is another job's
+  // published artifact, and a missing file is a normal, reportable state.
+  //
+  // Added LAST, into whatever budget the fixed sections leave (task
+  // t-mvlek4iv-p6be2t): the plan is the only unbounded section (5.7 KB on
+  // 2026-10-22), and when it came first the final cut to the Telegram cap
+  // dropped calendar, tasks and waiting-on-you instead of the plan's tail.
+  const planDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const dayPlan = readPublishedDayPlan(planDate);
+  if (dayPlan) {
+    const fixed = lines.join("\n");
+    const marker = `\n… (day plan truncated, full plan: MEMORY/BRIEFINGS/day-plan-${planDate}.md)`;
+    const room = TELEGRAM_CAP - fixed.length - 1; // 1 = the "\n" joining the plan
+    if (room >= dayPlan.length + 1) {
+      lines.push(`\n${dayPlan}`);
+    } else if (room > marker.length + 1) {
+      lines.push(`\n${dayPlan.slice(0, room - marker.length - 1)}${marker}`);
+    } else {
+      lines.push(marker);
+    }
+  } else {
+    lines.push("\n🗓️ No day plan published today (scheduler-daily did not produce one).");
+  }
+
+  const telegram = lines.join("\n").slice(0, TELEGRAM_CAP);
   return {
     telegram,
     voice: "Editorial failed. Minimal briefing delivered via Telegram.",

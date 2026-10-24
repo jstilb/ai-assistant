@@ -30,9 +30,9 @@ import "../../LifeOS/Aggregation/HabitConsistency.ts";
 // from this file changed module evaluation order enough to leave TRACKED_HABITS
 // in TDZ when gatherHabits ran (the exact crash class GatherFailure's doc
 // comment records).
-// cross-skill-allowed: Mastery Map checkbox grammar is owned by LifeOS/Learning; briefing only renders "n/M nodes" from it (same seam ReviewPopulator uses)
-import { computeProgress, parseCheckboxTree } from "../../LifeOS/Learning/MasteryMapCheckboxes.ts";
-import { learningDeckFor, trackMechanic } from "../../LifeOS/Aggregation/SkillMastery.ts"; // cross-skill-allowed: gatherLearning must resolve a target's REAL Anki deck (e.g. Cooking's hand-built deck) the same way the LifeOS sweep does — a local Learning::<skill> template is the exact deck-mismatch bug the 08-23 review found
+// cross-skill-allowed: Mastery Map checkbox grammar is owned by LifeOS/Mastery; briefing only renders "n/M nodes" from it (same seam ReviewPopulator uses)
+import { computeProgress, parseCheckboxTree } from "../../LifeOS/Mastery/MasteryMapCheckboxes.ts";
+import { learningDeckFor, trackMechanic } from "../../LifeOS/Aggregation/DisciplineMastery.ts"; // cross-skill-allowed: gatherLearning must resolve a target's REAL Anki deck (e.g. Cooking's hand-built deck) the same way the LifeOS sweep does — a local Learning::<skill> template is the exact deck-mismatch bug the 08-23 review found
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads Anki's live due/new card counts read-only for the learning section (apy needs Anki closed; the call fails soft when it's open)
 import { AnkiClient } from "../../../Life/Anki/Tools/AnkiClient.ts";
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads ContentAggregator's content store read-only to populate the news block
@@ -246,7 +246,7 @@ export interface BriefingData {
   claudeCodeUpdates?: ClaudeCodeUpdatesData;
 
   /**
-   * T4 Learning Loop targets (skill_mastery_active rows with a non-empty
+   * T4 Learning Loop Disciplines (skill_mastery_active rows with a non-empty
    * phase — the live targets, e.g. Piano/Information Ecosystems; dormant
    * rows never appear here). Undefined when there are no live targets, OR
    * when none of them have anything notable this morning (no Anki cards
@@ -258,15 +258,15 @@ export interface BriefingData {
       track: string;
       /** Plain-language line: what a "review" IS for this track (knowledge =
        *  answer the cards; skill = do the rep again at the weak point; hybrid
-       *  = both). From SkillMastery.trackMechanic — render it next to the
-       *  target so the briefing never tells Jm to "review" a skill by recalling it. */
+       *  = both). From DisciplineMastery.trackMechanic — render it next to the
+       *  target so the briefing never tells Jm to "review" a skill-track discipline by recalling it. */
       reviewMeans: string;
       /** Anki due/new counts. Every registered target has a deck now
-       *  (curriculum decks hold L1 recall cards for skills too), so this is
+       *  (curriculum decks hold L1 recall cards for skill-track disciplines too), so this is
        *  fetched for all tracks; skill decks are the smaller part of the review. */
       cardsDue?: number;
       cardsNew?: number;
-      /** True when the Anki reviewDue call failed (e.g. Anki open at 06:00) —
+      /** True when the Anki recallDue call failed (e.g. Anki open at 06:00) —
        *  fail-soft: never blocks the rest of this target or the briefing. */
       cardsUnavailable?: boolean;
       /** review_due <= today (string compare, both YYYY-MM-DD). */
@@ -1136,10 +1136,10 @@ async function gatherClaudeCodeUpdates(
  * LIVE rows (non-empty phase) read-only, computes dueToPractice from
  * review_due vs today (string compare, both YYYY-MM-DD), and pulls Anki
  * due/new counts for every track (since the 09-2026 curriculum builds every
- * registered target has a Learning::<skill> deck; for a skill the deck holds
+ * registered target has a Learning::<discipline> deck; for a skill-track discipline the deck holds
  * L1 recall only and the rep — dueToPractice — is the real review). Each
  * target also carries `reviewMeans`, the track's plain-language review
- * instruction, so the rendered briefing says "do the rep" for a skill and
+ * instruction, so the rendered briefing says "do the rep" for a skill-track discipline and
  * "answer the cards" for knowledge instead of one line for both.
  *
  * The Anki call is fail-soft PER TARGET (apy needs the collection unlocked —
@@ -1169,10 +1169,10 @@ async function gatherLearning(
 
     const targets: NonNullable<BriefingData["learning"]>["targets"] = [];
     for (const r of liveRows) {
-      const name = str(r.skill);
+      const name = str(r.discipline);
       const track = str(r.track);
-      const reviewDue = str(r.review_due);
-      const dueToPractice = reviewDue !== "" && reviewDue <= today;
+      const recallDue = str(r.review_due);
+      const dueToPractice = recallDue !== "" && recallDue <= today;
       const lastPractice = str(r.last_practice);
       const nextAction = str(r.next_action).trim();
 
@@ -1181,12 +1181,12 @@ async function gatherLearning(
       let cardsUnavailable: boolean | undefined;
       {
         try {
-          const due = await anki.reviewDue(learningDeckFor(name));
+          const due = await anki.recallDue(learningDeckFor(name));
           cardsDue = due.dueCount;
           cardsNew = due.newCount;
         } catch (err) {
           cardsUnavailable = true;
-          warnings.push(`learning: Anki reviewDue unavailable for "${name}" (Anki may be open): ${err instanceof Error ? err.message : String(err)}`);
+          warnings.push(`learning: Anki recallDue unavailable for "${name}" (Anki may be open): ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -1227,6 +1227,58 @@ async function gatherLearning(
 }
 
 // ============================================================================
+// Per-gatherer timeout
+// ============================================================================
+
+/**
+ * Runaway cap for ONE gatherer. 2026-10-22: one gatherer never settled, so the
+ * Promise.all below never resolved and briefing-sentinel was SIGTERMed at its
+ * 300 s job timeout with nothing delivered. Gatherers run in parallel, so the
+ * gather phase costs ~max(gatherer) — 60 s leaves ~240 s of the sentinel's
+ * budget for render + Deliver.ts + the page.
+ */
+export const GATHERER_TIMEOUT_MS = 60_000;
+
+/**
+ * Race one gatherer against GATHERER_TIMEOUT_MS. On timeout it records a hard
+ * GatherFailure (loud, central failure log) plus a warning and returns
+ * `fallback` (the same empty value the gatherer's own catch block returns), so
+ * one hung source costs one section, not the whole briefing. Logs each
+ * gatherer's wall time to stderr (stdout carries the JSON). The timer is
+ * cleared in `finally` so it never holds the process open; Promise.race keeps
+ * a handler on `gather`, so a late rejection is never unhandled.
+ */
+export async function withGathererTimeout<T>(
+  source: string,
+  gather: Promise<T>,
+  fallback: T,
+  warnings: string[],
+  failures: GatherFailure[],
+  timeoutMs: number = GATHERER_TIMEOUT_MS,
+): Promise<T> {
+  const start = Date.now();
+  const timedOut = Symbol("timedOut");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof timedOut>((resolve) => {
+    timer = setTimeout(() => resolve(timedOut), timeoutMs);
+  });
+  try {
+    const result = await Promise.race([gather, timeout]);
+    if (result === timedOut) {
+      const message = `gatherer timed out after ${timeoutMs}ms`;
+      warnings.push(`${source}: ${message}`);
+      recordFailure(failures, source, new Error(message));
+      console.error(`[DataGatherer] ${source}: TIMEOUT after ${Date.now() - start}ms`);
+      return fallback;
+    }
+    console.error(`[DataGatherer] ${source}: ${Date.now() - start}ms`);
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ============================================================================
 // Main Export
 // ============================================================================
 
@@ -1256,6 +1308,11 @@ export async function gatherBriefingData(
   // editorial prompt owns the "is this stale enough to flag" judgment — no threshold here.
   const telosStaleness = gatherTelosStaleness();
 
+  // Every gatherer is capped (see withGathererTimeout); the fallback is the
+  // same empty value that gatherer's own catch block returns.
+  const timed = <T>(source: string, gather: Promise<T>, fallback: T): Promise<T> =>
+    withGathererTimeout(source, gather, fallback, warnings, failures);
+
   const [
     tasks,
     calendar,
@@ -1272,20 +1329,22 @@ export async function gatherBriefingData(
     claudeCodeUpdates,
     learning,
   ] = await Promise.all([
-    gatherTasks(warnings, failures),
-    gatherCalendar(warnings, failures),
-    gatherGoals(warnings, failures),
-    gatherStrategies(warnings, failures),
-    gatherHabits(warnings, failures),
-    gatherNews(warnings, failures),
-    gatherWeather(warnings, failures),
-    gatherGmail(warnings, failures),
-    gatherApprovalQueue(warnings, failures),
-    gatherTechDebt(warnings, failures),
-    gatherAutonomousDeliverables(warnings, failures),
-    gatherWaitingOnJm(warnings, failures),
-    gatherClaudeCodeUpdates(warnings, failures),
-    gatherLearning(warnings, failures),
+    timed("tasks", gatherTasks(warnings, failures),
+      { overdue: [], dueToday: [], nextUp: [], totalActiveCount: 0, overdueTotalCount: 0, dueTodayTotalCount: 0 }),
+    timed("calendar", gatherCalendar(warnings, failures), { events: [], fetchError: "calendar gatherer timed out" }),
+    timed("goals", gatherGoals(warnings, failures),
+      { wigs: [], missions: [], currentQuarter: `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}` }),
+    timed("strategies", gatherStrategies(warnings, failures), []),
+    timed("habits", gatherHabits(warnings, failures), []),
+    timed("news", gatherNews(warnings, failures), { articles: [], totalFetched: 0, totalRecent: 0 }),
+    timed("weather", gatherWeather(warnings, failures), undefined),
+    timed("gmail", gatherGmail(warnings, failures), undefined),
+    timed("approvalQueue", gatherApprovalQueue(warnings, failures), undefined),
+    timed("techDebt", gatherTechDebt(warnings, failures), undefined),
+    timed("autonomousDeliverables", gatherAutonomousDeliverables(warnings, failures), undefined),
+    timed("waitingOnJm", gatherWaitingOnJm(warnings, failures), undefined),
+    timed("claudeCodeUpdates", gatherClaudeCodeUpdates(warnings, failures), undefined),
+    timed("learning", gatherLearning(warnings, failures), undefined),
   ]);
 
   const feedback = gatherFeedback(warnings);

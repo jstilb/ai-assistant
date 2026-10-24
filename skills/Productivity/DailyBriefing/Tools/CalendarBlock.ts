@@ -109,8 +109,11 @@ export function parseAgendaOutput(stdout: string): ParsedAgenda {
         const afterTime = cleanLine.slice(cleanLine.indexOf(timeStr) + timeStr.length);
         const title = afterTime.replace(/^[\s\-:]+/, "").trim();
 
-        if (title && !title.match(/^\d/)) {
-          // Avoid duplicating if title looks like a time
+        // Skip only a remainder that is itself a time (e.g. a "9:00 - 10:00"
+        // range). A bare leading digit is a real title ("1on1", "2nd ...");
+        // rejecting every leading digit dropped such events and fired the
+        // bogus format-change warning on 2026-10-22.
+        if (title && !/^\d{1,2}:\d{2}/.test(title)) {
           events.push({
             time: timeStr,
             title: title,

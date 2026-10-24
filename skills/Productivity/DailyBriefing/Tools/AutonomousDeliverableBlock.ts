@@ -83,7 +83,7 @@ export async function execute(
           const link = extractWikiLink(text);
           if (link) {
             noteLink = link;
-            break; // activity_log is DESC by created_at — first match = newest
+            break; // task_events is DESC by created_at — first match = newest
           }
         }
       }

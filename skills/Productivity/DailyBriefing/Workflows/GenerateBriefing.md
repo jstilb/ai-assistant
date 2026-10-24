@@ -57,12 +57,13 @@ Stdout is a `BriefingData` JSON object; warnings print to stderr. Read the file.
 - `weather` — current, forecast, sunrise/sunset, 3-day, hourly subsample, alerts
 - `gmail` — unread-important messages (only present when non-empty)
 - `approvalQueue`, `waitingOnJm`, `techDebt`, `autonomousDeliverables`, `claudeCodeUpdates`
-- `learning` — T4 Learning Loop live targets (skill_mastery_active rows with a phase set):
+- `learning` — the Disciplines Jm is actively learning (skill_mastery_active rows with a phase
+  set; call each one a **Discipline**, never a "skill" — "skill" below is only a track name):
   name, track, `reviewMeans` (the track's own review instruction — knowledge = answer the
   cards, skill = do the rep again at the weak point, hybrid = both; USE THESE WORDS, never
-  tell Jm to "review" a skill by recalling it), `cardsDue`/`cardsNew` (`cardsUnavailable`
-  when Anki was open at gather time; for a skill the deck is L1 recall only), `dueToPractice`
-  (for a skill this is the headline — the rep is the review), `lastPractice`, `nextAction`.
+  tell Jm to "review" a skill-track Discipline by recalling it), `cardsDue`/`cardsNew` (`cardsUnavailable`
+  when Anki was open at gather time; for the skill track the deck is L1 recall only), `dueToPractice`
+  (for the skill track this is the headline — the rep is the review), `lastPractice`, `nextAction`.
   Present only when there's something notable (cards due/new, or something due to practice).
 
 ## Step 2 — Drill deeper WITH judgment
@@ -141,7 +142,7 @@ today's most important items in Jm's interest areas. Don't drill into sections t
    critically behind, ≤ −40 struggling, ≤ −20 needs improvement — guidance for naming, not
    hard rules). Connect habits to goals; when avg7 and avg28 diverge, name the momentum
    ("workout 100% this week vs 25% over 28 days — rebounding").
-   - **Learning:** when `learning` is present, mention each target's cards due/new and
+   - **Learning:** when `learning` is present, mention each Discipline's cards due/new and
      practice-due status, plus at most one suggested application drawn verbatim from that
      target's `nextAction` — never fabricate a number absent from the JSON (a target with no
      `cardsDue`/`cardsNew` has no known Anki count, not zero). Omit the learning topic
