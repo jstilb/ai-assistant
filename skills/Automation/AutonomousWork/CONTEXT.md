@@ -1,8 +1,12 @@
 # AutonomousWork
 
-The orchestrator-of-orchestrators that executes queued development work autonomously: it decomposes a spec into units, drives independent build/verify agent loops, and gates completion behind verification. This document fixes the vocabulary so "slice", "phase", and "verification" mean one thing each.
+The **Spec Executor (Lane B)**: the orchestrator-of-orchestrators that executes approved spec-pipeline work autonomously: it decomposes a spec into units, drives independent build/verify agent loops, and gates completion behind verification. This document fixes the vocabulary so "slice", "phase", and "verification" mean one thing each.
 
 ## Language
+
+**Spec Executor (Lane B)**:
+This skill as a whole — the nightly runner (20:30, entry `HeadlessWorkDriver`) that consumes approved **Work Items** from `pipeline.db`. Distinct from the LucidTasks **Task Executor (Lane A)**, which runs `disposition='autonomous'` LucidTasks and never touches `pipeline.db`.
+_Avoid_: "the executor" unqualified, "the autonomous executor".
 
 **Slice**:
 A vertical feature cut through every layer it touches (schema → API → UI → tests), demoable on its own, that ends with a live-verification run before the next slice starts. The unit the build→verify loop iterates over. **Realized in the spec as a vertical `Phase` block** (see Phase) — "Slice" is the design principle, "Phase" is the markdown token.
@@ -38,15 +42,15 @@ The headless queue driver (`Tools/HeadlessWorkDriver.ts`) that selects work item
 **WorkOrchestrator**:
 The per-work-item orchestrator (`Tools/WorkOrchestrator.ts`) that drives the build→verify loop over **Slices**. The older `TaskOrchestrator` name refers to a deleted class.
 
-**Builder**:
+**Builder** _(role, not an `agents/*.md` identity)_:
 The agent role that writes implementation and tests for a slice.
 
-**Verifier**:
+**Verifier** _(role, not an `agents/*.md` identity)_:
 The independent agent role that adversarially checks the Builder's work against the ISC rows. Structurally forbidden from trusting the Builder's claims.
 _Avoid_: reviewer, checker.
 
-**TestWriter**:
-The agent that writes spec-driven tests before implementation exists. Today runs once per work item (all tests up front); the hybrid-retrofit decision re-scopes it to once per slice.
+**TestWriter** _(role, not an `agents/*.md` identity)_:
+The agent role that writes spec-driven tests before implementation exists. Today runs once per work item (all tests up front); the hybrid-retrofit decision re-scopes it to once per slice.
 
 ## Relationships
 
@@ -82,10 +86,10 @@ read **structured** fault signals, not error prose. Heuristics that re-interpret
 guessed code quality were removed. See **ADR-0007** for the full cut + keep-ledger and the guiding principle
 ("determinism must earn its place").
 
-## Retrofit plan disposition
+## Retrofit plan ruling
 
 `docs/RETROFIT-PLAN.md` (the S1–S6 execution roadmap) is removed — superseded by **ADR-0005**
 (Slice realized as vertical Phase), which reconciles what shipped (S1, S4, S6 — via the existing
 Phase mechanism, not a new Slice schema) against what was dropped as redundant (S2/S3/S5: no
 separate Slice type/section; `needs-grilling` reused instead of a new `needs-slicing` status).
-See `docs/adr/0005-slice-realized-as-vertical-phase.md` for the full disposition.
+See `docs/adr/0005-slice-realized-as-vertical-phase.md` for the full ruling.

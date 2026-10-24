@@ -93,7 +93,7 @@ export type WorkSurface =
   | "api"          // HTTP endpoints/routes: endpoint/route/HTTP method keywords in spec
   | "integration"; // Everything else: internal TypeScript, hooks, state, plumbing
 
-export type ISCRowDisposition = "automatable" | "human-required" | "deferred";
+export type ISCRowExecutability = "automatable" | "human-required" | "deferred";
 
 /**
  * Classifies the origin of a pipeline failure for retry routing.
@@ -125,8 +125,13 @@ export interface ISCRow {
   specSection?: string;
   /** True when spec exists but parseSpec returned empty ISC, forcing template fallback */
   specFallback?: boolean;
-  /** Whether this row can be completed by automation or requires human action */
-  disposition?: ISCRowDisposition;
+  /**
+   * Whether this row can be completed by automation or requires human action.
+   * Field name kept as `disposition` for compatibility with persisted `isc_rows`
+   * JSON; the concept is ISC Row Executability (ontology D2 — "disposition" is
+   * reserved for the LucidTask routing column).
+   */
+  disposition?: ISCRowExecutability;
   /** Test level classification from TestStrategy */
   testLevel?: "unit" | "integration" | "e2e" | "manual";
   /** Verification priority — smoke rows run first for fast-fail */
@@ -293,7 +298,7 @@ export class WorkOrchestrator {
     this.iscGenerator = new ISCGenerator(
       this.iscManager,
       (item) => this.verifyCtxResolver.resolveItemCwd(item),
-      (description) => this.iscManager.classifyDisposition({ id: 0, description, status: "PENDING", parallel: false }),
+      (description) => this.iscManager.classifyExecutability({ id: 0, description, status: "PENDING", parallel: false }),
       this.inferenceFn, // threads injected inferenceFn (e.g. from _createForTesting) into comprehendSpec
       (itemId, spec) => { this.queue.setMetadata(itemId, { comprehendedSpec: spec }); },
     );
@@ -334,7 +339,7 @@ export class WorkOrchestrator {
       // this hook used to run per-item, against MEMORY/MONITORING/traces/{id}.jsonl)
       // is deleted with no direct per-item replacement. ErrorRate/DecisionQuality
       // signal now lives as a NIGHTLY, curated-sample Evals regression check
-      // (skills/Intelligence/Evals/UseCases/AgentTraces/), not a live per-completion
+      // (skills/Development/Evals/UseCases/AgentTraces/), not a live per-completion
       // scorer — so this fail-open DI hook is now a genuine no-op rather than
       // silently degrading to a broken import. See CompletionPipeline.ts's
       // emitTraces stage: this fires fire-and-forget with its rejection swallowed,
@@ -1487,8 +1492,8 @@ export class WorkOrchestrator {
     return this.verifyCtxResolver.resolveRowCwd(row, verifyCtx);
   }
 
-  private classifyRowDisposition(description: string): ISCRowDisposition {
-    return this.iscManager.classifyDisposition({ id: 0, description, status: "PENDING", parallel: false });
+  private classifyRowExecutability(description: string): ISCRowExecutability {
+    return this.iscManager.classifyExecutability({ id: 0, description, status: "PENDING", parallel: false });
   }
 
   private mapPriority(priority: Priority): ItemReviewSummary["priority"] {
@@ -1698,10 +1703,17 @@ export class WorkOrchestrator {
     try {
       // cross-skill-allowed: Lane-A escalation writes LucidTasks tasks by design (07-02 overhaul) — closes the manual-${id} escalation task once the human prerequisite resolves; seam candidate: TaskClient
       const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
+      // cross-skill-allowed: outcome contract for the escalation close below — the outcome gate refuses an agent close without one; seam candidate: TaskClient
+      const { serializeOutcome, systemOutcome } = await import("../../../Productivity/LucidTasks/Tools/TaskOutcome.ts");
       const db = getTaskDB();
       const escTask = db.getTask(`manual-${itemId}`);
       if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
-        db.updateTask(`manual-${itemId}`, { status: "done" }, "WorkOrchestrator/resumeBlocked");
+        const outcome = serializeOutcome(systemOutcome({
+          by: "WorkOrchestrator/resumeBlocked",
+          headline: "Escalation closed: the blocked item resumed",
+          noArtifact: `closed by WorkOrchestrator when blocked work-queue item ${itemId} was re-pended (resumeBlocked)`,
+        }));
+        db.updateTask(`manual-${itemId}`, { status: "done", outcome }, "WorkOrchestrator/resumeBlocked");
       }
     } catch (e) {
       this.guard.logCaughtError(itemId, "resumeBlocked/closeEscalation", e);

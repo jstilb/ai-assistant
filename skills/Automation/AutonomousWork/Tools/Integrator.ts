@@ -9,6 +9,7 @@ import { join } from "path";
 import { getKayaHome, defaultKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
 import { getOrCreateWorktree, gcWorktreeForBranch } from "../../../../lib/core/WorktreeManager.ts";
 import { resolveGuardHooks, buildGuardHookSettings, resolveEnforceTools } from "../../../../lib/core/AgentSpawner.ts";
+import { AGENT_RUN_ENV_KEY, reapAgentRun } from "../../../../lib/core/ProcessReaper.ts";
 import {
   revParseRef,
   changedFilesBetween,
@@ -709,6 +710,9 @@ export class Integrator {
           }
           conflictResolverArgs.push("--output-format", "text", conflictResolverPrompt);
 
+          // Same leftover-process sweep as AgentSpawner.spawnAgentSync (ProcessReaper.ts).
+          const runId = crypto.randomUUID();
+          env[AGENT_RUN_ENV_KEY] = runId;
           const agentResult = opts._conflictResolverForTest
             ? opts._conflictResolverForTest()
             : spawnSync(
@@ -716,6 +720,12 @@ export class Integrator {
                 conflictResolverArgs,
                 { cwd: wtPath, encoding: "utf-8", timeout: 120_000, env, maxBuffer: 32 * 1024 * 1024 }
               );
+          if (!opts._conflictResolverForTest) {
+            const reaped = reapAgentRun(runId);
+            if (reaped.length > 0) {
+              console.warn(`[Integrator] conflict resolver left ${reaped.length} process(es) running; ended pids ${reaped.join(", ")}`);
+            }
+          }
 
           // Check if conflicts remain
           const postAgentStatus = (() => {

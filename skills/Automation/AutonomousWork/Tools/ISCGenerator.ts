@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from "fs";
 import type { WorkItem } from "./WorkQueue.ts";
 import type { EffortLevel } from "./WorkQueue.ts";
-import type { ISCRow, ISCRowDisposition } from "./WorkOrchestrator.ts";
+import type { ISCRow, ISCRowExecutability } from "./WorkOrchestrator.ts";
 import type { ISCManager } from "./ISCManager.ts";
 import { normalizeVerificationCommand } from "./VerificationUtils.ts";
 import { comprehendSpec } from "./LLMSpecComprehension.ts";
@@ -22,7 +22,7 @@ export class ISCGenerator {
   constructor(
     private readonly iscManager: ISCManager,
     private readonly resolveItemCwd: (item: WorkItem) => string,
-    private readonly classifyDisposition: (description: string) => ISCRowDisposition,
+    private readonly classifyExecutability: (description: string) => ISCRowExecutability,
     private readonly inferenceFn?: InferenceFn,
     private readonly persistComprehendedSpec?: (itemId: string, spec: ComprehendedSpec) => void,
   ) {}
@@ -41,8 +41,8 @@ export class ISCGenerator {
         const itemCwd = this.resolveItemCwd(item);
         const rows: ISCRow[] = comprehended.rows.map((row: ComprehendedRow) => {
           const disposition = (row.humanRequired || row.native)
-            ? "human-required" as ISCRowDisposition
-            : this.classifyDisposition(row.description);
+            ? "human-required" as ISCRowExecutability
+            : this.classifyExecutability(row.description);
 
           // invertExit is the LLM's judgment (comprehension Rule 7): true when the row
           // asserts ABSENCE and the verifyCommand passes by exiting non-zero. Read it

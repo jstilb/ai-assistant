@@ -1,9 +1,11 @@
 ---
 name: AutonomousWork
-description: Orchestrator of orchestrators for autonomous execution of development, research, and content work. Claude session drives orchestration, delegating to real Claude Code agents and ralph loops. USE WHEN work start, work status, work next, autonomous task execution, pick up from queue.
+description: Spec Executor (Lane B) — orchestrator of orchestrators for autonomous execution of development, research, and content work. Claude session drives orchestration, delegating to real Claude Code agents and ralph loops. USE WHEN work start, work status, work next, autonomous task execution, pick up from queue.
 ---
 
 # AutonomousWork Skill
+
+This skill is the **Spec Executor (Lane B)**: it executes approved spec-pipeline work items. The LucidTasks **Task Executor (Lane A)** (`skills/Productivity/LucidTasks/Tools/executor/`) is a separate runner — see `CONTEXT-MAP.md`.
 
 **You are the orchestrator.** Follow `Workflows/Orchestrate.md` step-by-step, using the Task tool to delegate work to agents and Bash for ralph loops. Never write implementation code yourself.
 
@@ -169,7 +171,7 @@ allowedTools:                          # Per-agent tool allowlist (replaces the 
 | Agent | Model | maxTurns | allowedTools | Role |
 |-------|-------|----------|--------------|------|
 | Architect | opus | 50 | Bash(git *), Bash(bun *), Read, Write, Edit, Glob, Grep | Novel architectural reasoning |
-| Algorithm | opus | 50 | Bash(git *), Bash(bun *), Read, Write, Edit, Glob, Grep | ISC precision reasoning |
+| ISCAuthor | opus | 50 | Bash(git *), Bash(bun *), Read, Write, Edit, Glob, Grep | ISC precision reasoning |
 | Engineer | sonnet | 50 | Bash(git *), Bash(bun *), Bash(npm *), Read, Write, Edit, MultiEdit, Glob, Grep | TDD implementation |
 | Designer | sonnet | 30 | Bash(git *), Read, Write, Edit, Glob, Grep | Design work |
 | Artist | sonnet | 30 | Read, Write, Glob, Grep | Visual content |
@@ -177,9 +179,9 @@ allowedTools:                          # Per-agent tool allowlist (replaces the 
 | Intern | sonnet | 30 | Read, Write, Edit, Glob, Grep, WebSearch, WebFetch, Bash(ls *), Bash(cat *), Bash(git status), Bash(git diff *) | General/parallel work |
 | Pentester | sonnet | 30 | Read, Glob, Grep, Bash(git diff *) | Security assessment |
 | ClaudeResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Research |
-| GeminiResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Multi-perspective research |
-| GrokResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Contrarian research |
-| CodexResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Technical research |
+| BreadthResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Multi-perspective research |
+| ContrarianResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Contrarian research |
+| TechnicalResearcher | sonnet | 25 | WebSearch, WebFetch, Read, Glob, Grep | Technical research |
 | Verifier (Explore) | sonnet | 30 | Read, Glob, Grep, Bash | Read-only independent verification |
 | Executive | sonnet | 50 | Task, Read, Bash, Write | Queue management, approval |
 | TaskOrchestrator | sonnet | 30 | Task, Read, Bash | Per-item Builder/Verifier loop driver |
@@ -334,8 +336,8 @@ These hooks are registered in `settings.json` or team configs.
 For background/parallel spawning at scale, use lean agent variants to reduce context overhead:
 - `Intern-lean.md` — ~1.7KB vs Intern.md (minimal context overhead)
 - `ClaudeResearcher-lean.md` — parallel research without voice config
-- `GeminiResearcher-lean.md` — parallel multi-perspective research
-- `GrokResearcher-lean.md` — parallel contrarian research
+- `BreadthResearcher-lean.md` — parallel multi-perspective research
+- `ContrarianResearcher-lean.md` — parallel contrarian research
 
 Use lean variants when: `parallel: true`, `run_in_background: true`, or spawning 3+ concurrent agents.
 
@@ -384,9 +386,9 @@ Kaya: Loaded 5 items. DAG valid. 3 ready, 2 blocked.
 ```typescript
 // 4 parallel researchers
 Task({ subagent_type: "ClaudeResearcher", model: "sonnet", prompt: "Research X..." })
-Task({ subagent_type: "GeminiResearcher", model: "sonnet", prompt: "Research X..." })
-Task({ subagent_type: "GrokResearcher", model: "sonnet", prompt: "Research X..." })
-Task({ subagent_type: "CodexResearcher", model: "sonnet", prompt: "Research X..." })
+Task({ subagent_type: "BreadthResearcher", model: "sonnet", prompt: "Research X..." })
+Task({ subagent_type: "ContrarianResearcher", model: "sonnet", prompt: "Research X..." })
+Task({ subagent_type: "TechnicalResearcher", model: "sonnet", prompt: "Research X..." })
 ```
 
 ---

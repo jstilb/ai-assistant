@@ -25,10 +25,17 @@ export async function applyCompletionSideEffects(itemId: string): Promise<void> 
   try {
     // cross-skill-allowed: Lane-A escalation writes LucidTasks tasks by design (07-02 overhaul); seam candidate: TaskClient
     const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
+    // cross-skill-allowed: outcome contract for the escalation close below — the outcome gate refuses an agent close without one; seam candidate: TaskClient
+    const { serializeOutcome, systemOutcome } = await import("../../../Productivity/LucidTasks/Tools/TaskOutcome.ts");
     const db = getTaskDB();
     const escTask = db.getTask(`manual-${itemId}`);
     if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
-      db.updateTask(`manual-${itemId}`, { status: "done" }, "WorkOrchestrator");
+      const outcome = serializeOutcome(systemOutcome({
+        by: "WorkOrchestrator",
+        headline: "Escalation closed: the queue item finished",
+        noArtifact: `closed by WorkOrchestrator when work-queue item ${itemId} completed`,
+      }));
+      db.updateTask(`manual-${itemId}`, { status: "done", outcome }, "WorkOrchestrator");
     }
   } catch (e) {
     console.error(

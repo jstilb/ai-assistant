@@ -2,13 +2,13 @@
  * ISCManager.ts — Extracted from WorkOrchestrator.ts
  *
  * ISC 5: Unified ISC lifecycle — load, persist, markDone, resetToPending,
- *        classifyDisposition extracted from WorkOrchestrator god object.
+ *        classifyExecutability extracted from WorkOrchestrator god object.
  *
  * ISC 11: loadISC side effects removed — backfillDispositionsIfNeeded is now
  *         an explicit call, not a side effect of every load.
  *
  * ISC 19 (Bug 19 from spec Section 9): implements the required interface:
- *   load, persist, markDone, resetToPending, classifyDisposition
+ *   load, persist, markDone, resetToPending, classifyExecutability
  *
  * The Map cache lives INSIDE ISCManager as a private field. External consumers
  * get rows via load() only. persist() writes to BOTH the internal Map AND
@@ -17,7 +17,7 @@
  */
 
 import type { WorkQueue } from "./WorkQueue.ts";
-import type { ISCRow, ISCRowDisposition } from "./WorkOrchestrator.ts";
+import type { ISCRow, ISCRowExecutability } from "./WorkOrchestrator.ts";
 
 // ============================================================================
 // ISCManager Class
@@ -132,8 +132,8 @@ export class ISCManager {
    * Returns "human-required" for deployment/publishing/external actions.
    * Returns "automatable" for everything else.
    */
-  classifyDisposition(row: ISCRow): "human-required" | "automatable" {
-    return this._classifyRowDisposition(row.description);
+  classifyExecutability(row: ISCRow): "human-required" | "automatable" {
+    return this._classifyRowExecutability(row.description);
   }
 
   /**
@@ -149,7 +149,7 @@ export class ISCManager {
     let backfilled = false;
     for (const row of rows) {
       if (!row.disposition) {
-        row.disposition = this._classifyRowDisposition(row.description);
+        row.disposition = this._classifyRowExecutability(row.description);
         backfilled = true;
       }
     }
@@ -173,7 +173,7 @@ export class ISCManager {
   // Internal helpers
   // --------------------------------------------------------------------------
 
-  private _classifyRowDisposition(_description: string): ISCRowDisposition {
+  private _classifyRowExecutability(_description: string): ISCRowExecutability {
     // Default to automatable. The "human-required" decision is made upstream by
     // signals that carry ground truth the LLM emits or the producer fixes:
     //   - the comprehension LLM's per-row `humanRequired` flag (Rule 3: secret
@@ -193,4 +193,4 @@ export class ISCManager {
 // comprehension LLM's job (LLMSpecComprehension Rule 3), reinforced by the
 // objective native→human lock. The keyword scanner second-guessed the LLM's
 // per-row humanRequired flag from the same description text — content
-// interpretation the LLM does better. See _classifyRowDisposition above.
+// interpretation the LLM does better. See _classifyRowExecutability above.

@@ -1970,8 +1970,8 @@ describe("normalizeVerificationCommand", () => {
     });
 
     it("does not modify commands without tildes", () => {
-      const result = normalizeVerificationCommand("bun test skills/Commerce/JobEngine/");
-      expect(result).toBe("bun test skills/Commerce/JobEngine/");
+      const result = normalizeVerificationCommand("bun test skills/Commerce/JobSearch/");
+      expect(result).toBe("bun test skills/Commerce/JobSearch/");
     });
   });
 
@@ -2878,34 +2878,34 @@ describe("detectProjectContext", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Component B: classifyRowDisposition
+// Component B: classifyRowExecutability
 // ---------------------------------------------------------------------------
 
-describe("classifyRowDisposition", () => {
+describe("classifyRowExecutability", () => {
   function makeOrch(): WorkOrchestrator {
     const queue = new WorkQueue();
     return new WorkOrchestrator(queue, async () => "mock-inference");
   }
 
   // Determinism-residue cleanup: the keyword scanner (classifyHumanRequired) was
-  // removed. classifyRowDisposition now always returns "automatable" — the
+  // removed. classifyRowExecutability now always returns "automatable" — the
   // "human-required" decision is owned by the comprehension LLM's per-row
   // humanRequired flag (LLMSpecComprehension Rule 3) and the objective
   // native→human lock, applied upstream in ISCGenerator.generateISC. It is NOT
   // re-derived from the description text here.
   it("returns automatable for ordinary code work", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowDisposition("Implement retry logic with exponential backoff")).toBe("automatable");
+    expect((orch as any).classifyRowExecutability("Implement retry logic with exponential backoff")).toBe("automatable");
   });
 
   it("no longer keyword-classifies secret entry as human-required (LLM/native lock owns that)", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowDisposition("Add PLAID_SECRET to secrets.json")).toBe("automatable");
+    expect((orch as any).classifyRowExecutability("Add PLAID_SECRET to secrets.json")).toBe("automatable");
   });
 
   it("no longer keyword-classifies physical/on-device actions as human-required", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowDisposition("Run manual test on physical device")).toBe("automatable");
+    expect((orch as any).classifyRowExecutability("Run manual test on physical device")).toBe("automatable");
   });
 });
 

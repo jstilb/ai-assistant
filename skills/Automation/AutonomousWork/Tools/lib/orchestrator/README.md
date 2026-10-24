@@ -46,7 +46,7 @@ its DI'd helpers, and the phase-level deterministic gate):
   - getGitDiffStat (delegates to VerifyContextResolver)           1664-1666
   - resolveVerifyContext (delegates to VerifyContextResolver)     1668-1670
   - resolveRowCwd (delegates to VerifyContextResolver)            1672-1674
-  - classifyRowDisposition (private, delegates to iscManager)      1676-1678
+  - classifyRowExecutability (private, delegates to iscManager)      1676-1678
   - mapPriority (private) — builds ItemReviewSummary.priority for
     verify()'s summary                                           1680-1687
   - resolveStaleReviewProxies (private)                          1696-1733
