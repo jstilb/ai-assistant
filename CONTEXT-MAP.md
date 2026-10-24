@@ -1,6 +1,6 @@
-# Context Map
+# Glossary Map
 
-Kaya is a multi-context repo: domain glossaries live next to the skill they describe as `CONTEXT.md`, with architectural decisions in that skill's `docs/adr/`. This map lists the contexts and how they relate. It is maintained by the GrillWithDocs interactive grill (`/queue grill`) — every grill that creates a skill's first `CONTEXT.md` adds its entry here (see `skills/Automation/QueueRouter/docs/adr/0001-grill-writes-docs-specgen-reads.md`).
+Kaya is a multi-context repo: domain glossaries (**Skill Glossaries**) live next to the skill they describe as `CONTEXT.md`, with architectural decisions in that skill's `docs/adr/`. This map lists the contexts and how they relate. It is maintained by the GrillWithDocs interactive grill (`/queue grill`) — every grill that creates a skill's first `CONTEXT.md` adds its entry here (see `skills/Automation/QueueRouter/docs/adr/0001-grill-writes-docs-specgen-reads.md`).
 
 ## Contexts
 
@@ -11,7 +11,7 @@ Kaya is a multi-context repo: domain glossaries live next to the skill they desc
 - [CalendarAssistant — Proactive Scheduling](./skills/Productivity/CalendarAssistant/CONTEXT.md) — Jm's calendar domain: the reactive CRUD/intelligence skill plus the planned two-agent planning loop (Planner / Feedback-Learner / Kaya Blocks / Tiered Authority).
 - [Canvas — Kaya Desktop Surface](./apps/Canvas/CONTEXT.md) — the greenfield Kaya desktop UI (Bun-served localhost web app): Mission Control visibility, code-first Panels, Agent SDK Session Backend. Replaces archived canvas v1.
 - [LifeOS — Personal Operating System](./skills/Productivity/LifeOS/CONTEXT.md) — Jm's life-capture domain: Captures route through the Router into per-domain Logs (today: Workbook tabs), read back via a planned Query API and a local web Dashboard.
-- [AutoMaintenance — Recurring Upkeep & Tech Debt](./skills/Automation/AutoMaintenance/CONTEXT.md) — scheduled maintenance jobs plus the tech-debt registry: broad capture (Self-Report / Audit Scan / Manual Capture), pure-LLM Priority Scoring, and weekly throttled Promotion of top debt into the spec-pipeline. A **second upstream producer** feeding QueueRouter.
+- [AutoMaintenance — Recurring Upkeep & Tech Debt](./skills/Automation/AutoMaintenance/CONTEXT.md) — scheduled maintenance jobs plus the tech-debt registry: three write paths (Self-Report / Audit Scan / Manual Record), pure-LLM Priority Scoring, and weekly throttled Promotion of top debt into the spec-pipeline. A **second upstream producer** feeding QueueRouter.
 - [Adventure — Experiences & Plans](./skills/Life/Adventure/CONTEXT.md) — experience ideas, plans, and recorded outings.
 - [Cooking — Recipes & Cuisine Practice](./skills/Life/Cooking/CONTEXT.md) — recipes, cuisine projects, and cooking practice.
 - [LucidTasks — Task State & Routing](./skills/Productivity/LucidTasks/CONTEXT.md) — task status, disposition, priority, Icebox parking, and the Task Executor (Lane A).

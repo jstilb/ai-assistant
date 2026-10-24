@@ -904,7 +904,7 @@ function generateSettingsJson(config: Config): string {
       "UserPromptSubmit": [
         {
           "hooks": [
-            { "type": "command", "command": "${KAYA_DIR}/hooks/ExplicitRatingCapture.hook.ts" }
+            { "type": "command", "command": "${KAYA_DIR}/hooks/ExplicitRatingRecord.hook.ts" }
           ]
         }
       ],
@@ -917,7 +917,7 @@ function generateSettingsJson(config: Config): string {
       ],
       "SubagentStop": [
         {
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/AgentOutputCapture.hook.ts" }]
+          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/AgentOutputRecord.hook.ts" }]
         }
       ]
     },

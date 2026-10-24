@@ -74,13 +74,13 @@ Examples below are illustrative, not exhaustive -- see each category's own `SKIL
 |----------|-----------------|-------------|
 | **Agents** | SpecSheet | Agent context files and spec-pipeline support |
 | **Automation** | AutonomousWork, QueueRouter, AutoMaintenance, ProactiveEngine | Autonomous execution, queue routing, scheduling |
-| **Commerce** | Instacart, JobEngine, Shopping | Online shopping and job search |
+| **Commerce** | Instacart, JobSearch, Shopping | Online shopping and job search |
 | **Communication** | Gmail, Telegram, VoiceInteraction | Email, messaging, and voice interaction |
 | **Content** | Art, ContentAggregator, SystemFlowchart, VoiceNotes | Content generation and system visualization |
 | **Data** | Apify, BrightData, DataScience, WebAssessment | Data collection and statistical analysis |
-| **Development** | Browser, CreateSkill, TDD, ImproveCodebaseArchitecture | Engineering, CLI, and codebase tools |
-| **Intelligence** | Research, ArgumentMapper, Evals, KnowledgeGraph | Research, analysis, and evaluation |
-| **Life** | Cooking, Anki, Telos, DnD | Lifestyle, goals, and hobbies |
+| **Development** | Browser, CreateSkill, TDD, ImproveCodebaseArchitecture, Evals, PRD | Engineering, CLI, codebase tools, and agent evals |
+| **Intelligence** | Research, ArgumentMapper, Graph, VaultGraph, AgentMetacognition | Research, analysis, and pattern synthesis |
+| **Life** | Cooking, Anki, Telos, DnD, InteriorDesign | Lifestyle, goals, and hobbies |
 | **Productivity** | CalendarAssistant, DailyBriefing, LucidTasks, LifeOS | Tasks, calendar, and daily planning |
 | **System** | AgentMonitor, KayaUpgrade, PublicSync | System integrity, monitoring, and sync |
 

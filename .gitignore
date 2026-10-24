@@ -246,7 +246,6 @@ history/*.jsonl
 # - MEMORY/           (session history, learnings - YOUR BACKUP)
 # - context/          (personal context files - YOUR BACKUP)
 # - plans/            (planning documents)
-# - PAISECURITYSYSTEM/ (security patterns)
 # - Observability/    (dashboard code, minus builds)
 # - settings.json     (identity config - no secrets)
 # - CLAUDE.md         (entry point)
@@ -322,7 +321,7 @@ MEMORY/security/
 MEMORY/browser-states/*.json
 # JobEngine's cookie jars predate the 07-12 sweep and live at a separate,
 # older path convention (T4-01, 2026-08-01) — same rationale as above.
-skills/Commerce/JobEngine/State/browser-cookies/*.json
+skills/Commerce/JobSearch/State/browser-cookies/*.json
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # ANKI COLLECTION BACKUPS (anki-deck-review-20260724 S0)
@@ -345,12 +344,13 @@ plans/anki-deck-review-20260724/media/s3/
 USER/FINANCES/Data/*
 !USER/FINANCES/Data/README.md
 
-# Evals setup-ablation profile dirs (Tools/Ablation/ProfileBuilder.ts):
-# rebuildable in <1s from Profiles/*.yaml, mostly symlinks into ~/.claude,
-# and they carry a snapshot COPY of the auto-memory dir — Jm's memory must
-# never ride into version control (public mirror). report.md / matrix.json /
-# cells/ of a run ARE committable evidence.
-skills/Intelligence/Evals/Results/ablations/*/profiles/
+# Evals setup-ablation profile dirs (Tools/Ablation/ProfileBuilder.ts): since
+# 2026-10-11 AblationRunner builds them OUTSIDE the repo
+# (~/.kaya/runtime/ablations/<runId>/profiles). This line only guards LEGACY
+# in-repo trees from older runs — they carry a snapshot COPY of the auto-memory
+# dir, which must never ride into version control (public mirror). report.md /
+# matrix.json / cells/ of a run ARE committable evidence.
+skills/Development/Evals/Results/ablations/*/profiles/
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # RUNTIME CHURN UNTRACKED (dirty-tree remediation, 2026-09-21)
@@ -394,14 +394,14 @@ MEMORY/CONTENT/
 MEMORY/AutonomousWork/live-verification/
 MEMORY/Intelligence/argumentmapper-runs.jsonl
 MEMORY/AppUsage/calibration/
-skills/Intelligence/Evals/Results/**/run_*.json
-skills/Intelligence/Evals/Transcripts/
+skills/Development/Evals/Results/**/run_*.json
+skills/Development/Evals/Transcripts/
 skills/Productivity/CalendarAssistant/[Dd]ata/scheduler-state.json
 skills/Productivity/CalendarAssistant/[Dd]ata/calendar-writes.jsonl
 skills/Productivity/LucidTasks/Data/automation-state.json
 skills/Productivity/LucidTasks/Data/daily-stats.jsonl
-skills/Commerce/JobEngine/State/applications.jsonl
-skills/Commerce/JobEngine/State/gmail-sync-state.json
+skills/Commerce/JobSearch/State/applications.jsonl
+skills/Commerce/JobSearch/State/gmail-sync-state.json
 skills/Content/MoodBoard/[Dd]ata/boards.*.backup.json
 skills/Content/ContentAggregator/State/
 # Repo-root timestamps, agent rosters and worktree registry written by hooks/CLI.

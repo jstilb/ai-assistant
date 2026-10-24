@@ -251,13 +251,32 @@ render_context_bar() {
 
 RATE_GREEN='\033[38;2;74;222;128m'; RATE_YELLOW='\033[38;2;250;204;21m'; RATE_RED='\033[38;2;251;113;133m'
 
-# Parse rate_limits; write MEMORY/State/rate-limits.json; fire debounced ntfy alert
-read -r rl_5pct rl_5reset rl_7pct rl_7reset <<< "$(echo "$input" | jq -r '((.rate_limits["5_hour"].used_percentage//empty|tostring)//"null")+" "+(.rate_limits["5_hour"].resets_at//"null")+" "+((.rate_limits["7_day"].used_percentage//empty|tostring)//"null")+" "+(.rate_limits["7_day"].resets_at//"null")')"
+# Parse rate_limits; write MEMORY/State/rate-limits.json; fire debounced ntfy alert.
+# Payload (Claude Code 2.1.302, from its own statusline schema): .rate_limits.five_hour / .seven_day, each
+# {used_percentage: number, resets_at: epoch SECONDS}. The object is optional: it is absent for non-subscribers and
+# before the first API response of a session. (Until 2026-10-18 this read "5_hour"/"7_day", which never matched.)
+# A render with no data NEVER overwrites a real reading: fiveHour/sevenDay hold this render's value (null if none) and
+# lastReal keeps the last real reading per window, each with its own observedAt.
+read -r rl_5pct rl_5reset rl_7pct rl_7reset <<< "$(echo "$input" | jq -r '
+  def pct(k): (.rate_limits[k].used_percentage // null) | if type == "number" then (. + 0.5 | floor | tostring) else "null" end;
+  def rst(k): (.rate_limits[k].resets_at // null) | if type == "number" then (floor | todate) else "null" end;
+  pct("five_hour") + " " + rst("five_hour") + " " + pct("seven_day") + " " + rst("seven_day")' 2>/dev/null)"
+# jq failure (non-JSON input) leaves the vars empty: treat as no data
+rl_5pct=${rl_5pct:-null}; rl_5reset=${rl_5reset:-null}; rl_7pct=${rl_7pct:-null}; rl_7reset=${rl_7reset:-null}
 mkdir -p "$(dirname "$RATE_LIMITS_STATE")"; rl_tmp=$(mktemp)
-printf '{"fiveHour":%s,"sevenDay":%s,"updatedAt":"%s"}\n' \
-  "$([ "$rl_5pct" = "null" ] && echo "null" || printf '{"usedPercentage":%s,"resetsAt":"%s"}' "$rl_5pct" "$rl_5reset")" \
-  "$([ "$rl_7pct" = "null" ] && echo "null" || printf '{"usedPercentage":%s,"resetsAt":"%s"}' "$rl_7pct" "$rl_7reset")" \
-  "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$rl_tmp" && mv "$rl_tmp" "$RATE_LIMITS_STATE"
+rl_old=$(jq -c '.' "$RATE_LIMITS_STATE" 2>/dev/null); [ -n "$rl_old" ] || rl_old='{}'
+if echo "$input" | jq --argjson old "$rl_old" --arg now "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '
+  def win(k): (.rate_limits[k] // null)
+    | if type == "object" and ((.used_percentage | type) == "number") and ((.resets_at | type) == "number")
+      then {usedPercentage: .used_percentage, resetsAt: (.resets_at | floor | todate), observedAt: $now} else null end;
+  win("five_hour") as $f | win("seven_day") as $s
+  | {fiveHour: $f, sevenDay: $s, updatedAt: $now,
+     lastReal: {fiveHour: ($f // $old.lastReal.fiveHour // null), sevenDay: ($s // $old.lastReal.sevenDay // null)}}' > "$rl_tmp" 2>/dev/null; then
+  mv "$rl_tmp" "$RATE_LIMITS_STATE"
+else
+  # Could not build the new state: leave the previous file untouched (never write a guess over a real reading)
+  rm -f "$rl_tmp"; echo "statusline: rate-limits.json not updated (jq failed)" >&2
+fi
 read -r rl_enabled rl_threshold rl_topic rl_server <<< "$(jq -r '(.rateLimits.enabled//true|tostring)+" "+(.rateLimits.alertThreshold//80|tostring)+" "+(.notifications.ntfy.topic//"")+" "+(.notifications.ntfy.server//"ntfy.sh")' "$SETTINGS_FILE" 2>/dev/null)"
 if [ "$rl_enabled" = "true" ] && { [ "$rl_5pct" != "null" ] || [ "$rl_7pct" != "null" ]; }; then
   rl_max=$([ "$rl_5pct" != "null" ] && [ "$rl_7pct" != "null" ] && { [ "$rl_5pct" -gt "$rl_7pct" ] && echo "$rl_5pct" || echo "$rl_7pct"; } || echo "${rl_5pct:-${rl_7pct:-0}}")
