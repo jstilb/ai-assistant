@@ -139,6 +139,8 @@ export interface CollectionSummary {
 
 export const KAYA_HOME = getKayaHome();
 export const SOURCES_PATH = `${KAYA_HOME}/skills/Content/ContentAggregator/Tools/sources.json`;
-export const CONTENT_STORE_DIR = `${KAYA_HOME}/MEMORY/CONTENT`;
-export const DIGESTS_DIR = `${KAYA_HOME}/MEMORY/DIGESTS`;
-export const METRICS_PATH = `${KAYA_HOME}/MEMORY/DIGESTS/metrics.jsonl`;
+// Resolved at call time (not module load) so a test that pins KAYA_HOME is honored even
+// when this module was first imported by an earlier file in the same bun process.
+export const contentStoreDir = (): string => `${getKayaHome()}/MEMORY/CONTENT`;
+export const digestsDir = (): string => `${getKayaHome()}/MEMORY/DIGESTS`;
+export const metricsPath = (): string => `${getKayaHome()}/MEMORY/DIGESTS/metrics.jsonl`;

@@ -14,8 +14,8 @@
         "technology"
       ],
       "pollInterval": 60,
-      "lastPolled": "2026-10-03T12:16:21.424Z",
-      "lastContentHash": "a393a4288ec90300",
+      "lastPolled": "2026-10-24T01:00:01.829Z",
+      "lastContentHash": "f445ba5feca38c53",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -32,8 +32,8 @@
         "llm"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:21.482Z",
-      "lastContentHash": "2df1dafaf5586db2",
+      "lastPolled": "2026-10-24T01:00:01.847Z",
+      "lastContentHash": "2ad4b6bdbbb7c033",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -50,8 +50,8 @@
         "machine-learning"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:16:21.560Z",
-      "lastContentHash": "ffb3c680008416ba",
+      "lastPolled": "2026-10-24T01:00:11.810Z",
+      "lastContentHash": "aa7c6aa56ee4f623",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -69,8 +69,8 @@
         "analysis"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:16:21.831Z",
-      "lastContentHash": "33abd3f4562482d8",
+      "lastPolled": "2026-10-24T01:00:02.056Z",
+      "lastContentHash": "95b31f4ba8bc53fa",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -87,8 +87,8 @@
         "programming"
       ],
       "pollInterval": 60,
-      "lastPolled": "2026-10-03T12:16:21.743Z",
-      "lastContentHash": "62d3ce34c327cf4a",
+      "lastPolled": "2026-10-24T01:00:06.828Z",
+      "lastContentHash": "aa4183681026508d",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -105,8 +105,8 @@
         "security"
       ],
       "pollInterval": 60,
-      "lastPolled": "2026-10-03T12:16:22.173Z",
-      "lastContentHash": "d187b243fcff35dc",
+      "lastPolled": "2026-10-24T01:00:12.004Z",
+      "lastContentHash": "72a1ddf05ba223a1",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -124,8 +124,8 @@
         "research"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:22.304Z",
-      "lastContentHash": "fb7f43cfe0261a7a",
+      "lastPolled": "2026-10-24T01:00:12.066Z",
+      "lastContentHash": "39e3cf1241877255",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -142,8 +142,8 @@
         "funding"
       ],
       "pollInterval": 60,
-      "lastPolled": "2026-10-03T12:16:22.180Z",
-      "lastContentHash": "6fb44b79f6727a78",
+      "lastPolled": "2026-10-24T01:00:12.017Z",
+      "lastContentHash": "3215a05da2d9ec04",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -160,8 +160,8 @@
         "science"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:22.723Z",
-      "lastContentHash": "ef99ca2268971b6",
+      "lastPolled": "2026-10-24T01:00:12.501Z",
+      "lastContentHash": "63fb7330da425c51",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -177,8 +177,8 @@
         "technology"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:22.143Z",
-      "lastContentHash": "a0d6502b5b5c862",
+      "lastPolled": "2026-10-24T01:00:12.155Z",
+      "lastContentHash": "fd403f6f0396f6c2",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -195,8 +195,8 @@
         "privacy"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:22.956Z",
-      "lastContentHash": "25529a6bff34b709",
+      "lastPolled": "2026-10-24T01:00:12.835Z",
+      "lastContentHash": "d72b50ee6c3a8b4b",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -213,8 +213,8 @@
         "cryptography"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:22.885Z",
-      "lastContentHash": "5892ff23962c0d2f",
+      "lastPolled": "2026-10-24T01:00:12.700Z",
+      "lastContentHash": "b3468b9a58f31f62",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -232,8 +232,8 @@
         "philosophy"
       ],
       "pollInterval": 720,
-      "lastPolled": "2026-10-03T12:16:23.148Z",
-      "lastContentHash": "d23d46cf3afea777",
+      "lastPolled": "2026-10-24T01:00:13.357Z",
+      "lastContentHash": "4154ace2137ec4c4",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -250,7 +250,7 @@
         "management"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:16:23.691Z",
+      "lastPolled": "2026-10-24T01:00:13.407Z",
       "lastContentHash": "9271c24dac6b9579",
       "healthStatus": "healthy",
       "failureCount": 0
@@ -268,8 +268,8 @@
         "technology"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:16:23.235Z",
-      "lastContentHash": "80a890215f397253",
+      "lastPolled": "2026-10-24T01:00:13.185Z",
+      "lastContentHash": "8ac0ed0d06f6109e",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -286,8 +286,8 @@
         "ideas"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:24.196Z",
-      "lastContentHash": "342ae31b4cd27c44",
+      "lastPolled": "2026-10-24T01:00:14.356Z",
+      "lastContentHash": "14a874c79f4ebb91",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -305,8 +305,8 @@
         "creative"
       ],
       "pollInterval": 120,
-      "lastPolled": "2026-10-03T12:16:24.063Z",
-      "lastContentHash": "40158d44b1fa40f1",
+      "lastPolled": "2026-10-24T01:00:13.860Z",
+      "lastContentHash": "8e1a55f6916f303b",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -323,8 +323,8 @@
         "literature"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:34:19.466Z",
-      "lastContentHash": "8b7011bbf927df4d",
+      "lastPolled": "2026-10-24T01:00:18.568Z",
+      "lastContentHash": "a3149724a77a5c25",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -342,8 +342,8 @@
         "creative"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:16:23.894Z",
-      "lastContentHash": "2b33b883229a5d21",
+      "lastPolled": "2026-10-24T01:00:13.719Z",
+      "lastContentHash": "5a04cccce59391e9",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -361,8 +361,8 @@
         "essays"
       ],
       "pollInterval": 240,
-      "lastPolled": "2026-10-03T12:16:24.531Z",
-      "lastContentHash": "53ef91bb3e96857c",
+      "lastPolled": "2026-10-24T01:00:15.677Z",
+      "lastContentHash": "5f432812cf001765",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -380,8 +380,8 @@
         "habits"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-02T07:00:14.062Z",
-      "lastContentHash": "5d7e39b925c70d2b",
+      "lastPolled": "2026-10-24T01:00:19.103Z",
+      "lastContentHash": "fdf397dfd3e3f385",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -398,8 +398,8 @@
         "self-improvement"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:34:20.566Z",
-      "lastContentHash": "48c701ae3dae57b3",
+      "lastPolled": "2026-10-24T01:00:19.158Z",
+      "lastContentHash": "dcbf9524c4ee448d",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -417,8 +417,8 @@
         "wisdom"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:34:20.522Z",
-      "lastContentHash": "f7b9f2ea81f8d2b0",
+      "lastPolled": "2026-10-24T01:00:19.018Z",
+      "lastContentHash": "a7e78467c7a41e8a",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -436,8 +436,8 @@
         "ideas"
       ],
       "pollInterval": 240,
-      "lastPolled": "2026-10-03T12:34:20.356Z",
-      "lastContentHash": "5c3858df0d1ac55e",
+      "lastPolled": "2026-10-24T01:00:18.827Z",
+      "lastContentHash": "c582a6d7c6d1638c",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -454,8 +454,8 @@
         "culture"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-03T12:34:20.567Z",
-      "lastContentHash": "ea7d91ba95d600f8",
+      "lastPolled": "2026-10-24T01:00:19.044Z",
+      "lastContentHash": "358ceeedc8e00e90",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -473,8 +473,8 @@
         "essays"
       ],
       "pollInterval": 720,
-      "lastPolled": "2026-10-02T07:00:14.298Z",
-      "lastContentHash": "587f5970a413ecbb",
+      "lastPolled": "2026-10-24T01:00:19.439Z",
+      "lastContentHash": "2956484d5c3ed21b",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -491,8 +491,8 @@
         "environment"
       ],
       "pollInterval": 240,
-      "lastPolled": "2026-10-02T12:04:59.741Z",
-      "lastContentHash": "de0b8c0a1eb4197e",
+      "lastPolled": "2026-10-24T01:00:19.403Z",
+      "lastContentHash": "409638ee2bde459",
       "healthStatus": "healthy",
       "failureCount": 0
     },
@@ -510,11 +510,11 @@
         "agent-skills"
       ],
       "pollInterval": 360,
-      "lastPolled": "2026-10-02T07:00:14.363Z",
-      "lastContentHash": "d5c4ac3de04fb60f",
+      "lastPolled": "2026-10-24T01:00:19.389Z",
+      "lastContentHash": "d88a30f21a844aa8",
       "healthStatus": "healthy",
       "failureCount": 0
     }
   ],
-  "lastUpdated": "2026-10-03T12:34:20.568Z"
+  "lastUpdated": "2026-10-24T01:00:19.463Z"
 }

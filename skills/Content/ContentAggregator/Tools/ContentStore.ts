@@ -24,8 +24,8 @@ import {
   type ContentItem,
   type ContentStoreState,
   ContentStoreStateSchema,
-  CONTENT_STORE_DIR,
-  METRICS_PATH,
+  contentStoreDir,
+  metricsPath,
 } from "./types.ts";
 
 // ============================================================================
@@ -40,12 +40,12 @@ function getPartitionKey(date?: string): string {
 }
 
 function getPartitionPath(partitionKey: string): string {
-  return join(CONTENT_STORE_DIR, `${partitionKey}.json`);
+  return join(contentStoreDir(), `${partitionKey}.json`);
 }
 
 function ensureStoreDir(): void {
-  if (!existsSync(CONTENT_STORE_DIR)) {
-    mkdirSync(CONTENT_STORE_DIR, { recursive: true });
+  if (!existsSync(contentStoreDir())) {
+    mkdirSync(contentStoreDir(), { recursive: true });
   }
 }
 
@@ -335,7 +335,7 @@ export async function logMetrics(metrics: Record<string, unknown>): Promise<void
 
   // F6c: through the AppendLog seam (rotation + retention) instead of a raw
   // appendFileSync; fileMode preserves the previous 0o644 create mode.
-  createAppendLog(METRICS_PATH, { fileMode: 0o644 }).appendJson(entry);
+  createAppendLog(metricsPath(), { fileMode: 0o644 }).appendJson(entry);
 }
 
 // ============================================================================
@@ -343,9 +343,9 @@ export async function logMetrics(metrics: Record<string, unknown>): Promise<void
 // ============================================================================
 
 function listPartitions(): string[] {
-  if (!existsSync(CONTENT_STORE_DIR)) return [];
+  if (!existsSync(contentStoreDir())) return [];
 
-  return readdirSync(CONTENT_STORE_DIR)
+  return readdirSync(contentStoreDir())
     .filter((f) => f.endsWith(".json") && /^\d{4}-\d{2}\.json$/.test(f))
     .map((f) => f.replace(".json", ""))
     .sort();

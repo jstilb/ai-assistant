@@ -16,7 +16,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import type { ContentItem } from "./types.ts";
-import { DIGESTS_DIR, KAYA_HOME } from "./types.ts";
+import { digestsDir, KAYA_HOME } from "./types.ts";
 
 // ============================================================================
 // BlockResult interface (compatible with DailyBriefing)
@@ -277,14 +277,14 @@ export function generateNewsBlock(items: ContentItem[]): BlockResult {
  * Save digest to MEMORY/DIGESTS/
  */
 export async function saveDigest(markdown: string, filename?: string): Promise<string> {
-  if (!existsSync(DIGESTS_DIR)) {
-    mkdirSync(DIGESTS_DIR, { recursive: true });
+  if (!existsSync(digestsDir())) {
+    mkdirSync(digestsDir(), { recursive: true });
   }
 
   const date = new Date().toISOString().slice(0, 10);
   const time = new Date().toISOString().slice(11, 16).replace(":", "");
   const name = filename || `${date}-${time}-digest.md`;
-  const path = join(DIGESTS_DIR, name);
+  const path = join(digestsDir(), name);
 
   writeFileSync(path, markdown, "utf-8");
   return path;
