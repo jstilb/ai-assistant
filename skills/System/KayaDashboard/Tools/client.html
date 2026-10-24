@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaya — brain &amp; work</title>
+<style>
+  :root {
+    --bg:#121211; --surface:#1a1a19; --surface-2:#232321; --line:#2f2f2c;
+    --ink:#ecebe6; --ink-2:#b4b2aa; --muted:#83817a;
+    --blue:#3987e5; --good:#2f9e5b; --warn:#c9a227; --crit:#d03b3b;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", sans-serif; font-size:14px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); display:flex; min-height:100vh; }
+  nav { width:200px; flex:none; background:var(--surface); border-right:1px solid var(--line); padding:16px 0; position:sticky; top:0; height:100vh; overflow:auto; }
+  nav h1 { font-size:16px; margin:0 16px 14px; letter-spacing:.02em; }
+  nav h1 small { display:block; color:var(--muted); font-weight:400; font-size:11px; margin-top:2px; }
+  nav a { display:block; padding:7px 16px; color:var(--ink-2); text-decoration:none; border-left:3px solid transparent; }
+  nav a:hover { color:var(--ink); background:var(--surface-2); }
+  nav a.active { color:var(--ink); border-left-color:var(--blue); background:var(--surface-2); }
+  main { flex:1; padding:22px 28px 60px; min-width:0; }
+  h2 { margin:0 0 4px; font-size:20px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  h3 { font-size:14px; margin:22px 0 8px; color:var(--ink-2); text-transform:uppercase; letter-spacing:.05em; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; }
+  .tile { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .tile .k { color:var(--muted); font-size:12px; }
+  .tile .v { font-size:26px; font-weight:600; margin-top:4px; }
+  .tile .d { color:var(--ink-2); font-size:12px; margin-top:4px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:12px; }
+  table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; background:var(--surface-2); position:sticky; top:0; }
+  tr:hover td { background:#1f1f1d; }
+  td.wrap { max-width:520px; }
+  code, .mono { font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+  .muted { color:var(--muted); } .small { font-size:12px; }
+  a { color:#7fb2f0; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--line); color:var(--ink-2); white-space:nowrap; }
+  .pill.good { color:#7fd3a0; border-color:#2f5e43; } .pill.crit { color:#f08a8a; border-color:#6b2c2c; } .pill.warn { color:#e6cd73; border-color:#5f5226; }
+  button { background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; font:inherit; font-size:12px; }
+  button:hover { border-color:var(--blue); } button:disabled { opacity:.5; cursor:wait; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .switch { position:relative; width:36px; height:20px; display:inline-block; vertical-align:middle; }
+  .switch input { opacity:0; width:0; height:0; }
+  .switch span { position:absolute; inset:0; background:#3a3a37; border-radius:10px; cursor:pointer; transition:.15s; }
+  .switch span:before { content:""; position:absolute; width:14px; height:14px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .switch input:checked + span { background:var(--good); }
+  .switch input:checked + span:before { transform:translateX(16px); }
+  .switch input:disabled + span { opacity:.5; cursor:wait; }
+  input[type=search], select { background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:inherit; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  pre { white-space:pre-wrap; word-break:break-word; background:#0e0e0d; border:1px solid var(--line); border-radius:6px; padding:10px; max-height:420px; overflow:auto; margin:0; }
+  textarea { width:100%; min-height:60vh; background:#0e0e0d; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:12px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; line-height:1.5; }
+  .turn { border-left:3px solid var(--line); padding:6px 12px; margin:8px 0; white-space:pre-wrap; word-break:break-word; }
+  .turn.user { border-left-color:var(--blue); } .turn .who { color:var(--muted); font-size:11px; margin-bottom:2px; }
+  .chart { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
+  .chart .title { font-size:13px; color:var(--ink-2); margin-bottom:6px; }
+  .chart svg { width:100%; height:140px; display:block; overflow:visible; }
+  .chart svg rect.bar:hover { opacity:.75; }
+  .tip { position:fixed; pointer-events:none; background:#0e0e0d; border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-size:12px; display:none; z-index:10; }
+  .toast { position:fixed; bottom:18px; right:18px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; max-width:460px; box-shadow:0 6px 24px #0008; z-index:20; }
+  .toast.err { border-color:var(--crit); }
+  .mermaid-wrap { overflow:auto; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:14px; }
+  .err { color:#f08a8a; }
+  .modal { position:fixed; inset:0; background:#000a; display:flex; align-items:flex-start; justify-content:center; padding:40px; z-index:15; }
+  .modal > div { background:var(--surface); border:1px solid var(--line); border-radius:10px; width:min(1100px,100%); max-height:calc(100vh - 80px); overflow:auto; padding:18px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:14px; } @media (max-width:1000px) { .two { grid-template-columns:1fr; } nav { width:150px; } }
+</style>
+</head>
+<body>
+<nav id="nav">
+  <h1>Kaya<small>brain &amp; work</small></h1>
+</nav>
+<main id="main"><p class="muted">Loading…</p></main>
+<div class="tip" id="tip"></div>
+<script>
+const SECTIONS = [
+  ["overview","Overview"],["sessions","Sessions"],["usage","Usage"],["jobs","Jobs"],["telegram","Telegram"],
+  ["skills","Skills"],["hooks","Hooks"],["context","Context"],["projects","Projects"],["work","Recent work"],
+  ["systems","Systems work"],["diagrams","Diagrams"],
+];
+const $ = (s, r=document) => r.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ago = (iso) => { if (!iso) return ""; const t = Date.parse(iso); if (isNaN(t)) return esc(iso); const s = (Date.now()-t)/1000;
+  if (s < 90) return "just now"; if (s < 5400) return Math.round(s/60)+"m ago"; if (s < 129600) return Math.round(s/3600)+"h ago"; return Math.round(s/86400)+"d ago"; };
+const when = (iso) => `<span title="${esc(iso)}">${ago(iso)}</span>`;
+const api = async (path, opts={}) => {
+  const r = await fetch(path, { ...opts, headers: { "content-type":"application/json", "x-kaya-dashboard":"1", ...(opts.headers||{}) } });
+  const data = await r.json().catch(() => ({ error: "bad JSON from server" }));
+  if (!r.ok && !data.error) data.error = "HTTP " + r.status;
+  return data;
+};
+const errBox = (d) => d && d.error ? `<div class="card err">Source error: ${esc(d.error)}</div>` : "";
+function toast(msg, isErr=false) {
+  const t = document.createElement("div"); t.className = "toast" + (isErr ? " err" : ""); t.innerHTML = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), isErr ? 9000 : 5000);
+}
+function fileLink(path, label) { return `<a href="#" data-open="${esc(path)}">${esc(label ?? path)}</a>`; }
+
+// ── tiny accessible bar chart (single series; hover tooltip; values in table views) ──
+function barChart(title, points, color="var(--blue)", fmt=(v)=>v) {
+  const W = 800, H = 140, pad = 18, max = Math.max(1, ...points.map(p => p.v));
+  const bw = (W - pad) / points.length, gap = 2;
+  const bars = points.map((p, i) => {
+    const h = Math.max(p.v ? 2 : 0, (p.v / max) * (H - pad - 4));
+    return `<rect class="bar" x="${(i*bw + gap/2).toFixed(1)}" y="${(H - pad - h).toFixed(1)}" width="${Math.max(1, bw - gap).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${color}" data-tip="${esc(p.label)}: ${esc(fmt(p.v))}"></rect>
+      <rect x="${(i*bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H - pad}" fill="transparent" data-tip="${esc(p.label)}: ${esc(fmt(p.v))}"></rect>`;
+  }).join("");
+  const ticks = points.map((p, i) => (points.length <= 14 || i % Math.ceil(points.length / 8) === 0) ? `<text x="${(i*bw + bw/2).toFixed(1)}" y="${H-4}" fill="var(--muted)" font-size="10" text-anchor="middle">${esc(p.short ?? p.label)}</text>` : "").join("");
+  return `<div class="chart"><div class="title">${esc(title)} <span class="muted small">(max ${esc(fmt(max))})</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(title)}">
+    <line x1="0" x2="${W}" y1="${H-pad}" y2="${H-pad}" stroke="var(--line)"></line>${bars}${ticks}</svg></div>`;
+}
+document.addEventListener("mousemove", (e) => {
+  const tip = $("#tip"), t = e.target.closest?.("[data-tip]");
+  if (!t) { tip.style.display = "none"; return; }
+  tip.textContent = t.dataset.tip; tip.style.display = "block";
+  tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px";
+});
+
+// ── sections ──
+const R = {};
+
+R.overview = async () => {
+  const o = await api("/api/overview");
+  const days = Array.isArray(o.usage?.days) ? o.usage.days : [];
+  const prompts7 = days.reduce((a, d) => a + d.prompts, 0), cronOk = days.reduce((a, d) => a + d.cronOk, 0), cronFail = days.reduce((a, d) => a + d.cronFail, 0);
+  const g = o.graph || {};
+  return `<h2>Overview</h2><p class="sub">Snapshot ${when(o.generatedAt)} · everything here is live from KAYA_HOME</p>
+  <div class="grid">
+    <div class="tile"><div class="k">Jobs on / total</div><div class="v">${o.jobs.on} / ${o.jobs.total}</div><div class="d">${o.jobs.running} running · ${o.jobs.off} off</div></div>
+    <div class="tile"><div class="k">Last-run failures</div><div class="v ${o.jobs.lastRunFailed.length ? "err" : ""}">${o.jobs.lastRunFailed.length}</div><div class="d">${o.jobs.lastRunFailed.slice(0,3).map(f => esc(f.label.replace(/^com\.kaya\.(cron\.)?/,""))).join(", ") || "all green"}</div></div>
+    <div class="tile"><div class="k">Cron runs (7d)</div><div class="v">${cronOk + cronFail}</div><div class="d">${cronFail} failed · ${cronOk + cronFail ? Math.round(100*cronOk/(cronOk+cronFail)) : 0}% ok</div></div>
+    <div class="tile"><div class="k">Sessions (14d)</div><div class="v">${o.sessions.last14d ?? "?"}</div><div class="d">${o.sessions.interactive ?? 0} interactive · ${o.sessions.today ?? 0} today</div></div>
+    <div class="tile"><div class="k">Prompts (7d)</div><div class="v">${prompts7}</div><div class="d">avg rating ${o.usage?.ratings?.avg ?? "—"} (${o.usage?.ratings?.count ?? 0})</div></div>
+    <div class="tile"><div class="k">Skills · Hooks</div><div class="v">${o.skills} · ${o.hooks}</div><div class="d">registered</div></div>
+    <div class="tile"><div class="k">Knowledge graph</div><div class="v">${(g.nodeCount ?? 0).toLocaleString()}</div><div class="d">${(g.edgeCount ?? 0).toLocaleString()} edges · ingested ${ago(g.lastIngested)}</div></div>
+  </div>
+  ${o.jobs.lastRunFailed.length ? `<h3>Jobs whose last run failed</h3><table><tr><th>Job</th><th>Failure class</th></tr>${o.jobs.lastRunFailed.map(f => `<tr><td><a href="#jobs?q=${esc(f.label)}">${esc(f.label)}</a></td><td>${esc(f.failureClass ?? "")}</td></tr>`).join("")}</table>` : ""}
+  ${o.jobs.nonZeroExit.length ? `<h3>Non-zero last exit (launchd)</h3><table><tr><th>Job</th><th>Exit</th></tr>${o.jobs.nonZeroExit.map(f => `<tr><td><a href="#jobs?q=${esc(f.label)}">${esc(f.label)}</a></td><td>${f.lastExit}</td></tr>`).join("")}</table>` : ""}`;
+};
+
+R.sessions = async () => {
+  const s = await api("/api/sessions?limit=80");
+  if (s.error) return errBox(s);
+  return `<h2>Sessions</h2><p class="sub">Most recent Claude Code transcripts (14-day window). Interactive = has prompts in history.jsonl; the rest are headless/cron/executor agents.</p>
+  <div class="toolbar"><input type="search" id="q" placeholder="filter title / project…"><label class="small"><input type="checkbox" id="onlyI"> interactive only</label></div>
+  <table id="tbl"><tr><th>Updated</th><th>Title</th><th>Project</th><th>Kind</th><th>Size</th><th></th></tr>
+  ${s.map(x => `<tr data-i="${x.interactive}" data-text="${esc((x.title+" "+x.project+" "+x.firstPrompt).toLowerCase())}">
+    <td class="small">${when(x.updatedAt)}</td>
+    <td class="wrap"><a href="#" data-session="${x.sessionId}">${esc(x.title)}</a>${x.firstPrompt && x.firstPrompt !== x.title ? `<div class="muted small">${esc(x.firstPrompt.slice(0,160))}</div>` : ""}</td>
+    <td class="small">${esc(x.project)}</td><td>${x.interactive ? '<span class="pill good">interactive</span>' : '<span class="pill">headless</span>'}</td>
+    <td class="small muted">${x.sizeKB} KB</td><td><button data-copy="claude --resume ${x.sessionId}" title="copy resume command">resume ⧉</button></td></tr>`).join("")}</table>`;
+};
+function wireFilter() {
+  const q = $("#q"), only = $("#onlyI");
+  const apply = () => document.querySelectorAll("#tbl tr[data-text]").forEach(tr => {
+    const okQ = !q || !q.value || tr.dataset.text.includes(q.value.toLowerCase());
+    const okI = !only || !only.checked || tr.dataset.i === "true";
+    tr.style.display = okQ && okI ? "" : "none";
+  });
+  q?.addEventListener("input", apply); only?.addEventListener("change", apply);
+  const pre = new URLSearchParams(location.hash.split("?")[1] || "").get("q"); if (pre && q) { q.value = pre; }
+  apply();
+}
+
+R.usage = async () => {
+  const u = await api("/api/usage?days=30");
+  if (u.error) return errBox(u);
+  const pts = (k) => u.days.map(d => ({ label: d.date, short: d.date.slice(5), v: d[k] ?? 0 }));
+  return `<h2>Usage patterns</h2><p class="sub">Last 30 days · prompts from history.jsonl, ratings from LEARNING/SIGNALS, cron from the run ledger</p>
+  ${barChart("Interactive prompts per day", pts("prompts"))}
+  ${barChart("Interactive sessions per day", pts("sessions"))}
+  <div class="two">
+    ${barChart("Prompts by hour of day", u.hourOfDay.map((v, h) => ({ label: h + ":00", short: String(h), v })))}
+    ${barChart("Cron failures per day", pts("cronFail"), "var(--crit)")}
+  </div>
+  <div class="two">
+    <div><h3>Top projects (by prompts)</h3><table><tr><th>Project</th><th>Prompts</th></tr>${u.topProjects.map(p => `<tr><td>${esc(p.project)}</td><td>${p.prompts}</td></tr>`).join("")}</table>
+      <h3>Most-failing cron jobs (30d)</h3><table><tr><th>Job</th><th>Failures</th><th>Last class</th></tr>${u.cronFailures.map(f => `<tr><td><a href="#jobs?q=${esc(f.jobId)}">${esc(f.jobId)}</a></td><td>${f.failures}</td><td class="small">${esc(f.lastFailureClass ?? "")}</td></tr>`).join("")}</table></div>
+    <div><h3>Session ratings — avg ${u.ratings.avg ?? "—"} over ${u.ratings.count}</h3><table><tr><th>When</th><th>Rating</th><th>Summary</th></tr>${u.ratings.recent.map(r => `<tr><td class="small">${when(r.timestamp)}</td><td>${r.rating}</td><td class="small wrap">${esc(r.summary)}</td></tr>`).join("")}</table></div>
+  </div>
+  <h3>Daily table</h3><table><tr><th>Date</th><th>Prompts</th><th>Sessions</th><th>Cron ok</th><th>Cron fail</th><th>Avg rating</th></tr>${u.days.slice().reverse().map(d => `<tr><td>${d.date}</td><td>${d.prompts}</td><td>${d.sessions}</td><td>${d.cronOk}</td><td>${d.cronFail}</td><td>${d.avgRating ?? ""}</td></tr>`).join("")}</table>`;
+};
+
+R.jobs = async () => {
+  const j = await api("/api/jobs");
+  if (j.error) return errBox(j);
+  const status = (x) => x.pid ? `<span class="pill good">running · ${x.pid}</span>` : !x.loaded ? '<span class="pill">unloaded</span>' :
+    x.lastRun?.outcome === "failure" ? `<span class="pill crit" title="${esc(x.lastRun.failureClass ?? "")}">last run failed</span>` :
+    (x.lastExit && x.lastExit !== 0) ? `<span class="pill warn">exit ${x.lastExit}</span>` : '<span class="pill">idle</span>';
+  return `<h2>Jobs</h2><p class="sub">${j.length} LaunchAgents (com.kaya.* / com.pai.*). Toggle = launchctl disable+bootout / enable+bootstrap, plus the cron manifest's <code>enabled:</code>. Run = cron wrapper with --catchup, or launchctl kickstart (KeepAlive services restart). Every action is audit-logged to logs/kaya-dashboard-actions.jsonl.</p>
+  <div class="toolbar"><input type="search" id="q" placeholder="filter jobs…" style="min-width:280px"><select id="kind"><option value="">all kinds</option><option>cron</option><option>service</option><option>calendar</option><option>interval</option><option>on-demand</option></select></div>
+  <table id="tbl"><tr><th>On</th><th>Job</th><th>Schedule</th><th>Status</th><th>Last run</th><th>Actions</th></tr>
+  ${j.map(x => `<tr data-kind="${x.kind}" data-text="${esc((x.label+" "+x.description+" "+x.schedule).toLowerCase())}">
+    <td><label class="switch" title="${x.on ? "on" : "off"}${x.disabled ? " (launchd-disabled)" : ""}${x.manifestEnabled === false ? " (manifest enabled:false)" : ""}"><input type="checkbox" data-toggle="${esc(x.label)}" ${x.on ? "checked" : ""} ${x.label === "com.kaya.dashboard" ? "disabled" : ""}><span></span></label></td>
+    <td class="wrap"><b>${esc(x.label.replace(/^com\.(kaya|pai)\./,""))}</b> <span class="pill">${x.kind}</span>${x.manifestPath ? ` ${fileLink(x.manifestPath.replace(/^.*?\/MEMORY\//,"MEMORY/"), "manifest")}` : ""}
+      ${x.description ? `<div class="muted small">${esc(x.description.slice(0,220))}</div>` : ""}</td>
+    <td class="small mono">${esc(x.schedule)}</td><td>${status(x)}</td>
+    <td class="small">${x.lastRun ? `${when(x.lastRun.startedAt)} · ${esc(x.lastRun.outcome)}` : ""}</td>
+    <td style="white-space:nowrap"><button data-run="${esc(x.label)}" ${x.label === "com.kaya.dashboard" ? "disabled" : ""}>${x.keepAlive ? "restart" : "run now"}</button> <button data-logs="${esc(x.label)}">logs</button></td></tr>`).join("")}</table>`;
+};
+function wireJobs() {
+  const q = $("#q"), kind = $("#kind");
+  const apply = () => document.querySelectorAll("#tbl tr[data-text]").forEach(tr => {
+    tr.style.display = (!q.value || tr.dataset.text.includes(q.value.toLowerCase())) && (!kind.value || tr.dataset.kind === kind.value) ? "" : "none";
+  });
+  q.addEventListener("input", apply); kind.addEventListener("change", apply);
+  const pre = new URLSearchParams(location.hash.split("?")[1] || "").get("q"); if (pre) q.value = pre.replace(/^com\.kaya\./,"");
+  apply();
+  document.querySelectorAll("[data-toggle]").forEach(cb => cb.addEventListener("change", async () => {
+    const label = cb.dataset.toggle, enable = cb.checked;
+    if (!enable && !confirm(`Turn OFF ${label}?\n\nIt will be launchd-disabled + booted out${cb.closest("tr").innerHTML.includes("manifest") ? " and its manifest set to enabled:false" : ""}.`)) { cb.checked = true; return; }
+    cb.disabled = true;
+    const r = await api(`/api/jobs/${encodeURIComponent(label)}/toggle`, { method:"POST", body: JSON.stringify({ enable }) });
+    cb.disabled = false;
+    if (r.ok) toast(`<b>${esc(label)}</b> → ${enable ? "ON" : "OFF"}<div class="small muted">${r.steps.map(esc).join("<br>")}</div>`);
+    else { cb.checked = !enable; toast(`Toggle failed for <b>${esc(label)}</b>: ${esc(r.error)}<div class="small muted">${(r.steps||[]).map(esc).join("<br>")}</div>`, true); }
+  }));
+  document.querySelectorAll("[data-run]").forEach(b => b.addEventListener("click", async () => {
+    const label = b.dataset.run;
+    if (!confirm(`Run ${label} now?`)) return;
+    b.disabled = true;
+    const r = await api(`/api/jobs/${encodeURIComponent(label)}/run`, { method:"POST", body:"{}" });
+    b.disabled = false;
+    r.ok ? toast(`Started <b>${esc(label)}</b><div class="small muted">${r.steps.map(esc).join("<br>")}</div>`) : toast(`Run failed for <b>${esc(label)}</b>: ${esc(r.error)}`, true);
+  }));
+  document.querySelectorAll("[data-logs]").forEach(b => b.addEventListener("click", async () => {
+    const r = await api(`/api/jobs/${encodeURIComponent(b.dataset.logs)}/logs?lines=120`);
+    modal(`<h2>${esc(b.dataset.logs)} — logs</h2>${errBox(r)}<h3>stdout</h3><pre>${esc(r.stdout || "(empty)")}</pre><h3>stderr</h3><pre>${esc(r.stderr || "(empty)")}</pre>`);
+  }));
+}
+
+R.telegram = async () => {
+  const t = await api("/api/telegram");
+  if (t.error) return errBox(t);
+  return `<h2>Telegram</h2><p class="sub">Recurring messages = cron jobs that deliver output (manifest output ≠ silent) or deliver from their own scripts (briefings, digests, nudges, sentinels). Toggle them on the Jobs tab.</p>
+  <h3>Recurring senders (${t.recurring.length})</h3><table><tr><th>On</th><th>Job</th><th>Schedule</th><th>Via</th><th>What</th></tr>
+  ${t.recurring.map(r => `<tr><td>${r.on ? '<span class="pill good">on</span>' : '<span class="pill">off</span>'}</td><td><a href="#jobs?q=${esc(r.label)}">${esc(r.cronId ?? r.label)}</a></td><td class="mono small">${esc(r.schedule)}</td><td class="small">${esc(r.via)}</td><td class="small wrap">${esc(r.description)}</td></tr>`).join("")}</table>
+  <h3>Outbound by source</h3><p>${t.bySource.map(s => `<span class="pill">${esc(s.source)} · ${s.count}</span>`).join(" ")}</p>
+  <h3>Recent outbound messages</h3><table><tr><th>When</th><th>Source</th><th>Text</th></tr>${t.recent.map(m => `<tr><td class="small">${when(m.timestamp)}</td><td class="small">${esc(m.source)}</td><td class="wrap small">${esc(m.text)}</td></tr>`).join("")}</table>`;
+};
+
+R.skills = async () => {
+  const s = await api("/api/skills");
+  if (s.error) return errBox(s);
+  const cats = [...new Set(s.map(x => x.category))];
+  return `<h2>Skills</h2><p class="sub">${s.length} skills across ${cats.length} categories. Click a name to view / edit its SKILL.md.</p>
+  <div class="toolbar"><input type="search" id="q" placeholder="filter skills…"></div>
+  <table id="tbl"><tr><th>Skill</th><th>Category</th><th>Description</th><th>Workflows</th><th>Tools</th><th>SKILL.md updated</th></tr>
+  ${s.map(x => `<tr data-text="${esc((x.name+" "+x.category+" "+x.description).toLowerCase())}"><td>${fileLink(x.path, x.name)}</td><td class="small">${esc(x.category)}</td><td class="small wrap">${esc(x.description)}</td><td>${x.workflows}</td><td>${x.tools}</td><td class="small">${when(x.updatedAt)}</td></tr>`).join("")}</table>`;
+};
+
+R.hooks = async () => {
+  const h = await api("/api/hooks");
+  if (h.error) return errBox(h);
+  return `<h2>Hooks</h2><p class="sub">Registered in settings.json → hooks. Source is viewable (read-only here — edit hooks in the repo).</p>
+  <table><tr><th>Event</th><th>Matcher</th><th>Hook</th><th>What it does</th></tr>
+  ${h.map(x => `<tr><td><span class="pill">${esc(x.event)}</span></td><td class="mono small">${esc(x.matcher)}</td><td class="mono small">${x.file ? fileLink(x.file, x.file.replace(/^hooks\//,"")) : esc(x.command)} ${x.exists ? "" : '<span class="pill crit">missing</span>'}</td><td class="small wrap">${esc(x.doc)}</td></tr>`).join("")}</table>`;
+};
+
+R.context = async () => {
+  const c = await api("/api/context");
+  if (c.error) return errBox(c);
+  const groups = [...new Set(c.files.map(f => f.group))];
+  return `<h2>Key context</h2><p class="sub">The files that shape every Kaya session, plus the auto-memory index. Click to view; USER/, TELOS, context/, routing docs, SKILL.md, cron manifests and memory files are editable.</p>
+  <div class="two"><div>${groups.map(g => `<h3>${esc(g)}</h3><table>${c.files.filter(f => f.group === g).map(f => `<tr><td>${fileLink(f.path, f.label)}<div class="muted small mono">${esc(f.path)}</div></td><td class="small">${f.sizeKB} KB</td><td class="small">${when(f.updatedAt)}</td></tr>`).join("")}</table>`).join("")}</div>
+  <div><h3>TELOS status</h3><pre>${esc(c.status)}</pre></div></div>
+  <h3>Auto-memory (${c.memory.length}) — ${fileLink("memory:MEMORY.md", "edit index")}</h3>
+  <div class="toolbar"><input type="search" id="q" placeholder="filter memories…"></div>
+  <table id="tbl">${c.memory.map(m => `<tr data-text="${esc((m.title+" "+m.hook).toLowerCase())}"><td class="wrap">${fileLink("memory:" + m.file, m.title)}<div class="muted small">${esc(m.hook)}</div></td></tr>`).join("")}</table>`;
+};
+
+R.projects = async () => {
+  const p = await api("/api/projects");
+  if (p.error) return errBox(p);
+  return `<h2>Projects</h2><p class="sub">TELOS projects, live LucidTasks projects, and the other Kaya surfaces.</p>
+  <h3>Kaya surfaces</h3><div class="grid">${p.links.map(l => `<a class="tile" href="${esc(l.url)}" target="_blank" style="text-decoration:none;color:inherit"><div class="v" style="font-size:16px">${esc(l.name)} ↗</div><div class="d">${esc(l.note)}</div><div class="muted small mono">${esc(l.url)}</div></a>`).join("")}</div>
+  <div class="two"><div><h3>TELOS projects — ${fileLink("USER/TELOS/PROJECTS.md", "edit")}</h3><table><tr><th>Project</th><th>Mission</th><th>Goals</th></tr>${p.telos.map(t => `<tr><td>${esc(t.project)}</td><td class="small">${esc(t.mission)}</td><td class="small">${esc(t.goals)}</td></tr>`).join("")}</table></div>
+  <div><h3>LucidTasks projects</h3><table><tr><th>Project</th><th>Status</th><th>Open</th><th>Done</th></tr>${p.lucid.map(l => `<tr><td><a href="http://127.0.0.1:7777/#p=${esc(l.id)}" target="_blank">${esc(l.name)}</a></td><td class="small">${esc(l.status)}</td><td>${l.open ?? 0}</td><td class="muted">${l.done ?? 0}</td></tr>`).join("")}</table></div></div>`;
+};
+
+R.work = async () => {
+  const w = await api("/api/work");
+  if (w.error) return errBox(w);
+  const st = (s) => `<span class="pill ${s === "done" ? "good" : s === "cancelled" ? "" : s === "in_progress" ? "warn" : ""}">${esc(s)}</span>`;
+  return `<h2>Recent work</h2><p class="sub">LucidTasks activity, autonomous-executor deliveries, and commits on main.</p>
+  <h3>Autonomous executor</h3><table><tr><th>When</th><th>Task</th><th>Verdict</th><th>Verify</th><th>Branch</th></tr>${w.executor.map(e => `<tr><td class="small">${when(e.timestamp)}</td><td class="wrap">${esc(e.title)}</td><td><span class="pill">${esc(e.verdict)}</span></td><td>${e.verify ? `<span class="pill ${e.verify === "pass" ? "good" : "crit"}">${esc(e.verify)}</span>` : ""}</td><td class="mono small">${esc(e.branch)}</td></tr>`).join("")}</table>
+  <div class="two"><div><h3>Recently updated tasks</h3><table><tr><th>Updated</th><th>Task</th><th>Status</th><th>Project</th></tr>${w.tasks.map(t => `<tr><td class="small">${when(t.updated_at)}</td><td class="wrap">${esc(t.title)}${t.disposition ? ` <span class="pill">${esc(t.disposition)}</span>` : ""}</td><td>${st(t.status)}</td><td class="small">${esc(t.project ?? "")}</td></tr>`).join("")}</table></div>
+  <div><h3>Commits on main</h3><table><tr><th>When</th><th>SHA</th><th>Subject</th></tr>${w.commits.map(c => `<tr><td class="small">${when(c.date)}</td><td class="mono small">${esc(c.sha)}</td><td class="small wrap">${esc(c.subject)}</td></tr>`).join("")}</table></div></div>`;
+};
+
+R.systems = async () => {
+  const s = await api("/api/systems");
+  if (s.error) return errBox(s);
+  return `<h2>Systems work</h2><p class="sub">Work pipeline (pipeline.db), tech-debt queue, failure log, and executor branches waiting for review.</p>
+  <h3>Pipeline by stage</h3><p>${s.pipeline.map(p => `<span class="pill">${esc(p.stage)} · ${p.count}</span>`).join(" ")}</p>
+  <div class="two"><div><h3>Active pipeline items</h3><table><tr><th>Updated</th><th>Item</th><th>Stage</th></tr>${s.activeItems.map(i => `<tr><td class="small">${when(i.updated_at)}</td><td class="wrap small">${esc(i.title)}<div class="muted mono small">${esc(i.id)}</div></td><td><span class="pill">${esc(i.stage)}</span></td></tr>`).join("")}</table>
+    <h3>Unmerged executor branches (${s.unmergedExecutorBranches.length})</h3><table><tr><th>When</th><th>Branch</th><th>Last commit</th></tr>${s.unmergedExecutorBranches.map(b => `<tr><td class="small">${when(b.date)}</td><td class="mono small">${esc(b.branch)}</td><td class="small wrap">${esc(b.subject)}</td></tr>`).join("")}</table></div>
+  <div><h3>Tech debt (latest)</h3><table><tr><th>When</th><th>Where</th><th>Item</th></tr>${s.techDebt.map(t => `<tr><td class="small">${when(t.timestamp)}</td><td class="mono small">${esc(t.source)}<div><span class="pill">${esc(t.status)}</span></div></td><td class="small wrap">${esc(t.summary)}</td></tr>`).join("")}</table>
+    <h3>Failure log (latest)</h3><table><tr><th>When</th><th>Source</th><th>Detail</th></tr>${s.failures.map(f => `<tr><td class="small">${when(f.timestamp)}</td><td class="small">${esc(f.source)}</td><td class="small wrap">${esc(f.summary)}</td></tr>`).join("")}</table></div></div>`;
+};
+
+R.diagrams = async () => {
+  const d = await api("/api/diagrams");
+  if (d.error) return errBox(d);
+  const g = d.graph || {};
+  const byType = Object.entries(g.nodesByType || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  return `<h2>System diagrams</h2><p class="sub">Mermaid diagrams from docs/architecture.md and SystemFlowchart output, plus the knowledge graph's shape. (Diagrams render via the mermaid CDN; source is shown if offline.)</p>
+  <h3>Knowledge graph — ${(g.nodeCount ?? 0).toLocaleString()} nodes · ${(g.edgeCount ?? 0).toLocaleString()} edges · ingested ${ago(g.lastIngested)}</h3>
+  ${barChart("Graph nodes by type", byType.map(([k, v]) => ({ label: k, short: k.slice(0, 8), v })), "var(--blue)", (v) => Number(v).toLocaleString())}
+  ${d.diagrams.map((x, i) => `<h3>${esc(x.title)} <span class="muted small" style="text-transform:none">— ${fileLink(x.source)}</span></h3><div class="mermaid-wrap"><pre class="mermaid" id="mm${i}">${esc(x.mermaid)}</pre></div>`).join("")}`;
+};
+async function renderMermaid() {
+  if (!document.querySelector(".mermaid")) return;
+  try {
+    const m = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+    m.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict", htmlLabels: false, flowchart: { htmlLabels: false, useMaxWidth: false }, fontFamily: "ui-sans-serif, -apple-system, sans-serif" });
+    for (const [i, el] of [...document.querySelectorAll("pre.mermaid")].entries()) {
+      const src = el.textContent;
+      try {
+        const { svg } = await m.render("kdash-mmd-" + i + "-" + Date.now(), src);
+        const box = document.createElement("div"); box.innerHTML = svg; el.replaceWith(box);
+      } catch (err) {
+        el.insertAdjacentHTML("beforebegin", `<div class="err small">Mermaid could not render this diagram (${esc(err.message || err)}) — source below.</div>`);
+        document.querySelectorAll("[id^=dkdash-mmd-" + i + "]").forEach(n => n.remove()); // mermaid's leftover error node
+      }
+    }
+  } catch (e) { toast("Mermaid unavailable (offline?) — showing diagram source", true); }
+}
+
+// ── modal + file viewer/editor + session viewer ──
+function modal(html) {
+  const m = document.createElement("div"); m.className = "modal";
+  m.innerHTML = `<div>${html}<p style="text-align:right"><button data-close>close</button></p></div>`;
+  m.addEventListener("click", (e) => { if (e.target === m || e.target.matches("[data-close]")) m.remove(); });
+  document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { m.remove(); document.removeEventListener("keydown", k); } });
+  document.body.appendChild(m); return m;
+}
+async function openFile(path) {
+  const f = await api("/api/file?path=" + encodeURIComponent(path));
+  if (f.error) return toast(`Can't open ${esc(path)}: ${esc(f.error)}`, true);
+  const m = modal(`<h2 class="mono" style="font-size:15px">${esc(path)}</h2><p class="sub">${f.writable ? "Editable — saved straight to the live file (atomic write; refuses if the file changed on disk)." : "Read-only in the dashboard."}</p>
+    <textarea id="ed" ${f.writable ? "" : "readonly"} spellcheck="false">${esc(f.content)}</textarea>
+    ${f.writable ? '<p><button class="primary" id="save">Save</button> <span class="muted small" id="saveState"></span></p>' : ""}`);
+  let mtime = f.mtimeMs;
+  m.querySelector("#save")?.addEventListener("click", async () => {
+    const r = await api("/api/file", { method: "PUT", body: JSON.stringify({ path, content: m.querySelector("#ed").value, mtimeMs: mtime }) });
+    if (r.ok) { mtime = r.mtimeMs; m.querySelector("#saveState").textContent = "saved " + new Date().toLocaleTimeString(); toast(`Saved ${esc(path)}`); }
+    else toast(`Save failed: ${esc(r.error)}`, true);
+  });
+}
+async function openSession(id) {
+  const s = await api("/api/sessions/" + id);
+  if (s.error) return toast(esc(s.error), true);
+  modal(`<h2>Session <span class="mono" style="font-size:13px">${esc(id)}</span></h2><p class="sub mono small">${esc(s.path)} · ${s.turns.length} text turns · <button data-copy="claude --resume ${esc(id)}">copy resume command</button></p>
+    ${s.turns.map(t => `<div class="turn ${t.role}"><div class="who">${t.role} · ${esc(t.ts)}</div>${esc(t.text)}</div>`).join("")}`);
+}
+document.addEventListener("click", (e) => {
+  const o = e.target.closest("[data-open]"); if (o) { e.preventDefault(); openFile(o.dataset.open); return; }
+  const s = e.target.closest("[data-session]"); if (s) { e.preventDefault(); openSession(s.dataset.session); return; }
+  const c = e.target.closest("[data-copy]"); if (c) { navigator.clipboard?.writeText(c.dataset.copy); toast("Copied: <code>" + esc(c.dataset.copy) + "</code>"); }
+});
+
+// ── router ──
+const nav = $("#nav");
+nav.insertAdjacentHTML("beforeend", SECTIONS.map(([k, l]) => `<a href="#${k}" data-k="${k}">${l}</a>`).join("") + '<p class="muted small" style="margin:16px">auto-refresh 60s · <a href="#" id="refresh">refresh now</a></p>');
+async function route() {
+  const key = (location.hash.slice(1).split("?")[0]) || "overview";
+  nav.querySelectorAll("a[data-k]").forEach(a => a.classList.toggle("active", a.dataset.k === key));
+  const main = $("#main");
+  try {
+    main.innerHTML = await (R[key] || R.overview)();
+  } catch (e) { main.innerHTML = `<div class="card err">Render error: ${esc(e.message)}</div>`; }
+  if (key === "jobs") wireJobs(); else wireFilter();
+  if (key === "diagrams") renderMermaid();
+}
+window.addEventListener("hashchange", route);
+$("#refresh").addEventListener("click", (e) => { e.preventDefault(); route(); });
+setInterval(() => { if (!document.querySelector(".modal") && !["diagrams"].includes(location.hash.slice(1))) {
+  const y = scrollY; const q = $("#q")?.value; route().then(() => { if (q && $("#q")) { $("#q").value = q; $("#q").dispatchEvent(new Event("input")); } scrollTo(0, y); }); } }, 60000);
+route();
+</script>
+</body>
+</html>
