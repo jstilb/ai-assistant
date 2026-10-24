@@ -263,6 +263,18 @@ function truncateSnippet(text: string, max = 240): string {
 }
 
 /**
+ * LucidTasks' per-task history table. Renamed activity_log -> task_events by
+ * ontology ruling D10; TaskDB migrates on open, but this readonly connection
+ * can see a database no TaskDB has opened since, so fall back to the old name.
+ */
+function taskEventsTable(db: Database): "task_events" | "activity_log" {
+  const row = db
+    .query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_events'`)
+    .get();
+  return row ? "task_events" : "activity_log";
+}
+
+/**
  * Look up a task's status/disposition plus executor-delivered and
  * Jm-approved comment evidence, using an already-open readonly connection.
  * Returns null if the task doesn't exist in this db.
@@ -275,7 +287,7 @@ function queryTaskEvidence(db: Database, taskId: string): LinkedTaskEvidence | n
 
   const comments = db
     .query(
-      `SELECT actor, changes FROM activity_log WHERE task_id = ? AND action = 'comment' ORDER BY created_at ASC`
+      `SELECT actor, changes FROM ${taskEventsTable(db)} WHERE task_id = ? AND action = 'comment' ORDER BY created_at ASC`
     )
     .all(taskId) as { actor: string; changes: string }[];
 

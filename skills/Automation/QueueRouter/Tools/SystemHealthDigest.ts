@@ -40,51 +40,103 @@ const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 const RESPOOL_CAP = 100;
 
 /**
+ * Per-bullet character cap. A single spool message longer than this is
+ * clipped (with "…") rather than left whole: the 4096 truncation below can
+ * only drop a line wholesale, so one long message (an 800-char
+ * eventscout-weekend-digest entry on 2026-10-16, a 5825-char
+ * eval-health-weekly-digest entry on 2026-07-15) used to be dropped entirely.
+ * Clipped, it still renders and Jm still sees that it fired.
+ */
+const MAX_BULLET_CHARS = 500;
+
+/** Max characters of omitted-key names listed in the truncation tail. */
+const MAX_TAIL_KEYS_CHARS = 300;
+
+/**
+ * One composed digest line plus what it accounts for. `entries` is the
+ * number of consumed spool entries the line renders (0 for headers, cron
+ * lines and backlog lines, which come from other sources); `key` is the
+ * spool key, for naming the line in the truncation tail if it gets dropped.
+ */
+interface DigestLine {
+  text: string;
+  entries: number;
+  key?: string;
+}
+
+/** Result of composing a digest: the text plus its spool-entry accounting. */
+export interface ComposedDigest {
+  text: string;
+  /** Consumed spool entries represented by a line that made it into `text`. */
+  renderedEntries: number;
+  /** Consumed spool entries whose line was dropped by the 4096 truncation. */
+  omittedEntries: number;
+  /** Spool keys of the dropped lines (also named in the truncation tail). */
+  omittedKeys: string[];
+}
+
+function clipMessage(message: string): string {
+  return message.length <= MAX_BULLET_CHARS ? message : `${message.slice(0, MAX_BULLET_CHARS - 1)}…`;
+}
+
+function buildTruncationTail(omittedEntries: number, omittedKeys: string[]): string {
+  const head = `…truncated, ${omittedEntries} entries omitted`;
+  if (omittedKeys.length === 0) return head;
+  const listed: string[] = [];
+  let used = 0;
+  for (const key of omittedKeys) {
+    if (used + key.length + 2 > MAX_TAIL_KEYS_CHARS) break;
+    listed.push(key);
+    used += key.length + 2;
+  }
+  const rest = omittedKeys.length - listed.length;
+  return `${head}: ${listed.join(", ")}${rest > 0 ? ` +${rest} more` : ""}`;
+}
+
+/**
  * Hard-truncate a composed digest to TELEGRAM_MAX_MESSAGE_LENGTH, appending
- * an explicit "…truncated, N entries omitted" tail so a truncated send is
- * visibly incomplete rather than silently clipped by the API itself (or
- * rejected outright with an HTTP 400, which is what happened before this —
- * see RESPOOL_CAP's doc comment).
+ * an explicit "…truncated, N entries omitted: key, key" tail so a truncated
+ * send is visibly incomplete AND says what it left out, rather than being
+ * silently clipped by the API (or rejected with an HTTP 400 — see
+ * RESPOOL_CAP's doc comment).
  *
- * Best-fit sequential scan, not a prefix cutoff: a single oversized line
- * (observed live 2026-07-15 — one `eval-health-weekly-digest` spool entry
- * alone ran 5825 chars, bigger than Telegram's ENTIRE cap) does not stop the
- * scan. It's skipped and counted as omitted, and every later line that still
- * fits in the remaining budget is kept in its original order. A plain
- * prefix-cutoff would let that one aberrant line blank out the whole rest of
- * an otherwise-normal-sized digest, which defeats the point of truncating
- * (staying informative) rather than just satisfying the char limit.
+ * N counts consumed spool entries (a dropped "×8" line is 8 entries), so the
+ * digest upholds "every consumed entry is rendered or counted".
  *
- * The tail's own length depends on the final omitted count, so the budget
- * reserves worst-case headroom (6 digits — far beyond any realistic entry
- * count, especially now that RESPOOL_CAP bounds the spool itself) up front
- * rather than measuring the tail after the fact. That keeps this a single
- * linear pass while still guaranteeing the final message never exceeds the
+ * Best-fit sequential scan, not a prefix cutoff: a line that doesn't fit is
+ * skipped and every later line that still fits is kept in original order.
+ * The tail's length is bounded (MAX_TAIL_KEYS_CHARS + a short head), so the
+ * budget reserves that worst case up front and the result never exceeds the
  * cap.
  */
-function truncateToTelegramLimit(lines: string[]): string {
-  const buildTail = (n: number) => `…truncated, ${n} entries omitted`;
-  const maxTailLength = buildTail(999_999).length;
+function truncateToTelegramLimit(lines: DigestLine[]): ComposedDigest {
+  const maxTailLength = buildTruncationTail(999_999, []).length + 2 + MAX_TAIL_KEYS_CHARS + " +999 more".length;
   const budget = TELEGRAM_MAX_MESSAGE_LENGTH - maxTailLength - 1; // -1: the tail's own leading newline
 
   const kept: string[] = [];
   let usedLength = 0;
-  let omittedBullets = 0;
+  let renderedEntries = 0;
+  let omittedEntries = 0;
+  const omittedKeys: string[] = [];
   for (const line of lines) {
-    const addLength = line.length + (kept.length > 0 ? 1 : 0); // +1 for the joining newline
+    const addLength = line.text.length + (kept.length > 0 ? 1 : 0); // +1 for the joining newline
     if (usedLength + addLength <= budget) {
-      kept.push(line);
+      kept.push(line.text);
       usedLength += addLength;
-    } else if (line.trim().startsWith("•")) {
-      // Only bullet lines count as "entries" — a dropped section header
-      // (its bullets, if any, are counted individually as they're visited)
-      // isn't itself a separate omitted entry.
-      omittedBullets++;
+      renderedEntries += line.entries;
+    } else if (line.entries > 0) {
+      omittedEntries += line.entries;
+      if (line.key !== undefined) omittedKeys.push(line.key);
     }
   }
 
-  const tail = buildTail(omittedBullets);
-  return kept.length > 0 ? `${kept.join("\n")}\n${tail}` : tail;
+  const tail = buildTruncationTail(omittedEntries, omittedKeys);
+  return {
+    text: kept.length > 0 ? `${kept.join("\n")}\n${tail}` : tail,
+    renderedEntries,
+    omittedEntries,
+    omittedKeys,
+  };
 }
 
 /**
@@ -186,18 +238,34 @@ export function buildDigest(
   backlog: BacklogMetrics | null = null,
   backlogWarning: string | null = null,
 ): string | null {
+  return composeDigest(entries, cronFailures, backlog, backlogWarning)?.text ?? null;
+}
+
+/**
+ * buildDigest plus its spool-entry accounting. Invariant (guarded by tests):
+ * renderedEntries + omittedEntries === entries.length — every consumed spool
+ * entry is either rendered or counted (and named) in the truncation tail.
+ */
+export function composeDigest(
+  entries: SpoolEntry[],
+  cronFailures: FailureRecord[],
+  backlog: BacklogMetrics | null = null,
+  backlogWarning: string | null = null,
+): ComposedDigest | null {
   const digestByKey = new Map<string, { latest: string; count: number }>();
   const logByKey = new Map<string, number>();
   // [Slice B] Partitioned out of digestByKey's loop below — see
   // CRON_HEALTH_SLEEP_DIGEST_KEY's doc comment. Latest message wins on a
   // repeat, matching digestByKey's own dedup-by-key convention.
   let sleepDigestMessage: string | null = null;
+  let sleepDigestCount = 0;
 
   for (const e of entries) {
     if (e.tier === "log") {
       logByKey.set(e.key, (logByKey.get(e.key) ?? 0) + 1);
     } else if (e.key === CRON_HEALTH_SLEEP_DIGEST_KEY) {
       sleepDigestMessage = e.message;
+      sleepDigestCount++;
     } else {
       const prev = digestByKey.get(e.key);
       digestByKey.set(e.key, { latest: e.message, count: (prev?.count ?? 0) + 1 });
@@ -229,46 +297,57 @@ export function buildDigest(
     return null;
   }
 
-  const lines: string[] = [`🩺 System health — ${new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" })}`];
+  const lines: DigestLine[] = [];
+  const add = (text: string, entries = 0, key?: string) => lines.push({ text, entries, key });
+
+  add(`🩺 System health — ${new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" })}`);
 
   if (digestByKey.size > 0) {
-    lines.push("", "⚠️ Alerts:");
-    for (const [, { latest, count }] of digestByKey) {
-      lines.push(`• ${latest}${count > 1 ? ` ×${count}` : ""}`);
+    add("");
+    add("⚠️ Alerts:");
+    for (const [key, { latest, count }] of digestByKey) {
+      add(`• ${clipMessage(latest)}${count > 1 ? ` ×${count}` : ""}`, count, key);
     }
   }
 
   if (logByKey.size > 0 || sleepDigestMessage !== null) {
-    lines.push("", "ℹ️ Counts:");
+    add("");
+    add("ℹ️ Counts:");
     for (const [key, count] of logByKey) {
-      lines.push(`• ${key} ×${count}`);
+      add(`• ${key} ×${count}`, count, key);
     }
     if (sleepDigestMessage !== null) {
       // [Slice B] Message text as-is (not tallied/reformatted like the
       // key×count lines above) — cron-health-monitor already composed the
       // full "🌙 Overnight: ..." summary.
-      lines.push(`• ${sleepDigestMessage}`);
+      add(`• ${clipMessage(sleepDigestMessage)}`, sleepDigestCount, CRON_HEALTH_SLEEP_DIGEST_KEY);
     }
   }
 
   if (cronLines.length > 0) {
-    lines.push("", "🕐 Cron failures (24h):");
+    add("");
+    add("🕐 Cron failures (24h):");
     for (const { label, count } of cronLines) {
-      lines.push(`• ${label}${count > 1 ? ` ×${count}` : ""}`);
+      add(`• ${label}${count > 1 ? ` ×${count}` : ""}`);
     }
   }
 
   if (backlogHasContent) {
-    lines.push("", "📋 Backlog:");
-    lines.push(`• Needs grilling: ${backlog!.needsGrillingCount} (oldest ${backlog!.needsGrillingOldestAgeDays}d)`);
-    lines.push(`• Approvals pending: ${backlog!.approvalsPendingCount}`);
-    lines.push(`• Lane-A waiting: ${backlog!.laneAWaitingCount}`);
+    add("");
+    add("📋 Backlog:");
+    add(`• Needs grilling: ${backlog!.needsGrillingCount} (oldest ${backlog!.needsGrillingOldestAgeDays}d)`);
+    add(`• Approvals pending: ${backlog!.approvalsPendingCount}`);
+    add(`• Lane-A waiting: ${backlog!.laneAWaitingCount}`);
   } else if (backlogWarning) {
-    lines.push("", `⚠️ Backlog metrics unavailable: ${backlogWarning}`);
+    add("");
+    add(`⚠️ Backlog metrics unavailable: ${backlogWarning}`);
   }
 
-  const full = lines.join("\n");
-  return full.length <= TELEGRAM_MAX_MESSAGE_LENGTH ? full : truncateToTelegramLimit(lines);
+  const full = lines.map((l) => l.text).join("\n");
+  if (full.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
+    return { text: full, renderedEntries: entries.length, omittedEntries: 0, omittedKeys: [] };
+  }
+  return truncateToTelegramLimit(lines);
 }
 
 export interface SystemHealthDigestDeps {
@@ -340,16 +419,19 @@ export async function runSystemHealthDigest(deps: SystemHealthDigestDeps = {}): 
   // on send failure everything (up to RESPOOL_CAP) is re-spooled for
   // tomorrow's digest.
   const entries = gate.consumeSpool();
-  const body = buildDigest(entries, cronFailures(), backlog, backlogWarning);
+  const composed = composeDigest(entries, cronFailures(), backlog, backlogWarning);
 
-  if (!body) {
+  if (!composed) {
     console.log("[SystemHealthDigest] nothing to report");
     return;
   }
 
   try {
-    await send(body);
-    console.log(`[SystemHealthDigest] sent (${entries.length} spool entries)`);
+    await send(composed.text);
+    const omittedNote = composed.omittedEntries > 0
+      ? `, ${composed.omittedEntries} omitted by the ${TELEGRAM_MAX_MESSAGE_LENGTH}-char cap: ${composed.omittedKeys.join(", ")}`
+      : "";
+    console.log(`[SystemHealthDigest] sent (${entries.length} spool entries: ${composed.renderedEntries} rendered${omittedNote})`);
   } catch (err) {
     // Cap the re-spool (S6 — see RESPOOL_CAP's doc comment): drop-oldest,
     // keep the most recent RESPOOL_CAP entries, and always log the drop

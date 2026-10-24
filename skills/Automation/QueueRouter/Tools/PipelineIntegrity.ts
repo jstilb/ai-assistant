@@ -15,6 +15,11 @@
  *   3. Stuck-in-autonomous-stage — items in autonomous stages whose
  *      updated_at exceeds a per-stage threshold. Explicitly EXCLUDES
  *      needs-grilling (human-paced backlog) and all terminal stages.
+ *      Items whose next step was handed to Jm via an open escalation task
+ *      (`manual-<itemId>`, EscalationHelper's key — in any project, since Jm
+ *      may move it to Icebox) are human-paced too: they are reported as
+ *      AWAITING_JM(n) — still visible, but they don't fail the check (a
+ *      months-old open review task would otherwise page every day).
  *
  *   4. Guard bypass ("wrote around the guard", slice A2) — items whose
  *      current pipeline_items.stage differs from their LATEST pipeline_events
@@ -51,6 +56,7 @@ import { getPipelineRepository, resetPipelineRepository } from "./PipelineReposi
 import { defaultPipelineDbPath, getPipelineDb } from "./PipelineDB.ts";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { getTaskClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 
 // ============================================================================
 // Stuck-stage thresholds (milliseconds)
@@ -129,6 +135,8 @@ export interface IntegrityCheckReport {
   checkedAt: string;
   orphanSpecs: OrphanSpec[];
   stuckItems: StuckItem[];
+  /** Past-threshold items parked on an open escalation task — informational, not a failure. */
+  awaitingJmItems: StuckItem[];
   storeErrors: string[];
   storeWarnings: string[];
   guardBypassItems: GuardBypassItem[];
@@ -199,11 +207,15 @@ function checkStoreIntegrity(dbPath: string): { errors: string[]; warnings: stri
 // Check 3: Stuck-in-autonomous-stage
 // ============================================================================
 
-function checkStuckItems(dbPath: string): StuckItem[] {
+async function checkStuckItems(
+  dbPath: string,
+  isHumanGated: HumanGatePredicate,
+): Promise<{ stuckItems: StuckItem[]; awaitingJmItems: StuckItem[] }> {
   const repo = getPipelineRepository(dbPath);
   const now = Date.now();
 
   const stuckItems: StuckItem[] = [];
+  const awaitingJmItems: StuckItem[] = [];
 
   for (const stage of AUTONOMOUS_STAGES) {
     const threshold = STUCK_THRESHOLDS_MS[stage];
@@ -214,7 +226,8 @@ function checkStuckItems(dbPath: string): StuckItem[] {
       const ageMs = now - new Date(updatedAt).getTime();
 
       if (ageMs > threshold) {
-        stuckItems.push({
+        const bucket = (await isHumanGated(item.id)) ? awaitingJmItems : stuckItems;
+        bucket.push({
           id: item.id,
           stage: item.stage,
           title: item.title,
@@ -226,7 +239,35 @@ function checkStuckItems(dbPath: string): StuckItem[] {
     }
   }
 
-  return stuckItems;
+  return { stuckItems, awaitingJmItems };
+}
+
+/** True when a pipeline item's next step is parked on Jm. */
+export type HumanGatePredicate = (itemId: string) => Promise<boolean>;
+
+/** Task statuses that mean the escalation is resolved (the gate no longer holds). */
+const RESOLVED_ESCALATION_STATUSES = new Set(["done", "cancelled"]);
+
+/**
+ * Human-gate predicate backed by LucidTasks: an item is parked on Jm while its
+ * escalation task `manual-<itemId>` (EscalationHelper's deterministic key)
+ * exists and is not done/cancelled. Requires a registered TaskClient (the CLI
+ * entry wires it). Any read failure answers false — fail toward alerting.
+ */
+export function lucidTasksHumanGate(): HumanGatePredicate {
+  return async (itemId) => {
+    const client = getTaskClient();
+    if (!client) return false;
+    try {
+      const task = await client.getTaskById(`manual-${itemId}`);
+      return task !== null && !RESOLVED_ESCALATION_STATUSES.has(task.status);
+    } catch (err) {
+      console.error(
+        `[PipelineIntegrity] could not read escalation task manual-${itemId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
+  };
 }
 
 // ============================================================================
@@ -301,6 +342,12 @@ export interface CheckOptions {
   dbPath?: string;
   /** Override specs directory. */
   specsDir?: string;
+  /**
+   * Answers whether an item is parked on an open escalation (see lucidTasksHumanGate).
+   * Past-threshold items it accepts land in awaitingJmItems instead of stuckItems.
+   * Default: nothing is human-gated.
+   */
+  isHumanGated?: HumanGatePredicate;
 }
 
 export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckReport> {
@@ -324,7 +371,7 @@ export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckR
   const { errors: storeErrors, warnings: storeWarnings } = checkStoreIntegrity(dbPath);
 
   // Check 3: Stuck items
-  const stuckItems = checkStuckItems(dbPath);
+  const { stuckItems, awaitingJmItems } = await checkStuckItems(dbPath, opts.isHumanGated ?? (async () => false));
 
   // Check 4: Guard bypass ("wrote around the guard", slice A2)
   const guardBypassItems = checkGuardBypass(dbPath);
@@ -338,12 +385,14 @@ export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckR
     `STUCK(${stuckItems.length})`,
     `STORE_ERRORS(${storeErrors.length})`,
     `GUARD_BYPASS(${guardBypassItems.length})`,
+    `AWAITING_JM(${awaitingJmItems.length})`,
   ].join(" ");
 
   const report: IntegrityCheckReport = {
     checkedAt,
     orphanSpecs,
     stuckItems,
+    awaitingJmItems,
     storeErrors,
     storeWarnings,
     guardBypassItems,
@@ -421,7 +470,8 @@ Exit codes:
   1  One or more problems found (orphans / stuck / store errors)
 
 Machine-greppable summary line:
-  PIPELINE_ORPHANS(n) STUCK(n) STORE_ERRORS(n)
+  PIPELINE_ORPHANS(n) STUCK(n) STORE_ERRORS(n) GUARD_BYPASS(n) AWAITING_JM(n)
+  (AWAITING_JM is informational — it never makes the check fail)
 `);
     process.exit(0);
   }
@@ -437,17 +487,34 @@ Machine-greppable summary line:
     process.env.KAYA_HOME = values["kaya-home"];
   }
 
+  // Wire the QueueRouter <-> LucidTasks seam so stuck items parked on an open
+  // escalation task can be told apart from genuinely stuck ones. Skipped under
+  // --kaya-home (test isolation must not read the live task db).
+  let isHumanGated: HumanGatePredicate | undefined;
+  if (!values["kaya-home"]) {
+    await import("../../../../bin/wire-queue-task-integration.ts");
+    isHumanGated = lucidTasksHumanGate();
+  }
+
   const report = await runCheck({
     noAlert: values["no-alert"] ?? false,
     kayaHome: values["kaya-home"],
     dbPath: values["db-path"],
     specsDir: values["specs-dir"],
+    isHumanGated,
   });
 
   if (values.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(report.summary);
+    if (report.awaitingJmItems.length > 0) {
+      console.log(`\nAwaiting Jm — parked on an open escalation task (${report.awaitingJmItems.length}):`);
+      for (const s of report.awaitingJmItems) {
+        const ageH = Math.floor(s.ageMs / (60 * 60 * 1000));
+        console.log(`  ${s.id}  stage=${s.stage}  age=${ageH}h  "${s.title.slice(0, 50)}"  (task manual-${s.id})`);
+      }
+    }
     if (!report.ok) {
       if (report.orphanSpecs.length > 0) {
         console.log(`\nOrphan specs (${report.orphanSpecs.length}):`);

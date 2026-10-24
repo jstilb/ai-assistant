@@ -12,7 +12,7 @@
  * false-positive was entirely in the old regex gate, not in the spec content.
  *
  * Live eval (running the actual LLM against those full spec fixtures) is in:
- *   skills/Intelligence/Evals/UseCases/SpecSheet/spec-quality-judge.yaml
+ *   skills/Development/Evals/UseCases/SpecSheet/spec-quality-judge.yaml
  * and requires an authorized run context.
  */
 
@@ -286,4 +286,4 @@ describe("judgeSpecQuality", () => {
 // NOTE: validateISCQuality and validateSliceShape were deleted in Slice 2a
 // (feat/dedeterminize-queue-specsheet). Their test coverage has been replaced
 // by the judgeSpecQuality tests above and the live eval at:
-//   skills/Intelligence/Evals/UseCases/SpecSheet/spec-quality-judge.yaml
+//   skills/Development/Evals/UseCases/SpecSheet/spec-quality-judge.yaml

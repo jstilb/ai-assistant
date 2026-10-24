@@ -44,9 +44,9 @@ _Avoid_: retries, attempts.
 A domain `CONTEXT.md` on its first grill-write — `## Language` terms only, no forced `## Relationships`. Provisional because every later grill *challenges against* whatever is written, so a thin-but-correct seed beats an opinionated-but-wrong one.
 _Avoid_: draft, stub.
 
-**Disposition**:
-The visible terminal outcome every triaged task must reach: `clear` → spec pipeline, ambiguous → **needs-grilling**, confident human-only → **Skip Digest**. "Zero silent discards" means every task has exactly one recorded disposition, auditable from the run log. (Resolved in the 2026-06-10 grill of mq4kdqs0; pre-dating behavior — `not-executable` → invisible `notExecutable` tag — is the banned **Silent Discard**.)
-_Avoid_: outcome, result, silent skip.
+**Triage Verdict**:
+The visible terminal outcome every triaged task must reach (`TriageStamp.verdict`, stored in the LucidTask `kaya_triage` column): `clear` → spec pipeline, ambiguous → **needs-grilling**, confident human-only → **Skip Digest**. "Zero silent discards" means every task has exactly one recorded triage verdict, auditable from the run log. (Resolved in the 2026-06-10 grill of mq4kdqs0; pre-dating behavior — `not-executable` → invisible `notExecutable` tag — is the banned **Silent Discard**.)
+_Avoid_: disposition (reserved for the LucidTask routing column — see [LucidTasks](../../Productivity/LucidTasks/CONTEXT.md)), outcome, result, silent skip.
 
 **Skip Digest**:
 The per-run Telegram message listing the triage run's confident human-only skips — one line each with the classifier's reasoning, plus **Promote**/**Dismiss** inline buttons (mirrors the `aq:*` approvals button pattern). **Promote** parks the task as **needs-grilling**; **Dismiss** records a confirmed discard in the ledger and never deletes or cancels the LucidTask.
@@ -67,7 +67,7 @@ _Avoid_: context (unqualified), prompt context.
 - The research phase emits a **Research Verdict**; only `implement` reaches spec generation.
 - Spec generation injects the domain **CONTEXT.md** vocabulary into its prompt, then enforces the **Quality Gate** before transferring the item to `awaiting-approval` under a **Revision Budget**.
 - The **Autonomous Lens** enriches the research phase in parallel; it never replaces the **Interactive Grill** (no human, no docs).
-- Triage assigns every task a **Disposition**; the **Softened Tiebreak** routes ambiguity to **needs-grilling**, and confident human-only skips land in the **Skip Digest** (Promote → needs-grilling, Dismiss → confirmed discard).
+- Triage assigns every task a **Triage Verdict**; the **Softened Tiebreak** routes ambiguity to **needs-grilling**, and confident human-only skips land in the **Skip Digest** (Promote → needs-grilling, Dismiss → confirmed discard).
 - The classifier reads the four **Context Digests**; the vault folder map digest is produced by InformationManager's refresh machinery (see [InformationManager](../../Productivity/InformationManager/CONTEXT.md)).
 
 ## Example dialogue
@@ -81,5 +81,5 @@ _Avoid_: context (unqualified), prompt context.
 
 - "grill" / "GrillMe" meant both the human interview and the headless lens. **Resolved:** the human GrillWithDocs interview is the **Interactive Grill**; the headless directive generator is the **Autonomous Lens** (`GrillMeLens`). Only the Interactive Grill writes docs.
 - "context" meant both the grill's per-item output and the durable domain glossary. **Resolved:** per-item output is **Item Context** (`notes`/`researchGuidance`/`scopeHints`); the durable glossary is the domain **CONTEXT.md**; the classifier's injected reality summaries are **Context Digests**.
-- "default more tasks to Kaya" (item mq4kdqs0) read as a threshold change. **Resolved in the 2026-06-10 grill:** it means zero **Silent Discards** — every triaged task gets a visible **Disposition**; the `clear` bar itself did not move.
-- "skip" meant both the research verdict and the triage discard. **Resolved:** the research-phase decision stays **Research Verdict** `skip`; the triage outcome for human-only tasks is a **Disposition** that lands in the **Skip Digest** — never an invisible tag.
+- "default more tasks to Kaya" (item mq4kdqs0) read as a threshold change. **Resolved in the 2026-06-10 grill:** it means zero **Silent Discards** — every triaged task gets a visible **Triage Verdict**; the `clear` bar itself did not move.
+- "skip" meant both the research verdict and the triage discard. **Resolved:** the research-phase decision stays **Research Verdict** `skip`; the triage outcome for human-only tasks is a **Triage Verdict** that lands in the **Skip Digest** — never an invisible tag.

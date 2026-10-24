@@ -263,7 +263,7 @@ function getComplexity(_item: QueueItem): Complexity {
  * pass:    true  → spec is substantive and ready for approvals
  *          false → spec needs improvement (see reasons)
  * reasons: human-readable list of specific issues found (empty on pass)
- * verdict: raw disposition string from the judge ("PASS" or "NEEDS_REVIEW" or
+ * verdict: raw verdict string from the judge ("PASS" or "NEEDS_REVIEW" or
  *          "FAIL") — preserved for logging/debugging
  */
 export interface SpecQualityJudgment {
@@ -668,10 +668,10 @@ const UISPEC_DIR = join(KAYA_HOME, "skills/Development/UISpec");
 
 /** Context bundle for the UXDesigner generation step (~35KB capped). */
 export const UX_DESIGNER_BUNDLE: BundleFile[] = [
-  { path: join(KAYA_HOME, "skills/Agents/UXDesignerContext.md"), cap: 10_000 },
+  { path: join(KAYA_HOME, "skills/Agents/UXDesignerBrief.md"), cap: 10_000 },
   { path: UXUI_FORMAT_DOC, cap: 10_000 },
   { path: join(UXSPEC_DIR, "SKILL.md"), cap: 10_000 },
-  // UXDesignerContext.md references this workflow doc; Templates/ is the
+  // UXDesignerBrief.md references this workflow doc; Templates/ is the
   // fallback in case the file moves back (the context doc's path history
   // shows both locations).
   {
@@ -688,7 +688,7 @@ export const UX_DESIGNER_BUNDLE: BundleFile[] = [
 
 /** Context bundle for the UIDesigner realization step (~44KB capped). */
 export const UI_DESIGNER_BUNDLE: BundleFile[] = [
-  { path: join(KAYA_HOME, "skills/Agents/UIDesignerContext.md"), cap: 6_000 },
+  { path: join(KAYA_HOME, "skills/Agents/UIDesignerBrief.md"), cap: 6_000 },
   { path: UXUI_FORMAT_DOC, cap: 4_500 },
   { path: join(UISPEC_DIR, "SKILL.md"), cap: 5_000 },
   { path: join(UISPEC_DIR, "Workflows/GenerateUISpec.md"), cap: 7_000 },
@@ -701,7 +701,7 @@ export const UI_DESIGNER_BUNDLE: BundleFile[] = [
 
 /** Context bundle for the Designer review pass (~6.5KB capped). */
 export const DESIGNER_BUNDLE: BundleFile[] = [
-  { path: join(KAYA_HOME, "skills/Agents/DesignerContext.md"), cap: 4_000 },
+  { path: join(KAYA_HOME, "skills/Agents/DesignerBrief.md"), cap: 4_000 },
   { path: UXUI_FORMAT_DOC, cap: 4_500 },
 ];
 
@@ -710,7 +710,7 @@ export const DESIGNER_BUNDLE: BundleFile[] = [
  *
  * Inlines the agent's context documents directly into the prompt (SpecSheet
  * ADR 0007) — the inference() transport has no tools, so the agent cannot
- * self-read its *Context.md chain. The docs themselves are unchanged and
+ * self-read its *Brief.md chain. The docs themselves are unchanged and
  * interactive workflows still read them from disk (ADR 0004).
  *
  * Per UXUISpecFormat.md:
@@ -1918,12 +1918,19 @@ export async function closeEscalationIfOpen(itemId: string, note: string): Promi
   try {
     // cross-skill-allowed: closes the manual-<itemId> Needs-Jm escalation task directly via TaskDB, sharing lib/core/EscalationHelper's escalation id scheme by design (see docstring above); seam candidate: TaskClient escalation writes (deferred, see D3 log)
     const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
+    // cross-skill-allowed: outcome contract for the escalation close below — the outcome gate refuses an agent close without one; seam candidate: TaskClient
+    const { serializeOutcome, systemOutcome } = await import("../../../Productivity/LucidTasks/Tools/TaskOutcome.ts");
     const db = getTaskDB();
     const task = db.getTask(`manual-${itemId}`);
     if (task && task.status !== "done" && task.status !== "cancelled") {
+      const outcome = serializeOutcome(systemOutcome({
+        by: "SpecPipelineRunner",
+        headline: "Escalation closed: the spec pipeline moved past it",
+        noArtifact: `auto-closed by SpecPipelineRunner for item ${itemId}: ${note}`,
+      }));
       db.updateTask(
         `manual-${itemId}`,
-        { status: "done", description: `${task.description}\n\n[auto-closed] ${note}` },
+        { status: "done", description: `${task.description}\n\n[auto-closed] ${note}`, outcome },
         "SpecPipelineRunner"
       );
       return true;

@@ -40,9 +40,11 @@ import {
 import { resetPipelineDb } from "./PipelineDB.ts";
 import {
   runCheck,
+  lucidTasksHumanGate,
   type CheckOptions,
   type IntegrityCheckReport,
 } from "./PipelineIntegrity.ts";
+import { setTaskClient, type TaskClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 
 // ============================================================================
 // Live path guard
@@ -431,6 +433,79 @@ describe("5. Stuck items detection", () => {
     expect(report.stuckItems.some(s => s.id === itemId)).toBe(false);
 
     resetPipelineDb(dbPath);
+  });
+
+  test("past-threshold item parked on an open escalation → AWAITING_JM, not STUCK, check stays ok", async () => {
+    const { home, dbPath, specsDir, repo } = makeTestHome("stuck5");
+
+    const gatedId = generatePipelineId();
+    repo.upsert(makeItem({ id: gatedId, stage: "approved" }));
+    const oldDate = new Date(Date.now() - 500 * 60 * 60 * 1000).toISOString();
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
+      .run(oldDate, gatedId);
+
+    const report = await runCheck(opts(home, dbPath, specsDir, {
+      isHumanGated: async (id) => id === gatedId,
+    }));
+    expect(report.stuckItems.some(s => s.id === gatedId)).toBe(false);
+    expect(report.awaitingJmItems.some(s => s.id === gatedId && s.stage === "approved")).toBe(true);
+    expect(report.summary).toContain("STUCK(0)");
+    expect(report.summary).toContain("AWAITING_JM(1)");
+    expect(report.ok).toBe(true);
+
+    resetPipelineDb(dbPath);
+  });
+
+  test("human gate only exempts the items it accepts — other stuck items still fail the check", async () => {
+    const { home, dbPath, specsDir, repo } = makeTestHome("stuck6");
+
+    const gatedId = generatePipelineId();
+    const stuckId = generatePipelineId();
+    repo.upsert(makeItem({ id: gatedId, stage: "approved" }));
+    repo.upsert(makeItem({ id: stuckId, stage: "generating-spec" }));
+    const oldDate = new Date(Date.now() - 100 * 60 * 60 * 1000).toISOString();
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ?").run(oldDate);
+
+    const report = await runCheck(opts(home, dbPath, specsDir, {
+      isHumanGated: async (id) => id === gatedId,
+    }));
+    expect(report.stuckItems.map(s => s.id)).toEqual([stuckId]);
+    expect(report.awaitingJmItems.map(s => s.id)).toEqual([gatedId]);
+    expect(report.ok).toBe(false);
+
+    resetPipelineDb(dbPath);
+  });
+});
+
+describe("5b. lucidTasksHumanGate", () => {
+  afterAll(() => setTaskClient(null));
+
+  const clientWith = (tasks: Record<string, string>): TaskClient => ({
+    getTaskById: async (id: string) =>
+      id in tasks ? { id, status: tasks[id], title: id, queueItemId: null } : null,
+  } as unknown as TaskClient);
+
+  test("open manual-<itemId> task (any non-terminal status, any project) → gated", async () => {
+    setTaskClient(clientWith({ "manual-a": "next", "manual-b": "someday", "manual-c": "waiting" }));
+    const gate = lucidTasksHumanGate();
+    expect(await gate("a")).toBe(true);
+    expect(await gate("b")).toBe(true);
+    expect(await gate("c")).toBe(true);
+  });
+
+  test("done / cancelled / missing escalation task → not gated", async () => {
+    setTaskClient(clientWith({ "manual-d": "done", "manual-e": "cancelled" }));
+    const gate = lucidTasksHumanGate();
+    expect(await gate("d")).toBe(false);
+    expect(await gate("e")).toBe(false);
+    expect(await gate("missing")).toBe(false);
+  });
+
+  test("no TaskClient registered or a read error → not gated (fail toward alerting)", async () => {
+    setTaskClient(null);
+    expect(await lucidTasksHumanGate()("a")).toBe(false);
+    setTaskClient({ getTaskById: async () => { throw new Error("db locked"); } } as unknown as TaskClient);
+    expect(await lucidTasksHumanGate()("a")).toBe(false);
   });
 });
 
