@@ -1,5 +1,5 @@
 ---
-name: tdd
+name: TDD
 description: Test-driven development with red-green-refactor loop using vertical slices (tracer bullets). USE WHEN tdd, test driven development, red green refactor, write tests first, vertical slice, tracer bullet, integration tests, behavior tests, public interface tests.
 ---
 
