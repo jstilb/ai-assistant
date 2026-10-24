@@ -13,7 +13,7 @@ The machine-first JSONL store (`MEMORY/QUEUES/tech-debt.jsonl`) holding all Tech
 _Avoid_: tracker file, debt log, TECH_DEBT.md
 
 **Write Path**:
-One of exactly three ways a Tech Debt Item is created: **Self-Report**, **Audit Scan**, or **Manual Capture**.
+One of exactly three ways a Tech Debt Item is created: **Self-Report**, **Audit Scan**, or **Manual Record**.
 
 **Self-Report**:
 An AutonomousWork build agent recording shortcuts it took (workarounds, skipped tests, suppressed errors) via the `debtIncurred` field in its completion results — always optional and non-blocking.
@@ -21,8 +21,8 @@ An AutonomousWork build agent recording shortcuts it took (workarounds, skipped 
 **Audit Scan**:
 The weekly AutoMaintenance LLM scan of the codebase that files new Tech Debt Items; its first run produces the **Baseline Inventory**.
 
-**Manual Capture**:
-Jm filing a Tech Debt Item directly via CLI/chat command.
+**Manual Record**:
+Jm filing a Tech Debt Item directly via CLI/chat command. Called Manual Capture before ontology ruling D10 reserved "Capture" for LifeOS.
 
 **Priority Score**:
 The pure-LLM composite (severity × impact × effort) assigned at intake — no human review; the approvals gate on promoted work is the backstop.
