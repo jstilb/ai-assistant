@@ -1,5 +1,5 @@
 ---
-name: diagnose
+name: Diagnose
 description: Disciplined diagnosis loop for hard bugs and performance regressions. Reproduce → minimise → hypothesise → instrument → fix → regression-test. USE WHEN diagnose, debug this, hard bug, broken, throwing, failing, performance regression, flaky test, build a feedback loop, ranked hypotheses, post-mortem, root cause analysis.
 ---
 
