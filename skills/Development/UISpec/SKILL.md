@@ -70,4 +70,4 @@ Note: UIBuilder does **not** consume this output — it runs its own independent
 - `skills/Agents/SpecSheet/CONTEXT.md` — canonical vocabulary
 
 ### Agent
-Run by the **UIDesigner** agent (`skills/Agents/UIDesignerContext.md`). The **Designer** agent reviews the output as a separate pass on Medium+ effort.
+Run by the **UIDesigner** agent (`skills/Agents/UIDesignerBrief.md`). The **Designer** agent reviews the output as a separate pass on Medium+ effort.
