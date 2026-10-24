@@ -126,7 +126,7 @@ flowchart TB
         PATTERNS["PATTERNS/\n(extracted patterns)"]
     end
 
-    Explicit["ExplicitRatingCapture"] -->|"N - text"| Ratings
+    Explicit["ExplicitRatingRecord"] -->|"N - text"| Ratings
     Implicit["ImplicitSentimentCapture"] -->|"inference"| Sentiment
     WorkLearn["WorkCompletionLearning"] -->|"Opus analysis"| ALGORITHM
 ```
@@ -288,7 +288,7 @@ flowchart LR
 |------|-----------|-----------|
 | AutoWorkCreation | WORK/, STATE/current-work.json | — |
 | ResponseCapture | WORK/items/, STATE/current-work.json | STATE/current-work.json |
-| ExplicitRatingCapture | LEARNING/SIGNALS/ratings.jsonl | — |
+| ExplicitRatingRecord | LEARNING/SIGNALS/ratings.jsonl | — |
 | ImplicitSentimentCapture | LEARNING/SIGNALS/ratings.jsonl | LEARNING/SIGNALS/ratings.jsonl |
 | SecurityValidator | SECURITY/security-events.jsonl | patterns.yaml |
 | WorkCompletionLearning | LEARNING/ALGORITHM/ | transcript |

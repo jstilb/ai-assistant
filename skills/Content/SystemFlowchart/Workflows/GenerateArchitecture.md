@@ -100,9 +100,9 @@ bun ~/.claude/skills/Content/SystemFlowchart/Tools/ArtBridge.ts batch \
   --output ~/.claude/skills/Content/SystemFlowchart/Output/images
 ```
 
-### Step 6: Update Master Architecture Document
+### Step 6: Update the Diagram Index
 
-Create the master document at `~/.claude/USER/PAI_ARCHITECTURE.md`:
+Update `~/.claude/skills/Content/SystemFlowchart/Output/INDEX.md`. This skill does not write a separate master architecture document; the canonical prose architecture doc is `docs/architecture.md`, maintained by hand.
 
 ```markdown
 # Kaya System Architecture
@@ -210,7 +210,7 @@ After generation, verify:
 - [ ] All 6 markdown diagrams exist in `Output/markdown/`
 - [ ] Mermaid syntax is valid (render in Obsidian/VS Code)
 - [ ] Cache state updated with correct file count
-- [ ] Master document at `USER/PAI_ARCHITECTURE.md` is current
+- [ ] `Output/INDEX.md` is current
 - [ ] PNG images generated (if requested)
 
 ---
@@ -245,6 +245,6 @@ bun SkillCategorizer.ts
 - `Tools/CacheManager.ts` - Track staleness
 
 ### Feeds Into
-- `USER/PAI_ARCHITECTURE.md` - Master architecture document
+- `Output/INDEX.md` - Diagram index (canonical prose doc: `docs/architecture.md`)
 - System skill integrity checks
 - Kaya onboarding documentation

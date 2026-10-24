@@ -31,7 +31,7 @@ sequenceDiagram
     rect rgb(6, 78, 59)
     Note right of CC: UserPromptSubmit Event
         CC->>H: AutoWorkCreation.hook
-        CC->>H: ExplicitRatingCapture.hook
+        CC->>H: ExplicitRatingRecord.hook
         CC->>H: FormatEnforcer.hook
         CC->>H: ImplicitSentimentCapture.hook
         CC->>H: QuestionAnswered.hook
@@ -59,7 +59,7 @@ sequenceDiagram
 
     rect rgb(124, 45, 18)
     Note right of CC: Stop Event
-        CC->>H: AgentOutputCapture.hook
+        CC->>H: AgentOutputRecord.hook
         CC->>H: CommitWorkReminder.hook
         CC->>H: StopOrchestrator.hook
         CC->>H: WorktreeCleanup.hook

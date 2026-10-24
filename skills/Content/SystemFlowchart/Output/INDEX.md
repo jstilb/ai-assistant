@@ -6,7 +6,6 @@
 
 | Document | Description | Last Updated |
 |----------|-------------|--------------|
-| [Kaya_ARCHITECTURE.md](Kaya_ARCHITECTURE.md) | Master system overview with all diagrams | 2026-01-20 |
 | [SESSION_LIFECYCLE.md](SESSION_LIFECYCLE.md) | Detailed hook execution flow | (workflow available) |
 | [SKILL_MAP.md](SKILL_MAP.md) | Skill hierarchy and dependencies | (workflow available) |
 | [MEMORY_STRUCTURE.md](MEMORY_STRUCTURE.md) | Memory system architecture | (workflow available) |

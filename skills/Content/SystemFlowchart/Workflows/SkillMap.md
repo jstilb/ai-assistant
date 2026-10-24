@@ -170,5 +170,4 @@ bun ArtBridge.ts generate --diagram ecosystem --output ~/Downloads/skills.png
 - `Tools/DiagramBuilder.ts` - Mermaid generation
 
 ### Feeds Into
-- `GenerateArchitecture.md` - Master architecture document
-- `USER/PAI_ARCHITECTURE.md` - Architecture reference
+- `GenerateArchitecture.md` - Diagram index (`Output/INDEX.md`)

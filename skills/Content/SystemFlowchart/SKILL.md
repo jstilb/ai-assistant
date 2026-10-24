@@ -161,7 +161,7 @@ notifySync('Architecture diagrams generated and cached');
 - **Documentation** - Visual architecture references
 - **System skill** - Integrity validation with visual context
 - **Kaya onboarding** - Understanding system structure
-- **USER/KAYA_ARCHITECTURE.md** - Master architecture document
+- **docs/architecture.md** - Canonical architecture document
 
 ### MCPs Used
 - None (generates Mermaid diagrams from filesystem, Art skill for PNGs)

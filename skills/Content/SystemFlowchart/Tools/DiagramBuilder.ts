@@ -375,9 +375,9 @@ export async function buildAgentArchitecture(): Promise<DiagramOutput> {
     subgraph ResearchAgents["Research Agents"]
         direction LR
         ClaudeRes["ClaudeResearcher"]
-        GrokRes["GrokResearcher"]
-        GeminiRes["GeminiResearcher"]
-        CodexRes["CodexResearcher"]
+        ContrarianRes["ContrarianResearcher"]
+        BreadthRes["BreadthResearcher"]
+        TechnicalRes["TechnicalResearcher"]
     end
 
     subgraph VoiceMapping["Voice"]

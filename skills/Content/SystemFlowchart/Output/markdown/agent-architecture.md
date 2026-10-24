@@ -21,12 +21,12 @@ flowchart TB
             QATester["QATester"]
             DesignerAgent["Designer"]
             Artist["Artist"]
-            Algorithm["Algorithm"]
+            ISCAuthor["ISCAuthor"]
             Pentester["Pentester"]
         end
         subgraph Row3[" "]
             direction LR
-            GeminiAnalyst["gemini-analyst"]
+            GeminiAnalyst["GeminiAnalyst"]
             GeneralPurpose["general-purpose"]
             ClaudeGuide["claude-code-guide"]
             StatusLine["statusline-setup"]
@@ -36,9 +36,9 @@ flowchart TB
     subgraph ResearchAgents["Research Agents"]
         direction LR
         ClaudeRes["ClaudeResearcher"]
-        GrokRes["GrokResearcher"]
-        GeminiRes["GeminiResearcher"]
-        CodexRes["CodexResearcher"]
+        ContrarianRes["ContrarianResearcher"]
+        BreadthRes["BreadthResearcher"]
+        TechnicalRes["TechnicalResearcher"]
     end
 
     subgraph CustomAgents["Custom Agents (AgentFactory)"]
@@ -67,7 +67,7 @@ flowchart TB
     classDef named fill:#7c2d12,stroke:#fdba74,color:#fff
     classDef invisible fill:none,stroke:none
 
-    class Architect,Engineer,Intern,Explore,Plan,QATester,DesignerAgent,Artist,Algorithm,Pentester,GeminiAnalyst,GeneralPurpose,ClaudeGuide,StatusLine task
+    class Architect,Engineer,Intern,Explore,Plan,QATester,DesignerAgent,Artist,ISCAuthor,Pentester,GeminiAnalyst,GeneralPurpose,ClaudeGuide,StatusLine task
     class ClaudeRes,GrokRes,GeminiRes,CodexRes research
     class Factory,Personality,Voice custom
     class Kaya,Others named

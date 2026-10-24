@@ -36,8 +36,8 @@ echo "$HOOKS"
 
 ```bash
 # Check if previous architecture exists
-if [ -f ~/.claude/USER/PAI_ARCHITECTURE.md ]; then
-  LAST_GEN=$(head -5 ~/.claude/USER/PAI_ARCHITECTURE.md | grep "Generated:" | cut -d: -f2-)
+if [ -f ~/.claude/skills/Content/SystemFlowchart/Output/INDEX.md ]; then
+  LAST_GEN=$(head -5 ~/.claude/skills/Content/SystemFlowchart/Output/INDEX.md | grep "Last Full Update:" | cut -d: -f2-)
   echo "Last generated: $LAST_GEN"
 fi
 
@@ -52,7 +52,7 @@ find ~/.claude/hooks -name "*.ts" -mtime -7 -exec basename {} \;
 
 Execute each workflow in sequence:
 
-1. **GenerateArchitecture** → `~/.claude/USER/PAI_ARCHITECTURE.md`
+1. **GenerateArchitecture** → `Output/markdown/` diagrams + `Output/INDEX.md`
 2. **SessionLifecycle** → `Output/SESSION_LIFECYCLE.md`
 3. **SkillMap** → `Output/SKILL_MAP.md`
 4. **MemoryStructure** → `Output/MEMORY_STRUCTURE.md`
@@ -83,7 +83,6 @@ Create/update `~/.claude/skills/Content/SystemFlowchart/Output/INDEX.md`:
 
 | Document | Description | Last Updated |
 |----------|-------------|--------------|
-| [Kaya_ARCHITECTURE.md](Kaya_ARCHITECTURE.md) | Master system overview | [timestamp] |
 | [SESSION_LIFECYCLE.md](SESSION_LIFECYCLE.md) | Hook execution flow | [timestamp] |
 | [SKILL_MAP.md](SKILL_MAP.md) | Skill hierarchy | [timestamp] |
 | [MEMORY_STRUCTURE.md](MEMORY_STRUCTURE.md) | Memory system | [timestamp] |

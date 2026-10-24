@@ -121,7 +121,7 @@ sequenceDiagram
     participant CC as Claude Code
     participant FE as FormatEnforcer
     participant AWC as AutoWorkCreation
-    participant ERC as ExplicitRatingCapture
+    participant ERC as ExplicitRatingRecord
     participant ISC as ImplicitSentimentCapture
     participant UTT as UpdateTabTitle
     participant M as Memory
@@ -255,12 +255,12 @@ sequenceDiagram
 | CheckVersion | SessionStart | Non-blocking | stderr |
 | FormatEnforcer | UserPromptSubmit | **Blocking** | stdout |
 | AutoWorkCreation | UserPromptSubmit | Non-blocking | files |
-| ExplicitRatingCapture | UserPromptSubmit | Non-blocking | files |
+| ExplicitRatingRecord | UserPromptSubmit | Non-blocking | files |
 | ImplicitSentimentCapture | UserPromptSubmit | Non-blocking | files |
 | UpdateTabTitle | UserPromptSubmit | Non-blocking | Kitty/voice |
 | SecurityValidator | PreToolUse | **Blocking** | decision |
 | SetQuestionTab | PreToolUse | Non-blocking | Kitty |
-| AgentOutputCapture | SubagentStop | Non-blocking | files |
+| AgentOutputRecord | SubagentStop | Non-blocking | files |
 | StopOrchestrator | Stop | Non-blocking | voice/files |
 | WorkCompletionLearning | SessionEnd | Non-blocking | files |
 | SessionSummary | SessionEnd | Non-blocking | files |
@@ -272,7 +272,7 @@ sequenceDiagram
 | File | Purpose | Updated By |
 |------|---------|-----------|
 | `MEMORY/STATE/current-work.json` | Active work pointer | AutoWorkCreation, ResponseCapture, SessionSummary |
-| `MEMORY/LEARNING/SIGNALS/ratings.jsonl` | User ratings | ExplicitRatingCapture, ImplicitSentimentCapture |
+| `MEMORY/LEARNING/SIGNALS/ratings.jsonl` | User ratings | ExplicitRatingRecord, ImplicitSentimentCapture |
 | `MEMORY/SECURITY/security-events.jsonl` | Security log | SecurityValidator |
 | `MEMORY/WORK/*/items/response.md` | Claude responses | ResponseCapture |
 | `MEMORY/WORK/*/summary.md` | Session summary | SessionSummary |
