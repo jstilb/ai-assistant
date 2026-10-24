@@ -1,0 +1,5 @@
+name: no-hooks
+description: "Full setup minus every settings.json hook (SessionStart context load, validators, capture hooks)"
+base: full
+remove:
+  hooks: ["*"]

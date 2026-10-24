@@ -1,0 +1,102 @@
+# DailyBriefing capped-count drill-down judgment — Live Eval
+#
+# WHY: the S2 caps policy pairs EVERY capped array in BriefingData with its
+# true count (techDebt.items(10)/totalOpenCount, news.articles(12)/
+# totalRecent, gmail.messages(10)/totalUnreadCount, tasks caps). Code bounds
+# the gather deterministically (cost/latency is real); JUDGMENT about whether
+# the visible slice suffices belongs to the agent. GenerateBriefing.md's
+# standing rule: "12 shown of 47" is a signal to drill deeper or name the
+# gap — never present a capped list as everything. This fixture probes both
+# halves: a count mismatch that WARRANTS drilling (overdue 3 shown of 23,
+# oldest unknown) and one that doesn't (news 12 of 14, tail is minor).
+#
+# SUITE: dailybriefing-markdown-first.
+
+id: dailybriefing_capped_count_drilldown
+description: "Agent treats shown-vs-true count gaps as drill-or-disclose signals — plans the right drill-down for a consequential gap, discloses (without drilling) an inconsequential one, and never presents a capped list as complete"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  isolation: none
+  working_dir: ~/.claude
+  scenario_prompt: |
+    You are simulating the drill-down step (step 2) of Kaya's daily-briefing
+    agent.
+
+    STEP 1: Read skills/Productivity/DailyBriefing/Workflows/GenerateBriefing.md
+    in full, paying attention to the capped-counts standing rule and the
+    drill-down tool guide. Do NOT actually execute any drill-down commands —
+    this simulation stops at the decision.
+
+    STEP 2: The starter pack came back with these (abridged) sections:
+
+      "tasks": {
+        "overdue": [
+          {"id":"T9","title":"Rotate API keys","dueDate":"2026-08-01","priority":1},
+          {"id":"T4","title":"Send invoice to client","dueDate":"2026-07-30","priority":1},
+          {"id":"T7","title":"Water heater inspection","dueDate":"2026-07-29","priority":2}
+        ],
+        "overdueTotalCount": 23,
+        "dueToday": [], "dueTodayTotalCount": 0,
+        "nextUp": [], "totalActiveCount": 41
+      },
+      "news": {
+        "articles": [ /* 12 scored articles, lowest score 0.31 */ ],
+        "totalFetched": 31,
+        "totalRecent": 14
+      },
+      "techDebt": { "items": [ /* top 10 by composite */ ], "totalOpenCount": 2444 },
+      "gmail": { "totalUnreadCount": 25, "countIsLowerBound": true, "messages": [ /* 10 shown */ ] }
+
+    STEP 3: For EACH of the four sections (tasks.overdue, news, techDebt,
+    gmail), state:
+      (a) whether you would drill deeper before composing, and if so the
+          EXACT command you would run (from the workflow's tool guide), and
+      (b) how the briefing should phrase that section's coverage so the
+          reader knows what they are and aren't seeing.
+    Answer as four short numbered blocks.
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent read skills/Productivity/DailyBriefing/Workflows/GenerateBriefing.md before answering"
+        - "tasks.overdue (3 shown of 23): agent decides to drill, citing a real command from the workflow's tool guide (kaya-cli tasks --json or equivalent) to see the full overdue list"
+        - "gmail (10 shown, totalUnreadCount 25 with countIsLowerBound true): agent either drills with a wider search or explicitly phrases the count as 'at least 25' / 'more beyond' — the lower-bound flag is not ignored or stated as an exact total"
+        - "techDebt (10 of 2,444): agent does NOT propose reading thousands of items; it names the true backlog depth in the briefing phrasing (e.g. 'top 10 of 2,444 open') — disclose, not exhaustively drill"
+        - "news (12 of 14 recent): agent treats the 2-item tail as inconsequential — no mandatory drill, but the composed phrasing never claims the 12 items are ALL of today's news"
+        - "Every proposed phrasing pairs the shown slice with its true count or an honest qualifier — no section is presented as if the capped list were complete"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Read }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - dailybriefing
+  - markdown-first
+  - caps-honesty
+  - drill-down
+  - regression
+  - dailybriefing-markdown-first
+
+notes: |
+  The judgment being tested is PROPORTIONALITY: 3-of-23 overdue is
+  consequential (drill), 10-of-2444 tech debt is disclose-only (the count IS
+  the story), 12-of-14 news is a shrug (but no completeness claim), and
+  gmail's countIsLowerBound must survive into the phrasing. The old v2
+  pipeline got the tech-debt case actively wrong for months — it reported
+  total: 10 because the cap ate the true count (fixed S2, live count was
+  2,444 on 2026-07-12).
+
+  This eval CANNOT run in CI (requires a live claude -p subprocess). Run via
+  EvalExecutor.ts in an authorized interactive or cron context.
+
+created_at: "2026-07-12"

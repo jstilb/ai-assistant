@@ -1,0 +1,5 @@
+name: no-claudemd
+description: "Full setup minus CLAUDE.md (identity, response format, capture routing, principles)"
+base: full
+remove:
+  claudemd: true

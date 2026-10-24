@@ -1,0 +1,129 @@
+# EventScout query invocation — Live Eval
+#
+# WHY: On 2026-07-03 two silent date-window bugs shipped — "Monday through
+# Thursday" and "July 6 to July 9" both collapsed to a SINGLE DAY via partial
+# regex matches inside resolveWhen() (Tools/ConstraintParser.ts) — confidently
+# wrong, zero warning. The fix (markdown-first de-determinization) deletes
+# resolveWhen() entirely: EventScout's `cli.ts query` now does ZERO natural-
+# language interpretation in code. Every path into EventScout (chat, voice,
+# cron) already has an LLM agent reading SKILL.md before invoking the CLI, so
+# ALL date/refresh/price/category judgment moves there instead.
+#
+# This eval proves the AGENT — reading only SKILL.md's "How to invoke query
+# (agents)" section, with no other EventScout code in context — correctly
+# resolves natural-language event requests into the CLI's structured flags.
+# Cases 1-2 are the exact regression cases for the original bugs: both MUST
+# produce the full 4-day window, not a single day.
+#
+# ENVIRONMENT: Requires an authorized run context (claude -p subprocess) with
+# Read access to skills/Productivity/EventScout/SKILL.md. This is a live LLM
+# judgment eval — it cannot be stubbed; it is the acceptance test for the
+# whole markdown-first migration in this slice.
+#
+# SUITE: eventscout-markdown-first (see Suites/ for registration).
+#
+# APPROACH: Cloned from UseCases/SpecSheet/spec-quality-judge.yaml's pattern —
+# one scenario_prompt covering multiple cases in a single trial, graded with
+# natural_language_assert (0.70) + tool_calls (0.30, requires the agent to
+# have actually Read SKILL.md rather than guess from training knowledge).
+
+id: eventscout_query_invocation
+description: "Agent resolves NL event requests into cli.ts query flags per SKILL.md — regression coverage for the Monday-Thursday / July 6-9 single-day collapse bug"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  # No sandbox tempdir — the agent MUST see this repo's SKILL.md (with the
+  # new "How to invoke query (agents)" section), not a random tmpdir. Path is
+  # the live tree — the eventscout-markdown-first worktree is deleted after
+  # this slice merges, so the permanent regression net runs against main.
+  isolation: none
+  working_dir: ~/.claude
+  scenario_prompt: |
+    You are simulating how a calling agent (chat/voice/cron) invokes the
+    EventScout CLI's `query` subcommand for natural-language requests from Jm.
+
+    STEP 1: Read skills/Productivity/EventScout/SKILL.md in full, paying
+    close attention to the "How to invoke query (agents)" section — it is
+    the complete contract for how to turn natural language into CLI flags.
+    Do not rely on any other knowledge of EventScout's internals.
+
+    STEP 2: Treat "today" as Friday, 2026-07-03 (America/Los_Angeles), for
+    ALL relative-date resolution below. Do not use the real current date.
+
+    STEP 3: For EACH of the following 7 requests, construct the exact
+    `bun skills/Productivity/EventScout/cli.ts query "<text>" [flags]`
+    command you would run, following SKILL.md's flag contract exactly. Do
+    NOT execute the commands — just construct and report them.
+
+      1. "Monday through Thursday" (a bare date-range request — find events
+         happening Monday through Thursday)
+      2. "July 6 to July 9"
+      3. "this weekend"
+      4. "next Friday"
+      5. "latest jazz shows this weekend"
+      6. "free stuff under $30 this week"
+      7. "comedy shows tonight"
+
+    Report your answer as a numbered list of the exact CLI commands, one per
+    line, e.g.:
+      1. bun skills/Productivity/EventScout/cli.ts query "..." --from ... --to ...
+      2. ...
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent read skills/Productivity/EventScout/SKILL.md before answering"
+        - "Case 1 ('Monday through Thursday') resolves to a FULL 4-day window: --from 2026-07-06 --to 2026-07-09 — NOT a single day (this is the exact regression the redesign fixes)"
+        - "Case 2 ('July 6 to July 9') resolves to --from 2026-07-06 --to 2026-07-09 — NOT a single day"
+        - "Case 3 ('this weekend') resolves to the upcoming Saturday+Sunday: --from 2026-07-04 --to 2026-07-05"
+        - "Case 4 ('next Friday') resolves to a SINGLE day in the following Mon-Sun week: --from 2026-07-10 --to 2026-07-10"
+        - "Case 5 ('latest jazz shows this weekend') includes the --refresh flag AND the weekend window --from 2026-07-04 --to 2026-07-05"
+        - "Case 6 ('free stuff under $30 this week') includes --max-price 30 and does NOT also include --free (no double-flagging price)"
+        - "Case 7 ('comedy shows tonight') includes --category comedy AND a same-day window --from 2026-07-03 --to 2026-07-03"
+        - "None of the 7 commands include --limit (EventScout returns all results by default)"
+        - "All 7 cases are answered with a constructed command, not skipped"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Read }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - eventscout
+  - markdown-first
+  - dedeterminize
+  - date-resolution
+  - regression
+  - eventscout-markdown-first
+
+notes: |
+  Red-Green evidence (Slice 1):
+
+  OLD deterministic resolveWhen() regex cascade (Tools/ConstraintParser.ts,
+  deleted in this slice) behavior on 2026-07-03:
+  - "Monday through Thursday": the weekday-name regex matched only the FIRST
+    weekday token ("Monday"), silently collapsing the range to a single day.
+  - "July 6 to July 9": the month-day-range regex required a specific
+    separator shape that this phrasing didn't match, so it fell through to
+    the bare month-day SINGLE-date branch, again collapsing to one day.
+  Both failures were silent — no error, no warning, just a wrong (too-narrow)
+  result silently returned as if correct.
+
+  NEW behavior (what this eval verifies): the calling agent — reading only
+  SKILL.md, no code — resolves both cases to their FULL 4-day span and passes
+  --from/--to explicitly. cli.ts's buildQueryContext (Tools/Window.ts) then
+  does only exact, LOUDLY-validated arithmetic on those two strings; it never
+  guesses.
+
+  This eval CANNOT run in CI (requires a live claude -p subprocess). Run in
+  an authorized interactive or cron context via EvalExecutor.ts.
+
+created_at: "2026-07-03"

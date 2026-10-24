@@ -1,0 +1,5 @@
+name: no-memory
+description: "Full setup minus the auto-memory snapshot (MEMORY.md index + memory files)"
+base: full
+remove:
+  memory: true

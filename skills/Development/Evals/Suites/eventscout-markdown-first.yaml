@@ -1,0 +1,46 @@
+# EventScout Markdown-First De-Determinization Eval Suite
+#
+# Covers the LLM judgment that replaced deterministic NL/keyword resolution
+# with agent judgment across EventScout's pipeline:
+#   - Slice 1 (query): resolveWhen()'s regex cascade (Tools/ConstraintParser.ts)
+#     silently collapsed "Monday through Thursday" and "July 6 to July 9" to a
+#     single day on 2026-07-03 — confidently wrong, zero warning.
+#   - Slice 2 (booking): classifyBooking()'s regex cascade (RESERVE_RE/RSVP_RE
+#     in Tools/Booking.ts) guessed a booking action from event text — an
+#     enumerated keyword list, silently wrong on anything unanticipated.
+#   - Slice 3 (age-gate): Filter.ts's queryWantsKids()/isMinorOnlyEvent() regex
+#     cascade guessed kid/family intent and minor-only events from keyword
+#     lists; replaced by ONE rubric line in Ranker.ts's existing batched
+#     scoring call — the LLM that already scores every event against the
+#     query now age-gates as real judgment, not a keyword match.
+# This suite proves the calling agent, reading only SKILL.md, resolves the
+# same natural-language requests / classification judgments correctly into
+# cli.ts's structured flags (query's --from/--to/--free/--max-price/
+# --category/--time-of-day/--refresh; add-to-calendar's/booking note's
+# --action/--book-by) — and, for Slice 3, that the ranker rubric line itself
+# swings real model scoring behavior on a held-out fixture.
+#
+# Slice: EventScout Markdown-First De-Determinization (2026-07)
+
+name: eventscout-markdown-first
+description: "Agent-resolved NL/classification → CLI-flag judgments replacing deleted resolveWhen()/wantsRefresh()/classifyBooking/age-gate regex gates across EventScout's query, booking, and ranking pipelines"
+type: regression
+domain: coding
+
+tasks:
+  - eventscout_query_invocation
+  - eventscout_booking_classification
+  - eventscout_agegate_rubric
+
+pass_threshold: 0.80
+
+tags:
+  - eventscout
+  - markdown-first
+  - dedeterminize
+  - date-resolution
+  - booking
+  - classification
+  - age-gate
+
+created_at: "2026-07-03"

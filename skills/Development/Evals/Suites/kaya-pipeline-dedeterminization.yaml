@@ -1,0 +1,35 @@
+# Kaya Pipeline De-Determinization Eval Suite
+#
+# Covers the LLM judgments that replaced deterministic regex gates in the
+# spec pipeline (QueueRouter + SpecSheet). Each eval corresponds to a deleted
+# gate and proves the LLM judge handles the cases the gate was meant for.
+#
+# Plan: plans/one-combined-plan-rosy-blum.md (Slices 1 + 2)
+# Branch: feat/dedeterminize-queue-specsheet
+#
+# Slice 2a (SpecSheet quality judge) — added 2026-06-18
+# Slice 1  (QueueRouter routing/sufficiency/dedup) — TBD
+
+name: kaya-pipeline-dedeterminization
+description: "LLM judges replacing deleted regex/heuristic gates in the spec pipeline"
+type: regression
+domain: coding
+
+tasks:
+  # Slice 2a: spec quality judge (validateISCQuality + validateSliceShape → judgeSpecQuality)
+  - kaya_specsheet_spec_quality_judge
+
+  # Slice 1: QueueRouter routing + sufficiency (TBD — placeholders for future evals)
+  # - kaya_queuerouter_sufficiency_judge
+  # - kaya_queuerouter_dedup_judge
+
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - pipeline
+  - dedeterminize
+  - specsheet
+  - queuerouter
+
+created_at: "2026-06-18"

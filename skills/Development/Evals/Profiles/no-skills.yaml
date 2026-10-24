@@ -1,0 +1,6 @@
+name: no-skills
+description: "Full setup minus every skill category (skills/*) and every slash command"
+base: full
+remove:
+  skills: ["*"]
+  commands: ["*"]

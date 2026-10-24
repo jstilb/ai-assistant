@@ -1,0 +1,185 @@
+# EventScout ranker age-gate rubric line — Live Eval
+#
+# WHY: Filter.ts's age-gate (`queryWantsKids` + `isMinorOnlyEvent`, a regex
+# cascade over the raw query and event text) is being deleted in this slice's
+# Commit 2 — another enumerated-keyword gate faking LLM judgment. The
+# replacement is ONE line added to the scoring rubric inside
+# `buildBatchSystemPrompt` (Tools/Ranker.ts): the LLM that already scores
+# every event against the verbatim raw query is told to score kids-only
+# events 0-20 UNLESS the query itself expresses family/kid intent. Zero new
+# inference calls — the rubric line rides the existing batched scoring call.
+#
+# This eval proves the rubric line actually changes real LLM scoring
+# behavior: it exercises the REAL `rankEvents` (no injected/stub scorer, no
+# EVENTSCOUT_DISABLE_RERANK kill-switch) against a small fixture with 2
+# kids-only events + 3 general adult events, under two queries — one with no
+# kid/family intent, one with explicit family intent — and checks that the
+# same two kids-only events score low under the first and competitively under
+# the second. Unlike query-invocation.yaml / booking-classification.yaml
+# (which grade the agent's stated JUDGMENT against SKILL.md prose), this eval
+# grades the agent's ability to exercise REAL CODE against a REAL model call
+# and report the resulting behavior — the anti-gaming graders specifically
+# check for evidence of a live, non-stubbed LLM round-trip (elapsed latency,
+# query-sensitive score deltas, and an explicit no-override call snippet).
+#
+# ENVIRONMENT: Requires an authorized run context (claude -p subprocess) with
+# Bash access to run `bun`, and live model inference via lib/core/Inference.ts
+# (through Tools/Ranker.ts's real scoring path). This eval CANNOT be stubbed —
+# it is the acceptance test for the rubric-line migration in this slice.
+#
+# SUITE: eventscout-markdown-first (see Suites/ for registration).
+#
+# APPROACH: Cloned from UseCases/EventScout/query-invocation.yaml's overall
+# shape (natural_language_assert 0.70 + tool_calls 0.30, isolation: none,
+# working_dir = the live tree), but the scenario is code-execution-based
+# rather than judgment-recall-based: the graded agent writes and runs a small
+# standalone script (outside the repo, using absolute imports, so the
+# working tree stays clean) that calls the real `rankEvents` twice and reports
+# scores + timing evidence.
+
+id: eventscout_agegate_rubric
+description: "Agent exercises the REAL Tools/Ranker.ts rankEvents against a kids-only-event fixture under two queries, proving the AGE-GATE rubric line replaces Filter.ts's deleted regex age-gate with real LLM judgment"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  # No sandbox tempdir — the agent MUST import the real Tools/Ranker.ts from
+  # this repo (with the AGE-GATE rubric line), not a random tmpdir. Path is
+  # the live tree — the eventscout-markdown-first worktree is deleted after
+  # this slice merges, so the permanent regression net runs against main.
+  isolation: none
+  working_dir: ~/.claude
+  scenario_prompt: |
+    You are verifying that EventScout's ranker rubric (Tools/Ranker.ts) correctly
+    age-gates kids-only events using LLM judgment instead of a deterministic
+    regex filter. (Context: a regex age-gate in Tools/Filter.ts is being
+    deleted in this same slice; the judgment now lives entirely in the
+    scoring rubric inside `buildBatchSystemPrompt` in Tools/Ranker.ts, which
+    the existing per-event batch-scoring LLM call already applies to every
+    event.)
+
+    STEP 1: Read skills/Productivity/EventScout/Tools/Ranker.ts in full —
+    in particular `buildBatchSystemPrompt` (the scoring rubric text, look for
+    the "AGE-GATE" line) and the exported `rankEvents` function's signature
+    and behavior. Also skim skills/Productivity/EventScout/Tools/types.ts for
+    the EventItem, QueryContext, and InterestProfile shapes you'll need to
+    construct fixtures (EventItem.category is a fixed enum — pick a valid
+    value; QueryContext requires rawQuery/window/home/radiusMiles;
+    InterestProfile requires only homeLocation and defaultRadiusMiles).
+
+    STEP 2: Write a small standalone TypeScript script to a path OUTSIDE this
+    repo — e.g. /tmp/agegate-rubric-check-<random>.ts — NOT inside the repo,
+    so its git status stays clean. Import `rankEvents` using the ABSOLUTE path
+    "~/.claude/skills/Productivity/EventScout/Tools/Ranker.ts"
+    (and the EventItem/QueryContext/InterestProfile types from the sibling
+    "~/.claude/skills/Productivity/EventScout/Tools/types.ts")
+    so the script resolves correctly regardless of your working directory.
+
+    The script must:
+      a. Build a fixture of exactly 5 EventItem objects: 2 kids-only events —
+         e.g. "Kids Summer Camp (Ages 6-12)" and "Toddler Story Time" (any
+         valid category, any near-future startDatetime, give them a
+         description too) — and 3 general adult events spanning different
+         categories (e.g. a concert, a comedy show, a food festival), none of
+         which mention kids/family/age limits.
+      b. Build one InterestProfile (any homeLocation/defaultRadiusMiles —
+         Ranker.ts only reads homeLocation as a distance-tiebreak fallback)
+         and TWO QueryContext objects that differ ONLY in `rawQuery`:
+           - Query A: rawQuery = "things to do this weekend" (no kid/family
+             intent)
+           - Query B: rawQuery = "family activities this weekend" (explicit
+             family intent)
+         (window/home/radiusMiles can be any valid values — Ranker.ts does
+         not read window or apply a radius filter; only rawQuery drives the
+         scoring judgment you're testing.)
+      c. Call `rankEvents(events, queryContextA, profile)` and separately
+         `rankEvents(events, queryContextB, profile)`. Do NOT pass an `opts`
+         argument and do NOT pass an `opts.scoreBatch` override — you must
+         exercise the REAL default LLM scoring path, not an injected/stub
+         scorer. Do NOT set `EVENTSCOUT_DISABLE_RERANK` in the environment
+         (that env var forces a non-LLM soonness-order fallback and would
+         defeat the entire point of this check).
+      d. Wrap each `rankEvents(...)` call with `Date.now()` timestamps
+         immediately before and after, and print the elapsed milliseconds for
+         each call — this is evidence the call went over the network to a
+         real model rather than returning instantly from a stub.
+      e. Print each event's id/title and its `.score` (0-100) from BOTH runs,
+         clearly labeled by query.
+
+    STEP 3: Run the script with `bun <path>` via the Bash tool. This is live
+    LLM inference — if it errors transiently, fix and retry up to 2 times
+    before giving up.
+
+    STEP 4: Report your findings in EXACTLY this format:
+      - Import/call snippet: <paste the exact import line and the two
+        rankEvents(...) call lines you used, proving no scoreBatch override
+        and no EVENTSCOUT_DISABLE_RERANK>
+      - Query A ("things to do this weekend") elapsed ms: <N>
+      - Query A scores: one line per event as "<id/title>: <score>"
+      - Query B ("family activities this weekend") elapsed ms: <N>
+      - Query B scores: one line per event as "<id/title>: <score>"
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent read Tools/Ranker.ts (buildBatchSystemPrompt and rankEvents) before writing the script"
+        - "The reported import/call snippet shows the script called the real `rankEvents` directly from Tools/Ranker.ts with NO `opts.scoreBatch` override and NO reliance on EVENTSCOUT_DISABLE_RERANK — i.e. the real default LLM scoring path was exercised, not a stub"
+        - "The fixture included at least 2 kids-only events (an explicit age ceiling ≤17, or a kids-only program like a camp or toddler story time) and at least 3 general adult events with no kid/family/age-limit wording"
+        - "For Query A ('things to do this weekend', no kid/family intent), BOTH kids-only events scored 20 or below"
+        - "For Query B ('family activities this weekend', explicit family intent), the kids-only events scored competitively — at least 50, or clearly and substantially higher than their Query A scores — showing they are NOT suppressed when the query itself wants them"
+        - "The reported elapsed-ms timings for both rankEvents() calls are non-trivial (at least a few hundred milliseconds, consistent with a real network round-trip to an LLM), not near-zero as a stub would return"
+        - "The two runs produced DIFFERENT scores for the SAME kids-only events between Query A and Query B, proving the scoring is query-sensitive judgment rather than a hardcoded constant"
+        - "Both queries were actually run (not skipped or simulated) and results for both are reported in the specified format"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Bash }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - eventscout
+  - markdown-first
+  - dedeterminize
+  - age-gate
+  - ranker
+  - regression
+  - eventscout-markdown-first
+
+notes: |
+  Red-Green evidence (Slice 3):
+
+  OLD deterministic age-gate (Tools/Filter.ts, deleted in this slice's Commit
+  2): `queryWantsKids()` regex-matched the raw query for
+  kid/child/famil/toddler/youth/all-ages/teen tokens; `isMinorOnlyEvent()`
+  regex-matched event text for an age-range upper bound ≤17 or explicit
+  children's-program markers (tykes, toddlers, story time, kids camp/class/
+  club/party/workshop, youth camp/workshop/program). `filterEvents` then
+  hard-dropped any minor-only event when the query didn't "want kids" — a
+  fixed enumerated keyword list, silently wrong on any wording outside its
+  patterns (e.g. "counter seating" analog for age-gating: a camp called
+  "Junior Explorers" or "Ages 6 and under" would need new regex additions
+  forever).
+
+  NEW behavior (what this eval verifies): the calling code no longer gates on
+  keywords at all — the LLM that already scores every event against the
+  verbatim raw query (Ranker.ts's batched `scoreBatch` call) is told, via one
+  rubric line, to treat kids-only events as a 0-20 fit UNLESS the query
+  itself expresses family/kid intent. This eval proves that rubric line
+  actually swings real model output on a held-out fixture: same 2 kids-only
+  events score low under a bare "things to do" query and competitively under
+  an explicit "family activities" query — real judgment, not a keyword match,
+  and zero new inference calls (the rubric line rides the existing batched
+  scoring call that was already happening).
+
+  This eval CANNOT run in CI (requires live claude -p + live model calls via
+  Tools/Ranker.ts's real scoring path). Run in an authorized interactive or
+  cron context via EvalExecutor.ts.
+
+created_at: "2026-07-03"

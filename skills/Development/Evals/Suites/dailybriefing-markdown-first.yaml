@@ -1,0 +1,43 @@
+# DailyBriefing Markdown-First Inversion Eval Suite
+#
+# Covers the judgment that replaced the v2 TypeScript pipeline's deterministic
+# guards when the briefing became an agent executing
+# Workflows/GenerateBriefing.md (ADR-022):
+#   - EditorialEngine.ts's 90-line SYSTEM_PROMPT (deleted) carried the
+#     data-honesty rules ("calendar unavailable, not clear"; "never invent a
+#     number"; telegram 4096 hard limit). Those rules now live as workflow
+#     prose — these fixtures prove an agent reading ONLY the workflow applies
+#     them to novel data.
+#   - The gather layer's caps are now paired with true counts
+#     (totalOpenCount/totalRecent/totalUnreadCount…) — one fixture proves the
+#     agent treats "N shown of M" as a drill-or-disclose signal instead of
+#     presenting the capped list as complete.
+#
+# Standing rule (determinism memo, deleted-rule→eval-fixture): each fixture's
+# scenario DATA is novel — the workflow md contains the rules, never the
+# fixtures' specific inputs/expected outputs, so these measure judgment, not
+# string echo.
+#
+# Slice: DailyBriefing Markdown-First Inversion S6 (2026-07-12)
+
+name: dailybriefing-markdown-first
+description: "Agent-applied briefing judgment (outage honesty, no fabricated numbers, telegram-limit awareness, capped-count drill-down) replacing EditorialEngine's deleted deterministic prompt+parse pipeline"
+type: regression
+domain: coding
+
+tasks:
+  - dailybriefing_calendar_outage_honesty
+  - dailybriefing_no_fabricated_numbers
+  - dailybriefing_telegram_limit_awareness
+  - dailybriefing_capped_count_drilldown
+
+pass_threshold: 0.80
+
+tags:
+  - dailybriefing
+  - markdown-first
+  - dedeterminize
+  - data-honesty
+  - regression
+
+created_at: "2026-07-12"

@@ -1,0 +1,7 @@
+# The cheapest "is CLAUDE.md alone enough?" probe: bare Claude Code plus
+# only CLAUDE.md. Compare against `clean` (floor) and `full` (ceiling).
+name: claudemd-only
+description: "Bare Claude Code plus only CLAUDE.md — no skills, hooks, agents, memory"
+base: clean
+include:
+  claudemd: true

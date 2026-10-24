@@ -1,0 +1,157 @@
+# EventScout booking action classification — Live Eval
+#
+# WHY: `classifyBooking()` (Tools/Booking.ts) was a regex cascade over
+# ticket/reservation keywords — an enumerated keyword list, silently wrong on
+# anything unanticipated. The fix (markdown-first de-determinization, Slice 2)
+# deletes classifyBooking/RESERVE_RE/RSVP_RE entirely: `cli.ts`'s
+# `add-to-calendar`/`booking note` now take an explicit `--action`
+# (buy-tickets | reserve | rsvp | none), judged by the calling agent from
+# SKILL.md's "Booking Notices" → "How to judge --action" guidance. Omitting
+# `--action` is not an error — the entry lands "unclassified" and nags every
+# scan/digest until resolved, so a wrong-but-confident guess never survives
+# as a silent misclassification.
+#
+# This eval proves the AGENT — reading only SKILL.md, no other EventScout
+# code in context — correctly judges the booking action for 5 event
+# fixtures, including the PRECEDENCE CASE the old regex classifier already
+# handled correctly by accident (RESERVE_RE ran before the paid check) but
+# that a naive "paid → buy-tickets" reading could get wrong: a PAID event
+# that ALSO carries reservation/table/seating wording must resolve to
+# `reserve`, not `buy-tickets`.
+#
+# SUITE: eventscout-markdown-first (see Suites/ for registration).
+#
+# APPROACH: Cloned from UseCases/EventScout/query-invocation.yaml's pattern —
+# one scenario_prompt covering multiple cases in a single trial, graded with
+# natural_language_assert (0.70) + tool_calls (0.30, requires the agent to
+# have actually Read SKILL.md rather than guess from training knowledge).
+
+id: eventscout_booking_classification
+description: "Agent judges cli.ts's booking --action (buy-tickets/reserve/rsvp/none) from SKILL.md's 'How to judge --action' guidance for 5 event fixtures — regression coverage for the deleted classifyBooking regex cascade, including the paid+reservation precedence case"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  # No sandbox tempdir — the agent MUST see this repo's SKILL.md (with the
+  # "Booking Notices" → "How to judge --action" section), not a random
+  # tmpdir. Path is the live tree — repointed here in Slice 4 (per Slice 1's
+  # eval convention) since the eventscout-markdown-first worktree is deleted
+  # after this slice merges.
+  isolation: none
+  working_dir: ~/.claude
+  scenario_prompt: |
+    You are simulating how a calling agent (chat/voice/cron) judges the
+    EventScout booking `--action` flag before running
+    `bun skills/Productivity/EventScout/cli.ts add-to-calendar <id> --action <a>`
+    (or `booking note <id> --action <a>`).
+
+    STEP 1: Read skills/Productivity/EventScout/SKILL.md in full, paying
+    close attention to the "Booking Notices" section — specifically "How to
+    judge `--action` (agents)" and its precedence rule for paid events that
+    also carry reservation wording. Do not rely on any other knowledge of
+    EventScout's internals or of booking systems in general — the
+    classification logic that used to live in code (`classifyBooking`) has
+    been deleted; SKILL.md is now the only source of truth for how to choose
+    an action.
+
+    STEP 2: For EACH of the following 5 cached events, choose the `--action`
+    value (buy-tickets | reserve | rsvp | none) you would pass, per
+    SKILL.md's guidance. Do NOT execute any commands — just report your
+    judgment and a one-sentence reason for each.
+
+      1. "Deep Sea Sounds" — The Casbah, 9pm. isFree=false, priceMin=25,
+         ticketUrl set. Description: "Live indie/electronic showcase. Doors
+         at 8, show at 9. 21+."
+
+      2. "Intro to Woodworking" — Liberty Station, 10am. isFree=true, no
+         ticketUrl. Description: "Free hands-on workshop, beginners
+         welcome. RSVP required — space is limited to 12 people, please
+         register in advance."
+
+      3. "Chef's Table Tasting Menu" — Kettner Exchange, 7pm. isFree=true
+         (no price fields set — the venue doesn't list a cover charge
+         through EventScout; the menu itself is paid AT the restaurant).
+         Description: "Seven-course tasting menu, reservation required.
+         Table for two or four available. Call ahead to book your seat."
+
+      4. "Sunday Morning Run Club" — Balboa Park, 8am. isFree=true, no
+         ticketUrl. Description: "Casual 5k group run, all paces welcome.
+         Meet at the fountain. No signup needed, just show up."
+
+      5. "Omakase Night" — Sushi Tadokoro, 6:30pm. isFree=false,
+         priceMin=120, ticketUrl set (a ticketing/deposit link).
+         Description: "12-course omakase, chef's counter. Seating is
+         extremely limited — reservation required, table held for your
+         party. Prepay deposit to hold your seat."
+
+    Report your answer as a numbered list, one line per event, in the form:
+      1. <action> — <one-sentence reason>
+      2. <action> — <one-sentence reason>
+      3. <action> — <one-sentence reason>
+      4. <action> — <one-sentence reason>
+      5. <action> — <one-sentence reason>
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent read skills/Productivity/EventScout/SKILL.md before answering"
+        - "Case 1 ('Deep Sea Sounds', a paid concert with no reservation/table wording) resolves to buy-tickets"
+        - "Case 2 ('Intro to Woodworking', a free workshop with RSVP/register/limited-space wording) resolves to rsvp"
+        - "Case 3 ('Chef's Table Tasting Menu', no listed price through EventScout, reservation/table wording) resolves to reserve"
+        - "Case 4 ('Sunday Morning Run Club', a bare free meetup with 'no signup needed, just show up') resolves to none"
+        - "Case 5 (THE PRECEDENCE CASE — 'Omakase Night', a PAID event at $120 that ALSO carries reservation/table/seating wording) resolves to reserve, NOT buy-tickets"
+        - "For case 5 specifically, the agent's stated one-sentence reason explicitly cites the reservation/table/seat-holding language (not just the price) as why reserve wins over buy-tickets — this is the precedence judgment the eval exists to verify"
+        - "All 5 cases are answered with a judged action — none are skipped or left as 'omit --action / unclassified'"
+      # 0.70 weight: correctness of judgment + visible reasoning is the load-bearing signal.
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Read }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - eventscout
+  - markdown-first
+  - dedeterminize
+  - booking
+  - classification
+  - regression
+  - eventscout-markdown-first
+
+notes: |
+  Red-Green evidence (Slice 2):
+
+  OLD deterministic classifyBooking() (Tools/Booking.ts, regex cascade,
+  deleted in this slice's Commit 3) precedence, first match wins:
+    1. RESERVE_RE (table/tasting/prix-fixe/omakase wording) → "reserve"
+    2. paid (isFree===false or price>0)                     → "buy-tickets"
+    3. ticket link OR RSVP_RE                                → "rsvp"
+    4. otherwise                                              → "none"
+  This ordering happened to get the paid+reservation precedence case (Case 5
+  above) right ONLY because RESERVE_RE was checked before the paid branch —
+  a fragile ordering dependency baked into code, invisible to anyone reading
+  the CLI surface, and silently wrong the moment a new reservation phrasing
+  (e.g. "counter seating", "chef's counter") wasn't in the regex's keyword
+  list. It was also a fixed enumerated list: any wording outside
+  RESERVE_RE/RSVP_RE's exact patterns silently fell through to the next
+  branch with zero warning.
+
+  NEW behavior (what this eval verifies): the calling agent — reading only
+  SKILL.md's prose precedence rule, no code — reproduces the same correct
+  judgment on Case 5 (and the other 4 baseline cases) via actual reasoning
+  about what's being secured (a table vs. a ticket), not a keyword match.
+  cli.ts's `parseBookingFlags` then does only LOUD enum/date validation; it
+  never guesses (see tests/booking.test.ts's `parseBookingFlags` coverage
+  for the code-side validation tests).
+
+  This eval CANNOT run in CI (requires a live claude -p subprocess). Run in
+  an authorized interactive or cron context via EvalExecutor.ts.
+
+created_at: "2026-07-03"

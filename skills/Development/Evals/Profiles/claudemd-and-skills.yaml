@@ -1,0 +1,7 @@
+name: claudemd-and-skills
+description: "Bare Claude Code plus CLAUDE.md, skills and commands — no hooks, agents, memory, plugins, MCP"
+base: clean
+include:
+  claudemd: true
+  skills: ["*"]
+  commands: ["*"]

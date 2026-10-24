@@ -1,0 +1,107 @@
+# Spec Quality Judge — Live Eval
+#
+# WHY: The deterministic validateISCQuality + validateSliceShape gates produced
+# false-positive rejections on real grilled specs (lifeos mq5vmjmh and cooking
+# mq647gx0). This eval proves the LLM judge passes those real specs (RED under
+# the old gate, GREEN under the judge) and rejects genuinely barren specs.
+#
+# ENVIRONMENT: Requires an authorized run context (claude -p subprocess).
+# The unit tests in ISCQualityGate.test.ts cover the same cases with a stubbed
+# inference — those run in CI. This eval is the live validation.
+#
+# SUITE: kaya-pipeline-dedeterminization (see Suites/ for registration).
+#
+# APPROACH: Each case calls judgeSpecQuality() via a script that imports
+# SpecPipelineRunner.ts, passes in the spec content, and prints the JSON result.
+# The grader checks the JSON for pass:true or pass:false as appropriate.
+
+id: kaya_specsheet_spec_quality_judge
+description: "LLM spec-quality judge: real grilled specs PASS, skeleton specs FAIL"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  scenario_prompt: |
+    You are validating the spec-quality judge function in SpecPipelineRunner.ts.
+    The function is: judgeSpecQuality(specMarkdown, itemId?): Promise<SpecQualityJudgment>
+    It calls inference() with a consistent rubric and returns { pass, reasons, verdict }.
+
+    Run three test cases:
+
+    CASE A — LifeOS grilled spec (mq5vmjmh, previously false-failed):
+    Read the file at plans/Specs/Queue/mq5vmjmh-8rf97i-spec.md.
+    Import and call judgeSpecQuality with the file contents.
+    Record the result.
+
+    CASE B — Cooking grilled spec (mq647gx0, previously false-failed):
+    Read the file at plans/Specs/Queue/mq647gx0-6suifr-spec.md.
+    Import and call judgeSpecQuality with the file contents.
+    Record the result.
+
+    CASE C — Skeleton/barren spec (should FAIL):
+    Call judgeSpecQuality with this content:
+    ```
+    ## 5. Ideal State Criteria (ISC)
+
+    | # | What Ideal Looks Like | Verify Method |
+    |---|---|---|
+    | 1 | Implementation matches problem context | Manual review |
+    | 2 | No regressions in existing functionality | Test suite |
+    ```
+    Record the result.
+
+    Report results for all three cases in this format:
+    CASE A: pass=<true/false> verdict=<PASS/FAIL/NEEDS_REVIEW/JUDGE_UNAVAILABLE>
+    CASE B: pass=<true/false> verdict=<PASS/FAIL/NEEDS_REVIEW/JUDGE_UNAVAILABLE>
+    CASE C: pass=<true/false> verdict=<PASS/FAIL/NEEDS_REVIEW/JUDGE_UNAVAILABLE>
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "CASE A (LifeOS mq5vmjmh) result shows pass=true"
+        - "CASE B (Cooking mq647gx0) result shows pass=true"
+        - "CASE C (skeleton spec) result shows pass=false"
+        - "Agent read both real spec files before calling judgeSpecQuality"
+        - "All three cases completed without JUDGE_UNAVAILABLE verdict"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Read }
+        - { tool: Bash }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - kaya
+  - specsheet
+  - spec-quality
+  - dedeterminize
+  - regression
+  - kaya-pipeline-dedeterminization
+
+notes: |
+  Red-Green evidence (Slice 2a):
+
+  OLD deterministic gate (validateISCQuality + validateSliceShape) behavior:
+  - CASE A (mq5vmjmh LifeOS): would FALSE-FAIL because extractISC mis-detected
+    the table layout and returned insufficient rows, or a verify-method cell
+    matched a SKELETON_PHRASES pattern.
+  - CASE B (mq647gx0 Cooking): same false-positive class.
+  - CASE C (skeleton): correctly FAIL.
+
+  NEW LLM judge behavior (what this eval verifies):
+  - CASE A: PASS (rich, specific ISC with concrete verify commands)
+  - CASE B: PASS (rich, specific ISC with concrete verify commands)
+  - CASE C: FAIL (generic boilerplate ISC)
+
+  This eval CANNOT run in CI (requires live claude -p subprocess).
+  CI coverage is in ISCQualityGate.test.ts (stubbed inference).
+  Run this eval in an authorized interactive or cron context.
+
+created_at: "2026-06-18"

@@ -1,0 +1,90 @@
+# DailyBriefing telegram-limit awareness — Live Eval
+#
+# WHY: Telegram's 4096-char hard limit was enforced by TelegramFormatter.ts's
+# silent slice (deleted S3 — Deliver.ts now truncates LOUDLY as a last
+# resort). The composition-side defense is the agent targeting 800-1500 chars
+# and leaving room for the appended Drive link, per GenerateBriefing.md's
+# channel-format rules. This fixture hands the agent a HEAVY day (dense
+# calendar, many overdue tasks, rich news) where dumping everything would
+# blow past the limit — a pass composes a prioritized message inside the
+# budget and pushes depth to the written markdown channel instead.
+#
+# SUITE: dailybriefing-markdown-first.
+
+id: dailybriefing_telegram_limit_awareness
+description: "Agent composing a heavy-day telegram message stays within the workflow's char budget by prioritizing, pushing depth to the markdown channel — never relying on downstream truncation"
+type: regression
+domain: coding
+source: manual
+
+setup:
+  isolation: none
+  working_dir: ~/.claude
+  scenario_prompt: |
+    You are simulating the composition step of Kaya's daily-briefing agent.
+
+    STEP 1: Read skills/Productivity/DailyBriefing/Workflows/GenerateBriefing.md
+    in full, paying attention to the channel formats section (telegram vs
+    markdown). Do not run any gather or delivery commands.
+
+    STEP 2: Today is a HEAVY day. The gathered data includes:
+      - calendar: 11 events between 08:00 and 21:30 (standup 09:00, dentist
+        11:30, lunch w/ Sam 12:30, sprint review 14:00, 1:1 15:00, PT 16:30,
+        surf check 17:30, dinner reservation 19:00, plus 3 minor holds),
+        totalEventCount 11
+      - tasks: overdueTotalCount 9 (top: "Renew car registration" 12d
+        overdue, "Reply to accountant" 8d, "Fix roof leak quote" 6d),
+        dueTodayTotalCount 4 ("Submit conference talk", "Pay contractor
+        invoice", "Book flights for October", "Review PR #142")
+      - news.totalRecent 14, with 6 substantive articles (a major model
+        release, an npm supply-chain compromise affecting a package Jm uses,
+        a local SD transit vote, plus 3 minor items)
+      - strategies: S2 at 41 of 100 (gap -59), S4 at 8.6 of 100 (gap -91.4)
+      - habits: Writing avg7 86 avg28 71; Stretching avg7 0 avg28 4
+      - weather: 66°F overcast, High 71 Low 60, 3-6am rain 80%
+
+    STEP 3: Write the exact TELEGRAM message you would put in the delivery
+    payload for this day. After the message, report its character count and
+    explain in 2-3 sentences how you decided what to include vs. what to
+    leave for the written markdown briefing.
+
+graders:
+  - type: natural_language_assert
+    weight: 0.70
+    params:
+      assertions:
+        - "Agent read skills/Productivity/DailyBriefing/Workflows/GenerateBriefing.md before composing"
+        - "The telegram message is comfortably under 4096 characters (the workflow's stated hard limit), and the agent's reported count reflects awareness of a budget — target range on the order of 800-1500 chars, not thousands over"
+        - "The message PRIORITIZES rather than dumps: it does not enumerate all 11 calendar events and all 13 task titles — it names the most important few and summarizes the rest with counts (e.g. '9 overdue — oldest: car registration, 12d')"
+        - "The agent's explanation explicitly assigns full depth (complete lists, all news items, links) to the written markdown/Drive channel rather than the telegram message"
+        - "The message leads with today's single most important action, per the workflow's Today-first structure"
+        - "No reliance on downstream truncation — the agent never says the delivery tool will cut it to fit"
+  - type: tool_calls
+    weight: 0.30
+    required: true
+    params:
+      required:
+        - { tool: Read }
+
+trials: 2
+pass_threshold: 0.80
+
+tags:
+  - dailybriefing
+  - markdown-first
+  - telegram
+  - channel-limits
+  - regression
+  - dailybriefing-markdown-first
+
+notes: |
+  Deliver.ts still enforces the 4096 hard cut as a last resort — but it
+  WARNS loudly and the workflow's step-5 verify treats a truncation warning
+  as a composition defect to report. This fixture proves the budget lives in
+  composition judgment, so the deterministic cut stays what it should be: a
+  never-fired safety rail.
+
+  This eval CANNOT run in CI (requires a live claude -p subprocess). Run via
+  EvalExecutor.ts in an authorized interactive or cron context.
+
+created_at: "2026-07-12"

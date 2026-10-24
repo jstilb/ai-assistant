@@ -1,0 +1,40 @@
+name: kaya-pipeline-nightly
+description: "Nightly regression suite for Kaya pipeline decisions — sampled from divergence spool, failure log, and yesterday's decision records. Tasks are appended by later slices."
+version: 1.0.0
+type: regression
+domain: general
+
+# Suite-level threshold: 80% mean score across all tasks must pass
+pass_threshold: 0.80
+
+# One task per de-determinized pipeline decision (Slices 1-7).
+tasks:
+  - kaya_router_disposition_golden   # Slice 1 — 6-way routing disposition
+  - kaya_clarity_verdict_golden      # Slice 2 — 3-way clarity verdict
+  - kaya_research_verdict_golden     # Slice 3 — implement/skip/defer
+  - kaya_isc_extraction_golden       # Slice 4 — ISC extraction fidelity
+  - kaya_isc_quality_golden          # Slice 5 — spec quality (pass/barren)
+  - kaya_verifier_accuracy_golden    # Slice 6 — verifier verdict justification
+  - kaya_judge_calibration           # Slice 7 — judge discrimination + drift
+
+  # S0 eval nets (determinism-remediation "let-the-model-speak") — rigor
+  # moves into evals BEFORE the deterministic rules they cover are deleted
+  # in later slices. Each of these fixtures a rule slated for deletion.
+  - kaya_capture_routing             # S0 — live classify() vs CaptureGate's NON_CAPTURE_HEURISTICS (pre-S6)
+  - kaya_learning_capture            # S0 — live LLM judgment vs learning-utils.ts regex dictionaries
+
+  # evals-rebuild C2 — AgentMonitor consolidation: ErrorRate/DecisionQuality
+  # signal migrated from the deleted AgentMonitor Phase-1 evaluator pipeline
+  # (EvaluatorPipeline.ts + the five Evaluator classes). Lands in this
+  # existing nightly slot rather than a third evals-* cron job.
+  - kaya_agent_trace_error_rate_golden        # deterministic protocol-parse over 5 real trace files (was ErrorRateEvaluator)
+  - kaya_agent_trace_decision_quality_golden  # LLM judge over whole-workflow traces + rule-half features (was DecisionQualityEvaluator's LLM-half)
+
+  # Context Integrity Program D1 — recall@k/MRR over MemoryStore.search()'s
+  # fullText path. Held out of this suite at build time because it cost ~11
+  # real minutes per run and had never reached a clean harness verdict. Both
+  # blockers are gone: the cost was a per-candidate index reparse in
+  # MemoryStore.loadEntry() (fixed 2026-07-30 — full run now 1.87s, metrics
+  # byte-identical), and the task now has a clean end-to-end harness run.
+  # Zero LLM calls — deterministic setup_command + fixture_accuracy grader.
+  - kaya_retrieval_quality_golden
