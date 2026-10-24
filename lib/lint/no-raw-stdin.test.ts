@@ -68,3 +68,11 @@ test("full-tree warning mode uses the same new provider and stream pattern", asy
   expect(result.warnings.length).toBe(1);
   expect(result.warnings[0]).toContain("bin/client.ts");
 });
+
+test("flags ordinary skills paths", async () => {
+  const code = `const body = ${reads[1]};\n`;
+  stage("skills/Example/Tools/cli.ts", code);
+  const result = await checkNoRawStdinStaged(repo);
+  expect(result.errors.length).toBe(1);
+  expect(result.errors[0]).toContain("skills/Example/Tools/cli.ts:1:");
+});

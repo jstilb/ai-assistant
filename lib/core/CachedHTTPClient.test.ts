@@ -678,6 +678,66 @@ describe('CachedHTTPClient', () => {
     });
   });
 
+  // Port-0 Bun.serve stubs (local loopback only) — these exercise the real
+  // default transport, not an injected fetchFn. Task t-mvlqluf3-e45ff6.
+  describe('Non-idempotent requests and caller signal (Bun.serve stub)', () => {
+    it('should send concurrent POSTs with different bodies separately', async () => {
+      const received: string[] = [];
+      const server = Bun.serve({
+        port: 0,
+        async fetch(req) {
+          const body = await req.text();
+          received.push(body);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return new Response(`echo:${body}`);
+        },
+      });
+      try {
+        const client = createHTTPClient({ cacheDir });
+        const url = `http://localhost:${server.port}/send`;
+        const headers = { 'content-type': 'text/plain' };
+
+        const [r1, r2] = await Promise.all([
+          client.fetch(url, { method: 'POST', body: 'first', headers }),
+          client.fetch(url, { method: 'POST', body: 'second', headers }),
+        ]);
+
+        expect(received.sort()).toEqual(['first', 'second']);
+        expect(await r1.text()).toBe('echo:first');
+        expect(await r2.text()).toBe('echo:second');
+      } finally {
+        server.stop(true);
+      }
+    });
+
+    it('should abort on the caller signal and not retry', async () => {
+      let hits = 0;
+      const server = Bun.serve({
+        port: 0,
+        fetch() {
+          hits++;
+          // Never answers.
+          return new Promise<Response>(() => {});
+        },
+      });
+      try {
+        const client = createHTTPClient({ cacheDir });
+        const url = `http://localhost:${server.port}/hang`;
+
+        const start = Date.now();
+        await expect(
+          client.fetch(url, { cache: 'none', retry: 3, signal: AbortSignal.timeout(200) })
+        ).rejects.toThrow();
+        const elapsed = Date.now() - start;
+
+        expect(elapsed).toBeLessThan(2000); // client default timeout is 30 s
+        expect(hits).toBe(1); // a caller abort is not retried
+      } finally {
+        server.stop(true);
+      }
+    }, 5000);
+  });
+
   describe('Circuit Breaker', () => {
     it('should open circuit after repeated failures', async () => {
       const { fetchFn, calls } = alwaysFailingFetch();

@@ -112,6 +112,58 @@ export function loadOAuthToken(): string | undefined {
   return undefined;
 }
 
+/** Max chars of stdout surfaced in an exit error. */
+const EXIT_STDOUT_TAIL_CHARS = 1000;
+
+/**
+ * Compact summary of a Claude Code JSON envelope that carries no `result`
+ * message. Built only from known fields so raw digits (session_id, durations)
+ * can't be mistaken for status codes by substring classifiers downstream.
+ */
+function summarizeEnvelope(rec: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const key of ['subtype', 'terminal_reason', 'api_error_status']) {
+    const v = rec[key];
+    if (typeof v === 'string' || typeof v === 'number') parts.push(`${key}=${v}`);
+  }
+  if (parts.length === 0) return 'claude envelope without message';
+  return `claude envelope${rec.is_error === true ? ' is_error' : ''} (${parts.join(', ')})`;
+}
+
+/** Max chars of `[claude-code:…]` stderr tag lines surfaced in an exit error. */
+const EXIT_TAG_CHARS = 300;
+
+/**
+ * Error text for a non-zero `claude -p` exit. Claude Code prints its real
+ * reason (limit / credit / auth / bad model) on STDOUT and leaves stderr empty,
+ * so when stderr is blank surface a bounded stdout tail, message first
+ * (`exit N: <msg>`) so short downstream truncations still show it. In
+ * `--output-format json` mode stdout is an envelope; prefer its `result`
+ * message, else a field summary, never the raw JSON.
+ * Claude Code also emits bare `[claude-code:<reason>] {...}` tag lines on stderr
+ * for such failures; stderr made only of those (blank lines allowed) is still
+ * "no real message", so the message leads and the capped tag follows in
+ * brackets. Other stderr is unchanged.
+ */
+export function buildExitError(code: number | null, stdout: string, stderr: string): string {
+  const errTrim = stderr.trim();
+  const tagOnly = errTrim !== '' &&
+    errTrim.split('\n').every((l) => l.trim() === '' || /^\[claude-code:[^\]]+\]/.test(l.trim()));
+  if (errTrim && !tagOnly) return stderr;
+  const tag = tagOnly ? ` [${errTrim.replace(/\s*\n\s*/g, ' ').slice(0, EXIT_TAG_CHARS)}]` : '';
+  let detail = stdout.trim();
+  if (!detail) return `Process exited with code ${code}${tag}`;
+  try {
+    const parsed: unknown = JSON.parse(detail);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      const rec = parsed as Record<string, unknown>;
+      const result = rec.result;
+      detail = typeof result === 'string' && result.trim() ? result.trim() : summarizeEnvelope(rec);
+    }
+  } catch { /* intentionally silent: stdout is often plain text, not a JSON envelope — falling back to the raw tail is the normal path */ }
+  return `exit ${code}: ${detail.slice(-EXIT_STDOUT_TAIL_CHARS)}${tag}`;
+}
+
 /**
  * Resolve the full path to the `claude` CLI binary.
  * In interactive shells, `claude` is on $PATH via ~/.local/bin.
@@ -166,6 +218,10 @@ export interface InferenceOptions {
    *  is ignored when this is set. NOT supported on the `kimi` level (no
    *  claude -p spawn) — that combination fails loud rather than degrading. */
   schema?: Record<string, unknown>;
+  /** Explicit model for this call (claude -p `--model`), overriding the level's configured model. Not for the `kimi` level. */
+  model?: string;
+  /** Explicit effort for this call (claude -p `--effort`), overriding the level's configured effort. Not for the `kimi` level. */
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   timeout?: number;
   /** When true, detect JSON arrays in userPrompt and TOON-encode them before sending.
    *  Only applies when settings.json toon.enableInInference is also true. */
@@ -666,7 +722,11 @@ export function buildHardenedClaudeEnv(): Record<string, string | undefined> {
   const claudeBin = join(defaultKayaHome(), 'bin');
   const existingPath = env.PATH ?? '';
   const pathSegments = existingPath.split(':').filter(Boolean);
-  if (!pathSegments.includes(claudeBin)) {
+  if (env.KAYA_LAB_WORLD === '1') {
+    // Eval Lab fake Kaya world (rule 10): the cell's PATH already has its own shims first. Prepending the
+    // real bin would put the live kaya-cli (real gmail/calendar) ahead of the record-only shim.
+    env.PATH = existingPath;
+  } else if (!pathSegments.includes(claudeBin)) {
     env.PATH = existingPath ? `${claudeBin}:${existingPath}` : claudeBin;
   } else {
     env.PATH = existingPath;
@@ -756,6 +816,37 @@ async function kimiInferenceOnce(
   return { success: true, output, latencyMs, level, ...costFields };
 }
 
+/** Per-call override (Eval Lab lane arms): an explicit model/effort wins over the level's config. */
+export function resolveModelEffort(
+  options: Pick<InferenceOptions, 'model' | 'effort'>,
+  config: { model: string; effort?: string },
+): { model: string; effort: string | undefined } {
+  return { model: options.model ?? config.model, effort: options.effort ?? config.effort };
+}
+
+/** The `claude -p` argv for one call (system prompt included; user prompt goes on stdin). Pure. */
+export function buildClaudeArgs(
+  options: Pick<InferenceOptions, 'systemPrompt' | 'schema'>,
+  model: string,
+  effort: string | undefined,
+): string[] {
+  const args = [
+    '-p',
+    '--model', model,
+    ...(effort ? ['--effort', effort] : []),
+    '--tools', '',  // Disable tools for faster response
+    // schema mode needs the JSON result envelope to carry structured_output;
+    // plain mode stays on text so 73 existing expectJson callers are untouched.
+    '--output-format', options.schema ? 'json' : 'text',
+    '--setting-sources', '',  // Disable hooks to prevent recursion
+    '--system-prompt', options.systemPrompt,
+  ];
+  if (options.schema) {
+    args.push('--json-schema', JSON.stringify(options.schema));
+  }
+  return args;
+}
+
 async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult> {
   const level = options.level || 'standard';
   const levelConfig = getLevelConfig();
@@ -767,6 +858,22 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
   let userPrompt = options.userPrompt;
   if (options.toonEncodeInput && isToonInferenceEnabled()) {
     userPrompt = toonEncodePrompt(userPrompt);
+  }
+
+  // Per-call model/effort are claude -p flags: an empty model is a caller bug, and kimi has no such dials. Fail loud.
+  if (options.model !== undefined && options.model.trim() === '') {
+    return {
+      success: false, output: '', error: 'model option must be a non-empty string', latencyMs: Date.now() - startTime, level,
+      estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+    };
+  }
+  if (isExternalApiLevel(level) && (options.model !== undefined || options.effort !== undefined)) {
+    return {
+      success: false, output: '',
+      error: `model/effort options are not supported on the '${level}' level (no claude -p spawn). Use fast/standard/smart, or drop them.`,
+      latencyMs: Date.now() - startTime, level,
+      estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+    };
   }
 
   // The kimi level is not a `claude -p` spawn — hand off to the HTTPS client
@@ -794,20 +901,8 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
 
   // Use -p flag with stdin for user prompt (avoids CLI flag parsing issues
   // when content starts with special characters like ---)
-  const args = [
-    '-p',
-    '--model', config.model,
-    ...(config.effort ? ['--effort', config.effort] : []),
-    '--tools', '',  // Disable tools for faster response
-    // schema mode needs the JSON result envelope to carry structured_output;
-    // plain mode stays on text so 73 existing expectJson callers are untouched.
-    '--output-format', options.schema ? 'json' : 'text',
-    '--setting-sources', '',  // Disable hooks to prevent recursion
-    '--system-prompt', options.systemPrompt,
-  ];
-  if (options.schema) {
-    args.push('--json-schema', JSON.stringify(options.schema));
-  }
+  const { model, effort } = resolveModelEffort(options, config);
+  const args = buildClaudeArgs(options, model, effort);
 
   // Redirect claude's stdout/stderr to temp files via file descriptors.
   // The claude binary's IPC with the parent Claude Code process suppresses
@@ -844,7 +939,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
       const outputTokens = estimateTokens(outputText);
       return {
         estimatedTokens: { input: inputTokens, output: outputTokens, total: inputTokens + outputTokens },
-        estimatedCostUSD: estimateCostUSD({ inputTokens, outputTokens, modelName: config.model }),
+        estimatedCostUSD: estimateCostUSD({ inputTokens, outputTokens, modelName: model }),
       };
     };
 
@@ -881,7 +976,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
         resolve({
           success: false,
           output: stdout,
-          error: stderr || `Process exited with code ${code}`,
+          error: buildExitError(code, stdout, stderr),
           latencyMs,
           level,
           estimatedTokens: zeroCost,
@@ -920,7 +1015,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
               estimatedCostUSD: estimateCostUSD({
                 inputTokens: envelope.usage.input,
                 outputTokens: envelope.usage.output,
-                modelName: config.model,
+                modelName: model,
               }),
             }
           : computeCostFields(options.systemPrompt + '\n' + userPrompt, envelope.resultText);

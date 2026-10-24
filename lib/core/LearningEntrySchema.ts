@@ -4,14 +4,14 @@
  *
  *   1. skills/Communication/Telegram/Server/gateway/LearningCapture.ts
  *      → MEMORY/LEARNING/SIGNALS/ratings.jsonl  (RatingSignal)
- *   2. hooks/ExplicitRatingCapture.hook.ts
+ *   2. hooks/ExplicitRatingRecord.hook.ts
  *      → MEMORY/LEARNING/SIGNALS/ratings.jsonl  (RatingEntry)
- *   3. hooks/SessionRatingCapture.hook.ts
+ *   3. hooks/SessionRatingRecord.hook.ts
  *      → MEMORY/LEARNING/SIGNALS/ratings.jsonl  (SessionRatingRow)
  *
  * Three DIFFERENT writers append to the SAME file (ratings.jsonl) with THREE
  * genuinely different shapes — there is no discriminant field common to all
- * of them (ExplicitRatingCapture never writes `source` at all; the other two
+ * of them (ExplicitRatingRecord never writes `source` at all; the other two
  * always do). This is modeled as a union of per-writer variants rather than
  * one shape with optional fields, so that:
  *   - each writer can `.parse()` its own exact contract at construction time
@@ -60,7 +60,7 @@ const RatingsBaseShape = {
   session_id: z.string().min(1),
 };
 
-// ── Variant 1: hooks/ExplicitRatingCapture.hook.ts — `RatingEntry` ──────────
+// ── Variant 1: hooks/ExplicitRatingRecord.hook.ts — `RatingEntry` ──────────
 //
 // The minimal shape: this hook only ever knows the number the user typed
 // plus an optional trailing comment. No `source`/`sentiment_summary`/
@@ -74,7 +74,7 @@ export const ExplicitHookRatingSchema = z
   .strict();
 export type ExplicitHookRating = z.infer<typeof ExplicitHookRatingSchema>;
 
-// ── Variant 2: hooks/SessionRatingCapture.hook.ts — `SessionRatingRow` ──────
+// ── Variant 2: hooks/SessionRatingRecord.hook.ts — `SessionRatingRow` ──────
 //
 // One inferred rating per session at SessionEnd. `source` is always the
 // literal "implicit" — this writer never produces "explicit" or "telegram".

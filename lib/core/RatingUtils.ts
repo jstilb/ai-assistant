@@ -1,5 +1,5 @@
 /**
- * RatingUtils — Shared rating parsing utilities for the ExplicitRatingCapture
+ * RatingUtils — Shared rating parsing utilities for the ExplicitRatingRecord
  * hook. (ImplicitSentimentCapture, the other original consumer, was deleted
  * 2026-07-03 — de-registered since April 2026.)
  *

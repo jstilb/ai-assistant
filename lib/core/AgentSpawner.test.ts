@@ -35,6 +35,7 @@ import {
 import type { RawSpawnFn, RawSpawnOutcome, GetOrCreateWorktreeFn } from "./AgentSpawner.ts";
 import { MEMORY } from "./MemoryPaths.ts";
 import { removeWorktree, worktreesDir, repoSlug } from "./WorktreeManager.ts";
+import { AGENT_RUN_ENV_KEY } from "./ProcessReaper.ts";
 
 // ============================================================================
 // Fake spawn fn — never touches a real process
@@ -227,6 +228,53 @@ describe("spawnAgentSync — enforceTools (S-06 slice-3)", () => {
     } finally {
       if (origEnv === undefined) delete process.env.KAYA_HEADLESS_TOOLS_ENFORCE;
       else process.env.KAYA_HEADLESS_TOOLS_ENFORCE = origEnv;
+    }
+  });
+});
+
+// ============================================================================
+// spawnAgentSync — leftover-process sweep (incident 2026-10-23, ProcessReaper.ts)
+// ============================================================================
+
+describe("spawnAgentSync — leftover-process sweep", () => {
+  it("gives each spawn a fresh run marker in env and sweeps that same marker after", () => {
+    const { fn, calls } = makeFakeSpawn({ status: 0 });
+    const swept: string[] = [];
+    const reapFn = (runId: string) => { swept.push(runId); return []; };
+    const deps = { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED, reapFn };
+    const r1 = spawnAgentSync({ prompt: "p", model: "sonnet", allowedTools: "Read" }, deps);
+    spawnAgentSync({ prompt: "p", model: "sonnet", allowedTools: "Read" }, deps);
+
+    expect(calls.map(c => c.opts.env[AGENT_RUN_ENV_KEY])).toEqual(swept);
+    expect(swept[0]).not.toBe(swept[1]);
+    expect(r1.reapedPids).toBeUndefined();
+  });
+
+  it("ends a server the agent backgrounded and reports its pid in reapedPids", () => {
+    const tag = `agentspawner-leftover-${crypto.randomUUID()}`;
+    let leftover = -1;
+    // Fake agent: does what the 2026-10-05 executor run did — starts a bun
+    // process with `&` from a shell, with the env it was given, then exits.
+    const spawnFn: RawSpawnFn = (_claudePath, _args, opts) => {
+      execFileSync("sh", ["-c", `"${process.execPath}" -e 'setTimeout(() => {}, 600000) // ${tag}' > /dev/null 2>&1 &`], {
+        env: opts.env,
+        cwd: tmpdir(),
+      });
+      Bun.sleepSync(200);
+      leftover = Number(execFileSync("pgrep", ["-f", tag], { encoding: "utf-8" }).trim());
+      return { stdout: "done", stderr: "", status: 0, signal: null };
+    };
+    try {
+      const r = spawnAgentSync(
+        { prompt: "p", model: "sonnet", allowedTools: "Bash" },
+        { spawnFn, isRateLimitedFn: NEVER_LIMITED },
+      );
+      expect(leftover).toBeGreaterThan(1);
+      expect(r.reapedPids).toEqual([leftover]);
+      expect(r.success).toBe(true);
+      expect(() => process.kill(leftover, 0)).toThrow();
+    } finally {
+      if (leftover > 1) { try { process.kill(leftover, "SIGKILL"); } catch { /* already gone */ } }
     }
   });
 });

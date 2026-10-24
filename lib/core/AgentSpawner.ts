@@ -42,12 +42,14 @@
  */
 
 import { spawnSync } from "child_process";
+import { randomUUID } from "crypto";
 import type { ZodType } from "zod";
 import { CLAUDE_PATH, buildHardenedClaudeEnv, stripDangerousClaudeEnvKeys } from "./Inference.ts";
 import { isRateLimited, isRateLimitError, DEFAULT_THRESHOLD } from "./RateLimitGuard.ts";
 import { getKayaHome } from "./KayaHome.ts";
 import { getOrCreateWorktree } from "./WorktreeManager.ts";
 import type { CreateWorktreeOptions } from "./WorktreeManager.ts";
+import { AGENT_RUN_ENV_KEY, reapAgentRun } from "./ProcessReaper.ts";
 
 // ============================================================================
 // Constants
@@ -120,6 +122,11 @@ export interface AgentSpawnResult {
   infraReason?: InfraReason;
   /** Node.js errno code from a spawn-level error (e.g. "ENOTFOUND"), when present. */
   errorCode?: string;
+  /**
+   * Pids of processes the agent left running (e.g. a server started with `&`),
+   * ended by the post-run sweep. Set only when non-empty. See ProcessReaper.ts.
+   */
+  reapedPids?: number[];
 }
 
 /** Reusing WorktreeManager's own option type — no duplicate shape to drift. */
@@ -288,6 +295,8 @@ export interface AgentSpawnDeps {
   getOrCreateWorktreeFn?: GetOrCreateWorktreeFn;
   /** Defaults to the real RateLimitGuard.isRateLimited. */
   isRateLimitedFn?: IsRateLimitedFn;
+  /** Defaults to the real ProcessReaper.reapAgentRun (post-run leftover sweep). */
+  reapFn?: (runId: string) => number[];
 }
 
 // ============================================================================
@@ -450,7 +459,10 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBuffer = opts.maxBuffer ?? DEFAULT_MAX_BUFFER;
   const cwd = opts.cwd ?? process.env.HOME ?? "/tmp";
-  const env = buildSpawnEnv(opts.env);
+  // Fresh per-run marker: every descendant inherits it, so the post-run sweep
+  // can find servers the agent backgrounded and never stopped (ProcessReaper.ts).
+  const runId = randomUUID();
+  const env = { ...buildSpawnEnv(opts.env), [AGENT_RUN_ENV_KEY]: runId };
 
   // `--allowedTools` is a permission-system allow-list — under
   // `--dangerously-skip-permissions` the permission system never runs, so it
@@ -487,6 +499,12 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
 
   const spawnFn = deps.spawnFn ?? defaultSpawnFn;
   const raw = spawnFn(CLAUDE_PATH, args, { cwd, env, timeoutMs, maxBuffer });
+  const reapedPids = (deps.reapFn ?? reapAgentRun)(runId);
+  if (reapedPids.length > 0) {
+    console.warn(
+      `[AgentSpawner] agent left ${reapedPids.length} process(es) running in ${cwd}; ended pids ${reapedPids.join(", ")}`,
+    );
+  }
 
   const timedOut = raw.signal === "SIGTERM" || raw.error?.code === "ETIMEDOUT";
   const exitCode = raw.status ?? 1;
@@ -501,6 +519,7 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
     infraUnavailable: false,
     preSpawnGated: false,
     errorCode: raw.error?.code,
+    ...(reapedPids.length > 0 ? { reapedPids } : {}),
   };
   result.infraReason = classifyInfraReason(result);
   result.infraUnavailable = isInfraUnavailable(result);

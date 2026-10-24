@@ -152,13 +152,27 @@ export type { ZodType };
 export const RateLimitWindowSchema = z.object({
   usedPercentage: z.number(),
   resetsAt: z.string(),
+  /** ISO time the statusline saw this reading. Absent in files written before 2026-10-18 (use updatedAt then). */
+  observedAt: z.string().optional(),
 });
 export type RateLimitWindow = z.infer<typeof RateLimitWindowSchema>;
 
 export const RateLimitsSchema = z.object({
+  /** The reading from the LAST statusline render; null when that render carried no usage data. */
   fiveHour: RateLimitWindowSchema.nullable(),
   sevenDay: RateLimitWindowSchema.nullable(),
+  /** ISO time of the last statusline write (a render with or without usage data). */
   updatedAt: z.string().optional(),
+  /**
+   * The last REAL reading per window, kept across renders that carried no data (a null render never overwrites it).
+   * Each window carries its own observedAt. Absent in files written before 2026-10-18.
+   */
+  lastReal: z
+    .object({
+      fiveHour: RateLimitWindowSchema.nullable(),
+      sevenDay: RateLimitWindowSchema.nullable(),
+    })
+    .optional(),
 });
 export type RateLimits = z.infer<typeof RateLimitsSchema>;
 

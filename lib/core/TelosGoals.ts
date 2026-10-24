@@ -7,7 +7,7 @@
  * This deletes the five independent regex parsers that each re-derived the
  * same hand-written GOALS.md grammar (DailyBriefing/GoalsBlock,
  * LucidTasks/TelosGoalLoader, AgentMetacognition/GoalConnector,
- * LifeOS/StatusRefresh, KnowledgeGraph/GapDetector) — a format change that
+ * LifeOS/StatusRefresh, VaultGraph/GapDetector) — a format change that
  * satisfied one silently broke the other four.
  *
  * Contract:

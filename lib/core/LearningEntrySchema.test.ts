@@ -58,12 +58,12 @@ describe("LearningEntrySchema — per-writer real shapes", () => {
     expect(TelegramRatingSignalSchema.safeParse(signal).success).toBe(true);
   });
 
-  it("ExplicitRatingCapture.hook.ts — bare rating, no comment", () => {
+  it("ExplicitRatingRecord.hook.ts — bare rating, no comment", () => {
     const entry = { timestamp: "2026-07-03T09:51:30-07:00", rating: 8, session_id: "smoke-test" };
     expect(ExplicitHookRatingSchema.safeParse(entry).success).toBe(true);
   });
 
-  it("ExplicitRatingCapture.hook.ts — rating with trailing comment", () => {
+  it("ExplicitRatingRecord.hook.ts — rating with trailing comment", () => {
     const entry = {
       timestamp: "2026-01-27T09:44:19-08:00",
       rating: 1,
@@ -73,7 +73,7 @@ describe("LearningEntrySchema — per-writer real shapes", () => {
     expect(ExplicitHookRatingSchema.safeParse(entry).success).toBe(true);
   });
 
-  it("SessionRatingCapture.hook.ts — SessionRatingRow", () => {
+  it("SessionRatingRecord.hook.ts — SessionRatingRow", () => {
     const row = {
       timestamp: "2026-06-30T11:32:15.390Z",
       rating: 6,
@@ -128,8 +128,8 @@ describe("LearningEntrySchema — real malformed rows from MEMORY/LEARNING/SIGNA
 
   it("rejects a row with `source` but missing sentiment_summary/confidence (partial write, matches no writer contract)", () => {
     // Real row sampled from the corpus 2026-07-03 — has source:"implicit" like
-    // SessionRatingCapture rows, but SessionRatingCapture never omits
-    // sentiment_summary/confidence, and ExplicitRatingCapture never writes
+    // SessionRatingRecord rows, but SessionRatingRecord never omits
+    // sentiment_summary/confidence, and ExplicitRatingRecord never writes
     // `source` at all. Matches neither.
     const row = {
       timestamp: "2026-03-09T20:41:08-07:00",
@@ -185,11 +185,11 @@ describe("LearningEntrySchema — round-trip fidelity on real sampled lines", ()
       line: '{"timestamp": "2026-02-18T19:52:18.343Z", "rating": 5, "session_id": "8009738983-2026-02-18T19-25-06", "source": "implicit", "sentiment_summary": "Neutral exchange, no sentiment detected", "confidence": 0.5, "platform": "telegram", "message_type": "text", "profile": "general"}',
     },
     {
-      label: "SessionRatingCapture.hook.ts",
+      label: "SessionRatingRecord.hook.ts",
       line: '{"timestamp":"2026-06-30T11:32:15.390Z","rating":6,"session_id":"78eae622-f0e1-4c05-8414-911cc2d17818","source":"implicit","sentiment_summary":"Sync-All completed successfully; minor teardown integration errors.","confidence":0.68}',
     },
     {
-      label: "ExplicitRatingCapture.hook.ts (no comment)",
+      label: "ExplicitRatingRecord.hook.ts (no comment)",
       line: '{"timestamp":"2026-07-03T09:51:30-07:00","rating":8,"session_id":"smoke-test"}',
     },
   ];

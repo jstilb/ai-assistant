@@ -5,6 +5,9 @@
  * Reads MEMORY/State/rate-limits.json (written by statusline-command.sh)
  * and determines whether a model should be swapped for a fallback.
  *
+ * A missing or stale reading is UNKNOWN, not 0%: resolveModel() reports it in `reason`
+ * and `known:false, peak:null`, and keeps the preferred model.
+ *
  * Two safety layers:
  *   1. Pre-spawn: resolveModel() checks state file before spawning
  *   2. Post-spawn: isRateLimitError() pattern-matches agent output
@@ -19,6 +22,7 @@
  *   import { resolveModel, isRateLimitError, getFallbackModel } from './RateLimitGuard.ts';
  */
 
+import { existsSync } from "node:fs";
 import { parseArgs } from "util";
 import { MEMORY, type RateLimits, type RateLimitWindow } from "./MemoryPaths.ts";
 
@@ -35,6 +39,10 @@ interface ModelFallbackResult {
   model: ModelTier;
   wasFallback: boolean;
   reason: string;
+  /** Highest fresh usage percentage; null when usage is unknown (no fresh statusline reading). */
+  peak: number | null;
+  /** false = usage unknown. Unknown is NOT 0%: it means "no evidence either way". */
+  known: boolean;
 }
 
 // ============================================================================
@@ -79,37 +87,113 @@ const RATE_LIMIT_PATTERN = /hit your (?:[a-z0-9-]+ )?limit|reached your (?:[a-z0
 // ============================================================================
 
 /**
- * Read the current rate limit state from disk.
- * Returns null if the file is missing, unreadable, or stale.
+ * Read the raw rate limit state from disk, with NO staleness filtering.
+ * Returns null if the file is missing, unreadable, or fails validation.
+ * Whether a reading is current is decided per window by assessUsage().
  */
 function getRateLimitState(): RateLimitState | null {
-  const parsed = MEMORY.state.rateLimits.read();
-  if (!parsed) return null;
-  // Stale data is treated as missing — RateLimitGuard's contract is "no recent measurement".
-  if (parsed.updatedAt) {
-    const age = Date.now() - new Date(parsed.updatedAt).getTime();
-    if (age > MAX_STALE_MS) return null;
-  }
-  return parsed;
+  return MEMORY.state.rateLimits.read();
+}
+
+type WindowName = "fiveHour" | "sevenDay";
+
+/** One window's last real reading, with how old it is and whether it still describes the present. */
+interface WindowReading {
+  window: WindowName;
+  usedPercentage: number;
+  resetsAt: string;
+  /** ISO time the statusline saw this reading; null if the file does not say. */
+  observedAt: string | null;
+  /** null when observedAt is missing or unparseable. */
+  ageMs: number | null;
+  /** Fresh = observed within MAX_STALE_MS AND its window has not reset since. Only fresh readings feed the peak. */
+  fresh: boolean;
+  /** Plain-words reason a reading is not fresh; null when fresh. */
+  staleWhy: string | null;
+}
+
+interface UsageAssessment {
+  /** true when at least one window has a FRESH real reading. false = UNKNOWN (never 0%). */
+  known: boolean;
+  /** Highest usedPercentage among fresh readings; null when unknown. */
+  peak: number | null;
+  /** Every window that has any real reading, fresh or stale. */
+  readings: WindowReading[];
+  /** Newest observedAt across all readings (fresh or stale); null if no reading has ever been recorded. */
+  lastObservedAt: string | null;
+}
+
+function humanAge(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  if (m < 90) return `${m}m`;
+  const h = ms / 3_600_000;
+  return h < 48 ? `${h.toFixed(1)}h` : `${Math.round(h / 24)}d`;
 }
 
 /**
- * Get the peak usage percentage across both rate limit windows.
- * Returns 0 if no data is available.
+ * Turn the state file into per-window readings. A window's reading is the current render's value if it has one,
+ * else the file's `lastReal` (a null render never erases it). A missing reading is UNKNOWN, never 0%.
+ * An old-format file (no observedAt) borrows the file's updatedAt as the observation time.
+ */
+function assessUsage(state: RateLimitState | null, nowMs: number = Date.now()): UsageAssessment {
+  const readings: WindowReading[] = [];
+  if (state) {
+    for (const window of ["fiveHour", "sevenDay"] as const) {
+      const current = state[window];
+      const w = current ?? state.lastReal?.[window] ?? null;
+      if (!w) continue;
+      const observedAt = w.observedAt ?? (current ? state.updatedAt ?? null : null);
+      const obsMs = observedAt ? Date.parse(observedAt) : Number.NaN;
+      const ageMs = Number.isNaN(obsMs) ? null : nowMs - obsMs;
+      const resetMs = Date.parse(w.resetsAt);
+      let staleWhy: string | null = null;
+      if (ageMs === null) staleWhy = "no usable observation time";
+      else if (ageMs > MAX_STALE_MS) staleWhy = `observed ${humanAge(ageMs)} ago`;
+      else if (!Number.isNaN(resetMs) && resetMs <= nowMs) staleWhy = `its window reset at ${w.resetsAt}`;
+      readings.push({ window, usedPercentage: w.usedPercentage, resetsAt: w.resetsAt, observedAt, ageMs, fresh: staleWhy === null, staleWhy });
+    }
+  }
+  const fresh = readings.filter((r) => r.fresh);
+  const times = readings.map((r) => (r.observedAt ? Date.parse(r.observedAt) : Number.NaN)).filter((t) => !Number.isNaN(t));
+  return {
+    known: fresh.length > 0,
+    peak: fresh.length > 0 ? Math.max(...fresh.map((r) => r.usedPercentage)) : null,
+    readings,
+    lastObservedAt: times.length > 0 ? new Date(Math.max(...times)).toISOString() : null,
+  };
+}
+
+const WINDOW_LABEL: Record<WindowName, string> = { fiveHour: "5h", sevenDay: "7d" };
+
+/** Plain-words account of why usage is unknown (or partly unknown), for `reason` fields and logs. */
+function describeGaps(a: UsageAssessment): string {
+  const stale = a.readings.filter((r) => !r.fresh);
+  if (a.readings.length === 0) {
+    // The accessor returns null for a missing file AND for a corrupt/invalid one; say which. Both stay "unknown" (fail-safe).
+    const path = MEMORY.state.rateLimits.path();
+    if (existsSync(path) && MEMORY.state.rateLimits.read() === null) return `rate-limits.json could not be read or parsed (${path})`;
+    return "no statusline reading has ever been recorded";
+  }
+  const parts = stale.map((r) => `${WINDOW_LABEL[r.window]} ${r.usedPercentage}% is stale (${r.staleWhy})`);
+  return `no statusline reading since ${a.lastObservedAt ?? "an unknown time"}${parts.length ? `; last readings: ${parts.join(", ")}` : ""}`;
+}
+
+/**
+ * Get the peak usage percentage across both windows, counting only FRESH readings.
+ * Returns 0 if usage is unknown. That 0 means UNKNOWN, not "0% used" — callers that must tell the two apart
+ * use assessUsage().known / .peak. Kept for back-compat.
  */
 function getPeakUsage(state: RateLimitState | null): number {
-  if (!state) return 0;
-
-  const five = state.fiveHour?.usedPercentage ?? 0;
-  const seven = state.sevenDay?.usedPercentage ?? 0;
-  return Math.max(five, seven);
+  return assessUsage(state).peak ?? 0;
 }
 
 /**
- * Check if the current rate limit state exceeds a threshold.
+ * Check if the current rate limit state exceeds a threshold. Unknown usage is NOT limited:
+ * there is no evidence of a limit, and callers (spawn gates, the executor) already treat "no data" as go.
  */
 function isRateLimited(threshold: number = DEFAULT_THRESHOLD): boolean {
-  return getPeakUsage(getRateLimitState()) >= threshold;
+  const peak = assessUsage(getRateLimitState()).peak;
+  return peak !== null && peak >= threshold;
 }
 
 /**
@@ -133,14 +217,29 @@ function resolveModel(
   preferred: ModelTier,
   threshold: number = DEFAULT_THRESHOLD,
 ): ModelFallbackResult {
-  const state = getRateLimitState();
-  const peak = getPeakUsage(state);
+  const usage = assessUsage(getRateLimitState());
+  const peak = usage.peak;
 
-  if (peak < threshold) {
+  if (peak === null) {
+    // Unknown usage keeps the preferred model. There is no evidence of a limit, and failing over on missing
+    // data would change every caller's behaviour (the statusline only writes while an interactive session renders).
     return {
       model: preferred,
       wasFallback: false,
-      reason: `${preferred} within limits (${peak}% used)`,
+      reason: `${preferred} usage unknown: ${describeGaps(usage)}; keeping ${preferred}`,
+      peak: null,
+      known: false,
+    };
+  }
+
+  if (peak < threshold) {
+    const gaps = usage.readings.filter((r) => !r.fresh);
+    return {
+      model: preferred,
+      wasFallback: false,
+      reason: `${preferred} within limits (${peak}% used)${gaps.length ? `; ignored stale: ${gaps.map((r) => `${WINDOW_LABEL[r.window]} ${r.usedPercentage}% (${r.staleWhy})`).join(", ")}` : ""}`,
+      peak,
+      known: true,
     };
   }
 
@@ -151,6 +250,8 @@ function resolveModel(
       model: fallback,
       wasFallback: true,
       reason: `${preferred} at ${peak}% usage (threshold ${threshold}%), fell back to ${fallback}`,
+      peak,
+      known: true,
     };
   }
 
@@ -159,6 +260,8 @@ function resolveModel(
     model: preferred,
     wasFallback: false,
     reason: `${preferred} at ${peak}% usage but no fallback available — proceeding with ${preferred}`,
+    peak,
+    known: true,
   };
 }
 
@@ -218,12 +321,17 @@ OPTIONS:
   if (values.status) {
     const state = getRateLimitState();
     if (!state) {
-      console.log(JSON.stringify({ available: false, reason: "No rate limit data or data is stale" }));
+      console.log(JSON.stringify({ available: false, reason: "No rate limit file, or it failed validation" }));
     } else {
+      const usage = assessUsage(state);
       console.log(JSON.stringify({
-        available: true,
+        available: usage.known,
+        known: usage.known,
         peakUsage: getPeakUsage(state),
+        peak: usage.peak,
         isLimited: isRateLimited(),
+        ...(usage.known ? {} : { reason: `usage unknown: ${describeGaps(usage)}` }),
+        readings: usage.readings,
         ...state,
       }, null, 2));
     }
@@ -268,7 +376,10 @@ export {
   getRateLimitState,
   getFallbackModel,
   getPeakUsage,
+  assessUsage,
+  describeGaps,
   extractResetInfo,
+  MAX_STALE_MS,
   RATE_LIMIT_PATTERN,
   FALLBACK_CHAIN,
   DEFAULT_THRESHOLD,
@@ -276,4 +387,7 @@ export {
   type RateLimitState,
   type RateLimitWindow,
   type ModelFallbackResult,
+  type UsageAssessment,
+  type WindowReading,
+  type WindowName,
 };

@@ -73,6 +73,8 @@ export interface FetchOptions {
   method?: string;
   /** Request body for POST/PUT/PATCH requests */
   body?: string | ArrayBuffer | FormData;
+  /** Caller abort signal. Aborts the current attempt (with the client timeout) and stops retries. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -289,15 +291,22 @@ class HTTPClientImpl implements CachedHTTPClient {
     // Check rate limit
     await this.waitForRateLimit(domain);
 
-    // Request deduplication - check for inflight request
-    const inflightKey = `${url}:${JSON.stringify(options.headers ?? {})}`;
-    if (this.inflightRequests.has(inflightKey)) {
-      return this.inflightRequests.get(inflightKey)!.then(r => r.clone());
+    // Request deduplication - only idempotent GET/HEAD requests are coalesced.
+    // POST/PUT/PATCH/DELETE are always sent: two sends are two sends.
+    const dedupable = method === 'GET' || method === 'HEAD';
+    const inflightKey = `${method}:${url}:${JSON.stringify(options.headers ?? {})}`;
+    if (dedupable) {
+      const inflight = this.inflightRequests.get(inflightKey);
+      if (inflight) {
+        return inflight.then(r => r.clone());
+      }
     }
 
     // Execute request with retry
     const requestPromise = this.executeWithRetry(url, options);
-    this.inflightRequests.set(inflightKey, requestPromise);
+    if (dedupable) {
+      this.inflightRequests.set(inflightKey, requestPromise);
+    }
 
     try {
       const response = await requestPromise;
@@ -324,7 +333,9 @@ class HTTPClientImpl implements CachedHTTPClient {
       this.recordFailure(domain);
       throw error;
     } finally {
-      this.inflightRequests.delete(inflightKey);
+      if (dedupable) {
+        this.inflightRequests.delete(inflightKey);
+      }
     }
   }
 
@@ -527,12 +538,17 @@ class HTTPClientImpl implements CachedHTTPClient {
     // POST/PUT/PATCH requests are not retried by default to avoid side effects
     const effectiveMaxRetries = (method === 'GET' || method === 'HEAD') ? maxRetries : 0;
 
+    const callerSignal = options.signal;
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= effectiveMaxRetries; attempt++) {
+      // A caller abort (also during backoff) stops all further attempts.
+      callerSignal?.throwIfAborted();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      // Whichever fires first aborts the attempt: the client timeout or the caller signal.
+      const signal = callerSignal ? AbortSignal.any([controller.signal, callerSignal]) : controller.signal;
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const fetchInit: RequestInit = {
           method,
@@ -540,7 +556,7 @@ class HTTPClientImpl implements CachedHTTPClient {
             'User-Agent': this.config.userAgent,
             ...options.headers
           },
-          signal: controller.signal,
+          signal,
         };
 
         if (options.body !== undefined) {
@@ -567,6 +583,11 @@ class HTTPClientImpl implements CachedHTTPClient {
 
         return response;
       } catch (error: any) {
+        clearTimeout(timeoutId);
+        // A caller abort is final: surface the caller's reason, never retry.
+        if (callerSignal?.aborted) {
+          throw callerSignal.reason;
+        }
         lastError = error;
 
         // Timeout handling

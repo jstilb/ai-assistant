@@ -644,7 +644,7 @@ describe('ALLOWED_RUNTIME_KEYS', () => {
     // (verified via grep 2026-07-03), so asserting the key still exists in
     // ALLOWED_RUNTIME_KEYS was a stale expectation, not a code defect.
     // 'failures' replaces it as coverage of a live runtime key (read by
-    // ExplicitRatingCapture.hook.ts via settings.failures.enabled).
+    // ExplicitRatingRecord.hook.ts via settings.failures.enabled).
     // 'wisdom' was removed 2026-07-09 for the same reason as 'contextManager':
     // the wisdom-frame synthesis subsystem was deleted and no settings file
     // ever defined the key.

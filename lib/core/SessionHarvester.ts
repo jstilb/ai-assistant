@@ -4,6 +4,13 @@
  *
  * Harvests insights from ~/.claude/projects/ sessions and writes to LEARNING/
  *
+ * Also scans the claude-browser config dir (~/.claude-browser-home/projects/),
+ * where sessions started from the phone through the Remote Control server
+ * (bin/claude-remote-server) write their transcripts. Those sessions run with
+ * `--spawn worktree`, so the repo's worktree project dirs there are included
+ * too. The two projects dirs stay separate on disk (bin/claude-browser keeps
+ * projects/ isolated) — this tool just reads both.
+ *
  * Commands:
  *   --recent N     Harvest from N most recent sessions (default: 10)
  *   --all          Harvest from all sessions modified in last 7 days
@@ -26,10 +33,10 @@
  * makes its OWN inference call per session — one Sonnet call over the
  * session's concatenated readable turns, using the SAME
  * LEARNING_JUDGMENT_CRITERIA + LearningItemSchema as
- * hooks/SessionRatingCapture.hook.ts — rather than consuming that hook's
+ * hooks/SessionRatingRecord.hook.ts — rather than consuming that hook's
  * output, because this tool's job is retroactively mining ARBITRARY past
  * sessions under ~/.claude/projects/ (including ones from before S8, or
- * ones SessionRatingCapture never ran against), not re-processing sessions
+ * ones SessionRatingRecord never ran against), not re-processing sessions
  * that already went through the live hook path. See docs/decisions/015.
  */
 
@@ -48,7 +55,11 @@ import { getKayaHome } from "./KayaHome.ts";
 // frozen at import (getKayaHome cached); no test re-pins this module
 const CLAUDE_DIR = getKayaHome();
 const USERNAME = process.env.USER || require("os").userInfo().username;
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", `-Users-${USERNAME}--claude`);
+const PROJECT_SLUG = `-Users-${USERNAME}--claude`;
+const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", PROJECT_SLUG);
+// Same default + override as bin/claude-browser's BROWSER_HOME.
+const BROWSER_HOME = process.env.CLAUDE_BROWSER_HOME || path.join(require("os").homedir(), ".claude-browser-home");
+const BROWSER_PROJECTS_ROOT = path.join(BROWSER_HOME, "projects");
 const LEARNING_DIR = path.join(CLAUDE_DIR, "MEMORY", "LEARNING");
 
 /** Minimum non-whitespace turns before a session is worth an inference call. */
@@ -96,19 +107,34 @@ interface HarvestedLearning {
 // Session File Discovery
 // ============================================================================
 
+/**
+ * Phone (Remote Control) session dirs: the repo's own project dir plus its
+ * worktree project dirs (`<slug>--claude-worktrees-<name>`) under the
+ * claude-browser config dir.
+ */
+function getBrowserSessionDirs(): string[] {
+  if (!fs.existsSync(BROWSER_PROJECTS_ROOT)) return [];
+  return fs.readdirSync(BROWSER_PROJECTS_ROOT)
+    .filter(d => d === PROJECT_SLUG || d.startsWith(`${PROJECT_SLUG}--claude-worktrees-`))
+    .map(d => path.join(BROWSER_PROJECTS_ROOT, d));
+}
+
 function getSessionFiles(options: { recent?: number; all?: boolean; sessionId?: string }): string[] {
-  if (!fs.existsSync(PROJECTS_DIR)) {
+  const browserDirs = getBrowserSessionDirs();
+  if (!fs.existsSync(PROJECTS_DIR) && browserDirs.length === 0) {
     console.error(`Projects directory not found: ${PROJECTS_DIR}`);
     return [];
   }
 
-  const files = fs.readdirSync(PROJECTS_DIR)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => ({
-      name: f,
-      path: path.join(PROJECTS_DIR, f),
-      mtime: fs.statSync(path.join(PROJECTS_DIR, f)).mtime.getTime()
-    }))
+  const dirs = [PROJECTS_DIR, ...browserDirs].filter(d => fs.existsSync(d));
+  const files = dirs
+    .flatMap(dir => fs.readdirSync(dir)
+      .filter(f => f.endsWith('.jsonl'))
+      .map(f => ({
+        name: f,
+        path: path.join(dir, f),
+        mtime: fs.statSync(path.join(dir, f)).mtime.getTime()
+      })))
     .sort((a, b) => b.mtime - a.mtime);
 
   if (options.sessionId) {
@@ -148,7 +174,7 @@ function extractTextContent(content: string | Array<any>): string {
 
 /**
  * Read one session transcript, concatenate its readable user/assistant turns
- * (capped, most-recent-last like hooks/SessionRatingCapture.hook.ts's
+ * (capped, most-recent-last like hooks/SessionRatingRecord.hook.ts's
  * buildUserPrompt), and make ONE inference call asking the model to judge
  * genuine learning moments — no regex pre-filtering of which lines "count".
  */
@@ -280,6 +306,9 @@ Usage:
   bun run SessionHarvester.ts --session ID   Harvest from specific session
   bun run SessionHarvester.ts --dry-run      Preview without writing files
 
+Sources: ~/.claude/projects/ and ~/.claude-browser-home/projects/ (phone sessions
+via the Remote Control server; override with CLAUDE_BROWSER_HOME).
+
 Output: Creates learning files in MEMORY/LEARNING/{ALGORITHM|SYSTEM}/YYYY-MM/
 
 Each session review makes one LLM inference call (S8, let-the-model-speak) —
@@ -301,7 +330,8 @@ if (sessionFiles.length === 0) {
   process.exit(0);
 }
 
-console.log(`🔍 Scanning ${sessionFiles.length} session(s)...`);
+const phoneCount = sessionFiles.filter(f => f.startsWith(BROWSER_PROJECTS_ROOT + path.sep)).length;
+console.log(`🔍 Scanning ${sessionFiles.length} session(s)${phoneCount ? ` (${phoneCount} from phone/claude-browser sessions)` : ''}...`);
 
 // Harvest learnings from each session (one inference call per session)
 let totalLearnings = 0;

@@ -6,7 +6,7 @@
  * regex-indicator counting, whether a piece of text was a "learning moment"
  * and whether it belonged in SYSTEM (tooling/infra) or ALGORITHM (task
  * execution) category. That classifier was provably wrong in both
- * directions — see skills/Intelligence/Evals/Data/golden/
+ * directions — see skills/Development/Evals/Data/golden/
  * learning-capture-fixtures.jsonl (lc06-08 are real learnings the regex
  * MISSED because they used no vocabulary word from its dictionaries; lc09-10
  * are pure venting the regex FALSE-POSITIVED on because they happened to hit
@@ -14,12 +14,12 @@
  *
  * S8 inverts this: every writer that used to call isLearningCapture() /
  * getLearningCategory() now either (a) consumes the `learnings` array
- * produced by ONE per-session LLM call (hooks/SessionRatingCapture.hook.ts),
+ * produced by ONE per-session LLM call (hooks/SessionRatingRecord.hook.ts),
  * (b) makes its own inference call using the SAME judgment criteria
  * (lib/core/SessionHarvester.ts, a manually-invoked batch CLI, not a
  * per-turn/per-session hook), or (c) writes the neutral `UNCATEGORIZED`
  * literal instead of guessing (hooks/WorkCompletionLearning.hook.ts,
- * hooks/ExplicitRatingCapture.hook.ts — both are per-turn/synchronous
+ * hooks/ExplicitRatingRecord.hook.ts — both are per-turn/synchronous
  * SessionEnd/UserPromptSubmit paths where adding a second per-event
  * inference call just to assign SYSTEM/ALGORITHM would reintroduce the
  * ungrounded-guess problem this slice removed, only with a model call
@@ -28,7 +28,7 @@
  * stay aligned instead of drifting into two subtly different prompts.
  *
  * The criteria text below is independently worded to the same semantic bar
- * as skills/Intelligence/Evals/Tools/LearningCaptureFixtureRunner.ts's
+ * as skills/Development/Evals/Tools/LearningCaptureFixtureRunner.ts's
  * SYSTEM_PROMPT (the eval-baselined judgment prompt that proved an LLM CAN
  * do this job) — it does not quote that file's fixtures verbatim, per the
  * anti-gaming rule (a prior slice was flagged for pasting fixture text into
@@ -73,7 +73,7 @@ If nothing in the text meets the bar for a learning, the correct output is an em
  * Defensively parse a `learnings` field from an LLM's parsed JSON output.
  * Per-item fail-open: a malformed individual item is dropped rather than
  * rejecting the whole array, so one bad entry never blocks legitimate ones
- * (or the caller's other, unrelated payload fields — e.g. SessionRatingCapture's
+ * (or the caller's other, unrelated payload fields — e.g. SessionRatingRecord's
  * rating/sentiment_summary/confidence, which are validated independently).
  *
  * Non-array / missing input returns [] (the documented "no learnings" shape).

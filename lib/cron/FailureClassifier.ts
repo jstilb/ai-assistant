@@ -77,7 +77,7 @@ const TRANSIENT_PATTERNS: RegExp[] = [
 // machine-generated error text gating a bounded retry. First pattern is the
 // literal 2026-07-09 daily-upkeep/knowledge-daily production signature; the
 // others are known Anthropic CLI/API limit banners.
-const USAGE_LIMIT_PATTERNS: RegExp[] = [
+export const USAGE_LIMIT_PATTERNS: RegExp[] = [
   /hit your (usage|weekly|5-hour|session) limit/i,
   /usage limit reached/i,
   // The literal API error type only — NOT a loose /rate.?limit/i: several
