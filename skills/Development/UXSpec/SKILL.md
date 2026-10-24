@@ -62,4 +62,4 @@ Both UX and UI skills always run on browser/native surfaces — effort tier chan
 - `skills/Agents/SpecSheet/CONTEXT.md` — canonical vocabulary (UX Spec, Screen Inventory, Screen×State Matrix, etc.)
 
 ### Agent
-Run by the **UXDesigner** agent (`skills/Agents/UXDesignerContext.md`). The **Designer** agent reviews the output as a separate pass.
+Run by the **UXDesigner** agent (`skills/Agents/UXDesignerBrief.md`). The **Designer** agent reviews the output as a separate pass.
