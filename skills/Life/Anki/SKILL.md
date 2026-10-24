@@ -149,7 +149,7 @@ Learning                                  preset "Learning (all subjects)"
     ├── Music Theory / Music Intervals / Musical Notes
 ```
 
-The 14 subjects: Climbing, Cooking, Data Science, Hip Hop Dance, Improv, Information Ecosystems, Massage, Music Production, Music Theory & Composition, Piano, Salsa & Bachata, Software Architecture, Surfing, Volleyball. Subject names match LifeOS `skill_mastery_active.skill`, so `Learning::<skill>` resolves without a mapping.
+The 14 subject decks, one per Discipline (ontology D9 — what Jm learns is a Discipline): Climbing, Cooking, Data Science, Hip Hop Dance, Improv, Information Ecosystems, Massage, Music Production, Music Theory & Composition, Piano, Salsa & Bachata, Software Architecture, Surfing, Volleyball. Subject names match LifeOS `skill_mastery_active.discipline`, so `Learning::<discipline>` resolves without a mapping.
 
 **Daily limits (live as of 2026-09-24, set by Jm):**
 
@@ -177,9 +177,9 @@ The 14 subjects: Climbing, Cooking, Data Science, Hip Hop Dance, Improv, Informa
   conf = next(x for x in c.decks.all_config() if x["name"] == "Learning subject")
   deck = c.decks.get(did); deck["conf"] = conf["id"]; c.decks.save(deck); c.close()
   ```
-  Also add it as a LifeOS learning target with the same `skill` name, so `learningDeckFor` (in `skills/Productivity/LifeOS/Aggregation/SkillMastery.ts`) finds its reviews.
+  Also add it as a LifeOS Discipline (a `skill_mastery_active` row) with the same `discipline` name, so `learningDeckFor` (in `skills/Productivity/LifeOS/Aggregation/DisciplineMastery.ts`) finds its reviews.
 - **Curriculum blocks / sub-topics** → `Learning::<Subject>::…` (e.g. `Learning::Cooking::Curriculum::B03 Braising`). No preset needed: the subject and parent limits gate them.
-- **Never create a top-level deck.** Code that reads a subject's deck must go through `learningDeckFor(skill)` (→ `Learning::<skill>`), never a hand-typed name. The old `SKILL_DECK_OVERRIDES` map (Cooking → top-level `Cooking`) was deleted in the consolidation.
+- **Never create a top-level deck.** Code that reads a subject's deck must go through `learningDeckFor(discipline)` (→ `Learning::<discipline>`), never a hand-typed name. The old `SKILL_DECK_OVERRIDES` map (Cooking → top-level `Cooking`) was deleted in the consolidation.
 - A `DeckManager.children(did)` call returns *all* descendants, not just direct children. Filter on `::` depth.
 
 **Rollback:** backups `collection-pre-learning-consolidation-2026-09-24.anki2` and `collection-pre-reset-old-decks-2026-09-24.anki2` in `~/Library/Application Support/Anki2/User 1/backups/`. To restore, close Anki and copy one over `collection.anki2`.

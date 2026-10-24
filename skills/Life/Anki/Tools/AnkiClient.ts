@@ -11,7 +11,7 @@
  *
  * Features:
  *   - Prerequisite validation: apy binary lookup (launchd-safe), apy info (collection readable)
- *   - Command wrappers: addCard, listDecks, reviewDue, syncAnki, ensureDeck
+ *   - Command wrappers: addCard, listDecks, recallDue, syncAnki, ensureDeck
  *   - Error handling: all apy calls wrapped with typed results
  *   - Audit log to MEMORY/Life/anki-runs.jsonl
  *   - Voice notification on addCard success
@@ -33,7 +33,7 @@ export interface DeckInfo {
   count: number;
 }
 
-export interface ReviewDueResult {
+export interface RecallDueResult {
   cardCount: number;
   dueCount: number;
   /** Cards never studied (Anki `is:new`) — NOT included in dueCount. */
@@ -128,7 +128,7 @@ const auditLogsByPath = new Map<string, AppendLog>();
  *
  * execFileSync defaults maxBuffer to 1 MiB and throws ENOBUFS past it. On
  * 2026-07-25 the live collection (2,117 cards) made `apy list-cards ""` emit
- * 1,302,868 bytes, so `reviewDue()` with no deck threw and exited 1 — a real
+ * 1,302,868 bytes, so `recallDue()` with no deck threw and exited 1 — a real
  * break that went unnoticed because the criterion covering it (ISC 11 of the
  * anki-deck-review spec) was never implemented. `Data Science` alone was
  * already 587,901 bytes, so per-deck calls had thin headroom too.
@@ -543,7 +543,7 @@ export class AnkiClient {
     }
   }
 
-  async reviewDue(deck?: string): Promise<ReviewDueResult> {
+  async recallDue(deck?: string): Promise<RecallDueResult> {
     const start = Date.now();
     await this.ensurePrerequisites();
 
@@ -568,7 +568,7 @@ export class AnkiClient {
 
       appendAuditEntry(this.kayaHome, {
         timestamp: new Date().toISOString(),
-        operation: "reviewDue",
+        operation: "recallDue",
         deck,
         durationMs: Date.now() - start,
         success: true,
@@ -579,13 +579,13 @@ export class AnkiClient {
     } catch (err) {
       appendAuditEntry(this.kayaHome, {
         timestamp: new Date().toISOString(),
-        operation: "reviewDue",
+        operation: "recallDue",
         deck,
         durationMs: Date.now() - start,
         success: false,
         error: String(err),
       });
-      throw new Error(`reviewDue failed: ${err}`);
+      throw new Error(`recallDue failed: ${err}`);
     }
   }
 
@@ -593,7 +593,7 @@ export class AnkiClient {
    * Count of cards answered within the last `days` days (Anki search
    * `rated:N`), optionally scoped to a deck. The apy (Anki-closed) leg of the
    * knowledge-track review-activity signal — doing your due cards IS the
-   * review (see Aggregation/SkillMastery.ts's sweepReviewDue).
+   * review (see Aggregation/DisciplineMastery.ts's sweepRecallDue).
    */
   async reviewedInLastDay(deck?: string, days = 1): Promise<{ count: number }> {
     const start = Date.now();
@@ -761,7 +761,7 @@ if (import.meta.main) {
     }
     case "due": {
       const deck = args[1];
-      const result = await client.reviewDue(deck);
+      const result = await client.recallDue(deck);
       console.log(JSON.stringify(result, null, 2));
       break;
     }

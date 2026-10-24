@@ -157,7 +157,7 @@ export class AnkiConnectClient {
 
   /** Card IDs answered within the last `days` days (Anki search `rated:N`),
    *  optionally scoped to a deck. The AnkiConnect (Anki-open) leg of the
-   *  knowledge-track review-activity signal — see SkillMastery.sweepReviewDue. */
+   *  knowledge-track review-activity signal — see DisciplineMastery.sweepRecallDue. */
   async findReviewedInLastDay(deck?: string, days = 1): Promise<number[]> {
     const query = deck ? `deck:"${deck}" rated:${days}` : `rated:${days}`;
     return this.invoke<number[]>("findCards", { query });
