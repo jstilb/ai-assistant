@@ -31,7 +31,7 @@ The triage agent defaults to `autonomous`. `needs-jm` is reserved for genuinely 
 
 ## Handoff Seam
 
-Tasks where `disposition = 'autonomous'` are the handoff to the downstream autonomous executor. These tasks are NOT enqueued into the spec-pipeline directly — the executor reads `disposition = 'autonomous'` from the task table and decides how to process them.
+Tasks where `disposition = 'autonomous'` are the handoff to the downstream Task Executor (Lane A, `Tools/executor/`). These tasks are NOT enqueued into the spec-pipeline directly — the executor reads `disposition = 'autonomous'` from the task table and decides how to process them.
 
 ## Files
 

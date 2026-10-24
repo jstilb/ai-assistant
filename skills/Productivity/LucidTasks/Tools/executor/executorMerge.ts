@@ -64,7 +64,7 @@ import {
 // cross-skill-allowed: Lane-A executor updates QueueRouter's pipeline state on merge by design (07-02 overhaul)
 import { getPipelineRepository } from "../../../../Automation/QueueRouter/Tools/PipelineRepository.ts";
 import type { TaskDB } from "../TaskDB.ts";
-import { mergeTask } from "./taskBookkeeper.ts";
+import { mergeTask, type OutcomeDraft } from "./taskBookkeeper.ts";
 
 // ============================================================================
 // Interactive session lock
@@ -230,6 +230,11 @@ export interface AutoMergeParams {
   /** The builder agent's own EXECUTOR_VERDICT summary — carried into the merged comment. */
   summary: string;
   verdict: "pass" | "fail" | "uncertain";
+  /** Agent-authored outcome fields + the verifier's reasoning, forwarded to mergeTask so a fresh
+   *  build records its Outcome atomically with the done flip. Omitted by the pending-merge
+   *  sweep, which keeps the outcome already on the task and only updates its merge state. */
+  outcome?: OutcomeDraft;
+  verifyReasoning?: string;
 }
 
 export type AutoMergeOutcome =
@@ -391,7 +396,13 @@ export async function runAutoMerge(
   // 5. Merged — close the task, mark the worktree, notify, cross-ref event. Each of the last
   //    three is best-effort: the merge itself already succeeded and must not be undone or
   //    reported as a failure because a downstream notification/bookkeeping step hiccuped.
-  mergeTask(db, params.taskId, { branch: params.branch, sha: afterSha, summary: params.summary });
+  mergeTask(db, params.taskId, {
+    branch: params.branch,
+    sha: afterSha,
+    summary: params.summary,
+    outcome: params.outcome,
+    verify: params.outcome ? { verdict: params.verdict, reasoning: params.verifyReasoning ?? "" } : undefined,
+  });
 
   try {
     await markMerged(params.wtPath);

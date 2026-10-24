@@ -59,7 +59,18 @@ import { reorganizeTaskFromComment, type ReorganizeContext } from "./TaskAI.ts";
 import { scoreTask, type ScoringContext } from "./TaskScorer.ts";
 import { buildPriorityList } from "./PriorityList.ts";
 import { loadTelosData } from "./TelosGoalLoader.ts";
+import {
+  agentOutcomeProblem,
+  createForJmTasks,
+  readOutcome,
+  serializeOutcome,
+  linkFromTarget,
+  type Outcome,
+  type OutcomeLink,
+} from "./TaskOutcome.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { timingSafeEqual } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as joinPath, resolve as resolvePath } from "node:path";
@@ -73,19 +84,48 @@ const MAX_COMMENT_LEN = 5000;
 // API serialization
 // ============================================================================
 
-/** A Task with context_tags/labels normalized from JSON-strings to arrays. */
-type BoardTask = Omit<Task, "context_tags" | "labels"> & {
+/** The outcome as sent to the client; list views drop the (large) `details`. */
+type BoardOutcome = Omit<Outcome, "details"> & { details?: string };
+
+/** A Task with context_tags/labels as arrays and `outcome` as a parsed object (or null). */
+type BoardTask = Omit<Task, "context_tags" | "labels" | "outcome"> & {
   context_tags: string[];
   labels: string[];
+  outcome: BoardOutcome | null;
+  /** Set only when the stored outcome is unreadable (bad JSON / wrong shape). */
+  outcome_error?: string;
+  /** Actor of the latest `completed` event; set on done tasks only (null = not recorded). */
+  closed_by?: string | null;
 };
 
-/** Normalize the two JSON-string columns into real arrays for the client. */
-function serializeTask(t: Task): BoardTask {
+/**
+ * Normalize the JSON-string columns into real arrays/objects for the client.
+ * `full: false` (list views) omits `outcome.details` — the full report can be
+ * 12 KB per task; the drawer fetches GET /api/tasks/:id, which keeps it.
+ */
+function serializeTask(t: Task, full = true, closedBy?: string | null): BoardTask {
+  const { outcome: rawOutcome, ...rest } = t;
+  const read = readOutcome(rawOutcome);
+  let outcome: BoardOutcome | null = read.outcome;
+  if (outcome && !full) {
+    const { details: _details, ...lean } = outcome;
+    outcome = lean;
+  }
   return {
-    ...t,
+    ...rest,
     context_tags: safeParseJSON(t.context_tags),
     labels: safeParseJSON(t.labels),
+    outcome,
+    ...(read.error ? { outcome_error: read.error } : {}),
+    ...(closedBy !== undefined ? { closed_by: closedBy } : {}),
   };
+}
+
+/** serializeTask for many tasks; done tasks get `closed_by` from ONE batched lookup. */
+function serializeWithClosers(db: TaskDB, tasks: Task[], full: boolean): BoardTask[] {
+  const doneIds = tasks.filter((t) => t.status === "done").map((t) => t.id);
+  const closers = doneIds.length > 0 ? db.getCloserActors(doneIds) : new Map<string, string>();
+  return tasks.map((t) => serializeTask(t, full, t.status === "done" ? (closers.get(t.id) ?? null) : undefined));
 }
 
 // ============================================================================
@@ -117,7 +157,7 @@ function handleListTasks(db: TaskDB, url: URL): Response {
     if (Number.isFinite(n) && n > 0) filter.limit = n;
   }
 
-  const tasks = db.listTasks(filter).map(serializeTask);
+  const tasks = serializeWithClosers(db, db.listTasks(filter), false);
   return Response.json({ tasks });
 }
 
@@ -128,7 +168,7 @@ function handleListProjects(db: TaskDB): Response {
 
 /** GET /api/stats */
 function handleStats(db: TaskDB): Response {
-  return Response.json(db.getStats());
+  return Response.json({ ...db.getStats(), closedWithoutOutcome: db.listClosedWithoutOutcome({ sinceDays: 30 }).length });
 }
 
 /**
@@ -139,6 +179,10 @@ function handleStats(db: TaskDB): Response {
  * Trust boundary: this server binds 127.0.0.1 only (loadBoardBind), so only a
  * process on the same machine can reach it by default. As defense in depth the
  * resolved path is still required to live inside the user's home directory.
+ *
+ * `repo=1`: `path` is repo-relative (an outcome link of kind "repo"). The server
+ * joins it to the Kaya home itself and requires the result to stay inside that
+ * home — a client never supplies the absolute path, and `..` cannot escape.
  */
 async function handleOpenPath(url: URL): Promise<Response> {
   const raw = url.searchParams.get("path");
@@ -147,7 +191,19 @@ async function handleOpenPath(url: URL): Promise<Response> {
   }
 
   const home = resolvePath(homedir());
-  const expanded = raw === "~" || raw.startsWith("~/") ? joinPath(home, raw.slice(1)) : raw;
+  let expanded: string;
+  if (url.searchParams.get("repo") === "1") {
+    if (raw.startsWith("/") || raw.startsWith("~")) {
+      return Response.json({ error: "repo path must be relative" }, { status: 400 });
+    }
+    const kayaHome = resolvePath(getKayaHome());
+    expanded = resolvePath(kayaHome, raw);
+    if (expanded !== kayaHome && !expanded.startsWith(kayaHome + "/")) {
+      return Response.json({ error: "repo path must stay inside the Kaya home" }, { status: 400 });
+    }
+  } else {
+    expanded = raw === "~" || raw.startsWith("~/") ? joinPath(home, raw.slice(1)) : raw;
+  }
   const resolved = resolvePath(expanded);
   if (resolved !== home && !resolved.startsWith(home + "/")) {
     return Response.json({ error: "path must be inside the home directory" }, { status: 400 });
@@ -165,6 +221,79 @@ async function handleOpenPath(url: URL): Promise<Response> {
     );
   }
   return Response.json({ ok: true });
+}
+
+// ----------------------------------------------------------------------------
+// Read-only views of the repo (outcome card links: branch diff, commit, file at a ref)
+// ----------------------------------------------------------------------------
+
+const GIT_OUTPUT_CAP = 2 * 1024 * 1024;
+const GIT_REF_RE = /^[A-Za-z0-9._/-]{1,200}$/;
+
+/** A branch name or sha safe to hand to the tool as an argument; null when it is not. */
+function validGitRef(v: string | null): string | null {
+  if (v === null || !GIT_REF_RE.test(v) || v.startsWith("-") || v.includes("..")) return null;
+  return v;
+}
+
+/** A repo-relative path safe to put after `<ref>:`; null when it is not. */
+function validRepoPath(v: string | null): string | null {
+  if (v === null || v === "" || v.length > 500 || v.startsWith("/") || v.startsWith("-")) return null;
+  if (/[\u0000-\u001f]/.test(v)) return null;
+  if (v.split("/").some((seg) => seg === "..")) return null;
+  return v;
+}
+
+/**
+ * Run `git <args>` in the Kaya home with an args array (never a shell) and answer
+ * text/plain. A non-zero exit (unknown ref/sha/path) is a 404 carrying git's own
+ * message; output over 2 MB is cut and says so.
+ */
+function runGitView(args: string[]): Response {
+  const headers = { "content-type": "text/plain; charset=utf-8" };
+  try {
+    const out = execFileSync("git", args, {
+      cwd: getKayaHome(),
+      encoding: "utf8",
+      maxBuffer: GIT_OUTPUT_CAP,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return new Response(out, { headers });
+  } catch (err) {
+    const e = err as { code?: string; stdout?: string; stderr?: string; status?: number | null };
+    if (e.code === "ENOBUFS") {
+      const partial = typeof e.stdout === "string" ? e.stdout : "";
+      return new Response(partial + "\n[output cut at 2 MB]\n", { headers });
+    }
+    if (typeof e.status === "number") {
+      const msg = (typeof e.stderr === "string" && e.stderr.trim() !== "" ? e.stderr.trim() : "git failed");
+      return Response.json({ error: msg }, { status: 404 });
+    }
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+}
+
+/** GET /api/git/diff?ref=<branch> -> the diff of main...<ref> */
+function handleGitDiff(url: URL): Response {
+  const ref = validGitRef(url.searchParams.get("ref"));
+  if (!ref) return Response.json({ error: "invalid ref" }, { status: 400 });
+  return runGitView(["diff", "--no-color", "main..." + ref, "--"]);
+}
+
+/** GET /api/git/commit?sha=<sha> -> show --stat --patch <sha> */
+function handleGitCommit(url: URL): Response {
+  const sha = validGitRef(url.searchParams.get("sha"));
+  if (!sha) return Response.json({ error: "invalid sha" }, { status: 400 });
+  return runGitView(["show", "--no-color", "--stat", "--patch", sha, "--"]);
+}
+
+/** GET /api/git/show?ref=<ref>&path=<rel> -> show <ref>:<rel> */
+function handleGitShow(url: URL): Response {
+  const ref = validGitRef(url.searchParams.get("ref"));
+  if (!ref) return Response.json({ error: "invalid ref" }, { status: 400 });
+  const path = validRepoPath(url.searchParams.get("path"));
+  if (!path) return Response.json({ error: "invalid path" }, { status: 400 });
+  return runGitView(["show", "--no-color", ref + ":" + path]);
 }
 
 /**
@@ -206,7 +335,7 @@ function handleNext(db: TaskDB, url: URL): Response {
 
   return Response.json({
     next: scored.slice(0, top).map((s) => ({
-      task: serializeTask(s.task),
+      task: serializeTask(s.task, false),
       score: s.score,
       reasons: s.reasons,
     })),
@@ -224,7 +353,7 @@ function handleNext(db: TaskDB, url: URL): Response {
 function handlePriority(db: TaskDB): Response {
   const { items, totals } = buildPriorityList(db);
   return Response.json({
-    items: items.map((it) => ({ ...it, task: serializeTask(it.task) })),
+    items: items.map((it) => ({ ...it, task: serializeTask(it.task, false) })),
     totals,
     ai_scored_at: db.getLastActivityAt(["ai_scored", "auto_prioritized"]),
     generated_at: new Date().toISOString(),
@@ -355,6 +484,53 @@ function validateTaskUpdates(db: TaskDB, body: Record<string, unknown>): Validat
   return { ok: true, updates };
 }
 
+/** Board-supplied outcome -> the JSON string for tasks.outcome (null clears). */
+function buildBoardOutcome(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw === null) return { ok: true, value: null };
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "outcome must be an object or null" };
+  }
+  const o = raw as Record<string, unknown>;
+  if (typeof o.headline !== "string" || o.headline.trim() === "") {
+    return { ok: false, error: "outcome.headline must be a non-empty string" };
+  }
+  if (o.check !== undefined && o.check !== null && typeof o.check !== "string") {
+    return { ok: false, error: "outcome.check must be a string" };
+  }
+  if (o.links !== undefined && !Array.isArray(o.links)) {
+    return { ok: false, error: "outcome.links must be an array" };
+  }
+  const links: OutcomeLink[] = [];
+  for (const item of (o.links ?? []) as unknown[]) {
+    const l = (typeof item === "object" && item !== null ? item : {}) as Record<string, unknown>;
+    if (typeof l.target !== "string" || l.target.trim() === "") {
+      return { ok: false, error: "each outcome link needs a non-empty target" };
+    }
+    if (l.label !== undefined && l.label !== null && typeof l.label !== "string") {
+      return { ok: false, error: "outcome link label must be a string" };
+    }
+    links.push(linkFromTarget(l.target, typeof l.label === "string" ? l.label : undefined));
+  }
+  const check = typeof o.check === "string" && o.check.trim() !== "" ? o.check : undefined;
+  try {
+    const value = serializeOutcome({
+      v: 1,
+      headline: o.headline,
+      links,
+      // A board outcome with no link still needs a reason, or a later agent-side close would be refused.
+      ...(links.length === 0 ? { noArtifact: "no link given (recorded by Jm on the board)" } : {}),
+      forJm: [],
+      ...(check !== undefined ? { check } : {}),
+      by: "board",
+      at: new Date().toISOString(),
+      source: "board",
+    });
+    return { ok: true, value };
+  } catch (err) {
+    return { ok: false, error: "invalid outcome: " + (err instanceof Error ? err.message : String(err)) };
+  }
+}
+
 /**
  * PATCH /api/tasks/:id — body is a partial Task (title/status/priority/project_id/
  * due_date/scheduled_date/description/energy_level/estimated_minutes/goal_id, plus
@@ -373,13 +549,45 @@ async function handlePatchTask(db: TaskDB, id: string, req: Request): Promise<Re
   }
   const updates = validation.updates;
 
+  // Outcome: the board may record a short one ({headline, links?, check?}) or clear it
+  // (null). Built and validated here, in one place, so a bad body is a 400, not a 500.
+  if (body.outcome !== undefined) {
+    const built = buildBoardOutcome(body.outcome);
+    if (!built.ok) return Response.json({ error: built.error }, { status: 400 });
+    updates.outcome = built.value;
+  }
+
   if (Object.keys(updates).length === 0) {
     return Response.json({ error: "no valid fields to update" }, { status: 400 });
   }
 
   const updated = withRetry(() => db.updateTask(id, updates, "board"));
   if (!updated) return Response.json({ error: "task not found" }, { status: 404 });
-  return Response.json({ task: serializeTask(updated) });
+  return Response.json({ task: serializeWithClosers(db, [updated], true)[0] });
+}
+
+/**
+ * POST /api/tasks/:id/outcome/for-jm/:index/task — "＋ Make task" on one For-you item: creates the
+ * child task (createForJmTasks) and writes its id back into that item. 404 unknown task; 400 for
+ * no outcome, bad/out-of-range index, or an item that already has a task (idempotent).
+ */
+function handleMakeForJmTask(db: TaskDB, id: string, indexRaw: string): Response {
+  const task = db.getTask(id);
+  if (!task) return Response.json({ error: "task not found" }, { status: 404 });
+  const { outcome } = readOutcome(task.outcome);
+  if (!outcome) return Response.json({ error: "task has no readable outcome" }, { status: 400 });
+  if (!/^(0|[1-9]\d*)$/.test(indexRaw)) return Response.json({ error: "index must be a non-negative integer" }, { status: 400 });
+  const index = Number(indexRaw);
+  const item = outcome.forJm[index];
+  if (!item) return Response.json({ error: `no for-Jm item at index ${index}` }, { status: 400 });
+  if (item.taskId) return Response.json({ error: "already a task" }, { status: 400 });
+  const made = createForJmTasks(db, task, [item.text]);
+  const taskId = made[0]?.taskId;
+  if (!taskId) return Response.json({ error: "item text is blank" }, { status: 400 });
+  const forJm = outcome.forJm.map((it, i) => (i === index ? { ...it, taskId } : it));
+  const updated = withRetry(() => db.updateTask(id, { outcome: serializeOutcome({ ...outcome, forJm }) }, "board"));
+  if (!updated) return Response.json({ error: "task not found" }, { status: 404 });
+  return Response.json({ task: serializeWithClosers(db, [updated], true)[0], childId: taskId });
 }
 
 /**
@@ -407,14 +615,14 @@ async function handleSetPins(db: TaskDB, req: Request): Promise<Response> {
   const tasks = ids.map((id, i) =>
     withRetry(() => db.updateTask(id, { manual_rank: i + 1, manual_ranked_at: stamp }, "board")),
   );
-  return Response.json({ tasks: tasks.filter((t): t is Task => t !== null).map(serializeTask) });
+  return Response.json({ tasks: tasks.filter((t): t is Task => t !== null).map((t) => serializeTask(t)) });
 }
 
 /** GET /api/tasks/:id → { task, activity }. 404 if missing. Powers the detail drawer. */
 function handleGetTask(db: TaskDB, id: string): Response {
   const task = db.getTask(id);
   if (!task) return Response.json({ error: "task not found" }, { status: 404 });
-  return Response.json({ task: serializeTask(task), activity: db.getActivityLog(id, 100) });
+  return Response.json({ task: serializeWithClosers(db, [task], true)[0], activity: db.getActivityLog(id, 100) });
 }
 
 /** DELETE /api/tasks/:id — hard delete (drawer-only "Delete permanently"). 200/404. */
@@ -477,7 +685,12 @@ export interface BoardDeps {
  * create any requested subtasks as normal cards, and post Kaya's reply. On ANY
  * failure it posts a visible "⚠️ Couldn't reorganize: …" comment (fail loudly).
  */
-async function defaultReorganize(db: TaskDB, taskId: string, commentText: string): Promise<void> {
+export async function defaultReorganize(
+  db: TaskDB,
+  taskId: string,
+  commentText: string,
+  reorganizeFn: typeof reorganizeTaskFromComment = reorganizeTaskFromComment, // injectable so tests never call an LLM
+): Promise<void> {
   try {
     const task = db.getTask(taskId);
     if (!task) return; // task vanished between comment and reorg — nothing to do
@@ -488,7 +701,7 @@ async function defaultReorganize(db: TaskDB, taskId: string, commentText: string
       statuses: [...ACTIVE_STATUSES, "done", "cancelled"],
     };
 
-    const result = await reorganizeTaskFromComment(task, commentText, ctx);
+    const result = await reorganizeFn(task, commentText, ctx);
     if (!result) {
       db.addComment(taskId, "⚠️ Couldn't reorganize: the AI request failed or returned an unusable response.", "kaya");
       return;
@@ -501,7 +714,27 @@ async function defaultReorganize(db: TaskDB, taskId: string, commentText: string
     }
 
     if (Object.keys(validation.updates).length > 0) {
-      withRetry(() => db.updateTask(taskId, validation.updates, "kaya"));
+      const updates: Partial<Task> = { ...validation.updates };
+      // "kaya" is a gated actor. A close Jm asked for in his board comment records that as its outcome,
+      // in the SAME update as the status change.
+      if (
+        updates.status === "done" && task.status !== "done" && updates.outcome === undefined &&
+        agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null
+      ) {
+        const quoted = commentText.replace(/\s+/g, " ").trim();
+        const clipped = quoted.length > 110 ? `${quoted.slice(0, 109).trimEnd()}…` : quoted;
+        updates.outcome = serializeOutcome({
+          v: 1,
+          headline: `Closed at Jm's request: "${clipped}"`,
+          links: [],
+          noArtifact: "closed from Jm's board comment",
+          forJm: [],
+          by: "kaya",
+          at: new Date().toISOString(),
+          source: "board",
+        });
+      }
+      withRetry(() => db.updateTask(taskId, updates, "kaya"));
     }
 
     if (result.subtasks && result.subtasks.length > 0) {
@@ -616,6 +849,34 @@ export function loadBoardToken(): string | null {
 export function loadBoardBind(): string {
   if (process.env.BOARD_BIND) return process.env.BOARD_BIND;
   return readSecretString("lucidtasks_board_bind") ?? HOST;
+}
+
+export type StartupAuth = { ok: true; token: string | null } | { ok: false; error: string };
+
+/**
+ * Startup auth decision. Remote access is opt-in and never unauthenticated: a
+ * non-loopback bind without a token (or with a blank one) is a hard startup
+ * failure, not a warning. An explicit BOARD_TOKEN env enforces auth even on
+ * loopback (testable + belt-and-suspenders); the secrets.json token only
+ * activates for remote binds, so local browsing stays cookie-free once the
+ * secret exists.
+ */
+export function resolveStartupAuth(
+  bind: string,
+  envToken: string | undefined,
+  loadToken: () => string | null = loadBoardToken,
+): StartupAuth {
+  const raw = bind === HOST ? (envToken ?? null) : loadToken();
+  const token = raw !== null && raw.trim().length > 0 ? raw : null;
+  if (bind !== HOST && token === null) {
+    return {
+      ok: false,
+      error:
+        "BOARD_BIND=" + bind + " requires a token (env BOARD_TOKEN or " +
+        "lucidtasks_board_token in ~/.claude/secrets.json). Refusing to expose the board unauthenticated.",
+    };
+  }
+  return { ok: true, token };
 }
 
 function readSecretString(key: string): string | null {
@@ -749,6 +1010,14 @@ async function routeRequest(req: Request, db: TaskDB, deps: BoardDeps): Promise<
   }
   if (pathname === "/api/open" && req.method === "GET") {
     return handleOpenPath(url);
+  }
+  if (pathname === "/api/git/diff" && req.method === "GET") return handleGitDiff(url);
+  if (pathname === "/api/git/commit" && req.method === "GET") return handleGitCommit(url);
+  if (pathname === "/api/git/show" && req.method === "GET") return handleGitShow(url);
+
+  const makeTaskMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/outcome\/for-jm\/([^/]+)\/task$/);
+  if (makeTaskMatch && req.method === "POST") {
+    return handleMakeForJmTask(db, decodeURIComponent(makeTaskMatch[1]), decodeURIComponent(makeTaskMatch[2]));
   }
 
   // POST /api/tasks/:id/comments — match before the generic :id route so the
@@ -1085,6 +1354,89 @@ const EXTRA_CSS = `
   .ctx-chip.path { border-color: var(--line); background: #eef0f2; color: var(--ink); }
   .ctx-chip.more { cursor: default; opacity: .65; }
   .ctx-chip.more:hover { border-color: var(--line); color: var(--muted); }
+  /* outcome card (drawer) + row headline */
+  .oc { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+  .oc.warn { border-color: #f5c2c2; }
+  .oc-top { padding: 10px 12px; background: #f9fafb; border-bottom: 1px solid var(--line); }
+  .oc-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+  .oc-badge {
+    font-size: 10.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid var(--line); background: #fff; color: var(--muted); white-space: nowrap;
+  }
+  .oc-badge.ok { border-color: #b7e0c0; background: #eefcf1; color: var(--green); }
+  .oc-badge.warn { border-color: #f3d79b; background: #fef6e7; color: #b76e00; }
+  .oc-badge.bad { border-color: #f5c2c2; background: #fde8e8; color: var(--p1); }
+  .oc-badge.info { border-color: #bcd4fb; background: #eef4ff; color: var(--accent); }
+  .oc-headline { font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+  .oc-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .oc-sec .lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    font-weight: 700; margin-bottom: 4px;
+  }
+  .oc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .oc-chip {
+    display: inline-flex; align-items: center; gap: 4px; font-family: inherit; font-size: 11.5px;
+    line-height: 1.4; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+    background: #eef0f2; color: var(--ink); cursor: pointer; max-width: 100%; min-width: 0;
+    overflow: hidden; white-space: nowrap;
+  }
+  .oc-chip .ic, .oc-chip .k { flex: none; }
+  .oc-chip .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .oc-chips, .oc-sec { min-width: 0; }
+  li.task .why .oc-hl { min-width: 0; overflow-wrap: anywhere; }
+  #dw-pill { flex: none; }
+  .dw-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .dw-compact b { color: var(--ink); font-weight: 600; }
+  .dw-compact .edit { margin-left: auto; border: none; background: none; color: var(--accent); font-size: 12px; font-family: inherit; cursor: pointer; padding: 0; }
+  .oc-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .oc-chip.url { border-color: #b7e0c0; background: #eefcf1; color: var(--green); }
+  .oc-chip.task { border-color: #bcd4fb; background: #eef4ff; color: var(--accent); }
+  .oc-chip.branch, .oc-chip.commit { border-color: #f3d79b; background: #fef6e7; color: #b76e00; }
+  .oc-chip .k { font-weight: 700; }
+  .oc-check { font-size: 12px; overflow-wrap: anywhere; }
+  .oc-check code, .oc-todo code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: #eef0f2; padding: 0 4px; border-radius: 4px; }
+  .oc-todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .oc-todo li { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; }
+  .oc-todo .box { flex: none; width: 12px; height: 12px; margin-top: 3px; border: 1.5px solid var(--line); border-radius: 3px; }
+  .oc-todo .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .oc-body details > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .oc-body details .oc-more { margin-top: 6px; }
+  .oc-details { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin-top: 6px; max-height: 320px; overflow-y: auto; }
+  .oc-actions { display: flex; gap: 8px; }
+  .oc-actions button, .oc-form button {
+    padding: 6px 12px; font-size: 12.5px; border-radius: 8px; cursor: pointer; font-family: inherit;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+  }
+  .oc-actions button.primary, .oc-form button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .oc-actions button:disabled, .oc-form button:disabled { opacity: .5; cursor: default; }
+  .oc-form { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 7px; }
+  .oc-form.warn { border: 1px solid #f5c2c2; background: #fff5f5; }
+  .oc-form .oc-warn { font-size: 12px; font-weight: 700; color: var(--p1); }
+  .oc-form .lbl { font-size: 12px; font-weight: 600; }
+  .oc-form input {
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px;
+    font-family: inherit; background: #fff; color: var(--ink); width: 100%; box-sizing: border-box;
+  }
+  .oc-form input:focus { outline: none; border-color: var(--accent); }
+  .oc-form .oc-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .oc-err { font-size: 11px; color: var(--p1); margin-bottom: 10px; }
+  details.dw-edit { margin-bottom: 4px; }
+  details.dw-edit > summary, details.dw-hist > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 9px; }
+  details.dw-hist { margin-top: 18px; }
+  .dw-hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+  .dw-hist-list li { display: flex; gap: 8px; }
+  .dw-hist-list .t { flex: none; font-variant-numeric: tabular-nums; }
+  .dw-hist-list .hx { overflow-wrap: anywhere; white-space: pre-wrap; }
+  .dw-hist-list .hx.long { cursor: pointer; }
+  .dw-hist-list .hx.long:hover { color: var(--ink); }
+  .dw-msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
+  .dw-msg.user { align-self: flex-end; align-items: flex-end; }
+  .dw-msg.kaya { align-self: flex-start; align-items: flex-start; }
+  .dw-msg .dw-bubble { max-width: 100%; }
+  .dw-msg .dw-who { font-size: 10px; color: var(--muted); }
+  li.task .why.oc-row-line { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+  li.task .why .oc-hl { color: var(--ink); }
+  li.task .why .oc-badge { font-size: 10px; padding: 0 6px; }
 `;
 
 const HTML = `<!doctype html>
@@ -1236,7 +1588,8 @@ function toast(msg, kind) {
 }
 
 // Toast with an action button (e.g. Undo). Stays ~6s so the action is reachable.
-function toastAction(msg, actionLabel, onAction, kind) {
+// extra = optional second action {label, onAction} shown next to the first.
+function toastAction(msg, actionLabel, onAction, kind, extra) {
   const el = document.createElement('div');
   el.className = 'toast action' + (kind ? ' ' + kind : '');
   const span = document.createElement('span');
@@ -1254,6 +1607,18 @@ function toastAction(msg, actionLabel, onAction, kind) {
   });
   el.appendChild(span);
   el.appendChild(btn);
+  if (extra) {
+    const btn2 = document.createElement('button');
+    btn2.className = 'toast-action';
+    btn2.textContent = extra.label;
+    btn2.addEventListener('click', () => {
+      if (acted) return;
+      acted = true;
+      dismiss();
+      extra.onAction();
+    });
+    el.appendChild(btn2);
+  }
   toastsEl.appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(dismiss, 6000);
@@ -1299,7 +1664,22 @@ function matchesChip(t) {
   if (chipFilter === 'overdue') return !finished && !!t.due_date && t.due_date < todayISO();
   if (chipFilter === 'dueToday') return !finished && t.due_date === todayISO();
   if (chipFilter.indexOf('status:') === 0) return t.status === chipFilter.slice(7);
+  if (chipFilter === 'noOutcome') return noOutcomeFlag(t);
   return true;
+}
+
+/** Same window as TaskDB.listClosedWithoutOutcome({ sinceDays: 30 }) and the /api/stats count. */
+function noOutcomeCutoff() { return new Date(Date.now() - 30 * 86400000).toISOString(); }
+function outcomeAcceptable(o) {
+  return !!o && !!String(o.headline || '').trim() && ((o.links || []).length > 0 || !!String(o.noArtifact || '').trim());
+}
+/** A done task an agent closed (closed_by known and not Jm) in the last 30 days with no acceptable outcome. */
+function noOutcomeFlag(t) {
+  return t.status === 'done' && !!t.closed_by && HUMAN_CLOSERS.indexOf(t.closed_by) < 0 &&
+    !outcomeAcceptable(t.outcome) && (t.completed_at || '') >= noOutcomeCutoff();
+}
+function noOutcomeRowLine(t) {
+  return '<div class="why oc-row-line"><span class="oc-badge bad" title="' + esc('Closed by ' + t.closed_by + ' with no outcome') + '">⚠ no outcome</span></div>';
 }
 
 function projectOptions(selectedId) {
@@ -1386,6 +1766,8 @@ function renderTask(t) {
     '<span class="prio p' + pr + '" data-act="priority" title="Priority ' + pr + ' — click to cycle">P' + pr + '</span>' +
     (finished ? '' : '<button class="trash" data-act="trash" title="Cancel task (soft-delete)">🗑</button>') +
     whyLine +
+    ((t.outcome && (t.status === 'waiting' || t.status === 'done')) ? outcomeRowLine(t) : '') +
+    (noOutcomeFlag(t) ? noOutcomeRowLine(t) : '') +
     '</li>';
 }
 
@@ -1600,7 +1982,8 @@ function modelSignature() {
 }
 
 // ---- data ----------------------------------------------------------------
-function scopeOf(m) { return m === 'done' ? 'done,cancelled' : ''; }
+// The no-outcome chip lists done tasks, so it needs the done scope even on the All view.
+function scopeOf(m) { return (m === 'done' || chipFilter === 'noOutcome') ? 'done,cancelled' : ''; }
 
 async function load() {
   const scope = scopeOf(mode);
@@ -1667,6 +2050,10 @@ function renderChips() {
   }
   if (overdue || chipFilter === 'overdue') parts.push(chipBtn('overdue', 'overdue', '⚠ ' + overdue + ' overdue'));
   if (dueToday || chipFilter === 'dueToday') parts.push(chipBtn('dueToday', '', '📅 ' + dueToday + ' due today'));
+  const noOutcomeN = stats && stats.closedWithoutOutcome ? stats.closedWithoutOutcome : 0;
+  if (noOutcomeN || chipFilter === 'noOutcome') {
+    parts.push(chipBtn('noOutcome', 'overdue', '⚠ ' + noOutcomeN + ' closed with no outcome'));
+  }
   if (projectView === null && stats && stats.completedThisWeek) {
     parts.push('<button class="chip done" data-chip="donemode" title="Show completed tasks">✓ ' +
       stats.completedThisWeek + ' done this week</button>');
@@ -1675,7 +2062,7 @@ function renderChips() {
   chipsEl.innerHTML = parts.join('');
 }
 
-chipsEl.addEventListener('click', (e) => {
+chipsEl.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-chip]');
   if (!b) return;
   const key = b.dataset.chip;
@@ -1692,6 +2079,12 @@ chipsEl.addEventListener('click', (e) => {
     if (allBtn) { allBtn.click(); return; }   // its handler saves prefs + re-renders
   }
   savePrefs();
+  // Entering/leaving the no-outcome chip changes which statuses are loaded.
+  if (scopeOf(mode) !== loadedScope) {
+    setStatus('loading…');
+    try { await load(); setStatus('updated ' + new Date().toLocaleTimeString()); }
+    catch (err) { setStatus('refresh failed: ' + err.message); }
+  }
   render();
 });
 
@@ -1795,7 +2188,10 @@ async function markDone(id, li) {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: 'done' }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    toastAction('Marked done', 'Undo', () => undoStatusChange(id, priorStatus), 'ok');
+    // Jm's decision 2: a close with no outcome offers the optional "What came of it?" line
+    // (opens the drawer, which shows the form). Never blocks the close.
+    const offer = (before && !before.outcome) ? { label: 'What came of it?', onAction: () => openDrawer(id) } : undefined;
+    toastAction('Marked done', 'Undo', () => undoStatusChange(id, priorStatus), 'ok', offer);
   } catch (e) {
     if (before) { tasks.push(before); render(); }
     toast('Mark-done failed — restored: ' + e.message, 'err');
@@ -2377,7 +2773,256 @@ function onCtxChipClick(e) {
   const target = btn.dataset.ctxTarget;
   if (kind === 'url') { window.open(target, '_blank', 'noopener'); return; }
   if (kind === 'task') { openDrawer(target); return; }
-  fetch('/api/open?path=' + encodeURIComponent(target))
+  openFile(target, false);
+}
+
+function wireCtxChips(container) {
+  container.querySelectorAll('.ctx-chip[data-ctx-kind]').forEach(b => b.addEventListener('click', onCtxChipClick));
+}
+
+// ---- outcome card (drawer top) + row headline ----------------------------
+// task.outcome is the parsed TaskOutcome object (or null); see TaskOutcome.ts.
+const HUMAN_ACTORS = ['user', 'board', 'telegram'];     // Jm's side of the conversation
+const HUMAN_CLOSERS = ['board', 'telegram'];            // closes that never need an outcome
+const HIST_MARKERS = ['EXECUTOR_', 'MERGE_', '✅ Auto-merged', '✅ VERIFY', '❌ VERIFY', '❓ VERIFY',
+  '⚠️ verification skipped', 'Deliverable'];
+const HIST_CUT = 160;
+let ocSkipped = false;     // "Skip" pressed on the no-outcome form (this drawer session only)
+let histRows = [];         // [{ short, full, open }] behind the History list (click to expand)
+
+function shortSha(s) { return s ? String(s).slice(0, 7) : ''; }
+
+/** Badges for the outcome's verify + merge state. compact = the board-row wording. */
+function outcomeBadges(o, compact) {
+  const out = [];
+  const v = o.verify ? o.verify.verdict : null;
+  if (v === 'pass') out.push(['ok', compact ? '✓ checked' : '✓ Checked by verifier']);
+  else if (v === 'fail') out.push(['bad', compact ? '✗ check failed' : '✗ Verifier found a problem']);
+  else if (v === 'uncertain') out.push(['warn', compact ? '? unsure' : '? Verifier unsure']);
+  else if (v === 'skipped' && !compact) out.push(['', 'Verification skipped']);
+  const m = o.merge ? o.merge.state : null;
+  if (m === 'merged') out.push(['ok', (compact ? 'merged ' : 'Merged ') + shortSha(o.merge.sha)]);
+  else if (m === 'pending') out.push(['warn', compact ? 'not merged' : 'Not merged · waiting']);
+  else if (m === 'deferred') out.push(['warn', compact ? 'not merged' : 'Not merged · held back']);
+  else if (m === 'failed') out.push(['bad', compact ? 'merge failed' : 'Merge failed']);
+  return out;
+}
+function badgeHtml(b) { return '<span class="oc-badge ' + b[0] + '">' + esc(b[1]) + '</span>'; }
+
+/** Second line under a waiting/done row: headline + compact badges. */
+function outcomeRowLine(t) {
+  const o = t.outcome;
+  const badges = outcomeBadges(o, true);
+  const nLinks = (o.links || []).length;
+  const nJm = (o.forJm || []).length;
+  if (nLinks > 0) badges.push(['info', '📄 ' + nLinks]);
+  if (nJm > 0) badges.push(['info', '☑ ' + nJm + ' for you']);
+  return '<div class="why oc-row-line"><span class="oc-hl">' + esc(o.headline) + '</span>' +
+    badges.map(badgeHtml).join('') + '</div>';
+}
+
+function ocLinkChipHtml(l, i) {
+  const icons = { path: '📄', repo: '📄', url: '🔗', task: '☑', branch: '⇄', commit: '⇄' };
+  let key = l.label || '';
+  let text;
+  if (l.kind === 'branch') { key = key || 'Diff'; text = l.target; }
+  else if (l.kind === 'commit') { key = key || 'Commit'; text = shortSha(l.target); }
+  else if (l.kind === 'url') {
+    text = l.target;
+    try { const u = new URL(l.target); text = u.host + (u.pathname !== '/' ? u.pathname : ''); } catch (_) {}
+  } else if (l.kind === 'task') text = l.target;
+  else text = l.target.split('/').filter(Boolean).pop() || l.target;
+  if (text.length > 44) text = text.slice(0, 41) + '…';
+  return '<button type="button" class="oc-chip ' + esc(l.kind) + '" data-oc-i="' + i + '" title="' +
+    esc(l.target + (l.ref ? ' @ ' + l.ref : '')) + '"><span class="ic">' + (icons[l.kind] || '📄') + '</span>' +
+    (key ? '<span class="k">' + esc(key) + '</span>' : '') + '<span class="tx">' + esc(text) + '</span></button>';
+}
+
+function ocSection(label, inner) {
+  return '<div class="oc-sec"><div class="lbl">' + esc(label) + '</div>' + inner + '</div>';
+}
+
+function forJmItemHtml(it, i) {
+  return '<li><span class="box"></span><span class="txt">' + esc(it.text) + '</span>' +
+    (it.taskId
+      ? '<button type="button" class="ctx-chip task" data-oc-task="' + esc(it.taskId) + '" title="' + esc(it.taskId) + '">☑ task</button>'
+      : '<button type="button" class="ctx-chip" data-oc-make="' + i + '" title="Create a task for this item">＋ Make task</button>') +
+    '</li>';
+}
+
+function outcomeCardHtml(t) {
+  const o = t.outcome;
+  const links = o.links || [];
+  const forJm = o.forJm || [];
+  const badges = outcomeBadges(o, false);
+  if (o.source === 'backfill') badges.push(['info', 'drafted from old comments']);
+  let h = '<div class="oc"><div class="oc-top">' +
+    (badges.length ? '<div class="oc-row">' + badges.map(badgeHtml).join('') + '</div>' : '') +
+    '<div class="oc-headline">' + esc(o.headline) + '</div></div><div class="oc-body">';
+  if (links.length) h += ocSection('Open', '<div class="oc-chips">' + links.map(ocLinkChipHtml).join('') + '</div>');
+  else if (o.noArtifact) h += ocSection('Open', '<div class="oc-check">Nothing to open: ' + esc(o.noArtifact) + '</div>');
+  if (o.check) h += ocSection('Check it yourself', '<div class="oc-check">' + esc(o.check) + '</div>');
+  if (forJm.length) {
+    let list = '<ul class="oc-todo">' + forJm.slice(0, 3).map((it, i) => forJmItemHtml(it, i)).join('') + '</ul>';
+    if (forJm.length > 3) {
+      list += '<details><summary>' + (forJm.length - 3) + ' more</summary><ul class="oc-todo oc-more">' +
+        forJm.slice(3).map((it, i) => forJmItemHtml(it, i + 3)).join('') + '</ul></details>';
+    }
+    h += ocSection('For you · ' + forJm.length, list);
+  }
+  if (t.status === 'waiting') {
+    h += '<div class="oc-actions"><button type="button" class="primary" data-oc-act="approve">Approve (mark done)</button>' +
+      '<button type="button" data-oc-act="changes">Request changes</button></div>';
+  }
+  if (o.details) h += '<details><summary>Kaya’s full report</summary><div class="oc-details">' + esc(o.details) + '</div></details>';
+  if (o.verify && o.verify.note) h += '<details><summary>What the verifier checked</summary><div class="oc-details">' + esc(o.verify.note) + '</div></details>';
+  return h + '</div></div>';
+}
+
+/** Actor of the latest "completed" event, or null when the log does not say. */
+function completingActor() {
+  let best = null;
+  (drawerActivity || []).forEach(a => {
+    if (a.action === 'completed' && (!best || String(a.created_at) > String(best.created_at))) best = a;
+  });
+  return best ? (best.actor || null) : null;
+}
+
+function outcomeFormHtml(t) {
+  const who = completingActor();
+  const flagged = !!who && HUMAN_CLOSERS.indexOf(who) < 0;
+  return '<div class="oc-form' + (flagged ? ' warn' : '') + '">' +
+    (flagged ? '<div class="oc-warn">⚠ Closed by ' + esc(who) + ' with no outcome</div>' : '') +
+    '<div class="lbl">What came of it? <span style="font-weight:400;color:var(--muted)">(optional)</span></div>' +
+    '<input id="dw-oc-headline" maxlength="200" placeholder="One line: what changed or what you decided">' +
+    '<input id="dw-oc-link" placeholder="Link (file path, URL or task id) — optional">' +
+    '<div class="oc-btns"><button type="button" data-oc-act="skip">Skip</button>' +
+    '<button type="button" class="primary" data-oc-act="save">Save</button></div></div>';
+}
+
+/** Top of the drawer: the card when an outcome exists, else the optional form for done/waiting. */
+function outcomeSlotHtml(t) {
+  let h = t.outcome_error ? '<div class="oc-err">Outcome unreadable: ' + esc(t.outcome_error) + '</div>' : '';
+  if (t.outcome) return h + outcomeCardHtml(t);
+  if ((t.status === 'done' || t.status === 'waiting') && !ocSkipped) h += outcomeFormHtml(t);
+  return h;
+}
+
+function drawerPillHtml(t) {
+  const label = t.status === 'waiting' ? 'Waiting for your review' : statusLabel(t.status);
+  const cls = t.status === 'done' ? 'ok' : (t.status === 'waiting' ? 'warn' : '');
+  return '<span class="oc-badge ' + cls + '">' + esc(label) + '</span>';
+}
+
+function drawerCompactHtml(t) {
+  const proj = projects.find(p => p.id === t.project_id);
+  return '<span>Status <b>' + esc(statusLabel(t.status)) + '</b></span>' +
+    '<span>Priority <b>P' + esc(t.priority || 2) + '</b></span>' +
+    '<span>Project <b>' + esc(proj ? proj.name : '—') + '</b></span>' +
+    '<span>Estimate <b>' + esc(t.estimated_minutes ? fmtMin(t.estimated_minutes) : '—') + '</b></span>' +
+    '<button type="button" class="edit" data-oc-act="edit">Edit fields ▸</button>';
+}
+
+/** Header pill + compact read-only row; call after any change to drawerTask. */
+function renderDrawerChrome() {
+  if (!drawerTask) return;
+  const pill = document.getElementById('dw-pill');
+  if (pill) pill.innerHTML = drawerPillHtml(drawerTask);
+  const row = document.getElementById('dw-compact');
+  if (row) row.innerHTML = drawerCompactHtml(drawerTask);
+}
+
+function renderOutcomeSlot() {
+  const el = document.getElementById('dw-outcome');
+  if (el && drawerTask) el.innerHTML = outcomeSlotHtml(drawerTask);
+  renderDrawerChrome();
+}
+
+async function refreshDrawerActivity() {
+  const id = drawerTaskId;
+  if (!id) return;
+  try {
+    const res = await fetch('/api/tasks/' + encodeURIComponent(id));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (drawerTaskId !== id) return;
+    drawerActivity = data.activity || [];
+    renderThread();
+    renderOutcomeSlot();
+  } catch (_) {}
+}
+
+async function patchDrawerTask(body) {
+  const id = drawerTaskId;
+  const res = await fetch('/api/tasks/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errj = await res.json().catch(() => ({}));
+    throw new Error(errj.error || ('HTTP ' + res.status));
+  }
+  const { task } = await res.json();
+  if (drawerTaskId === id) drawerTask = task;
+  syncBoardModel(task);
+  return task;
+}
+
+async function saveOutcomeForm() {
+  const hl = document.getElementById('dw-oc-headline');
+  const lk = document.getElementById('dw-oc-link');
+  if (!hl) return;
+  const headline = hl.value.trim();
+  if (!headline) { hl.focus(); return; }
+  const outcome = { headline: headline };
+  const link = lk ? lk.value.trim() : '';
+  if (link) outcome.links = [{ target: link }];
+  try {
+    await patchDrawerTask({ outcome: outcome });
+    renderOutcomeSlot();
+    setStatus('outcome saved');
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'err');
+  }
+}
+
+async function makeForJmTask(btn) {
+  const id = drawerTaskId; // the drawer may switch tasks while the POST is in flight
+  const index = btn.dataset.ocMake;
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/tasks/' + encodeURIComponent(id) + '/outcome/for-jm/' + encodeURIComponent(index) + '/task', { method: 'POST' });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+    if (drawerTaskId === id) drawerTask = j.task;
+    syncBoardModel(j.task);
+    if (drawerTaskId === id) renderOutcomeSlot();
+    toast('Task created: ' + j.childId, 'ok');
+    refresh();
+  } catch (e) {
+    btn.disabled = false;
+    toast('Could not make task: ' + e.message, 'err');
+  }
+}
+
+async function approveOutcome(btn) {
+  btn.disabled = true;
+  const id = drawerTaskId; // the drawer may switch tasks while the PATCH is in flight
+  try {
+    await patchDrawerTask({ status: 'done' });
+    if (drawerTaskId !== id) return;
+    const sel = document.getElementById('dw-status');
+    if (sel) sel.value = 'done';
+    setStatus('marked done');
+    await refreshDrawerActivity();
+    renderOutcomeSlot();
+  } catch (e) {
+    btn.disabled = false;
+    toast('Could not mark done: ' + e.message, 'err');
+  }
+}
+
+function openFile(target, repo) {
+  fetch('/api/open?path=' + encodeURIComponent(target) + (repo ? '&repo=1' : ''))
     .then(async res => {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -2386,13 +3031,67 @@ function onCtxChipClick(e) {
     .catch(e => toast('Could not open: ' + e.message, 'err'));
 }
 
-function wireCtxChips(container) {
-  container.querySelectorAll('.ctx-chip[data-ctx-kind]').forEach(b => b.addEventListener('click', onCtxChipClick));
+function openOutcomeLink(l, o) {
+  const tab = (u) => window.open(u, '_blank', 'noopener');
+  if (l.kind === 'url') tab(l.target);
+  else if (l.kind === 'task') openDrawer(l.target);
+  else if (l.kind === 'branch') tab('/api/git/diff?ref=' + encodeURIComponent(l.target));
+  else if (l.kind === 'commit') tab('/api/git/commit?sha=' + encodeURIComponent(l.target));
+  else if (l.kind === 'repo') {
+    const merged = !!o.merge && o.merge.state === 'merged';
+    if (l.ref && !merged) tab('/api/git/show?ref=' + encodeURIComponent(l.ref) + '&path=' + encodeURIComponent(l.target));
+    else openFile(l.target, true);
+  } else openFile(l.target, false);
 }
+
+function onDrawerClick(e) {
+  const el = e.target;
+  if (!el || !el.closest) return;
+  const chip = el.closest('.oc-chip[data-oc-i]');
+  if (chip) {
+    const o = drawerTask ? drawerTask.outcome : null;
+    const l = o ? (o.links || [])[Number(chip.dataset.ocI)] : null;
+    if (l) openOutcomeLink(l, o);
+    return;
+  }
+  const mk = el.closest('[data-oc-make]');
+  if (mk) { makeForJmTask(mk); return; }
+  const tk = el.closest('[data-oc-task]');
+  if (tk) { openDrawer(tk.dataset.ocTask); return; }
+  const act = el.closest('[data-oc-act]');
+  if (act) {
+    const a = act.dataset.ocAct;
+    if (a === 'save') saveOutcomeForm();
+    else if (a === 'skip') { ocSkipped = true; renderOutcomeSlot(); }
+    else if (a === 'approve') approveOutcome(act);
+    else if (a === 'edit') {
+      const d = document.getElementById('dw-edit');
+      if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    }
+    else if (a === 'changes') {
+      const ta = document.getElementById('dw-comment');
+      if (ta) { ta.placeholder = 'What should Kaya change?'; ta.scrollIntoView({ block: 'center' }); ta.focus(); }
+    }
+    return;
+  }
+  const hx = el.closest('.hx.long');
+  if (hx) {
+    const row = histRows[Number(hx.dataset.hi)];
+    if (row) { row.open = !row.open; hx.textContent = row.open ? row.full : row.short; }
+  }
+}
+drawerEl.addEventListener('click', onDrawerClick);
+drawerEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target && (e.target.id === 'dw-oc-headline' || e.target.id === 'dw-oc-link')) {
+    e.preventDefault();
+    saveOutcomeForm();
+  }
+});
 
 async function openDrawer(id) {
   if (replyPollTimer) { clearInterval(replyPollTimer); replyPollTimer = null; }
   drawerTaskId = id;
+  ocSkipped = false;
   pendingEdits.add(id);                 // poll won't clobber the board while open
   drawerEl.hidden = false;
   backdropEl.hidden = false;
@@ -2443,9 +3142,13 @@ function buildDrawer() {
   drawerEl.innerHTML =
     '<div class="drawer-head">' +
       '<input id="dw-title" value="' + esc(t.title) + '" maxlength="1000">' +
+      '<span id="dw-pill">' + drawerPillHtml(t) + '</span>' +
       '<button id="dw-close" title="Close (Esc)">✕</button>' +
     '</div>' +
     '<div class="drawer-body">' +
+      '<div id="dw-outcome">' + outcomeSlotHtml(t) + '</div>' +
+      '<div class="dw-compact" id="dw-compact">' + drawerCompactHtml(t) + '</div>' +
+      '<details class="dw-edit" id="dw-edit"' + ((t.outcome && !t.outcome_error) ? '' : ' open') + '><summary>Edit fields</summary>' +
       '<div class="dw-grid">' +
         '<div class="dw-field full"><label>Description</label><textarea id="dw-description" placeholder="Add a description…">' + esc(t.description || '') + '</textarea></div>' +
         contextFieldHtml(t.description) +
@@ -2464,14 +3167,16 @@ function buildDrawer() {
         '<div class="dw-field full"><label>Labels (comma-separated)</label><input id="dw-labels" value="' + esc(labels) + '"></div>' +
       '</div>' +
       '<div class="dw-meta" id="dw-meta">' + drawerMetaHtml(t) + '</div>' +
+      '</details>' +
       '<div class="dw-section">' +
-        '<h4>Comments</h4>' +
+        '<h4>Conversation</h4>' +
         '<div id="dw-thread"></div>' +
         '<div class="dw-composer">' +
           '<textarea id="dw-comment" placeholder="Tell Kaya what to do — e.g. “move to Next and bump to P1”…"></textarea>' +
           '<button id="dw-comment-send">Comment &amp; reorganize</button>' +
         '</div>' +
       '</div>' +
+      '<details class="dw-hist" id="dw-hist"><summary id="dw-hist-sum">History</summary><ul class="dw-hist-list" id="dw-hist-list"></ul></details>' +
       '<div class="dw-danger"><button id="dw-delete">Delete permanently</button></div>' +
     '</div>';
   wireDrawer();
@@ -2527,6 +3232,8 @@ async function drawerSaveField(field, value, el) {
       if (cf) { cf.outerHTML = contextFieldHtml(task.description); wireCtxChips(drawerEl); }
     }
     setStatus('saved ' + new Date().toLocaleTimeString());
+    renderDrawerChrome();
+    if (field === 'status') { renderOutcomeSlot(); refreshDrawerActivity(); }
   } catch (e) {
     revertField(field, el);
     toast('Save failed: ' + e.message, 'err');
@@ -2588,40 +3295,104 @@ function fmtVal(v) {
   return String(v);
 }
 
-function activityLine(a) {
-  const when = fmtTs(a.created_at);
-  if (a.action === 'created') return 'Created · ' + when;
-  if (a.action === 'deleted') return 'Deleted · ' + when;
-  if (a.action === 'recurrence_created') return 'Recurrence created · ' + when;
+/** One event as plain text (no timestamp). An outcome change never prints its raw JSON. */
+function activityText(a) {
+  if (a.action === 'created') return 'Created';
+  if (a.action === 'deleted') return 'Deleted';
+  if (a.action === 'recurrence_created') return 'Recurrence created';
   let summary = a.action;
   try {
     const ch = JSON.parse(a.changes || '{}');
     const parts = Object.keys(ch).filter(k => k !== 'updated_at').map(k => {
       const v = ch[k];
+      if (k === 'outcome') {
+        let src = a.actor || 'unknown';
+        try {
+          const to = v && typeof v === 'object' && ('to' in v) ? v.to : v;
+          const parsed = typeof to === 'string' ? JSON.parse(to) : to;
+          if (parsed && parsed.source) src = parsed.source;
+        } catch (_) {}
+        return 'Outcome recorded (' + src + ')';
+      }
       if (v && typeof v === 'object' && ('from' in v) && ('to' in v)) return k + ': ' + fmtVal(v.from) + ' → ' + fmtVal(v.to);
       return k;
     });
     if (parts.length) summary = parts.join(', ');
   } catch (_) {}
-  const actor = (a.actor && a.actor !== 'user') ? ' (' + a.actor + ')' : '';
-  return summary + actor + ' · ' + when;
+  const hasOutcome = String(a.changes || '').indexOf('"outcome"') >= 0 && summary.indexOf('Outcome recorded') >= 0;
+  const actor = (a.actor && a.actor !== 'user' && !hasOutcome) ? ' (' + a.actor + ')' : '';
+  return summary + actor;
 }
 
+function activityLine(a) {
+  return activityText(a) + ' · ' + fmtTs(a.created_at);
+}
+
+function commentText(a) {
+  try { return (JSON.parse(a.changes || '{}').text) || ''; } catch (_) { return a.changes || ''; }
+}
+
+function isHistMarker(text) {
+  const s = String(text).trim();
+  return HIST_MARKERS.some(p => s.indexOf(p) === 0);
+}
+
+/** Consecutive identical history lines collapse to one row with a count n. */
+function collapseHistory(hist) {
+  const rows = [];
+  hist.forEach(h => {
+    const last = rows[rows.length - 1];
+    if (last && last.text === h.text) last.n += 1;
+    else rows.push({ when: h.when, text: h.text, n: 1 });
+  });
+  return rows;
+}
+
+// Conversation = Jm's comments (right, blue) + every other actor's ordinary comments
+// (left, grey). History (collapsed) = non-comment events + executor/system marker comments.
 function renderThread() {
   const el = document.getElementById('dw-thread');
   if (!el) return;
   const entries = (drawerActivity || []).slice().reverse();   // oldest first, reads top→bottom
-  if (entries.length === 0) { el.innerHTML = '<div class="dw-empty">No activity yet.</div>'; return; }
-  el.innerHTML = entries.map(a => {
-    if (a.action === 'comment') {
-      let text = '';
-      try { text = (JSON.parse(a.changes || '{}').text) || ''; } catch (_) { text = a.changes || ''; }
-      const who = a.actor === 'kaya' ? 'kaya' : 'user';
-      return '<div class="dw-bubble ' + who + '">' + esc(text) + '</div>';
-    }
-    return '<div class="dw-sys">' + esc(activityLine(a)) + '</div>';
-  }).join('');
+  const convo = [];
+  const hist = [];
+  entries.forEach(a => {
+    if (a.action !== 'comment') { hist.push({ when: a.created_at, text: activityText(a) }); return; }
+    const text = commentText(a);
+    if (HUMAN_ACTORS.indexOf(a.actor) < 0 && isHistMarker(text)) hist.push({ when: a.created_at, text: String(text).trim() });
+    else convo.push({ actor: a.actor, text: text });
+  });
+  if (convo.length === 0) {
+    el.innerHTML = '<div class="dw-empty">No messages yet. Write below to steer Kaya.</div>';
+  } else {
+    el.innerHTML = convo.map(c => {
+      const who = HUMAN_ACTORS.indexOf(c.actor) >= 0 ? 'user' : 'kaya';
+      const chips = contextChipsHtml(c.text);
+      return '<div class="dw-msg ' + who + '">' +
+        ((who === 'kaya' && c.actor && c.actor !== 'kaya') ? '<div class="dw-who">' + esc(c.actor) + '</div>' : '') +
+        '<div class="dw-bubble ' + who + '">' + esc(c.text) + '</div>' +
+        (chips ? '<div class="ctx-chips">' + chips + '</div>' : '') +
+        '</div>';
+    }).join('');
+    wireCtxChips(el);
+  }
   el.scrollTop = el.scrollHeight;
+
+  // History: collapse consecutive identical lines to one with ×N; long lines click to expand.
+  histRows = collapseHistory(hist).map(r => {
+    const full = r.text + (r.n > 1 ? ' ×' + r.n : '');
+    const cut = r.text.length > HIST_CUT ? r.text.slice(0, HIST_CUT - 1) + '…' : r.text;
+    return { when: r.when, full: full, short: cut + (r.n > 1 ? ' ×' + r.n : ''), long: r.text.length > HIST_CUT, open: false };
+  });
+  const list = document.getElementById('dw-hist-list');
+  const sum = document.getElementById('dw-hist-sum');
+  if (sum) sum.textContent = 'History · ' + hist.length + ' event' + (hist.length === 1 ? '' : 's');
+  if (list) {
+    list.innerHTML = histRows.map((r, i) =>
+      '<li><span class="t">' + esc(fmtTs(r.when)) + '</span><span class="hx' + (r.long ? ' long' : '') +
+      '" data-hi="' + i + '"' + (r.long ? ' title="Click to expand"' : '') + '>' + esc(r.short) + '</span></li>'
+    ).join('');
+  }
 }
 
 async function submitComment() {
@@ -2672,6 +3443,7 @@ function pollForReply(id, baselineKaya) {
         if (countKaya(drawerActivity) > baselineKaya) {
           drawerTask = data.task;
           syncDrawerFields(data.task);
+          renderOutcomeSlot();
           const meta = document.getElementById('dw-meta');
           if (meta) meta.innerHTML = drawerMetaHtml(data.task);
           syncBoardModel(data.task);
@@ -2892,6 +3664,15 @@ setInterval(refresh, 30000);
 // ============================================================================
 
 if (import.meta.main) {
+  // Auth check first, before the DB opens: a refused start touches nothing.
+  const bind = loadBoardBind();
+  const startup = resolveStartupAuth(bind, process.env.BOARD_TOKEN);
+  if (!startup.ok) {
+    console.error("[BoardServer] " + startup.error);
+    process.exit(1);
+  }
+  const authToken = startup.token;
+
   // Acquire the long-lived singleton ONCE and hold it for process lifetime.
   const db = getTaskDB();
   db.getRawDb().exec("PRAGMA busy_timeout=5000"); // belt-and-suspenders; constructor sets it too
@@ -2900,21 +3681,6 @@ if (import.meta.main) {
   installRealQueueArchiveHook().catch((err) => {
     console.warn("[BoardServer] queue reverse-sync hook install failed:", err);
   });
-
-  // Remote access is opt-in and never unauthenticated: a non-loopback bind
-  // without a token is a hard startup failure, not a warning. An explicit
-  // BOARD_TOKEN env enforces auth even on loopback (testable + belt-and-
-  // suspenders); the secrets.json token only activates for remote binds, so
-  // local browsing stays cookie-free once the secret exists.
-  const bind = loadBoardBind();
-  const authToken = bind === HOST ? (process.env.BOARD_TOKEN || null) : loadBoardToken();
-  if (bind !== HOST && authToken === null) {
-    console.error(
-      "[BoardServer] BOARD_BIND=" + bind + " requires a token (env BOARD_TOKEN or " +
-      "lucidtasks_board_token in ~/.claude/secrets.json). Refusing to expose the board unauthenticated.",
-    );
-    process.exit(1);
-  }
 
   const server = Bun.serve({
     hostname: bind,

@@ -2,6 +2,9 @@
 /**
  * taskBookkeeper.ts — Atomic status transitions and comments for the autonomous executor.
  *
+ * deliverTask and mergeTask also record the task's Outcome (Task Outcome Card) in the same
+ * updateTask call as their status change.
+ *
  * Five operations:
  *   claimTask          — in_progress guard (idempotent-safe: returns false if already claimed/closed)
  *   deliverTask        — waiting + a reviewable Deliverable comment (branch diff or external artifact,
@@ -17,8 +20,40 @@
 
 import type { TaskDB } from "../TaskDB.ts";
 import type { VerifyRecord } from "./executorVerify.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import {
+  OutcomeSchema,
+  createForJmTasks,
+  linkFromTarget,
+  readOutcome,
+  serializeOutcome,
+  type ForJmItem,
+  type Outcome,
+  type OutcomeLink,
+} from "../TaskOutcome.ts";
+import { recordFailure } from "../../../../../lib/core/FailureLog.ts";
+import { deriveHeadline } from "./verdictParser.ts";
 
 const CLOSED_STATUSES = new Set(["in_progress", "done", "cancelled"]);
+
+/** The agent-authored part of an outcome (from the EXECUTOR_VERDICT), plus run context. */
+export interface OutcomeDraft {
+  /** One plain sentence for Jm. */
+  headline: string;
+  /** One command or step for Jm to check the work. */
+  check?: string;
+  /** Files Jm opens first (repo-relative or absolute). Mapped to links. */
+  deliverables?: string[];
+  /** Items that need Jm's decision or action — each becomes a child task. */
+  forJm?: string[];
+  /** Changed files from `git diff --name-only <headBefore>..HEAD`; used ONLY when `deliverables` is empty. */
+  fallbackFiles?: string[];
+  /** The executor worktree path — absolute deliverables under it are really repo-relative. */
+  wtPath?: string;
+}
+
+/** Why a merge was attempted but did not complete (runAutoMerge's non-merged outcome kinds). */
+export type MergeAttemptKind = "deferred" | "merge-failed" | "verify-failed";
 
 export interface DeliverablePayload {
   /** Human-readable account of what the agent did — Jm reviews this on the board. */
@@ -37,6 +72,10 @@ export interface DeliverablePayload {
    * tell "reviewed and flagged" apart from "never reviewed."
    */
   verifySkipped?: string;
+  /** The agent-authored outcome fields. When absent, the headline is derived from `summary`. */
+  outcome?: OutcomeDraft;
+  /** Set when runAutoMerge tried and did NOT merge — so the outcome's merge.state is accurate. */
+  mergeAttempt?: MergeAttemptKind;
 }
 
 /**
@@ -114,14 +153,230 @@ export function formatDeliverableComment(payload: DeliverablePayload): string {
   return verifyLine ? `${verifyLine}\n\n${body}` : body;
 }
 
+// ============================================================================
+// Outcome record (Task Outcome Card) — pure builder
+// ============================================================================
+
+export interface ExecutorOutcomeInput {
+  draft: OutcomeDraft;
+  /** For-Jm items AFTER their child tasks were created (carry `taskId`). */
+  forJm: ForJmItem[];
+  /** The full report (already carries the fallback-model label, if any). */
+  details: string;
+  branch?: string;
+  /** True when the run produced repo changes committed to `branch`. */
+  hasChanges: boolean;
+  verify?: { verdict: "pass" | "fail" | "uncertain"; reasoning: string };
+  /** Reason verification could not run (e.g. "infra"). */
+  verifySkipped?: string;
+  /** Set to the merge SHA when the branch was merged to main. */
+  mergedSha?: string;
+  /** Set when a merge was attempted and did not complete. */
+  mergeAttempt?: MergeAttemptKind;
+  kayaHome: string;
+  /** ISO timestamp; defaults to now. */
+  at?: string;
+}
+
+const MAX_LINKS = 20; // OutcomeSchema's links limit
+const MAX_FOR_JM = 20; // OutcomeSchema's forJm limit
+const MAX_DELIVERABLE_LINKS = MAX_LINKS - 1; // one slot stays free for the diff/commit link
+const MAX_FALLBACK_FILES = 5;
+
+function clip(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
+}
+
+function mapDeliverable(raw: string, input: ExecutorOutcomeInput, ref: string | undefined): OutcomeLink {
+  const t = raw.trim();
+  const under = (root: string | undefined): string | null => {
+    if (!root) return null;
+    const prefix = root.endsWith("/") ? root : `${root}/`;
+    return t.startsWith(prefix) ? t.slice(prefix.length) : null;
+  };
+  const rel = under(input.draft.wtPath) ?? under(input.kayaHome);
+  if (rel !== null && rel !== "") {
+    return ref ? { kind: "repo", target: rel, ref } : { kind: "repo", target: rel };
+  }
+  const link = linkFromTarget(t);
+  return link.kind === "repo" && ref ? { ...link, ref } : link;
+}
+
+/**
+ * Build the Outcome the executor records for a delivery or auto-merge. Pure — exported for tests.
+ *
+ * Links: the agent's deliverables (absolute path inside the worktree/repo -> "repo" with the
+ * relative path; other absolute -> "path"; relative -> "repo"; `ref` = branch while the work is
+ * not on main), then one "branch" link (label "Diff") when there are repo changes that are not
+ * merged, or one "commit" link (label "Commit") when merged. With no deliverables, falls back
+ * to up to 5 changed files. Merge state comes from what the executor DID, never from prose.
+ */
+export function buildExecutorOutcome(input: ExecutorOutcomeInput): Outcome {
+  const { draft, hasChanges } = input;
+  // Blank branch/sha count as absent: a whitespace branch must not throw, and an empty sha must
+  // not claim "merged".
+  const branch = input.branch?.trim() || undefined;
+  const mergedSha = input.mergedSha?.trim() || undefined;
+  const merged = mergedSha !== undefined;
+  const ref = !merged && hasChanges ? branch : undefined;
+
+  const targets =
+    draft.deliverables && draft.deliverables.length > 0
+      ? draft.deliverables
+      : (draft.fallbackFiles ?? []).slice(0, MAX_FALLBACK_FILES);
+  const links: OutcomeLink[] = [];
+  for (const target of targets) {
+    if (target.trim() === "") continue;
+    const link = mapDeliverable(target, input, ref);
+    if (!links.some((l) => l.kind === link.kind && l.target === link.target)) links.push(link);
+  }
+  links.splice(MAX_DELIVERABLE_LINKS);
+  if (mergedSha) {
+    links.push({ kind: "commit", target: mergedSha, label: "Commit" });
+  } else if (hasChanges && branch) {
+    links.push({ kind: "branch", target: branch, label: "Diff" });
+  }
+
+  let mergeState: NonNullable<Outcome["merge"]>["state"];
+  if (merged) mergeState = "merged";
+  else if (input.mergeAttempt === "deferred") mergeState = "deferred";
+  else if (input.mergeAttempt === "merge-failed" || input.mergeAttempt === "verify-failed") mergeState = "failed";
+  else mergeState = hasChanges ? "pending" : "none";
+
+  let verify: Outcome["verify"];
+  if (input.verifySkipped) {
+    verify = { verdict: "skipped", note: clip(`verification skipped: ${input.verifySkipped}`, 600) };
+  } else if (input.verify) {
+    verify = { verdict: input.verify.verdict, note: clip(input.verify.reasoning, 600) };
+  }
+
+  const check = draft.check?.trim();
+  return OutcomeSchema.parse({
+    v: 1,
+    headline: clip(draft.headline.trim(), 200),
+    links,
+    ...(links.length === 0 ? { noArtifact: "no files changed; see the report" } : {}),
+    ...(verify ? { verify } : {}),
+    merge: {
+      state: mergeState,
+      ...(branch && hasChanges ? { branch } : {}),
+      ...(mergedSha ? { sha: mergedSha } : {}),
+    },
+    ...(check ? { check: clip(check, 300) } : {}),
+    forJm: input.forJm,
+    details: clip(input.details, 12000),
+    by: "executor",
+    at: input.at ?? new Date().toISOString(),
+    source: "executor",
+  });
+}
+
 /**
  * Mark the task delivered: set status to 'waiting' and add a reviewable Deliverable comment.
  * Jm reviews the result (branch diff or artifact) and either marks the task done (approve)
  * or comments feedback (which the next executor run picks up as a re-engagement).
+ *
+ * The Outcome is written in the SAME updateTask call as the status change (a re-engagement
+ * delivery replaces any earlier outcome). For-Jm child tasks are created first, so their ids
+ * land in `outcome.forJm`; createForJmTasks dedupes, so re-delivery adds no duplicates.
  */
 export function deliverTask(db: TaskDB, taskId: string, payload: DeliverablePayload): void {
-  db.updateTask(taskId, { status: "waiting" }, "executor");
+  const task = db.getTask(taskId);
+  const draft: OutcomeDraft = payload.outcome ?? { headline: "" };
+  const headline = pickHeadline(draft.headline, payload.summary, task?.title);
+  const hasChanges = Boolean(payload.hasChanges && payload.branch);
+  const outcomeJson = outcomeJsonOrFallback(db, taskId, {
+    forJm: draft.forJm ?? [],
+    build: (forJm) =>
+      buildExecutorOutcome({
+        draft: { ...draft, headline, deliverables: [...(draft.deliverables ?? []), ...(payload.artifacts ?? [])] },
+        forJm,
+        details: payload.summary,
+        branch: payload.branch,
+        hasChanges,
+        verify: payload.verify,
+        verifySkipped: payload.verifySkipped,
+        mergeAttempt: payload.mergeAttempt,
+        kayaHome: getKayaHome(),
+      }),
+    branch: payload.branch,
+    fallback: (forJm, note) =>
+      buildExecutorOutcome({
+        draft: { headline },
+        forJm,
+        details: `${note}\n\n${payload.summary}`,
+        branch: payload.branch,
+        hasChanges,
+        mergeAttempt: payload.mergeAttempt,
+        kayaHome: getKayaHome(),
+      }),
+  });
+  db.updateTask(taskId, { status: "waiting", outcome: outcomeJson }, "executor");
   db.addComment(taskId, formatDeliverableComment(payload), "executor");
+}
+
+/** A non-empty headline: the draft's, else the summary's first sentence, else the task title. */
+function pickHeadline(draftHeadline: string, summary: string, taskTitle: string | undefined): string {
+  return (
+    draftHeadline.trim() ||
+    deriveHeadline(summary) ||
+    clip((taskTitle ?? "").trim(), 200) ||
+    "Delivered (no summary)"
+  );
+}
+
+/**
+ * Produce the outcome JSON for a status write — and NEVER throw because of the outcome (a throw
+ * after a real merge would strand the task not-done). Order matters:
+ *   1. build once with text-only for-Jm items to VALIDATE before any child task exists,
+ *   2. create the child tasks, 3. rebuild with their ids and serialize.
+ * Any failure falls back to a minimal valid outcome and is logged via recordFailure, so the
+ * degradation is visible and the caller's status transition still happens. The fallback keeps
+ * Jm's for-Jm items as TEXT-ONLY items (no child tasks) and carries a note for `details`, so
+ * the card itself shows the problem. Items over the 20-item cap are dropped — and logged.
+ */
+function outcomeJsonOrFallback(
+  db: TaskDB,
+  taskId: string,
+  opts: {
+    forJm: string[];
+    /** Run context for the failure log. */
+    branch?: string;
+    sha?: string;
+    build: (forJm: ForJmItem[]) => Outcome;
+    fallback: (forJm: ForJmItem[], note: string) => Outcome;
+  },
+): string {
+  const all = opts.forJm.map((t) => t.trim().slice(0, 300).trim()).filter((t) => t !== "");
+  const texts = all.slice(0, MAX_FOR_JM);
+  if (all.length > texts.length) {
+    recordFailure({
+      source: "executor:outcome",
+      error: `forJm over cap: dropped ${all.length - texts.length} items`,
+      context: { taskId, dropped: all.length - texts.length },
+    });
+  }
+  const textOnly: ForJmItem[] = texts.map((text) => ({ text }));
+  try {
+    opts.build(textOnly); // validate first; throws on a bad outcome
+    const task = db.getTask(taskId);
+    const items = task && texts.length > 0 ? createForJmTasks(db, task, texts) : [];
+    return serializeOutcome(opts.build(items));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    recordFailure({
+      source: "executor:outcome",
+      error: err,
+      context: { taskId, branch: opts.branch, sha: opts.sha, forJm: texts.length },
+    });
+    const note = `Kaya could not build the full outcome: ${message.slice(0, 200)}. See the failure log.`;
+    try {
+      return serializeOutcome(opts.fallback(textOnly, note));
+    } catch (err2) {
+      recordFailure({ source: "executor:outcome", error: err2, context: { taskId, stage: "fallback" } });
+      return serializeOutcome(opts.fallback([], note));
+    }
+  }
 }
 
 /**
@@ -156,6 +411,11 @@ export interface MergedPayload {
   sha: string;
   /** The builder agent's own EXECUTOR_VERDICT summary — carried into the merged comment. */
   summary: string;
+  /** Agent-authored outcome fields for a FRESH build. Absent on the pending-merge sweep, which
+   *  updates the outcome already on the task instead. */
+  outcome?: OutcomeDraft;
+  /** The verification verdict that cleared the merge (fresh build only). */
+  verify?: { verdict: "pass" | "fail" | "uncertain"; reasoning: string };
 }
 
 /**
@@ -170,12 +430,86 @@ export function formatMergedComment(payload: MergedPayload): string {
 }
 
 /**
+ * The outcome to record on a merge. Fresh build (`payload.outcome`): built from scratch.
+ * Pending-merge sweep (no draft): the deferred delivery's outcome is kept field-for-field, with
+ * `merge` -> merged (sha, branch) and the "branch" link swapped for a "commit" link. A task with
+ * no outcome yet (delivered before the Outcome Card existed) gets one built from the summary.
+ */
+function buildMergeOutcome(
+  taskTitle: string | undefined,
+  existingRaw: string | null | undefined,
+  payload: MergedPayload,
+  forJm: ForJmItem[],
+): Outcome {
+  if (payload.outcome) {
+    return buildExecutorOutcome({
+      draft: { ...payload.outcome, headline: pickHeadline(payload.outcome.headline, payload.summary, taskTitle) },
+      forJm,
+      details: payload.summary,
+      branch: payload.branch,
+      hasChanges: true,
+      verify: payload.verify,
+      mergedSha: payload.sha,
+      kayaHome: getKayaHome(),
+    });
+  }
+
+  const existing = readOutcome(existingRaw).outcome;
+  if (!existing) {
+    return buildExecutorOutcome({
+      draft: { headline: pickHeadline("", payload.summary, taskTitle) },
+      forJm: [],
+      details: payload.summary,
+      branch: payload.branch,
+      hasChanges: true,
+      mergedSha: payload.sha,
+      kayaHome: getKayaHome(),
+    });
+  }
+
+  // Swap the branch link for the commit link; keep the total within the schema's 20-link limit
+  // (no branch link to swap: drop the last link to make room).
+  const commit: OutcomeLink = { kind: "commit", target: payload.sha, label: "Commit" };
+  let links: OutcomeLink[];
+  if (existing.links.some((l) => l.kind === "branch")) {
+    links = existing.links.map((l) => (l.kind === "branch" ? commit : l));
+  } else {
+    links = [...existing.links.slice(0, MAX_LINKS - 1), commit];
+  }
+  return OutcomeSchema.parse({
+    ...existing,
+    links,
+    merge: { state: "merged", branch: payload.branch, sha: payload.sha },
+  });
+}
+
+/**
  * Mark the task done after a successful Lane A auto-merge (slice F2): a comment naming the
  * branch + merge SHA, then status → 'done' (TaskDB auto-stamps completed_at on that
  * transition — see TaskDB.updateTask). Comment written BEFORE the status flip, mirroring
- * failTask's ordering: never missing on a DB error partway through.
+ * failTask's ordering: never missing on a DB error partway through. The Outcome rides in the
+ * SAME updateTask call as the status flip (see buildMergeOutcome). The outcome can never make
+ * this throw — the merge to main already happened — see outcomeJsonOrFallback.
  */
 export function mergeTask(db: TaskDB, taskId: string, payload: MergedPayload): void {
   db.addComment(taskId, formatMergedComment(payload), "executor");
-  db.updateTask(taskId, { status: "done" }, "executor");
+  const task = db.getTask(taskId);
+  const outcomeJson = outcomeJsonOrFallback(db, taskId, {
+    forJm: payload.outcome?.forJm ?? [],
+    build: (forJm) => buildMergeOutcome(task?.title, task?.outcome, payload, forJm),
+    branch: payload.branch,
+    sha: payload.sha,
+    fallback: (forJm, note) =>
+      buildExecutorOutcome({
+        draft: { headline: pickHeadline(payload.outcome?.headline ?? "", payload.summary, task?.title) },
+        // Sweep path (no draft): keep the for-Jm items already on the task's outcome.
+        forJm: payload.outcome ? forJm : (readOutcome(task?.outcome).outcome?.forJm ?? []),
+        details: `${note}\n\n${payload.summary}`,
+        branch: payload.branch,
+        hasChanges: true,
+        mergedSha: payload.sha,
+        kayaHome: getKayaHome(),
+      }),
+  });
+  db.updateTask(taskId, { status: "done", outcome: outcomeJson }, "executor");
 }

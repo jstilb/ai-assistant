@@ -85,7 +85,7 @@ Each candidate task is scored by `scoreTask()`. Factors are cumulative — highe
 
 ## Voice Notification
 
-Automatic via `notifySync()` is NOT called in `cmdNext`. Notification is only triggered if `--start` is used (via activity log). No manual notification required for browsing suggestions.
+Automatic via `notifySync()` is NOT called in `cmdNext`. Notification is only triggered if `--start` is used (via task events). No manual notification required for browsing suggestions.
 
 ## Integration
 

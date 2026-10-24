@@ -19,6 +19,7 @@
  */
 
 import { getTaskDB, type TaskStatus, type Task } from "./TaskDB.ts";
+import { agentOutcomeProblem, readOutcome, serializeOutcome, systemOutcome } from "./TaskOutcome.ts";
 import { syncQueueStatus as taskManagerSyncQueueStatus } from "./TaskManager.ts";
 import {
   setTaskClient,
@@ -67,7 +68,18 @@ export const taskClientAdapter: TaskClient = {
 
   async updateTaskStatus(taskId: string, status: string): Promise<boolean> {
     const db = getTaskDB();
-    const updated = db.updateTask(taskId, { status: status as TaskStatus }, "queue");
+    const updates: Partial<Task> = { status: status as TaskStatus };
+    // Closing is gated on an outcome; a queue-driven close is bookkeeping, so record that truthfully.
+    // Never overwrite a real outcome the task already has.
+    const existing = status === "done" ? db.getTask(taskId) : null;
+    if (status === "done" && existing && agentOutcomeProblem(readOutcome(existing.outcome).outcome) !== null) {
+      updates.outcome = serializeOutcome(systemOutcome({
+        by: "queue",
+        headline: "Closed by the work-queue integration",
+        noArtifact: "status set to done through the queue/task integration seam",
+      }));
+    }
+    const updated = db.updateTask(taskId, updates, "queue");
     return updated !== null;
   },
 

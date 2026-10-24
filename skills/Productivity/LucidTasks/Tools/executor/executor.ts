@@ -58,13 +58,14 @@ import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 import { sendAlert } from "../../../../../lib/core/AlertGate.ts";
 import { isRateLimited } from "../../../../../lib/core/RateLimitGuard.ts";
 import { getOrCreateWorktree, removeWorktree } from "../../../../../lib/core/WorktreeManager.ts";
+import { reapProcessesInDir } from "../../../../../lib/core/ProcessReaper.ts";
 import { recordFailure } from "../../../../../lib/core/FailureLog.ts";
 import { createAppendLog, type AppendLog } from "../../../../../lib/core/AppendLog.ts";
 import type { InfraReason } from "../../../../../lib/core/AgentSpawner.ts";
 import { spawnAgent, type SpawnAgentOpts, type SpawnAgentResult } from "./spawnAgent.ts";
 import { parseVerdict } from "./verdictParser.ts";
 import { buildAgentPrompt } from "./agentPrompt.ts";
-import { claimTask, deliverTask, failTask, recordVerification } from "./taskBookkeeper.ts";
+import { claimTask, deliverTask, failTask, recordVerification, type OutcomeDraft } from "./taskBookkeeper.ts";
 import { acquireLock, releaseLock } from "./runLock.ts";
 import { runVerification } from "./executorVerify.ts";
 import {
@@ -210,8 +211,16 @@ function headSha(wtPath: string): string {
   }
 }
 
-/** Best-effort worktree teardown — never throws (cleanup must not mask the real outcome). */
+/**
+ * Best-effort worktree teardown — never throws (cleanup must not mask the real outcome).
+ * First ends any process still running inside the worktree (a server the agent
+ * backgrounded with a scrubbed env slips past AgentSpawner's env-marker sweep).
+ */
 async function cleanupWorktree(wtPath: string): Promise<void> {
+  const reaped = reapProcessesInDir(wtPath);
+  if (reaped.length > 0) {
+    console.warn(`[executor] ended ${reaped.length} leftover process(es) in ${wtPath}: ${reaped.join(", ")}`);
+  }
   try {
     await removeWorktree(wtPath);
   } catch (err) {
@@ -247,6 +256,42 @@ export function captureWorktreeChanges(
 
   const headAfter = headSha(wtPath);
   return dirty || (headAfter !== "" && headAfter !== headBefore);
+}
+
+/**
+ * Files changed on the branch since `headBefore`, from `git diff --name-only <headBefore>..HEAD`
+ * in the worktree (up to `limit`). Used as the Outcome's links when the agent listed no
+ * deliverables; must run BEFORE any worktree cleanup/merge. Best-effort: [] on any git error
+ * or when `headBefore` is unknown — the outcome then falls back to the branch link alone.
+ */
+export function changedFilesSinceHead(wtPath: string, headBefore: string, limit = 5): string[] {
+  if (!headBefore) return [];
+  try {
+    return git(["diff", "--name-only", `${headBefore}..HEAD`], wtPath)
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0)
+      .slice(0, limit);
+  } catch (err) {
+    console.warn(`[executor] changed-files fallback failed in ${wtPath}: ${err instanceof Error ? err.message : err}`);
+    return [];
+  }
+}
+
+/**
+ * The files the Deliverable comment renders as `[[wikilinks]]`: the legacy `artifacts` plus any
+ * ABSOLUTE deliverable outside the worktree (an Obsidian note etc.). Deliverables inside the
+ * worktree are repo changes — they ride on the branch, not as wikilinks. Deduped. Pure.
+ */
+export function externalArtifacts(
+  verdict: { artifacts: string[]; deliverables: string[] },
+  wtPath: string,
+): string[] {
+  const out = [...verdict.artifacts];
+  for (const d of verdict.deliverables) {
+    if (d.startsWith("/") && !d.startsWith(`${wtPath}/`) && !out.includes(d)) out.push(d);
+  }
+  return out;
 }
 
 // ============================================================================
@@ -318,7 +363,7 @@ export function selectTasks(db: TaskDB, limit = 3): SelectedTask[] {
 
   // Prepared statement: newest COMMENT (action='comment') by insertion order
   const newestCommentActorStmt = raw.prepare(
-    `SELECT actor FROM activity_log
+    `SELECT actor FROM task_events
      WHERE task_id = ? AND action = 'comment'
      ORDER BY id DESC LIMIT 1`
   );
@@ -489,7 +534,7 @@ export function detectPendingMerge(db: TaskDB, taskId: string): PendingMergeCand
   const raw = db.getRawDb();
   const rows = raw
     .prepare(
-      `SELECT actor, changes FROM activity_log
+      `SELECT actor, changes FROM task_events
        WHERE task_id = ? AND action = 'comment'
        ORDER BY id DESC LIMIT 20`
     )
@@ -577,6 +622,9 @@ async function defaultResolveLegacyWorktree(branch: string, taskId: string): Pro
  * ONLY the merge step (runAutoMerge) on the recorded branch/worktree — the verdict was already
  * "pass" and the work already built + verified at defer time, so this NEVER spawns a builder
  * agent (no spawnAgent call anywhere in this function or anything it calls).
+ *
+ * On success, runAutoMerge -> mergeTask updates the outcome already on the task (merge ->
+ * merged, "branch" link -> "commit" link, every other field kept) — no outcome draft is passed.
  *
  * See the section docstring above for the defect this fixes and findPendingMergeCandidates /
  * detectPendingMerge for how candidates are found purely from the persisted comment trail.
@@ -867,6 +915,15 @@ export async function runTask(
     return { taskId, status: "failed", reason };
   }
 
+  // 7a. The verdict caps (5 deliverables, 20 forJm) drop extras — never silently.
+  if (verdict.dropped.deliverables > 0 || verdict.dropped.forJm > 0) {
+    recordFailure({
+      source: "executor:outcome",
+      error: `verdict over caps: dropped ${verdict.dropped.deliverables} deliverables, ${verdict.dropped.forJm} forJm items`,
+      context: { taskId, dropped: verdict.dropped },
+    });
+  }
+
   // 7b. Label the delivery when the work was built by the fallback model — the prefix rides the
   //     summary into every downstream shape (Deliverable comment, auto-merged comment, verify
   //     builderSummary), so Jm always sees which model did the work.
@@ -882,6 +939,19 @@ export async function runTask(
     headBefore,
     `executor: ${task.title} (task ${taskId})`
   );
+
+  // 8b. Outcome draft (Task Outcome Card): the agent's headline/deliverables/check/forJm. When the
+  //     agent listed no deliverables, fall back to the changed files — read NOW, before the
+  //     worktree is merged or torn down.
+  const outcomeDraft: OutcomeDraft = {
+    headline: verdict.headline,
+    check: verdict.check,
+    deliverables: verdict.deliverables,
+    forJm: verdict.forJm,
+    fallbackFiles:
+      hasChanges && verdict.deliverables.length === 0 ? changedFilesSinceHead(wtPath, headBefore) : undefined,
+    wtPath,
+  };
 
   // 6b. Verify — SKEPTICAL second-agent review of the branch diff. Only runs when there ARE
   //     committed repo changes to review (the worktree still exists here; below, it gets torn
@@ -899,7 +969,7 @@ export async function runTask(
 
   if (hasChanges) {
     const verifyOutcome = runVerification({
-      task: { id: taskId, title: task.title, description: task.description },
+      task: { id: taskId, title: task.title, description: task.description, raw_input: task.raw_input },
       branch,
       wtPath,
       builderSummary: deliverySummary,
@@ -952,6 +1022,8 @@ export async function runTask(
         repoRoot: kayaHome(),
         summary: deliverySummary,
         verdict: record.verdict,
+        outcome: outcomeDraft,
+        verifyReasoning: record.reasoning,
       });
     }
   }
@@ -986,11 +1058,15 @@ export async function runTask(
   //    now including the verification verdict (or an explicit skip marker) prominently.
   deliverTask(db, taskId, {
     summary: deliverySummary,
-    artifacts: verdict.artifacts,
+    artifacts: externalArtifacts(verdict, wtPath),
     branch,
     hasChanges,
     verify: verifyPayload,
     verifySkipped,
+    outcome: outcomeDraft,
+    // runAutoMerge's deferred / merge-failed / verify-failed reach the outcome's merge.state here
+    // ("merged" returned above; "skipped" and undefined mean no attempt was made).
+    mergeAttempt: mergeOutcome && mergeOutcome.kind !== "skipped" ? mergeOutcome.kind : undefined,
   });
 
   // 8. Append run record + report

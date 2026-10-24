@@ -23,10 +23,11 @@ A project for parked work. `someday` is a task status; a task can also belong to
 The autonomous executor under `Tools/executor/` that selects tasks with `disposition='autonomous'` and applies its own gates. It does not turn every task into a Spec Pipeline item.
 
 **Task event**:
-An audit entry currently stored in `activity_log` for a task change, completion, or comment. The approved D10 table rename to `task_events` is a separate migration and has not happened here.
+One row in the `task_events` table: a task change, completion, automation action, or comment, with its actor. Called `activity_log` before ontology ruling D10; `TaskDB` renames an old `activity_log` on open (`PRAGMA user_version` 1 = renamed) and `Tools/MigrateTaskEvents.ts` runs or rolls back the rename on demand.
+_Avoid_: activity log, log ("Log" means a LifeOS domain table; LifeOS has its own unrelated `activity_log`).
 
 ## Relationships
 
 - Status says where the task sits; disposition says who or what may act on it; priority helps order eligible work.
 - A task may be `someday` regardless of its project, while Icebox is a project name.
-- Lane A consumes eligible autonomous tasks; QueueRouter's Spec Pipeline has its own item IDs, stages, and approval gate.
+- The Task Executor (Lane A) consumes eligible autonomous tasks; QueueRouter's Spec Pipeline has its own item IDs, stages, and approval gate.

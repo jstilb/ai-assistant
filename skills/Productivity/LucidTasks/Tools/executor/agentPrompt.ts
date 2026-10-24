@@ -18,6 +18,8 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { ActivityLogEntry } from "../TaskDB.ts";
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { HEADLINE_TARGET } from "../TaskOutcome.ts";
+import { INTENT_RULE, UI_DESIGN_BAR } from "./qualityBar.ts";
 
 // ============================================================================
 // Types
@@ -157,6 +159,16 @@ step in your final summary — do not stop or ask externally.
 
 ---
 
+${INTENT_RULE}
+
+${UI_DESIGN_BAR}
+
+If your change has a UI, render it and open desktop and phone screenshots with Read before you
+deliver; fix what fails Jm's words or the bar. A skeptical verifier renders it too and judges it
+against Jm's words and this bar — a UI it has not seen does not merge.
+
+---
+
 ## YOUR WORKSPACE
 
 You are running inside an **isolated git worktree** on branch \`${branch}\`. This is a private
@@ -168,7 +180,7 @@ copy of the Kaya repo — your changes here do NOT touch the live tree or any ot
   is preferred. Jm reviews this branch's diff and merges it when satisfied.
 - For tasks whose output lives **outside the repo** (research notes, documents): write to the
   appropriate external location — e.g. \`/Users/[user]/Desktop/obsidian/<best-folder>/<slug>.md\`
-  — exactly as before, and list those file paths as \`artifacts\` in your verdict.
+  — exactly as before, and list those file paths as \`deliverables\` in your verdict.
 
 ---
 
@@ -199,7 +211,8 @@ unresolvable from available context.
   check). If you wrote a script, execute it. Don't claim something works without checking.
 - **Orchestrate sub-agents** for parallelizable research/exploration when it helps:
   \`Task({ subagent_type: "ClaudeResearcher", prompt: "..." })\` or the \`deep-research\` skill.
-  (Do NOT use GeminiResearcher — unavailable here.) Use WebSearch/WebFetch for targeted lookups.
+  For breadth / contrarian / technical angles: BreadthResearcher / ContrarianResearcher / TechnicalResearcher. (Do NOT use
+  GeminiAnalyst — it shells to the \`gemini\` CLI, unavailable here.) Use WebSearch/WebFetch for targeted lookups.
 
 ---
 
@@ -238,11 +251,29 @@ This is the LAST thing in your response. Emit it exactly as shown (no extra whit
 between the markers):
 
 EXECUTOR_VERDICT_START
-{"summary": "<what you did, where it lives, how to verify, anything left for Jm>", "artifacts": ["<absolute path of any external file you wrote>"]}
+{"headline": "<what changed, in plain words for Jm>", "summary": "<full report: what you did, where it lives, how to verify>", "deliverables": ["<file Jm opens first>"], "check": "<one command or step>", "forJm": ["<one decision or action only Jm can do>"]}
 EXECUTOR_VERDICT_END
 
-\`summary\` is required. \`artifacts\` is optional (use [] if you only changed repo code — those
-changes are captured from your branch automatically). If you fail to emit this block exactly, the
-executor will treat the run as failed and reset the task so it can be retried.
+Example:
+
+EXECUTOR_VERDICT_START
+{"headline": "Added a retry with backoff to the calendar sync, so a failed call no longer drops events.", "summary": "Wrapped the Google Calendar fetch in skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts with 3 retries (1s, 2s, 4s). Added 4 tests; all pass. The sync still fails loudly after the third retry.", "deliverables": ["skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts", "skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts"], "check": "bun test ~/.claude/skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts", "forJm": ["Decide if 3 retries is enough, or if the sync should also page you after the last failure."]}
+EXECUTOR_VERDICT_END
+
+Rules:
+- \`summary\` is required. It is the full report; Jm folds it away by default.
+- \`headline\` is plain words for Jm, at most ${HEADLINE_TARGET} characters, one sentence. It says what
+  CHANGED, not the steps you took. If you omit it, the executor guesses from your summary's first
+  sentence — write it yourself.
+- \`deliverables\` are the 1-5 things Jm opens first: repo-relative paths (changes in your worktree)
+  or absolute paths (files you wrote outside the repo, e.g. an Obsidian note). Use [] only if
+  nothing was produced.
+- \`check\` is ONE command or ONE step Jm can run to see that it works. Omit it if there is none.
+- \`forJm\` lists ONLY things that need Jm's decision or action — one short sentence each. Each item
+  becomes a task for Jm. Never put generic advice or "nice to have" ideas here. Use [] if none.
+- Repo code changes are captured from your branch automatically — do not list every changed file.
+
+If you fail to emit this block exactly, the executor will treat the run as failed and reset the
+task so it can be retried.
 `;
 }

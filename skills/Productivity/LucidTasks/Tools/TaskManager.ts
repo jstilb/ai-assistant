@@ -9,7 +9,7 @@
  *   bun run TaskManager.ts                      # Today's tasks
  *   bun run TaskManager.ts inbox                # Inbox items
  *   bun run TaskManager.ts add "title" [opts]   # Add task
- *   bun run TaskManager.ts done <id>            # Complete task
+ *   bun run TaskManager.ts done <id> --outcome "<what changed>" --link <path|url>   # Complete task (agents: outcome required)
  *   bun run TaskManager.ts next                 # Suggested next task
  *   bun run TaskManager.ts projects             # List projects
  *   bun run TaskManager.ts search "query"       # Full-text search
@@ -24,6 +24,10 @@
 import { join } from "path";
 import { getTaskDB, installRealQueueArchiveHook, DispositionSchema, hasContextLink, inheritedContextLines, CONTEXT_STANDARD_HINT, type Task, type Project, type TaskStatus, type EnergyLevel, type TaskFilter } from "./TaskDB.ts";
 import { notifySync } from "../../../../lib/core/NotificationService.ts";
+import {
+  agentOutcomeProblem, createForJmTasks, HUMAN_CLOSE_ACTORS, linkFromTarget, readOutcome, serializeOutcome, systemOutcome,
+  OutcomeRequiredError, OutcomeSchema, type Outcome, type OutcomeLink,
+} from "./TaskOutcome.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { getAllGoalIds, getGoal, loadTelosData } from "./TelosGoalLoader.ts";
@@ -140,6 +144,131 @@ function getArg(name: string, args: string[]): string | undefined {
 
 function hasFlag(name: string, args: string[]): boolean {
   return args.includes(`--${name}`);
+}
+
+/** Every value of a repeatable flag, in order (`--link a --link b` -> ["a", "b"]). */
+function getArgs(name: string, args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === `--${name}`) out.push(args[i + 1]);
+  }
+  return out;
+}
+
+/** Flags that carry the close outcome (`done`, `update --status done`). All take a value. */
+const OUTCOME_VALUE_FLAGS = ["outcome", "link", "check", "no-artifact", "for-jm", "details", "note", "actor"] as const;
+
+/** Flags whose presence on `update` means "write an outcome" (not --note/--actor, which other writers use). */
+const OUTCOME_WRITE_FLAGS = ["outcome", "link", "check", "no-artifact", "for-jm", "details"] as const;
+
+interface OutcomeFlags {
+  actor: string;
+  headline?: string;
+  links: OutcomeLink[];
+  check?: string;
+  noArtifact?: string;
+  forJm: string[];
+  details?: string;
+}
+
+/** Print one clean error line and exit 1 (nothing has been created or closed yet). */
+function failCli(message: string): never {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+}
+
+/** Reject an outcome flag with no value, or whose value is another flag (`--outcome --link x`). */
+function checkOutcomeFlagValues(args: string[]): void {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith("--") || !(OUTCOME_VALUE_FLAGS as readonly string[]).includes(a.slice(2))) continue;
+    const v = args[i + 1];
+    if (v === undefined || v.startsWith("--")) failCli(`${a} needs a value${v === undefined ? "" : ` (got "${v}")`}`);
+  }
+}
+
+function parseOutcomeFlags(args: string[]): OutcomeFlags {
+  checkOutcomeFlagValues(args);
+  let links: OutcomeLink[];
+  try {
+    links = getArgs("link", args).map((t) => linkFromTarget(t));
+  } catch (err) {
+    return failCli(`--link: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return {
+    actor: getArg("actor", args) || "user",
+    headline: getArg("outcome", args),
+    links,
+    check: getArg("check", args),
+    noArtifact: getArg("no-artifact", args),
+    forJm: getArgs("for-jm", args),
+    // --note keeps working: it fills details when --details is absent.
+    details: getArg("details", args) ?? getArg("note", args),
+  };
+}
+
+/** Build the outcome for the flags. `forJm` is the resolved list (text-only until children exist). */
+function outcomeFromFlags(f: OutcomeFlags, forJm: Outcome["forJm"]): Outcome {
+  return {
+    v: 1,
+    headline: f.headline ?? "",
+    links: f.links,
+    noArtifact: f.noArtifact,
+    check: f.check,
+    forJm,
+    details: f.details,
+    by: f.actor,
+    at: new Date().toISOString(),
+    source: "cli",
+  };
+}
+
+/**
+ * Validate the WHOLE outcome (schema + agent acceptability) with text-only for-jm items, BEFORE any
+ * child task is created. Any problem -> one clean stderr line, exit 1.
+ * `closing`: this command also closes the task. A plain outcome write (update on an open or done task)
+ * closes nothing, so its message names what the outcome lacks instead of the close gate.
+ */
+function validateOutcomeFlags(f: OutcomeFlags, example: string, closing: boolean): void {
+  const use = `Use: ${example} --outcome "<what changed>" --link <path|url> (or --no-artifact "<why>")`;
+  const refuse = (gateReason: string, writeReason: string): never =>
+    failCli(
+      closing
+        ? `${f.actor} needs an outcome before closing a task: ${gateReason}. ${use}`
+        : `outcome not saved: ${writeReason}. ${use}`
+    );
+  if (!f.headline || f.headline.trim() === "") {
+    refuse("no outcome recorded", `the outcome needs an --outcome "<what changed>" headline`);
+  }
+  const parsed = OutcomeSchema.safeParse(outcomeFromFlags(f, f.forJm.map((text) => ({ text: text.trim().slice(0, 300) }))));
+  if (!parsed.success) {
+    failCli(`invalid outcome: ${parsed.error.issues.map((i) => `${i.path.join(".") || "outcome"}: ${i.message}`).join("; ")}`);
+  }
+  const problem = agentOutcomeProblem(parsed.data);
+  if (problem) {
+    const noEvidence = parsed.data.links.length === 0 && !parsed.data.noArtifact?.trim();
+    refuse(problem, noEvidence ? "the outcome needs a --link or a --no-artifact reason" : problem);
+  }
+}
+
+/**
+ * Build the outcome JSON for one task from CLI flags (source "cli", by = actor). Returns null when
+ * no --outcome headline was given. Call validateOutcomeFlags first: this creates the --for-jm child
+ * tasks of `task`, then serializes with their ids.
+ */
+function buildCliOutcome(db: ReturnType<typeof getTaskDB>, task: Task, f: OutcomeFlags): string | null {
+  if (!f.headline || f.headline.trim() === "") return null;
+  return serializeOutcome(outcomeFromFlags(f, f.forJm.length > 0 ? createForJmTasks(db, task, f.forJm) : []));
+}
+
+/** The CLI is never the board or Telegram: those actors skip the outcome gate, so refuse them here. */
+function refuseReservedActor(actor: string): void {
+  if (!HUMAN_CLOSE_ACTORS.has(actor)) return;
+  console.error(
+    `Error: --actor ${actor} is reserved for the board and Telegram; the CLI closes as an agent. ` +
+      `Pass --outcome … --link … (or --no-artifact "<why>").`
+  );
+  process.exit(1);
 }
 
 // ============================================================================
@@ -587,8 +716,8 @@ async function cmdDone(args: string[]): Promise<void> {
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith("--")) {
       // Skip flag and its value if it takes one
-      if (args[i] === "--note" || args[i] === "--help") {
-        i++; // skip the value of --note
+      if ((OUTCOME_VALUE_FLAGS as readonly string[]).includes(args[i].slice(2))) {
+        i++; // skip the value of a value-taking flag
       }
       continue;
     }
@@ -596,11 +725,15 @@ async function cmdDone(args: string[]): Promise<void> {
   }
 
   if (taskArgs.length === 0) {
-    console.error("Error: task ID or title required. Usage: done <id|title>... [--note \"text\"]");
+    console.error("Error: task ID or title required. Usage: done <id|title>... --outcome \"<what changed>\" --link <path|url> [--check \"<cmd>\"] [--for-jm \"<item>\"]");
     process.exit(1);
   }
 
   const note = getArg("note", args);
+  const outcomeFlags = parseOutcomeFlags(args);
+  // Validate up front so a batch with a missing outcome closes nothing.
+  refuseReservedActor(outcomeFlags.actor);
+  validateOutcomeFlags(outcomeFlags, "tasks done <id>", true);
   const db = getTaskDB();
 
   const completed: Array<{ task: Task; elapsed_minutes?: number }> = [];
@@ -667,7 +800,12 @@ async function cmdDone(args: string[]): Promise<void> {
       }
 
       // Complete the task
-      const updatedTask = db.updateTask(resolvedTask.id, { status: "done" });
+      const outcomeJson = buildCliOutcome(db, resolvedTask, outcomeFlags);
+      const updatedTask = db.updateTask(
+        resolvedTask.id,
+        outcomeJson ? { status: "done", outcome: outcomeJson } : { status: "done" },
+        outcomeFlags.actor
+      );
       if (!updatedTask) {
         failed.push({ input: arg, error: `Failed to update task: ${resolvedTask.id}` });
         continue;
@@ -678,7 +816,7 @@ async function cmdDone(args: string[]): Promise<void> {
       if (note) changes.note = note;
       if (elapsedMinutes !== undefined) changes.elapsed_minutes = elapsedMinutes;
       if (Object.keys(changes).length > 0) {
-        db.logActivity(resolvedTask.id, "completed", JSON.stringify(changes), "user");
+        db.logActivity(resolvedTask.id, "completed", JSON.stringify(changes), outcomeFlags.actor);
       }
 
       completed.push({ task: updatedTask, elapsed_minutes: elapsedMinutes });
@@ -1334,16 +1472,29 @@ function cmdEdit(args: string[]): void {
     updates.disposition = parsed.data;
   }
 
-  if (Object.keys(updates).length === 0) {
-    console.error("Error: no updates provided. Use --title, --status, --due, --goal, --project, --priority, --energy, --estimate, --disposition, --queue-item-id, --clear-queue-item-id, --kaya-triage");
-    process.exit(1);
-  }
-
-  // Automated writers pass --actor cron so activity_log stays a clean
+  // Automated writers pass --actor cron so task_events stays a clean
   // human-activity signal for the triage staleness guard.
   const actor = getArg("actor", args) || "user";
 
+  // Outcome flags work with or without --status: any of them present means "write an outcome". The whole
+  // outcome is validated BEFORE any --for-jm child task exists. Without outcome flags, closing falls
+  // through to the gate (an outcome already on the task may satisfy it).
+  const closing = updates.status === "done" && existing.status !== "done";
+  if (closing) refuseReservedActor(actor);
+  const outcomeFlags = parseOutcomeFlags(args);
+  const hasOutcomeFlags = OUTCOME_WRITE_FLAGS.some((f) => hasFlag(f, args));
+  if (hasOutcomeFlags) validateOutcomeFlags(outcomeFlags, `tasks update ${id}`, closing);
+
+  if (Object.keys(updates).length === 0 && !hasOutcomeFlags) {
+    console.error("Error: no updates provided. Use --title, --status, --due, --goal, --project, --priority, --energy, --estimate, --disposition, --queue-item-id, --clear-queue-item-id, --kaya-triage, or an outcome: --outcome with --link/--no-artifact (plus --check, --for-jm, --details)");
+    process.exit(1);
+  }
+
   try {
+    if (hasOutcomeFlags) {
+      const outcomeJson = buildCliOutcome(db, existing, outcomeFlags);
+      if (outcomeJson) updates.outcome = outcomeJson;
+    }
     const task = db.updateTask(id, updates, actor);
 
     if (JSON_FLAG) {
@@ -1352,7 +1503,7 @@ function cmdEdit(args: string[]): void {
       console.log(`\nUpdated: ${formatTaskLine(task!)}\n`);
     }
   } catch (err) {
-    console.error(`Database error: ${err instanceof Error ? err.message : err}`);
+    console.error(err instanceof OutcomeRequiredError ? `Error: ${err.message}` : `Database error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
 
@@ -1411,6 +1562,34 @@ function cmdContextLint(args: string[]): void {
   console.log(`\n⚠ ${thin.length} open task(s) with no context link (fix: tasks edit <id> --desc "WHAT: … CONTEXT: /abs/path"):\n`);
   for (const t of thin) console.log(`  ${formatTaskLine(t)}`);
   console.log(`\nStandard: skills/Productivity/LucidTasks/SKILL.md "Task context standard"\n`);
+}
+
+/**
+ * `tasks outcome-lint [--days N] [--json]` — done tasks (last N days, default 30) closed by an
+ * agent with no acceptable outcome. A report: exit 0 always. Same list as the board's
+ * "closed with no outcome" chip.
+ */
+function cmdOutcomeLint(args: string[]): void {
+  const daysArg = getArg("days", args);
+  const days = daysArg === undefined ? 30 : Number(daysArg);
+  if (!Number.isFinite(days) || days <= 0) {
+    console.error(`outcome-lint: --days must be a positive number (got "${daysArg}")`);
+    process.exit(1);
+  }
+  const db = getTaskDB();
+  const rows = db.listClosedWithoutOutcome({ sinceDays: days });
+  db.close();
+  if (JSON_FLAG || hasFlag("json", args)) {
+    output({ count: rows.length, days, tasks: rows });
+    return;
+  }
+  if (rows.length === 0) {
+    console.log(`\n✅ No agent-closed tasks without an outcome in the last ${days} days.\n`);
+    return;
+  }
+  console.log(`\n⚠ ${rows.length} task(s) closed by an agent with no outcome in the last ${days} days:\n`);
+  for (const r of rows) console.log(`  ${r.id}  ${r.completed_at.slice(0, 10)}  ${r.closer}  ${r.title}`);
+  console.log(`\nFix: tasks update <id> --outcome "<what changed>" --link <path|url> (or --no-artifact "<why>")\n`);
 }
 
 function cmdList(args: string[]): void {
@@ -2269,6 +2448,7 @@ Commands:
   edit <id> [opts]                Edit a task
   list [opts]                     List tasks with filters
   context-lint [--json]           Open tasks with no context link in the description
+  outcome-lint [--days N] [--json] Done tasks closed by an agent with no outcome (default 30 days)
   board [--no-open]               Open the live, always-on task board (127.0.0.1:7777)
   project-add "name" [opts]       Create a new project
   habits [--task id] [--days 30]  Habit tracking and streaks
@@ -2301,8 +2481,16 @@ Add Options:
   --disposition <value>           Set disposition explicitly: autonomous|needs-jm|personal-todo (else null; InboxTriage assigns it)
   --calendar                      Create Google Calendar event (requires --due)
 
-Done Options:
-  --note "text"                   Add completion note to all tasks in batch
+Done Options (an agent close REQUIRES --outcome plus --link or --no-artifact; Jm's board/telegram closes never do):
+  --outcome "<headline>"          What changed, in plain words (<= 140 chars). Same outcome for every task in a batch
+  --link <path|url|task-id>       Where the work is (repeatable). Repo-relative paths are allowed
+  --no-artifact "<why>"           Instead of --link: why there is nothing to link
+  --check "<cmd>"                 One command or step Jm can run to check it
+  --for-jm "<item>"               Something Jm must decide or do (repeatable; each becomes a child task, needs-jm)
+  --details "<text>"              Full report (folded on the board)
+  --note "text"                   Same as --details when --details is absent
+  --actor <name>                  Who closes it (default: user)
+  (also accepted by: update <id> [--status done] ..., which can add an outcome to an already-done task)
 
 Next Options:
   --project <name|id>             Filter to tasks in this project
@@ -2350,6 +2538,9 @@ Edit Options:
   --priority 1-3                  Update priority
   --energy low|medium|high        Update energy level
   --estimate <minutes>            Update time estimate
+  --outcome "<headline>"          Record/replace the outcome (with --link or --no-artifact; also --check, --for-jm,
+                                  --details). Works with or without --status, e.g. on an already-done task
+  --actor <name>                  Who writes it (default: user; board/telegram refused for closes)
 
 List Options:
   --status <status>               Filter by status
@@ -2366,7 +2557,7 @@ Examples:
   bun TaskManager.ts add "Buy groceries" --due tomorrow
   bun TaskManager.ts add "Write chapter 3" --goal G13 --project writing --priority 1
   bun TaskManager.ts done t-abc123-xyz
-  bun TaskManager.ts done t-001 t-002 t-003 --note "Sprint cleanup"
+  bun TaskManager.ts done t-001 t-002 t-003 --outcome "Sprint cleanup" --no-artifact "bookkeeping only"
   bun TaskManager.ts done "buy groceries"
   bun TaskManager.ts next --project writing --energy high --top 5
   bun TaskManager.ts next --start
@@ -2403,7 +2594,17 @@ export function syncQueueStatus(taskId: string, queueStatus: string): void {
 
   const newStatus = QUEUE_STATUS_TO_LUCID_TASK_STATUS[queueStatus];
   if (newStatus && task.status !== newStatus) {
-    db.updateTask(taskId, { status: newStatus }, "queue");
+    const updates: Partial<Task> = { status: newStatus };
+    // A queue item completing closes the task: record a truthful system outcome (the gate needs one),
+    // but never overwrite a real outcome the task already has.
+    if (newStatus === "done" && agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null) {
+      updates.outcome = serializeOutcome(systemOutcome({
+        by: "queue",
+        headline: `Closed when work-queue item finished: ${task.title}`,
+        noArtifact: `status synced from work-queue item ${task.queue_item_id ?? "(unlinked)"}`,
+      }));
+    }
+    db.updateTask(taskId, updates, "queue");
     db.logActivity(taskId, "status_sync", JSON.stringify({ from: task.status, to: newStatus, queueStatus }), "queue");
   }
 }
@@ -2508,6 +2709,10 @@ if (import.meta.main) {
 
     case "context-lint":
       cmdContextLint(subArgs);
+      break;
+
+    case "outcome-lint":
+      cmdOutcomeLint(subArgs);
       break;
 
     case "board":

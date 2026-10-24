@@ -18,6 +18,8 @@ import { z } from "zod";
 import { getQueueClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
+// Import cycle with TaskOutcome.ts (it imports TaskDB): safe only while these are used inside function bodies.
+import { agentOutcomeProblem, HUMAN_CLOSE_ACTORS, OutcomeRequiredError, readOutcome } from "./TaskOutcome.ts";
 
 // ============================================================================
 // Configuration
@@ -104,6 +106,8 @@ export const TaskSchema = z.object({
   manual_rank: z.number().int().nullable().default(null),
   /** When manual_rank was last set — a newer pin wins a slot tie. */
   manual_ranked_at: z.string().nullable().default(null),
+  /** JSON Outcome card (see TaskOutcome.ts) recorded when the task closes or is delivered for review. null until recorded. */
+  outcome: z.string().nullable().default(null),
 });
 export type Task = z.infer<typeof TaskSchema>;
 
@@ -371,6 +375,181 @@ const NON_JM_DISPOSITIONS: ReadonlySet<string> = new Set(["autonomous", "drop"])
 export type QueueArchiveHook = (itemId: string, reason: string) => Promise<void>;
 
 // ============================================================================
+// Task Events Migration (ontology ruling D10, 2026-09-21)
+// ============================================================================
+
+/**
+ * The per-task history table: one row per create/update/comment/automation
+ * action. Named `activity_log` until schema version 1 — renamed because "Log"
+ * is reserved for LifeOS domain tables (LifeOS has its own `activity_log`).
+ */
+/** One row of TaskDB.listClosedWithoutOutcome. */
+export interface ClosedWithoutOutcome {
+  id: string;
+  title: string;
+  completed_at: string;
+  closer: string;
+}
+
+export const TASK_EVENTS_TABLE = "task_events";
+/** Pre-D10 name of the same table. Only the migration and rollback use it. */
+export const LEGACY_TASK_EVENTS_TABLE = "activity_log";
+/** PRAGMA user_version once task_events is the live table. */
+export const TASK_EVENTS_SCHEMA_VERSION = 1;
+
+const TASK_EVENTS_COLUMNS = "task_id, action, changes, ai_reasoning, actor, created_at";
+
+function eventsTableDdl(name: string): string {
+  return `CREATE TABLE IF NOT EXISTS ${name} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        changes TEXT,
+        ai_reasoning TEXT,
+        actor TEXT NOT NULL DEFAULT 'user',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );`;
+}
+
+const TASK_EVENTS_DDL = eventsTableDdl(TASK_EVENTS_TABLE);
+
+function tableExists(db: Database, name: string): boolean {
+  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) != null;
+}
+
+function rowCount(db: Database, table: string): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+}
+
+function schemaVersion(db: Database): number {
+  return (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+}
+
+function sequenceFor(db: Database, table: string): number {
+  if (!tableExists(db, "sqlite_sequence")) return 0;
+  const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = ?").get(table) as { seq: number } | null;
+  return row?.seq ?? 0;
+}
+
+export interface TaskEventsMigrationResult {
+  /** "migrated": activity_log renamed; "merged": stray activity_log rows folded into an existing task_events; "rolled_back": task_events renamed back; "noop": nothing to do. */
+  outcome: "migrated" | "merged" | "rolled_back" | "noop";
+  legacyRows: number;
+  rowsBefore: number;
+  rowsAfter: number;
+}
+
+/**
+ * Forward migration: activity_log -> task_events, in one IMMEDIATE transaction
+ * so concurrent openers serialize and the loser sees the finished state.
+ *
+ *   - Fast path: user_version >= 1 and no activity_log table -> noop.
+ *   - activity_log only: copy rows WITH their ids (the executor orders comments
+ *     by id), carry the AUTOINCREMENT high-water mark, recreate the task_id
+ *     index, drop activity_log, set user_version = 1.
+ *   - both tables: a pre-D10 process recreated activity_log after the
+ *     migration. Its rows are appended to task_events with fresh ids (theirs
+ *     may collide), then activity_log is dropped.
+ *
+ * Throws (and rolls back) if the destination row count is not exactly the
+ * source count plus whatever task_events already held. Never prunes.
+ */
+export function migrateActivityLogToTaskEvents(db: Database): TaskEventsMigrationResult {
+  if (schemaVersion(db) >= TASK_EVENTS_SCHEMA_VERSION && !tableExists(db, LEGACY_TASK_EVENTS_TABLE)) {
+    return { outcome: "noop", legacyRows: 0, rowsBefore: 0, rowsAfter: 0 };
+  }
+
+  const run = db.transaction((): TaskEventsMigrationResult => {
+    const hasLegacy = tableExists(db, LEGACY_TASK_EVENTS_TABLE);
+    const hasEvents = tableExists(db, TASK_EVENTS_TABLE);
+
+    if (!hasLegacy) {
+      // Fresh DB, or another connection won the race.
+      db.exec(`PRAGMA user_version = ${TASK_EVENTS_SCHEMA_VERSION}`);
+      return { outcome: "noop", legacyRows: 0, rowsBefore: 0, rowsAfter: 0 };
+    }
+
+    const legacyRows = rowCount(db, LEGACY_TASK_EVENTS_TABLE);
+    const rowsBefore = hasEvents ? rowCount(db, TASK_EVENTS_TABLE) : 0;
+
+    db.exec(TASK_EVENTS_DDL);
+    if (hasEvents) {
+      db.exec(
+        `INSERT INTO ${TASK_EVENTS_TABLE} (${TASK_EVENTS_COLUMNS})
+         SELECT ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`
+      );
+    } else {
+      const legacySeq = sequenceFor(db, LEGACY_TASK_EVENTS_TABLE);
+      db.exec(
+        `INSERT INTO ${TASK_EVENTS_TABLE} (id, ${TASK_EVENTS_COLUMNS})
+         SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`
+      );
+      // Inserting explicit ids sets seq to MAX(id); keep the old high-water
+      // mark if newer rows had been pruned so ids are never reused.
+      if (legacySeq > sequenceFor(db, TASK_EVENTS_TABLE)) {
+        db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = ?").run(legacySeq, TASK_EVENTS_TABLE);
+        if (sequenceFor(db, TASK_EVENTS_TABLE) !== legacySeq) {
+          db.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)").run(TASK_EVENTS_TABLE, legacySeq);
+        }
+      }
+    }
+
+    const rowsAfter = rowCount(db, TASK_EVENTS_TABLE);
+    if (rowsAfter !== rowsBefore + legacyRows) {
+      throw new Error(
+        `task_events migration row-count mismatch: ${rowsBefore} + ${legacyRows} legacy != ${rowsAfter}`
+      );
+    }
+
+    db.exec(`DROP TABLE ${LEGACY_TASK_EVENTS_TABLE}`); // drops idx_activity_task_id with it
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON ${TASK_EVENTS_TABLE}(task_id)`);
+    db.exec(`PRAGMA user_version = ${TASK_EVENTS_SCHEMA_VERSION}`);
+    return { outcome: hasEvents ? "merged" : "migrated", legacyRows, rowsBefore, rowsAfter };
+  });
+
+  return run.immediate();
+}
+
+/**
+ * Inverse of migrateActivityLogToTaskEvents: task_events -> activity_log with
+ * ids and sequence preserved, user_version back to 0. Only useful together
+ * with pre-D10 code — current TaskDB re-migrates on its next open.
+ */
+export function rollbackTaskEventsToActivityLog(db: Database): TaskEventsMigrationResult {
+  const run = db.transaction((): TaskEventsMigrationResult => {
+    if (!tableExists(db, TASK_EVENTS_TABLE)) {
+      return { outcome: "noop", legacyRows: 0, rowsBefore: 0, rowsAfter: 0 };
+    }
+    if (tableExists(db, LEGACY_TASK_EVENTS_TABLE)) {
+      throw new Error("rollback refused: activity_log and task_events both exist — run the forward migration first");
+    }
+    const rowsBefore = rowCount(db, TASK_EVENTS_TABLE);
+    const seq = sequenceFor(db, TASK_EVENTS_TABLE);
+    db.exec(eventsTableDdl(LEGACY_TASK_EVENTS_TABLE));
+    db.exec(
+      `INSERT INTO ${LEGACY_TASK_EVENTS_TABLE} (id, ${TASK_EVENTS_COLUMNS})
+       SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${TASK_EVENTS_TABLE} ORDER BY id`
+    );
+    if (seq > sequenceFor(db, LEGACY_TASK_EVENTS_TABLE)) {
+      db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = ?").run(seq, LEGACY_TASK_EVENTS_TABLE);
+      if (sequenceFor(db, LEGACY_TASK_EVENTS_TABLE) !== seq) {
+        db.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)").run(LEGACY_TASK_EVENTS_TABLE, seq);
+      }
+    }
+    const rowsAfter = rowCount(db, LEGACY_TASK_EVENTS_TABLE);
+    if (rowsAfter !== rowsBefore) {
+      throw new Error(`task_events rollback row-count mismatch: ${rowsBefore} != ${rowsAfter}`);
+    }
+    db.exec(`DROP TABLE ${TASK_EVENTS_TABLE}`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_activity_task_id ON ${LEGACY_TASK_EVENTS_TABLE}(task_id)`);
+    db.exec("PRAGMA user_version = 0");
+    return { outcome: "rolled_back", legacyRows: rowsAfter, rowsBefore, rowsAfter };
+  });
+
+  return run.immediate();
+}
+
+// ============================================================================
 // Database Class
 // ============================================================================
 
@@ -401,7 +580,13 @@ export class TaskDB {
   // --------------------------------------------------------------------------
 
   private initSchema(): void {
+    // D10 (ontology 2026-09-21): activity_log -> task_events. Runs before the
+    // CREATE below so an existing activity_log is renamed, never shadowed.
+    migrateActivityLogToTaskEvents(this.db);
+
     this.db.exec(`
+      ${TASK_EVENTS_DDL}
+
       CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -441,17 +626,8 @@ export class TaskDB {
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         completed_at TEXT,
-        started_at TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS activity_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        task_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        changes TEXT,
-        ai_reasoning TEXT,
-        actor TEXT NOT NULL DEFAULT 'user',
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        started_at TEXT,
+        outcome TEXT
       );
 
       CREATE TABLE IF NOT EXISTS habit_completions (
@@ -482,12 +658,12 @@ export class TaskDB {
       CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_date ON tasks(scheduled_date);
       CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_asana_gid ON tasks(asana_gid);
-      CREATE INDEX IF NOT EXISTS idx_activity_task_id ON activity_log(task_id);
+      CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id);
     `);
 
     // Schema migrations for existing databases
     // Discriminating error handler: re-throw any error that isn't "column already exists"
-    for (const columnDef of ["started_at TEXT", "kaya_triage TEXT", "disposition TEXT", "manual_rank INTEGER", "manual_ranked_at TEXT"]) {
+    for (const columnDef of ["started_at TEXT", "kaya_triage TEXT", "disposition TEXT", "manual_rank INTEGER", "manual_ranked_at TEXT", "outcome TEXT"]) {
       try {
         this.db.exec(`ALTER TABLE tasks ADD COLUMN ${columnDef}`);
       } catch (err) {
@@ -499,9 +675,9 @@ export class TaskDB {
       }
     }
 
-    // Prune activity_log entries older than 90 days on DB open
+    // Prune task_events entries older than 90 days on DB open
     this.db.exec(
-      `DELETE FROM activity_log WHERE datetime(created_at) < datetime('now', '-90 days')`
+      `DELETE FROM task_events WHERE datetime(created_at) < datetime('now', '-90 days')`
     );
 
     // Full-text search virtual table
@@ -548,7 +724,7 @@ export class TaskDB {
    * the existing dynamic import in TaskManager.ts:344).
    *
    * The hook is called at most once per qualifying transition; failures are
-   * caught, warned, and logged to activity_log — they NEVER surface to the caller.
+   * caught, warned, and logged to task_events — they NEVER surface to the caller.
    */
   setQueueArchiveHook(hook: QueueArchiveHook): void {
     this._queueArchiveHook = hook;
@@ -653,7 +829,7 @@ export class TaskDB {
    * pipeline-evals router-disposition monitor. `capture` mirrors the golden's field
    * (raw_input ?? title) so the nightly_judge can score capture↔disposition plausibility
    * against LIVE routing decisions, not just the static golden.
-   * See skills/Intelligence/Evals/UseCases/QueueRouter/kaya_router_disposition_golden.yaml.
+   * See skills/Development/Evals/UseCases/QueueRouter/kaya_router_disposition_golden.yaml.
    */
   exportDispositions(opts: { since?: string; limit?: number } = {}): Array<{
     id: string;
@@ -734,6 +910,32 @@ export class TaskDB {
   ): Task | null {
     const existing = this.getTask(id);
     if (!existing) return null;
+
+    // Outcome gate: an agent (any actor not in HUMAN_CLOSE_ACTORS) cannot move a task into done
+    // without a valid outcome. Checked BEFORE any write (plain and recurring paths). Re-saving an
+    // already-done task is not gated.
+    if (existing.status !== "done" && updates.status === "done" && !HUMAN_CLOSE_ACTORS.has(actor)) {
+      // An explicit `outcome` in the update (even null) wins over the stored one.
+      const effectiveRaw = updates.outcome !== undefined ? updates.outcome : existing.outcome;
+      const problem = agentOutcomeProblem(readOutcome(effectiveRaw).outcome);
+      if (problem) {
+        throw new OutcomeRequiredError(
+          `Task ${id} needs an outcome before ${actor} can close it: ${problem}. ` +
+            `Use: tasks done ${id} --outcome "<what changed>" --link <path|url> (or --no-artifact "<why>")`
+        );
+      }
+    } else if (
+      existing.status === "done" && (updates.status === undefined || updates.status === "done") &&
+      updates.outcome !== undefined && !HUMAN_CLOSE_ACTORS.has(actor)
+    ) {
+      // Invariant: a done task keeps an outcome an agent would accept. Only human actors may clear/weaken it.
+      const problem = agentOutcomeProblem(readOutcome(updates.outcome).outcome);
+      if (problem) {
+        throw new OutcomeRequiredError(
+          `Task ${id} is done; ${actor} cannot replace its outcome with an unacceptable one: ${problem}.`
+        );
+      }
+    }
 
     const now = new Date().toISOString();
     const changes: Record<string, { from: unknown; to: unknown }> = {};
@@ -1199,7 +1401,7 @@ export class TaskDB {
   ): void {
     this.db
       .prepare(
-        `INSERT INTO activity_log (task_id, action, changes, ai_reasoning, actor, created_at)
+        `INSERT INTO task_events (task_id, action, changes, ai_reasoning, actor, created_at)
          VALUES ($task_id, $action, $changes, $ai_reasoning, $actor, $created_at)`
       )
       .run({
@@ -1215,13 +1417,62 @@ export class TaskDB {
   getActivityLog(taskId: string, limit: number = 20): ActivityLogEntry[] {
     return this.db
       .prepare(
-        "SELECT * FROM activity_log WHERE task_id = ? ORDER BY created_at DESC LIMIT ?"
+        "SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at DESC LIMIT ?"
       )
       .all(taskId, limit) as ActivityLogEntry[];
   }
 
   /**
-   * Most recent activity_log timestamp across ANY task for the given actions —
+   * Latest `completed` event actor per task id, in one query per 500 ids. Tasks with no
+   * completed event (pruned after 90 days, or seeded done) are absent from the map.
+   */
+  getCloserActors(taskIds: string[]): Map<string, string> {
+    const out = new Map<string, string>();
+    for (let i = 0; i < taskIds.length; i += 500) {
+      const chunk = taskIds.slice(i, i + 500);
+      const rows = this.db
+        .prepare(
+          `SELECT task_id, actor FROM task_events
+           WHERE action = 'completed' AND task_id IN (${chunk.map(() => "?").join(",")})
+           ORDER BY created_at ASC, rowid ASC`
+        )
+        .all(...chunk) as { task_id: string; actor: string | null }[];
+      for (const r of rows) if (r.actor) out.set(r.task_id, r.actor); // later rows win = latest
+    }
+    return out;
+  }
+
+  /**
+   * Backstop for the outcome gate: done tasks completed within `sinceDays` whose outcome is
+   * missing or unacceptable for an agent close (null, unreadable, or failing agentOutcomeProblem)
+   * and whose latest `completed` event actor is not a human close actor. A task with no
+   * `completed` event (closer unknown) is NOT listed. One query.
+   */
+  listClosedWithoutOutcome(opts: { sinceDays?: number } = {}): ClosedWithoutOutcome[] {
+    const sinceDays = opts.sinceDays ?? 30;
+    const cutoff = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
+    const rows = this.db
+      .prepare(
+        `SELECT t.id, t.title, t.completed_at, t.outcome,
+           (SELECT e.actor FROM task_events e
+             WHERE e.task_id = t.id AND e.action = 'completed'
+             ORDER BY e.created_at DESC, e.rowid DESC LIMIT 1) AS closer
+         FROM tasks t
+         WHERE t.status = 'done' AND t.completed_at IS NOT NULL AND t.completed_at >= ?
+         ORDER BY t.completed_at DESC`
+      )
+      .all(cutoff) as { id: string; title: string; completed_at: string; outcome: string | null; closer: string | null }[];
+    const out: ClosedWithoutOutcome[] = [];
+    for (const r of rows) {
+      if (!r.closer || HUMAN_CLOSE_ACTORS.has(r.closer)) continue;
+      if (agentOutcomeProblem(readOutcome(r.outcome).outcome) === null) continue;
+      out.push({ id: r.id, title: r.title, completed_at: r.completed_at, closer: r.closer });
+    }
+    return out;
+  }
+
+  /**
+   * Most recent task_events timestamp across ANY task for the given actions —
    * e.g. ["ai_scored", "auto_prioritized"] tells the priority list how fresh
    * the stored AI ranking is. null when no such row exists.
    */
@@ -1229,7 +1480,7 @@ export class TaskDB {
     if (actions.length === 0) return null;
     const placeholders = actions.map(() => "?").join(",");
     const row = this.db
-      .prepare(`SELECT MAX(created_at) AS at FROM activity_log WHERE action IN (${placeholders})`)
+      .prepare(`SELECT MAX(created_at) AS at FROM task_events WHERE action IN (${placeholders})`)
       .get(...actions) as { at: string | null } | null;
     return row?.at ?? null;
   }
@@ -1273,7 +1524,7 @@ export class TaskDB {
   }
 
   /**
-   * Append a free-text comment to a task. A comment is just an activity_log row
+   * Append a free-text comment to a task. A comment is just a task_events row
    * with action="comment" and the text JSON-wrapped in `changes`, so Kaya sees
    * it via getActivityLog() with no new table. `actor` is "user" or "kaya".
    */

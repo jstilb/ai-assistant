@@ -55,9 +55,40 @@ CONTEXT: /abs/path/doc.md (section, ~line) | ~/.kaya/memory/x.md | https://... |
 ```
 
 - **Proportional.** A personal quick-capture ("buy vitamix") needs only what real context exists; link the plan/research note if one exists, otherwise a short WHAT and `NEEDS JM: <what is unknown>`. Never pad, never fabricate.
+- **Keep Jm's words** (2026-10-23, after the `/learn` incident `t-mvfkuj9e-1v6obq`). When a task comes from Jm's own words (Scratch Pad, Telegram, voice, chat), quote them verbatim on an `ORIGINAL: '...'` line. DONE WHEN carries his quality words as checks, not only the functions: "simple" → one primary action per view; "easy to pick up" → resume in one click. For UI work add "renders cleanly at desktop and phone width and meets the UI bar in `Tools/executor/qualityBar.ts`". If you edit Jm's words later, update DONE WHEN to match. The executor's builder and verifier treat ORIGINAL as the spec and DONE WHEN as the minimum.
 - **Machine-created tasks always carry a CONTEXT link** (spec path, queue item, parent task, plan doc). "Context: ~/.kaya/memory/x.md" alone does NOT meet the standard: pull the what/how/options out of that file and link the deeper plan docs it points to.
 - **Enforcement is a lint, not a gate.** `tasks add` warns when the description has no openable link; `tasks context-lint` lists every open task that fails; the board renders paths, URLs and task ids as clickable chips (paths open via `GET /api/open`). Subtasks from `decompose`, queue `split`, and board AI reorganize inherit the parent's `CONTEXT:` lines.
 - Helpers: `hasContextLink()`, `inheritedContextLines()` in `Tools/TaskDB.ts`.
+
+## Completion standard
+
+Jm's ruling (2026-10-23): **an agent cannot close a task without saying what came of it.** Every closed task carries an outcome. Jm opens the task and sees the result first, not the chat history.
+
+An outcome has five parts:
+
+- **Headline:** one line, about 140 characters, that says what changed.
+- **Links:** where the work is (file path, URL, commit, branch, or task id).
+- **Check:** one command or one step that lets Jm verify the work.
+- **For Jm:** things only Jm can do next.
+- **Details:** the full report, folded by default.
+
+- **The rule.** An agent is every actor except the board and Telegram. It cannot close a task without a headline AND at least one link or a `--no-artifact` reason. The database refuses the close with an error that names the missing part and the command to fix it.
+- **For-Jm items** become child tasks in the `needs-jm` state.
+- **Executor tasks.** The executor records the outcome by itself. Do not add it again.
+- **Where it shows.** The board drawer shows an outcome card. The task row shows the headline.
+
+```
+# A code change: link a file and a commit or URL
+kaya-cli tasks done <id> --outcome "Added null check to auth refresh" \
+  --link skills/Productivity/LucidTasks/Tools/TaskDB.ts --link <commit-sha> --check "bun test <abs-path>"
+
+# A decision with no artifact
+kaya-cli tasks done <id> --outcome "Chose SQLite over Postgres for the log" --no-artifact "decision made in chat, no file"
+```
+
+`--link` takes a file path, a URL or a task id. A string of 7 to 40 hex characters is a commit. To force the kind, use a prefix: `commit:<sha>`, `branch:<name>`, `task:<id>`, `repo:<path>`, `url:<url>`.
+
+Other flags: `--for-jm "<item>"` (repeatable), `--details "<text>"`, `--actor <name>`. Full list: `Workflows/CompleteTask.md`.
 
 ## Commands
 
@@ -67,9 +98,11 @@ kaya-cli tasks today                         # Alias for today's tasks
 kaya-cli tasks inbox                         # Inbox items needing triage
 kaya-cli tasks add "title"                   # Add to inbox
 kaya-cli tasks add "title" --goal G25 --project myproject --due fri
-kaya-cli tasks done <id|title>               # Mark complete (by ID or fuzzy title match)
-kaya-cli tasks done t-001 t-002 t-003        # Batch complete multiple tasks
-kaya-cli tasks done <id> --note "text"       # Complete with activity note
+kaya-cli tasks done <id|title> --outcome "<what changed>" --link <path|url|sha>   # Mark complete (by ID or fuzzy title match)
+kaya-cli tasks done t-001 t-002 t-003 --outcome "<what changed>" --no-artifact "<why>"  # Batch complete: same outcome for every task
+kaya-cli tasks done <id> --outcome "<what changed>" --link <path|url|sha> [--check "<cmd>"] [--for-jm "<item>"] [--details "<text>"]  # Complete with outcome (required for agents)
+kaya-cli tasks done <id> --outcome "<what changed>" --no-artifact "<why>"  # Complete when there is nothing to link
+kaya-cli tasks done <id> --note "text"       # Fill outcome details / activity note
 kaya-cli tasks next                          # AI-suggested next tasks (7-factor scoring)
 kaya-cli tasks next --project backend        # Filter by project
 kaya-cli tasks next --goal G25               # Filter by goal
@@ -83,7 +116,7 @@ kaya-cli tasks project-add "name" --goal G25 --color blue  # Create project
 kaya-cli tasks search "query"                # Full-text search
 kaya-cli tasks stats                         # Dashboard with counts
 kaya-cli tasks dashboard                     # Alias for stats
-kaya-cli tasks view <id>                     # View task details + activity log
+kaya-cli tasks view <id>                     # View task details + task events
 kaya-cli tasks show <id>                     # Alias for view
 kaya-cli tasks get <id>                      # Alias for view
 kaya-cli tasks edit <id> --title/--status/--due/--priority/--goal/--project/--energy/--estimate
@@ -91,6 +124,7 @@ kaya-cli tasks update <id> [opts]            # Alias for edit
 kaya-cli tasks icebox <id|title>...          # Move task(s) to someday (icebox) status
 kaya-cli tasks list [--status X] [--project X] [--goal X] [--limit N]  # Filtered listing
 kaya-cli tasks context-lint [--json]         # Open tasks with no context link (see "Task context standard")
+kaya-cli tasks outcome-lint [--days N] [--json]  # Done tasks an agent closed with no outcome (default 30 days; report, exit 0)
 kaya-cli tasks ls [opts]                     # Alias for list
 kaya-cli tasks board [--no-open]             # Open the live, always-on task board (127.0.0.1:7777)
 kaya-cli tasks habits [--task <id>] [--days 30]  # Habit tracking and streaks
@@ -179,7 +213,7 @@ User: "Add task 'Write chapter 3' for my novel goal, due Friday"
 ```
 User: "Mark task abc123 as done"
 -> bun skills/Productivity/LucidTasks/Tools/TaskManager.ts done t-abc123
--> Task completed, activity logged, voice notification sent
+-> Task completed, task event recorded, voice notification sent
 ```
 
 **Example 4: Smart next task**
@@ -219,15 +253,16 @@ User: "Start working on the next task"
 - **PriorityList.ts** - Jm's cross-project ranked list (lane filter + ranking + totals); backs `GET /api/priority`, the board's Priority mode and `tasks priority`/`estimate`
 - **TaskAI.ts** - AI extraction/scoring/weekly-review calls (Haiku/Sonnet/Opus tiers), owns loud failure reporting for its own degraded paths
 - **TaskAutomation.ts** - Scheduled automation workflows: morning (6:30 AM), evening (9 PM), weekly (Sunday 10 AM), monthly crons
-- **KayaTaskClassifier.ts** - Triage/disposition classification feeding the `disposition` column consumed by the lane-a executor
+- **KayaTaskClassifier.ts** - Triage/disposition classification feeding the `disposition` column consumed by the Task Executor (Lane A)
 - **BoardServer.ts** - Always-on live web board server (127.0.0.1:7777, launchd `com.kaya.lucidtasks-board`)
-- **executor/** - Lane-a autonomous executor: polls `disposition='autonomous'` tasks, spawns build+verify agents, merges to `main` (cron `com.kaya.cron.autonomous-executor`, 19:00 daily)
+- **executor/** - Task Executor (Lane A): polls `disposition='autonomous'` tasks, spawns build+verify agents, merges to `main` (cron `com.kaya.cron.autonomous-executor`, 19:00 daily)
 - **TelosGoalLoader.ts** - Parse TELOS markdown into structured data
+- **MigrateTaskEvents.ts** - Run, check, or roll back the ontology D10 `activity_log` → `task_events` rename on one database (`--db <path>` or `--live`; backs up first, refuses `--live` while the board or executor runs)
 
 ### Database Schema (5 Tables)
 - `tasks` - All task records with status, priority, dates, metadata
 - `projects` - Project groupings with goal links
-- `activity_log` - Full audit trail of task changes
+- `task_events` - Full audit trail of task changes and comments (named `activity_log` before ontology D10; see `Tools/MigrateTaskEvents.ts`)
 - `habit_completions` - Daily habit check-in records (schema ready)
 - `saved_views` - Named filter/sort presets (schema ready)
 - `tasks_fts` - FTS5 virtual table for full-text search

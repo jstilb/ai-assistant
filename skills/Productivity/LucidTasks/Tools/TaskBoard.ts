@@ -69,7 +69,7 @@ export const BOARD_CSS = `
     flex: 1; min-width: 200px; max-width: 360px; padding: 7px 11px;
     border: 1px solid var(--line); border-radius: 8px; font-size: 13px; background: #fff;
   }
-  .filters { display: flex; gap: 4px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 4px; }
   .filters button {
     padding: 6px 12px; font-size: 12px; border: 1px solid var(--line);
     background: #fff; border-radius: 7px; cursor: pointer; color: var(--muted);

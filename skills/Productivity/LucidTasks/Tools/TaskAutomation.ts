@@ -8,7 +8,7 @@
  *   - Weekly (Sunday 10 AM): Opus review, goal alignment velocity, stale task detection, habit streaks
  *
  * All operations respect TrustConfig.yaml autopilot settings.
- * Every automated change is logged to activity_log with actor "cron".
+ * Every automated change is logged to task_events with actor "cron".
  * Idempotent: safe to run multiple times without side effects.
  *
  * Usage:
