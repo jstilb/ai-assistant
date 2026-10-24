@@ -21,6 +21,7 @@ import {
   isFutureWithin,
   expandHorizonDays,
   fetchICSEvents,
+  loadBrightDataToken,
   MAX_EVENTS_SAFETY,
 } from "../Tools/adapters/ICSAdapter.ts";
 import type { VeventOccurrence } from "../Tools/adapters/ICSAdapter.ts";
@@ -402,25 +403,26 @@ test("27. feed with 299 events → all 299 returned (regression: still works und
 
 // ============================================================================
 // unblock routing: WAF'd feeds fetch through the Bright Data Web Unlocker
-// Strategy: mock globalThis.fetch + point HOME at a temp secrets.json so the
+// Strategy: mock globalThis.fetch + point KAYA_HOME at a temp secrets.json so the
 // token loader resolves a dummy token. Asserts the unlocker endpoint (not the
 // source URL) is hit, with auth + zone + target url in the request.
 // ============================================================================
 
 console.log("\n--- unblock routing (mocked fetch + temp secrets) ---\n");
 
-/** Run `fn` with HOME pointed at a temp dir containing a fake secrets.json. */
+/** Run `fn` with KAYA_HOME pointed at a temp dir containing a fake secrets.json. */
 async function withTempSecrets(token: string | null, fn: () => Promise<void>): Promise<void> {
-  const originalHome = process.env.HOME;
+  const originalKayaHome = process.env.KAYA_HOME;
   const dir = mkdtempSync(join(tmpdir(), "es-ics-secrets-"));
   try {
     mkdirSync(join(dir, ".claude"), { recursive: true });
     const body = token == null ? {} : { BRIGHTDATA_API_TOKEN: token };
     writeFileSync(join(dir, ".claude", "secrets.json"), JSON.stringify(body));
-    process.env.HOME = dir;
+    process.env.KAYA_HOME = join(dir, ".claude");
     await fn();
   } finally {
-    process.env.HOME = originalHome;
+    if (originalKayaHome === undefined) delete process.env.KAYA_HOME;
+    else process.env.KAYA_HOME = originalKayaHome;
     rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -451,7 +453,7 @@ test("28. unblock:true routes through the Bright Data unlocker endpoint", async 
     try {
       const result = await fetchICSEvents(UNBLOCK_SOURCE);
       assert(calledUrl === "https://api.brightdata.com/request", `28a. hits unlocker endpoint, got "${calledUrl}"`);
-      assert(calledAuth === "Bearer dummy-token-123", `28b. sends Bearer auth, got "${calledAuth}"`);
+      assert(calledAuth === "Bearer dummy-token-123", "28b. sends Bearer auth with the temp-secrets token");
       assert(calledBody.url === UNBLOCK_SOURCE.url, `28c. body.url is the source url, got "${String(calledBody.url)}"`);
       assert(calledBody.zone === "mcp_unlocker", `28d. body.zone is mcp_unlocker, got "${String(calledBody.zone)}"`);
       assert(result.length === 3, `28e. parses unlocked feed → expected 3, got ${result.length}`);
@@ -495,3 +497,9 @@ test("30. unblock:true throws a clear error when BRIGHTDATA_API_TOKEN is absent"
   });
 });
 
+
+test("31. loadBrightDataToken reads secrets.json from KAYA_HOME, not os.homedir()", async () => {
+  await withTempSecrets("fake-token-from-kaya-home", async () => {
+    assert(loadBrightDataToken() === "fake-token-from-kaya-home", "31. token comes from the KAYA_HOME secrets.json");
+  });
+});

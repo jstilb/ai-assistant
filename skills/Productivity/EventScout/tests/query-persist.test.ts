@@ -92,7 +92,8 @@ function makeEvent(id: string, overrides: Partial<EventItem> = {}): EventItem {
   return {
     id,
     title: `Event ${id}`,
-    startDatetime: "2026-06-10T19:00:00",
+    // Relative future date: the cache write now prunes expired events.
+    startDatetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     allDay: false,
     venue: "Some Venue",
     lat: 32.7157,

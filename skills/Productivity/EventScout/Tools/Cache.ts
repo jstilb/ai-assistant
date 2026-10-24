@@ -175,8 +175,18 @@ export function upsertEvents(incoming: EventItem[]): void {
  * api-tier sources (sources.json fetchTier === "api") are exempt from this
  * fuzzy re-dedup pass — see Dedup.ts's "api-tier exemption" note. Their
  * dedup already happened above via upsertEvents' exact-id upsert.
+ *
+ * Finally prunes expired events — the SPEC's "pruned each cycle". Every ingest
+ * path (cron prefetch, UI refresh, CLI --refresh) lands here, so this is the
+ * cycle boundary. Until 2026-10-04 nothing called pruneExpired, and the cache
+ * grew to 32k events (86% past, 30 MB per /api/data). The grace window keeps
+ * today's all-day / no-end-time events (effective end = startDatetime) visible
+ * after the afternoon prefetch.
  */
 export function upsertEventsDeduped(incoming: EventItem[]): void {
   upsertEvents(incoming);
   writeEvents(dedupeAndMerge(readEvents(), loadApiTierSourceIds()));
+  pruneExpired(new Date(Date.now() - PRUNE_GRACE_MS));
 }
+
+const PRUNE_GRACE_MS = 24 * 60 * 60 * 1000;

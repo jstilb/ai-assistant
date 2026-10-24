@@ -240,7 +240,8 @@ test("4. upsertEventsDeduped: collapses a cross-source twin already in the cache
 
 test("5. upsertEventsDeduped: distinct events are preserved (no over-merge)", () => {
   cleanup();
-  writeEvents([pastEvent]);
+  // Future-dated: upsertEventsDeduped now prunes expired events (test 7).
+  writeEvents([{ ...pastEvent, id: "future-game-001", startDatetime: FUTURE_DATE, endDatetime: FUTURE_DATE }]);
   upsertEventsDeduped([futureEvent]);
   const after = readEvents();
   assert(after.length === 2, `Expected 2 distinct events preserved, got ${after.length}`);
@@ -282,5 +283,18 @@ test("6. upsertEventsDeduped: api-tier events (padres-mlb) survive the whole-cac
   assert(
     after.length === 2,
     `api-tier events must not be fuzzy-collapsed by the whole-cache re-dedup pass (got ${after.length})`
+  );
+});
+
+test("7. upsertEventsDeduped: prunes expired events, keeps ones inside the 24h grace", () => {
+  cleanup();
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const endedToday: EventItem = { ...pastEvent, id: "ended-today-001", startDatetime: twoHoursAgo, endDatetime: twoHoursAgo };
+  writeEvents([pastEvent, endedToday]);
+  upsertEventsDeduped([futureEvent]);
+  const ids = readEvents().map((e: EventItem) => e.id).sort();
+  assert(
+    deepEqual(ids, ["ended-today-001", "future-event-001"]),
+    `Expected [ended-today-001, future-event-001], got ${JSON.stringify(ids)}`
   );
 });

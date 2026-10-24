@@ -26,7 +26,7 @@ import ical, { expandRecurringEvent } from "node-ical";
 import type { VEvent } from "node-ical";
 import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
-import { defaultKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // VeventOccurrence — minimal occurrence shape, decoupled from node-ical types
@@ -278,13 +278,13 @@ const BRIGHTDATA_UNLOCKER_ENDPOINT = "https://api.brightdata.com/request";
 const BRIGHTDATA_UNLOCKER_ZONE = "mcp_unlocker";
 
 /**
- * Read BRIGHTDATA_API_TOKEN from `~/.claude/secrets.json`.
+ * Read BRIGHTDATA_API_TOKEN from `<KAYA_HOME>/secrets.json` (defaults to `~/.claude`).
  *
  * Mirrors `loadApifyToken()` in ApifyAdapter — reads at call time (no caching).
  * Throws a clear error when the file is missing/malformed or the token is absent.
  */
 export function loadBrightDataToken(): string {
-  const secretsPath = join(defaultKayaHome(), "secrets.json");
+  const secretsPath = join(getKayaHome(), "secrets.json");
   if (!existsSync(secretsPath)) {
     throw new Error(
       `[ICSAdapter] secrets.json not found at ${secretsPath}. ` +
