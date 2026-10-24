@@ -1,6 +1,6 @@
 ---
 name: IssueTrace
-description: Graph-based development & issue tracing. Records bugs/errors/blockers/regressions into the knowledge graph, traces their full cause→fix→learning lifecycle, and feeds the patterns into AgentMetacognition. USE WHEN track an issue, trace a bug, why does this file keep breaking, recurring errors, regression, issue lifecycle, what bugs keep coming back, development health.
+description: Graph-based development & issue tracing. Records bugs/errors/blockers/regressions into the System Graph (Intelligence/Graph), traces their full cause→fix→learning lifecycle, and feeds the patterns into AgentMetacognition. USE WHEN track an issue, trace a bug, why does this file keep breaking, recurring errors, regression, issue lifecycle, what bugs keep coming back, development health.
 ---
 
 # IssueTrace

@@ -41,7 +41,7 @@ import { GraphPersistence, getGraphPersistence } from '../../Graph/Tools/GraphPe
 import { createMemoryStore, type MemoryStore } from '../../../../lib/core/MemoryStore';
 import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
 // cross-skill-allowed: bridges issue outcomes into AgentMetacognition's signal ledger by design
-import { SignalLedger } from '../../../Productivity/AgentMetacognition/Tools/SignalLedger';
+import { SignalLedger } from '../../../Intelligence/AgentMetacognition/Tools/SignalLedger';
 import { IssueTracer, type IssueTrace, type IssueSeverity } from './IssueTracer';
 
 // ============================================
