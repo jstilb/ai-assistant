@@ -66,7 +66,7 @@ User: "The research skill isn't triggering - validate it"
 
 **Example 3: Evaluate a skill's quality and iterate**
 ```
-User: "Eval the JobEngine skill"
+User: "Eval the JobSearch skill"
 → Invokes EvalSkill workflow
 → Generates test prompts, spawns with-skill + baseline subagents
 → Grades outputs, aggregates benchmark, launches HTML viewer

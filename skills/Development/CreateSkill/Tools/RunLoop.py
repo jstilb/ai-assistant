@@ -65,7 +65,7 @@ def run_loop(
     name, original_description, content = parse_skill_md(skill_path)
     current_description = description_override or original_description
 
-    # Extract parent category name from skill_path (e.g., Commerce/JobEngine → ["Commerce"])
+    # Extract parent category name from skill_path (e.g., Commerce/JobSearch → ["Commerce"])
     skills_dir = Path.home() / ".claude" / "skills"
     try:
         rel = skill_path.resolve().relative_to(skills_dir)

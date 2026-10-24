@@ -48,7 +48,7 @@ def run_single_query(
     """
     unique_id = uuid.uuid4().hex[:8]
     clean_name = f"{skill_name}-skill-{unique_id}"
-    # Match on temp command name OR parent skill names (e.g., "Commerce" for JobEngine)
+    # Match on temp command name OR parent skill names (e.g., "Commerce" for JobSearch)
     match_names = {clean_name}
     if parent_names:
         match_names.update(parent_names)
@@ -323,12 +323,12 @@ def main():
     description = args.description or original_description
     project_root = find_project_root()
 
-    # Extract parent category name from skill_path (e.g., Commerce/JobEngine → ["Commerce"])
+    # Extract parent category name from skill_path (e.g., Commerce/JobSearch → ["Commerce"])
     # Only take the directory immediately before the skill name, filtering out path noise
     skills_dir = Path.home() / ".claude" / "skills"
     try:
         rel = skill_path.resolve().relative_to(skills_dir)
-        # rel = Commerce/JobEngine → parent is "Commerce"
+        # rel = Commerce/JobSearch → parent is "Commerce"
         parent_names = [rel.parts[0]] if len(rel.parts) > 1 else []
     except ValueError:
         # skill_path not under ~/.claude/skills, try raw parent
