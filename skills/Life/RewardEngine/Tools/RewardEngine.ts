@@ -37,6 +37,7 @@
  *   bun RewardEngine.ts history [--limit 20] # recent ledger entries
  *   bun RewardEngine.ts menu                 # show the reward menu
  *   bun RewardEngine.ts odds                 # show current effective odds
+ *   bun RewardEngine.ts points [sub]         # deterministic points ledger (see Points.ts)
  *
  * STATE:
  *   Config:  skills/Life/RewardEngine/config/rewards.json (edit your menu here)
@@ -50,6 +51,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
+import type { PointsConfig } from "./Points.ts";
 
 // ----------------------------------------------------------------------------
 // Types
@@ -71,6 +73,8 @@ export interface RewardConfig {
   schedule: ScheduleConfig;
   rewards: Record<Tier, string[]>;
   nearMiss: string[];
+  /** Deterministic points ledger (Points.ts). Absent = points disabled. */
+  points?: PointsConfig;
 }
 
 export interface EngineState {
@@ -105,11 +109,6 @@ export function rewardEnginePaths(): { dir: string; state: string; ledger: strin
   const dir = join(getKayaHome(), "runtime", "reward-engine");
   return { dir, state: join(dir, "state.json"), ledger: join(dir, "ledger.jsonl") };
 }
-
-// AppendLog seam for the ledger.jsonl growing log — getKayaHome() is cached process-wide
-// after first call, so this module-level path is stable for the life of the process
-// (same resolved path rewardEnginePaths().ledger would return at any later call).
-const rewardLedgerLog = createAppendLog(rewardEnginePaths().ledger);
 
 // ----------------------------------------------------------------------------
 // Seedable RNG (mulberry32) — deterministic, auditable
@@ -257,7 +256,9 @@ export interface LedgerEntry {
 }
 
 export function appendLedger(entry: LedgerEntry): void {
-  rewardLedgerLog.append(entry);
+  // Resolve the path per call: getKayaHome() follows KAYA_HOME changes, so a module-level
+  // log would write to a different file than readLedger() reads.
+  createAppendLog(rewardEnginePaths().ledger).append(entry);
 }
 
 export function readLedger(limit?: number): LedgerEntry[] {
@@ -483,7 +484,7 @@ async function cmdRoll(): Promise<void> {
   console.log(`     streak: ${next.streakDays}d · rolls today: ${next.rollsToday}/${cfg.dailyRollCap} · jackpot odds boosted to weight ${resolution.effectiveJackpotWeight}\n`);
 }
 
-function cmdStats(): void {
+async function cmdStats(): Promise<void> {
   const config = loadConfig();
   const s = loadState();
   const today = localDay(new Date());
@@ -495,7 +496,15 @@ function cmdStats(): void {
   console.log(`  rolls today:   ${rollsToday}/${config.schedule.dailyRollCap}`);
   console.log(`  near-misses:   ${s.consecutiveNearMisses} in a row (pity at ${config.schedule.pityAfter})`);
   console.log(`  lifetime:      ${s.totals.rolls} rolls · ${s.totals.rewards} rewards (${rewardRate}%) · ${s.totals.jackpots} jackpots`);
-  console.log(`  jackpot odds:  weight ${effectiveJackpotWeight(config.schedule, s.streakDays)} (base ${config.schedule.tierWeights.jackpot})\n`);
+  console.log(`  jackpot odds:  weight ${effectiveJackpotWeight(config.schedule, s.streakDays)} (base ${config.schedule.tierWeights.jackpot})`);
+  if (config.points) {
+    const { syncLedger } = await import("./Points.ts");
+    const { scoreLines } = await import("./PointsCli.ts");
+    const { ledger } = await syncLedger(config.points);
+    console.log(`\n  🏆 points`);
+    for (const l of scoreLines(ledger, today)) console.log(l);
+  }
+  console.log("");
 }
 
 function cmdHistory(): void {
@@ -544,7 +553,12 @@ async function main(): Promise<void> {
   const cmd = process.argv[2];
   switch (cmd) {
     case "roll": await cmdRoll(); break;
-    case "stats": cmdStats(); break;
+    case "stats": await cmdStats(); break;
+    case "points": {
+      const { cmdPoints } = await import("./PointsCli.ts");
+      await cmdPoints(loadConfig().points, process.argv.slice(3));
+      break;
+    }
     case "history": cmdHistory(); break;
     case "menu": cmdMenu(); break;
     case "odds": cmdOdds(); break;
@@ -554,7 +568,8 @@ async function main(): Promise<void> {
   roll --work "<what you did>"   Roll for a reward (LLM gates qualification)
   roll --no-llm                  Skip the qualification gate
   roll --seed <n>                Deterministic roll (testing/demos)
-  stats                          Streak, totals, today's rolls
+  stats                          Streak, totals, today's rolls, points + goal
+  points [sub]                   Points ledger: score|sync|check|routines|goal|history|weights|preview
   history [--limit N]            Recent ledger entries
   menu                           Show the reward menu
   odds                           Show current effective odds`);

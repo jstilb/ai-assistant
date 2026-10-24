@@ -1,6 +1,6 @@
 ---
 name: RewardEngine
-description: Randomized (variable-ratio) rewards to incentivize good work. You finish a real piece of work, you "roll" — most rolls give a small reward or an encouraging near-miss, occasionally a medium reward, rarely a jackpot. The unpredictability is the active ingredient — it's the slot-machine reinforcement schedule, redirected from the C0 media trap toward your actual goals. USE WHEN reward me, claim reward, roll reward, randomized reward, variable reward, incentivize good work, treat myself, i earned a reward, loot box, gamify habits, motivate me.
+description: Randomized (variable-ratio) rewards plus a deterministic points score to incentivize good work. You finish a real piece of work, you "roll" — most rolls give a small reward or an encouraging near-miss, occasionally a medium reward, rarely a jackpot. The unpredictability is the active ingredient — it's the slot-machine reinforcement schedule, redirected from the C0 media trap toward your actual goals. Points: every LucidTasks task, LifeOS habit and Daily/Weekly Behaviors routine item earns fixed points with streak-continuation and streak-recovery bonuses, toward a settable score goal. USE WHEN points, my score, score goal, check off routine, streak bonus, reward me, claim reward, roll reward, randomized reward, variable reward, incentivize good work, treat myself, i earned a reward, loot box, gamify habits, motivate me.
 ---
 
 # RewardEngine
@@ -44,6 +44,11 @@ bun $E stats                                              # streak, totals, toda
 bun $E history [--limit N]                                # recent ledger entries
 bun $E menu                                               # show the reward menu
 bun $E odds                                               # current effective odds
+
+bun $E points                                             # sync + score, goal progress, streaks
+bun $E points check "boredom block"                       # check off a Daily/Weekly Behaviors item
+bun $E points goal 400 --period week                      # set a score goal (day|week|month)
+bun $E points weights | routines | history | preview      # weights, checkable items, ledger, calibration
 ```
 
 ## The reward menu
@@ -83,6 +88,32 @@ do real work
 5. reveal   → slot-machine reveal (LLM flavor line if available, else templated)
 ```
 
+## Points (the deterministic half)
+
+Rolls are the *variable* reward; points are the *fixed* one. Every completion earns a
+known, auditable number of points (`Tools/Points.ts`, weights in `config/rewards.json → points`):
+
+| Source | What pays | Read from |
+|--------|-----------|-----------|
+| LucidTasks | each `done` task: P1 15 · P2 10 · P3 5, +2 per 30 min estimate (max +8), +5 if goal-linked. `autonomous`/`drop` dispositions excluded (agent work isn't Jm's) | `lucidtasks.db` (read-only) |
+| Habits | per `habit_log` item: leads weighted highest (S13 phone reps 2/rep up to 8, S14/S15 8, S16 6, S18 build 12, S17 community event 15/event), rehab/workout 10, maintenance 3–5 | `lifeos.db` habit_log (read-only, aliases folded) |
+| Routines | `points check "<item>"` against Daily/Weekly Behaviors rows; mapped rows use the item's weight, others 3 | the two Behaviors notes + `routine-checks.jsonl` |
+
+**Bonuses** (per item, opt-in via `bonuses`):
+- 🔥 **continuation**: 3+ periods in a row pays +1, +2, … up to +5 per period, plus milestones at 7/14/30/60/100 (+10/+15/+40/+75/+150).
+- 🩹 **recovery**: restart an item whose ≥3 streak broke, within 7 missed days (or 2 missed weeks), and get +8 ("never miss twice").
+- 🎯 **weekly target**: build ≥5 days/week +25; community events ≥2/week +20.
+
+Weekly-cadence items (weekly review, community events, friend reach-out) streak in weeks (Mon-start).
+Tasks feed a "≥1 task/day" streak item. A habit logged via `/habit` and the same routine
+checked off pay once.
+
+**Ledger integrity:** `scoreHistory()` is pure: the history goes in and awards with stable keys
+come out. Sync appends only what's owed and not yet paid, so re-runs are no-ops, logging more
+reps later tops up, and nothing is ever clawed back. Only completions on/after `points.startDate`
+pay; earlier history still builds streaks. `points preview --since <date>` re-scores past weeks
+(no writes) so a goal can be calibrated against real history.
+
 ## State & files
 
 | What | Where |
@@ -90,9 +121,16 @@ do real work
 | Reward menu + schedule | `skills/Life/RewardEngine/config/rewards.json` |
 | Streak / counters | `$KAYA_HOME/runtime/reward-engine/state.json` |
 | Roll ledger | `$KAYA_HOME/runtime/reward-engine/ledger.jsonl` |
+| Points ledger | `$KAYA_HOME/runtime/reward-engine/points-ledger.jsonl` |
+| Routine checks | `$KAYA_HOME/runtime/reward-engine/routine-checks.jsonl` |
+| Score goal | `$KAYA_HOME/runtime/reward-engine/points-goal.json` |
 
 ## Tests
 
 `bun test ./skills/Life/RewardEngine/tests/RewardEngine.test.ts` — 24 tests covering the RNG
 determinism, tier distribution, streak escalation, pity guarantee, daily-cap rollover, cooldown,
 streak day-continuity, and ledger/state round-trips. All pure logic (no LLM, injected clock).
+
+`bun test $PWD/skills/Life/RewardEngine/tests/Points.test.ts`: 33 tests covering task/habit/routine
+scoring, continuation/milestone/recovery/weekly-target bonuses, ledger idempotency + top-ups,
+goal progress, Behaviors parsing, and an end-to-end sync against temp sqlite DBs.
