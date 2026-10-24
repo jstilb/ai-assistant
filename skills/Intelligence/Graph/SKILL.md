@@ -302,7 +302,7 @@ bun skills/Intelligence/Graph/Tools/GraphQuerier.ts list --type decision --tags 
 - [ ] Graph diff (compare snapshots)
 - [ ] Export to Neo4j or other graph databases
 - [ ] GraphQL API for external tools
-- [ ] Merge with KnowledgeGraph (Obsidian integration)
+- [x] ~~Merge with KnowledgeGraph~~ — decided against (ontology ruling D5, 2026-09-21): the Obsidian vault graph was renamed `Intelligence/VaultGraph` and stays a separate skill
 
 ## References
 
