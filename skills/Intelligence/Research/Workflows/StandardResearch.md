@@ -38,7 +38,7 @@ Task({
 })
 
 Task({
-  subagent_type: "GeminiResearcher",
+  subagent_type: "BreadthResearcher",
   description: "[topic] perspectives",
   prompt: "Do ONE search for: [query optimized for breadth/perspectives]. Return findings immediately."
 })

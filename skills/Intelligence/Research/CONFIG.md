@@ -19,12 +19,12 @@ research:
     standard:
       agents: 2
       timeout_seconds: 60
-      agent_types: [ClaudeResearcher, GeminiResearcher]
+      agent_types: [ClaudeResearcher, BreadthResearcher]
 
     extensive:
       agents: 6
       timeout_seconds: 300
-      agent_types: [ClaudeResearcher, GeminiResearcher]
+      agent_types: [ClaudeResearcher, BreadthResearcher]
       agents_per_type: 3
 ```
 

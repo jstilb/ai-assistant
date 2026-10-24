@@ -44,9 +44,9 @@ Task({ subagent_type: "ClaudeResearcher", description: "[topic] angle 2", prompt
 Task({ subagent_type: "ClaudeResearcher", description: "[topic] angle 3", prompt: "Search for: [angle 3]. Return findings." })
 
 // Gemini - 3 threads (multi-perspective, cross-domain)
-Task({ subagent_type: "GeminiResearcher", description: "[topic] angle 4", prompt: "Search for: [angle 4]. Return findings." })
-Task({ subagent_type: "GeminiResearcher", description: "[topic] angle 5", prompt: "Search for: [angle 5]. Return findings." })
-Task({ subagent_type: "GeminiResearcher", description: "[topic] angle 6", prompt: "Search for: [angle 6]. Return findings." })
+Task({ subagent_type: "BreadthResearcher", description: "[topic] angle 4", prompt: "Search for: [angle 4]. Return findings." })
+Task({ subagent_type: "BreadthResearcher", description: "[topic] angle 5", prompt: "Search for: [angle 5]. Return findings." })
+Task({ subagent_type: "BreadthResearcher", description: "[topic] angle 6", prompt: "Search for: [angle 6]. Return findings." })
 ```
 
 **Each agent:**
