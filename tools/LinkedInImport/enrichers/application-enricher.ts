@@ -1,6 +1,6 @@
 // Application Enricher — generates dedup hashes, appends to applications.jsonl
 // Updated to output unified ApplicationRecord format with 16-char truncated SHA-256 hashes
-// matching computeDedupHash() from JobEngine/Tools/lib/dedup.ts
+// matching computeDedupHash() from JobSearch/Tools/lib/dedup.ts (skill formerly named JobEngine)
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import type { ParsedApplication } from "../parsers/application-parser.ts";
@@ -8,13 +8,13 @@ import type { Result } from "../types.ts";
 import { createAppendLog } from "../../../lib/core/AppendLog.ts";
 
 // =============================================================================
-// DEDUP HASH — matches JobEngine computeDedupHash() exactly
+// DEDUP HASH — matches JobSearch computeDedupHash() exactly
 // =============================================================================
 
 /**
  * Normalize a string for dedup key purposes.
  * Lowercases and strips all non-alphanumeric characters.
- * Matches normalizeDedupKey() in JobEngine/Tools/lib/dedup.ts.
+ * Matches normalizeDedupKey() in JobSearch/Tools/lib/dedup.ts.
  */
 function normalizeDedupKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -22,7 +22,7 @@ function normalizeDedupKey(value: string): string {
 
 /**
  * Compute a 16-character SHA-256 dedup hash from company + title + location.
- * Matches computeDedupHash() in JobEngine/Tools/lib/dedup.ts.
+ * Matches computeDedupHash() in JobSearch/Tools/lib/dedup.ts.
  */
 export function generateDedupHash(company: string, title: string, location: string): string {
   const normalized = [
@@ -38,7 +38,7 @@ export function generateDedupHash(company: string, title: string, location: stri
 // UNIFIED APPLICATION RECORD
 // =============================================================================
 
-/** Matches ApplicationRecord from JobEngine/Tools/lib/types.ts */
+/** Matches ApplicationRecord from JobSearch/Tools/lib/types.ts */
 interface UnifiedApplicationRecord {
   id: string;
   timestamp: string;
