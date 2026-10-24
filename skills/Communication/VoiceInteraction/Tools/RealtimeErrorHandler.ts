@@ -19,7 +19,6 @@
 
 import { spawnSync } from "child_process";
 import { getRealtimeVoiceConfig } from "./VoiceCommon.ts";
-import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 
 // ============================================================================
 // Types
@@ -225,7 +224,7 @@ export async function speakError(
 
   // Try MLX TTS first
   try {
-    const response = await httpClient.fetch(config.ttsUrl, {
+    const response = await fetch(config.ttsUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -235,7 +234,6 @@ export async function speakError(
         response_format: "wav",
       }),
       signal: AbortSignal.timeout(5000),
-      cache: "none",
     });
 
     if (response.ok) {

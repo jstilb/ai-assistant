@@ -42,7 +42,6 @@ import { polishTranscription } from "./STTPolishPipeline.ts";
 import { buildVoiceSystemPrompt, getMinimalContext } from "./VoiceSystemPrompt.ts";
 import { withTimeout, handleSTTError, handleLLMError, handleTTSError, handleCapacityError, speakError } from "./RealtimeErrorHandler.ts";
 import { RealtimeHealthMonitor } from "./RealtimeHealthMonitor.ts";
-import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import type { Server, ServerWebSocket } from "bun";
 
 // ============================================================================
@@ -522,6 +521,9 @@ function getSessionId(ws: ServerWebSocket<{ sessionId: string }>): string {
 // STT: Speech-to-Text via mlx-whisper
 // ============================================================================
 
+// STT/TTS POSTs use plain fetch, not httpClient: its circuit breaker is keyed
+// by hostname, so STT failures on localhost would also block TTS (and it
+// ignores the caller's signal). See RealtimeVoiceServer.breaker.test.ts.
 async function transcribeAudio(audioData: ArrayBuffer, sessionId: string): Promise<string | null> {
   const formData = new FormData();
   const blob = new Blob([audioData], { type: "audio/wav" });
@@ -532,11 +534,10 @@ async function transcribeAudio(audioData: ArrayBuffer, sessionId: string): Promi
 
   try {
     const response = await withTimeout(
-      httpClient.fetch(STT_URL, {
+      fetch(STT_URL, {
         method: "POST",
         body: formData,
         signal: AbortSignal.timeout(30000), // 30s for large model cold starts
-        cache: "none",
       }),
       30000, // Match AbortSignal timeout — large-v3-turbo cold start can exceed 15s
       null as Response | null,
@@ -605,7 +606,7 @@ async function synthesizeSpeech(
 ): Promise<ArrayBuffer | null> {
   // Try MLX TTS (primary)
   try {
-    const response = await httpClient.fetch(TTS_URL, {
+    const response = await fetch(TTS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -615,7 +616,6 @@ async function synthesizeSpeech(
         response_format: "wav",
       }),
       signal: AbortSignal.timeout(10000),
-      cache: "none",
     });
 
     if (response.ok) {
@@ -1056,7 +1056,9 @@ async function checkServiceHealth(
 ): Promise<ServiceHealth> {
   const start = Date.now();
   try {
-    const response = await httpClient.fetch(url, {
+    // Plain fetch, not httpClient: its 5-minute GET cache would report a dead
+    // service as "ok", and its retries/circuit breaker distort a liveness probe.
+    const response = await fetch(url, {
       method: "GET",
       signal: AbortSignal.timeout(3000),
     });
@@ -1369,7 +1371,7 @@ if (typeof Bun !== "undefined" && import.meta.main) {
   process.on("SIGINT", () => { if (server) gracefulShutdown(server); });
 }
 
-export { server, startServer, createSession, SentenceChunker, sessions, sessionStore, getHealthStatus, handleAudioTurn, handleTextTurn, handleClientMessage, handleSessionInit, runLLMAndTTSPipeline, transcribeAudio, streamLLM, synthesizeSpeech, sendMessage, sendStatus, sendError, healthMonitor, SESSION_RECOVERY_TTL_MS };
+export { server, startServer, checkServiceHealth, createSession, SentenceChunker, sessions, sessionStore, getHealthStatus, handleAudioTurn, handleTextTurn, handleClientMessage, handleSessionInit, runLLMAndTTSPipeline, transcribeAudio, streamLLM, synthesizeSpeech, sendMessage, sendStatus, sendError, healthMonitor, SESSION_RECOVERY_TTL_MS };
 export type {
   SessionState,
   SessionConfig,
