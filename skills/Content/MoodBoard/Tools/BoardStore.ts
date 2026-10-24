@@ -3,7 +3,7 @@
  * BoardStore.ts - Board + pin persistence via StateManager
  *
  * Boards live in skills/Content/MoodBoard/Data/boards.json (same in-repo
- * pattern as Designer's room-state.json). Pins are deduped by a deterministic
+ * pattern as InteriorDesign's room-state.json). Pins are deduped by a deterministic
  * hash of imageUrl, so re-adding the same image is a no-op.
  *
  * Usage:
