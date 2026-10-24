@@ -420,12 +420,12 @@ Options:
 
 **Agent sequence (mirrors UXUIStage.ts `planUXUIStage`):**
 
-Run the following agents in order. Each agent prepends its `*Context.md` before loading its skill workflow.
+Run the following agents in order. Each agent prepends its `*Brief.md` (Agent Brief) before loading its skill workflow.
 
 **Agent 1 — UXDesigner** (always when surface fires):
 ```
 - subagent_type: "general-purpose"
-- prepend_context: "skills/Agents/UXDesignerContext.md"
+- prepend_context: "skills/Agents/UXDesignerBrief.md"
 - model: <Sonnet for Small/Medium | Opus for Large>
 - prompt: |
     You are the UXDesigner. Surface: {{SURFACE}}. Effort: {{EFFORT}}.
@@ -442,7 +442,7 @@ Run the following agents in order. Each agent prepends its `*Context.md` before 
 **Agent 2 — UIDesigner** (always when surface fires; consumes UXDesigner output):
 ```
 - subagent_type: "general-purpose"
-- prepend_context: "skills/Agents/UIDesignerContext.md"
+- prepend_context: "skills/Agents/UIDesignerBrief.md"
 - model: <Sonnet for Small/Medium | Opus for Large>
 - prompt: |
     You are the UIDesigner. Surface: {{SURFACE}}. Effort: {{EFFORT}}.
@@ -459,7 +459,7 @@ Run the following agents in order. Each agent prepends its `*Context.md` before 
 **Agent 3 — Designer review** (Medium or Large effort only):
 ```
 - subagent_type: "general-purpose"
-- prepend_context: "skills/Agents/DesignerContext.md"
+- prepend_context: "skills/Agents/DesignerBrief.md"
 - model: Opus   ← always Opus for review, regardless of effort tier
 - prompt: |
     You are the Designer (review-only, not a generator). Effort: {{EFFORT}}.

@@ -1,6 +1,6 @@
 ---
 name: SpecSheet
-description: Library backing the automated spec-generation pipeline (QueueRouter/SpecPipelineRunner) and the grill flow — screen-inventory parsing, UX/UI structural validation, GrillMe research directives. USE WHEN debugging spec-pipeline UX/UI gating, screen inventory coverage, or grill directive generation.
+description: Library backing the automated spec-generation pipeline (QueueRouter/SpecPipelineRunner) and the grill flow — screen-inventory parsing, UX/UI structural validation, Autonomous Lens (GrillMeLens) research directives. USE WHEN debugging spec-pipeline UX/UI gating, screen inventory coverage, or grill directive generation.
 ---
 
 # SpecSheet — Spec-Pipeline Support Library
@@ -13,7 +13,7 @@ rest was a parallel, disconnected interactive path. Spec generation for real wor
 lives entirely in the automated **QueueRouter spec-pipeline**
 (`skills/Automation/QueueRouter/Tools/SpecPipelineRunner.ts`); the grill/research
 front end is the **grill flow** (`skills/Automation/QueueRouter/Workflows/GrillTask.md`).
-See `/queuerouter` and `/grillme`.
+See `/queuerouter` and `/grilling`.
 
 ## What Survives Here (live pipeline consumers)
 
@@ -46,7 +46,7 @@ already moved to the LLM spec-quality judge in `SpecPipelineRunner.judgeSpecQual
 ## Pointers
 
 - Automated spec generation: `/queuerouter`, `skills/Automation/QueueRouter/Tools/SpecPipelineRunner.ts`
-- Grill / research front end: `/grillme`, `skills/Automation/QueueRouter/Workflows/GrillTask.md`
+- Grill / research front end: `/grilling`, `skills/Automation/QueueRouter/Workflows/GrillTask.md`
 - UX/UI spec format reference: `UXUISpecFormat.md`
 - ISC-ready implementation spec (still interactive): `Workflows/CurrentWork.md`
 
