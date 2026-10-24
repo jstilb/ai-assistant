@@ -247,7 +247,7 @@ export class BlocklistFilter {
     // ── Check excluded personal skills ────────────────────
     // Supports both flat (skills/<Name>/...) and nested (skills/<Category>/<Name>/...)
     if (parts[0] === "skills" && parts.length >= 2) {
-      // Check parts[1] (flat: skills/Designer/...) and parts[2] (nested: skills/Life/Designer/...)
+      // Check parts[1] (flat: skills/Designer/...) and parts[2] (nested: skills/Life/InteriorDesign/...)
       for (const skillName of this.config.excludedSkills) {
         if (parts[1] === skillName || (parts.length >= 3 && parts[2] === skillName)) {
           // Preserve README.md at the direct root of the excluded skill dir
@@ -671,6 +671,7 @@ export const DEFAULT_BLOCKLIST_CONFIG: BlocklistConfig = {
     "JobHunter",
     "JobBlitz",
     "JobEngine",
+    "JobSearch",
     "Gmail",
     "Telegram",
     "CalendarAssistant",
@@ -678,6 +679,7 @@ export const DEFAULT_BLOCKLIST_CONFIG: BlocklistConfig = {
     "Shopping",
     "Instacart",
     "Designer",
+    "InteriorDesign",
     "Cooking",
   ],
   excludedStateDirs: true,

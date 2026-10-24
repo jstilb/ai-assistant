@@ -31,7 +31,7 @@ import {
 import { join, dirname } from "path";
 import { execSync, execFileSync } from "child_process";
 import { createStateManager } from "../../../../lib/core/StateManager";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome";
+import { defaultKayaHome, getKayaHome } from "../../../../lib/core/KayaHome";
 import { redactSecrets } from "../../../../lib/core/Redactor";
 import { z } from "zod";
 
@@ -60,9 +60,11 @@ const SOURCE_DIR = defaultKayaHome();
 const STAGING_DIR = "/tmp/pai-public-staging";
 const SKILL_DIR = join(SOURCE_DIR, "skills", "System", "PublicSync");
 
-// Load GitHub token for HTTPS auth (SSH unavailable in launchd)
-function loadGithubToken(): string | undefined {
-  const secretsPath = join(defaultKayaHome(), "secrets.json");
+// Load GitHub token for HTTPS auth (SSH unavailable in launchd).
+// getKayaHome() (not defaultKayaHome()) so a test that pins KAYA_HOME never
+// reads the real secrets.json; the launchd plist sets KAYA_HOME=~/.claude.
+export function loadGithubToken(): string | undefined {
+  const secretsPath = join(getKayaHome(), "secrets.json");
   try {
     const secretsRaw = readFileSync(secretsPath, "utf-8");
     const secrets = JSON.parse(secretsRaw);
@@ -196,6 +198,21 @@ function stagingHasCommits(): boolean {
 }
 
 /**
+ * Remove a staging dir that exists but is no longer a usable git clone.
+ * macOS /tmp cleanup deletes long-unread files, which guts `.git` (HEAD gone)
+ * and leaves a husk; every later nightly then skipped the clone and died at
+ * `git pull` ("not a git repository"). A husk holds no history, so discarding
+ * it and re-cloning from the remote cannot push stale history.
+ * Returns true when a husk was removed.
+ */
+export function discardStagingHusk(dir: string): boolean {
+  if (!existsSync(dir) || existsSync(join(dir, ".git", "HEAD"))) return false;
+  console.log(`[SyncRunner] ${dir} exists but has no usable .git (husk) — discarding and re-cloning`);
+  rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
+/**
  * Prepare /tmp/pai-public-staging.
  *
  * `fresh` (recreate flow): the old staging clone is discarded before cloning,
@@ -214,6 +231,7 @@ function ensureStagingRepo(fresh: boolean): void {
     console.log(`[SyncRunner] --fresh: discarding old staging clone ${STAGING_DIR}`);
     rmSync(STAGING_DIR, { recursive: true, force: true });
   }
+  discardStagingHusk(STAGING_DIR);
 
   if (!existsSync(STAGING_DIR)) {
     console.log(`[SyncRunner] Cloning ${redactedRemote} → ${STAGING_DIR}`);

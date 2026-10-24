@@ -59,7 +59,7 @@ All three must pass before any push:
 ## Published by Default (everything else is private)
 
 - Top-level: `skills/`, `lib/`, `hooks/`, `tools/`, `.github/`, and the root project files (`README.md`, `CLAUDE.md`, `INSTALL.md`, `CONTEXT-*.md`, `install.ts`, `package.json`, `bunfig.toml`, `statusline*.sh`, `.gitignore`, `.gitattributes`)
-- Inside those, still excluded: personal skills (Gmail, Telegram, JobHunter, JobBlitz, JobEngine, CalendarAssistant, NetworkMatch, Shopping, Instacart, Designer, Cooking, CommunityOutreach, **InformationManager, LifeOS**); `State/ Data/ data/ logs/ Config/ config/ Transcripts/` inside any skill; `secrets.json`, `settings*.json`, `.active-agents.json`, `.env*` at any depth; `.db*`, `.log*`, `.jsonl`, media/binary extensions; prompt-injection / command-guard hook code (publication decision, see `blocklist.yaml`)
+- Inside those, still excluded: personal skills (Gmail, Telegram, JobHunter, JobBlitz, JobEngine→JobSearch, CalendarAssistant, NetworkMatch, Shopping, Instacart, Designer→InteriorDesign, Cooking, CommunityOutreach, **InformationManager, LifeOS**); `State/ Data/ data/ logs/ Config/ config/ Transcripts/` inside any skill; `secrets.json`, `settings*.json`, `.active-agents.json`, `.env*` at any depth; `.db*`, `.log*`, `.jsonl`, media/binary extensions; prompt-injection / command-guard hook code (publication decision, see `blocklist.yaml`)
 - README.md at the root of an excluded **skill** is preserved; excluded top-level dirs get nothing
 
 ## Customization
