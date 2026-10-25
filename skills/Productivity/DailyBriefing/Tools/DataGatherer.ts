@@ -31,7 +31,7 @@ import "../../LifeOS/Aggregation/HabitConsistency.ts";
 // in TDZ when gatherHabits ran (the exact crash class GatherFailure's doc
 // comment records).
 // cross-skill-allowed: Mastery Map checkbox grammar is owned by LifeOS/Mastery; briefing only renders "n/M nodes" from it (same seam ReviewPopulator uses)
-import { computeProgress, parseCheckboxTree } from "../../LifeOS/Mastery/MasteryMapCheckboxes.ts";
+import { readPlanSummary } from "../../LifeOS/Mastery/LearnPlan.ts";
 import { learningDeckFor, trackMechanic } from "../../LifeOS/Aggregation/DisciplineMastery.ts"; // cross-skill-allowed: gatherLearning must resolve a target's REAL Anki deck (e.g. Cooking's hand-built deck) the same way the LifeOS sweep does — a local Learning::<skill> template is the exact deck-mismatch bug the 08-23 review found
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads Anki's live due/new card counts read-only for the learning section (apy needs Anki closed; the call fails soft when it's open)
 import { AnkiClient } from "../../../Life/Anki/Tools/AnkiClient.ts";
@@ -273,9 +273,10 @@ export interface BriefingData {
       dueToPractice?: boolean;
       lastPractice?: string;
       nextAction?: string;
-      /** "n/M nodes" from the Mastery Map's checkbox leaves — read live at
-       *  gather time so a same-day Obsidian tick shows up; omitted when the
-       *  map is missing/unparseable (fail-soft). */
+      /** LearnPlan.planSummary of the plan note, read live at gather time: unit
+       *  levels for a living plan ("Shells: tried · 5 more units: new"), "n/M
+       *  nodes" for an old checkbox map; omitted when the note is missing or
+       *  unparseable (fail-soft). */
       mapProgress?: string;
     }>;
   };
@@ -1190,16 +1191,9 @@ async function gatherLearning(
         }
       }
 
-      let mapProgress: string | undefined;
+      // Unit levels for a living plan, "n/M nodes" for an old map; fail-soft: missing/unparseable → no line.
       const mapLink = str(r.map_link);
-      if (mapLink) {
-        try {
-          const progress = computeProgress(parseCheckboxTree(readFileSync(mapLink, "utf-8")));
-          if (progress.total > 0) mapProgress = `${progress.checked}/${progress.total} nodes`;
-        } catch {
-          // fail-soft: missing/unparseable map just omits the progress line
-        }
-      }
+      const mapProgress = mapLink ? readPlanSummary(mapLink)?.text : undefined;
 
       targets.push({
         name,
