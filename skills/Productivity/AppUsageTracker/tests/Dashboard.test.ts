@@ -59,7 +59,7 @@ test("buildPayload: empty DB → zero today, empty trend/devices/topApps", async
   const p = await buildPayload(db);
   expect(p.today.tier1_minutes).toBe(0);
   expect(p.today.total_lowvalue_minutes).toBe(0);
-  expect(p.today.delta_vs_ceiling).toBe(0 - CEILING_MIN);
+  expect(p.today.delta_vs_ceiling).toBe(CEILING_MIN === null ? null : 0 - CEILING_MIN);
   expect(p.trend_60d).toEqual([]);
   expect(p.per_device_today).toEqual([]);
   expect(p.top_apps_7d).toEqual([]);
@@ -78,7 +78,7 @@ test("buildPayload: daily_metrics row populates 'today'", async () => {
   expect(p.today.tier1_minutes).toBe(120);
   expect(p.today.tier2_lowvalue_minutes).toBe(80);
   expect(p.today.total_lowvalue_minutes).toBe(200);
-  expect(p.today.delta_vs_ceiling).toBe(200 - CEILING_MIN);
+  expect(p.today.delta_vs_ceiling).toBe(CEILING_MIN === null ? null : 200 - CEILING_MIN);
   expect(p.today.rolling_4wk_avg).toBe(150.5);
 });
 

@@ -20,6 +20,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { readMediaWigTargets } from "./WigTargets.ts";
 import { join } from "node:path";
 import { Db } from "./Db.ts";
 import { CONFIG } from "../Config.ts";
@@ -37,17 +38,11 @@ const PORT = Number(process.env.PORT ?? 7745);
 // dashboard previously hardcoded the retired Q2 G37/270 target and drifted 11
 // days into Q3 before this fix (fable-audit batch2, 2026-07-17).
 const WIG_STATUS_PATH = join(import.meta.dir, "..", "..", "LifeOS", "config", "wig_status.json");
-const FALLBACK_CEILING_MIN = 120; // Q3 G42 low_value target; used only if wig_status.json is unreadable
-function readCeilingMin(): number {
-  try {
-    const status = JSON.parse(readFileSync(WIG_STATUS_PATH, "utf8")) as {
-      G42?: { targets?: { low_value?: { target_min_per_day?: number } } };
-    };
-    const target = status.G42?.targets?.low_value?.target_min_per_day;
-    return typeof target === "number" ? target : FALLBACK_CEILING_MIN;
-  } catch {
-    return FALLBACK_CEILING_MIN;
-  }
+/** Low-value ceiling from the current media WIG, or null when this quarter has
+ *  no media goal (Q4 2026: Jm ruled "no media rule this quarter"). Null is
+ *  rendered visibly as "no active media goal" — never a stale fallback number. */
+function readCeilingMin(): number | null {
+  return readMediaWigTargets(WIG_STATUS_PATH)?.lowValue ?? null;
 }
 
 /**
@@ -103,8 +98,8 @@ interface DashboardPayload {
     tier1_minutes: number;
     tier2_lowvalue_minutes: number;
     total_lowvalue_minutes: number;
-    ceiling_min: number;
-    delta_vs_ceiling: number; // negative = under ceiling (good); positive = over
+    ceiling_min: number | null; // null = no active media goal this quarter
+    delta_vs_ceiling: number | null; // negative = under ceiling (good); positive = over
     rolling_4wk_avg: number | null;
   };
   trend_60d: Array<{
@@ -239,7 +234,7 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
       tier2_lowvalue_minutes: tier2,
       total_lowvalue_minutes: total,
       ceiling_min: ceilingMin,
-      delta_vs_ceiling: total - ceilingMin,
+      delta_vs_ceiling: ceilingMin === null ? null : total - ceilingMin,
       rolling_4wk_avg: todayRow?.rolling_4wk_avg == null ? null : Number(todayRow.rolling_4wk_avg),
     },
     trend_60d: trend.map(r => ({
@@ -268,7 +263,7 @@ const HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>AppUsageTracker — G42</title>
+  <title>AppUsageTracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root { --bg:#0e1116; --panel:#161b22; --fg:#e6edf3; --muted:#8b949e; --good:#3fb950; --warn:#d29922; --bad:#f85149; --link:#58a6ff; }
@@ -300,7 +295,7 @@ const HTML = `<!doctype html>
 </head>
 <body>
   <header>
-    <h1>AppUsageTracker — G42 (<span id="ceiling-label">≤ … min/day low-value media</span>)</h1>
+    <h1>AppUsageTracker (<span id="ceiling-label">≤ … min/day low-value media</span>)</h1>
     <span class="updated" id="updated"></span>
   </header>
   <div class="chart-warning" id="chart-warning" hidden></div>
@@ -380,17 +375,22 @@ const HTML = `<!doctype html>
 
     function renderToday(t) {
       document.getElementById('today-total').textContent = fmt(t.total_lowvalue_minutes) + ' min';
-      const sign = t.delta_vs_ceiling >= 0 ? '+' : '';
       const deltaEl = document.getElementById('today-delta');
-      deltaEl.textContent = sign + fmt(t.delta_vs_ceiling) + ' min vs ceiling (' + t.ceiling_min + ')';
-      deltaEl.className = 'sub ' + deltaClass(t.delta_vs_ceiling);
+      if (t.ceiling_min == null) {
+        deltaEl.textContent = 'no active media goal this quarter';
+        deltaEl.className = 'sub';
+      } else {
+        const sign = t.delta_vs_ceiling >= 0 ? '+' : '';
+        deltaEl.textContent = sign + fmt(t.delta_vs_ceiling) + ' min vs ceiling (' + t.ceiling_min + ')';
+        deltaEl.className = 'sub ' + deltaClass(t.delta_vs_ceiling);
+      }
       document.getElementById('today-tier1').textContent = fmt(t.tier1_minutes) + ' min';
       document.getElementById('today-tier2').textContent = fmt(t.tier2_lowvalue_minutes) + ' min';
       document.getElementById('rolling-avg').textContent = t.rolling_4wk_avg == null ? '—' : fmt1(t.rolling_4wk_avg) + ' min';
       // Ceiling is read live from wig_status.json server-side (readCeilingMin) —
       // render it here rather than baking a goal number into the static HTML.
-      document.getElementById('ceiling-label').textContent = '≤ ' + t.ceiling_min + ' min/day low-value media';
-      document.getElementById('target-sub').textContent = 'target ≤ ' + t.ceiling_min + ' min/day · excludes days with no events';
+      document.getElementById('ceiling-label').textContent = t.ceiling_min == null ? 'no active media goal this quarter' : '≤ ' + t.ceiling_min + ' min/day low-value media';
+      document.getElementById('target-sub').textContent = t.ceiling_min == null ? 'no target this quarter · excludes days with no events' : 'target ≤ ' + t.ceiling_min + ' min/day · excludes days with no events';
     }
 
     function renderTrend(rows, ceilingMin) {
@@ -399,14 +399,14 @@ const HTML = `<!doctype html>
         const totals = rows.map(r => r.total_lowvalue_minutes);
         const avg = rows.map(r => r.rolling_4wk_avg);
         const ceiling = labels.map(() => ceilingMin);
+        const ceilingDatasets = ceilingMin == null ? [] : [{ label: 'ceiling (' + ceilingMin + ')', data: ceiling, borderColor: '#d29922', borderDash: [4,4], pointRadius: 0, borderWidth: 1 }];
         if (trendChart) trendChart.destroy();
         trendChart = new Chart(document.getElementById('trendChart'), {
           type: 'line',
           data: { labels, datasets: [
             { label: 'daily total', data: totals, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.15)', tension: .25, pointRadius: 0, fill: true },
             { label: '4-wk avg (per logged day)', data: avg, borderColor: '#3fb950', tension: .25, pointRadius: 0, borderWidth: 2 },
-            { label: 'ceiling (' + ceilingMin + ')', data: ceiling, borderColor: '#d29922', borderDash: [4,4], pointRadius: 0, borderWidth: 1 },
-          ]},
+          ].concat(ceilingDatasets) },
           options: {
             responsive: true, maintainAspectRatio: false,
             scales: { x: { ticks: { color: '#8b949e', maxTicksLimit: 12 }, grid: { color: '#21262d' } },

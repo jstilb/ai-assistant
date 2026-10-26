@@ -50,7 +50,7 @@ export function readMediaWigTargets(path?: string): MediaWigTargets | null {
   }
   if (typeof parsed !== "object" || parsed === null) return null;
   for (const [key, goal] of Object.entries(parsed as Record<string, unknown>)) {
-    if (!/^G\d+$/.test(key) || typeof goal !== "object" || goal === null) continue;
+    if (!/^[GR]\d+$/.test(key) || typeof goal !== "object" || goal === null) continue;
     const targets = (goal as Record<string, unknown>).targets;
     if (typeof targets !== "object" || targets === null) continue;
     const t = targets as Record<string, { target_min_per_day?: unknown } | undefined>;
