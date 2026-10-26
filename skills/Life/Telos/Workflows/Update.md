@@ -34,7 +34,7 @@ TELOS is {principal.name}'s life framework stored in `~/.claude/USER/TELOS/`. It
 - updates.md - Comprehensive change log
 - backups/ - Timestamped backups of all changes
 
-**Removed files:** BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM and WRONG (plus TELOS.md and MISSION.md) were unfilled scaffolds and were deleted in the 2026-09 context-pollution audit — see `USER/TELOS/README.md`. `UpdateTelos.ts` rejects them. Books and movies {principal.name} finished go to LifeOS capture (`reading_log` / `media_log`), not TELOS; lessons and wisdom that change his thinking go into BELIEFS.md, FRAMES.md or MODELS.md.
+**Removed files:** BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM and WRONG (plus TELOS.md and MISSION.md) were unfilled scaffolds and were deleted in the 2026-09 context-pollution audit — see `skills/Life/Telos/docs/architecture.md` (the TELOS README was deleted 2026-10-25; its rules moved there, its word definitions to the vault glossary (`POS/Kaya Glossary.md` in the Obsidian vault)). `UpdateTelos.ts` rejects them. Books and movies {principal.name} finished go to LifeOS capture (`reading_log` / `media_log`), not TELOS; lessons and wisdom that change his thinking go into BELIEFS.md, FRAMES.md or MODELS.md.
 
 ## When to Use This Command
 
@@ -216,7 +216,7 @@ Those pair well together. Is there a recent decision where one of them changed y
 **Fix:** File names must be exact: "MISSIONS.md" not "MISSION.md"
 **Response:** "I need the exact filename. It's MISSIONS.md (plural). Let me add that for you with the correct name."
 
-If the name is one of the removed scaffolds (BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM, WRONG), don't silently pick another file: tell {principal.name} it was removed, and offer LifeOS capture (books/movies), the closest live file, or recreating it per `USER/TELOS/README.md`.
+If the name is one of the removed scaffolds (BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM, WRONG), don't silently pick another file: tell {principal.name} it was removed, and offer LifeOS capture (books/movies), the closest live file, or recreating it per `skills/Life/Telos/docs/architecture.md`.
 
 ### Missing Content
 **Error:** `❌ Usage: update-telos <file> "<content>" "<change-description>"`

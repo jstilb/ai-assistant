@@ -47,7 +47,20 @@ All files located in `~/.claude/USER/TELOS/`:
 ### Change Tracking
 - **updates.md** - Comprehensive changelog of all TELOS updates
 
-BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM and WRONG (plus TELOS.md and MISSION.md) were unfilled scaffolds, deleted in the 2026-09 context-pollution audit — see `USER/TELOS/README.md` before recreating one.
+BOOKS, IDEAS, LEARNED, MOVIES, PREDICTIONS, TRAUMAS, WISDOM and WRONG (plus TELOS.md and MISSION.md) were unfilled scaffolds, flagged daily by FreshnessGuard and deleted in the 2026-09 context-pollution audit (2026-09-12 / 2026-09-21). Recreate one only when there is real content to put in it, and register it in `skills/Productivity/InformationManager/config/artifact-freshness.json`, `GenerateContextRouting.ts` and `UpdateTelos.ts`.
+
+**The words** (Mission, Goal, Rock, Floor, Parked, Menu, Lead Measure, the ID letters M/G/R/S/C/P/N/B/FR/MO/TR/I) are defined in ONE place: the vault glossary (`POS/Kaya Glossary.md` in the Obsidian vault) ({principal.name}'s ruling D3.4, 2026-10-25 — the old `USER/TELOS/README.md` was deleted then; its file table and numbering moved here and to the glossary).
+
+### TELOS data provenance (read before inferring anything about {principal.name})
+
+TELOS files are self-reported by {principal.name}: an incomplete, point-in-time snapshot, not a complete or current model of who {principal.name} is.
+
+- **Treat silence as unknown, not as absence.** If a goal, challenge, belief or experience is not in these files, {principal.name} did not write it down — not that it doesn't exist or doesn't matter.
+- **Recency varies by file.** STATUS.md changes often; BELIEFS.md or MODELS.md may reflect older thinking.
+- **Coverage is selective** — biased toward what felt significant when written.
+- **Do not infer completeness.** When a question reaches the edge of what TELOS records, report the limit rather than extrapolating.
+
+TELOS files are private: never synced to public repositories (PublicSync excludes `USER/`), used locally only.
 
 ---
 
