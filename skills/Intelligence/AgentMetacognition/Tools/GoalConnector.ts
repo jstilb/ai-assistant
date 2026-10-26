@@ -225,7 +225,7 @@ export function parseMissions(content: string): Mission[] {
         if (missionMatch) {
           const mission = missions.find((m) => m.id === `M${missionMatch[1]}`);
           if (mission) {
-            const goalMatches = goalsText.match(/G\d+/g);
+            const goalMatches = goalsText.match(/[GR]\d+/g);
             if (goalMatches) {
               mission.goalIds = goalMatches;
             }
