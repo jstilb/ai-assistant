@@ -59,8 +59,8 @@ const GoalSectionSchema = z.object({
   active: z.boolean().optional(),
   /** Literal markdown between the heading and the first goal. */
   preamble: z.string().optional(),
-  /** Ordered goal ids in this section. */
-  goals: z.array(z.string().regex(/^G\d+$/)).min(1),
+  /** Ordered goal ids in this section (G<n> goals, R<n> Rocks from Q4 2026). */
+  goals: z.array(z.string().regex(/^[GR]\d+$/)).min(1),
 });
 
 const LiteralSectionSchema = z.object({
@@ -76,8 +76,8 @@ const GoalsFileSchema = z.object({
   sections: z.array(SectionSchema).min(1),
   /** Literal document tail (the italic review/footer lines). */
   footer: z.string().min(1),
-  /** Goal definitions keyed by id (G<number>). */
-  goals: z.record(z.string().regex(/^G\d+$/), GoalDefSchema),
+  /** Goal definitions keyed by id (G<number>, or R<number> for Rocks from Q4 2026). */
+  goals: z.record(z.string().regex(/^[GR]\d+$/), GoalDefSchema),
 });
 
 export type TelosMissionRef = z.infer<typeof MissionRefSchema>;
