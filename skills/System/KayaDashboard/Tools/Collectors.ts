@@ -476,8 +476,8 @@ export function projects(): {
   const links = [
     { name: "LucidTasks board", url: "http://127.0.0.1:7777", note: "tasks kanban + triage" },
     { name: "LifeOS dashboard", url: "http://127.0.0.1:31337", note: "habits, WIGs, leads" },
-    { name: "AppUsage dashboard", url: "http://127.0.0.1:7745", note: "media / screen time (G42)" },
-    { name: "EventScout", url: "http://127.0.0.1:4180", note: "community events (G43)" },
+    { name: "AppUsage dashboard", url: "http://127.0.0.1:7745", note: "media / screen time" },
+    { name: "EventScout", url: "http://127.0.0.1:4180", note: "community events" },
     { name: "RecipeIndex", url: "http://127.0.0.1:4181", note: "cooking" },
     { name: "Observability", url: "http://127.0.0.1:5173", note: "agent traces (if running)" },
   ];
