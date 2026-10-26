@@ -146,17 +146,18 @@ export function expandGoalIds(refs: string): string[] {
   const parts = refs.split(",").map((s) => s.trim());
 
   for (const part of parts) {
-    const rangeMatch = part.match(/G(\d+)\s*-\s*G(\d+)/);
+    const rangeMatch = part.match(/([GR])(\d+)\s*-\s*\1(\d+)/);
     if (rangeMatch) {
-      const start = parseInt(rangeMatch[1]);
-      const end = parseInt(rangeMatch[2]);
+      const prefix = rangeMatch[1];
+      const start = parseInt(rangeMatch[2]);
+      const end = parseInt(rangeMatch[3]);
       for (let i = start; i <= end; i++) {
-        ids.push(`G${i}`);
+        ids.push(`${prefix}${i}`);
       }
     } else {
-      const singleMatch = part.match(/G(\d+)/);
+      const singleMatch = part.match(/([GR])(\d+)/);
       if (singleMatch) {
-        ids.push(`G${singleMatch[1]}`);
+        ids.push(`${singleMatch[1]}${singleMatch[2]}`);
       }
     }
   }
