@@ -563,7 +563,7 @@ function computeStrategyFromLead(
 
   const target = 100;
 
-  if (typeof lead.target_reps_per_day === "number" && lead.target_reps_per_day > 0) {
+  if (typeof lead.target_reps_per_day === "number" && lead.target_reps_per_day > 0 && captureHabit) {
     const rawTarget = lead.target_reps_per_day;
     const { last7Avg } = helpers.computeReps(habitRows, captureHabit);
     const current = pctOfTarget(last7Avg, rawTarget);
@@ -573,7 +573,10 @@ function computeStrategyFromLead(
     };
   }
 
-  if (typeof lead.target_days_per_week === "number" && lead.target_days_per_week > 0) {
+  // captureHabit required: a days/week lead with no habit (Q4 S20 — manual
+  // capture) would score a fake 0% against an empty habit name. Falls through
+  // to the "no recognized target field" warning instead.
+  if (typeof lead.target_days_per_week === "number" && lead.target_days_per_week > 0 && captureHabit) {
     const rawTarget = lead.target_days_per_week;
     const { daysWithShowUp7d } = helpers.computeBinaryShowUp(habitRows, { habit: captureHabit });
     const current = pctOfTarget(daysWithShowUp7d, rawTarget);
@@ -654,7 +657,7 @@ export async function gatherStrategies(
 
     const strategies: BriefingData["strategies"] = [];
     for (const [goalId, goal] of Object.entries(wigStatus as Record<string, unknown>)) {
-      if (!/^G\d+$/.test(goalId) || typeof goal !== "object" || goal === null) continue;
+      if (!/^[GR]\d+$/.test(goalId) || typeof goal !== "object" || goal === null) continue;
       const g = goal as Record<string, unknown>;
 
       const leadsToProcess: WigLead[] = Array.isArray(g.leads)
