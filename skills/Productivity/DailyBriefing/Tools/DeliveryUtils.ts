@@ -22,7 +22,7 @@ import { sendVoiceBuffer } from "../../../Communication/Telegram/Tools/TelegramC
 import { buildSendMessageParams } from "../../../Communication/Telegram/Tools/TelegramFormatting.ts";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import { recordOutbound } from "../../../../lib/core/TelegramOutboundLedger.ts";
+import { recordOutbound, isTelegramPushEnabled } from "../../../../lib/core/TelegramOutboundLedger.ts";
 
 const KAYA_HOME = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
 const LIB_CORE = join(KAYA_HOME, "lib", "core");
@@ -166,6 +166,11 @@ export async function deliverVoiceToTelegram(
   audioPath: string,
   generate: (text: string, audioPath: string) => Promise<void> = generateVoice,
 ): Promise<void> {
+  if (!isTelegramPushEnabled()) {
+    console.log("Telegram push is off (notifications.telegramPush.enabled=false) — voice not sent");
+    return;
+  }
+
   try {
     await generate(text, audioPath);
 
@@ -279,6 +284,11 @@ export async function deliverTelegram(
   message: string,
   sendMessage: (message: string) => Promise<void> = sendTelegramMessage,
 ): Promise<void> {
+  if (!isTelegramPushEnabled()) {
+    console.log("Telegram push is off (notifications.telegramPush.enabled=false) — not sent");
+    return;
+  }
+
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
