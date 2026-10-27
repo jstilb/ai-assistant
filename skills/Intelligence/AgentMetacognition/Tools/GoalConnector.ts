@@ -48,7 +48,7 @@ export type GoalInferenceFn = (opts: InferenceOptions) => Promise<InferenceResul
 const CLAUDE_DIR = getKayaHome();
 const TELOS_DIR = path.join(CLAUDE_DIR, "USER", "TELOS");
 const MISSIONS_FILE = path.join(TELOS_DIR, "MISSIONS.md");
-const STRATEGIES_FILE = path.join(TELOS_DIR, "STRATEGIES.md");
+const STRATEGIES_FILE = path.join(TELOS_DIR, "LEAD-MEASURES.md");
 
 // ============================================================================
 // Types
