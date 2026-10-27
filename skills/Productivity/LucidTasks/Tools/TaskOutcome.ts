@@ -58,7 +58,7 @@ export type Outcome = z.infer<typeof OutcomeSchema>;
 export type OutcomeLink = z.infer<typeof OutcomeLinkSchema>;
 export type ForJmItem = z.infer<typeof ForJmItemSchema>;
 export const HEADLINE_TARGET = 140;
-export const HUMAN_CLOSE_ACTORS: ReadonlySet<string> = new Set(["board", "telegram"]);
+export const HUMAN_CLOSE_ACTORS: ReadonlySet<string> = new Set(["board", "telegram", "home"]);
 
 /** Never throws. null input -> {outcome:null}; bad JSON / schema -> {outcome:null, error}. */
 export function readOutcome(raw: string | null | undefined): { outcome: Outcome | null; error?: string } {

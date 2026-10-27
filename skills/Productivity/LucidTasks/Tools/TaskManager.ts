@@ -261,11 +261,11 @@ function buildCliOutcome(db: ReturnType<typeof getTaskDB>, task: Task, f: Outcom
   return serializeOutcome(outcomeFromFlags(f, f.forJm.length > 0 ? createForJmTasks(db, task, f.forJm) : []));
 }
 
-/** The CLI is never the board or Telegram: those actors skip the outcome gate, so refuse them here. */
+/** The CLI is never the board, Telegram or the home page: those actors skip the outcome gate, so refuse them here. */
 function refuseReservedActor(actor: string): void {
   if (!HUMAN_CLOSE_ACTORS.has(actor)) return;
   console.error(
-    `Error: --actor ${actor} is reserved for the board and Telegram; the CLI closes as an agent. ` +
+    `Error: --actor ${actor} is reserved for the board, Telegram and the LifeOS home; the CLI closes as an agent. ` +
       `Pass --outcome … --link … (or --no-artifact "<why>").`
   );
   process.exit(1);
