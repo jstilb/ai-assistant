@@ -4,7 +4,7 @@
  *
  * WHY THIS EXISTS: a blanket "stale after N days" rule is wrong for this
  * tree. Verified spread in USER/TELOS/: STATUS.md updates every few hours,
- * GOALS.md/STRATEGIES.md roll over roughly quarterly, CHALLENGES.md is a
+ * GOALS.md/LEAD-MEASURES.md roll over roughly quarterly, CHALLENGES.md is a
  * mid-quarter review (~2 months), and MISSIONS.md/BELIEFS.md/MODELS.md are
  * durable statements of intent that have not needed to change since
  * Jan-Feb — and SHOULDN'T be flagged as "stale" for that. A single N-day

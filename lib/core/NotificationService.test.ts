@@ -776,3 +776,37 @@ describe('Module exports', () => {
     expect(typeof module.escapeLegacyMarkdown).toBe('function');
   });
 });
+
+describe('Telegram push switch (notifications.telegramPush.enabled)', () => {
+  it('suppresses the send, logs it, and reports handled when the switch is off', async () => {
+    const { clearAllCaches } = await import('./ConfigLoader');
+    const settingsPath = join(scratchDir, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify({ notifications: { telegramPush: { enabled: false } } }));
+    writeFileSync(
+      join(scratchDir, 'secrets.json'),
+      JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+    );
+    clearAllCaches();
+
+    try {
+      const { createNotificationService } = await import('./NotificationService');
+      const mockFetch = mock(async () => ({ ok: true, status: 200 }));
+      globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+      const message = `Push-off probe ${Date.now()}`;
+      const delivered = await createNotificationService().notify(message, { channel: 'telegram', fallback: true });
+
+      expect(delivered).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+      const logPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
+      const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+      const entry = JSON.parse(lines[lines.length - 1]!);
+      expect(entry.message).toBe(message);
+      expect(entry.channel).toBe('telegram');
+      expect(entry.event).toBe('suppressed');
+    } finally {
+      rmSync(settingsPath, { force: true });
+      clearAllCaches();
+    }
+  });
+});

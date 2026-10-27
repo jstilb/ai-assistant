@@ -98,6 +98,8 @@ export interface AgendaOptions extends GcalCliDeps {
   calendars?: string[];
   /** --nocolor flag. Default true (every pre-S14 call site passed it). */
   nocolor?: boolean;
+  /** Extra agenda flags appended after the range (e.g. `--tsv`, `--nodeclined`) — argv entries, never shell-parsed. */
+  extraArgs?: string[];
 }
 
 /** Pure argv builder — exported so the shell-injection regression test can assert on it directly. */
@@ -106,6 +108,7 @@ export function buildAgendaArgs(start: string, end: string, opts: AgendaOptions 
   for (const cal of opts.calendars ?? []) args.push("--calendar", cal);
   args.push("agenda", start, end);
   if (opts.nocolor !== false) args.push("--nocolor");
+  args.push(...(opts.extraArgs ?? []));
   return args;
 }
 

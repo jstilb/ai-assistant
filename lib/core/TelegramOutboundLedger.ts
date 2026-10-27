@@ -34,6 +34,7 @@ import { existsSync, readFileSync, statSync, openSync, readSync, closeSync } fro
 import { join } from 'path';
 import { getKayaHome, assertNotLiveHomeUnderTest } from './KayaHome.ts';
 import { createAppendLog } from './AppendLog.ts';
+import { loadSettings } from './ConfigLoader.ts';
 
 export interface OutboundRecord {
   /** ISO timestamp of the send. */
@@ -101,6 +102,33 @@ export async function recordOutboundFromTelegramResponse(
     // Body unreadable/not-JSON — the send itself already succeeded upstream.
     console.error('[TelegramOutboundLedger] could not parse send response for ledger:', err);
   }
+}
+
+/**
+ * Push switch: settings.json `notifications.telegramPush.enabled`. Every
+ * Kaya-initiated (push) seam — the ones listed in this file's header, plus
+ * approvals.sendApprovalNudge() and DeliveryUtils voice delivery — checks it
+ * before calling the Bot API. Jm set it false on 2026-10-26 ("shut down all
+ * telegram messages"). Bot replies to Jm's own messages (TelegramBot
+ * ctx.reply, sendVoiceBuffer) are not pushes and are not gated.
+ *
+ * Read per call (ConfigLoader re-reads settings.json on mtime change), so a
+ * flip needs no restart. Unset → enabled. A settings load failure is logged
+ * and fails open, so a broken config can't silently swallow alerts. Lives
+ * here because every push seam already imports this module.
+ */
+export function isTelegramPushEnabled(): boolean {
+  let notifications: unknown;
+  try {
+    notifications = loadSettings().notifications;
+  } catch (err) {
+    console.error('[TelegramOutboundLedger] settings load failed — Telegram push stays enabled:', err);
+    return true;
+  }
+  if (typeof notifications !== 'object' || notifications === null) return true;
+  const push = (notifications as { telegramPush?: unknown }).telegramPush;
+  if (typeof push !== 'object' || push === null) return true;
+  return (push as { enabled?: unknown }).enabled !== false;
 }
 
 /** Read the tail of the ledger (bounded), newest entry LAST. */

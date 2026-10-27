@@ -61,7 +61,7 @@ import { join } from 'path';
 import { kayaHomePath, assertNotLiveHomeUnderTest } from './KayaHome';
 import { loadSettings as loadCanonicalSettings } from './ConfigLoader';
 import { createAppendLog } from './AppendLog.ts';
-import { recordOutboundFromTelegramResponse } from './TelegramOutboundLedger.ts';
+import { recordOutboundFromTelegramResponse, isTelegramPushEnabled } from './TelegramOutboundLedger.ts';
 
 // ============================================================================
 // Types
@@ -201,7 +201,7 @@ function getDefaultConfig(): NotificationConfig {
  * Log notification event
  */
 function logNotification(
-  event: 'sent' | 'failed' | 'queued' | 'retried',
+  event: 'sent' | 'failed' | 'queued' | 'retried' | 'suppressed',
   channel: string,
   message: string,
   error?: string
@@ -423,6 +423,14 @@ async function sendTelegram(
   config: NotificationConfig,
   options: NotifyOptions
 ): Promise<boolean> {
+  // Push switch off (settings.json notifications.telegramPush.enabled=false):
+  // record the message and report it handled, so it does not retry, fall
+  // back, dead-letter or replay later.
+  if (!isTelegramPushEnabled()) {
+    logNotification('suppressed', 'telegram', message, 'notifications.telegramPush.enabled=false');
+    return true;
+  }
+
   const secretsPath = kayaHomePath('secrets.json');
   if (!existsSync(secretsPath)) {
     logNotification('failed', 'telegram', message, 'secrets.json not found');

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, existsSync, readFileSync } from 'fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -13,7 +13,9 @@ import {
   recordOutboundFromTelegramResponse,
   findByMessageId,
   recentOutbound,
+  isTelegramPushEnabled,
 } from './TelegramOutboundLedger.ts';
+import { clearAllCaches } from './ConfigLoader.ts';
 
 let tempHome: string;
 const savedKayaHome = process.env.KAYA_HOME;
@@ -126,5 +128,24 @@ describe('hermetic guard', () => {
     delete process.env.KAYA_HOME;
     delete process.env.KAYA_DIR;
     expect(() => recordOutbound({ messageId: 1, source: 's', text: 't' })).toThrow(/hermetic-guard/);
+  });
+});
+
+describe('isTelegramPushEnabled', () => {
+  beforeEach(() => clearAllCaches());
+  afterEach(() => clearAllCaches());
+
+  it('is enabled when settings.json is absent', () => {
+    expect(isTelegramPushEnabled()).toBe(true);
+  });
+
+  it('is enabled when notifications.telegramPush is unset', () => {
+    writeFileSync(join(tempHome, 'settings.json'), JSON.stringify({ notifications: { quietHours: { enabled: true } } }));
+    expect(isTelegramPushEnabled()).toBe(true);
+  });
+
+  it('is disabled when notifications.telegramPush.enabled is false', () => {
+    writeFileSync(join(tempHome, 'settings.json'), JSON.stringify({ notifications: { telegramPush: { enabled: false } } }));
+    expect(isTelegramPushEnabled()).toBe(false);
   });
 });
