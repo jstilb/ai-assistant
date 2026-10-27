@@ -428,3 +428,12 @@ daemon.status.json
 # Scratch dumps: undo snapshots (4 MB index copies) and watch-later exports.
 .scratch/context-integrity/undo-*/
 .scratch/youtube-curation/assets/
+
+# Claude Code runtime state (2026-10-26 shared-tree sweep): written by the harness, not Kaya
+plugins/plugin-directory-cache-v2.json*
+plugins/store/
+plugins/synced/
+skills/synced/
+policy-limits.json
+policy-limits.json.stamp.json
+remote-settings.json
