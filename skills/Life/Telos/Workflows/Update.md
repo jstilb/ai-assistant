@@ -21,7 +21,7 @@ TELOS is {principal.name}'s life framework stored in `~/.claude/USER/TELOS/`. It
 - FRAMES.md - Mental frames and perspectives
 - MODELS.md - Mental models
 - NARRATIVES.md - Personal narratives
-- STRATEGIES.md - Strategies being employed
+- LEAD-MEASURES.md - Lead measures (S#) that drive the goals
 
 **Goals & Challenges:**
 - GOALS.md - Life goals
@@ -84,7 +84,7 @@ This is the main command you'll use. It takes three parameters:
 - PROBLEMS.md - Problems to solve
 - PROJECTS.md - Active projects
 - STATUS.md - Current state across life areas
-- STRATEGIES.md - Strategies being employed"`
+- LEAD-MEASURES.md - Lead measures (S#) that drive the goals"`
 
 ## View Recent TELOS Updates
 !`head -50 ~/.claude/USER/TELOS/updates.md`
@@ -171,7 +171,7 @@ Important lesson! I'll add that to FRAMES.md with proper formatting.
 
 ✅ Lesson recorded and backed up!
 
-This is especially relevant for system design and personal knowledge management. Should we also add this as a strategy to STRATEGIES.md?
+This is especially relevant for system design and personal knowledge management. Should we also add this as a strategy to LEAD-MEASURES.md?
 ```
 
 ## Example 3: Updating Beliefs

@@ -35,7 +35,7 @@ All files located in `~/.claude/USER/TELOS/`:
 - **FRAMES.md** - Mental frames and perspectives
 - **MODELS.md** - Mental models used for decision-making
 - **NARRATIVES.md** - Personal narratives and self-stories
-- **STRATEGIES.md** - Strategies being employed in life
+- **LEAD-MEASURES.md** - Strategies being employed in life
 
 ### Goals & Challenges
 - **GOALS.md** - Life goals (short-term and long-term)
@@ -126,7 +126,7 @@ Build relationship graph:
 ## Common Project TELOS Files
 
 ### Context Files
-- **OVERVIEW.md**, **COMPANY.md**, **PROBLEMS.md**, **GOALS.md**, **MISSION.md**, **STRATEGIES.md**, **PROJECTS.md**
+- **OVERVIEW.md**, **COMPANY.md**, **PROBLEMS.md**, **GOALS.md**, **MISSION.md**, **LEAD-MEASURES.md**, **PROJECTS.md**
 
 ### Operational Files
 - **EMPLOYEES.md**, **ENGINEERING_TEAMS.md**, **BUDGET.md**, **KPI_TRACKING.md**, **APPLICATIONS.md**, **TOOLS.md**, **VENDORS.md**

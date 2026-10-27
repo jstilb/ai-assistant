@@ -232,7 +232,7 @@ function generateRecommendations(sourceDir: string): Recommendation[] {
   const recommendations: Recommendation[] = [];
   let recId = 1;
 
-  const strategyFiles = ['STRATEGIES.md', 'SOLUTIONS.md', 'RECOMMENDATIONS.md', 'ACTIONS.md'];
+  const strategyFiles = ['LEAD-MEASURES.md', 'SOLUTIONS.md', 'RECOMMENDATIONS.md', 'ACTIONS.md'];
 
   for (const filename of strategyFiles) {
     const content = readMarkdownFile(sourceDir, filename);
@@ -385,7 +385,7 @@ function generateNarrative(sourceDir: string, narrativeFile?: string): Narrative
   const missionContent = readMarkdownFile(sourceDir, 'MISSION.md');
   const goalsContent = readMarkdownFile(sourceDir, 'GOALS.md');
   const problemsContent = readMarkdownFile(sourceDir, 'PROBLEMS.md');
-  const strategiesContent = readMarkdownFile(sourceDir, 'STRATEGIES.md');
+  const strategiesContent = readMarkdownFile(sourceDir, 'LEAD-MEASURES.md');
   const visionContent = readMarkdownFile(sourceDir, 'VISION.md');
 
   const goals = extractBulletPoints(goalsContent);

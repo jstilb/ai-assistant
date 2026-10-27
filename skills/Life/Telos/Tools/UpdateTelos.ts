@@ -24,7 +24,7 @@
  * - PROBLEMS.md - Problems to solve
  * - PROJECTS.md - Active projects
  * - STATUS.md - Current state across life areas
- * - STRATEGIES.md - Strategies being employed
+ * - LEAD-MEASURES.md - Lead measures (S#) that drive the goals
  */
 
 import { readFileSync, writeFileSync, copyFileSync, existsSync, renameSync } from 'fs';
@@ -49,7 +49,7 @@ if (!existsSync(TELOS_DIR)) {
 const VALID_FILES = [
   'BELIEFS.md', 'CHALLENGES.md', 'FRAMES.md', 'GOALS.md', 'MISSIONS.md',
   'MODELS.md', 'NARRATIVES.md', 'PROBLEMS.md', 'PROJECTS.md', 'STATUS.md',
-  'STRATEGIES.md'
+  'LEAD-MEASURES.md'
 ];
 
 const MAX_CONTENT_LENGTH = 10_000;
