@@ -96,7 +96,7 @@ known, auditable number of points (`Tools/Points.ts`, weights in `config/rewards
 | Source | What pays | Read from |
 |--------|-----------|-----------|
 | LucidTasks | each `done` task: P1 15 · P2 10 · P3 5, +2 per 30 min estimate (max +8), +5 if goal-linked. `autonomous`/`drop` dispositions excluded (agent work isn't Jm's) | `lucidtasks.db` (read-only) |
-| Habits | per `habit_log` item: leads weighted highest (S13 phone reps 2/rep up to 8, S14/S15 8, S16 6, S18 build 12, S17 community event 15/event), rehab/workout 10, maintenance 3–5 | `lifeos.db` habit_log (read-only, aliases folded) |
+| Habits | per `habit_log` item: rehab/workout 10, maintenance 3–5 (the Q3 lead items S13–S18 were removed 2026-10-26; Q4 leads have no items yet) | `lifeos.db` habit_log (read-only, aliases folded) |
 | Routines | `points check "<item>"` against Daily/Weekly Behaviors rows; mapped rows use the item's weight, others 3 | the two Behaviors notes + `routine-checks.jsonl` |
 
 **Bonuses** (per item, opt-in via `bonuses`):
