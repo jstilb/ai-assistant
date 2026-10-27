@@ -346,7 +346,7 @@ export function keyContext(): { files: KeyFile[]; memory: { file: string; title:
     ["USER/TELOS/STATUS.md", "TELOS status", "TELOS"],
     ["USER/TELOS/MISSIONS.md", "Missions", "TELOS"],
     ["USER/TELOS/GOALS.md", "Goals", "TELOS"],
-    ["USER/TELOS/STRATEGIES.md", "Strategies", "TELOS"],
+    ["USER/TELOS/LEAD-MEASURES.md", "Lead Measures", "TELOS"],
     ["USER/TELOS/CHALLENGES.md", "Challenges", "TELOS"],
     ["USER/TELOS/PROJECTS.md", "Projects", "TELOS"],
     ["context/CalendarContext.md", "Calendar context", "Live"],
