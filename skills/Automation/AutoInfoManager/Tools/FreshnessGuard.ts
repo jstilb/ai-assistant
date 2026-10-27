@@ -1006,7 +1006,7 @@ if (import.meta.main) {
     // AlertGate page above handled the announcement — exit 1 here made
     // FailStreak/cron-health/incident-triage classify each detection as a
     // 'bug' and page the same incident two more times (observed 2026-08-05
-    // → 08-07 on USER/TELOS/STRATEGIES.md). A crash still exits 1 below.
+    // → 08-07 on USER/TELOS/LEAD-MEASURES.md). A crash still exits 1 below.
     process.exit(DETECTION_EXIT_CODE);
   } catch (err) {
     console.error("[FreshnessGuard] Fatal error:", err instanceof Error ? err.message : String(err));
