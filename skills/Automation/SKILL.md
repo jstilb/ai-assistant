@@ -14,6 +14,7 @@ System automation and orchestration — covering autonomous work execution, inte
 | **AutoInfoManager** | daily upkeep, autoinfo, scratchpad processing, inbox triage schedule, context digests, vault map refresh, freshness sentinel, or context staleness alerts | `Automation/AutoInfoManager/SKILL.md` |
 | **AutoMaintenance** | maintenance daily, maintenance weekly, maintenance monthly, system health, automated cleanup, cron scheduling, system integrity, security audit, log cleanup, workspace cleanup, kaya health, auto-remediation, gap detection | `Automation/AutoMaintenance/SKILL.md` |
 | **AutonomousWork** | work start, work status, work next, autonomous task execution, pick up from queue | `Automation/AutonomousWork/SKILL.md` |
+| **Handoff** | handoff, hand off, context budget, contextbudgetguard note, continue in a new session, fresh session, session at 40 percent, context at 50 percent | `Automation/Handoff/SKILL.md` |
 | **ProactiveEngine** | scheduling proactive tasks, setting up cron jobs, creating proactive behaviors, evening summaries, periodic checks, or managing automated outreach | `Automation/ProactiveEngine/SKILL.md` |
 | **QueueRouter** | queue task, queue add, queue list, route task, approval queue, approved-work queue, background queue, process queue, queue status, promote queue, spec pipeline, context gathering, reject spec, pipeline status | `Automation/QueueRouter/SKILL.md` |
 
