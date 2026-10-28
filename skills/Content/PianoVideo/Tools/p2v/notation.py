@@ -13,6 +13,18 @@ import numpy as np
 from .arrange import Note
 from .meter import Grid
 
+# Onset snapping per path and note role (DESIGN.md §17). The pipeline passes ROLE_PENALTY[source] to
+# build_score: a role named there snaps with its own fine_penalty instead of build_score's. 0.5 = the
+# tatum only: a sung lead's onsets scatter around the beat (loose timing, SOME's ornaments), and an
+# eighth-only lead matched the reference melodies' written lengths best on the bank's tune half.
+# Not for a lead note from the band's line (`Note.hook`, §28): `role_pen` gives it no role penalty, so
+# a riff keeps its 16ths (and the beat lattice) as the piano part does; it is still "lead" everywhere else.
+ROLE_PENALTY: dict[str, dict[str, float]] = {"hybrid": {"lead": 0.5}, "arrange": {"lead": 0.5}}
+TATUM_ONLY = 0.5  # a role penalty this high never takes the 16th: such a role's note ends snap to the tatum too
+# LEAD_VOICE: a hand that holds lead notes and other notes is written in two voices, the lead (stems
+# up) over the rest (stems down), so the accompaniment's onsets do not cut a held melody note.
+LEAD_VOICE = True
+
 
 @dataclass(frozen=True)
 class QEvent:
@@ -20,6 +32,112 @@ class QEvent:
     offset: float
     dur: float
     pitches: tuple[int, ...]
+
+
+# Written onsets by beat (DESIGN.md §26). In a simple meter, each hand's onsets in one beat (chords within
+# CHORD_TOL count once) go onto ONE lattice of that beat: eighths, 16ths, triplet eighths or sextuplets, in
+# order and on distinct points (two onsets on one point would merge into one chord, so a beat with five or six
+# notes cannot be 16ths). Cost of a lattice: squared distances / LATTICE_SIGMA^2 (beats), + LATTICE_MERGE for
+# each onset that does share the previous one's point (a melody note played before its chord), + the
+# lattice's penalty. One beat alone is weak evidence (a melody eighth played early at a third of the beat
+# reads as a triplet), and tuplets come in runs, so the hand's beats are decided together: a Viterbi path over
+# its beats, LATTICE_SWITCH for each change between the duple and the triple lattices; a beat with onsets on
+# the beat only costs nothing. Every lattice also holds the next beat (1.0: a downbeat played early). A beat
+# the path writes duple keeps the per-note snap (snap_notes: its eighth bias reads better on sung songs'
+# piano), so only tuplet beats change. Chosen on the bank's tune half with perfect beats (s12/qeval.py).
+LATTICE_SIGMA = 0.06
+LATTICE_MERGE = 3.0
+LATTICE_SWITCH = 8.0
+LATTICES: tuple[tuple[tuple[float, ...], float], ...] = (
+    ((0.0, 0.5), 0.0),                       # eighths
+    ((0.0, 0.25, 0.5, 0.75), 1.0),           # 16ths
+    ((0.0, 1 / 3, 2 / 3), 3.0),              # triplet eighths
+    (tuple(k / 6 for k in range(6)), 10.0),  # sextuplets
+)
+BY_BEAT = True  # read at call time: bank --set sweeps it
+
+
+def fit_lattice(f: np.ndarray, pts, sigma: float | None = None, merge: float | None = None) -> tuple[float, np.ndarray]:
+    """Sorted beat phases f onto the sorted lattice points `pts`, keeping their order: (cost, point per phase).
+    Cost = squared distance / sigma^2, + `merge` for each phase on the same point as the phase before it."""
+    sigma = LATTICE_SIGMA if sigma is None else sigma
+    merge = LATTICE_MERGE if merge is None else merge
+    pts = np.asarray(pts, dtype=float)
+    k, m = len(f), len(pts)
+    c = (np.asarray(f, dtype=float)[:, None] - pts[None, :]) ** 2 / sigma ** 2
+    best = np.full((k, m), np.inf)
+    arg = np.zeros((k, m), dtype=int)
+    best[0] = c[0]
+    for i in range(1, k):
+        prev = best[i - 1]
+        lower = np.r_[np.inf, np.minimum.accumulate(prev)[:-1]]  # the best earlier point
+        lower_arg = np.r_[0, [int(np.argmin(prev[:j])) for j in range(1, m)]]
+        same = prev + merge
+        take = same < lower
+        best[i] = c[i] + np.where(take, same, lower)
+        arg[i] = np.where(take, np.arange(m), lower_arg)
+    j = int(np.argmin(best[k - 1]))
+    cost, out = float(best[k - 1, j]), np.zeros(k)
+    for i in range(k - 1, -1, -1):
+        out[i] = pts[j]
+        j = int(arg[i, j])
+    return cost, out
+
+
+def onsets_by_beat(q_pos, starts, beat_q: float, keep=None) -> tuple[np.ndarray, dict[int, int]]:
+    """One hand's written onsets (quarters) by beat (LATTICES), and per beat index the chosen lattice's
+    points per beat. An onset belongs to the beat it is in, or to the next one within a 12th of it. With
+    `keep` (written onsets, one per note), a beat on a duple lattice keeps those: only tuplet beats change."""
+    from .arrange import CHORD_TOL
+    q, t = np.asarray(q_pos, dtype=float), np.asarray(starts, dtype=float)
+    out = np.zeros(len(q))
+    sizes: dict[int, int] = {}
+    groups: list[list[int]] = []
+    for i in np.argsort(t, kind="stable"):
+        if groups and t[i] - t[groups[-1][0]] <= CHORD_TOL:
+            groups[-1].append(int(i))
+        else:
+            groups.append([int(i)])
+    if not groups:
+        return out, sizes
+    gp = np.array([np.mean(q[g]) for g in groups]) / beat_q
+    beat = np.floor(gp + 1 / 12).astype(int)
+    beats = np.unique(beat)
+    phases = []
+    cost = np.zeros((len(beats), len(LATTICES)))
+    for r, b in enumerate(beats):
+        sel = np.flatnonzero(beat == b)
+        sel = sel[np.argsort(gp[sel], kind="stable")]
+        f = gp[sel] - b
+        phases.append((sel, f))
+        if np.any(np.abs(f) > LATTICE_SIGMA):
+            cost[r] = [fit_lattice(f, (*pts, 1.0))[0] + pen for pts, pen in LATTICES]
+        else:  # onsets on the beat only: no evidence, but a tuplet lattice still costs its penalty
+            cost[r] = [pen for _, pen in LATTICES]
+    triple = np.array([len(pts) % 3 == 0 for pts, _ in LATTICES])
+    switch = np.where(triple[:, None] != triple[None, :], LATTICE_SWITCH, 0.0)
+    total, back = cost[0] + np.where(triple, LATTICE_SWITCH, 0.0), []  # the path starts duple
+    for r in range(1, len(beats)):
+        step = total[:, None] + switch
+        back.append(step.argmin(axis=0))
+        total = step.min(axis=0) + cost[r]
+    path = [int(total.argmin())]
+    for arg in reversed(back):
+        path.append(int(arg[path[-1]]))
+    for (sel, f), b, k in zip(phases, beats, path[::-1]):
+        pts = LATTICES[k][0]
+        _, pos = fit_lattice(f, (*pts, 1.0))  # 1.0: the next beat, played early
+        sizes[int(b)] = len(pts) if np.any(np.abs(f) > LATTICE_SIGMA) else 2  # onsets on the beat only: no tuplet there
+        for s, x in zip(sel, pos):
+            out[groups[s]] = (b + x) * beat_q if keep is None or sizes[int(b)] % 3 == 0 else np.asarray(keep)[groups[s]]
+    return out, sizes
+
+
+def role_pen(n: Note, role_penalty: dict[str, float] | None) -> float | None:
+    """The note's own snap penalty from `role_penalty`, or None (the score's): a role not named there,
+    or a lead note from the band's line (`Note.hook`). A riff's 16ths are real, a singer's are loose
+    timing: T5 melody written length 0.05 -> 0.37 / 0.10 -> 0.52 (tune / check, DESIGN.md §28)."""
+    return None if n.hook else (role_penalty or {}).get(n.role)
 
 
 def snap_onsets(q_pos, step: float, fine_penalty: float = 0.0) -> np.ndarray:
@@ -30,9 +148,22 @@ def snap_onsets(q_pos, step: float, fine_penalty: float = 0.0) -> np.ndarray:
     return np.where(np.abs(p - half) + fine_penalty < np.abs(p - whole), half, whole) * step
 
 
+def snap_notes(notes: list[Note], sec_to_q, tatum: float, fine_penalty: float | None = None,
+               role_penalty: dict[str, float] | None = None) -> np.ndarray:
+    """Written onsets (quarters) of `notes`: on a grid of tatum/2, or of the tatum unless clearly
+    between two (`fine_penalty`, per role through `role_penalty`; snap_onsets)."""
+    raw = np.asarray(sec_to_q([n.start for n in notes]), dtype=float)
+    pen = [fine_penalty if (p := role_pen(n, role_penalty)) is None else p for n in notes]
+    fine = np.round(raw / (tatum / 2)) * (tatum / 2)
+    if all(p is None for p in pen):
+        return fine
+    return np.where([p is None for p in pen], fine, snap_onsets(raw, tatum, np.array([p or 0.0 for p in pen])))
+
+
 def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty: float | None = None,
                   beat_q: float | None = None, beat_onsets: set[float] | None = None,
-                  min_len: float | None = None) -> list[QEvent]:
+                  min_len: float | None = None, role_penalty: dict[str, float] | None = None,
+                  lead_mono: bool = False) -> list[QEvent]:
     """Snap onsets/durations to a `step`-quarter grid and turn the hand into a
     sequence of non-overlapping chords (a held note is cut at the next onset —
     readable notation beats perfect sustain fidelity for a learning score).
@@ -42,24 +173,55 @@ def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty:
     starts a note), a note that starts off the beat ends at the next beat when something starts
     there: the texture moved on, and the pedal, not the finger, holds it. With `min_len`, a
     note is written at least that long unless the hand's next note comes sooner: a short,
-    detached chord reads as an eighth, not as a 16th and a dotted-eighth rest."""
+    detached chord reads as an eighth, not as a 16th and a dotted-eighth rest. `role_penalty`
+    (role -> fine_penalty) snaps those roles' onsets with their own penalty; with `lead_mono`, two
+    lead notes on one written onset keep only the longer (in seconds). In a simple meter (`beat_q`
+    = 4 steps) the onsets of notes without a role penalty are written by beat (`onsets_by_beat`); in a
+    beat written in thirds (sixths), ends snap to thirds (sixths) of the beat, the shortest length is a third
+    (a sixth) and `min_len` becomes a third of the beat."""
     if not notes:
         return []
     q = step
-    raw = sec_to_q([n.start for n in notes])
-    starts = np.round(raw / q) * q if fine_penalty is None else snap_onsets(raw, 2 * q, fine_penalty)
-    ends = np.round(sec_to_q([n.end for n in notes]) / q) * q
+    starts = snap_notes(notes, sec_to_q, 2 * q, fine_penalty, role_penalty)
+    coarse = np.array([(role_pen(n, role_penalty) or 0.0) >= TATUM_ONLY for n in notes])
+    raw_end = np.asarray(sec_to_q([n.end for n in notes]), dtype=float)
+    ends = np.where(coarse, np.round(raw_end / (2 * q)) * 2 * q, np.round(raw_end / q) * q)
+    tuplet: dict[int, int] = {}  # beat index -> 3 or 6: the beats written in thirds or sixths
+    by_beat = [i for i, n in enumerate(notes) if role_pen(n, role_penalty) is None]
+    if BY_BEAT and beat_q and abs(beat_q - 4 * q) < 1e-9 and by_beat:
+        starts = np.asarray(starts, dtype=float).copy()
+        w, sizes = onsets_by_beat(sec_to_q([notes[i].start for i in by_beat]), [notes[i].start for i in by_beat], beat_q,
+                                  starts[by_beat])
+        starts[by_beat] = w
+        tuplet = {b: k for b, k in sizes.items() if k % 3 == 0}
+        for i in by_beat:
+            if k := tuplet.get(int(np.floor(raw_end[i] / beat_q + 1 / 12)), 0):
+                ends[i] = np.round(raw_end[i] / (beat_q / k)) * (beat_q / k)
+    in_tuplet = lambda s: tuplet.get(int(np.floor(s / beat_q + 1 / 12)), 0) if tuplet else 0  # noqa: E731
+    shortest = lambda s: beat_q / in_tuplet(s) if in_tuplet(s) else q  # noqa: E731
+    if lead_mono:
+        best: dict[float, int] = {}
+        for i, (n, s) in enumerate(zip(notes, starts)):
+            k = round(max(float(s), 0.0), 6)
+            if n.role == "lead" and (k not in best or n.dur > notes[best[k]].dur):
+                best[k] = i
+        keep = [n.role != "lead" or best[round(max(float(s), 0.0), 6)] == i for i, (n, s) in enumerate(zip(notes, starts))]
+        notes, starts, ends = [n for n, k in zip(notes, keep) if k], starts[keep], ends[keep]
     groups: dict[float, list[tuple[int, float]]] = {}
     for n, s, e in zip(notes, starts, ends):
         s = max(float(s), 0.0)
-        groups.setdefault(s, []).append((n.pitch, max(float(e) - s, q)))
+        groups.setdefault(s, []).append((n.pitch, max(float(e) - s, shortest(s))))
     onsets = sorted(groups)
     events = []
     for i, s in enumerate(onsets):
         pitches = tuple(sorted({p for p, _ in groups[s]}))
         dur = max(d for _, d in groups[s])
         if min_len:
-            dur = max(dur, min_len)
+            dur = max(dur, beat_q / 3 if in_tuplet(s) else min_len)
+        if k := in_tuplet(s + dur):  # a minimum length can end on a 16th inside a tuplet beat: end at its beat line
+            e, b = s + dur, int(np.floor((s + dur) / beat_q + 1 / 12))
+            if abs(e * k / beat_q - round(e * k / beat_q)) > 1e-6 and b * beat_q > s + 1e-9:
+                dur = b * beat_q - s
         if i + 1 < len(onsets):
             dur = min(dur, onsets[i + 1] - s)
         if beat_q and beat_onsets is not None and (s / beat_q) % 1.0 > 1e-6:
@@ -83,14 +245,6 @@ def spell(midi: int, sharps: int):
     if p.accidental is not None and p.accidental.name == "flat" and sharps > 0:
         p = p.getEnharmonic()
     return p
-
-
-def detect_key(notes: list[Note]):
-    from music21 import note, stream
-    s = stream.Stream()
-    for n in notes:
-        s.append(note.Note(n.pitch, quarterLength=max(0.25, min(n.dur * 2, 4.0))))
-    return s.analyze("key")
 
 
 def tempo_text(grid: Grid, bpm: float | None = None) -> str:
@@ -122,6 +276,7 @@ def tempo_marks(grid: Grid, change: float = 0.10, hold: int = 4, gap: int = 8) -
 
 KS_MAJOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
 KS_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+KEY_MARGIN = 0.1  # key_plan: how much better (share of the notes inside the signature) another one must fit
 
 
 def signature_scores(hist: np.ndarray) -> dict[int, float]:
@@ -139,23 +294,68 @@ def signature_scores(hist: np.ndarray) -> dict[int, float]:
     return out
 
 
+MAJOR_SET = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1], dtype=float)  # the 7 notes of a major scale
+
+
+def signature_fit(hist: np.ndarray) -> dict[int, float]:
+    """Share of a pitch-class histogram inside each key signature's 7 notes (sharps -5..6). A key
+    signature is a set of notes, whatever the mode: dorian or mixolydian songs need no special case
+    (bank, 22 songs with a reference key: 20 right vs 18 for the Krumhansl fit, 14 for music21's; DESIGN.md §16)."""
+    tot = float(np.sum(hist))
+    if tot <= 0:
+        return {}
+    out = {}
+    for tonic in range(12):
+        s = (tonic * 7) % 12
+        out[s - 12 if s > 6 else s] = float(np.dot(hist, np.roll(MAJOR_SET, tonic))) / tot
+    return out
+
+
+def _weights(notes: list[Note]) -> tuple[np.ndarray, np.ndarray]:
+    return np.array([n.pitch % 12 for n in notes]), np.array([min(n.end - n.start, 2.0) for n in notes])
+
+
+def best_signature(hist: np.ndarray) -> int | None:
+    """The signature with the best diatonic fit; a tie (both F and F# absent) goes to the Krumhansl fit."""
+    fit = signature_fit(hist)
+    if not fit:
+        return None
+    top = max(round(v, 9) for v in fit.values())
+    tied = [s for s, v in fit.items() if round(v, 9) == top]
+    if len(tied) == 1:
+        return tied[0]
+    ks = signature_scores(hist)
+    return max(tied, key=lambda s: ks.get(s, -1.0))
+
+
+def piece_key(notes: list[Note]) -> int:
+    """The piece's key signature (sharps) from all its notes, weighted by length (at most 2 s)."""
+    if not notes:
+        return 0
+    pcs, w = _weights(notes)
+    best = best_signature(np.bincount(pcs, weights=w, minlength=12))
+    return 0 if best is None else best
+
+
 def key_plan(notes: list[Note], grid: Grid, sharps: int, window: int = 4, run: int = 8,
-             margin: float = 0.1) -> list[tuple[float, int]]:
+             margin: float = KEY_MARGIN) -> list[tuple[float, int]]:
     """(score offset, sharps) for each key signature, starting with the piece's key. Each bar is
-    scored over +-`window` bars (pitch classes weighted by length); the signature changes only
-    where another one fits better by `margin` for `run` bars in a row, at the first of them —
-    a passing chromatic stretch (Connections' 5 bars leaning to D major near the end) stays in
-    the home key. Measured on Connections, Starlight and Viva la FAI: no changes."""
+    scored over +-`window` bars (pitch classes weighted by length, `signature_fit`, the scorer of
+    `piece_key`); the signature changes only where another one fits better by `margin` for `run`
+    bars in a row, at the first of them — a passing chromatic stretch (Connections' 5 bars leaning
+    to D major near the end) stays in the home key. Margin 0.1 (a share of the notes): no key change
+    on any of the 22 pop songs of the bank (Connections, Starlight and Viva la FAI included); 0.05
+    adds one on a T1 cover (DESIGN.md §16)."""
     if not notes:
         return [(0.0, sharps)]
     bars = np.floor(grid.sec_to_q([n.start for n in notes]) / grid.bar_q).astype(int)
-    weight = np.array([min(n.end - n.start, 2.0) for n in notes])
-    pcs = np.array([n.pitch % 12 for n in notes])
+    pcs, weight = _weights(notes)
     plan, cur, streak, cand = [(0.0, sharps)], sharps, 0, None
     for b in range(max(0, int(bars.min())), int(bars.max()) + 1):
         m = (bars >= b - window + 1) & (bars <= b + window)
-        sc = signature_scores(np.bincount(pcs[m], weights=weight[m], minlength=12)) if m.sum() >= 8 else {}
-        best = max(sc, key=sc.get) if sc else cur
+        hist = np.bincount(pcs[m], weights=weight[m], minlength=12) if m.sum() >= 8 else None
+        sc = signature_fit(hist) if hist is not None else {}
+        best = best_signature(hist) if sc else cur
         if best != cur and sc.get(best, 0.0) - sc.get(cur, -1.0) >= margin:
             streak, cand = (streak + 1, cand) if best == cand else (1, best)
             if streak == run:
@@ -171,14 +371,14 @@ def sharps_at(plan: list[tuple[float, int]], q: float) -> int:
     return next(s for off, s in reversed(plan) if off <= q + 1e-9)
 
 
-def lead_in(notes: list[Note], grid: Grid, fine_penalty: float | None = 0.15) -> float:
+def lead_in(notes: list[Note], grid: Grid, fine_penalty: float | None = 0.15,
+            role_penalty: dict[str, float] | None = None) -> float:
     """Whole bars (in quarters) before the bar of these notes' first onset. The grid's bar 0 holds
     the source's first note, which a variant may not play (Connections' `piano/lead` opened with an
     empty bar: the first note is a left-hand F#3); the score drops those bars."""
     if not notes:
         return 0.0
-    q = grid.sec_to_q([min(n.start for n in notes)])
-    first = float(snap_onsets(q, grid.tatum_q, fine_penalty or 0.0)[0])
+    first = float(np.min(snap_notes(notes, grid.sec_to_q, grid.tatum_q, fine_penalty, role_penalty)))  # as written
     return max(0.0, float(np.floor(first / grid.bar_q + 1e-9)) * grid.bar_q)
 
 
@@ -190,7 +390,8 @@ def _from(plan: list[tuple[float, float]], shift: float) -> list[tuple[float, fl
 
 def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float | None = 0.15,
                 release_on_beat: bool = True, min_tatum: bool = True,
-                keys: list[tuple[float, int]] | None = None, chords: list | None = None):
+                keys: list[tuple[float, int]] | None = None, chords: list | None = None,
+                role_penalty: dict[str, float] | None = None):
     """Grand staff on the grid. Onsets snap to the tatum (eighth) unless clearly between two
     (`fine_penalty`), and an off-beat note ends at a beat where anything starts (`release_on_beat`).
     On Connections (Starlight's intro unchanged) the two together took written-length agreement
@@ -199,18 +400,21 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
     either reference, and Viva la FAI's detached chords went from 54% to 39% shorter than an
     eighth (its loosely timed off-beats keep the rest). Score offsets are the grid's minus
     `lead_in` (whole empty bars before the first note). `chords` (chords.Chord, grid quarters) are
-    written as chord symbols above the treble staff, spelled for the key in force."""
+    written as chord symbols above the treble staff, spelled for the key in force. `role_penalty`
+    (role -> fine_penalty, the pipeline's ROLE_PENALTY[source]) snaps those roles their own way; two
+    lead notes on one written onset keep the longer; with LEAD_VOICE a hand with lead and other notes
+    gets two voices (DESIGN.md §17)."""
     from music21 import chord, clef, harmony, key, layout, meter, metadata, note, stream, tempo
 
     step = grid.tatum_q / 2
-    shift = lead_in(notes, grid, fine_penalty)
+    lead_voice = LEAD_VOICE  # read at call time: bank --set sweeps it
+    shift = lead_in(notes, grid, fine_penalty, role_penalty)
     sec_to_q = lambda t: grid.sec_to_q(t) - shift  # noqa: E731
     beat_onsets = None
     if release_on_beat and notes:
-        raw = sec_to_q([n.start for n in notes])
-        pos = np.round(raw / step) * step if fine_penalty is None else snap_onsets(raw, grid.tatum_q, fine_penalty)
+        pos = snap_notes(notes, sec_to_q, grid.tatum_q, fine_penalty, role_penalty)
         beat_onsets = {round(float(p), 6) for p in pos if (p / grid.beat_q) % 1.0 < 1e-6}
-    keys = _from(keys or key_plan(notes, grid, detect_key(notes).sharps if notes else 0), shift)
+    keys = _from(keys or key_plan(notes, grid, piece_key(notes)), shift)
     score = stream.Score()
     score.insert(0, metadata.Metadata(title=title, composer="transcribed by Kaya piano2video"))
     parts = []
@@ -230,31 +434,81 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
             from .chords import KINDS
             for c in chords or []:
                 off = c.start_q - shift
-                if c.root is not None and off >= -1e-6:
+                if c.root is not None and c.end_q - shift > 1e-6:  # one still sounding at the first bar: its symbol there (§19)
                     sh = sharps_at(keys, max(off, 0.0))
                     bass = None if c.bass is None else spell(48 + c.bass, sh)
                     p.insert(max(off, 0.0), harmony.ChordSymbol(root=spell(60 + c.root, sh), kind=KINDS[c.quality],
                                                                 bass=bass))
-        for ev in quantize_hand([n for n in notes if n.hand == hand], sec_to_q, step, fine_penalty,
-                                grid.beat_q, beat_onsets, grid.tatum_q if min_tatum else None):
-            ps = [spell(m, sharps_at(keys, ev.offset)) for m in ev.pitches]
-            el = note.Note(ps[0]) if len(ps) == 1 else chord.Chord(ps)
-            el.quarterLength = ev.dur
-            p.insert(ev.offset, el)
+        hn = [n for n in notes if n.hand == hand]
+        lead = [n for n in hn if n.role == "lead"]
+        voices = [lead, [n for n in hn if n.role != "lead"]] if lead_voice and 0 < len(lead) < len(hn) else [hn]
+        for k, vn in enumerate(voices):
+            two = len(voices) > 1
+            target = stream.Voice() if two else p
+            for ev in quantize_hand(vn, sec_to_q, step, fine_penalty, grid.beat_q, beat_onsets,
+                                    grid.tatum_q if min_tatum else None, role_penalty, lead_mono=True):
+                ps = [spell(m, sharps_at(keys, ev.offset)) for m in ev.pitches]
+                el = note.Note(ps[0]) if len(ps) == 1 else chord.Chord(ps)
+                el.quarterLength = ev.dur
+                if two:
+                    el.stemDirection = "up" if k == 0 else "down"
+                target.insert(ev.offset, el)
+            if two:
+                target.id = str(k + 1)
+                p.insert(0, target)
         parts.append(p)
     # visible rests in every gap, up to the end of the last bar: left to the exporter, music21
-    # fills gaps with hidden rests and the PDF shows blank space a beginner can't count
+    # fills gaps with hidden rests and the PDF shows blank space a beginner can't count. Two voices:
+    # the lead voice's rests show, the lower voice's are hidden (the lead voice already counts the bar)
     end = float(np.ceil(max(p.highestTime for p in parts) / grid.bar_q - 1e-9) * grid.bar_q)
     for p in parts:
-        p.makeRests(refStreamOrTimeRange=[0.0, end], fillGaps=True, inPlace=True, hideRests=False)
+        for k, v in enumerate(list(p.voices) or [p]):
+            v.makeRests(refStreamOrTimeRange=[0.0, end], fillGaps=True, inPlace=True, hideRests=k > 0)
+            split_at_beats(v, grid.beat_q)
         score.insert(0, p)
     score.insert(0, layout.StaffGroup(parts, name="Piano", symbol="brace"))
     return score
 
 
+def split_at_beats(v, beat_q: float) -> None:
+    """A note, chord or rest that starts or ends off the 16th grid (a tuplet point) and runs across a beat
+    line is cut at the beat lines next to its ends, notes tied: one 7/12- or 5/6-quarter element was engraved
+    as a 12:7 or 6:5 tuplet (makeRests filled such gaps; a note held from a 16th into a triplet beat made
+    one, and it broke the tuplets after it). Elements on the 16th grid stay whole."""
+    off16 = lambda x: abs(x * 4 - round(x * 4)) > 1e-6  # noqa: E731
+    for el in list(v.notesAndRests):
+        a, b = float(el.offset), float(el.offset + el.quarterLength)
+        cuts = []
+        if off16(a):
+            cuts.append(float(np.ceil(a / beat_q + 1e-6) * beat_q))
+        if off16(b):
+            cuts.append(float(np.floor(b / beat_q - 1e-6) * beat_q))
+        cuts = sorted({c for c in cuts if a + 1e-6 < c < b - 1e-6})
+        if not cuts:
+            continue
+        v.remove(el)
+        for c in cuts:
+            left, el = el.splitAtQuarterLength(c - a)
+            v.insert(a, left)
+            a = c
+        v.insert(a, el)
+
+
 def write_musicxml(score, path: Path) -> Path:
     # makeNotation: measures, rests, ties across barlines, beaming
-    score.write("musicxml", fp=str(path), makeNotation=True)
+    if not any(p.hasVoices() for p in score.parts):
+        score.write("musicxml", fp=str(path), makeNotation=True)
+        return path
+    # two voices: music21 numbers a measure's voices from 0, and Verovio drops voice 0 ("Layer 0
+    # cannot be found": the lead voice vanished from the PDF), so make the measures here and number
+    # the voices from 1; the export's makeNotation then keeps them (it splits 5-16th notes into ties)
+    from music21 import stream
+    s = score.makeNotation()
+    for p in s.parts:
+        for m in p.getElementsByClass(stream.Measure):
+            for i, v in enumerate(m.voices):
+                v.id = str(i + 1)
+    s.write("musicxml", fp=str(path), makeNotation=True)
     return path
 
 
@@ -276,9 +530,12 @@ def engrave_pdf(musicxml: Path, pdf: Path) -> int:
     n = tk.getPageCount()
     for i in range(1, n + 1):
         buf = io.BytesIO()
-        # chord-symbol accidentals are SMuFL glyphs cairosvg can't draw (B-flat came out "B" + a box)
-        svg = re.sub(r'<tspan font-family="Leipzig" font-size="\d+px">([\uea64\uea66])</tspan>',
-                     lambda m: '<tspan font-size="405px">' + ("b" if m[1] == "\uea64" else "#") + "</tspan>",
+        # chord-symbol accidentals are SMuFL glyphs cairosvg can't draw (B-flat came out "B" + a box); a
+        # natural (music21 writes root-alter 0 for some roots, e.g. F in G major: "F" + a box) is dropped,
+        # since `spell` writes every root as the key spells it (\u00a719)
+        svg = re.sub(r'<tspan font-family="Leipzig" font-size="\d+px">([\uea64\uea65\uea66])</tspan>',
+                     lambda m: "" if m[1] == "\uea65" else
+                     '<tspan font-size="405px">' + ("b" if m[1] == "\uea64" else "#") + "</tspan>",
                      tk.renderToSVG(i))
         cairosvg.svg2pdf(bytestring=svg.encode(), write_to=buf)
         buf.seek(0)

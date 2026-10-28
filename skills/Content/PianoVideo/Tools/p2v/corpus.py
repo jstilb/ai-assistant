@@ -13,7 +13,7 @@ extended by the sustain pedal, like the model's) to isolate the later stages.
 
 Usage (from Tools/):
   python -m p2v.corpus fetch                         # ASAP clone + MAESTRO audio excerpts
-  python -m p2v.corpus run --label base [--input audio|midi] [--pieces 0,3,5]
+  python -m p2v.corpus run --label base [--input audio|midi] [--pieces 0,3,5] [--beats beat-this]
   python -m p2v.corpus compare base new
 """
 
@@ -33,7 +33,8 @@ from pathlib import Path
 import numpy as np
 
 from .arrange import Note, arrange_piano_only
-from .evaluate import Reference, RefNote, grid_map, load_reference, notation_load, score_notation, score_notes
+from .evaluate import (Reference, RefNote, bar_quarters, grid_map, load_reference, notation_load, score_notation,
+                       score_notes)
 
 ROOT = Path(os.environ.get("P2V_CORPUS", Path.home() / ".kaya/piano2video/corpus"))
 ASAP_GIT = "https://github.com/fosfrancesco/asap-dataset.git"
@@ -62,6 +63,18 @@ PIECES = (
     "Bach/Prelude/bwv_854",                       # 12/8
     "Bach/Prelude/bwv_865",                       # 9/8
 )
+# Beat This!'s training data holds most of ASAP: its 8-fold cross-validation (CPJKU/beat_this_annotations,
+# asap/8-folds.split, folds grouped by work) says which fold model never heard each piece. The three
+# pieces missing here are in none of its training data, so final0 is fair on them (DESIGN.md §12).
+BT_HELDOUT = {
+    "Bach/Prelude/bwv_846": "fold3", "Chopin/Etudes_op_25/1": "fold7", "Rachmaninoff/Preludes_op_23/6": "fold0",
+    "Schubert/Piano_Sonatas/664-1": "fold4", "Mozart/Piano_Sonatas/12-1": "fold4",
+    "Rachmaninoff/Preludes_op_23/4": "fold3", "Scriabin/Etudes_op_8/11": "fold6",
+    "Schubert/Moment_musical_no_3": "fold3", "Haydn/Keyboard_Sonatas/48-2": "fold1", "Chopin/Berceuse_op_57": "fold7",
+    "Mozart/Piano_Sonatas/12-3": "fold1", "Beethoven/Piano_Sonatas/28-1": "fold5",
+    "Liszt/Annees_de_pelerinage_2/1_Gondoliera": "fold0", "Chopin/Barcarolle": "fold4",
+    "Bach/Prelude/bwv_854": "fold2", "Bach/Prelude/bwv_865": "fold2",
+}
 
 
 def slug(folder: str) -> str:
@@ -211,10 +224,28 @@ def align_notes(sq: np.ndarray, pt: np.ndarray, notes: list[RefNote], perf: list
     return grid_map(aq_, at_)
 
 
+def bar_phase(down_q: np.ndarray, bar_q: float) -> float:
+    """Where the annotated downbeats (score quarters) fall in the bar: the most common `quarter % bar`, to a
+    48th of a quarter; 0 when they fall on multiples of the bar (DESIGN.md §25)."""
+    if not len(down_q):
+        return 0.0
+    ph = np.round(np.asarray(down_q, dtype=float) % bar_q * 48) / 48 % bar_q
+    vals, counts = np.unique(ph, return_counts=True)
+    return float(vals[np.argmax(counts)])
+
+
+def shift_quarters(notes: list[RefNote], q2s, ph: float) -> tuple[list[RefNote], object]:
+    """The notes `ph` quarters earlier and the quarters -> seconds map with them: every note keeps its time."""
+    from dataclasses import replace
+    return ([replace(n, q_on=n.q_on - ph, q_off=n.q_off - ph) for n in notes],
+            lambda q: q2s(np.asarray(q, dtype=float) + ph))
+
+
 def reference(folder: str) -> tuple[Reference, object, tuple[float, float], dict]:
     """The score's notes (midi_score: repeats unfolded, one track per staff, bottom track = LH) in
     the excerpt's whole bars, the score-quarter -> performance-second map, its span in seconds, and
-    the performance's annotated beats and downbeats in that span."""
+    the performance's annotated beats and downbeats in that span. The measures take quarter 0 as a bar
+    line (written position = quarter % bar), so a score that opens with a pickup is shifted to one (§25)."""
     import pretty_midi
     d, row = ROOT / "asap" / folder, perf_row(folder)
     sm = pretty_midi.PrettyMIDI(str(d / "midi_score.mid"))
@@ -223,6 +254,9 @@ def reference(folder: str) -> tuple[Reference, object, tuple[float, float], dict
     sq = np.array([sm.time_to_tick(t) / sm.resolution for t in st])
     down = np.array([lab.startswith("db") for lab in labels])
     meter = next(lab.split(",")[1] for lab in labels if lab.startswith("db") and "," in lab)
+    # "db,<meter>,<sharps>": the key signature at the first downbeat that names one (later changes not used)
+    sharps = next((int(f[2]) for f in (lab.split(",") for lab in labels)
+                   if f[0] == "db" and len(f) > 2 and f[2].strip().lstrip("-").isdigit()), None)
     tracks = [i for i in sm.instruments if not i.is_drum and i.notes]
     notes = [RefNote(sm.time_to_tick(n.start) / sm.resolution, sm.time_to_tick(n.end) / sm.resolution, n.pitch,
                      "L" if k == len(tracks) - 1 and len(tracks) > 1 else "R", k)
@@ -232,10 +266,13 @@ def reference(folder: str) -> tuple[Reference, object, tuple[float, float], dict
     notes = sorted((n for n in notes if q0 - 1e-6 <= n.q_on < q1 - 1e-6), key=lambda n: (n.q_on, n.pitch))
     q2s = align_notes(sq, pt, notes, perf_notes(folder, EXCERPT))
     span = (float(q2s(q0)), float(q2s(q1)))
+    ph = bar_phase(sq[down & (sq >= q0 - 1e-6) & (sq <= q1 + 1e-6)], bar_quarters(meter))
+    if ph:  # a score that opens with a pickup (5 of the 19 pieces): a bar line at quarter 0, as the measures take it
+        notes, q2s = shift_quarters(notes, q2s, ph)
     keep = (pt >= span[0] - 1e-3) & (pt < span[1] - 1e-3)
     ann = {"meter": meter, "beats": pt[keep], "downbeats": pt[keep & down],
-           "beat_q": float(np.median(np.diff(sq)))}
-    return Reference(notes, None, meter, None), q2s, span, ann
+           "beat_q": float(np.median(np.diff(sq))), "sharps": sharps}
+    return Reference(notes, sharps, meter, None), q2s, span, ann
 
 
 # ------------------------------------------------------------------ run -- #
@@ -257,27 +294,30 @@ def beat_scores(grid, ann: dict, span: tuple[float, float]) -> dict:
             "est_beat_q": grid.beat_q, "ref_beat_q": round(ann["beat_q"], 3)}
 
 
-def run_piece(folder: str, label: str, mode: str) -> dict:
+def run_piece(folder: str, label: str, mode: str, beats: str = "notes", checkpoint: str = "heldout") -> dict:
     import soundfile as sf
-    from .meter import score_grid
-    from .notation import build_score, detect_key, key_plan, lead_in, write_musicxml
+    from .meter import beat_this, score_grid
+    from .notation import build_score, key_plan, lead_in, piece_key, write_musicxml
     from .pipeline import transcribe_piano
     ref, q2s, span, ann = reference(folder)
     out = ROOT / "runs" / label / slug(folder)
     out.mkdir(parents=True, exist_ok=True)
     wav = ROOT / "audio" / f"{slug(folder)}.wav"
+    ck = (BT_HELDOUT.get(folder, "final0") if checkpoint == "heldout" else checkpoint) if beats == "beat-this" else None
+    model = beat_this(wav, ck) if ck else None  # the recording, also for --input midi (MAESTRO is aligned)
     if mode == "audio":
         (ROOT / "tx").mkdir(exist_ok=True)
         raw = transcribe_piano(wav, ROOT / "tx" / f"{slug(folder)}.json")
-        grid = score_grid(raw, wav)
+        grid = score_grid(raw, wav, model=model)
     else:
         raw = perf_notes(folder, EXCERPT)
-        grid = score_grid(raw, None, sf.info(str(wav)).duration)
+        grid = score_grid(raw, None, sf.info(str(wav)).duration, model=model)
     notes = arrange_piano_only(raw, "lead+accomp")
-    keys = key_plan(raw, grid, detect_key(raw).sharps)
+    keys = key_plan(raw, grid, piece_key(raw))
     xml = write_musicxml(build_score(notes, grid, slug(folder), keys=keys), out / "piano.musicxml")
     shift = lead_in(notes, grid)
-    res = {"piece": folder, "mode": mode, "ref_meter": ann["meter"], "meter": grid.meter,
+    res = {"piece": folder, "mode": mode, "beats": f"beat-this {ck}" if ck else "notes",
+           "ref_meter": ann["meter"], "meter": grid.meter,
            "meter_match": grid.meter == ann["meter"], "span_s": [round(x, 2) for x in span],
            **beat_scores(grid, ann, span), **score_notes(ref, q2s, notes, span)}
     gq2s = grid_map(grid.q, grid.t)
@@ -343,6 +383,9 @@ def main(argv=None):
     r.add_argument("--label", required=True)
     r.add_argument("--input", choices=("audio", "midi"), default="audio")
     r.add_argument("--pieces", help="tune | check | comma list of indices (default: all)")
+    r.add_argument("--beats", choices=("notes", "beat-this"), default="beat-this", help="score grid's beat source (as the pipeline)")
+    r.add_argument("--checkpoint", default="heldout",
+                   help="Beat This! weights: heldout = the fold model that never heard the piece (BT_HELDOUT), or a name")
     c = sub.add_parser("compare")
     c.add_argument("a")
     c.add_argument("b")
@@ -355,7 +398,7 @@ def main(argv=None):
         results = []
         for p in select(args.pieces):
             print(f"corpus: {p}", file=sys.stderr, flush=True)
-            results.append(run_piece(p, args.label, args.input))
+            results.append(run_piece(p, args.label, args.input, args.beats, args.checkpoint))
             print("  " + json.dumps(flat(results[-1])), file=sys.stderr, flush=True)
         (ROOT / "results").mkdir(parents=True, exist_ok=True)
         path = ROOT / "results" / f"{args.label}.json"

@@ -16,5 +16,9 @@ pillow==13.0.0
 numpy==2.4.6
 soundfile==0.14.0
 pytest==9.1.1
+# score-grid beats (--beats beat-this, the default since DESIGN.md §12; approved by Jm 2026-10-27). setup.sh
+# fetches its weights (final0.ckpt) and keeps them only when the SHA-256 is the verified one.
+beat-this==1.1.0
+rotary-embedding-torch==0.9.1
 # resampy (via basic-pitch) still imports pkg_resources, dropped from newer setuptools
 setuptools<70

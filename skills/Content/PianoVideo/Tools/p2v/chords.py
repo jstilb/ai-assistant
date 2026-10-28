@@ -3,7 +3,8 @@
 Per beat of the score grid: a pitch-class profile (duration x velocity) and a bass profile (the
 lowest sounding note), matched against chord templates, then a Viterbi path that lets the chord
 change cheaply on a bar line, less cheaply on a half bar and dearly on any other beat.
-Pure numpy; measured on POP909's piano arrangements (DESIGN.md §9).
+Pure numpy; measured on POP909's piano arrangements (DESIGN.md §9). Since §19 the default also hears
+the recording: BTC's chord probabilities (btc.py) per beat, with the note templates added.
 """
 
 from __future__ import annotations
@@ -135,17 +136,57 @@ def change_costs(edges_q: np.ndarray, grid: Grid, bar: float = 0.3, half: float 
     return np.where(on(grid.bar_q), bar, np.where(halves, half, beat))
 
 
+AUDIO_W, NOTE_W = 0.1, 0.5  # BTC's per-beat log probability vs the note templates (§19, chosen on the tune half)
+FAMILY = {"maj": 0, "7": 0, "maj7": 0, "sus4": 0, "min": 1, "min7": 1, "dim": 1}  # BTC class = 2 x root + family
+NO_CHORD = 24  # BTC's "N"
+NEAR_S = 0.25  # seconds: a segment without frames takes the nearest one only this close
+
+
+def beat_logp(t: np.ndarray, p: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """(segments, classes): mean log probability of the frames (times `t`) inside each segment between
+    `edges` (seconds); a segment shorter than a frame takes the frame nearest its middle, and one
+    with no frame within NEAR_S (past the recording's ends) says nothing: uniform."""
+    k = len(edges) - 1
+    seg = np.searchsorted(edges, t, side="right") - 1
+    ok = (seg >= 0) & (seg < k)
+    out, cnt = np.zeros((k, p.shape[1])), np.zeros(k)
+    np.add.at(out, seg[ok], np.log(p[ok] + 1e-6))
+    np.add.at(cnt, seg[ok], 1)
+    for i in np.flatnonzero(cnt == 0):
+        mid = (edges[i] + edges[i + 1]) / 2
+        j = int(np.argmin(np.abs(t - mid))) if len(t) else -1
+        near = j >= 0 and abs(t[j] - mid) <= NEAR_S
+        out[i], cnt[i] = (np.log(p[j] + 1e-6) if near else np.full(p.shape[1], -np.log(p.shape[1]))), 1
+    return out / cnt[:, None]
+
+
+def audio_scores(t: np.ndarray, p: np.ndarray, edges: np.ndarray, states: list[tuple[int | None, str]]) -> np.ndarray:
+    """(segments, states): BTC's major/minor/no-chord log probability for each state. A seventh,
+    sus4 or dim state shares its family's (BTC has 25 classes): the notes tell them apart."""
+    lp = beat_logp(t, p, edges)
+    return np.column_stack([lp[:, NO_CHORD] if r is None else lp[:, 2 * r + FAMILY[q]] for r, q in states])
+
+
 def recognize(notes: list[Note], grid: Grid, vocab: tuple[str, ...] = BASIC, slash: float = 0.6,
-              costs: dict[str, float] | None = None, **score_kw) -> list[Chord]:
-    """Chords over the notes' span, one per run of equal beats. A chord gets a slash bass when
-    another of its tones is the lowest note for at least `slash` of its frames."""
-    if not notes:
+              costs: dict[str, float] | None = None, audio: tuple[np.ndarray, np.ndarray] | None = None,
+              **score_kw) -> list[Chord]:
+    """Chords over the notes' span (or the audio's, without notes), one per run of equal beats.
+    `audio` = BTC's (frame times, probabilities) of the recording (btc.chord_probs): the score per
+    beat is then AUDIO_W x its log probability + NOTE_W x the note templates (§19: major/minor on
+    the band types 0.80 -> 0.88 on the held-out half). A chord gets a slash bass when another of its
+    tones is the lowest note for at least `slash` of its frames."""
+    if not notes and audio is None:
         return []
     ns = sort_notes(notes)
-    eq = beat_edges(grid, ns[0].start, max(n.end for n in ns))
-    chroma, bass = beat_features(ns, grid.q_to_sec(eq))
+    t0, t1 = (ns[0].start, max(n.end for n in ns)) if ns else (float(audio[0][0]), float(audio[0][-1]))
+    eq = beat_edges(grid, t0, t1)
+    edges = grid.q_to_sec(eq)
+    chroma, bass = beat_features(ns, edges)
     states = labels(vocab)
-    path = smooth(template_scores(chroma, bass, vocab, **score_kw), change_costs(eq, grid, **(costs or {})))
+    scores = template_scores(chroma, bass, vocab, **score_kw)
+    if audio is not None:
+        scores = AUDIO_W * audio_scores(*audio, edges, states) + (NOTE_W * scores if ns else 0.0)
+    path = smooth(scores, change_costs(eq, grid, **(costs or {})))
     out: list[Chord] = []
     i = 0
     while i < len(path):
@@ -162,6 +203,21 @@ def recognize(notes: list[Note], grid: Grid, vocab: tuple[str, ...] = BASIC, sla
         out.append(Chord(float(eq[i]), float(eq[j + 1]), root, q if root is not None else "N", b))
         i = j + 1
     return out
+
+
+def tones_at(chords: list[Chord], grid: Grid):
+    """t (seconds) -> the pitch classes of the chord at t (with a slash bass), None outside a chord:
+    the band arrangement keeps the transcribed notes that belong to it (DESIGN.md §20)."""
+    starts = np.array([c.start_q for c in chords])
+
+    def tones(t: float) -> set[int] | None:
+        q = float(grid.sec_to_q(t))
+        i = int(np.searchsorted(starts, q + 1e-6)) - 1
+        if i < 0 or chords[i].root is None or q >= chords[i].end_q:
+            return None
+        c = chords[i]
+        return {(c.root + x) % 12 for x in QUALITIES[c.quality]} | ({c.bass} if c.bass is not None else set())
+    return tones
 
 
 def voice(c: Chord, lo: int = 48) -> tuple[int, ...]:

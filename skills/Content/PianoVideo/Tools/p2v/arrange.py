@@ -7,9 +7,12 @@ or I/O dependencies, so it is fully unit-tested in __tests__/test_arrange.py.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Iterable, Literal
+from typing import TYPE_CHECKING, Callable, Iterable, Literal
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .meter import Grid
 
 PIANO_LO, PIANO_HI = 21, 108  # A0 .. C8
 
@@ -21,8 +24,16 @@ Hand = Literal["R", "L"]
 LEAD_RANGE = (64, 89)    # E4 .. E6  — right-hand melody
 ACCOMP_RANGE = (48, 72)  # C3 .. B4  — chord voicings under the melody
 BASS_RANGE = (28, 53)    # E1 .. E3  — left-hand bass line
+# a sung line's median moves by whole octaves to land nearest D5: a man's voice an octave up (as vocal parts
+# are written in treble clef), a woman's mostly as sung. Counting notes inside LEAD_RANGE instead moved low
+# voices two octaves up (Viva la FAI to A5: the right hand then spanned the piano part, 7% unplayable chords)
+LEAD_CENTER = 74
+# a lead that rests this many bars hands the right hand to the band's top line (DESIGN.md §21: T4 tune melody
+# overlap 0.670 -> 0.685 at 1 bar, 0.670 at 2; half a bar fills a sung breath and costs note F1 on the check half)
+HOOK_REST_BARS = 1.0
 
 CHORD_TOL = 0.035  # seconds — onsets closer than this count as one chord
+HAND_REACH, HAND_NOTES = 15, 5  # a hand spanning more semitones, or striking more notes at once, cannot (bank.REACH)
 
 
 @dataclass(frozen=True)
@@ -34,6 +45,7 @@ class Note:
     role: Role = "accomp"
     hand: Hand | None = None
     sound_end: float | None = None  # when the note stops sounding (pedal), if later than `end`
+    hook: bool = False  # a lead note from the band's line (`hook_line`), not the voice: written like the piano part (§28)
 
     @property
     def dur(self) -> float:
@@ -108,14 +120,28 @@ def best_octave_shift(notes: list[Note], lo: int, hi: int) -> int:
     return best
 
 
-def fit_register(notes: Iterable[Note], lo: int, hi: int, keep_contour: bool = True) -> list[Note]:
+def octave_toward(notes: list[Note], center: int) -> int:
+    """Whole-octave transposition (semitones) that puts the line's median pitch nearest `center`."""
+    if not notes:
+        return 0
+    return 12 * int(np.round((center - float(np.median([n.pitch for n in notes]))) / 12))
+
+
+def fit_register(notes: Iterable[Note], lo: int, hi: int, keep_contour: bool = True,
+                 center: int | None = None) -> list[Note]:
     """Move a part into a register.
 
     keep_contour: first shift the whole line by one octave amount (melodies keep
-    their shape), then octave-fold only the stragglers.
+    their shape: the most notes in range, or the median nearest `center`), then
+    octave-fold only the stragglers.
     """
     notes = list(notes)
-    shift = best_octave_shift(notes, lo, hi) if keep_contour else 0
+    if not keep_contour:
+        shift = 0
+    elif center is not None:
+        shift = octave_toward(notes, center)
+    else:
+        shift = best_octave_shift(notes, lo, hi)
     out = []
     for n in notes:
         p = n.pitch + shift
@@ -124,38 +150,6 @@ def fit_register(notes: Iterable[Note], lo: int, hi: int, keep_contour: bool = T
         while p >= hi:
             p -= 12
         out.append(replace(n, pitch=p))
-    return out
-
-
-def limit_polyphony(notes: Iterable[Note], max_notes: int, tol: float = CHORD_TOL) -> list[Note]:
-    """Thin dense chords: per onset cluster keep the `max_notes` loudest
-    (always keeping the cluster's top and bottom pitch so the voicing's shape survives)."""
-    out: list[Note] = []
-    cluster: list[Note] = []
-
-    def flush():
-        if not cluster:
-            return
-        uniq = {}
-        for n in cluster:  # collapse duplicate pitches, keep loudest
-            if n.pitch not in uniq or n.velocity > uniq[n.pitch].velocity:
-                uniq[n.pitch] = n
-        c = sorted(uniq.values(), key=lambda n: n.pitch)
-        if len(c) > max_notes:
-            keep = {c[0].pitch, c[-1].pitch} if max_notes >= 2 else {c[-1].pitch}
-            for n in sorted(c[1:-1], key=lambda n: -n.velocity):
-                if len(keep) >= max_notes:
-                    break
-                keep.add(n.pitch)
-            c = [n for n in c if n.pitch in keep]
-        out.extend(c)
-        cluster.clear()
-
-    for n in sort_notes(notes):
-        if cluster and n.start - cluster[0].start > tol:
-            flush()
-        cluster.append(n)
-    flush()
     return out
 
 
@@ -173,13 +167,126 @@ def merge_same_pitch(notes: Iterable[Note], gap: float = 0.0) -> list[Note]:
     return sort_notes(x for lst in by_pitch.values() for x in lst)
 
 
-def drop_doubled(accomp: Iterable[Note], lead: list[Note]) -> list[Note]:
-    """Remove accompaniment notes that double a sounding lead note (same pitch)."""
+# --------------------------------------------------------------------------- #
+# The band arrangement on the score grid (`arrange` lead+accomp, DESIGN.md §20)
+# --------------------------------------------------------------------------- #
+
+def snap_to_grid(notes: Iterable[Note], grid: Grid) -> list[Note]:
+    """Onsets and ends to the nearest tatum, in seconds, each note at least a tatum long, so the MIDI,
+    the video and the score play the same rhythm (the score alone used to merge 16ths)."""
     out = []
-    for a in accomp:
-        clash = any(l.pitch == a.pitch and l.start < a.end and a.start < l.end for l in lead)
-        if not clash:
-            out.append(a)
+    for n in notes:
+        q0, q1 = grid.sec_to_q([n.start, n.end])
+        a = np.round(q0 / grid.tatum_q) * grid.tatum_q
+        b = max(a + grid.tatum_q, np.round(q1 / grid.tatum_q) * grid.tatum_q)
+        t0, t1 = grid.q_to_sec([a, b])
+        out.append(replace(n, start=float(t0), end=float(t1)))
+    return out
+
+
+def restrike(notes: Iterable[Note], tol: float = 0.01) -> list[Note]:
+    """Per pitch: notes struck together become one (the longest end, the loudest velocity); a note
+    still sounding when its pitch is struck again ends there (a repeated chord stays repeated, which
+    `merge_same_pitch` would join into one long note)."""
+    by_pitch: dict[int, list[Note]] = {}
+    for n in sort_notes(notes):
+        lst = by_pitch.setdefault(n.pitch, [])
+        if lst and abs(n.start - lst[-1].start) <= tol:
+            prev = lst[-1]
+            lst[-1] = replace(prev, end=max(prev.end, n.end), velocity=max(prev.velocity, n.velocity))
+            continue
+        if lst and lst[-1].end > n.start:
+            lst[-1] = replace(lst[-1], end=n.start)
+        lst.append(n)
+    return sort_notes(x for lst in by_pitch.values() for x in lst if x.end > x.start)
+
+
+def lowest_per_onset(notes: Iterable[Note], tol: float = 0.01) -> list[Note]:
+    """A bass line after snapping: one note per onset (the lowest; a repeat of it joins it, as in
+    `restrike`), each cut at the next onset."""
+    out: list[Note] = []
+    for n in sort_notes(notes):
+        if out and abs(n.start - out[-1].start) <= tol:  # sorted by pitch within an onset: the first is the lowest
+            if n.pitch == out[-1].pitch:
+                out[-1] = replace(out[-1], end=max(out[-1].end, n.end), velocity=max(out[-1].velocity, n.velocity))
+            continue
+        if out and out[-1].end > n.start:
+            out[-1] = replace(out[-1], end=n.start)
+        out.append(n)
+    return [n for n in out if n.end > n.start]
+
+
+def onset_clusters(notes: Iterable[Note], tol: float = 0.01) -> list[list[Note]]:
+    out: list[list[Note]] = []
+    for n in sort_notes(notes):
+        if out and n.start - out[-1][0].start <= tol:
+            out[-1].append(n)
+        else:
+            out.append([n])
+    return out
+
+
+def zone_voice(accomp: list[Note], mel: list[Note], bass: list[Note],
+               chord_tones: Callable[[float], set[int] | None] | None = None, max_notes: int = 3,
+               per_hand: int = 2, reach: int = 11, rh_free: tuple[int, int] = (60, 71),
+               lh_free: tuple[int, int] = (48, 59), onset_s: float = 0.04) -> list[Note]:
+    """Re-voice each accompaniment onset cluster into the hands' reach. The cluster keeps its loudest
+    pitch classes (only the chord's tones when `chord_tones(t)` names a chord and the cluster has
+    one), at most `max_notes`, at most `per_hand` a hand. Each goes to the octave inside a hand's
+    zone nearest its transcribed pitch: the right hand's `reach` semitones under the melody note
+    struck with the chord (or sounding just after it), the left hand's `reach` above the bass note
+    sounding; a hand without its line uses a free zone, and the right hand's zone starts above the
+    left's. Hands are set here: at the onset a hand spans at most `reach` semitones beyond its own
+    line (`end_at_crossing` keeps the lines outside while the chord sounds)."""
+    out = []
+    for cl in onset_clusters(accomp):
+        t0, t1 = cl[0].start, max(n.end for n in cl)
+        ms = [m.pitch for m in mel if abs(m.start - t0) <= onset_s or (m.start < t0 and m.end > t0 + onset_s)]
+        bs = [b.pitch for b in bass if b.start < t0 + 0.01 and b.end > t0] or [b.pitch for b in bass if b.start < t1 and b.end > t0]
+        zones = {"R": (min(ms) - reach, min(ms) - 1) if ms else rh_free,
+                 "L": (min(bs) + 1, min(bs) + reach) if bs else lh_free}
+        zones["R"] = (max(zones["R"][0], zones["L"][1] + 1), zones["R"][1])  # a low tune over a high bass: no crossing
+        weight: dict[int, float] = {}
+        near: dict[int, int] = {}
+        for n in cl:
+            weight[n.pitch % 12] = weight.get(n.pitch % 12, 0.0) + n.velocity
+            near.setdefault(n.pitch % 12, n.pitch)
+        tones = chord_tones(t0) if chord_tones else None
+        if tones and any(pc in tones for pc in weight):
+            weight = {pc: w for pc, w in weight.items() if pc in tones}
+        taken: dict[str, list[int]] = {"R": [], "L": []}
+        for pc in sorted(weight, key=lambda k: -weight[k]):
+            if len(taken["R"]) + len(taken["L"]) >= max_notes:
+                break
+            opts = []
+            for hand, (lo, hi) in zones.items():
+                p = lo + (pc - lo) % 12
+                if len(taken[hand]) < per_hand and p <= hi:
+                    opts.append((abs(p - near[pc]), hand, p))
+            if not opts:
+                continue
+            _, hand, p = min(opts)
+            taken[hand].append(p)
+            src = max((n for n in cl if n.pitch % 12 == pc), key=lambda n: n.velocity)
+            out.append(replace(src, pitch=p, hand=hand))
+    return sort_notes(out)
+
+
+def end_at_crossing(accomp: list[Note], mel: list[Note], bass: list[Note], onset_s: float = 0.04) -> list[Note]:
+    """A held accompaniment note ends where its hand's line crosses it: a right-hand note when a later
+    melody note starts at or under it, a left-hand note when a later bass note starts at or over it.
+    The tune stays the top line and the bass the bottom one (no doubled pitch, no crossed hands). A
+    note whose line leaps more than an octave away stays held, as a pianist pedals it: ending it there
+    too cost chroma 0.786 -> 0.774 on the T4 tune half and no playability (DESIGN.md §20)."""
+    lines = {"R": sorted(mel, key=lambda m: m.start), "L": sorted(bass, key=lambda b: b.start)}
+    out = []
+    for n in accomp:
+        def crosses(x: int) -> bool:
+            return x <= n.pitch if n.hand == "R" else x >= n.pitch
+        end = next((x.start for x in lines[n.hand or "R"] if n.start + onset_s < x.start < n.end and crosses(x.pitch)),
+                   n.end)
+        if end > n.start + 0.02:
+            out.append(replace(n, end=end))
     return out
 
 
@@ -261,7 +368,7 @@ def local_splits(notes: list[Note], window: float = 1.5, center: float = 60.0, b
 
 
 def assign_hands_adaptive(notes: Iterable[Note], free: float = 10.0, w_lane: float = 4.0, w_prior: float = 3.0,
-                          w_reg: float = 2.0, lh_hi: float = 64.0, rh_lo: float = 55.0, reach: float = 15.0,
+                          w_reg: float = 2.0, lh_hi: float = 64.0, rh_lo: float = 55.0, reach: float = HAND_REACH,
                           beam: int = 32, **split_kw) -> list[Note]:
     """Hands by a beam search over onset groups (notes within CHORD_TOL). Lead notes stay in the right
     hand and bass notes in the left (arrange mode); the other notes of a group split at one point of
@@ -304,7 +411,7 @@ def assign_hands_adaptive(notes: Iterable[Note], free: float = 10.0, w_lane: flo
         fixed_r = [notes[i].pitch for i in g if notes[i].role == "lead"]
         ps = sorted(notes[i].pitch for i in g if notes[i].role not in ("lead", "bass"))
         sp = float(np.median(split[g]))
-        ok = [j for j in range(len(ps) + 1) if all(not h or (h[-1] - h[0] <= reach and len(h) <= 5) for h in (
+        ok = [j for j in range(len(ps) + 1) if all(not h or (h[-1] - h[0] <= reach and len(h) <= HAND_NOTES) for h in (
             sorted(fixed_l + ps[:j]), sorted(fixed_r + ps[j:])))] or list(range(len(ps) + 1))
         nxt: dict[tuple, tuple] = {}
         for cost, lp, lt, rp, rt, hist in states:
@@ -386,39 +493,245 @@ def arrange_piano_only(piano: list[Note], parts: str) -> list[Note]:
     return both
 
 
+def rest_spans(lead: list[Note], grid: Grid, end_s: float, min_bars: float = HOOK_REST_BARS) -> list[tuple[float, float]]:
+    """Spans (seconds) where the lead sounds no note for at least `min_bars` bars of the grid, the
+    time before its first note and after its last (to `end_s`) included; no lead: one span."""
+    if not lead:
+        return [(0.0, end_s)] if end_s > 0 else []
+    spans, t = [], 0.0
+    for a, b in sorted((n.start, n.end) for n in lead) + [(end_s, end_s)]:
+        if a > t:
+            q0, q1 = grid.sec_to_q([t, a])
+            if q1 - q0 >= min_bars * grid.bar_q - 1e-6:
+                spans.append((t, a))
+        t = max(t, b)
+    return spans
+
+
+HOOK_LEAP = 0.5    # cost of a change of pitch, per octave (capped at one), against a frame's reward of about 1 (§23)
+HOOK_HIGH = 0.5    # reward per 3 octaves above middle C: the hook is the band's high voice; 0 is no better than the top line
+HOOK_FRAME = 0.05  # seconds a frame
+
+
+def track_line(notes: list[Note], a: float, b: float, leap: float = HOOK_LEAP, high: float = HOOK_HIGH,
+               dt: float = HOOK_FRAME, min_dur: float = 0.08) -> list[Note]:
+    """One voice through polyphonic notes in [a, b) (DESIGN.md §23): a Viterbi path over frames of `dt`
+    seconds, each frame one sounding pitch or none. A frame of pitch p earns 0.3 + 0.7 x velocity/127 +
+    `high` x (min(p, E6) - 60)/36; a change of pitch costs `leap` x min(|interval|, 12)/12, a start or end of a
+    silence `leap`/4. Each run of one pitch keeps the notes of that pitch that start in it after a release,
+    so restruck notes stay notes and two stems doubling a pitch do not; each keeps its own velocity (the
+    run's first onset is the note's own start when it is within a frame and after the last note's end)."""
+    n_f = int(np.ceil((b - a) / dt - 1e-9))
+    if n_f <= 0 or not notes:
+        return []
+    frames: list[dict[int, int]] = [{} for _ in range(n_f)]
+    for n in notes:
+        for k in range(max(0, int(np.ceil((n.start - a) / dt - 0.5))), min(n_f, int(np.ceil((n.end - a) / dt - 0.5)))):
+            frames[k][n.pitch] = max(frames[k].get(n.pitch, 0), n.velocity)
+    prev_p, prev_c, back = np.array([-1]), np.zeros(1), []
+    for d in frames:  # state -1 = silence
+        p = np.array([-1, *sorted(d)])
+        reward = np.r_[0.0, [0.3 + 0.7 * d[x] / 127.0 + high * (min(x, LEAD_RANGE[1]) - 60) / 36.0 for x in p[1:]]]
+        now_sil, was_sil = (p < 0)[:, None], (prev_p < 0)[None, :]
+        trans = np.where(now_sil & was_sil, 0.0, np.where(now_sil | was_sil, leap / 4.0,
+                         leap * np.minimum(np.abs(p[:, None] - prev_p[None, :]), 12) / 12.0))
+        tot = prev_c[None, :] + trans
+        bp = np.argmin(tot, axis=1)
+        prev_c = tot[np.arange(len(p)), bp] - reward
+        back.append((p, bp))
+        prev_p = p
+    seq, j = np.empty(n_f, dtype=int), int(np.argmin(prev_c))
+    for k in range(n_f - 1, -1, -1):
+        seq[k] = back[k][0][j]
+        j = int(back[k][1][j])
+    by_pitch: dict[int, list[Note]] = {}
+    for n in sorted(notes, key=lambda n: n.start):
+        by_pitch.setdefault(n.pitch, []).append(n)
+    out: list[Note] = []
+    k = 0
+    while k < n_f:
+        m = k
+        while m + 1 < n_f and seq[m + 1] == seq[k]:
+            m += 1
+        if seq[k] >= 0:
+            s, e = a + k * dt, a + (m + 1) * dt
+            own = [n for n in by_pitch[int(seq[k])] if n.start < e and n.end > s]
+            e = min(e, max(n.end for n in own))
+            first = own[0].start if abs(own[0].start - s) < dt else s
+            first = max(first, out[-1].end) if out else first  # one voice: never before the last note's end
+            ons = [(first, own[0].velocity)]
+            for i, n in enumerate(own[1:], 1):  # a restrike: the pitch was released (not a second stem doubling it)
+                if ons[-1][0] + min_dur <= n.start <= e - min_dur and all(o.end <= n.start + 0.02 for o in own[:i]):
+                    ons.append((n.start, n.velocity))
+            ends = [o for o, _ in ons[1:]] + [e]
+            out += [Note(o, nxt, int(seq[k]), v) for (o, v), nxt in zip(ons, ends) if nxt - o >= min_dur]
+        k = m + 1
+    return out
+
+
+def hook_line(band: dict[str, list[Note]], spans: list[tuple[float, float]], min_dur: float = 0.08) -> list[Note]:
+    """The song's own line where the voice rests (a drop, a riff, an instrumental track): per span one
+    voice through all the band stems' notes (`track_line`), cut to the span, so it never overlaps the lead
+    around it (DESIGN.md §21: Hey Brother's drop 0.29 -> 0.61 melody overlap). Until §23 it was the
+    `skyline` top line of the stem with the most note time, which leapt 2-6x as often as the references
+    (Veridis Quo: 58% of its intervals a fifth or more, the reference's 11%)."""
+    out: list[Note] = []
+    for a, b in spans:
+        notes = drop_short([n for ns in band.values() for n in ns if a - 0.02 <= n.start < b - 0.05], min_dur)
+        line = [replace(n, start=max(n.start, a), end=min(n.end, b)) for n in track_line(notes, a, b, min_dur=min_dur)]
+        out += [n for n in line if n.dur >= min_dur]
+    return out
+
+
 def arrange_full(
     lead: list[Note],
     harmony: list[Note],
     bass: list[Note],
     parts: str,
-    max_chord: int = 4,
+    grid: Grid | None = None,
+    chord_tones: Callable[[float], set[int] | None] | None = None,
+    max_chord: int = 3,
+    lead_center: int | None = None,
+    band: dict[str, list[Note]] | None = None,
 ) -> list[Note]:
     """source=arrange: re-voice the song's core components for two hands.
 
-    lead    — melody stem (usually vocals) -> monophonic RH line
-    harmony — chordal stems (piano/guitar/other) -> thinned voicings, C3..B4
-    bass    — bass stem -> monophonic LH line
+    lead    — melody stem (usually vocals) -> monophonic RH line; `lead_center` (a sung lead:
+              LEAD_CENTER) places it by its median, else the octave with the most notes in E4..E6
+    harmony — chordal stems (piano/guitar/other) -> on the score grid, at most `max_chord` pitch
+              classes an onset (the chord's tones when `chord_tones` names one), each voiced in
+              the reach of the hand under the melody or over the bass (`zone_voice`)
+    bass    — bass stem -> monophonic LH line on the score grid
+    band    — the chordal stems by name: where the lead rests HOOK_REST_BARS or more (or has no
+              note at all: an instrumental song), the RH line is one voice through the band (`hook_line`,
+              DESIGN.md §21, §23), each span placed as a sung lead is (median nearest LEAD_CENTER), so
+              the line keeps the voice's register; needs `grid`
+    `grid` (the score grid) is needed for lead+accomp (DESIGN.md §20).
     """
     mel = skyline(drop_short(lead, 0.08), top=True)
-    mel = with_role(fit_register(drop_short(mel, 0.08), *LEAD_RANGE), "lead")
+    mel = with_role(fit_register(drop_short(mel, 0.08), *LEAD_RANGE, center=lead_center), "lead")
+    if band:
+        if grid is None:
+            raise ValueError("arrange_full: the band's line (band=) needs the score grid")
+        end_s = max([n.end for ns in band.values() for n in ns] + [n.end for n in bass + mel] + [0.0])
+        hook = [n for span in rest_spans(mel, grid, end_s)
+                for n in fit_register(hook_line(band, [span]), *LEAD_RANGE, center=LEAD_CENTER)]
+        mel = sort_notes(mel + [replace(n, role="lead", hook=True) for n in hook])
     if parts == "lead":
         return assign_hands(mel)
+    if grid is None:
+        raise ValueError("arrange_full: lead+accomp needs the score grid")
 
     bl = skyline(drop_short(bass, 0.08), top=False)
-    bl = with_role(fit_register(bl, *BASS_RANGE), "bass")
+    bl = with_role(lowest_per_onset(snap_to_grid(fit_register(bl, *BASS_RANGE), grid)), "bass")
 
     hm = merge_same_pitch(fit_register(drop_short(harmony, 0.06), *ACCOMP_RANGE, keep_contour=False))
-    hm = limit_polyphony(hm, max_chord)
-    hm = drop_doubled(hm, mel)
-    # and any that double a sounding bass note
-    hm = [n for n in hm if not any(b.pitch == n.pitch and b.start < n.end and n.start < b.end for b in bl)]
-    hm = with_role(scale_velocity(hm, 0.75), "accomp")
-    # accompaniment split follows the texture and hand movement (assign_hands_adaptive), not middle C.
-    # Viva la FAI arrange/lead+accomp (2026-10-26), fixed C4 -> local_splits: stepwise accompaniment
-    # figures changing hand 10/55 -> 3/55, RH accompaniment chords that span > 15 semitones with the
-    # held melody note 4/207 -> 0/124, unplayable onset clusters 1/454 -> 0/454, hand crossings 0 -> 0;
-    # with the beam search (§11) still 0/454 unplayable and 0 crossings
-    return assign_hands_adaptive(mel + hm + bl)
+    hm = restrike(snap_to_grid(hm, grid))
+    # T4 (DESIGN.md §20, tune half): notes shorter than an eighth 32% -> 0%, written unplayable onsets
+    # 3.5% -> 0.4%, MIDI unplayable 0.6% -> 0%, chord tones 0.92 -> 0.95; the band's thinner texture
+    # costs pitch-class similarity to the recording 0.815 -> 0.790
+    acc = end_at_crossing(zone_voice(hm, mel, bl, chord_tones, max_notes=max_chord), mel, bl)
+    acc = with_role(scale_velocity(restrike(acc), 0.75), "accomp")
+    return sort_notes([replace(n, hand="R") for n in mel] + [replace(n, hand="L") for n in bl] + acc)
+
+
+def under_melody(accomp: list[Note], mel: list[Note], gap: int = 1) -> list[Note]:
+    """Accompaniment notes that stay below the melody: a note that sounds while a melody note sounds
+    and reaches within `gap` semitones of it (or above it) is dropped, so the tune is the top line."""
+    ms = sorted(mel, key=lambda m: m.start)
+    starts = np.array([m.start for m in ms])
+    ends = np.maximum.accumulate(np.array([m.end for m in ms])) if ms else np.array([])
+    out = []
+    for n in accomp:
+        hi = int(np.searchsorted(starts, n.end))       # melody notes starting before this one ends
+        lo = int(np.searchsorted(ends, n.start, side="right"))  # ... and (some) ending after it starts
+        if any(ms[i].end > n.start and n.pitch >= ms[i].pitch - gap for i in range(lo, hi)):
+            continue
+        out.append(n)
+    return out
+
+
+def arrange_hybrid(lead: list[Note], piano: list[Note], parts: str, lead_center: int | None = None) -> list[Note]:
+    """source=hybrid, a piano-led song with vocals (DESIGN.md §14): the sung melody in the right hand
+    over the song's own piano part. The melody is fitted to E4-E6 as in `arrange`; the piano part
+    keeps its own voicing (the piano model's notes, not Basic Pitch's re-voiced harmony), minus the
+    notes that would sound at, just under or above the melody (doubles included). Hands come from the
+    beam search over both (`assign_hands_adaptive`, lead notes stay right), then `fit_hands` keeps each
+    written chord playable (§24); key-press lengths (`key_lengths`) apply to the piano part only, so a held
+    sung note is not cut by the next chord."""
+    mel = skyline(drop_short(lead, 0.08), top=True)
+    mel = with_role(fit_register(drop_short(mel, 0.08), *LEAD_RANGE, center=lead_center), "lead")
+    if parts == "lead":
+        return assign_hands(mel)
+    acc = under_melody(with_role(clamp_to_piano(drop_short(piano, 0.03)), "accomp"), mel)
+    both = fit_hands(assign_hands_adaptive(mel + acc))
+    return sort_notes([n for n in both if n.role == "lead"] + key_lengths([n for n in both if n.role != "lead"]))
+
+
+FIT_NEAR = 0.25  # seconds: notes this near are one written chord (a 16th at 60 a minute; 0.15 left 2.5% unplayable, §24)
+
+
+def fit_hands(notes: list[Note], reach: int = HAND_REACH, near: float = FIT_NEAR) -> list[Note]:
+    """Each hand's written chords within `reach` semitones (DESIGN.md §24). The hand search groups notes within
+    CHORD_TOL, but a sung note and the piano's chord start up to a 16th apart and the score writes them as one
+    chord. Right hand: a piano note more than `reach` under a lead note that starts within `near` of it goes to
+    the left hand if that hand can take it, else up by octaves into reach (under the lead), else it is dropped.
+    Left hand: a note more than `reach` over the lowest left-hand note within `near` goes to the right hand if
+    that hand can take it under the lead, else down by octaves, else it is dropped. A hand takes a note when its
+    notes within `near` stay within `reach`, under HAND_NOTES, and do not strike that pitch already (no doubled
+    key). Lead notes and each window's lowest note never move; a chord of more than HAND_NOTES notes within
+    reach is not thinned."""
+    out = sort_notes(notes)
+    lead = [n for n in out if n.role == "lead"]
+    l_on = np.array([n.start for n in lead])  # sorted, as `out` is
+    l_p = np.array([n.pitch for n in lead])
+    starts = np.array([n.start for n in out])
+    keep = [True] * len(out)
+
+    def window(i: int, hand: str) -> set[int]:  # the pitches that hand strikes within `near` of note i
+        lo = int(np.searchsorted(starts, starts[i] - near))
+        hi = int(np.searchsorted(starts, starts[i] + near, side="right"))
+        return {out[k].pitch for k in range(lo, hi) if keep[k] and k != i and out[k].hand == hand}
+
+    def lead_top(t: float) -> int | None:  # the highest lead note starting within `near` of t
+        lo, hi = int(np.searchsorted(l_on, t - near)), int(np.searchsorted(l_on, t + near, side="right"))
+        return int(l_p[lo:hi].max()) if hi > lo else None
+
+    def takes(ps: set[int], p: int) -> bool:  # a hand striking `ps` can also strike p
+        return p not in ps and max(ps | {p}) - min(ps | {p}) <= reach and len(ps) < HAND_NOTES
+
+    for i, n in enumerate(out):  # the right hand, under the lead
+        if n.role == "lead" or n.hand != "R":
+            continue
+        top = lead_top(n.start)
+        if top is None or n.pitch >= top - reach:
+            continue
+        if takes(window(i, "L"), n.pitch):
+            out[i] = replace(n, hand="L")
+            continue
+        q = n.pitch + 12 * int(np.ceil((top - reach - n.pitch) / 12))
+        rh = window(i, "R")
+        if q <= top - 2 and q not in rh and len(rh) < HAND_NOTES:
+            out[i] = replace(n, pitch=q)
+        else:
+            keep[i] = False
+    for i, n in enumerate(out):  # the left hand, over its lowest note
+        if not keep[i] or n.role == "lead" or n.hand != "L":
+            continue
+        lh = window(i, "L")
+        bottom = min(lh | {n.pitch})
+        if n.pitch <= bottom + reach:
+            continue
+        top = lead_top(n.start)
+        if (top is None or n.pitch <= top - 2) and takes(window(i, "R"), n.pitch):
+            out[i] = replace(n, hand="R")
+            continue
+        q = n.pitch - 12 * int(np.ceil((n.pitch - bottom - reach) / 12))
+        if q > bottom and q not in lh and len(lh) < HAND_NOTES:
+            out[i] = replace(n, pitch=q)
+        else:
+            keep[i] = False
+    return [n for n, k in zip(out, keep) if k]
 
 
 def beats_to_seconds_fn(beat_times: np.ndarray):

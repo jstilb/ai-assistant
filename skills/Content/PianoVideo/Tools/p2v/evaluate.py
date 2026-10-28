@@ -58,7 +58,7 @@ def load_reference(path: Path, staves: list[int] | None = None) -> Reference:
     the recording doesn't play). The lowest kept staff is the left hand, the rest the right."""
     if path.suffix.lower() in (".mid", ".midi"):
         return _load_reference_midi(path)
-    from music21 import converter, key, meter, tempo
+    from music21 import converter, harmony, key, meter, tempo
     s = converter.parse(str(path))
     try:
         s = s.expandRepeats()
@@ -72,7 +72,7 @@ def load_reference(path: Path, staves: list[int] | None = None) -> Reference:
             continue
         hand = "L" if i == max(keep) and len(keep) > 1 else "R"
         for el in part.stripTies().flatten().notes:
-            if el.duration.isGrace:
+            if el.duration.isGrace or isinstance(el, harmony.ChordSymbol):  # a lead sheet's symbol: not played
                 continue
             q0, q1 = float(el.offset), float(el.offset + el.quarterLength)
             notes.extend(RefNote(q0, q1, p.midi, hand, i) for p in el.pitches)
@@ -349,18 +349,25 @@ def score_notation(ref: Reference, q2s, est: Reference, est_q2s, span: tuple[flo
             "written_length_ratio_p25_p50_p75": [round(float(x), 2) for x in np.percentile(dur_ratio, [25, 50, 75])]}
 
 
-def notation_load(path: Path, q_lo: float, q_hi: float) -> dict:
+def notation_load(path: Path, q_lo: float, q_hi: float, reach: int = 15, max_notes: int = 5) -> dict:
     """Reading load of a MusicXML score between two quarter offsets (all staves): written symbols
     (notes, chords, rests) per bar, the share of notes shorter than an eighth, and the share of
-    notes tied on to another (split by a bar line or beat)."""
-    from music21 import converter, meter
+    notes tied on to another (split by a bar line or beat). A hidden rest (a lower voice's gap) is not a
+    symbol, nor is a chord symbol; the bars end where the score ends (the whole-score call passes q_hi = 1e9). Written
+    playability: the share of a staff's written onsets (all voices) that strike more than `max_notes`
+    notes or span more than `reach` semitones (the bank's rule on the MIDI, here on the score)."""
+    from music21 import converter, harmony, meter
     s = converter.parse(str(path))
     ts = next(iter(s.recurse().getElementsByClass(meter.TimeSignature)), None)
     bar_q = float(ts.barDuration.quarterLength) if ts is not None else 4.0
     sym = short = tied = notes = 0
+    onsets: list[set[int]] = []
     for part in s.parts:
+        struck: dict[float, set[int]] = {}
         for el in part.flatten().notesAndRests:
-            if not q_lo <= float(el.offset) < q_hi or el.duration.isGrace:
+            if not q_lo <= float(el.offset) < q_hi or el.duration.isGrace or isinstance(el, harmony.ChordSymbol):
+                continue
+            if el.isRest and el.style.hideObjectOnPrint:
                 continue
             sym += 1
             if el.isRest:
@@ -368,10 +375,17 @@ def notation_load(path: Path, q_lo: float, q_hi: float) -> dict:
             notes += 1
             short += el.quarterLength < 0.5 - 1e-6
             tied += el.tie is not None and el.tie.type in ("start", "continue")
-    bars = max(1e-9, (q_hi - q_lo) / bar_q)
+            new = [n.pitch.midi for n in (el.notes if el.isChord else [el]) if n.tie is None or n.tie.type == "start"]
+            if new:  # a chord's own pitches each carry a tie: only the struck ones count
+                struck.setdefault(round(float(el.offset), 4), set()).update(new)
+        onsets.extend(struck.values())
+    end = float(np.ceil(float(s.highestTime) / bar_q - 1e-9) * bar_q)  # the last bar, whole
+    bars = max(1e-9, (min(q_hi, end) - q_lo) / bar_q)
     return {"symbols_per_bar": round(sym / bars, 1),
             "shorter_than_eighth": round(short / max(1, notes), 3),
-            "tied_on": round(tied / max(1, notes), 3)}
+            "tied_on": round(tied / max(1, notes), 3),
+            "unplayable_written": round(sum(len(ps) > max_notes or max(ps) - min(ps) > reach for ps in onsets)
+                                        / max(1, len(onsets)), 3)}
 
 
 def bar_check(ref: Reference, q2s, est: list[Note], low: float = 0.6) -> dict:
@@ -444,7 +458,7 @@ def evaluate(work: Path, reference: Path, nominal_bpm: float | None = None,
         grid = grids.get(mid.stem.split("_")[0])
         if xml.exists():
             sharps, ts = _variant_key(xml)
-            res["key_match"] = sharps == ref.sharps if ref.sharps is not None else None
+            res["key_match"] = (sharps - ref.sharps) % 12 == 0 if ref.sharps is not None and sharps is not None else None  # 6 sharps = 6 flats
             res["meter"] = ts
         if xml.exists() and grid:
             # the score drops whole empty bars before the variant's first note (notation.lead_in)
