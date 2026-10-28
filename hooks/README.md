@@ -48,13 +48,16 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 │  SessionStart ──┬──► LoadContext (date/time reminder)               │
 │                 └──► SessionEnvGuard (env-contamination guard)      │
 │                                                                     │
-│  UserPromptSubmit ──► ExplicitRatingRecord (1-10 ratings)          │
+│  UserPromptSubmit ──┬──► ExplicitRatingRecord (1-10 ratings)       │
+│                     └──► ContextBudgetGuard (handoff at 40-50%)     │
 │                                                                     │
 │  PreToolUse ──► SecurityValidator (Bash/Edit/Write)                 │
 │                                                                     │
 │  PostToolUse ──┬──► SkillStructureGuard (Write)                     │
 │                ├──► TaskCompleted.sh (TaskUpdate)                   │
 │                └──► PromptInjectionDefender (Bash/Read/Web*)        │
+│                                                                     │
+│  PostToolBatch ──► ContextBudgetGuard (handoff at 40-50%)           │
 │                                                                     │
 │  SubagentStart ──┬──► BackgroundAgentStarted                        │
 │                  └──► SubagentVerbosityHint                         │
@@ -75,9 +78,10 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 | Event | When It Fires | Typical Use Cases |
 |-------|---------------|-------------------|
 | `SessionStart` | Session begins | Context loading, settings validation, env-contamination guard |
-| `UserPromptSubmit` | User sends a message | Rating capture |
+| `UserPromptSubmit` | User sends a message | Rating capture, context-budget note |
 | `PreToolUse` | Before a tool executes | Security validation |
 | `PostToolUse` | After a tool executes | Prompt-injection scanning, skill-structure guard, task-completion side effects |
+| `PostToolBatch` | Once after a batch of tool calls, before the next model request | Context-budget note |
 | `SubagentStart` | Subagent launches | Inject hints, record background agents |
 | `SubagentStop` | Subagent completes | Capture subagent outputs |
 | `StopFailure` | Abnormal stop | Failure dump capture |
@@ -111,10 +115,11 @@ interface PreToolUsePayload extends BasePayload {
 
 ## Hook Registry
 
-> 18 commands registered in `settings.json` (`hooks/*.hook.ts` plus `TaskCompleted.sh`).
+> 20 commands registered in `settings.json` (`hooks/*.hook.ts` plus `TaskCompleted.sh`).
 > Updated 2026-09-29: the Stop hook (StopOrchestrator and all `hooks/handlers/*`),
 > UserPromptOrchestrator, and the other dead hooks were deleted; see
 > [THEHOOKSYSTEM.md](../docs/system/THEHOOKSYSTEM.md#2026-09-29-simplification).
+> Updated 2026-10-27: `ContextBudgetGuard.hook.ts` added (UserPromptSubmit + PostToolBatch).
 
 ### SessionStart Hooks
 
@@ -128,6 +133,13 @@ interface PreToolUsePayload extends BasePayload {
 | Hook | Purpose | Blocking | Dependencies |
 |------|---------|----------|--------------|
 | `ExplicitRatingRecord.hook.ts` | Record 1-10 ratings; ratings < 6 also write an `UNCATEGORIZED` learning file (deferred category — see [Learning Capture Flow](#learning-capture-flow)) | No | `MEMORY/LEARNING/SIGNALS/ratings.jsonl`, `MEMORY/LEARNING/UNCATEGORIZED/` |
+| `ContextBudgetGuard.hook.ts` | Measure context from the transcript; tell the model to run the Handoff skill at 400K (once) and 500K (every event) | No (additionalContext) | transcript, `skills/Automation/Handoff/SKILL.md`, marker in `os.tmpdir()` |
+
+### PostToolBatch Hooks
+
+| Hook | Purpose | Blocking | Dependencies |
+|------|---------|----------|--------------|
+| `ContextBudgetGuard.hook.ts` | Same hook as above; fires once per tool batch so parallel calls do not repeat the note | No (additionalContext) | as above |
 
 ### PreToolUse Hooks
 
