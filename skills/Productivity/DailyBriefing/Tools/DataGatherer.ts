@@ -611,10 +611,10 @@ function computeStrategyFromLead(
  *
  * Per-lead compute reuses WigSection.ts's exported pure helpers
  * (computeReps/computeBinaryShowUp) and CommunityStatus.ts's
- * computeWeeklyEventCount — the exact functions the LifeOS dashboard wires
- * wig_status.json leads through, so the dashboard and this briefing section
- * cannot diverge on the underlying math (only the percent-of-target
- * normalization on top is briefing-specific).
+ * computeWeeklyEventCount (only the percent-of-target normalization on top is
+ * briefing-specific). The old LifeOS dashboard overview used the same
+ * functions until LifeOS home S6 deleted it; the home's on-track rows count
+ * leads in LifeOS/Home/HomeGoals.ts, so the two can differ.
  */
 export async function gatherStrategies(
   warnings: string[],
