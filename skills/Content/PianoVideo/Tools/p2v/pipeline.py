@@ -4,7 +4,7 @@ Stages (each cached in the work dir; --force re-runs):
   1. ingest      ffmpeg -> 44.1 kHz stereo wav (optional --start/--duration trim)
   2. separate    Demucs htdemucs_6s -> vocals/drums/bass/guitar/piano/other
   3. transcribe  piano stem -> ByteDance high-res piano model; other stems -> Basic Pitch
-  4. arrange     --source piano|arrange x --parts lead|lead+accomp|lead+chords  (DESIGN.md §4)
+  4. arrange     --source piano|arrange x --parts lead|lead+accomp|lead+full|lead+chords  (DESIGN.md §4, §39)
   5. outputs     <variant>.mid, <variant>.musicxml, <variant>.pdf, <variant>.mp4
 """
 
@@ -25,7 +25,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .arrange import Note, arrange_full, arrange_hybrid, arrange_piano_only
+from . import arrange
+from .arrange import Note, arrange_full, arrange_hybrid, arrange_piano_only, melody_alone
 from .meter import Grid
 
 STEMS = ("vocals", "drums", "bass", "guitar", "piano", "other")
@@ -39,15 +40,21 @@ PIANO_CKPT = MODEL_DIR / "note_F1=0.9677_pedal_F1=0.9186.pth"
 PIANO_CKPT_URL = "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
 
 SOURCES = ("piano", "arrange", "hybrid")
-# --source auto: a piano with vocals is "piano-led" (the hybrid path) when the piano stem is at most
-# this far under the loudest other accompaniment stem (guitar, other, bass). Chosen on the bank's tune
-# half (0-20 dB swept: 12 dB routes 20 of 21 songs right, 21 of 21 on the check half); DESIGN.md §14
-PIANO_LEAD_DB = 12.0
+# --source auto: a piano with vocals is "piano-led" (the hybrid path) when the piano stem is at most this far
+# under the loudest other accompaniment stem (guitar, other, bass); 0 = at least as loud as each (DESIGN.md §14, §40)
+PIANO_LEAD_DB = 0.0
 # --source auto with no lead: piano when every other stem together is at most this far over the piano
 # stem, else arrange (the band's line). Bank (DESIGN.md §21): piano pieces with bleed -8 to -15 dB,
 # instrumental tracks with a piano-like stem +11 to +17 dB; the run logs the value ("others vs piano")
 NO_LEAD_PIANO_DB = 0.0
-PARTS = ("lead", "lead+accomp", "lead+chords")
+PARTS = ("lead", "lead+accomp", "lead+full", "lead+chords")
+BOTH_HANDS = ("lead+accomp", "lead+full")  # a two-hand arrangement: the playable score and the advanced one (§39)
+
+
+def band_chords(source: str, parts: str) -> bool:
+    """The accompaniment is voiced from the recognised chords' tones: `arrange` with both hands (§20), and the band
+    the advanced hybrid adds (§39)."""
+    return (source == "arrange" and parts in BOTH_HANDS) or (source == "hybrid" and parts == "lead+full")
 
 
 def log(msg: str):
@@ -156,8 +163,9 @@ def piano_input(choice: str, levels: dict[str, float]) -> str:
 
 def route(levels: dict[str, float], lead_stem: str = "vocals") -> str:
     """--source auto: the path for this song from its stem levels (DESIGN.md §4, §14). A solo-piano
-    recording -> piano; a piano that leads the accompaniment under a lead (vocal) stem -> hybrid (the
-    real piano part under the sung melody); any other song with a lead -> arrange; no lead -> piano
+    recording -> piano; a piano that leads the accompaniment under a lead (vocal) stem, at least as loud as
+    each band stem (PIANO_LEAD_DB, §40) -> hybrid (the real piano part under the sung melody); any other song
+    with a lead -> arrange; no lead -> piano
     when the piano is at least as loud as every other stem together (a piano piece with Demucs bleed:
     the bank's are 8-15 dB over the rest), else arrange, whose melody is then the band's top line
     (an instrumental track: the bank's T5 have the rest 11-17 dB over a piano stem, DESIGN.md §21)."""
@@ -379,16 +387,33 @@ def build_variant(source: str, parts: str, tx: dict[str, list[Note]], active: se
     if source == "hybrid":
         if "piano" not in active or lead_stem not in active or lead_stem == "piano":
             raise SystemExit(f"source=hybrid needs an audible piano and another audible lead stem (not '{lead_stem}')")
-        return arrange_hybrid(tx[lead_stem], tx["piano"], parts, lead_center=sung_center(lead_stem))
-    band = {s: tx.get(s, []) for s in band_stems(active, lead_stem)}  # --parts lead: run() transcribes them all
-    if lead_stem not in active and not band:
-        raise SystemExit(f"source=arrange but the lead stem '{lead_stem}' and every band stem are silent — "
-                         "pick another --lead-stem or use --source piano")
-    harmony = [n for ns in band.values() for n in ns]
-    bass = tx.get("bass", []) if "bass" in active else []
-    lead = tx[lead_stem] if lead_stem in active else []  # no lead: the band's top line throughout (§21)
-    return arrange_full(lead, harmony, bass, parts, grid=grid, chord_tones=chord_tones,
-                        lead_center=sung_center(lead_stem), band=band)
+        harmony, bass = [], []
+        if parts == "lead+full":  # the advanced score adds the band's parts the piano does not play (§39)
+            harmony = [n for s in band_stems(active, lead_stem) if s != "piano" for n in tx.get(s, [])]
+            bass = tx.get("bass", []) if "bass" in active else []
+        notes = arrange_hybrid(tx[lead_stem], tx["piano"], parts, lead_center=sung_center(lead_stem),
+                               harmony=harmony, bass=bass, grid=grid, chord_tones=chord_tones)
+    else:
+        band = {s: tx.get(s, []) for s in band_stems(active, lead_stem)}  # --parts lead: run() transcribes them all
+        if lead_stem not in active and not band:
+            raise SystemExit(f"source=arrange but the lead stem '{lead_stem}' and every band stem are silent — "
+                             "pick another --lead-stem or use --source piano")
+        harmony = [n for ns in band.values() for n in ns]
+        bass = tx.get("bass", []) if "bass" in active else []
+        lead = tx[lead_stem] if lead_stem in active else []  # no lead: the band's top line throughout (§21)
+        notes = arrange_full(lead, harmony, bass, parts, grid=grid, chord_tones=chord_tones,
+                             lead_center=sung_center(lead_stem), band=band)
+    # only the playable score: lead+full keeps the right hand's accompaniment (§39); RH_ACCOMP is read at call time
+    if arrange.RH_ACCOMP != "bars" or parts != "lead+accomp":
+        return notes
+    if grid is None:
+        raise ValueError("build_variant: the right hand's melody bars (§35) need the score grid")
+    out = melody_alone(notes, grid)  # the right hand plays the melody alone where it sounds (§35)
+    rh = lambda ns: sum(n.hand == "R" and n.role != "lead" for n in ns)  # noqa: E731
+    dropped = len(notes) - len(out)
+    log(f"[{source}] melody alone: {rh(notes) - rh(out) - dropped} right-hand accompaniment notes to the left hand, "
+        f"{dropped} dropped (no room in its reach)")
+    return out
 
 
 def run(args) -> dict:
@@ -398,9 +423,10 @@ def run(args) -> dict:
     why = beat_this_missing(args.beat_weights) if args.beats == "beat-this" else None
     if why:  # before the download, Demucs and the transcription, not after them
         raise SystemExit(f"--beats beat-this (the default): {why}. Fix: run {Path(__file__).parent.parent / 'setup.sh'}, "
-                         "or use --beats notes (the note tracker alone)")
+                         "or --beat-weights final0 (one model: the eight fold files are missing), or --beats notes (the note tracker alone)")
     if args.chord_model == "btc" and (args.parts == "lead+chords" or args.all_variants  # auto may route to arrange
-                                      or (args.source in ("arrange", "auto") and args.parts == "lead+accomp")):
+                                      or band_chords(args.source, args.parts)
+                                      or (args.source == "auto" and args.parts in BOTH_HANDS)):
         from .btc import btc_missing
         if why := btc_missing():
             raise SystemExit(f"--chord-model btc (the default): {why}. Fix: run {Path(__file__).parent.parent / 'setup.sh'}, "
@@ -438,7 +464,7 @@ def run(args) -> dict:
             need.add("piano")
         elif s == "hybrid" and "piano" in active and args.lead_stem in active and args.lead_stem != "piano":
             need |= {"piano", args.lead_stem}
-            if p == "lead+chords":  # chord_source hears the band too
+            if p in ("lead+chords", "lead+full"):  # chord_source hears the band too; lead+full plays it (§39)
                 need |= {x for x in (*HARMONY_STEMS, "bass") if x in active and x != args.lead_stem}
         elif s == "arrange" and (args.lead_stem in active or band_active):
             # the other stems too, even for a melody-only score: the beat grid needs the whole texture
@@ -485,7 +511,7 @@ def run(args) -> dict:
               "beats": beats_from, "lead_stem": args.lead_stem, "route": route(levels, args.lead_stem),
               "grids": {}, "variants": {}}
     grids, key_plans, chord_plans, chord_audio = {}, {}, {}, None
-    if any(p == "lead+chords" or (s == "arrange" and p == "lead+accomp") for s, p in variants):
+    if any(p == "lead+chords" or band_chords(s, p) for s, p in variants):
         report["chord_model"] = args.chord_model
     for source, parts in variants:
         tag = f"{source}_{parts.replace('+', '-')}"
@@ -510,7 +536,7 @@ def run(args) -> dict:
                 f"{int(np.ceil(grid.sec_to_q(duration) / grid.bar_q))} bars in {duration:.1f}s, "
                 f"key signature(s) {[s for _, s in key_plans[source]]}")
         grid, keys = grids[source], key_plans[source]
-        band = source == "arrange" and parts == "lead+accomp"  # its accompaniment keeps the chords' tones (§20)
+        band = band_chords(source, parts)
         if (parts == "lead+chords" or band) and source not in chord_plans:
             from .chords import BASIC, FULL, recognize
             if args.chord_model == "btc" and chord_audio is None:  # once a song: it hears the recording
@@ -586,8 +612,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "arrange = re-voice lead/harmony/bass stems for piano; hybrid = the sung melody over "
                          "the song's own piano part. DESIGN.md §4, §14")
     ap.add_argument("--parts", choices=PARTS, default="lead+accomp",
-                    help="lead = melody only (RH); lead+accomp = both hands; lead+chords = lead sheet "
-                         "(melody, chord symbols, LH block chords). PROVISIONAL default")
+                    help="lead = melody only (RH); lead+accomp = both hands, playable (PROVISIONAL default); lead+full = both hands, "
+                         "advanced: the fuller accompaniment the playable score thins (DESIGN.md §39); lead+chords = "
+                         "lead sheet (melody, chord symbols, LH block chords)")
     ap.add_argument("--chord-vocab", choices=("basic", "full"), default="basic",
                     help="lead+chords and arrange's accompaniment: basic = major, minor, dominant 7th; "
                          "full adds maj7, m7, dim, sus4")
@@ -611,9 +638,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "where its beats are regular, the note tracker elsewhere; notes = from the transcribed "
                          "notes alone (DESIGN.md §12)")
     from .meter import BEAT_THIS_SHA256
-    ap.add_argument("--beat-weights", default="final0", choices=sorted(BEAT_THIS_SHA256),
-                    help="Beat This! weights: final0 (default); fold0-fold7 are its cross-validation models, "
-                         "for scoring on pieces from its training data (corpus.BT_HELDOUT)")
+    ap.add_argument("--beat-weights", default="ensemble", choices=["ensemble", *sorted(BEAT_THIS_SHA256)],
+                    help="Beat This! weights: ensemble (default) = the mean of final0 and its 8 fold models "
+                         "(DESIGN.md §43); final0 alone; fold0-fold7 are its cross-validation models. 8 of the 9 heard the "
+                         "ASAP pieces of corpus.BT_HELDOUT: score those with their held-out fold, not the default")
     ap.add_argument("--audio-track", choices=("synth", "original", "mix", "none"), default="synth",
                     help="video soundtrack: synth = the transcription itself (default)")
     ap.add_argument("--start", type=float, help="trim: start offset (s)")

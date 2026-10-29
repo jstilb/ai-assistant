@@ -65,7 +65,8 @@ PIECES = (
 )
 # Beat This!'s training data holds most of ASAP: its 8-fold cross-validation (CPJKU/beat_this_annotations,
 # asap/8-folds.split, folds grouped by work) says which fold model never heard each piece. The three
-# pieces missing here are in none of its training data, so final0 is fair on them (DESIGN.md §12).
+# pieces missing here are in none of its training data, so final0 and the default nine-model mean are fair on
+# them (DESIGN.md §12, §43).
 BT_HELDOUT = {
     "Bach/Prelude/bwv_846": "fold3", "Chopin/Etudes_op_25/1": "fold7", "Rachmaninoff/Preludes_op_23/6": "fold0",
     "Schubert/Piano_Sonatas/664-1": "fold4", "Mozart/Piano_Sonatas/12-1": "fold4",
@@ -241,6 +242,15 @@ def shift_quarters(notes: list[RefNote], q2s, ph: float) -> tuple[list[RefNote],
             lambda q: q2s(np.asarray(q, dtype=float) + ph))
 
 
+def first_sharps(labels: list[str]) -> int | None:
+    """The key signature of the first beat line that names one ("db,<meter>,<sharps>", "b,,<sharps>", or
+    the "bR"/"dbR" forms), i.e. the piece's opening key (the excerpts start at the piece's start; later
+    changes not used). A score that opens with a pickup names its key on the pickup's beat, not on the
+    first downbeat, so downbeats alone miss it (DESIGN.md §37)."""
+    return next((int(f[2]) for f in (lab.split(",") for lab in labels)
+                 if f[0].rstrip("R") in ("b", "db") and len(f) > 2 and f[2].strip().lstrip("-").isdigit()), None)
+
+
 def reference(folder: str) -> tuple[Reference, object, tuple[float, float], dict]:
     """The score's notes (midi_score: repeats unfolded, one track per staff, bottom track = LH) in
     the excerpt's whole bars, the score-quarter -> performance-second map, its span in seconds, and
@@ -254,9 +264,7 @@ def reference(folder: str) -> tuple[Reference, object, tuple[float, float], dict
     sq = np.array([sm.time_to_tick(t) / sm.resolution for t in st])
     down = np.array([lab.startswith("db") for lab in labels])
     meter = next(lab.split(",")[1] for lab in labels if lab.startswith("db") and "," in lab)
-    # "db,<meter>,<sharps>": the key signature at the first downbeat that names one (later changes not used)
-    sharps = next((int(f[2]) for f in (lab.split(",") for lab in labels)
-                   if f[0] == "db" and len(f) > 2 and f[2].strip().lstrip("-").isdigit()), None)
+    sharps = first_sharps(labels)
     tracks = [i for i in sm.instruments if not i.is_drum and i.notes]
     notes = [RefNote(sm.time_to_tick(n.start) / sm.resolution, sm.time_to_tick(n.end) / sm.resolution, n.pitch,
                      "L" if k == len(tracks) - 1 and len(tracks) > 1 else "R", k)
@@ -303,7 +311,7 @@ def run_piece(folder: str, label: str, mode: str, beats: str = "notes", checkpoi
     out = ROOT / "runs" / label / slug(folder)
     out.mkdir(parents=True, exist_ok=True)
     wav = ROOT / "audio" / f"{slug(folder)}.wav"
-    ck = (BT_HELDOUT.get(folder, "final0") if checkpoint == "heldout" else checkpoint) if beats == "beat-this" else None
+    ck = (BT_HELDOUT.get(folder, "ensemble") if checkpoint == "heldout" else checkpoint) if beats == "beat-this" else None
     model = beat_this(wav, ck) if ck else None  # the recording, also for --input midi (MAESTRO is aligned)
     if mode == "audio":
         (ROOT / "tx").mkdir(exist_ok=True)

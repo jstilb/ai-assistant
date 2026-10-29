@@ -301,7 +301,8 @@ def hooktheory_timed(entry: dict) -> dict:
 
 def add_hooktheory(key: str, song_id: str, song_type: str, half: str, context: float = 20.0) -> Song:
     """Add one HookTheory entry to songs.json: its reference JSON in refs/, the YouTube recording
-    trimmed to the annotated section +- `context` seconds (the grid needs some music around it)."""
+    trimmed to the annotated section +- `context` seconds (the grid needs some music around it). Adding a
+    song again keeps the faults found by hand in its old entry (`ref` skip/why, shift/shift_why: §41)."""
     import gzip
     entry = json.load(gzip.open(HT_FILE))[key]
     ref = hooktheory_timed(entry)
@@ -310,10 +311,12 @@ def add_hooktheory(key: str, song_id: str, song_type: str, half: str, context: f
     path = ROOT / "refs" / "hooktheory" / f"{song_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(ref))
-    song = Song(song_id, song_type, half, entry["youtube"]["url"], round(start, 2), round(end - start, 2),
-                {"kind": "timed", "path": str(path)}, ref["source"])
     songs_file = ROOT / "songs.json"
-    songs = [d for d in (json.loads(songs_file.read_text()) if songs_file.exists() else []) if d["id"] != song_id]
+    old = json.loads(songs_file.read_text()) if songs_file.exists() else []
+    kept = next(({k: v for k, v in d["ref"].items() if k not in ("kind", "path")} for d in old if d["id"] == song_id), {})
+    song = Song(song_id, song_type, half, entry["youtube"]["url"], round(start, 2), round(end - start, 2),
+                {"kind": "timed", "path": str(path), **kept}, ref["source"])
+    songs = [d for d in old if d["id"] != song_id]
     songs_file.write_text(json.dumps(songs + [song.__dict__], indent=1))
     return song
 
@@ -327,14 +330,18 @@ def asap_reference(folder: str) -> Ref:
 def load_ref(song: Song, wav: Path) -> Ref | None:
     """The song's reference. `ref["skip"]` names parts found faulty (the reason in `ref["why"]`): a
     skipped melody is left out of the melody measures, skipped chords out of the chord measures; the
-    rest of the reference still counts."""
+    rest of the reference still counts. `ref["shift"]` (seconds, timed references): added to every time
+    of an annotation found offset from the recording (its beats and its melody both agree on the lag, §41)."""
     kind = song.ref.get("kind")
+    if "shift" in song.ref and kind != "timed":
+        raise ValueError(f"{song.id}: ref.shift moves timed references only, not a {kind!r} reference")
     if kind == "score":
         ref = score_reference(song.ref, wav)
     elif kind == "asap":
         ref = asap_reference(song.ref["folder"])
     elif kind == "timed":
-        ref = timed_reference(json.loads(Path(song.ref["path"]).expanduser().read_text()), song.start or 0.0)
+        ref = timed_reference(json.loads(Path(song.ref["path"]).expanduser().read_text()),
+                              (song.start or 0.0) - float(song.ref.get("shift", 0.0)))
     else:
         return None
     skip = song.ref.get("skip", ())
@@ -688,8 +695,9 @@ def run_song(song: Song, label: str, extra: list[str], redo: set[str]) -> dict:
         argv += ["--start", str(song.start)]
     if song.duration is not None:
         argv += ["--duration", str(song.duration)]
-    if song.audio.startswith("asap:"):  # the Beat This! fold model that never heard this piece (§12)
-        argv += ["--beat-weights", corpus.BT_HELDOUT.get(song.audio[5:], "final0")]
+    if song.audio.startswith("asap:") and song.audio[5:] in corpus.BT_HELDOUT:
+        argv += ["--beat-weights", corpus.BT_HELDOUT[song.audio[5:]]]  # the one model that never heard it (§12)
+    # every other song (the three ASAP pieces outside the folds too: no model heard them) gets the default (§43)
     t0 = time.time()
     report = pipeline.run(pipeline.build_parser().parse_args(argv))
     runtime = round(time.time() - t0, 1)
@@ -746,6 +754,8 @@ HEADLINE = (
     ("unplay", "free", ("unplayable",)), ("w_unplay", "free", ("load", "unplayable_written")),
     ("short", "free", ("load", "shorter_than_eighth")),
     ("ties", "free", ("load", "tied_on")), ("sym_bar", "free", ("load", "symbols_per_bar")),
+    ("ledger3", "free", ("load", "ledger3")),
+    ("rests", "free", ("load", "rests_per_bar")), ("two_v", "free", ("load", "two_voice_bars")),
     ("chroma", "free", ("chroma_sim",)),
 )
 

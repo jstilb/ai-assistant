@@ -22,23 +22,38 @@ if [[ ! -s "$CKPT" ]]; then
     "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
   mv "$CKPT.part" "$CKPT"
 fi
-# Beat This! weights for the default score grid (DESIGN.md §12): the authors' share, kept only when the
-# SHA-256 is the verified one (meter.py checks it again at every load).
+# Beat This! weights for the default score grid (DESIGN.md §12): final0 and its 8 fold models, whose mean is
+# the default (§43). The authors' share; each file kept only when its SHA-256 is the verified one (the same
+# values as meter.BEAT_THIS_SHA256; meter.py checks them again at every load).
 BT_DIR="${P2V_BEAT_THIS:-$HOME/.kaya/piano2video/models/beat_this}"
-BT_SHA=8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331
 mkdir -p "$BT_DIR"
-if [[ ! -s "$BT_DIR/final0.ckpt" ]] || [[ "$(shasum -a 256 "$BT_DIR/final0.ckpt" | cut -d' ' -f1)" != "$BT_SHA" ]]; then
-  echo "downloading Beat This! weights final0.ckpt (~81 MB)…"
-  # 7ik4RrBKTS273gp is the id of the authors' public share link (no password), not a secret
-  curl -fSL -u "7ik4RrBKTS273gp:" -o "$BT_DIR/final0.ckpt.part" "https://cloud.cp.jku.at/public.php/webdav/final0.ckpt"
-  got="$(shasum -a 256 "$BT_DIR/final0.ckpt.part" | cut -d' ' -f1)"
-  if [[ "$got" != "$BT_SHA" ]]; then
-    rm -f "$BT_DIR/final0.ckpt.part"
-    echo "final0.ckpt: SHA-256 $got is not the verified $BT_SHA (DESIGN.md §12); not installed" >&2
-    exit 1
+for pair in final0:8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331 \
+            fold0:f5c6b6726179e20710e4be6a0fba4018f6cbc89f32f9c0dfd15072cb047578ad \
+            fold1:617b5b9641cefa585c975c97ac4e7fb9c00165ec9827303e8a88fdbd5ff3b71f \
+            fold2:cece4323bccc50738e415c91c204c93ca7021e42ab3a24da6a84dccaa7cc0d4c \
+            fold3:849de186a21ed1cd41d0ac78dc412c61f5283dcafffa9dd32f390674c50792cf \
+            fold4:0a17b1691edbae73a7fac35f6d26d5f8f9aa483b0e3aff5d891c74140f836c52 \
+            fold5:ea651e7a0d1a1b243ad3ff268969c8c3d4b7e6d06b1bfb451b020d40526275c2 \
+            fold6:07b32a484f2c99b676e7061650ea2cd2f9f889d87ea6c712782c5855742070b1 \
+            fold7:f26bed3c18c8f338a39b5a9524ffea7dce654e847ccf3d006e147fa7bf71d43f; do
+  BT_NAME="${pair%%:*}" BT_SHA="${pair#*:}"
+  if [[ ! -s "$BT_DIR/$BT_NAME.ckpt" ]] || [[ "$(shasum -a 256 "$BT_DIR/$BT_NAME.ckpt" | cut -d' ' -f1)" != "$BT_SHA" ]]; then
+    echo "downloading Beat This! weights $BT_NAME.ckpt (~81 MB)…"
+    # 7ik4RrBKTS273gp is the id of the authors' public share link (no password), not a secret
+    if ! curl -fSL -u "7ik4RrBKTS273gp:" -o "$BT_DIR/$BT_NAME.ckpt.part" "https://cloud.cp.jku.at/public.php/webdav/$BT_NAME.ckpt"; then
+      rm -f "$BT_DIR/$BT_NAME.ckpt.part"
+      echo "$BT_NAME.ckpt: download failed; run setup.sh again (or use --beat-weights final0)" >&2
+      exit 1
+    fi
+    got="$(shasum -a 256 "$BT_DIR/$BT_NAME.ckpt.part" | cut -d' ' -f1)"
+    if [[ "$got" != "$BT_SHA" ]]; then
+      rm -f "$BT_DIR/$BT_NAME.ckpt.part"
+      echo "$BT_NAME.ckpt: SHA-256 $got is not the verified $BT_SHA (DESIGN.md §12); not installed" >&2
+      exit 1
+    fi
+    mv "$BT_DIR/$BT_NAME.ckpt.part" "$BT_DIR/$BT_NAME.ckpt"
   fi
-  mv "$BT_DIR/final0.ckpt.part" "$BT_DIR/final0.ckpt"
-fi
+done
 # SOME singing-note weights for the sung melody (DESIGN.md §15): the openvpi release zip, kept only when the
 # zip and the checkpoint inside it have the verified SHA-256 (some.py checks the checkpoint again at every load).
 SOME_DIR="${P2V_SOME:-$HOME/.kaya/piano2video/models/some}"

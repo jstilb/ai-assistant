@@ -355,14 +355,19 @@ def notation_load(path: Path, q_lo: float, q_hi: float, reach: int = 15, max_not
     notes tied on to another (split by a bar line or beat). A hidden rest (a lower voice's gap) is not a
     symbol, nor is a chord symbol; the bars end where the score ends (the whole-score call passes q_hi = 1e9). Written
     playability: the share of a staff's written onsets (all voices) that strike more than `max_notes`
-    notes or span more than `reach` semitones (the bank's rule on the MIDI, here on the score)."""
-    from music21 import converter, harmony, meter
+    notes or span more than `reach` semitones (the bank's rule on the MIDI, here on the score). Voices
+    (DESIGN.md §35): visible rests per bar, and the share of a staff's bars where two voices write notes."""
+    from music21 import converter, harmony, meter, stream
     s = converter.parse(str(path))
     ts = next(iter(s.recurse().getElementsByClass(meter.TimeSignature)), None)
     bar_q = float(ts.barDuration.quarterLength) if ts is not None else 4.0
-    sym = short = tied = notes = 0
+    sym = short = tied = notes = rests = two = staff_bars = 0
     onsets: list[set[int]] = []
     for part in s.parts:
+        for m in part.getElementsByClass(stream.Measure):
+            if q_lo <= float(m.offset) < q_hi:
+                staff_bars += 1
+                two += sum(any(not isinstance(e, harmony.ChordSymbol) for e in v.notes) for v in m.voices) >= 2
         struck: dict[float, set[int]] = {}
         for el in part.flatten().notesAndRests:
             if not q_lo <= float(el.offset) < q_hi or el.duration.isGrace or isinstance(el, harmony.ChordSymbol):
@@ -371,6 +376,7 @@ def notation_load(path: Path, q_lo: float, q_hi: float, reach: int = 15, max_not
                 continue
             sym += 1
             if el.isRest:
+                rests += 1
                 continue
             notes += 1
             short += el.quarterLength < 0.5 - 1e-6
@@ -381,11 +387,36 @@ def notation_load(path: Path, q_lo: float, q_hi: float, reach: int = 15, max_not
         onsets.extend(struck.values())
     end = float(np.ceil(float(s.highestTime) / bar_q - 1e-9) * bar_q)  # the last bar, whole
     bars = max(1e-9, (min(q_hi, end) - q_lo) / bar_q)
+    ledgers = written_ledgers(s, q_lo, q_hi)
     return {"symbols_per_bar": round(sym / bars, 1),
             "shorter_than_eighth": round(short / max(1, notes), 3),
             "tied_on": round(tied / max(1, notes), 3),
             "unplayable_written": round(sum(len(ps) > max_notes or max(ps) - min(ps) > reach for ps in onsets)
-                                        / max(1, len(onsets)), 3)}
+                                        / max(1, len(onsets)), 3),
+            "ledger_mean": round(float(np.mean(ledgers)), 3) if ledgers else None,
+            "ledger3": round(float(np.mean([x >= 3 for x in ledgers])), 3) if ledgers else None,
+            "rests_per_bar": round(rests / bars, 2), "two_voice_bars": round(two / max(1, staff_bars), 3)}
+
+
+def written_ledgers(s, q_lo: float, q_hi: float) -> list[int]:
+    """Ledger lines of every written note head between two quarter offsets, read with the clef in
+    force and any 8va/8vb (a parsed score keeps sounding pitches under an ottava; DESIGN.md §32)."""
+    from music21 import clef, harmony, spanner
+    from .notation import ledger_lines
+    out = []
+    for part in s.parts:
+        cl = None
+        for el in part.flatten().getElementsByClass(["Clef", "Note", "Chord"]):
+            if isinstance(el, clef.Clef):
+                cl = el
+                continue
+            if (cl is None or cl.lowestLine is None or not q_lo <= float(el.offset) < q_hi
+                    or el.duration.isGrace or isinstance(el, harmony.ChordSymbol)):
+                continue
+            ott = next((sp for sp in el.getSpannerSites() if isinstance(sp, spanner.Ottava)), None)
+            shift = 0 if ott is None or ott.transposing else -ott.interval().diatonic.generic.staffDistance
+            out.extend(ledger_lines(p.diatonicNoteNum + shift, cl.lowestLine) for p in el.pitches)
+    return out
 
 
 def bar_check(ref: Reference, q2s, est: list[Note], low: float = 0.6) -> dict:

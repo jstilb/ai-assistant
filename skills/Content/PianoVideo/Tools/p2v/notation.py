@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .arrange import Note
+from .arrange import Note, melody_bars, sort_notes
 from .meter import Grid
 
 # Onset snapping per path and note role (DESIGN.md §17). The pipeline passes ROLE_PENALTY[source] to
@@ -24,6 +24,9 @@ TATUM_ONLY = 0.5  # a role penalty this high never takes the 16th: such a role's
 # LEAD_VOICE: a hand that holds lead notes and other notes is written in two voices, the lead (stems
 # up) over the rest (stems down), so the accompaniment's onsets do not cut a held melody note.
 LEAD_VOICE = True
+# LEAD_BARS: with LEAD_VOICE, a bar without melody writes the hand's other notes as the lead voice, so its bar shows
+# no rests stacked over the accompaniment (DESIGN.md §35)
+LEAD_BARS = True
 
 
 @dataclass(frozen=True)
@@ -388,6 +391,84 @@ def _from(plan: list[tuple[float, float]], shift: float) -> list[tuple[float, fl
     return head + [(off - shift, v) for off, v in plan if off > shift + 1e-9]
 
 
+# Clefs and octave lines (DESIGN.md §32). A note head on 3 or more ledger lines is hard to read: the bank's
+# band bass sat there (deadmau5 Some Chords: 88% of the left hand's heads, Sober 51%). Per bar, each staff
+# takes one of its modes: its home clef, the home clef under an octave line (8va over the treble, 8vb under
+# the bass), or the other clef. A bar costs the ledger lines past 2 of its note heads, + STAFF_AWAY out of
+# the home mode; a Viterbi path over the bars adds STAFF_CHANGE for each change of mode, so a staff does not
+# flip for one high note. Mode = (clef, diatonic steps written minus sounding).
+STAFF_MODES = {"R": (("treble", 0), ("treble", -7), ("bass", 0)), "L": (("bass", 0), ("bass", 7), ("treble", 0))}
+STAFF_AWAY = 0.5
+STAFF_CHANGE = 3.0
+STAFF_CLEFS = True  # read at call time: bank --set sweeps it
+LOWEST_LINE = {"treble": 31, "bass": 19}  # music21 diatonic note numbers: E4, G2
+
+
+def ledger_lines(dnn: int, lowest_line: int) -> int:
+    """Ledger lines a note head needs on a five-line staff whose lowest line is `lowest_line`
+    (music21 diatonic note numbers: E4 = 31 is the treble clef's lowest line, G2 = 19 the bass clef's)."""
+    top = lowest_line + 8
+    if dnn > top + 1:
+        return (dnn - top) // 2
+    if dnn < lowest_line - 1:
+        return (lowest_line - dnn) // 2
+    return 0
+
+
+def staff_modes(bars: list[list[int]], hand: str, away: float | None = None, change: float | None = None) -> list[int]:
+    """One mode (an index into STAFF_MODES[hand]) per bar; `bars` holds each bar's written note heads as
+    diatonic note numbers (music21 `Pitch.diatonicNoteNum` of the spelled pitch). An empty bar costs nothing
+    in any mode, so a staff keeps its mode through a rest."""
+    away = STAFF_AWAY if away is None else away
+    change = STAFF_CHANGE if change is None else change
+    modes = STAFF_MODES[hand]
+    if not bars:
+        return []
+    cost = np.array([[sum(max(0, ledger_lines(d + sh, LOWEST_LINE[c]) - 2) for d in b) + (away if k and b else 0.0)
+                      for k, (c, sh) in enumerate(modes)] for b in bars])
+    n, m = cost.shape
+    acc, back = cost[0].copy(), np.zeros((n, m), dtype=int)
+    acc[1:] += change  # the staff starts in its home mode: leaving it at bar 1 is a change too
+    for i in range(1, n):
+        step = acc[:, None] + change * (1 - np.eye(m))  # [from, to]
+        back[i] = np.argmin(step, axis=0)
+        acc = step[back[i], np.arange(m)] + cost[i]
+    path = [int(np.argmin(acc))]
+    for i in range(n - 1, 0, -1):
+        path.append(int(back[i][path[-1]]))
+    return path[::-1]
+
+
+def apply_staff_modes(part, placed: list, hand: str, bar_q: float) -> list[int]:
+    """Clef changes and octave lines on one staff, from `staff_modes` over its bars; `placed` = the
+    staff's (offset, note or chord) at sounding pitch (the octave lines keep it: transposing=False)."""
+    from itertools import groupby
+
+    from music21 import clef, spanner
+    bar_of = lambda off: int(off / bar_q + 1e-9)  # noqa: E731
+    placed = sorted(placed, key=lambda t: t[0])
+    bars: list[list[int]] = [[] for _ in range(bar_of(placed[-1][0]) + 1)]
+    for off, el in placed:
+        bars[bar_of(off)].extend(p.diatonicNoteNum for p in el.pitches)
+    path = staff_modes(bars, hand)
+    modes = STAFF_MODES[hand]
+    cur = modes[0][0]
+    for b, k in enumerate(path):
+        if modes[k][0] != cur:
+            cur = modes[k][0]
+            if b == 0:
+                for old in [c for c in part.getElementsByClass(clef.Clef) if c.offset == 0]:
+                    part.remove(old)
+            part.insert(b * bar_q, clef.TrebleClef() if cur == "treble" else clef.BassClef())
+    for k, run in groupby(range(len(path)), key=lambda b: path[b]):
+        shift = modes[k][1]
+        span = set(run)
+        els = [el for off, el in placed if bar_of(off) in span]
+        if shift and els:
+            part.insert(0, spanner.Ottava(*els, type="8va" if shift < 0 else "8vb", transposing=False))
+    return path
+
+
 def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float | None = 0.15,
                 release_on_beat: bool = True, min_tatum: bool = True,
                 keys: list[tuple[float, int]] | None = None, chords: list | None = None,
@@ -441,7 +522,17 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
                                                                 bass=bass))
         hn = [n for n in notes if n.hand == hand]
         lead = [n for n in hn if n.role == "lead"]
-        voices = [lead, [n for n in hn if n.role != "lead"]] if lead_voice and 0 < len(lead) < len(hn) else [hn]
+        voices, bars = [hn], None
+        if lead_voice and 0 < len(lead) < len(hn):
+            rest = [n for n in hn if n.role != "lead"]
+            if LEAD_BARS:  # read at call time: in a bar without melody the rest of the hand is the lead voice (§35)
+                bars = melody_bars(lead, grid)
+                at = [int(np.floor((q + shift) / grid.bar_q + 1e-9)) in bars
+                      for q in snap_notes(rest, sec_to_q, grid.tatum_q, fine_penalty, role_penalty)]
+                lead = sort_notes(lead + [n for n, b in zip(rest, at) if not b])
+                rest = [n for n, b in zip(rest, at) if b]
+            voices = [lead, rest] if rest else [lead]
+        placed = []
         for k, vn in enumerate(voices):
             two = len(voices) > 1
             target = stream.Voice() if two else p
@@ -450,12 +541,15 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
                 ps = [spell(m, sharps_at(keys, ev.offset)) for m in ev.pitches]
                 el = note.Note(ps[0]) if len(ps) == 1 else chord.Chord(ps)
                 el.quarterLength = ev.dur
-                if two:
+                if two and (bars is None or int(np.floor((ev.offset + shift) / grid.bar_q + 1e-9)) in bars):
                     el.stemDirection = "up" if k == 0 else "down"
                 target.insert(ev.offset, el)
+                placed.append((ev.offset, el))
             if two:
                 target.id = str(k + 1)
                 p.insert(0, target)
+        if STAFF_CLEFS and placed:  # read at call time: bank --set sweeps it
+            apply_staff_modes(p, placed, hand, grid.bar_q)
         parts.append(p)
     # visible rests in every gap, up to the end of the last bar: left to the exporter, music21
     # fills gaps with hidden rests and the PDF shows blank space a beginner can't count. Two voices:

@@ -51,6 +51,10 @@ BEAT_THIS_SHA256 = {
     "fold6": "07b32a484f2c99b676e7061650ea2cd2f9f889d87ea6c712782c5855742070b1",
     "fold7": "f26bed3c18c8f338a39b5a9524ffea7dce654e847ccf3d006e147fa7bf71d43f",
 }
+# "ensemble" (the default since §43): the mean logit of all nine models. On songs none of them trained on it
+# breaks fewer grids than final0 alone (Aerodynamic's beat F 0.40 -> 0.99, Starlight's written position
+# 0.65 -> 0.98). Not for pieces in their training data: 8 of the 9 heard every ASAP piece of BT_HELDOUT.
+BEAT_THIS_ENSEMBLE = ("final0", *(f"fold{k}" for k in range(8)))
 BT_FPS = 50  # Beat This! frames per second
 
 
@@ -379,14 +383,48 @@ class ModelBeats:
     downbeat: np.ndarray
 
 
-def beat_this_missing(checkpoint: str = "final0") -> str | None:
+def beat_this_missing(checkpoint: str = "ensemble") -> str | None:
     """Why Beat This! can't run here (None when it can): the package or the pinned weights."""
     import importlib.util
     if importlib.util.find_spec("beat_this") is None:
         return "package beat-this not installed"
-    if not (BEAT_THIS_DIR / f"{checkpoint}.ckpt").exists():
-        return f"no weights at {BEAT_THIS_DIR / f'{checkpoint}.ckpt'} (DESIGN.md §12)"
+    for name in BEAT_THIS_ENSEMBLE if checkpoint == "ensemble" else (checkpoint,):
+        if not (BEAT_THIS_DIR / f"{name}.ckpt").exists():
+            return f"no weights at {BEAT_THIS_DIR / f'{name}.ckpt'} (DESIGN.md §12, §43)"
+        if (why := _bad_weights(name)) is not None:  # before Demucs and the transcription, not after them
+            return why
     return None
+
+
+_BT_VERIFIED: set[tuple[str, int, int]] = set()  # (path, size, mtime_ns) whose SHA-256 was the pinned one
+
+
+def _bad_weights(checkpoint: str) -> str | None:
+    """Why the checkpoint file is not the verified one (None when it is). Hashed once per process and
+    file state: the nine-model default would otherwise read 730 MB twice for every song."""
+    import hashlib
+    path = BEAT_THIS_DIR / f"{checkpoint}.ckpt"
+    st = path.stat()
+    key = (str(path), st.st_size, st.st_mtime_ns)
+    if key in _BT_VERIFIED:
+        return None
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != BEAT_THIS_SHA256.get(checkpoint):
+        return f"{path}: SHA-256 {digest} is not the verified one (DESIGN.md §12)"
+    _BT_VERIFIED.add(key)
+    return None
+
+
+def mean_logits(runs: list[ModelBeats]) -> ModelBeats:
+    """The models' mean beat and downbeat logits, frame by frame (over the frames all of them have: the
+    runs share one spectrogram, so their lengths may differ by a frame at most)."""
+    if not runs:
+        raise ValueError("mean_logits: no model runs")
+    lens = [len(r.beat) for r in runs] + [len(r.downbeat) for r in runs]
+    if max(lens) - min(lens) > 1:
+        raise ValueError(f"mean_logits: the runs' frame counts differ: {sorted(set(lens))}")
+    n = min(lens)
+    return ModelBeats(np.mean([r.beat[:n] for r in runs], axis=0), np.mean([r.downbeat[:n] for r in runs], axis=0))
 
 
 _BT_MODELS: dict = {}
@@ -396,11 +434,9 @@ def _beat_this_model(checkpoint: str):
     """The checkpoint as a plain torch module: SHA-256 must be the pinned one, tensors only
     (weights_only), every key and shape matching (strict)."""
     if checkpoint not in _BT_MODELS:
-        import hashlib
         path = BEAT_THIS_DIR / f"{checkpoint}.ckpt"
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != BEAT_THIS_SHA256.get(checkpoint):
-            raise RuntimeError(f"{path}: SHA-256 {digest} is not the verified one (DESIGN.md §12)")
+        if (why := _bad_weights(checkpoint)) is not None:
+            raise RuntimeError(why)
         import inspect
         import torch
         from beat_this.model.beat_tracker import BeatThis
@@ -412,10 +448,11 @@ def _beat_this_model(checkpoint: str):
     return _BT_MODELS[checkpoint]
 
 
-def beat_this(wav: Path, checkpoint: str = "final0", cache: Path | None = None) -> ModelBeats:
-    """Beat and downbeat logits of the recording (its own log-mel front end, 30 s chunks). With
-    `cache` (an .npz in the song's work dir) they are read from it when it exists and written to it
-    when not, so grid changes can be measured without the model (DESIGN.md §18)."""
+def beat_this(wav: Path, checkpoint: str = "ensemble", cache: Path | None = None) -> ModelBeats:
+    """Beat and downbeat logits of the recording (its own log-mel front end, 30 s chunks); "ensemble"
+    runs the nine models on one spectrogram, one model in memory at a time, and keeps their mean
+    (`mean_logits`, DESIGN.md §43). With `cache` (an .npz in the song's work dir) they are read from it
+    when it exists and written to it when not, so grid changes can be measured without the model (§18)."""
     if cache is not None and (mb := _logits_cached(cache, wav)) is not None:
         return mb
     import librosa
@@ -424,10 +461,16 @@ def beat_this(wav: Path, checkpoint: str = "final0", cache: Path | None = None) 
     from beat_this.preprocessing import LogMelSpect
     y, _ = librosa.load(str(wav), sr=SR, mono=True)
     spect = LogMelSpect()(torch.from_numpy(y))
+    names = BEAT_THIS_ENSEMBLE if checkpoint == "ensemble" else (checkpoint,)
+    runs = []
     with torch.inference_mode():
-        p = split_predict_aggregate(spect, chunk_size=1500, border_size=6, overlap_mode="keep_first",
-                                    model=_beat_this_model(checkpoint))
-    mb = ModelBeats(p["beat"].float().numpy(), p["downbeat"].float().numpy())
+        for name in names:
+            p = split_predict_aggregate(spect, chunk_size=1500, border_size=6, overlap_mode="keep_first",
+                                        model=_beat_this_model(name))
+            runs.append(ModelBeats(p["beat"].float().numpy(), p["downbeat"].float().numpy()))
+            if len(names) > 1:
+                _BT_MODELS.pop(name, None)  # nine 81 MB models: keep one in memory at a time
+    mb = mean_logits(runs)
     if cache is not None:
         _cache_logits(cache, mb)
     return mb
