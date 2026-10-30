@@ -15,7 +15,7 @@ Sessions run on the 1M context window with compaction off. Quality drops long be
 
 1. **Reach a clean point.** Finish or revert the current edit. Leave tests in a known state: green, or red with the reason written in the handoff. If subagents still run, wait for their results; a result that arrives after this session stops is lost.
 
-2. **Save the work.** In a worktree: commit, then `git push -u origin <branch>` if the repo has a remote. Do not merge unless the task already reached its merge step (Kaya: `bin/merge-to-main.sh`). Stop any dev servers this session started.
+2. **Save the work.** In a worktree: commit, then `git push -u origin <branch>` if the repo has a remote. Do not merge unless the task already reached its merge step (Kaya: `bin/merge-to-main.sh`). Stop any dev servers this session started, then check that none remain: `ps -axo pid,ppid,command | grep <worktree path>` (a background `npm exec wrangler dev` outlives the session as an orphan; four did on 2026-10-27).
 
 3. **Write the handoff file** with the template below. Write it for a reader with no context: absolute paths, branch names, exact commands.
    - If the project already keeps one (example: Intake `tracker/HANDOFF.md`), update that file and commit it.
@@ -73,4 +73,9 @@ Traps hit and approaches that failed (with the reason), so the next session does
 1. Read the handoff file first.
 2. If the handoff names a worktree and your cwd is not that worktree, call `EnterWorktree` with its `path`.
 3. Check the state before new work: `git log --oneline -5`, `git status`, and the tests the handoff names. If the state differs from the handoff, trust the repo and note the difference.
-4. Continue from **Next steps**. Keep the same rules. At the next guard note, run this skill again with `<n+1>`.
+4. **Remove the previous session's worktree** if you work in a different one. Each chain session that starts its own worktree leaves the old one behind; on 2026-10-29 that was ~130 worktrees (Kaya and Intake), ~30 GB, and a 98%-full disk. Remove it only when all of these hold:
+   - its branch is merged (Kaya: `git merge-base --is-ancestor <branch> main`) or pushed (`git -C <path> rev-parse HEAD` equals `origin/<branch>`);
+   - neither the handoff nor a watcher still uses it (`lsof -d cwd -Fn | grep <path>` is empty).
+
+   Then run `git worktree remove <path>` without `--force`: git refuses a tree with changes, and the branch stays. If git refuses, leave the tree and name it in your report.
+5. Continue from **Next steps**. Keep the same rules. At the next guard note, run this skill again with `<n+1>`.
