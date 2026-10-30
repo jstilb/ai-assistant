@@ -24,7 +24,7 @@ results/<label>.json.
 
 Usage (from Tools/):
   python -m p2v.bank list
-  python -m p2v.bank run --label base [--types T1,T3] [--half tune|check] [--songs a,b] [--set meter.SURE_CV=0.15]
+  python -m p2v.bank run --label base [--types T1,T3] [--half tune|check] [--songs a,b] [--set meter.DBN_RANGE=1.3]
   python -m p2v.bank compare base new [--variant arrange_lead-accomp]
 """
 
@@ -683,7 +683,37 @@ def audio_input(song: Song) -> str:
     return song.audio
 
 
-def run_song(song: Song, label: str, extra: list[str], redo: set[str]) -> dict:
+COMPOUND = ("6/8", "9/8", "12/8")
+
+
+def ref_hint(ref: Ref | None, downbeat: bool = False) -> list[str]:
+    """`--meter` / `--bpm` from the song's reference, as a user with its score would give them (`run --hints ref`,
+    DESIGN.md §48). 2/2 is written 4/4 and 6/4 12/8 (the same bars, as `same_bars` counts them); a meter the grid
+    cannot write (3/8, 3/2, 5/4 ...) or a reference without beats gives no hint. `downbeat` (`--hints ref-downbeat`,
+    §49) adds `--downbeat` at the reference's first bar line at or after 0 s (a trimmed song's reference may start
+    before its input)."""
+    out = _ref_meter_bpm(ref)
+    if downbeat and ref is not None and ref.downbeats is not None:
+        ok = np.asarray(ref.downbeats, dtype=float)
+        ok = ok[ok >= 0.0]
+        if len(ok):
+            out += ["--downbeat", f"{float(ok[0]):.3f}"]
+    return out
+
+
+def _ref_meter_bpm(ref: Ref | None) -> list[str]:
+    from .meter import METERS
+    if ref is None or not ref.meter or ref.beats is None or len(ref.beats) <= 2:
+        return []
+    m = {"2/2": "4/4", "6/4": "12/8"}.get(ref.meter, ref.meter)
+    step = float(np.median(np.diff(np.asarray(ref.beats, dtype=float))))
+    if m not in METERS.values() or step <= 0:
+        return []
+    bpm = 60.0 / step * beat_quarters(ref.meter) / (1.5 if m in COMPOUND else 1.0)
+    return ["--meter", m, "--bpm", f"{bpm:.1f}"] if 10.0 <= bpm <= 400.0 else []
+
+
+def run_song(song: Song, label: str, extra: list[str], redo: set[str], hints: str | None = None) -> dict:
     from . import corpus, pipeline
     wd = work_dir(song)
     for stage in redo:  # a change to separation or transcription must not read old caches
@@ -691,6 +721,10 @@ def run_song(song: Song, label: str, extra: list[str], redo: set[str]) -> dict:
             shutil.rmtree(p, ignore_errors=True)
     argv = [audio_input(song), "--out", str(wd.parent), "--name", wd.name, "--all-variants", "--no-video",
             "--no-pdf", "--audio-track", "none", *extra]
+    if hints in ("ref", "ref-downbeat"):
+        if not (wd / "input.wav").exists():
+            raise RuntimeError(f"--hints {hints} needs the song's input.wav: run it once without hints first")
+        argv += ref_hint(load_ref(song, wd / "input.wav"), downbeat=hints == "ref-downbeat")
     if song.start is not None:
         argv += ["--start", str(song.start)]
     if song.duration is not None:
@@ -722,7 +756,8 @@ def score_song(song: Song, out: Path) -> dict:
     r = route(report["stem_db"], report.get("lead_stem", "vocals"))  # levels rounded to 0.1 dB in the report
     res = {"id": song.id, "type": song.type, "half": song.half, "runtime_s": report.get("runtime_s"),
            "stem_db": report["stem_db"], "piano_input": report.get("piano_input"),
-           "route": r, "route_ok": r == EXPECTED_SOURCE[song.type], "ref": song.ref.get("kind"), "variants": {}}
+           "route": r, "route_ok": r == EXPECTED_SOURCE[song.type], "ref": song.ref.get("kind"),
+           "hint": report.get("hint"), "variants": {}}  # the --meter / --bpm this song ran with (§48), or None
     if ref is not None:
         res["ref_span_s"] = [round(x, 2) for x in ref.span]
     for tag in report["variants"]:
@@ -748,9 +783,12 @@ HEADLINE = (
     ("key", "invariant", ("key_match",)), ("mel_f1_pc", "invariant", ("melody", "f1_pc")), ("mel_ovl", "invariant", ("melody", "overlap_pc")),
     ("mel_pos", "invariant", ("melody_notation", "onset_in_bar_exact")),
     ("mel_len", "invariant", ("melody_notation", "written_length_exact")),
+    ("mel_qpos", "invariant", ("melody_notation", "onset_in_quarter_exact")),  # without the bar (§47)
+    ("mel_qlen", "invariant", ("melody_notation", "written_quarters_exact")),
     ("chord_mm", "invariant", ("chords", "majmin")), ("chord_fit", "invariant", ("chord_fit",)),
     ("note_f1", "fidelity", ("notes", "exact", "f1")), ("hands", "fidelity", ("hand_agreement",)),
     ("pos", "fidelity", ("notation", "onset_in_bar_exact")), ("len", "fidelity", ("notation", "written_length_exact")),
+    ("qpos", "fidelity", ("notation", "onset_in_quarter_exact")), ("qlen", "fidelity", ("notation", "written_quarters_exact")),
     ("unplay", "free", ("unplayable",)), ("w_unplay", "free", ("load", "unplayable_written")),
     ("short", "free", ("load", "shorter_than_eighth")),
     ("ties", "free", ("load", "tied_on")), ("sym_bar", "free", ("load", "symbols_per_bar")),
@@ -836,6 +874,70 @@ def compare(a: str, b: str, variant: str | None):
                     print(f"  {tag:22s} {half:5s} n={ma.get('n', 0)}/{mb.get('n', 0)} {cells}")
 
 
+# ------------------------------------------------------------------- gate -- #
+# Kaya's adoption rule (DESIGN.md §45; Kaya's method, not Jm's rule: change it when it stops serving the goal):
+# a change is adopted when, on the tune half, the 95% CI of the mean per-song change of its target measure lies
+# above 0 over all songs, and no CI of any measure (over all songs at 95%, per group Bonferroni-wide, `gate`)
+# lies below 0; the check half then confirms it once
+# by the same rule. Paired changes, because the songs differ far more than one change moves them (§44).
+
+GATE_MEASURES = ("beat_f_best", "downbeat_f", "meter_match", "tempo_match")
+
+
+def hash_half(key: str) -> str:
+    """'tune' or 'check' from a fixed hash of the id: a set's split that no one chose and that stays as it grows."""
+    return "tune" if hashlib.sha1(key.encode()).digest()[0] % 2 == 0 else "check"
+
+
+def paired_deltas(a: dict[str, float | bool | None], b: dict[str, float | bool | None]) -> dict[str, float]:
+    """b − a for every id measured in both (True / False count as 1 / 0)."""
+    return {k: float(b[k]) - float(a[k]) for k in a if k in b and a[k] is not None and b[k] is not None}
+
+
+def delta_stats(deltas, n_boot: int = 10000, seed: int = 0, alpha: float = 0.05) -> dict:
+    """n, the mean change, its 1 − alpha bootstrap CI (percentile, seeded: the same numbers every run; None under 2
+    songs), and the songs that got better and worse."""
+    x = np.asarray(list(deltas), dtype=float)
+    out = {"n": len(x), "mean": round(float(x.mean()), 4) if len(x) else None, "lo": None, "hi": None,
+           "better": int((x > 1e-9).sum()), "worse": int((x < -1e-9).sum())}
+    if len(x) >= 2:
+        means = x[np.random.default_rng(seed).integers(0, len(x), (n_boot, len(x)))].mean(axis=1)
+        out["lo"], out["hi"] = (round(float(v), 4) for v in np.percentile(means, [50 * alpha, 100 - 50 * alpha]))
+    return out
+
+
+def gate(rows_a: list[dict], rows_b: list[dict], measures=GATE_MEASURES) -> dict[str, dict[str, dict]]:
+    """Per measure, over 'all' songs and per group (`row["group"]`): `delta_stats` of the paired change from
+    rows_a to rows_b (rows: dicts with "id", "group" and the measures). 'all' has a 95% CI; the groups' CIs are
+    Bonferroni-wide (alpha 0.05 / (measures x groups)), so that among some 44 group CIs one does not fall
+    below 0 by chance and veto a change (code review of §45)."""
+    a, b = {r["id"]: r for r in rows_a}, {r["id"]: r for r in rows_b}
+    ids = [i for i in a if i in b]
+    groups = sorted({a[i]["group"] for i in ids})
+    alpha_g = 0.05 / (len(measures) * max(1, len(groups)))
+    out = {}
+    for m in measures:
+        d = paired_deltas({i: a[i].get(m) for i in ids}, {i: b[i].get(m) for i in ids})
+        out[m] = {"all": delta_stats(d.values())}
+        out[m].update({g: delta_stats((v for i, v in d.items() if a[i]["group"] == g), alpha=alpha_g) for g in groups})
+    return out
+
+
+def adopt(g: dict[str, dict[str, dict]], target: str) -> tuple[bool, list[str]]:
+    """Kaya's rule on one half's `gate`: the target measure's CI over all songs above 0, and no group's CI of
+    any measure below 0. The verdict and its reasons."""
+    t = g[target]["all"]
+    ok = t["lo"] is not None and t["lo"] > 0
+    why = [f"{target} all: n {t['n']}, mean {t['mean']}, CI [{t['lo']}, {t['hi']}] "
+           f"{'above 0' if ok else 'not above 0'}"]
+    for m, per in g.items():
+        for grp, s in per.items():
+            if s["hi"] is not None and s["hi"] < 0:
+                ok = False
+                why.append(f"{m} {grp}: n {s['n']}, mean {s['mean']}, CI [{s['lo']}, {s['hi']}] below 0")
+    return ok, why
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -851,9 +953,12 @@ def main(argv=None):
     r.add_argument("--half", choices=("tune", "check"))
     r.add_argument("--songs", help="comma list of song ids")
     r.add_argument("--set", action="append", default=[], metavar="MODULE.NAME=VALUE",
-                   help="change a p2v module constant for this run (e.g. meter.SURE_CV=0.15)")
+                   help="change a p2v module constant for this run (e.g. meter.DBN_RANGE=1.3)")
     r.add_argument("--redo", action="append", default=[], choices=("stems", "tx"),
                    help="discard cached stems or transcriptions first (when the change is in those stages)")
+    r.add_argument("--hints", choices=("ref", "ref-downbeat"),
+                   help="ref: give each song its reference's meter and tempo as `--meter` / `--bpm` (§48); "
+                        "ref-downbeat: and its first bar line as `--downbeat` (§49)")
     r.add_argument("pipeline_args", nargs="*", help="extra pipeline flags after --, e.g. -- --beats notes")
     sc = sub.add_parser("score", help="score a run's saved outputs again (after a change to a measure or the router)")
     sc.add_argument("--label", required=True, help="the run to score (runs/<label>/)")
@@ -878,13 +983,13 @@ def main(argv=None):
         args.label, src = args.as_label, args.label
         prev = ROOT / "results" / f"{src}.json"  # keep the source run's settings with its scores
         old = json.loads(prev.read_text()) if prev.exists() else {}
-        args.set, args.pipeline_args = [], old.get("pipeline_args", [])
+        args.set, args.pipeline_args, args.hints = [], old.get("pipeline_args", []), old.get("hints")
         todo = [s for s in songs if (ROOT / "runs" / src / s.id / "report.json").exists()]
         work = lambda s: score_song(s, ROOT / "runs" / src / s.id)  # noqa: E731
     else:
         old = {}
         todo = select(songs, args.types, args.half, args.songs)
-        work = lambda s: run_song(s, args.label, args.pipeline_args, set(args.redo))  # noqa: E731
+        work = lambda s: run_song(s, args.label, args.pipeline_args, set(args.redo), args.hints)  # noqa: E731
     changed = apply_settings(args.set)
     results, failed = [], {}
     for s in todo:
@@ -898,7 +1003,7 @@ def main(argv=None):
     summary = summarize(results)
     (ROOT / "results" / f"{args.label}.json").write_text(json.dumps(
         {"label": args.label, "settings": {k: repr(v) for k, v in changed.items()} or old.get("settings", {}),
-         "pipeline_args": args.pipeline_args,
+         "pipeline_args": args.pipeline_args, "hints": args.hints,
          "failed": failed, "router": router_accuracy(results), "summary": summary, "songs": results},
         indent=2, default=_json))
     print_summary(summary, {t: sum(s.type == t for s in todo) for t in TYPES}, router_accuracy(results))

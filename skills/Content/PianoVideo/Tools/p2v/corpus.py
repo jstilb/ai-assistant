@@ -131,9 +131,33 @@ class _HttpFile(io.RawIOBase):
         return got
 
 
+def maestro_zip() -> zipfile.ZipFile:
+    return zipfile.ZipFile(io.BufferedReader(_HttpFile(MAESTRO_ZIP), buffer_size=1 << 16))
+
+
+def read_performance(z: zipfile.ZipFile, row: dict, length: float) -> tuple[np.ndarray, int]:
+    """`length` seconds of a performance's MAESTRO recording from its ASAP time 0 (int16 frames x channels), and
+    the sample rate."""
+    import wave
+    member = row["maestro_audio_performance"].replace("{maestro}", "maestro-v3.0.0")
+    # ASAP time 0 is 0.5 s before `start` in the MAESTRO recording: a cut performance keeps half a
+    # second of lead-in (onset cross-correlation, all three cut pieces here: 0.50 s)
+    start = max(0.0, float(row["start"]) - 0.5) if row["start"] else 0.0
+    print(f"corpus: {row['folder']}: {member} from {start:.1f}s", file=sys.stderr)
+    with z.open(member) as f, wave.open(f) as w:
+        sr, ch = w.getframerate(), w.getnchannels()
+        skip = int(round(start * sr))
+        while skip > 0:  # deflated: no random access, read through (in blocks: a cut piece may start 30 min in)
+            got = len(w.readframes(min(skip, 1 << 20))) // (2 * ch)
+            if not got:
+                break
+            skip -= got
+        raw = w.readframes(int(length * sr))
+    return np.frombuffer(raw, dtype="<i2").reshape(-1, ch), sr
+
+
 def fetch(pieces: list[str]):
     import soundfile as sf
-    import wave
     if not (ROOT / "asap").exists():
         ROOT.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "clone", "--depth", "1", ASAP_GIT, str(ROOT / "asap")], check=True)
@@ -141,19 +165,9 @@ def fetch(pieces: list[str]):
     todo = [p for p in pieces if not (ROOT / "audio" / f"{slug(p)}.wav").exists()]
     if not todo:
         return
-    z = zipfile.ZipFile(io.BufferedReader(_HttpFile(MAESTRO_ZIP), buffer_size=1 << 16))
+    z = maestro_zip()
     for p in todo:
-        row = perf_row(p)
-        member = row["maestro_audio_performance"].replace("{maestro}", "maestro-v3.0.0")
-        # ASAP time 0 is 0.5 s before `start` in the MAESTRO recording: a cut performance keeps half a
-        # second of lead-in (onset cross-correlation, all three cut pieces here: 0.50 s)
-        start = max(0.0, float(row["start"]) - 0.5) if row["start"] else 0.0
-        print(f"corpus: {p}: {member} from {start:.1f}s", file=sys.stderr)
-        with z.open(member) as f, wave.open(f) as w:
-            sr, ch = w.getframerate(), w.getnchannels()
-            w.readframes(int(round(start * sr)))  # deflated: no random access, read through
-            raw = w.readframes(int((EXCERPT + 2.0) * sr))
-        y = np.frombuffer(raw, dtype="<i2").reshape(-1, ch)
+        y, sr = read_performance(z, perf_row(p), EXCERPT + 2.0)
         sf.write(str(ROOT / "audio" / f"{slug(p)}.wav"), y, sr, subtype="PCM_16")
 
 

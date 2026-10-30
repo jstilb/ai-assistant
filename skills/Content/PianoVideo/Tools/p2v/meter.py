@@ -17,9 +17,10 @@ no note starts), so a tracking slip stays inside its bar and onsets stay on the 
 
 With the recording at hand, the trained tracker Beat This! can replace level 1 (`model_grid`):
 its beats set the beat level and positions, the tatums are spaced evenly between them, and its
-downbeat probability is one more bar accent. Alone it put the bar lines of soft intros an eighth
-off (DESIGN.md §12), so `spliced_grid` uses it only where its beats are regular and the note
-tracker, at the model's meter and beat level, elsewhere.
+downbeat probability is one more bar accent. Its beats come from a DBN over its beat probability
+(`dbn_beats`). From §12 to §45 the note tracker took the stretches where the model's raw beats were
+irregular (a splice); on 287 songs of the grid test sets that splice lost more bars than it saved,
+and it is gone (DESIGN.md §46).
 """
 
 from __future__ import annotations
@@ -263,7 +264,52 @@ def downbeats(acc: np.ndarray, m: int, slack: int = 2, cost: float = 1.5) -> np.
     return np.array(out[::-1], dtype=int)
 
 
+def phase_at(down: np.ndarray, tatums: np.ndarray, t: float, g: int, m: int) -> np.ndarray:
+    """The downbeats moved so that a bar line falls on the beat nearest `t` (the user's `--downbeat`, §49): the run
+    of regular bars (exactly m tatums) that holds that beat moves by one shift; past a bar of m +- slack (where the
+    dynamic program re-phased, often a beat-tracking slip under rubato) the bars keep their own phase. A song whose
+    bar lines are a constant half bar off is one run, so all of it moves. Moving every bar instead lost on ASAP
+    (downbeat F -0.09, 2 better / 15 worse, tune): the phase at the user's bar line is not the phase elsewhere."""
+    n = len(tatums)
+    if len(down) == 0 or n == 0:
+        return down
+    x = float(np.interp(t, tatums, np.arange(n)))  # t as a tatum index
+    j = int(np.argmin(np.abs(down - x)))
+    lo, hi = j, j
+    while lo > 0 and down[lo] - down[lo - 1] == m:
+        lo -= 1
+    while hi < len(down) - 1 and down[hi + 1] - down[hi] == m:
+        hi += 1
+    out = np.array(down, dtype=int)
+    out[lo:hi + 1] += g * round((x - int(down[j])) / g)  # whole beats of the bars' own lattice (the note tracker's
+    return np.unique(out[(out >= 0) & (out < n)])  # tatum 0 need not be a beat), at most half a bar from down[j]
+
+
 METERS = {(2, 4): "2/4", (2, 6): "3/4", (2, 8): "4/4", (3, 6): "6/8", (3, 9): "9/8", (3, 12): "12/8"}
+
+
+@dataclass(frozen=True)
+class Hint:
+    """What the user knows of the song's notation (`--meter`, `--bpm`; DESIGN.md §48): the meter (a METERS value)
+    and the tempo in beats a minute, the beat as the meter counts it (a quarter in 2/4, 3/4, 4/4; a dotted quarter
+    in 6/8, 9/8, 12/8). The written tempo level and the bar length are the composer's convention, which the audio
+    cues do not hold (§36, §48); a printed score or a song listing states both. `downbeat` (`--downbeat`, §49): the
+    time in seconds of one bar line, which sets the bar phase; the cues pick the wrong half bar together (§49)."""
+    meter: str | None = None
+    bpm: float | None = None
+    downbeat: float | None = None
+
+    def __post_init__(self):
+        if self.meter is not None and self.meter not in METERS.values():
+            raise ValueError(f"meter {self.meter!r}: use one of {', '.join(METERS.values())}")
+        if self.bpm is not None and not 10.0 <= self.bpm <= 400.0:
+            raise ValueError(f"bpm {self.bpm}: beats a minute, 10-400")
+        if self.downbeat is not None and not self.downbeat >= 0.0:
+            raise ValueError(f"downbeat {self.downbeat}: seconds from the start of the input, 0 or more")
+
+    def gm(self) -> tuple[int, int] | None:
+        """(tatums a beat, tatums a bar) of the meter, or None."""
+        return next((k for k, v in METERS.items() if v == self.meter), None)
 
 
 def fit_bar(times: np.ndarray, strength: np.ndarray, m: int) -> np.ndarray:
@@ -342,35 +388,37 @@ def onset_strength(on: np.ndarray, tatums: np.ndarray) -> np.ndarray:
 
 
 def score_grid(notes: list[Note], wav: Path | None = None, duration: float | None = None,
-               model: ModelBeats | None = None) -> Grid:
+               model: ModelBeats | None = None, hint: Hint | None = None) -> Grid:
     """Seconds -> score quarters for these notes (levels in the module docstring). With `model`
-    (Beat This! on the recording) its grid is used where its beats are regular (`spliced_grid`)."""
-    if model is not None:
-        return spliced_grid(notes, model, wav, duration)
-    return note_grid(notes, wav, duration)
-
-
-def level_factor(bpm_notes: float, bpm: float) -> float:
-    """The metrical ratio (1/3 .. 3) that brings the note tracker's tempo nearest the model's."""
-    return min((1 / 3, 1 / 2, 2 / 3, 1.0, 3 / 2, 2.0, 3.0), key=lambda f: abs(np.log(bpm_notes * f / bpm)))
+    (Beat This! on the recording) the model's grid, everywhere it has one (`model_grid`, §46).
+    A `hint` sets the meter and the bar phase (both grids) and the beat tempo (the model's grid only)."""
+    if model is not None and (gm := model_grid(notes, model, hint)) is not None:
+        return gm
+    if model is not None and hint is not None and hint.bpm:
+        import warnings
+        warnings.warn("--bpm not used: the beat model found too few beats, and the note tracker keeps its own "
+                      "level (--meter is used; DESIGN.md §48)")
+    return note_grid(notes, wav, duration, hint)
 
 
 def note_grid(notes: list[Note], wav: Path | None = None, duration: float | None = None,
-              g: int | None = None, m: int | None = None, bpm: float | None = None) -> Grid:
-    """The note tracker's grid. `g`, `m` and the beat tempo `bpm` force a subdivision, a bar length
-    and a beat level (the model's, so the two grids can be spliced)."""
+              hint: Hint | None = None) -> Grid:
+    """The note tracker's grid. A hint's meter and downbeat are used; its tempo is not (the tracker's level is its own)."""
     env, local, beats = track_beats(notes, wav, duration)
     on = onset_clusters(notes)
-    g = g or subdivision(beats, on)
-    if bpm:
-        local = local * level_factor(float(np.median(local)), bpm)
+    fixed = hint.gm() if hint else None
+    g = fixed[0] if fixed else subdivision(beats, on)
     tatums = track_tatums(env, local, g)
+    def phase(d: np.ndarray, m: int) -> np.ndarray:
+        return phase_at(d, tatums, hint.downbeat, g, m) if hint and hint.downbeat is not None else d
+
     if len(tatums) < 4 * g:  # too little music to find bars: even 4/4 (or 12/8) from the first tatum
         tatums = tatums if len(tatums) >= 2 else np.array([0.0, 60.0 / (120.0 * g)])
-        return grid_from(tatums, np.array([0]), g, m or 4 * g, tatums[0])
+        m = fixed[1] if fixed else 4 * g
+        return grid_from(tatums, phase(np.array([0]), m), g, m, tatums[0])
     acc = bar_accents(notes, tatums, g)
-    m = m or bar_length(acc, g)
-    return grid_from(tatums, downbeats(acc, m), g, m, float(on[0]) if len(on) else 0.0,
+    m = fixed[1] if fixed else bar_length(acc, g)
+    return grid_from(tatums, phase(downbeats(acc, m), m), g, m, float(on[0]) if len(on) else 0.0,
                      onset_strength(on, tatums))
 
 
@@ -508,7 +556,6 @@ def peak_times(logit: np.ndarray) -> np.ndarray:
     return k[np.r_[True, np.diff(k) > 1]] / BT_FPS if len(k) else np.zeros(0)
 
 
-LEVEL_JUMP = 0.25  # octaves: a local beat interval this near 2x or 1/2x the piece's median is a level switch
 # beats a minute: a faster median model level is an eighth-note pulse, and the piece's level is the octave
 # below (Some Chords: Beat This! taps 250/min for its first 32 s, quarters at 130/min after; §22)
 MAX_BEAT_BPM = 200.0
@@ -521,28 +568,77 @@ def capped_bpm(bpm: float) -> float:
     return bpm
 
 
-def steady_beats(beat_logit: np.ndarray, beats: np.ndarray) -> np.ndarray:
-    """One beat per model beat period: librosa's dynamic program over the beat probability (on
-    the note tracker's SR/HOP frames) at the model's local tempo (median of 9 intervals). The
-    model's raw peaks gained eighths in Connections' free intro (bars 1-3) and lost bars there.
-    Measured, not tuned: the same program on the model's 50 frames/s moved Connections' downbeat
-    F 0.81 -> 0.76 (one bar), a Viterbi tempo path instead 0.81 but Starlight 0.47 -> 0.10 (§12).
-    The local tempo stays on one metrical level: where it is within LEVEL_JUMP of twice or half the
-    piece's median (`capped_bpm`), the model switched level (Laughing With taps eighths for a stretch)
-    and the tempo is moved back by the octave. A x1.5 ritardando is left alone: folding every octave
-    (nearest the median) flipped the meter of four classical pieces (DESIGN.md §18)."""
-    import librosa
-    from scipy.ndimage import median_filter
-    tt = np.arange(int(np.ceil(len(beat_logit) / BT_FPS * SR / HOP)) + 1) * HOP / SR
-    env = np.interp(tt, np.arange(len(beat_logit)) / BT_FPS, _prob(beat_logit))
-    ibi = np.diff(beats)
-    med = median_filter(ibi, size=min(9, len(ibi) | 1), mode="nearest")
-    octaves = np.log2(med * capped_bpm(60.0 / float(np.median(ibi))) / 60.0)
-    med = med * 2.0 ** np.where(np.abs(np.abs(octaves) - 1.0) < LEVEL_JUMP, -np.round(octaves), 0.0)
-    local = 60.0 / med
-    bpm = np.interp(tt, (beats[:-1] + beats[1:]) / 2, local)
-    _, out = librosa.beat.beat_track(onset_envelope=env, sr=SR, hop_length=HOP, bpm=bpm, units="time", trim=False)
-    return np.asarray(out, dtype=float)
+DBN_RANGE = 1.5  # the DBN's tempo range: within x1.5 of the piece's level (the capped median raw interval)
+# with the user's tempo (a Hint, §48): x1.2, so the level a third away (40 against 60 beats a minute in 6/8) is out
+HINT_RANGE = 1.2
+
+
+def steady_beats(beat_logit: np.ndarray, beats: np.ndarray, bpm: float | None = None) -> np.ndarray:
+    """One beat per model beat period: a DBN (`dbn_beats`) over the beat probability, its tempo kept
+    within DBN_RANGE of the piece's level (`capped_bpm` of the median raw interval: an eighth-note
+    pulse is folded to quarters). It bridges missed beats and skips stray peaks at a steady period
+    and follows a tempo change at the beats. Until §46 librosa's dynamic program at the model's local
+    tempo (the median of 9 raw intervals, which a run of missed beats doubles: The Lark, §44); on the
+    grid test sets the DBN gave beat F +0.010 over it (§46). A free DBN (55-215 beats a minute)
+    switched levels: tempo 2 better, 7 worse on ASAP. `bpm` (the user's hint, §48) replaces the level."""
+    if len(beats) < 2:  # no interval, no level (model_grid needs 8 raw peaks)
+        return np.asarray(beats, dtype=float)
+    b0, r = (bpm, HINT_RANGE) if bpm else (capped_bpm(60.0 / float(np.median(np.diff(beats)))), DBN_RANGE)
+    return dbn_beats(_prob(beat_logit), BT_FPS, b0 / r, b0 * r)
+
+
+def dbn_beats(act: np.ndarray, fps: float, min_bpm: float, max_bpm: float, lam: float = 100.0,
+              obs_lam: float = 16.0) -> np.ndarray:
+    """Beats from a beat probability curve by the DBN of Krebs, Böck and Widmer (2015), as madmom's
+    DBNBeatTrackingProcessor (which Beat This!'s optional post-processing uses; madmom itself is
+    unmaintained and does not install with this numpy). States: (beat interval i in frames, position
+    p in 0..i-1); p advances one a frame; at a beat's end the interval may change to j with
+    probability ∝ exp(-lam |j/i - 1|). The first 1/obs_lam of each beat are beat states (P = act),
+    the rest P = (1 - act) / (obs_lam - 1). Viterbi; a beat = the probability peak in each run of
+    beat states on the path."""
+    if len(act) == 0:
+        return np.zeros(0)
+    act = np.clip(np.asarray(act, dtype=float), 1e-6, 1 - 1e-6)
+    lo, hi = int(np.floor(60.0 * fps / max_bpm)), int(np.ceil(60.0 * fps / min_bpm))
+    ivs = np.arange(max(lo, 2), hi + 1)
+    n = len(ivs)
+    off = np.r_[0, np.cumsum(ivs)[:-1]]  # the first state of each interval
+    n_states = int(ivs.sum())
+    beat_state = np.concatenate([np.arange(i) / i for i in ivs]) < 1.0 / obs_lam
+    last = off + ivs - 1  # the last position of each interval
+    tp = np.exp(-lam * np.abs(ivs[None, :] / ivs[:, None] - 1.0))  # from i (row) to j (column)
+    tp[tp < 1e-16] = 0.0
+    tp /= tp.sum(axis=1, keepdims=True)
+    with np.errstate(divide="ignore"):
+        ltp = np.log(tp)
+    n_frames = len(act)
+    lb, lnb = np.log(act), np.log((1 - act) / (obs_lam - 1))
+    score = np.where(beat_state, lb[0], lnb[0]) - np.log(n_states)
+    back = np.empty((n_frames, n), dtype=np.int32)  # per frame: the interval each first state came from
+    adv = np.ones(n_states, dtype=bool)
+    adv[off] = False  # a first state comes from a beat's end, every other state from p - 1
+    prev = np.arange(n_states) - 1
+    for t in range(1, n_frames):
+        new = np.empty(n_states)
+        new[adv] = score[prev[adv]]
+        cand = score[last][:, None] + ltp
+        k = np.argmax(cand, axis=0)
+        new[off] = cand[k, np.arange(n)]
+        back[t] = k
+        score = new + np.where(beat_state, lb[t], lnb[t])
+    path = np.empty(n_frames, dtype=np.int64)
+    s = int(np.argmax(score))
+    state_iv = np.repeat(np.arange(n), ivs)
+    for t in range(n_frames - 1, -1, -1):
+        path[t] = s
+        if t == 0:
+            break
+        j = state_iv[s]
+        s = int(last[back[t, j]]) if s == off[j] else s - 1
+    on = beat_state[path].astype(int)
+    edges = np.flatnonzero(np.diff(on)) + 1
+    edges = np.r_[[0] if on[0] else [], edges, [n_frames] if on[-1] else []].astype(int)
+    return np.array([int(np.argmax(act[a:b])) + a for a, b in edges.reshape(-1, 2)], dtype=float) / fps
 
 
 def at_tatums(prob: np.ndarray, tatums: np.ndarray, width: int = 2) -> np.ndarray:
@@ -554,133 +650,28 @@ def at_tatums(prob: np.ndarray, tatums: np.ndarray, width: int = 2) -> np.ndarra
 MODEL_DOWN_W = 2.0  # weight of the model's z-scored downbeat probability against the note accents (§18)
 
 
-def model_grid(notes: list[Note], mb: ModelBeats) -> Grid | None:
+def model_grid(notes: list[Note], mb: ModelBeats, hint: Hint | None = None) -> Grid | None:
     """The score grid with Beat This!: steady model beats -> subdivision from the notes -> tatums
     evenly between beats -> bar length (`bar_length_joint`) -> downbeats by the same dynamic
     program over note accents + MODEL_DOWN_W x the model's z-scored downbeat probability ->
-    `grid_from`. None when the model found too few beats (the note tracker takes over)."""
+    `grid_from`. None when the model found too few beats (the note tracker takes over). A hint's
+    tempo sets the beat level, its meter the subdivision and the bar length, its downbeat the bar phase."""
     raw = peak_times(mb.beat)
     if len(raw) < 8:
         return None
-    beats = steady_beats(mb.beat, raw)
+    beats = steady_beats(mb.beat, raw, hint.bpm if hint else None)
     if len(beats) < 4:
         return None
     on = onset_clusters(notes)
-    g = subdivision(beats, on)
+    fixed = hint.gm() if hint else None
+    g = fixed[0] if fixed else subdivision(beats, on)
     tatums = np.interp(np.arange(0, len(beats) - 1 + 1e-9, 1 / g), np.arange(len(beats)), beats)
     acc = bar_accents(notes, tatums, g)
     p = at_tatums(_prob(mb.downbeat), tatums)
     down_z = (p - p.mean()) / (p.std() + 1e-9)
-    m = bar_length_joint(acc, down_z, g)
-    return grid_from(tatums, downbeats(acc + MODEL_DOWN_W * down_z, m), g, m,
-                     float(on[0]) if len(on) else float(beats[0]), onset_strength(on, tatums))
+    m = fixed[1] if fixed else bar_length_joint(acc, down_z, g)
+    down = downbeats(acc + MODEL_DOWN_W * down_z, m)
+    if hint and hint.downbeat is not None:
+        down = phase_at(down, tatums, hint.downbeat, g, m)
+    return grid_from(tatums, down, g, m, float(on[0]) if len(on) else float(beats[0]), onset_strength(on, tatums))
 
-
-# ------------------------------------------------- splice: model where sure -- #
-
-# the model is sure where its raw beat intervals vary less than this (CV over +-SURE_K beats). 0.2 until
-# §18: on the bank its bar lines beat the splice's at every CV level (classical rubato is irregular and
-# right), so the note tracker now takes only very irregular stretches (Connections' intro: 0.5 and 0.6 keep it)
-SURE_CV = 0.5
-SURE_K = 4
-SURE_RUN = 3    # bars: a shorter run of sure bars is not trusted
-SHARED_TOL = 0.5  # tatums: two grids share a bar line this close
-
-
-def beat_cv(raw: np.ndarray, k: int = SURE_K) -> np.ndarray:
-    """Per raw model beat: the coefficient of variation of its intervals within +-k beats."""
-    ibi = np.diff(raw)
-    out = np.full(len(raw), np.inf)
-    for i in range(len(raw)):
-        w = ibi[max(0, i - k): i + k]
-        if len(w) > 1:
-            out[i] = w.std() / w.mean()
-    return out
-
-
-def sure_bars(raw: np.ndarray, bars: np.ndarray, cv_max: float = SURE_CV, k: int = SURE_K,
-              run: int = SURE_RUN) -> np.ndarray:
-    """Per bar (bars[j] to bars[j + 1]): True where the model is sure, i.e. the median `beat_cv` of
-    its raw beats in the bar is under cv_max, in a run of at least `run` such bars. Where it is
-    wrong (Connections' intro, Starlight's intro) the CV is 0.3-0.5, where it is right 0.03-0.06."""
-    cv = beat_cv(raw, k)
-    ok = np.array([bool(np.median(c) < cv_max) if len(c := cv[(raw >= a) & (raw < b)]) else False
-                   for a, b in zip(bars[:-1], bars[1:])], dtype=bool)
-    out = ok.copy()
-    edges = np.flatnonzero(np.diff(np.r_[0, ok.astype(int), 0]))
-    for a, b in zip(edges[::2], edges[1::2]):
-        if b - a < run:
-            out[a:b] = False
-    return out
-
-
-def bar_times(grid: Grid) -> np.ndarray:
-    """Seconds of every bar line the grid's knots cover."""
-    q0 = np.ceil(grid.q[0] / grid.bar_q - 1e-6) * grid.bar_q
-    return grid.q_to_sec(np.arange(q0, grid.q[-1] + 1e-6, grid.bar_q))
-
-
-def splice(gm: Grid, gn: Grid, sure: np.ndarray, first_note: float, tol: float = SHARED_TOL) -> Grid:
-    """One grid from two of the same meter: gm's bars where `sure` (one flag per bar of gm), gn's
-    elsewhere. The source changes only at a bar line both grids share (within `tol` tatums), so
-    every stretch is whole bars of one grid: an unsure stretch grows to the nearest shared bar
-    lines. The bar holding the first note is bar 0, as in grid_from."""
-    bm, bn = bar_times(gm), bar_times(gn)
-    j = np.abs(bn[None, :] - bm[:, None]).argmin(axis=1)
-    shared = np.abs(bn[j] - bm) < tol * float(np.median(np.diff(gm.t)))
-    use_m, n_bars = sure.copy(), len(sure)
-    k = 0
-    while k < n_bars:
-        if use_m[k]:
-            k += 1
-            continue
-        a, b = k, k
-        while a > 0 and not shared[a]:
-            a -= 1
-        while b < n_bars and not use_m[b]:
-            b += 1
-        while b < n_bars and not shared[b]:
-            b += 1
-        use_m[a:b] = False
-        k = max(b, k + 1)
-    cuts = [c for c in range(1, n_bars) if use_m[c] != use_m[c - 1]]
-    ts, qs, q_end = [], [], None
-    for a, b in zip([None, *cuts], [*cuts, None]):
-        src, line, other = (gm, bm, bn[j]) if use_m[a or 0] else (gn, bn[j], bm)
-        lo = -np.inf if a is None else line[a]
-        hi = np.inf if b is None else line[b]
-        # the next stretch starts at its own grid's bar line (up to tol earlier): no knot at or after it
-        sel = (src.t >= lo - 1e-6) & (src.t < hi - 1e-6) & (src.t < (np.inf if b is None else other[b]) - 1e-6)
-        off = 0.0 if q_end is None else q_end - float(src.sec_to_q(lo))
-        ts.append(src.t[sel])
-        qs.append(src.q[sel] + off)
-        if b is not None:
-            q_end = float(src.sec_to_q(hi)) + off
-    t, q = np.concatenate(ts), np.concatenate(qs)
-    g = int(round(gm.beat_q / gm.tatum_q))
-    return Grid(t=t, q=_bar0(t, q, first_note, gm.tatum_q, gm.bar_q), meter=gm.meter, bar_q=gm.bar_q,
-                tatum_q=gm.tatum_q, beat_q=gm.beat_q, bpm=60.0 / (float(np.median(np.diff(t))) * g))
-
-
-def spliced_grid(notes: list[Note], mb: ModelBeats, wav: Path | None = None, duration: float | None = None) -> Grid:
-    """Beat This! where it is sure, the note tracker elsewhere (DESIGN.md §12). The model's grid
-    sets the meter and the beat level; where its raw beats are irregular (`sure_bars`) the note
-    tracker's grid at that meter and level takes over, switching at shared bar lines (`splice`).
-    No sure bar: the note grid, still at the model's meter and level (corpus held-out meter 56% ->
-    67% against the note grid's own meter, §12). No model grid: the note tracker alone."""
-    gm = model_grid(notes, mb)
-    if gm is None:
-        return note_grid(notes, wav, duration)
-    raw = peak_times(mb.beat)
-    bars = bar_times(gm)
-    sure = sure_bars(raw, bars, SURE_CV, SURE_K, SURE_RUN)
-    if sure.all():
-        return gm
-    in_sure = np.zeros(len(raw) - 1, dtype=bool)
-    for a, b in zip(bars[:-1][sure], bars[1:][sure]):
-        in_sure |= (raw[:-1] >= a) & (raw[1:] <= b)
-    bpm = capped_bpm(60.0 / float(np.median(np.diff(raw)[in_sure])) if in_sure.any() else gm.bpm)
-    g, m = int(round(gm.beat_q / gm.tatum_q)), int(round(gm.bar_q / gm.tatum_q))
-    on = onset_clusters(notes)
-    gn = note_grid(notes, wav, duration, g, m, bpm)
-    return splice(gm, gn, sure, float(on[0]) if len(on) else float(gm.t[0]), SHARED_TOL)

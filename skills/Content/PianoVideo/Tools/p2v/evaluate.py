@@ -327,7 +327,11 @@ def score_notation(ref: Reference, q2s, est: Reference, est_q2s, span: tuple[flo
     """Score-space accuracy of the engraved score. Notated notes are placed in seconds through the
     pipeline's own beat grid and matched to the reference (exact pitch, onset within ONSET_TOL).
     For each pair, compare where the note sits in its bar and how long it is written, both as a
-    fraction of the bar, so 6/4 and 12/8 spellings of the same bars agree."""
+    fraction of the bar, so 6/4 and 12/8 spellings of the same bars agree. A bar of the wrong length
+    (2/4 for 4/4) moves most of these, so the written rhythm is also scored without the bar: where the
+    note sits in its quarter and how many quarters it is written (§47). The place in the quarter cannot
+    see a shift by whole quarters (a wrong bar phase: downbeat F scores that), and a note on a whole
+    quarter matches at any level: read it with the length in quarters."""
     rb, eb = bar_quarters(ref.meter), bar_quarters(est.meter)
     en = [n for n in est.notes if span[0] - ONSET_TOL <= float(est_q2s(n.q_on)) <= span[1] + ONSET_TOL]
     ref_iv = np.array([[q2s(n.q_on), q2s(n.q_off)] for n in ref.notes])
@@ -335,17 +339,21 @@ def score_notation(ref: Reference, q2s, est: Reference, est_q2s, span: tuple[flo
     pairs = match(ref_iv, np.array([n.pitch for n in ref.notes]), est_iv, np.array([n.pitch for n in en]))
     if not pairs:
         return {"matched": 0}
-    pos_err, dur_ratio = [], []
+    pos_err, dur_ratio, qpos_err, q_ratio = [], [], [], []
     for i, j in pairs:
         r, e = ref.notes[i], en[j]
         d = (e.q_on % eb) / eb - (r.q_on % rb) / rb
         pos_err.append(abs((d + 0.5) % 1.0 - 0.5) * rb * 4)  # in reference sixteenths
         dur_ratio.append(((e.q_off - e.q_on) / eb) / max(1e-6, (r.q_off - r.q_on) / rb))
+        qpos_err.append(abs((e.q_on % 1.0 - r.q_on % 1.0 + 0.5) % 1.0 - 0.5) * 4)  # in sixteenths, as pos_err
+        q_ratio.append(max(1e-6, e.q_off - e.q_on) / max(1e-6, r.q_off - r.q_on))
     pos_err, dur_ratio = np.array(pos_err), np.array(dur_ratio)
     return {"matched": len(pairs),
             "onset_in_bar_exact": round(float(np.mean(pos_err < 1e-3)), 3),
             "onset_in_bar_within_16th": round(float(np.mean(pos_err <= 1 + 1e-3)), 3),
             "written_length_exact": round(float(np.mean(np.abs(np.log(dur_ratio)) < 0.01)), 3),
+            "onset_in_quarter_exact": round(float(np.mean(np.array(qpos_err) < 1e-3)), 3),
+            "written_quarters_exact": round(float(np.mean(np.abs(np.log(q_ratio)) < 0.01)), 3),
             "written_length_ratio_p25_p50_p75": [round(float(x), 2) for x in np.percentile(dur_ratio, [25, 50, 75])]}
 
 

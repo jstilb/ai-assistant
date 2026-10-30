@@ -420,6 +420,8 @@ def run(args) -> dict:
     from .meter import beat_this_missing
     if args.audio_track == "none":
         args.audio_track = None
+    if args.bpm is not None and args.meter is None:  # the beat --bpm counts depends on the meter (§48)
+        raise SystemExit("--bpm needs --meter: a quarter in 2/4, 3/4, 4/4, a dotted quarter in 6/8, 9/8, 12/8")
     why = beat_this_missing(args.beat_weights) if args.beats == "beat-this" else None
     if why:  # before the download, Demucs and the transcription, not after them
         raise SystemExit(f"--beats beat-this (the default): {why}. Fix: run {Path(__file__).parent.parent / 'setup.sh'}, "
@@ -447,6 +449,10 @@ def run(args) -> dict:
     (work / "tx").mkdir(exist_ok=True)
 
     wav = ingest(src, work, args.start, args.duration)
+    if args.downbeat is not None:  # past the end it would sit on the last beat: say so before separation
+        import soundfile as sf
+        if args.downbeat >= (length := sf.info(str(wav)).duration):
+            raise SystemExit(f"--downbeat {args.downbeat:g}: the input (after --start) is {length:.1f} s long")
     stems = separate(wav, work)
     levels = stem_levels(stems)
     active = active_stems(levels)
@@ -495,7 +501,14 @@ def run(args) -> dict:
     import soundfile as sf
     duration = sf.info(str(wav)).duration
 
-    from .meter import beat_this, score_grid
+    from .meter import Hint, beat_this, score_grid
+    given = {"meter": args.meter, "bpm": args.bpm, "downbeat": args.downbeat}
+    hint = Hint(**given) if any(v is not None for v in given.values()) else None
+    if hint:
+        log(f"score grid hint: meter {hint.meter or '-'}, {hint.bpm or '-'} beats/min, a bar line at "
+            f"{'-' if hint.downbeat is None else f'{hint.downbeat:g} s'} (DESIGN.md §48, §49)")
+        if hint.bpm and args.beats == "notes":
+            log("WARNING: --bpm is not used with --beats notes (the note tracker keeps its own level); --meter is")
     from .notation import ROLE_PENALTY, build_score, engrave_pdf, key_plan, lead_in, piece_key, write_musicxml
     from .render import Renderer, synthesize
 
@@ -509,6 +522,7 @@ def run(args) -> dict:
               "piano_input": piano_input(args.piano_input, levels) if "piano" in need else None,
               "lead_f0": lead_f0(args.lead_f0, args.lead_stem) if args.lead_stem in need else None,
               "beats": beats_from, "lead_stem": args.lead_stem, "route": route(levels, args.lead_stem),
+              "hint": {k: v for k, v in given.items() if v is not None} if hint else None,
               "grids": {}, "variants": {}}
     grids, key_plans, chord_plans, chord_audio = {}, {}, {}, None
     if any(p == "lead+chords" or band_chords(s, p) for s, p in variants):
@@ -526,7 +540,7 @@ def run(args) -> dict:
             continue
         if source not in grids:
             src_notes = source_notes(source, tx, active, args.lead_stem)
-            grids[source] = grid = score_grid(src_notes, wav, model=model)
+            grids[source] = grid = score_grid(src_notes, wav, model=model, hint=hint)
             # keys from everything the source plays: a melody line alone is too thin to judge
             # (Starlight's right-hand line read 4 -> 5 -> 4 sharps; the full texture stays in E)
             key_plans[source] = key_plan(src_notes, grid, piece_key(src_notes)) if src_notes else [(0.0, 0)]
@@ -599,6 +613,22 @@ def run(args) -> dict:
     return report
 
 
+def _hint_bpm(s: str) -> float:
+    """--bpm at parse time, so a bad value stops the run before separation and transcription."""
+    v = float(s)
+    if not 10.0 <= v <= 400.0:
+        raise argparse.ArgumentTypeError(f"{s}: beats a minute, 10-400")
+    return v
+
+
+def _hint_downbeat(s: str) -> float:
+    """--downbeat at parse time (seconds, 0 or more)."""
+    v = float(s)
+    if not v >= 0.0:
+        raise argparse.ArgumentTypeError(f"{s}: seconds from the start of the input, 0 or more")
+    return v
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="piano2video", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -634,14 +664,27 @@ def build_parser() -> argparse.ArgumentParser:
                     help="what the piano model hears: the original mix or the Demucs piano stem "
                          "(auto: the mix when the recording is solo piano)")
     ap.add_argument("--beats", choices=("notes", "beat-this"), default="beat-this",
-                    help="score grid: beat-this (default) = the trained beat/downbeat tracker on the recording "
-                         "where its beats are regular, the note tracker elsewhere; notes = from the transcribed "
-                         "notes alone (DESIGN.md §12)")
+                    help="score grid: beat-this (default) = the trained beat/downbeat tracker on the recording, "
+                         "its beats steadied by a DBN (the note tracker only where it finds too few beats, §46); "
+                         "notes = from the transcribed notes alone (DESIGN.md §12)")
     from .meter import BEAT_THIS_SHA256
     ap.add_argument("--beat-weights", default="ensemble", choices=["ensemble", *sorted(BEAT_THIS_SHA256)],
                     help="Beat This! weights: ensemble (default) = the mean of final0 and its 8 fold models "
                          "(DESIGN.md §43); final0 alone; fold0-fold7 are its cross-validation models. 8 of the 9 heard the "
                          "ASAP pieces of corpus.BT_HELDOUT: score those with their held-out fold, not the default")
+    from .meter import METERS
+    ap.add_argument("--meter", choices=list(METERS.values()),
+                    help="the song's written meter, if you know it (a printed score, a song listing): sets the bar "
+                         "length and simple or compound time. The audio cannot tell 2/4 from 4/4 (DESIGN.md §36, §48)")
+    ap.add_argument("--bpm", type=_hint_bpm,
+                    help="the song's written tempo in beats a minute, the beat as --meter counts it (a quarter in "
+                         "2/4, 3/4, 4/4; a dotted quarter in 6/8, 9/8, 12/8): sets the note values, so eighths are "
+                         "not written as quarters or 16ths (DESIGN.md §48)")
+    ap.add_argument("--downbeat", type=_hint_downbeat,
+                    help="the time in seconds of one bar line (beat 1 of a bar), from the start of the input after "
+                         "--start, best where the beat is steady (a verse or chorus, not a free intro): the run of "
+                         "regular bars around it moves so that a bar line falls on the beat nearest it; bars past a "
+                         "beat slip keep their phase. The audio often puts the bars half a bar off (DESIGN.md §49)")
     ap.add_argument("--audio-track", choices=("synth", "original", "mix", "none"), default="synth",
                     help="video soundtrack: synth = the transcription itself (default)")
     ap.add_argument("--start", type=float, help="trim: start offset (s)")
