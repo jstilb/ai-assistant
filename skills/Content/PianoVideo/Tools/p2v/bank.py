@@ -701,6 +701,19 @@ def ref_hint(ref: Ref | None, downbeat: bool = False) -> list[str]:
     return out
 
 
+def ref_score(song: Song) -> list[str]:
+    """`--score` from the song's reference file, as a user with its score would give it (`run --hints score`,
+    DESIGN.md §52): a score reference's file, an ASAP piece's score MIDI. A timed reference (an annotation, not a
+    score) gives none. The measures still read the reference's own alignment (`load_ref`), not the grid's."""
+    from . import corpus
+    kind = song.ref.get("kind")
+    if kind == "score":
+        return ["--score", str(Path(song.ref["path"]).expanduser())]
+    if kind == "asap":
+        return ["--score", str(corpus.ROOT / "asap" / song.ref["folder"] / "midi_score.mid")]
+    return []
+
+
 def _ref_meter_bpm(ref: Ref | None) -> list[str]:
     from .meter import METERS
     if ref is None or not ref.meter or ref.beats is None or len(ref.beats) <= 2:
@@ -725,10 +738,14 @@ def run_song(song: Song, label: str, extra: list[str], redo: set[str], hints: st
         if not (wd / "input.wav").exists():
             raise RuntimeError(f"--hints {hints} needs the song's input.wav: run it once without hints first")
         argv += ref_hint(load_ref(song, wd / "input.wav"), downbeat=hints == "ref-downbeat")
+    elif hints == "score":
+        argv += ref_score(song)
     if song.start is not None:
         argv += ["--start", str(song.start)]
     if song.duration is not None:
         argv += ["--duration", str(song.duration)]
+    if song.audio.startswith("asap:") and (title := corpus.title(song.audio[5:])):
+        argv += ["--title", title]  # the recording's title, as a concert upload names it, for the lookups (§55)
     if song.audio.startswith("asap:") and song.audio[5:] in corpus.BT_HELDOUT:
         argv += ["--beat-weights", corpus.BT_HELDOUT[song.audio[5:]]]  # the one model that never heard it (§12)
     # every other song (the three ASAP pieces outside the folds too: no model heard them) gets the default (§43)
@@ -757,7 +774,8 @@ def score_song(song: Song, out: Path) -> dict:
     res = {"id": song.id, "type": song.type, "half": song.half, "runtime_s": report.get("runtime_s"),
            "stem_db": report["stem_db"], "piano_input": report.get("piano_input"),
            "route": r, "route_ok": r == EXPECTED_SOURCE[song.type], "ref": song.ref.get("kind"),
-           "hint": report.get("hint"), "variants": {}}  # the --meter / --bpm this song ran with (§48), or None
+           "hint": report.get("hint"), "variants": {},  # the --meter / --bpm this song ran with (§48), or None
+           "lookup": report.get("lookup")}  # the title lookup's match and whether it set the grid (§54)
     if ref is not None:
         res["ref_span_s"] = [round(x, 2) for x in ref.span]
     for tag in report["variants"]:
@@ -956,9 +974,10 @@ def main(argv=None):
                    help="change a p2v module constant for this run (e.g. meter.DBN_RANGE=1.3)")
     r.add_argument("--redo", action="append", default=[], choices=("stems", "tx"),
                    help="discard cached stems or transcriptions first (when the change is in those stages)")
-    r.add_argument("--hints", choices=("ref", "ref-downbeat"),
+    r.add_argument("--hints", choices=("ref", "ref-downbeat", "score"),
                    help="ref: give each song its reference's meter and tempo as `--meter` / `--bpm` (§48); "
-                        "ref-downbeat: and its first bar line as `--downbeat` (§49)")
+                        "ref-downbeat: and its first bar line as `--downbeat` (§49); score: its reference file "
+                        "as `--score` (§52)")
     r.add_argument("pipeline_args", nargs="*", help="extra pipeline flags after --, e.g. -- --beats notes")
     sc = sub.add_parser("score", help="score a run's saved outputs again (after a change to a measure or the router)")
     sc.add_argument("--label", required=True, help="the run to score (runs/<label>/)")

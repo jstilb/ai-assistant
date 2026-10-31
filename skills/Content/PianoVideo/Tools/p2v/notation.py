@@ -21,6 +21,24 @@ from .meter import Grid
 # a riff keeps its 16ths (and the beat lattice) as the piano part does; it is still "lead" everywhere else.
 ROLE_PENALTY: dict[str, dict[str, float]] = {"hybrid": {"lead": 0.5}, "arrange": {"lead": 0.5}}
 TATUM_ONLY = 0.5  # a role penalty this high never takes the 16th: such a role's note ends snap to the tatum too
+# SUNG_SNAP (DESIGN.md §53): in a simple meter (a quarter beat), a sung lead note (a role at TATUM_ONLY) starts on the
+# 16th of its beat with the highest posterior: the places sung melodies use (SUNG_PRIOR, HookTheory: 22,041 sections
+# in 2/4, 3/4 and 4/4) times a Gaussian of the onset's distance in seconds (SUNG_SIGMA_S: SOME's onsets against the
+# bank's reference melodies, 877 notes). A 16th is written where the tempo makes it wider than the singer's spread,
+# an eighth where it does not; the note's end snaps to the 16th. "bpm": only when the user gave the tempo (`--bpm`:
+# the level is known); on the default grid a tempo-level error (x0.5) writes the reference's eighths as 16ths
+# (When We Were Young 0.59 -> 0.09). "on": always, "off": never (bank sweeps). SUNG_SIGMA_S 60 ms, not SOME's 32:
+# chosen on the tune half with the hint (melody qlen 0.570 -> 0.575 against 0.570 at 32 ms), as it also takes in
+# the grid's own error and leaves no 16th at 146 a minute.
+SUNG_SNAP = "bpm"
+SUNG_PRIOR = (0.471, 0.064, 0.369, 0.094)  # on the beat, a 16th, an eighth, three 16ths after it
+SUNG_SIGMA_S = 0.060
+# SUNG_LEGATO_S (§53): where SUNG_SNAP writes the sung lead, a sung note whose next note in the voice starts less than
+# this many seconds after its end is written up to that onset, past release_on_beat's cut (sung lines are legato:
+# 0.90 of HookTheory's notes). The snap's 16th ends left SOME's short gaps as 16th rests (right-hand 16th rests 30 ->
+# 151 on T3-T4); chosen on the tune half with the hint among 0.15, 0.30, 0.60 s (melody qlen 0.599 / 0.600 / 0.589).
+# Not on the default grid: there it cost melody qlen (tune 0.568 -> 0.559; Someone Like You at x2 0.33 -> 0.12).
+SUNG_LEGATO_S = 0.30
 # LEAD_VOICE: a hand that holds lead notes and other notes is written in two voices, the lead (stems
 # up) over the rest (stems down), so the accompaniment's onsets do not cut a held melody note.
 LEAD_VOICE = True
@@ -152,21 +170,49 @@ def snap_onsets(q_pos, step: float, fine_penalty: float = 0.0) -> np.ndarray:
 
 
 def snap_notes(notes: list[Note], sec_to_q, tatum: float, fine_penalty: float | None = None,
-               role_penalty: dict[str, float] | None = None) -> np.ndarray:
+               role_penalty: dict[str, float] | None = None, beat_q: float | None = None,
+               level_known: bool = False) -> np.ndarray:
     """Written onsets (quarters) of `notes`: on a grid of tatum/2, or of the tatum unless clearly
-    between two (`fine_penalty`, per role through `role_penalty`; snap_onsets)."""
+    between two (`fine_penalty`, per role through `role_penalty`; snap_onsets); with SUNG_SNAP and a
+    quarter `beat_q`, sung lead notes by `snap_sung` (`level_known`: the user gave the tempo)."""
     raw = np.asarray(sec_to_q([n.start for n in notes]), dtype=float)
     pen = [fine_penalty if (p := role_pen(n, role_penalty)) is None else p for n in notes]
     fine = np.round(raw / (tatum / 2)) * (tatum / 2)
+    on = sung_snap(beat_q, level_known)  # before any return: a bad SUNG_SNAP fails on every call
     if all(p is None for p in pen):
         return fine
-    return np.where([p is None for p in pen], fine, snap_onsets(raw, tatum, np.array([p or 0.0 for p in pen])))
+    out = np.where([p is None for p in pen], fine, snap_onsets(raw, tatum, np.array([p or 0.0 for p in pen])))
+    sung = np.array([on and (role_pen(n, role_penalty) or 0.0) >= TATUM_ONLY for n in notes])  # as quantize_hand
+    if sung.any():
+        t = np.array([n.start for n in notes])[sung]
+        dq = np.asarray(sec_to_q(t + 0.05), dtype=float) - np.asarray(sec_to_q(t - 0.05), dtype=float)
+        out[sung] = snap_sung(raw[sung], 0.1 / np.maximum(dq, 1e-6))
+    return out
+
+
+def sung_snap(beat_q: float | None, level_known: bool = False) -> bool:
+    """SUNG_SNAP (read at call time: bank --set sweeps it) applies in a simple meter only; at "bpm" only
+    when the tempo level is known (the user's --bpm)."""
+    if SUNG_SNAP not in ("off", "bpm", "on"):
+        raise ValueError(f"notation.SUNG_SNAP is {SUNG_SNAP!r}: off, bpm or on")
+    on = SUNG_SNAP == "on" or (SUNG_SNAP == "bpm" and level_known)
+    return on and beat_q is not None and abs(beat_q - 1.0) < 1e-9
+
+
+def snap_sung(raw_q, sec_per_q) -> np.ndarray:
+    """Written onsets (quarters, beats on whole quarters) of sung notes: the 16th of the beat (or the next beat)
+    with the highest log SUNG_PRIOR - d^2 / 2, d the distance in seconds over SUNG_SIGMA_S at `sec_per_q`."""
+    raw_q = np.asarray(raw_q, dtype=float)
+    cand = np.floor(raw_q)[:, None] + np.arange(5)[None, :] * 0.25
+    d = (cand - raw_q[:, None]) * np.asarray(sec_per_q, dtype=float)[:, None] / SUNG_SIGMA_S
+    score = np.log(np.r_[SUNG_PRIOR, SUNG_PRIOR[0]])[None, :] - 0.5 * d ** 2
+    return cand[np.arange(len(raw_q)), np.argmax(score, axis=1)]
 
 
 def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty: float | None = None,
                   beat_q: float | None = None, beat_onsets: set[float] | None = None,
                   min_len: float | None = None, role_penalty: dict[str, float] | None = None,
-                  lead_mono: bool = False) -> list[QEvent]:
+                  lead_mono: bool = False, level_known: bool = False) -> list[QEvent]:
     """Snap onsets/durations to a `step`-quarter grid and turn the hand into a
     sequence of non-overlapping chords (a held note is cut at the next onset —
     readable notation beats perfect sustain fidelity for a learning score).
@@ -181,12 +227,14 @@ def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty:
     lead notes on one written onset keep only the longer (in seconds). In a simple meter (`beat_q`
     = 4 steps) the onsets of notes without a role penalty are written by beat (`onsets_by_beat`); in a
     beat written in thirds (sixths), ends snap to thirds (sixths) of the beat, the shortest length is a third
-    (a sixth) and `min_len` becomes a third of the beat."""
+    (a sixth) and `min_len` becomes a third of the beat. `level_known` (the user gave the tempo) lets
+    SUNG_SNAP write the sung lead and SUNG_LEGATO_S hold a sung note over a short gap to the next sung note."""
     if not notes:
         return []
     q = step
-    starts = snap_notes(notes, sec_to_q, 2 * q, fine_penalty, role_penalty)
-    coarse = np.array([(role_pen(n, role_penalty) or 0.0) >= TATUM_ONLY for n in notes])
+    starts = snap_notes(notes, sec_to_q, 2 * q, fine_penalty, role_penalty, beat_q, level_known)
+    sung = sung_snap(beat_q, level_known)
+    coarse = np.array([(role_pen(n, role_penalty) or 0.0) >= TATUM_ONLY and not sung for n in notes])
     raw_end = np.asarray(sec_to_q([n.end for n in notes]), dtype=float)
     ends = np.where(coarse, np.round(raw_end / (2 * q)) * 2 * q, np.round(raw_end / q) * q)
     tuplet: dict[int, int] = {}  # beat index -> 3 or 6: the beats written in thirds or sixths
@@ -211,10 +259,16 @@ def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty:
         keep = [n.role != "lead" or best[round(max(float(s), 0.0), 6)] == i for i, (n, s) in enumerate(zip(notes, starts))]
         notes, starts, ends = [n for n, k in zip(notes, keep) if k], starts[keep], ends[keep]
     groups: dict[float, list[tuple[int, float]]] = {}
+    sung_start: dict[float, float] = {}  # written onset -> its earliest sung lead note's start (seconds)
+    sung_end: dict[float, float] = {}  # written onset -> its latest sung lead note's end (seconds)
     for n, s, e in zip(notes, starts, ends):
         s = max(float(s), 0.0)
         groups.setdefault(s, []).append((n.pitch, max(float(e) - s, shortest(s))))
+        if (role_pen(n, role_penalty) or 0.0) >= TATUM_ONLY:
+            sung_start[s] = min(sung_start.get(s, n.start), n.start)
+            sung_end[s] = max(sung_end.get(s, n.end), n.end)
     onsets = sorted(groups)
+    legato = SUNG_LEGATO_S if sung else 0.0  # read at call time: bank --set sweeps it
     events = []
     for i, s in enumerate(onsets):
         pitches = tuple(sorted({p for p, _ in groups[s]}))
@@ -225,9 +279,13 @@ def quantize_hand(notes: list[Note], sec_to_q, step: float = 0.25, fine_penalty:
             e, b = s + dur, int(np.floor((s + dur) / beat_q + 1 / 12))
             if abs(e * k / beat_q - round(e * k / beat_q)) > 1e-6 and b * beat_q > s + 1e-9:
                 dur = b * beat_q - s
+        held = False
         if i + 1 < len(onsets):
             dur = min(dur, onsets[i + 1] - s)
-        if beat_q and beat_onsets is not None and (s / beat_q) % 1.0 > 1e-6:
+            nxt_s = sung_start.get(onsets[i + 1])  # only to a sung note: not to an accompaniment onset
+            if legato and s in sung_end and nxt_s is not None and nxt_s - sung_end[s] < legato:
+                dur, held = onsets[i + 1] - s, True  # a sung note held to the next one (SUNG_LEGATO_S)
+        if beat_q and beat_onsets is not None and (s / beat_q) % 1.0 > 1e-6 and not held:
             nxt = float(np.ceil(s / beat_q - 1e-9) * beat_q)
             if round(nxt, 6) in beat_onsets:
                 dur = min(dur, nxt - s)
@@ -375,13 +433,14 @@ def sharps_at(plan: list[tuple[float, int]], q: float) -> int:
 
 
 def lead_in(notes: list[Note], grid: Grid, fine_penalty: float | None = 0.15,
-            role_penalty: dict[str, float] | None = None) -> float:
+            role_penalty: dict[str, float] | None = None, level_known: bool = False) -> float:
     """Whole bars (in quarters) before the bar of these notes' first onset. The grid's bar 0 holds
     the source's first note, which a variant may not play (Connections' `piano/lead` opened with an
     empty bar: the first note is a left-hand F#3); the score drops those bars."""
     if not notes:
         return 0.0
-    first = float(np.min(snap_notes(notes, grid.sec_to_q, grid.tatum_q, fine_penalty, role_penalty)))  # as written
+    first = float(np.min(snap_notes(notes, grid.sec_to_q, grid.tatum_q, fine_penalty, role_penalty, grid.beat_q,
+                                    level_known)))  # as written
     return max(0.0, float(np.floor(first / grid.bar_q + 1e-9)) * grid.bar_q)
 
 
@@ -472,7 +531,7 @@ def apply_staff_modes(part, placed: list, hand: str, bar_q: float) -> list[int]:
 def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float | None = 0.15,
                 release_on_beat: bool = True, min_tatum: bool = True,
                 keys: list[tuple[float, int]] | None = None, chords: list | None = None,
-                role_penalty: dict[str, float] | None = None):
+                role_penalty: dict[str, float] | None = None, level_known: bool = False):
     """Grand staff on the grid. Onsets snap to the tatum (eighth) unless clearly between two
     (`fine_penalty`), and an off-beat note ends at a beat where anything starts (`release_on_beat`).
     On Connections (Starlight's intro unchanged) the two together took written-length agreement
@@ -484,16 +543,16 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
     written as chord symbols above the treble staff, spelled for the key in force. `role_penalty`
     (role -> fine_penalty, the pipeline's ROLE_PENALTY[source]) snaps those roles their own way; two
     lead notes on one written onset keep the longer; with LEAD_VOICE a hand with lead and other notes
-    gets two voices (DESIGN.md §17)."""
+    gets two voices (DESIGN.md §17). `level_known` (the user gave the tempo, §53) lets SUNG_SNAP write the sung lead."""
     from music21 import chord, clef, harmony, key, layout, meter, metadata, note, stream, tempo
 
     step = grid.tatum_q / 2
     lead_voice = LEAD_VOICE  # read at call time: bank --set sweeps it
-    shift = lead_in(notes, grid, fine_penalty, role_penalty)
+    shift = lead_in(notes, grid, fine_penalty, role_penalty, level_known)
     sec_to_q = lambda t: grid.sec_to_q(t) - shift  # noqa: E731
     beat_onsets = None
     if release_on_beat and notes:
-        pos = snap_notes(notes, sec_to_q, grid.tatum_q, fine_penalty, role_penalty)
+        pos = snap_notes(notes, sec_to_q, grid.tatum_q, fine_penalty, role_penalty, grid.beat_q, level_known)
         beat_onsets = {round(float(p), 6) for p in pos if (p / grid.beat_q) % 1.0 < 1e-6}
     keys = _from(keys or key_plan(notes, grid, piece_key(notes)), shift)
     score = stream.Score()
@@ -528,7 +587,8 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
             if LEAD_BARS:  # read at call time: in a bar without melody the rest of the hand is the lead voice (§35)
                 bars = melody_bars(lead, grid)
                 at = [int(np.floor((q + shift) / grid.bar_q + 1e-9)) in bars
-                      for q in snap_notes(rest, sec_to_q, grid.tatum_q, fine_penalty, role_penalty)]
+                      for q in snap_notes(rest, sec_to_q, grid.tatum_q, fine_penalty, role_penalty, grid.beat_q,
+                                          level_known)]
                 lead = sort_notes(lead + [n for n, b in zip(rest, at) if not b])
                 rest = [n for n, b in zip(rest, at) if b]
             voices = [lead, rest] if rest else [lead]
@@ -537,7 +597,8 @@ def build_score(notes: list[Note], grid: Grid, title: str, fine_penalty: float |
             two = len(voices) > 1
             target = stream.Voice() if two else p
             for ev in quantize_hand(vn, sec_to_q, step, fine_penalty, grid.beat_q, beat_onsets,
-                                    grid.tatum_q if min_tatum else None, role_penalty, lead_mono=True):
+                                    grid.tatum_q if min_tatum else None, role_penalty, lead_mono=True,
+                                    level_known=level_known):
                 ps = [spell(m, sharps_at(keys, ev.offset)) for m in ev.pitches]
                 el = note.Note(ps[0]) if len(ps) == 1 else chord.Chord(ps)
                 el.quarterLength = ev.dur

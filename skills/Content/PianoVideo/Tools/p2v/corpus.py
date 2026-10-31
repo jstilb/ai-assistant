@@ -39,6 +39,7 @@ from .evaluate import (Reference, RefNote, bar_quarters, grid_map, load_referenc
 ROOT = Path(os.environ.get("P2V_CORPUS", Path.home() / ".kaya/piano2video/corpus"))
 ASAP_GIT = "https://github.com/fosfrancesco/asap-dataset.git"
 MAESTRO_ZIP = "https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0.zip"
+MAESTRO_CSV = "https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0.csv"
 EXCERPT = 90.0  # seconds of each performance
 # one performance (the first with MAESTRO audio) per piece; one meter each, mostly melody over
 # accompaniment. Even indices tune, odd ones check (`--pieces tune|check`).
@@ -85,6 +86,19 @@ def slug(folder: str) -> str:
 def perf_row(folder: str) -> dict:
     rows = csv.DictReader(open(ROOT / "asap" / "metadata.csv"))
     return next(r for r in rows if r["folder"] == folder and r["maestro_audio_performance"])
+
+
+def title(folder: str) -> str | None:
+    """The performance's recording as MAESTRO names it ("Johann Sebastian Bach - Prelude and Fugue in E Major, WTC I,
+    BWV 854"): the title a concert upload gives, not ASAP's folder name, for the score lookup (DESIGN.md §55). None
+    without MAESTRO's CSV (`fetch` downloads it)."""
+    path = ROOT / MAESTRO_CSV.rsplit("/", 1)[1]
+    if not path.exists():
+        return None
+    key = perf_row(folder)["maestro_audio_performance"].replace("{maestro}/", "")
+    with open(path, newline="") as f:
+        r = next((r for r in csv.DictReader(f) if r["audio_filename"] == key), None)
+    return f"{r['canonical_composer']} - {r['canonical_title'].strip()}" if r else None
 
 
 # ---------------------------------------------------------------- fetch -- #
@@ -162,6 +176,9 @@ def fetch(pieces: list[str]):
         ROOT.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "clone", "--depth", "1", ASAP_GIT, str(ROOT / "asap")], check=True)
     (ROOT / "audio").mkdir(exist_ok=True)
+    if not (csv_path := ROOT / MAESTRO_CSV.rsplit("/", 1)[1]).exists():  # the recordings' titles (`title`)
+        urllib.request.urlretrieve(MAESTRO_CSV, csv_path.with_suffix(".part"))
+        csv_path.with_suffix(".part").replace(csv_path)
     todo = [p for p in pieces if not (ROOT / "audio" / f"{slug(p)}.wav").exists()]
     if not todo:
         return

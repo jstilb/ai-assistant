@@ -416,10 +416,35 @@ def build_variant(source: str, parts: str, tx: dict[str, list[Note]], active: se
     return out
 
 
+def title_lookup(args, song: str, src: Path, model, score_g, hint):
+    """The song's meter and tempo by its title (DESIGN.md §54): with the model grid, unless the user gave `--meter`,
+    `--bpm` or `--score`, or `--no-lookup`. -> (the hint to use: the listing's when it confirms the recording's level,
+    keeping `--downbeat`; else `hint` unchanged, and what to report: None when the lookup did not run)."""
+    if model is None or score_g is not None or args.no_lookup or args.meter is not None or args.bpm is not None:
+        return hint, None
+    from .lookup import audio_bpm, lookup_hint, video_channel
+    title, channel = args.title or song, video_channel(src) if is_url(args.audio) else ""
+    lk, found = lookup_hint(title, channel, lambda: audio_bpm(model), args.downbeat)
+    if "error" in found:
+        log(f"WARNING: no tempo lookup: {found['error']} (DESIGN.md §54); the grid comes from the audio")
+    elif found["match"] is None:
+        log(f"no song listing for {title!r}: the meter and tempo come from the audio (--meter / --bpm set them)")
+    elif lk is None:
+        log(f"HookTheory lists {found['match']} at {found['meter']}, {found['bpm']:g} beats/min: not this "
+            f"recording's tempo ({found['audio_bpm']:g}), not used (--meter / --bpm set them)")
+    else:
+        log(f"tempo from HookTheory: {found['match']}, {lk.meter} at {lk.bpm:g} beats/min (the recording "
+            f"{found['audio_bpm']:g}; DESIGN.md §54; --no-lookup turns it off)")
+        return lk, found
+    return hint, found
+
+
 def run(args) -> dict:
     from .meter import beat_this_missing
     if args.audio_track == "none":
         args.audio_track = None
+    if getattr(args, "score", None) and any(v is not None for v in (args.meter, args.bpm, args.downbeat)):
+        raise SystemExit("--score sets the meter, the tempo and the bar lines: drop --meter, --bpm and --downbeat")
     if args.bpm is not None and args.meter is None:  # the beat --bpm counts depends on the meter (§48)
         raise SystemExit("--bpm needs --meter: a quarter in 2/4, 3/4, 4/4, a dotted quarter in 6/8, 9/8, 12/8")
     why = beat_this_missing(args.beat_weights) if args.beats == "beat-this" else None
@@ -501,9 +526,9 @@ def run(args) -> dict:
     import soundfile as sf
     duration = sf.info(str(wav)).duration
 
-    from .meter import Hint, beat_this, score_grid
-    given = {"meter": args.meter, "bpm": args.bpm, "downbeat": args.downbeat}
-    hint = Hint(**given) if any(v is not None for v in given.values()) else None
+    from .meter import Hint, beat_this, level_from_hint, score_grid
+    given = {k: v for k, v in {"meter": args.meter, "bpm": args.bpm, "downbeat": args.downbeat}.items() if v is not None}
+    hint = Hint(**given) if given else None
     if hint:
         log(f"score grid hint: meter {hint.meter or '-'}, {hint.bpm or '-'} beats/min, a bar line at "
             f"{'-' if hint.downbeat is None else f'{hint.downbeat:g} s'} (DESIGN.md §48, §49)")
@@ -512,18 +537,34 @@ def run(args) -> dict:
     from .notation import ROLE_PENALTY, build_score, engrave_pdf, key_plan, lead_in, piece_key, write_musicxml
     from .render import Renderer, synthesize
 
+    score_g, score_info = None, None
+    if getattr(args, "score", None):  # one grid for every source: the score is placed on the recording's time
+        from .scorefile import ScoreMismatch, score_file_grid
+        heard = [n for s in active if s != "drums" for n in tx.get(s, [])]
+        try:
+            score_g, score_info = score_file_grid(heard, args.score)
+            score_info["file"] = str(args.score)
+            log(f"score {args.score.name}: {score_info['written_meter']} written {score_g.meter}, "
+                f"{score_info['matched']:.0%} of the note onsets matched (DESIGN.md §52)")
+        except ScoreMismatch as e:  # the audio's grid, said loudly: the user expects the score's bars
+            score_info = {"file": str(args.score), "error": str(e)}
+            log(f"WARNING: --score {args.score.name} not used: {e}. The grid comes from the audio")
     model, beats_from = None, "notes"
-    if args.beats == "beat-this":  # the trained tracker hears the whole recording (DESIGN.md §12)
+    if score_g is not None:  # the score's beats: the audio's tracker is not needed
+        beats_from = "score"
+    elif args.beats == "beat-this":  # the trained tracker hears the whole recording (DESIGN.md §12)
         log("tracking beats and downbeats with Beat This!…")
         model = beat_this(wav, args.beat_weights, cache=work / f"beats-{args.beat_weights}.npz")
         beats_from = f"beat-this {args.beat_weights}"
+    hint, found = title_lookup(args, song, src, model, score_g, hint)
     report = {"input": args.audio if is_url(args.audio) else str(src), "work_dir": str(work), "bpm": None,
               "duration_s": round(duration, 2), "stem_db": {k: round(v, 1) for k, v in levels.items()},
               "piano_input": piano_input(args.piano_input, levels) if "piano" in need else None,
               "lead_f0": lead_f0(args.lead_f0, args.lead_stem) if args.lead_stem in need else None,
               "beats": beats_from, "lead_stem": args.lead_stem, "route": route(levels, args.lead_stem),
-              "hint": {k: v for k, v in given.items() if v is not None} if hint else None,
-              "grids": {}, "variants": {}}
+              "hint": given or None, "lookup": found, "grids": {}, "variants": {}}
+    if score_info is not None:
+        report["score"] = score_info
     grids, key_plans, chord_plans, chord_audio = {}, {}, {}, None
     if any(p == "lead+chords" or band_chords(s, p) for s, p in variants):
         report["chord_model"] = args.chord_model
@@ -540,7 +581,7 @@ def run(args) -> dict:
             continue
         if source not in grids:
             src_notes = source_notes(source, tx, active, args.lead_stem)
-            grids[source] = grid = score_grid(src_notes, wav, model=model, hint=hint)
+            grids[source] = grid = score_g if score_g is not None else score_grid(src_notes, wav, model=model, hint=hint)
             # keys from everything the source plays: a melody line alone is too thin to judge
             # (Starlight's right-hand line read 4 -> 5 -> 4 sharps; the full texture stays in E)
             key_plans[source] = key_plan(src_notes, grid, piece_key(src_notes)) if src_notes else [(0.0, 0)]
@@ -576,12 +617,14 @@ def run(args) -> dict:
                 + " ".join(c.harte for c in chords[:16]) + (" …" if len(chords) > 16 else ""))
         log(f"[{tag}] {len(notes)} notes (RH {sum(n.hand == 'R' for n in notes)}, "
             f"LH {sum(n.hand == 'L' for n in notes)})")
-        shift = lead_in(notes, grid, role_penalty=ROLE_PENALTY.get(source))
+        known = level_from_hint(grid, hint)  # the grid is at the user's tempo: SUNG_SNAP writes the sung lead (§53)
+        shift = lead_in(notes, grid, role_penalty=ROLE_PENALTY.get(source), level_known=known)
         midi = work / f"{tag}.mid"
         write_midi(notes, grid, midi, pedal if source in ("piano", "hybrid") and not chords else None, keys)
 
         title = f"{args.title or song} — {source} / {parts}"
-        score = build_score(notes, grid, title, keys=keys, chords=chords, role_penalty=ROLE_PENALTY.get(source))
+        score = build_score(notes, grid, title, keys=keys, chords=chords, role_penalty=ROLE_PENALTY.get(source),
+                            level_known=known)
         xml = write_musicxml(score, work / f"{tag}.musicxml")
         pages = None if args.no_pdf else engrave_pdf(xml, work / f"{tag}.pdf")
 
@@ -629,13 +672,23 @@ def _hint_downbeat(s: str) -> float:
     return v
 
 
+def _score_file(s: str) -> Path:
+    """--score at parse time: a MIDI or MusicXML file that exists."""
+    from .scorefile import SUFFIXES
+    p = Path(s).expanduser().resolve()
+    if p.suffix.lower() not in SUFFIXES or not p.is_file():
+        raise argparse.ArgumentTypeError(f"{s}: a score file ({', '.join(SUFFIXES)}) that exists")
+    return p
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="piano2video", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("audio", help="any ffmpeg-readable audio/video file, or an http(s) video URL (yt-dlp)")
     ap.add_argument("--out", default=str(Path.home() / ".kaya/piano2video/out"))
     ap.add_argument("--name", help="work-dir name (default: slug of the file name or video title)")
-    ap.add_argument("--title", help="title shown in the video and on the score")
+    ap.add_argument("--title", help="title shown in the video and on the score, and looked up for the meter and "
+                                    "tempo (\"Artist - Song\"; default: the video title or file name; DESIGN.md §54)")
     ap.add_argument("--source", choices=("auto", *SOURCES), default="auto",
                     help="auto (default) = choose from the stem levels (route: solo piano -> piano, piano-led "
                          "with vocals -> hybrid, else arrange); piano = transcribe only the song's piano part; "
@@ -685,6 +738,15 @@ def build_parser() -> argparse.ArgumentParser:
                          "--start, best where the beat is steady (a verse or chorus, not a free intro): the run of "
                          "regular bars around it moves so that a bar line falls on the beat nearest it; bars past a "
                          "beat slip keep their phase. The audio often puts the bars half a bar off (DESIGN.md §49)")
+    ap.add_argument("--score", type=_score_file,
+                    help="the piece's score, if you have it (MIDI or MusicXML; a PDF through OMR): aligned to the "
+                         "transcribed notes, it sets the meter, the tempo and every beat and bar line, through the "
+                         "player's rubato (DESIGN.md §52). The notes and the video stay the recording's. Replaces "
+                         "--meter, --bpm and --downbeat")
+    ap.add_argument("--no-lookup", action="store_true",
+                    help="do not look the song up by its title (or --title) in the local HookTheory index for its "
+                         "meter and tempo; without --meter / --bpm / --score the lookup sets them when it finds the "
+                         "artist and the song and the recording's beat tempo agrees (DESIGN.md §54)")
     ap.add_argument("--audio-track", choices=("synth", "original", "mix", "none"), default="synth",
                     help="video soundtrack: synth = the transcription itself (default)")
     ap.add_argument("--start", type=float, help="trim: start offset (s)")

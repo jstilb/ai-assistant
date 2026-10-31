@@ -98,5 +98,19 @@ if [[ ! -s "$BTC_DIR/btc_model.pt" ]] || [[ "$(shasum -a 256 "$BTC_DIR/btc_model
   fi
   mv "$BTC_DIR/btc_model.pt.part" "$BTC_DIR/btc_model.pt"
 fi
+# The meter and tempo lookup by title (DESIGN.md §54): an index built from the HookTheory dump (github.com/
+# chrisdonahue/sheetsage-data, CC BY-NC-SA 3.0, personal use; data, kept in ~/.kaya/piano2video, never in the repo).
+# Rebuilt at every setup (seconds), so a change in the build's rules reaches the index. Optional: a failed build or
+# no dump says so and setup goes on; without an index a run says so and takes the meter and tempo from the audio.
+HT_DUMP="${P2V_BANK:-$HOME/.kaya/piano2video/bank}/raw/hooktheory/Hooktheory.json.gz"
+HT_INDEX="${P2V_LOOKUP:-$HOME/.kaya/piano2video/lookup/hooktheory-index.json}"
+if [[ -s "$HT_DUMP" ]]; then
+  (cd "$HERE" && "$VENV/bin/python" -m p2v.lookup build) \
+    || echo "tempo lookup index: build failed (DESIGN.md §54); runs take the meter and tempo from the audio" >&2
+elif [[ -s "$HT_INDEX" ]]; then
+  echo "no HookTheory dump at $HT_DUMP: the existing index $HT_INDEX is kept, not rebuilt (DESIGN.md §54)" >&2
+else
+  echo "no HookTheory dump at $HT_DUMP: the tempo lookup by title is off (DESIGN.md §54)" >&2
+fi
 # Demucs htdemucs_6s weights download on first run into ~/.cache/torch.
 echo "ok — try: $HERE/piano2video <song.mp3> --all-variants"

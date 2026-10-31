@@ -239,11 +239,19 @@ def bar_length_joint(acc: np.ndarray, down_z: np.ndarray, g: int) -> int:
     return cands[int(np.argmax(cn / (np.abs(cn).max() + 1e-9) + cm / (np.abs(cm).max() + 1e-9)))]
 
 
+# the model grid's cost of a bar off m (§50): 3, chosen on the grid sets' tune half among 0.75, 1.5, 3 and 6
+# (0.75 lost, 6 moved no bar line); check half, read once: beat F +0.004 [+0.003, +0.005], meter and tempo the same.
+# The note tracker keeps 1.5: nothing measured it there.
+BAR_COST = 3.0
+
+
 def downbeats(acc: np.ndarray, m: int, slack: int = 2, cost: float = 1.5) -> np.ndarray:
     """Downbeat tatum indices by dynamic programming: maximise the accents on downbeats, bars of
     m +- slack tatums, each tatum off costing `cost` (in z-score units; Connections' bar lines hit
-    69% at 1.0, 81% from 1.5 to 3.0; Starlight's intro the same at all). The first downbeat may
-    come anywhere in the first bar (a pickup)."""
+    69% at 1.0, 81% from 1.5 to 3.0; Starlight's intro the same at all). A bar off m is written as
+    one bar of m (`fit_bar` squeezes or stretches it), so each costs the beats inside it: from 1.5
+    to 3 (BAR_COST, the model grid) the grid's beats gained on rubato piano and band songs alike, and
+    the bar lines did not move (§50). The first downbeat may come anywhere in the first bar (a pickup)."""
     n = len(acc)
     score = acc.astype(float).copy()
     back = np.full(n, -1)
@@ -571,6 +579,19 @@ def capped_bpm(bpm: float) -> float:
 DBN_RANGE = 1.5  # the DBN's tempo range: within x1.5 of the piece's level (the capped median raw interval)
 # with the user's tempo (a Hint, §48): x1.2, so the level a third away (40 against 60 beats a minute in 6/8) is out
 HINT_RANGE = 1.2
+# the DBN's tempo-change cost (dbn_beats' lam): madmom's 100 without a hint. With the user's tempo 30, so the beats
+# follow a classical player's rubato (§50: chosen on the tune half among 100, 30, 10; check half, read once: beat F
+# +0.0055 [+0.003, +0.008], ASAP +0.016, ASAP tempo +0.055). Not without a hint: inside x1.5 of the level, 30 let
+# the beats drift or jump a level (Hello 79 -> 71 a minute, meter and tempo lost; Gondoliera 88 -> 167); x1.2
+# leaves out every other level (§48), so with a hint the beats follow the audio's tempo inside it
+DBN_LAM, HINT_LAM = 100.0, 30.0
+
+
+def level_from_hint(grid: Grid, hint: Hint | None) -> bool:
+    """The user gave the tempo (`--bpm`) and the grid's tempo is at its level (within HINT_RANGE): the model grid
+    followed it. The note tracker (`--beats notes`, or too few model beats) keeps its own level (§48), which may be
+    x0.5 or x2: then a seconds-based rhythm decision (notation.SUNG_SNAP, §53) must not trust the hint."""
+    return bool(hint and hint.bpm) and abs(float(np.log(grid.bpm / hint.bpm))) <= float(np.log(HINT_RANGE)) + 1e-9
 
 
 def steady_beats(beat_logit: np.ndarray, beats: np.ndarray, bpm: float | None = None) -> np.ndarray:
@@ -580,11 +601,13 @@ def steady_beats(beat_logit: np.ndarray, beats: np.ndarray, bpm: float | None = 
     and follows a tempo change at the beats. Until §46 librosa's dynamic program at the model's local
     tempo (the median of 9 raw intervals, which a run of missed beats doubles: The Lark, §44); on the
     grid test sets the DBN gave beat F +0.010 over it (§46). A free DBN (55-215 beats a minute)
-    switched levels: tempo 2 better, 7 worse on ASAP. `bpm` (the user's hint, §48) replaces the level."""
+    switched levels: tempo 2 better, 7 worse on ASAP. `bpm` (the user's hint, §48) replaces the level, and the
+    tempo may then change faster (HINT_LAM, §50)."""
     if len(beats) < 2:  # no interval, no level (model_grid needs 8 raw peaks)
         return np.asarray(beats, dtype=float)
-    b0, r = (bpm, HINT_RANGE) if bpm else (capped_bpm(60.0 / float(np.median(np.diff(beats)))), DBN_RANGE)
-    return dbn_beats(_prob(beat_logit), BT_FPS, b0 / r, b0 * r)
+    b0, r, lam = (bpm, HINT_RANGE, HINT_LAM) if bpm else \
+        (capped_bpm(60.0 / float(np.median(np.diff(beats)))), DBN_RANGE, DBN_LAM)
+    return dbn_beats(_prob(beat_logit), BT_FPS, b0 / r, b0 * r, lam=lam)
 
 
 def dbn_beats(act: np.ndarray, fps: float, min_bpm: float, max_bpm: float, lam: float = 100.0,
@@ -670,7 +693,7 @@ def model_grid(notes: list[Note], mb: ModelBeats, hint: Hint | None = None) -> G
     p = at_tatums(_prob(mb.downbeat), tatums)
     down_z = (p - p.mean()) / (p.std() + 1e-9)
     m = fixed[1] if fixed else bar_length_joint(acc, down_z, g)
-    down = downbeats(acc + MODEL_DOWN_W * down_z, m)
+    down = downbeats(acc + MODEL_DOWN_W * down_z, m, cost=BAR_COST)
     if hint and hint.downbeat is not None:
         down = phase_at(down, tatums, hint.downbeat, g, m)
     return grid_from(tatums, down, g, m, float(on[0]) if len(on) else float(beats[0]), onset_strength(on, tatums))
