@@ -15,15 +15,16 @@
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, spyOn } from "bun:test";
 import type { Server } from "bun";
-import * as childProcess from "child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import * as childProcess from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CLAUDE_PATH } from "../../../../lib/core/Inference.ts";
 // cross-skill-allowed: test spies on the voice-boundary CaptureGate the server imports (same exception as RealtimeVoiceServer.ts)
 import * as CaptureGateModule from "../../../Productivity/LifeOS/Capture/CaptureGate.ts";
 import * as VoiceCommon from "./VoiceCommon.ts";
 import * as STTPolishPipeline from "./STTPolishPipeline.ts";
+import type { PolishResult } from "./STTPolishPipeline.ts";
 
 // Preserve original fetch BEFORE any mocking, for test HTTP calls to our server
 const originalFetch = globalThis.fetch;
@@ -52,7 +53,7 @@ const secretsSpy = spyOn(VoiceCommon, "loadSecrets").mockImplementation(() => ({
 }));
 
 // CaptureGate: this suite exercises the STT->LLM->TTS voice pipeline, not
-// LifeOS capture routing (skills/Productivity/LifeOS/tests/capture-gate.test.ts
+// LifeOS capture routing (skills/Productivity/LifeOS/tests/capture-gate.e2e.ts
 // covers that). Unmocked, every transcript would reach a real `claude -p`
 // classifier spawn.
 const captureGateSpy = spyOn(CaptureGateModule, "captureGate").mockResolvedValue({
@@ -63,13 +64,16 @@ const captureGateSpy = spyOn(CaptureGateModule, "captureGate").mockResolvedValue
 
 // STT polish: unmocked it calls the live Ollama service and writes the live
 // /tmp/voice-interaction/polish-config.json counters. Pass transcripts through.
-const polishSpy = spyOn(STTPolishPipeline, "polishTranscription").mockImplementation(async (rawText: string) => ({
-  text: rawText,
-  rawText,
-  polished: false,
-  model: "none",
-  duration_ms: 0,
-}));
+const polishSpy = spyOn(STTPolishPipeline, "polishTranscription").mockImplementation(
+  async (rawText: string): Promise<PolishResult> => ({
+    text: rawText,
+    rawText,
+    polished: false,
+    model: "none",
+    duration_ms: 0,
+    wordOverlap: 100,
+  }),
+);
 
 // The server's LLM is a persistent `claude` stream-json subprocess
 // (ClaudeSession). Redirect that one spawn to a fake that speaks the same
@@ -99,7 +103,12 @@ const spawnSpy = spyOn(childProcess, "spawn").mockImplementation(((
   command: string,
   args: ReadonlyArray<string>,
   options: childProcess.SpawnOptions,
-) => realSpawn(command === CLAUDE_PATH ? "bun" : command, command === CLAUDE_PATH ? [FAKE_CLAUDE_PATH] : args, options)) as typeof childProcess.spawn);
+) =>
+  realSpawn(
+    command === CLAUDE_PATH ? "bun" : command,
+    command === CLAUDE_PATH ? [FAKE_CLAUDE_PATH] : args,
+    options,
+  )) as typeof childProcess.spawn);
 
 afterAll(() => {
   configSpy.mockRestore();
@@ -107,6 +116,7 @@ afterAll(() => {
   captureGateSpy.mockRestore();
   polishSpy.mockRestore();
   spawnSpy.mockRestore();
+  mockFetch.mockRestore(); // do not leak the global fetch mock into later test files
   rmSync(FAKE_CLAUDE_DIR, { recursive: true, force: true });
 });
 
@@ -135,7 +145,10 @@ function connectWs(port: number): Promise<WebSocket> {
 
 function waitForMessage(ws: WebSocket, type?: string, timeoutMs = 5000): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Timeout waiting for message type: ${type ?? "any"}`)), timeoutMs);
+    const timeout = setTimeout(
+      () => reject(new Error(`Timeout waiting for message type: ${type ?? "any"}`)),
+      timeoutMs,
+    );
     const handler = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string) as Record<string, unknown>;
@@ -176,7 +189,10 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Fetch Mock Setup
 // ============================================================================
 
-const mockFetch = spyOn(globalThis, "fetch");
+// Typed to the call shape the mocks use; typeof fetch also demands Bun's `preconnect`, which the mocks never provide.
+const mockFetch = spyOn(globalThis, "fetch") as unknown as ReturnType<
+  typeof spyOn<{ fetch: (url: string | URL | Request, options?: RequestInit) => Promise<Response> }, "fetch">
+>;
 
 /**
  * Smart fetch mock that intercepts external service calls but passes through
@@ -251,12 +267,12 @@ function setupFailingHealthMocks(testPort: number): void {
 // ============================================================================
 
 describe("RealtimeVoiceServer", () => {
-  let server: Server | undefined;
+  let server: Server<{ sessionId: string }> | undefined;
   let port: number;
   let openSockets: WebSocket[] = [];
 
   // Dynamic import to get the module after mocks are set up
-  let startServer: (port?: number) => Server;
+  let startServer: (port?: number) => Server<{ sessionId: string }>;
   let sessions: Map<unknown, unknown>;
   let sessionStore: Map<string, { session: unknown; disconnectedAt: number | null }>;
   let SESSION_RECOVERY_TTL_MS: number;
@@ -268,7 +284,9 @@ describe("RealtimeVoiceServer", () => {
 
     // Query suffix = a fresh module instance evaluated under the spies above, even
     // if another test file already loaded the server with the real config.
-    const mod = (await import("./RealtimeVoiceServer.ts?voice-server-test")) as typeof import("./RealtimeVoiceServer.ts");
+    const mod = (await import(
+      "./RealtimeVoiceServer.ts" + "?voice-server-test"
+    )) as typeof import("./RealtimeVoiceServer.ts");
     startServer = mod.startServer;
     sessions = mod.sessions;
     sessionStore = mod.sessionStore as Map<string, { session: unknown; disconnectedAt: number | null }>;
@@ -560,9 +578,9 @@ describe("RealtimeVoiceServer", () => {
         maxTurns: number;
       }>;
       expect(sessionValues.length).toBe(1);
-      expect(sessionValues[0].config.voice).toBe("bf_emma");
-      expect(sessionValues[0].config.maxTokens).toBe(2048);
-      expect(sessionValues[0].maxTurns).toBe(100);
+      expect(sessionValues[0]?.config?.voice).toBe("bf_emma");
+      expect(sessionValues[0]?.config?.maxTokens).toBe(2048);
+      expect(sessionValues[0]?.maxTurns).toBe(100);
     });
   });
 
@@ -677,7 +695,7 @@ describe("RealtimeVoiceServer", () => {
       const ackB = await waitForMessage(wsB, "session_ack");
       expect(ackB.resumed).toBe(true);
       expect(ackB.sessionId).toBe(savedSessionId);
-      expect((ackB.conversationLength as number)).toBeGreaterThan(0);
+      expect(ackB.conversationLength as number).toBeGreaterThan(0);
     });
 
     it("should fail recovery for expired session", async () => {
@@ -825,7 +843,7 @@ describe("RealtimeVoiceServer", () => {
       const messages = await messagesPromise;
       const errors = messages.filter((m) => m.type === "error");
       expect(errors.length).toBeGreaterThanOrEqual(1);
-      expect(String(errors[0].message)).toContain("Rate limited");
+      expect(String(errors[0]?.message)).toContain("Rate limited");
     });
 
     it("should handle malformed JSON", async () => {

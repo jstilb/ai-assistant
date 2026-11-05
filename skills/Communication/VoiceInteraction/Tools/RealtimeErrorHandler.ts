@@ -17,7 +17,7 @@
  *   bun RealtimeErrorHandler.ts test   # Simulate error scenarios
  */
 
-import { spawnSync } from "child_process";
+import { spawnSync } from "node:child_process";
 import { getRealtimeVoiceConfig } from "./VoiceCommon.ts";
 
 // ============================================================================
@@ -59,12 +59,7 @@ interface ErrorContext {
  * @param label - Optional label for logging
  * @returns The resolved value or the fallback
  */
-export async function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  fallback: T,
-  label?: string,
-): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T, label?: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<T>((resolve) => {
@@ -146,11 +141,7 @@ export function handleLLMError(error: Error, sessionId: string): ErrorServerMess
   const isRateLimit = error.message.includes("429") || error.message.toLowerCase().includes("rate limit");
   const isTimeout = error.message.includes("timed out") || error.message.includes("timeout");
 
-  const spokenMessage = isRateLimit
-    ? RATE_LIMIT_MESSAGE
-    : isTimeout
-      ? SPOKEN_ERRORS.llm
-      : SPOKEN_ERRORS.llm;
+  const spokenMessage = isRateLimit ? RATE_LIMIT_MESSAGE : isTimeout ? SPOKEN_ERRORS.llm : SPOKEN_ERRORS.llm;
 
   const code = isRateLimit ? "LLM_RATE_LIMITED" : isTimeout ? "LLM_TIMEOUT" : "LLM_ERROR";
 
@@ -216,10 +207,7 @@ export function handleCapacityError(sessionId: string): ErrorServerMessage {
  *
  * Returns base64-encoded audio data or null if all TTS options fail.
  */
-export async function speakError(
-  message: string,
-  voice: string = "af_heart",
-): Promise<string | null> {
+export async function speakError(message: string, voice: string = "af_heart"): Promise<string | null> {
   const config = getRealtimeVoiceConfig();
 
   // Try MLX TTS first
@@ -257,7 +245,11 @@ export async function speakError(
         if (await file.exists()) {
           const buffer = await file.arrayBuffer();
           // Clean up
-          try { await Bun.write(tmpFile, ""); } catch { /* ignore */ }
+          try {
+            await Bun.write(tmpFile, "");
+          } catch {
+            /* ignore */
+          }
           return Buffer.from(buffer).toString("base64");
         }
       }
@@ -278,8 +270,7 @@ function logError(context: ErrorContext): void {
   const msg = context.originalError.message;
   const truncated = msg.length > 200 ? msg.slice(0, 200) + "..." : msg;
   console.error(
-    `[${context.timestamp}] [ERROR] [${context.category.toUpperCase()}] ` +
-    `[${context.sessionId}] ${truncated}`,
+    `[${context.timestamp}] [ERROR] [${context.category.toUpperCase()}] ` + `[${context.sessionId}] ${truncated}`,
   );
 }
 
@@ -297,12 +288,7 @@ async function main(): Promise<void> {
 
       // Test withTimeout
       console.log("1. Testing withTimeout (should resolve)...");
-      const fast = await withTimeout(
-        Promise.resolve("hello"),
-        1000,
-        "timeout",
-        "fast-test",
-      );
+      const fast = await withTimeout(Promise.resolve("hello"), 1000, "timeout", "fast-test");
       console.log(`   Result: ${fast} (expected: hello)\n`);
 
       console.log("2. Testing withTimeout (should timeout)...");
@@ -343,9 +329,6 @@ async function main(): Promise<void> {
       console.log("=== All tests passed ===");
       break;
     }
-
-    case "--help":
-    case "help":
     default: {
       console.log(`RealtimeErrorHandler - Centralized error handling for real-time voice
 

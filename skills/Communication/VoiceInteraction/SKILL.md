@@ -16,7 +16,7 @@ REAL-TIME (WebSocket - port 8882):
     --> Sentence chunking --> mlx-audio TTS (localhost:8880)
     |-- ON TTS FAILURE --> macOS `say` fallback --> text-only fallback
     --> WebSocket audio response --> Speakers
-    Auto-start: launchd (com.pai.realtime-voice.plist)
+    Auto-start: launchd (com.kaya.realtime-voice.plist)
     Health: http://localhost:8882/health
 
 BATCH - MOBILE (Telegram):
@@ -82,31 +82,7 @@ PROACTIVE:
 
 ## Free Voice Stack & Training
 
-The voice pipeline is free/local end to end by default. Paid cloud services
-are opt-in fallbacks, each behind its own flag (all default **false**):
-
-| Path | Free default | Paid fallback | Gate |
-|------|--------------|---------------|------|
-| STT (Telegram voice notes + files) | Local Whisper (`transcribeBuffer`) | Gemini API | `voiceInteraction.allowCloudSTT` |
-| TTS (Telegram voice replies) | Kokoro via mlx-audio :8880 | ElevenLabs | `voiceInteraction.allowCloudTTS` |
-| Transcription polish | Ollama (`dictation:latest` → `qwen2.5:1.5b`) | Claude API | STTPolish `allowCloudFallback` (`enable-cloud`/`disable-cloud` CLI) |
-
-Training the free stack on Jm's vocabulary:
-
-- **Vocabulary** lives in `USER/SKILLCUSTOMIZATIONS/VoiceInteraction/vocabulary.json`
-  (edit directly or `bun Tools/VocabularyStore.ts add <term>`). It feeds
-  Whisper's `--initial-prompt` (decoding bias), the polish prompt, and the
-  dictation model's system prompt.
-- **Dictation model**: `bun Tools/DictationTrainer.ts train` rebuilds
-  `dictation:latest` from the vocabulary + curated seed pairs
-  (`Config/dictation-seed-pairs.jsonl`) + accumulated raw→polished pairs
-  (`data/pairs.jsonl`, written automatically on every accepted polish).
-  Re-run after growing the vocabulary or accumulating new pairs;
-  `compare` evals it against the base model; reverse with
-  `ollama rm dictation:latest`.
-- **Hallucination guards**: polish output is rejected (raw text passes
-  through) when word overlap drops below 85% or more than one new content
-  word appears — few-shot examples can otherwise leak into output.
+The free voice stack (local STT and TTS) and the voice training notes are in `references/FreeVoiceStack.md`. Read it when you change the voice stack.
 
 ## Channels
 
@@ -192,186 +168,11 @@ bun ~/.claude/skills/Communication/VoiceInteraction/Tools/ProactivePinger.ts sch
 
 ## Examples
 
-**Example 1: Desktop voice conversation**
-```
-User: "Start voice mode"
---> DesktopVoiceClient starts listening
---> User presses hotkey, speaks: "What's on my calendar?"
---> VoiceInputProcessor transcribes via local Whisper
---> Inference generates response
---> VoiceResponseGenerator plays through speakers
---> Kaya: "You have three meetings today. First one at 10am with the design team."
-```
+Worked examples are in `references/Examples.md`.
 
-**Example 2: Telegram voice reply**
-```
-Jm sends voice note: "Hey Kaya, what's the weather?"
---> Telegram bot receives OGG audio
---> VoiceInputProcessor transcribes via Gemini
---> Inference generates response
---> VoiceResponseGenerator creates local TTS audio
---> Telegram sends voice reply
-```
+## Configuration, Customization, Setup, File Structure
 
-**Example 3: Proactive ping**
-```
-Calendar event in 10 minutes
---> ProactivePinger triggers
---> VoiceResponseGenerator creates audio: "Meeting with design team in 10 minutes"
---> Routes to active channel (desktop if running, else Telegram)
-```
-
-**Example 4: Between-turn interruption**
-```
-Kaya is speaking a long response through speakers
---> User starts new turn (VAD detects new speech)
---> InterruptionHandler cancels current TTS playback (between-turn, not mid-stream)
---> New input captured and processed
---> Fresh response generated with conversation context
-```
-
-## Configuration
-
-Voice settings from `settings.json`:
-```json
-{
-  "daidentity": {
-    "localVoice": {
-      "id": "af_heart",
-      "model": "kokoro",
-      "speed": 1.1
-    },
-    "voice": {
-      "stability": 0.35,
-      "similarity_boost": 0.8,
-      "style": 0.9,
-      "volume": 0.8
-    }
-  }
-}
-```
-
-Desktop mode settings (defaults):
-```json
-{
-  "voiceInteraction": {
-    "activation": "push-to-talk",
-    "hotkey": "F13",
-    "vadSensitivity": 0.5,
-    "silenceThreshold": 1.5,
-    "maxRecordingDuration": 120,
-    "whisperModel": "base.en",
-    "inferenceLevel": "standard",
-    "autoPlayResponse": true
-  }
-}
-```
-
-Local TTS config (persisted via StateManager at `/tmp/voice-interaction/local-tts-config.json`):
-```json
-{
-  "enabled": true,
-  "serverUrl": "http://localhost:8880",
-  "defaultModel": "kokoro",
-  "defaultVoice": "af_heart",
-  "defaultSpeed": 1.1,
-  "timeoutMs": 15000,
-  "totalRequests": 0,
-  "totalFallbacks": 0,
-  "lastUpdated": "2026-02-17T00:00:00.000Z"
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `enabled` | `true` | Whether local TTS is active; `false` falls back to macOS `say` |
-| `serverUrl` | `http://localhost:8880` | mlx-audio server URL |
-| `defaultModel` | `kokoro` | TTS model (kokoro, chatterbox, qwen3-tts) |
-| `defaultVoice` | `af_heart` | Kokoro voice ID |
-| `defaultSpeed` | `1.1` | Speech speed multiplier |
-| `timeoutMs` | `15000` | Request timeout in ms |
-
-## Customization
-
-User-specific overrides live in `USER/SKILLCUSTOMIZATIONS/VoiceInteraction/`:
-
-| File | Purpose |
-|------|---------|
-| `PREFERENCES.md` | Free-form voice preferences (loaded as context) |
-| `config.json` | JSON overrides merged into VoiceInteractionConfig |
-
-Configurable settings via `config.json`:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `mode` | `"push-to-talk" \| "vad"` | Desktop activation mode |
-| `whisperModel` | `string` | Whisper model for local STT (e.g. `"base.en"`, `"small.en"`) |
-| `silenceThreshold` | `number` | VAD silence detection threshold |
-| `silenceDuration` | `number` | Seconds of silence before end-of-speech |
-| `inferenceLevel` | `"fast" \| "standard" \| "smart"` | LLM inference tier for voice responses |
-
-Voice identity is configured in `settings.json` under `daidentity.localVoice` (voice ID, model, speed).
-
-## Setup
-
-### Requirements
-
-```bash
-# Audio recording
-brew install sox
-
-# Local transcription (managed by VoiceInput tool)
-# faster-whisper via uv (auto-installed)
-
-# Microphone permissions
-# System Settings > Privacy & Security > Microphone > Terminal
-```
-
-### Dependencies
-
-| Dependency | Status | Notes |
-|------------|--------|-------|
-| VoiceInput CORE tool | Exists | Local Whisper STT via sox + faster-whisper |
-| Telegram skill | Exists | Two-way messaging with voice support |
-| mlx-audio server | Running | Local TTS at localhost:8880 (Kokoro-82M) |
-| Ollama | Running | STT polish via qwen2.5:1.5b at localhost:11434 |
-| Gemini API | Configured | STT for Telegram voice messages |
-| sox (brew) | Required | Audio recording on desktop |
-
-## File Structure
-
-```
-skills/Communication/VoiceInteraction/
-+-- SKILL.md                               # This file
-+-- Tools/
-|   +-- VoiceCommon.ts                     # Shared constants, config, schemas, state managers
-|   +-- RealtimeVoiceServer.ts             # WebSocket server for real-time voice (port 8882)
-|   +-- VoiceSystemPrompt.ts              # Voice-optimized system prompt builder
-|   +-- RealtimeErrorHandler.ts           # Centralized error handling with spoken errors
-|   +-- RealtimeHealthMonitor.ts          # Health checks, metrics, capacity management
-|   +-- SentenceChunker.ts               # Streaming sentence boundary detection for TTS
-|   +-- VoiceInputProcessor.ts             # STT processing (Whisper + Gemini)
-|   +-- VoiceResponseGenerator.ts          # TTS via local mlx-audio (Kokoro)
-|   +-- LocalTTSClient.ts                 # HTTP client for mlx-audio server
-|   +-- STTPolishPipeline.ts              # Polish raw Whisper transcriptions via Ollama
-|   +-- InterruptionHandler.ts             # Cancel in-flight responses
-|   +-- ProactivePinger.ts                 # Event-driven voice outreach
-|   +-- DesktopVoiceClient.ts              # Desktop client (batch + real-time modes)
-|   +-- LocalTTSClient.test.ts             # Tests: Local TTS client
-|   +-- STTPolishPipeline.test.ts          # Tests: STT polish pipeline
-|   +-- DesktopVoiceClient.test.ts         # Tests: Desktop voice client
-|   +-- InterruptionHandler.test.ts        # Tests: Interruption handler
-|   +-- ProactivePinger.test.ts            # Tests: Proactive pinger
-+-- WebApp/
-|   +-- index.html                         # Telegram Mini App voice interface
-+-- Workflows/
-    +-- StartDesktop.md                    # Desktop voice mode workflow
-    +-- TelegramVoice.md                   # Telegram voice reply workflow
-    +-- ProactivePing.md                   # Proactive voice ping workflow
-
-~/Library/LaunchAgents/
-+-- com.pai.realtime-voice.plist           # Auto-start real-time voice server
-```
+The config keys, customization, setup requirements, dependencies and the file tree are in `references/ConfigurationAndSetup.md`. Read it when you change settings, set up a machine or look for a file.
 
 ## Integration
 

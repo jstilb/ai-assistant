@@ -7,22 +7,22 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// Structural check helper: collapse whitespace and unify quote style so a formatter
+// (line wrapping, single vs double quotes) cannot break these source assertions.
+const readSource = (path: string): string => readFileSync(path, "utf-8").replace(/\s+/g, " ").replace(/'/g, '"');
 
 const CLIENT_PATH = join(import.meta.dir, "LocalTTSClient.ts");
-const sourceCode = readFileSync(CLIENT_PATH, "utf-8");
+const sourceCode = readSource(CLIENT_PATH);
 
 describe("LocalTTSClient", () => {
   describe("Source Code Patterns", () => {
     it("should use CachedHTTPClient (no raw fetch)", () => {
       expect(sourceCode).toContain("httpClient.fetch");
-      // Ensure no raw fetch() calls (only httpClient.fetch is allowed)
-      const rawFetchMatches = sourceCode.match(/(?<!httpClient\.)(?<!await )fetch\(/g);
-      // Allow: import { ... } from, and dynamic imports - only check for bare fetch(
-      const bareGlobalFetch = (sourceCode.match(/(?<!\w)fetch\(/g) || []).filter(
-        (m) => !sourceCode.includes(`httpClient.fetch(`)
-      );
+      // No bare global fetch( call: every fetch( must be a member call such as httpClient.fetch(
+      expect(sourceCode.match(/(?<![\w.])fetch\(/g) ?? []).toEqual([]);
       // The source should use httpClient.fetch, not raw fetch
       expect(sourceCode).not.toContain("await fetch(");
     });

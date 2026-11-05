@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   loadPairs,
   selectFewShot,
@@ -41,17 +41,20 @@ describe("loadPairs", () => {
 
   it("parses valid lines and skips junk", () => {
     const path = join(tempDir, "pairs.jsonl");
-    writeFileSync(path, [
-      JSON.stringify({ timestamp: "t1", raw: "helo world", polished: "Hello world." }),
-      "not json",
-      JSON.stringify({ raw: "", polished: "empty raw skipped" }),
-      JSON.stringify({ timestamp: "t2", raw: "ok", polished: "OK." }),
-      "",
-    ].join("\n"));
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ timestamp: "t1", raw: "helo world", polished: "Hello world." }),
+        "not json",
+        JSON.stringify({ raw: "", polished: "empty raw skipped" }),
+        JSON.stringify({ timestamp: "t2", raw: "ok", polished: "OK." }),
+        "",
+      ].join("\n"),
+    );
     const pairs = loadPairs(path);
     expect(pairs.length).toBe(2);
-    expect(pairs[0].raw).toBe("helo world");
-    expect(pairs[1].polished).toBe("OK.");
+    expect(pairs[0]?.raw).toBe("helo world");
+    expect(pairs[1]?.polished).toBe("OK.");
   });
 });
 
@@ -62,9 +65,7 @@ describe("isQualityPair", () => {
 
   it("rejects pairs whose polished text starts lowercase", () => {
     expect(isQualityPair(pair("Investigate.", "investigate."))).toBe(false);
-    expect(
-      isQualityPair(pair("hello kaya how are you", "hello kaya, how are you?"))
-    ).toBe(false);
+    expect(isQualityPair(pair("hello kaya how are you", "hello kaya, how are you?"))).toBe(false);
   });
 
   it("rejects heavy rewrites (low word overlap)", () => {
@@ -72,9 +73,9 @@ describe("isQualityPair", () => {
       isQualityPair(
         pair(
           "nothing should be run twice that isn't meant to run twice",
-          "Nothing should run more than once unless intentionally repeated."
-        )
-      )
+          "Nothing should run more than once unless intentionally repeated.",
+        ),
+      ),
     ).toBe(false);
   });
 
@@ -83,9 +84,9 @@ describe("isQualityPair", () => {
       isQualityPair(
         pair(
           "check the daemon environment issue so future runs work",
-          "Check the daemon environment issue so future runs work."
-        )
-      )
+          "Check the daemon environment issue so future runs work.",
+        ),
+      ),
     ).toBe(true);
   });
 });
@@ -106,12 +107,12 @@ describe("selectFewShot", () => {
       "the newest sentence in the file",
     ]);
     // dedupe kept the NEWEST occurrence of the duplicated raw
-    expect(selected[1].polished).toBe("A duplicated raw sentence here.");
+    expect(selected[1]?.polished).toBe("A duplicated raw sentence here.");
   });
 
   it("respects the count limit", () => {
     const pairs = Array.from({ length: 10 }, (_, i) =>
-      pair(`raw sentence number ${i} here`, `Raw sentence number ${i} here.`)
+      pair(`raw sentence number ${i} here`, `Raw sentence number ${i} here.`),
     );
     expect(selectFewShot(pairs, 4).length).toBe(4);
   });

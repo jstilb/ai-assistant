@@ -6,19 +6,22 @@
  */
 
 import { describe, it, expect, beforeEach, afterAll, spyOn } from "bun:test";
-import * as fs from "fs";
+import * as fs from "node:fs";
 import * as ConfigLoader from "../../../../lib/core/ConfigLoader.ts";
 import * as VoiceCommon from "./VoiceCommon.ts";
 
 // spyOn (restored in afterAll) rather than mock.module: bun's module mocks
 // are process-global and would leak into every later test file in the run.
 const mockedExistsSync = spyOn(fs, "existsSync").mockImplementation(() => false);
-const mockedReadFileSync = spyOn(fs, "readFileSync").mockImplementation(() => "");
+const mockedReadFileSync = spyOn(fs, "readFileSync").mockImplementation(
+  (() => "") as unknown as typeof fs.readFileSync,
+);
 const loadSettingsSpy = spyOn(ConfigLoader, "loadSettings").mockImplementation(
-  () => ({
-    daidentity: { name: "Kaya", voice: {} },
-    principal: { name: "Jm", timezone: "America/Los_Angeles" },
-  }) as unknown as ReturnType<typeof ConfigLoader.loadSettings>, // partial settings fixture
+  () =>
+    ({
+      daidentity: { name: "Kaya", voice: {} },
+      principal: { name: "Jm", timezone: "America/Los_Angeles" },
+    }) as unknown as ReturnType<typeof ConfigLoader.loadSettings>, // partial settings fixture
 );
 const getIdentitySpy = spyOn(VoiceCommon, "getIdentity").mockImplementation(() => ({
   assistantName: "Kaya",
@@ -38,7 +41,6 @@ import {
   invalidatePersonalityCache,
   extractPersonalityTraits,
 } from "./VoiceSystemPrompt.ts";
-
 
 // ============================================================================
 // Tests
@@ -88,7 +90,7 @@ describe("buildVoiceSystemPrompt", () => {
   it("includes personality traits from DAIDENTITY.md when available", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
-      `## Personality & Behavior\n- **Direct but Gentle** - Tell harsh truths with kindness\n- **Proactive** - Anticipate needs before asked\n---\n`
+      `## Personality & Behavior\n- **Direct but Gentle** - Tell harsh truths with kindness\n- **Proactive** - Anticipate needs before asked\n---\n`,
     );
 
     const prompt = buildVoiceSystemPrompt();
@@ -135,9 +137,9 @@ describe("extractPersonalityTraits", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
       `## Personality & Behavior\n` +
-      `- **Direct but Gentle** - Tell harsh truths with kindness\n` +
-      `- **Proactive** - Anticipate needs before asked\n` +
-      `---\n`
+        `- **Direct but Gentle** - Tell harsh truths with kindness\n` +
+        `- **Proactive** - Anticipate needs before asked\n` +
+        `---\n`,
     );
 
     const traits = extractPersonalityTraits();
@@ -148,10 +150,7 @@ describe("extractPersonalityTraits", () => {
   it("extracts voice characteristics from DAIDENTITY.md", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
-      `**Voice Characteristics:**\n` +
-      `- Speaks with quiet confidence\n` +
-      `- Occasional dry humor\n` +
-      `**Other:**\n`
+      `**Voice Characteristics:**\n` + `- Speaks with quiet confidence\n` + `- Occasional dry humor\n` + `**Other:**\n`,
     );
 
     const traits = extractPersonalityTraits();
@@ -161,9 +160,7 @@ describe("extractPersonalityTraits", () => {
 
   it("extracts role from Assistant quote", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue(
-      `**Assistant:** "The trusted advisor who tells you what you need to hear"\n`
-    );
+    mockedReadFileSync.mockReturnValue(`**Assistant:** "The trusted advisor who tells you what you need to hear"\n`);
 
     const traits = extractPersonalityTraits();
     expect(traits).toContain("The trusted advisor who tells you what you need to hear");
@@ -199,9 +196,7 @@ describe("personality caching", () => {
     mockedExistsSync.mockClear();
     mockedReadFileSync.mockClear();
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue(
-      `## Personality & Behavior\n- **Kind** - Always gentle\n---\n`
-    );
+    mockedReadFileSync.mockReturnValue(`## Personality & Behavior\n- **Kind** - Always gentle\n---\n`);
   });
 
   it("caches personality after first load", () => {
@@ -210,7 +205,7 @@ describe("personality caching", () => {
 
     // readFileSync should only be called once for DAIDENTITY path
     const daidentityCalls = mockedReadFileSync.mock.calls.filter(
-      (args) => typeof args[0] === "string" && args[0].includes("DAIDENTITY")
+      (args) => typeof args[0] === "string" && args[0].includes("DAIDENTITY"),
     );
     expect(daidentityCalls.length).toBe(1);
   });
@@ -221,7 +216,7 @@ describe("personality caching", () => {
     extractPersonalityTraits();
 
     const daidentityCalls = mockedReadFileSync.mock.calls.filter(
-      (args) => typeof args[0] === "string" && args[0].includes("DAIDENTITY")
+      (args) => typeof args[0] === "string" && args[0].includes("DAIDENTITY"),
     );
     expect(daidentityCalls.length).toBe(2);
   });

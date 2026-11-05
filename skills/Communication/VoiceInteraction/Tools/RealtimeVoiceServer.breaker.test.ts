@@ -20,14 +20,21 @@ const tts = Bun.serve({
 });
 const ttsUrl = `http://127.0.0.1:${tts.port}/v1/audio/speech`;
 
+// The server reads its auth token from secrets.json at import time: inject a fake.
+const secretsSpy = spyOn(VoiceCommon, "loadSecrets").mockImplementation(() => ({
+  voice_auth_token: "test-voice-auth-token",
+}));
 const configSpy = spyOn(VoiceCommon, "getRealtimeVoiceConfig").mockImplementation(() =>
   VoiceCommon.RealtimeVoiceConfigSchema.parse({ sttUrl, ttsUrl, macOsSayFallback: false }),
 );
 // Query suffix = a fresh server module evaluated with the stub URLs above.
-const server = (await import("./RealtimeVoiceServer.ts?breaker-test")) as typeof import("./RealtimeVoiceServer.ts");
+const server = (await import(
+  "./RealtimeVoiceServer.ts" + "?breaker-test"
+)) as typeof import("./RealtimeVoiceServer.ts");
 
 afterAll(async () => {
   configSpy.mockRestore();
+  secretsSpy.mockRestore();
   await tts.stop(true);
 });
 

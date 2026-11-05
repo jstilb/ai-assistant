@@ -5,11 +5,10 @@
  * and StateManager schema validation.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { join } from 'path';
+import { describe, it, expect } from "bun:test";
 
 // Test exit command detection directly (pure function, no external deps)
-describe('isExitCommand', () => {
+describe("isExitCommand", () => {
   // We test the logic inline since importing VoiceCommon pulls in CORE deps
   const EXIT_COMMANDS = ["stop", "quit", "exit", "goodbye", "bye", "stop listening"];
 
@@ -18,110 +17,110 @@ describe('isExitCommand', () => {
     return EXIT_COMMANDS.some((cmd) => lower.includes(cmd));
   }
 
-  it('detects exact exit commands', () => {
-    expect(isExitCommand('stop')).toBe(true);
-    expect(isExitCommand('quit')).toBe(true);
-    expect(isExitCommand('exit')).toBe(true);
-    expect(isExitCommand('goodbye')).toBe(true);
-    expect(isExitCommand('bye')).toBe(true);
-    expect(isExitCommand('stop listening')).toBe(true);
+  it("detects exact exit commands", () => {
+    expect(isExitCommand("stop")).toBe(true);
+    expect(isExitCommand("quit")).toBe(true);
+    expect(isExitCommand("exit")).toBe(true);
+    expect(isExitCommand("goodbye")).toBe(true);
+    expect(isExitCommand("bye")).toBe(true);
+    expect(isExitCommand("stop listening")).toBe(true);
   });
 
-  it('detects exit commands in sentences', () => {
-    expect(isExitCommand('okay goodbye kaya')).toBe(true);
-    expect(isExitCommand('please stop listening now')).toBe(true);
-    expect(isExitCommand('I want to quit')).toBe(true);
-    expect(isExitCommand('time to exit the conversation')).toBe(true);
-    expect(isExitCommand('bye for now')).toBe(true);
+  it("detects exit commands in sentences", () => {
+    expect(isExitCommand("okay goodbye kaya")).toBe(true);
+    expect(isExitCommand("please stop listening now")).toBe(true);
+    expect(isExitCommand("I want to quit")).toBe(true);
+    expect(isExitCommand("time to exit the conversation")).toBe(true);
+    expect(isExitCommand("bye for now")).toBe(true);
   });
 
-  it('is case-insensitive', () => {
-    expect(isExitCommand('STOP')).toBe(true);
-    expect(isExitCommand('Goodbye')).toBe(true);
-    expect(isExitCommand('QUIT')).toBe(true);
-    expect(isExitCommand('BYE')).toBe(true);
-    expect(isExitCommand('Stop Listening')).toBe(true);
+  it("is case-insensitive", () => {
+    expect(isExitCommand("STOP")).toBe(true);
+    expect(isExitCommand("Goodbye")).toBe(true);
+    expect(isExitCommand("QUIT")).toBe(true);
+    expect(isExitCommand("BYE")).toBe(true);
+    expect(isExitCommand("Stop Listening")).toBe(true);
   });
 
-  it('does not match non-exit phrases', () => {
-    expect(isExitCommand('hello kaya')).toBe(false);
-    expect(isExitCommand('what is the weather')).toBe(false);
-    expect(isExitCommand('tell me a joke')).toBe(false);
-    expect(isExitCommand('how are you')).toBe(false);
-    expect(isExitCommand('')).toBe(false);
+  it("does not match non-exit phrases", () => {
+    expect(isExitCommand("hello kaya")).toBe(false);
+    expect(isExitCommand("what is the weather")).toBe(false);
+    expect(isExitCommand("tell me a joke")).toBe(false);
+    expect(isExitCommand("how are you")).toBe(false);
+    expect(isExitCommand("")).toBe(false);
   });
 
-  it('handles edge cases', () => {
-    expect(isExitCommand('   ')).toBe(false);
-    expect(isExitCommand('stopping')).toBe(true); // "stop" is contained in "stopping"
-    expect(isExitCommand('exiting')).toBe(true); // "exit" is contained in "exiting"
-    expect(isExitCommand('byebye')).toBe(true); // "bye" is contained
+  it("handles edge cases", () => {
+    expect(isExitCommand("   ")).toBe(false);
+    expect(isExitCommand("stopping")).toBe(true); // "stop" is contained in "stopping"
+    expect(isExitCommand("exiting")).toBe(true); // "exit" is contained in "exiting"
+    expect(isExitCommand("byebye")).toBe(true); // "bye" is contained
   });
 });
 
-describe('EXIT_COMMANDS constant', () => {
+describe("EXIT_COMMANDS constant", () => {
   const EXIT_COMMANDS = ["stop", "quit", "exit", "goodbye", "bye", "stop listening"];
 
-  it('contains expected commands', () => {
-    expect(EXIT_COMMANDS).toContain('stop');
-    expect(EXIT_COMMANDS).toContain('quit');
-    expect(EXIT_COMMANDS).toContain('exit');
-    expect(EXIT_COMMANDS).toContain('goodbye');
-    expect(EXIT_COMMANDS).toContain('bye');
-    expect(EXIT_COMMANDS).toContain('stop listening');
+  it("contains expected commands", () => {
+    expect(EXIT_COMMANDS).toContain("stop");
+    expect(EXIT_COMMANDS).toContain("quit");
+    expect(EXIT_COMMANDS).toContain("exit");
+    expect(EXIT_COMMANDS).toContain("goodbye");
+    expect(EXIT_COMMANDS).toContain("bye");
+    expect(EXIT_COMMANDS).toContain("stop listening");
   });
 
-  it('has exactly 6 commands', () => {
+  it("has exactly 6 commands", () => {
     expect(EXIT_COMMANDS).toHaveLength(6);
   });
 
-  it('contains only lowercase strings', () => {
+  it("contains only lowercase strings", () => {
     for (const cmd of EXIT_COMMANDS) {
       expect(cmd).toBe(cmd.toLowerCase());
     }
   });
 });
 
-describe('DesktopPidState schema validation', () => {
+describe("DesktopPidState schema validation", () => {
   // Test the Zod schema logic directly
-  const { z } = require('zod');
+  const { z } = require("zod");
 
   const DesktopPidSchema = z.object({
     pid: z.number().optional(),
     startedAt: z.string().optional(),
   });
 
-  it('accepts empty state', () => {
+  it("accepts empty state", () => {
     const result = DesktopPidSchema.safeParse({});
     expect(result.success).toBe(true);
   });
 
-  it('accepts state with pid', () => {
+  it("accepts state with pid", () => {
     const result = DesktopPidSchema.safeParse({ pid: 12345 });
     expect(result.success).toBe(true);
   });
 
-  it('accepts full state', () => {
+  it("accepts full state", () => {
     const result = DesktopPidSchema.safeParse({
       pid: 12345,
-      startedAt: '2026-02-07T14:00:00.000Z',
+      startedAt: "2026-02-07T14:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
 
-  it('rejects non-number pid', () => {
-    const result = DesktopPidSchema.safeParse({ pid: 'not-a-number' });
+  it("rejects non-number pid", () => {
+    const result = DesktopPidSchema.safeParse({ pid: "not-a-number" });
     expect(result.success).toBe(false);
   });
 
-  it('rejects non-string startedAt', () => {
+  it("rejects non-string startedAt", () => {
     const result = DesktopPidSchema.safeParse({ startedAt: 12345 });
     expect(result.success).toBe(false);
   });
 });
 
-describe('ConversationSession schema validation', () => {
-  const { z } = require('zod');
+describe("ConversationSession schema validation", () => {
+  const { z } = require("zod");
 
   const ConversationMessageSchema = z.object({
     role: z.enum(["user", "assistant"]),
@@ -136,51 +135,49 @@ describe('ConversationSession schema validation', () => {
     turnCount: z.number(),
   });
 
-  it('accepts valid session', () => {
+  it("accepts valid session", () => {
     const result = ConversationSessionSchema.safeParse({
-      id: 'session-123',
-      startedAt: '2026-02-07T14:00:00.000Z',
+      id: "session-123",
+      startedAt: "2026-02-07T14:00:00.000Z",
       messages: [],
       turnCount: 0,
     });
     expect(result.success).toBe(true);
   });
 
-  it('accepts session with messages', () => {
+  it("accepts session with messages", () => {
     const result = ConversationSessionSchema.safeParse({
-      id: 'session-123',
-      startedAt: '2026-02-07T14:00:00.000Z',
+      id: "session-123",
+      startedAt: "2026-02-07T14:00:00.000Z",
       messages: [
-        { role: 'user', content: 'hello', timestamp: '2026-02-07T14:00:01.000Z' },
-        { role: 'assistant', content: 'hi there', timestamp: '2026-02-07T14:00:02.000Z' },
+        { role: "user", content: "hello", timestamp: "2026-02-07T14:00:01.000Z" },
+        { role: "assistant", content: "hi there", timestamp: "2026-02-07T14:00:02.000Z" },
       ],
       turnCount: 1,
     });
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid role', () => {
+  it("rejects invalid role", () => {
     const result = ConversationSessionSchema.safeParse({
-      id: 'session-123',
-      startedAt: '2026-02-07T14:00:00.000Z',
-      messages: [
-        { role: 'system', content: 'invalid', timestamp: '2026-02-07T14:00:01.000Z' },
-      ],
+      id: "session-123",
+      startedAt: "2026-02-07T14:00:00.000Z",
+      messages: [{ role: "system", content: "invalid", timestamp: "2026-02-07T14:00:01.000Z" }],
       turnCount: 0,
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects missing required fields', () => {
+  it("rejects missing required fields", () => {
     const result = ConversationSessionSchema.safeParse({
-      id: 'session-123',
+      id: "session-123",
     });
     expect(result.success).toBe(false);
   });
 });
 
-describe('InterruptionState schema validation', () => {
-  const { z } = require('zod');
+describe("InterruptionState schema validation", () => {
+  const { z } = require("zod");
 
   const ActiveResponseSchema = z.object({
     sessionId: z.string(),
@@ -192,56 +189,62 @@ describe('InterruptionState schema validation', () => {
 
   const InterruptionStateSchema = z.object({
     activeResponses: z.array(ActiveResponseSchema),
-    lastInterruption: z.object({
-      sessionId: z.string(),
-      at: z.string(),
-      reason: z.string(),
-    }).optional(),
+    lastInterruption: z
+      .object({
+        sessionId: z.string(),
+        at: z.string(),
+        reason: z.string(),
+      })
+      .optional(),
   });
 
-  it('accepts empty state', () => {
+  it("accepts empty state", () => {
     const result = InterruptionStateSchema.safeParse({ activeResponses: [] });
     expect(result.success).toBe(true);
   });
 
-  it('accepts state with active response', () => {
+  it("accepts state with active response", () => {
     const result = InterruptionStateSchema.safeParse({
-      activeResponses: [{
-        sessionId: 'turn-0',
-        channel: 'desktop',
-        startedAt: '2026-02-07T14:00:00.000Z',
-        pid: 12345,
-      }],
+      activeResponses: [
+        {
+          sessionId: "turn-0",
+          channel: "desktop",
+          startedAt: "2026-02-07T14:00:00.000Z",
+          pid: 12345,
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
 
-  it('accepts state with last interruption', () => {
+  it("accepts state with last interruption", () => {
     const result = InterruptionStateSchema.safeParse({
       activeResponses: [],
       lastInterruption: {
-        sessionId: 'turn-0',
-        at: '2026-02-07T14:00:00.000Z',
-        reason: 'user_interrupt',
+        sessionId: "turn-0",
+        at: "2026-02-07T14:00:00.000Z",
+        reason: "user_interrupt",
       },
     });
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid channel', () => {
+  it("rejects invalid channel", () => {
     const result = InterruptionStateSchema.safeParse({
-      activeResponses: [{
-        sessionId: 'turn-0',
-        channel: 'phone',
-        startedAt: '2026-02-07T14:00:00.000Z',
-      }],
+      activeResponses: [
+        {
+          sessionId: "turn-0",
+          channel: "phone",
+          startedAt: "2026-02-07T14:00:00.000Z",
+        },
+      ],
     });
     expect(result.success).toBe(false);
   });
 });
 
-describe('ScheduledPings schema validation', () => {
-  const { z } = require('zod');
+describe("ScheduledPings schema validation", () => {
+  const { z } = require("zod");
 
   const ScheduledPingSchema = z.object({
     id: z.string(),
@@ -256,59 +259,65 @@ describe('ScheduledPings schema validation', () => {
     pings: z.array(ScheduledPingSchema),
   });
 
-  it('accepts empty pings', () => {
+  it("accepts empty pings", () => {
     const result = ScheduledPingsStateSchema.safeParse({ pings: [] });
     expect(result.success).toBe(true);
   });
 
-  it('accepts valid pending ping', () => {
+  it("accepts valid pending ping", () => {
     const result = ScheduledPingsStateSchema.safeParse({
-      pings: [{
-        id: 'ping-123',
-        message: 'Hello',
-        scheduledAt: '2026-02-07T15:00:00.000Z',
-        channel: 'auto',
-        createdAt: '2026-02-07T14:00:00.000Z',
-        status: 'pending',
-      }],
+      pings: [
+        {
+          id: "ping-123",
+          message: "Hello",
+          scheduledAt: "2026-02-07T15:00:00.000Z",
+          channel: "auto",
+          createdAt: "2026-02-07T14:00:00.000Z",
+          status: "pending",
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
 
-  it('accepts sent ping', () => {
+  it("accepts sent ping", () => {
     const result = ScheduledPingsStateSchema.safeParse({
-      pings: [{
-        id: 'ping-123',
-        message: 'Hello',
-        scheduledAt: '2026-02-07T15:00:00.000Z',
-        createdAt: '2026-02-07T14:00:00.000Z',
-        status: 'sent',
-      }],
+      pings: [
+        {
+          id: "ping-123",
+          message: "Hello",
+          scheduledAt: "2026-02-07T15:00:00.000Z",
+          createdAt: "2026-02-07T14:00:00.000Z",
+          status: "sent",
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid status', () => {
+  it("rejects invalid status", () => {
     const result = ScheduledPingsStateSchema.safeParse({
-      pings: [{
-        id: 'ping-123',
-        message: 'Hello',
-        scheduledAt: '2026-02-07T15:00:00.000Z',
-        createdAt: '2026-02-07T14:00:00.000Z',
-        status: 'failed',
-      }],
+      pings: [
+        {
+          id: "ping-123",
+          message: "Hello",
+          scheduledAt: "2026-02-07T15:00:00.000Z",
+          createdAt: "2026-02-07T14:00:00.000Z",
+          status: "failed",
+        },
+      ],
     });
     expect(result.success).toBe(false);
   });
 });
 
-describe('buildConversationPrompt', () => {
+describe("buildConversationPrompt", () => {
   // Test the pure logic of prompt building
   function buildConversationPrompt(
     session: { messages: Array<{ role: string; content: string }> },
     newInput: string,
-    assistantName: string = 'Kaya',
-    userName: string = 'Jm'
+    assistantName: string = "Kaya",
+    userName: string = "Jm",
   ): string {
     const recentMessages = session.messages.slice(-10);
     const history = recentMessages
@@ -324,48 +333,43 @@ ${history ? `Recent conversation:\n${history}\n\n` : ""}${userName}: ${newInput}
 ${assistantName}:`;
   }
 
-  it('builds prompt with empty history', () => {
-    const prompt = buildConversationPrompt({ messages: [] }, 'Hello');
-    expect(prompt).toContain('Kaya');
-    expect(prompt).toContain('Jm');
-    expect(prompt).toContain('Hello');
-    expect(prompt).not.toContain('Recent conversation');
+  it("builds prompt with empty history", () => {
+    const prompt = buildConversationPrompt({ messages: [] }, "Hello");
+    expect(prompt).toContain("Kaya");
+    expect(prompt).toContain("Jm");
+    expect(prompt).toContain("Hello");
+    expect(prompt).not.toContain("Recent conversation");
   });
 
-  it('builds prompt with history', () => {
+  it("builds prompt with history", () => {
     const prompt = buildConversationPrompt(
       {
         messages: [
-          { role: 'user', content: 'Hi' },
-          { role: 'assistant', content: 'Hello!' },
+          { role: "user", content: "Hi" },
+          { role: "assistant", content: "Hello!" },
         ],
       },
-      'How are you?'
+      "How are you?",
     );
-    expect(prompt).toContain('Recent conversation');
-    expect(prompt).toContain('Jm: Hi');
-    expect(prompt).toContain('Kaya: Hello!');
-    expect(prompt).toContain('Jm: How are you?');
+    expect(prompt).toContain("Recent conversation");
+    expect(prompt).toContain("Jm: Hi");
+    expect(prompt).toContain("Kaya: Hello!");
+    expect(prompt).toContain("Jm: How are you?");
   });
 
-  it('limits history to last 10 messages', () => {
+  it("limits history to last 10 messages", () => {
     const messages = Array.from({ length: 20 }, (_, i) => ({
-      role: i % 2 === 0 ? 'user' : 'assistant',
+      role: i % 2 === 0 ? "user" : "assistant",
       content: `message-${i}`,
     }));
-    const prompt = buildConversationPrompt({ messages }, 'Latest');
-    expect(prompt).toContain('message-10');
-    expect(prompt).not.toContain('message-0');
+    const prompt = buildConversationPrompt({ messages }, "Latest");
+    expect(prompt).toContain("message-10");
+    expect(prompt).not.toContain("message-0");
   });
 
-  it('uses custom names', () => {
-    const prompt = buildConversationPrompt(
-      { messages: [] },
-      'Hello',
-      'Assistant',
-      'User'
-    );
-    expect(prompt).toContain('You are Assistant');
-    expect(prompt).toContain('User: Hello');
+  it("uses custom names", () => {
+    const prompt = buildConversationPrompt({ messages: [] }, "Hello", "Assistant", "User");
+    expect(prompt).toContain("You are Assistant");
+    expect(prompt).toContain("User: Hello");
   });
 });

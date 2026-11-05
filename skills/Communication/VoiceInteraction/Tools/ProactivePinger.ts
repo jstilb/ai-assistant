@@ -18,9 +18,9 @@
  *   bun ProactivePinger.ts cancel <ping-id>                        # Cancel scheduled ping
  */
 
-import { spawnSync } from "child_process";
-import { unlinkSync } from "fs";
-import { join } from "path";
+import { spawnSync } from "node:child_process";
+import { unlinkSync } from "node:fs";
+import { join } from "node:path";
 import {
   TEMP_DIR,
   VOICE_RESPONSE_TOOL,
@@ -57,10 +57,7 @@ function isDesktopActive(): boolean {
 /**
  * Send a voice message via the best available channel
  */
-async function sendPing(
-  message: string,
-  preferredChannel?: "desktop" | "telegram" | "auto"
-): Promise<PingResult> {
+async function sendPing(message: string, preferredChannel?: "desktop" | "telegram" | "auto"): Promise<PingResult> {
   // No pre-announcement here: the ping itself IS the voice output.
   // Speaking "Sending voice ping" first doubled every proactive ping
   // (removed for task t-mt6x8giy-eidyl, constant-voice-notifications fix).
@@ -125,7 +122,11 @@ async function sendPing(
     });
 
     // Clean up temp file
-    try { unlinkSync(oggPath); } catch { /* ignore */ }
+    try {
+      unlinkSync(oggPath);
+    } catch {
+      /* ignore */
+    }
 
     return {
       sent: sendResult.status === 0,
@@ -149,7 +150,7 @@ async function sendPing(
 async function schedulePing(
   message: string,
   scheduledAt: string,
-  channel?: "desktop" | "telegram" | "auto"
+  channel?: "desktop" | "telegram" | "auto",
 ): Promise<ScheduledPing> {
   const manager = getPingsManager();
   const ping: ScheduledPing = {
@@ -175,10 +176,10 @@ async function cancelPing(pingId: string): Promise<boolean> {
   const manager = getPingsManager();
   const state = await manager.load();
   const ping = state.pings.find((p) => p.id === pingId);
-  if (!ping || ping.status !== "pending") return false;
+  if (ping?.status !== "pending") return false;
 
   await manager.update((s) => ({
-    pings: s.pings.map((p) => p.id === pingId ? { ...p, status: "cancelled" as const } : p),
+    pings: s.pings.map((p) => (p.id === pingId ? { ...p, status: "cancelled" as const } : p)),
   }));
 
   return true;
@@ -193,9 +194,7 @@ async function processDuePings(): Promise<PingResult[]> {
   const now = new Date();
   const results: PingResult[] = [];
 
-  const duePings = state.pings.filter(
-    (p) => p.status === "pending" && new Date(p.scheduledAt) <= now
-  );
+  const duePings = state.pings.filter((p) => p.status === "pending" && new Date(p.scheduledAt) <= now);
 
   for (const ping of duePings) {
     const result = await sendPing(ping.message, ping.channel);
@@ -206,7 +205,7 @@ async function processDuePings(): Promise<PingResult[]> {
   if (duePings.length > 0) {
     const dueIds = new Set(duePings.map((p) => p.id));
     await manager.update((s) => ({
-      pings: s.pings.map((p) => dueIds.has(p.id) ? { ...p, status: "sent" as const } : p),
+      pings: s.pings.map((p) => (dueIds.has(p.id) ? { ...p, status: "sent" as const } : p)),
     }));
   }
 
@@ -242,8 +241,8 @@ Commands:
       let channel: "desktop" | "telegram" | "auto" | undefined;
 
       for (let i = 1; i < args.length; i++) {
-        if (args[i].startsWith("--channel=")) {
-          const val = args[i].split("=")[1];
+        if (args[i]?.startsWith("--channel=")) {
+          const val = args[i]?.split("=")[1];
           if (val === "desktop" || val === "telegram" || val === "auto") {
             channel = val;
           }
@@ -270,11 +269,11 @@ Commands:
 
       for (let i = 1; i < args.length; i++) {
         if (args[i] === "--at" && args[i + 1]) {
-          at = args[++i];
+          at = args[++i] ?? "";
         } else if (args[i] === "--message" && args[i + 1]) {
-          message = args[++i];
-        } else if (args[i].startsWith("--channel=")) {
-          const val = args[i].split("=")[1];
+          message = args[++i] ?? "";
+        } else if (args[i]?.startsWith("--channel=")) {
+          const val = args[i]?.split("=")[1];
           if (val === "desktop" || val === "telegram" || val === "auto") {
             channel = val;
           }

@@ -30,7 +30,6 @@ interface SentenceChunkerOptions {
   maxChunkSize?: number;
 }
 
-const SENTENCE_END_PATTERN = /[.!?][\s\n]/;
 const DEFAULT_MIN_CHUNK = 30;
 const DEFAULT_MAX_CHUNK = 200;
 
@@ -103,30 +102,20 @@ class SentenceChunker {
   private tryEmitSentence(): string | null {
     // Search for sentence-ending punctuation followed by space or newline
     // We need to find a boundary where: [.!?] followed by [ \n]
-    let lastBoundary = -1;
-
     for (let i = 0; i < this.buffer.length - 1; i++) {
       const char = this.buffer[i];
       const nextChar = this.buffer[i + 1];
 
-      if (
-        (char === "." || char === "!" || char === "?") &&
-        (nextChar === " " || nextChar === "\n")
-      ) {
+      if ((char === "." || char === "!" || char === "?") && (nextChar === " " || nextChar === "\n")) {
         // Found a boundary at position i (the punctuation character)
         const candidate = this.buffer.slice(0, i + 1).trim();
 
         if (candidate.length >= this.minChunkSize) {
           // Emit this sentence
           const remainder = this.buffer.slice(i + 1);
-          this.buffer = remainder.startsWith(" ") || remainder.startsWith("\n")
-            ? remainder.slice(1)
-            : remainder;
+          this.buffer = remainder.startsWith(" ") || remainder.startsWith("\n") ? remainder.slice(1) : remainder;
           return candidate;
         }
-
-        // Track the boundary even if too short -- we may need it
-        lastBoundary = i;
       }
     }
 

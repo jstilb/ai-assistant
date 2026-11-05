@@ -52,4 +52,4 @@ bun ~/.claude/skills/Communication/VoiceInteraction/Tools/RealtimeHealthMonitor.
 - Batch mode uses Inference.ts (configurable level)
 - TTS fallback chain: MLX TTS (Kokoro) -> macOS `say` -> text-only
 - Say "goodbye" or "stop listening" to end session
-- Real-time server auto-starts via launchd (com.pai.realtime-voice.plist)
+- Real-time server auto-starts via launchd (com.kaya.realtime-voice.plist)

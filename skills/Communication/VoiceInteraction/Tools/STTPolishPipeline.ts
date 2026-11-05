@@ -50,7 +50,7 @@ const COLD_START_ALLOWANCE_MS = 20000;
 // Ask Ollama to keep the polish model resident between voice notes (default is
 // 5 min) so a conversation doesn't pay the cold-start on every other message.
 const OLLAMA_KEEP_ALIVE = "30m";
-const WORD_OVERLAP_THRESHOLD = 0.85;  // Reject if < 85% word overlap — prevents meaning-altering rewrites
+const WORD_OVERLAP_THRESHOLD = 0.85; // Reject if < 85% word overlap — prevents meaning-altering rewrites
 
 /** Path to training pairs file */
 const PAIRS_FILE = kayaHomePath("data", "pairs.jsonl");
@@ -184,55 +184,53 @@ export function buildPolishPrompt(): string {
  */
 async function isOllamaModelLoaded(model: string, config: PolishConfig): Promise<boolean> {
   try {
-    const response = await httpClient.fetch(
-      `http://${config.ollamaHost}:${config.ollamaPort}/api/ps`,
-      { cache: "none", method: "GET", timeout: 2000 }
-    );
+    const response = await httpClient.fetch(`http://${config.ollamaHost}:${config.ollamaPort}/api/ps`, {
+      cache: "none",
+      method: "GET",
+      timeout: 2000,
+    });
     if (!response.ok) return false;
     const data = (await response.json()) as { models?: Array<{ name?: string; model?: string }> };
     return (data.models ?? []).some((m) => m.name === model || m.model === model);
-  } catch {
+  } catch (err) {
+    // Ollama unreachable is expected (treated as "not loaded"); log so a real bug is not hidden.
+    console.error("[STTPolish] Ollama load check failed: %s", err instanceof Error ? err.message : err);
     return false;
   }
 }
 
-async function polishViaOllama(
-  model: string,
-  text: string,
-  config: PolishConfig
-): Promise<string | null> {
+async function polishViaOllama(model: string, text: string, config: PolishConfig): Promise<string | null> {
   try {
     const loaded = await isOllamaModelLoaded(model, config);
     const timeout = loaded ? config.timeoutMs : config.timeoutMs + COLD_START_ALLOWANCE_MS;
-    const response = await httpClient.fetch(
-      `http://${config.ollamaHost}:${config.ollamaPort}/api/generate`,
-      {
-        cache: "none",
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: model,
-          prompt: buildPolishPrompt() + text,
-          stream: false,
-          keep_alive: OLLAMA_KEEP_ALIVE,
-          options: { temperature: 0.1, num_predict: 512 },
-        }),
-        timeout,
-      }
-    );
+    const response = await httpClient.fetch(`http://${config.ollamaHost}:${config.ollamaPort}/api/generate`, {
+      cache: "none",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: model,
+        prompt: buildPolishPrompt() + text,
+        stream: false,
+        keep_alive: OLLAMA_KEEP_ALIVE,
+        options: { temperature: 0.1, num_predict: 512 },
+      }),
+      timeout,
+    });
 
     if (!response.ok) return null;
 
-    const data = await response.json() as { response?: string };
+    const data = (await response.json()) as { response?: string };
     const result = data?.response?.trim();
 
     if (!result) return null;
 
     // Normalize curly quotes to straight
-    return result
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"');
-  } catch {
+    return result.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  } catch (err) {
+    console.error(
+      "[STTPolish] Polish request failed, using raw transcript: %s",
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }
@@ -246,41 +244,42 @@ async function polishViaClaude(text: string): Promise<string | null> {
     const { getSecret } = await import("./VoiceCommon.ts");
     const apiKey = getSecret("ANTHROPIC_API_KEY");
 
-    const response = await httpClient.fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
-        cache: "none",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 512,
-          messages: [{
+    const response = await httpClient.fetch("https://api.anthropic.com/v1/messages", {
+      cache: "none",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        messages: [
+          {
             role: "user",
             content: buildPolishPrompt() + text,
-          }],
-        }),
-        timeout: 10000,
-      }
-    );
+          },
+        ],
+      }),
+      timeout: 10000,
+    });
 
     if (!response.ok) return null;
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       content?: Array<{ text?: string }>;
     };
     const result = data?.content?.[0]?.text?.trim();
 
     if (!result) return null;
 
-    return result
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"');
-  } catch {
+    return result.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  } catch (err) {
+    console.error(
+      "[STTPolish] Polish request failed, using raw transcript: %s",
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }
@@ -292,10 +291,18 @@ async function polishViaClaude(text: string): Promise<string | null> {
  */
 function calculateWordOverlap(raw: string, polished: string): number {
   const rawWords = new Set(
-    raw.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean)
+    raw
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, "")
+      .split(/\s+/)
+      .filter(Boolean),
   );
   const polishedWords = new Set(
-    polished.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean)
+    polished
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, "")
+      .split(/\s+/)
+      .filter(Boolean),
   );
 
   if (rawWords.size === 0) return 0;
@@ -317,7 +324,11 @@ function calculateWordOverlap(raw: string, polished: string): number {
 function countAddedWords(raw: string, polished: string): number {
   const tokenize = (text: string): Set<string> =>
     new Set(
-      text.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean)
+      text
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, "")
+        .split(/\s+/)
+        .filter(Boolean),
     );
   const rawWords = tokenize(raw);
   let added = 0;
@@ -346,12 +357,7 @@ function cleanPolishOutput(text: string): string {
 /**
  * Save a raw/polished training pair to the pairs file.
  */
-async function saveTrainingPair(
-  raw: string,
-  polished: string,
-  model: string,
-  audioSeconds?: number
-): Promise<void> {
+async function saveTrainingPair(raw: string, polished: string, model: string, audioSeconds?: number): Promise<void> {
   const config = await getPolishConfigManager().load();
   const pair = {
     timestamp: new Date().toISOString(),
@@ -361,8 +367,8 @@ async function saveTrainingPair(
     audio_seconds: audioSeconds ?? 0,
   };
 
-  const { mkdirSync, existsSync } = await import("fs");
-  const { dirname } = await import("path");
+  const { mkdirSync, existsSync } = await import("node:fs");
+  const { dirname } = await import("node:path");
 
   const dir = dirname(config.pairsFilePath);
   if (!existsSync(dir)) {
@@ -390,10 +396,7 @@ async function saveTrainingPair(
  * @param audioSeconds - Duration of the original audio (for training metadata)
  * @returns PolishResult with polished text and metadata
  */
-export async function polishTranscription(
-  rawText: string,
-  audioSeconds?: number
-): Promise<PolishResult> {
+export async function polishTranscription(rawText: string, audioSeconds?: number): Promise<PolishResult> {
   const manager = getPolishConfigManager();
   const config = await manager.load();
 
@@ -466,10 +469,7 @@ export async function polishTranscription(
   const wordOverlap = calculateWordOverlap(rawText, polished);
   const addedWords = countAddedWords(rawText, polished);
 
-  if (
-    wordOverlap < config.wordOverlapThreshold * 100 ||
-    addedWords > MAX_ADDED_WORDS
-  ) {
+  if (wordOverlap < config.wordOverlapThreshold * 100 || addedWords > MAX_ADDED_WORDS) {
     // Polish hallucinated -- reject and return raw
     await manager.update((c) => ({
       ...c,

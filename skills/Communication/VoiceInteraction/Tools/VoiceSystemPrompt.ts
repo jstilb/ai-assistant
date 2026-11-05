@@ -17,8 +17,8 @@
  *   bun VoiceSystemPrompt.ts preview --context # Show with sample context
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { KAYA_HOME, getIdentity } from "./VoiceCommon.ts";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
 
@@ -63,7 +63,8 @@ function extractPersonalityTraits(): string {
   }
 
   if (!existsSync(DAIDENTITY_PATH)) {
-    const fallback = "You are warm, efficient, and proactive. You speak with quiet confidence and occasional dry humor.";
+    const fallback =
+      "You are warm, efficient, and proactive. You speak with quiet confidence and occasional dry humor.";
     _cachedPersonality = fallback;
     _cachedPersonalityLoadedAt = now;
     return fallback;
@@ -76,12 +77,12 @@ function extractPersonalityTraits(): string {
 
   // Parse "Personality & Behavior" section
   const personalityMatch = content.match(/## Personality & Behavior\s*\n([\s\S]*?)(?=\n---|\n##)/);
-  if (personalityMatch) {
+  if (personalityMatch?.[1]) {
     const lines = personalityMatch[1].split("\n").filter((l) => l.startsWith("- **"));
     for (const line of lines) {
       // Extract "Direct but Gentle - Tell harsh truths..." style
       const match = line.match(/- \*\*(.+?)\*\*\s*-\s*(.+)/);
-      if (match) {
+      if (match?.[1] && match[2]) {
         traits.push(`${match[1].trim()}: ${match[2].trim()}`);
       }
     }
@@ -89,7 +90,7 @@ function extractPersonalityTraits(): string {
 
   // Parse "Natural Voice" characteristics
   const voiceMatch = content.match(/\*\*Voice Characteristics:\*\*\s*\n([\s\S]*?)(?=\n\*\*|\n---|\n##)/);
-  if (voiceMatch) {
+  if (voiceMatch?.[1]) {
     const lines = voiceMatch[1].split("\n").filter((l) => l.startsWith("- "));
     for (const line of lines) {
       traits.push(line.replace(/^- /, "").trim());
@@ -98,13 +99,14 @@ function extractPersonalityTraits(): string {
 
   // Parse relationship model
   const roleMatch = content.match(/\*\*Assistant:\*\*\s*"(.+?)"/);
-  if (roleMatch) {
+  if (roleMatch?.[1]) {
     traits.push(roleMatch[1]);
   }
 
-  const result = traits.length > 0
-    ? traits.join("\n")
-    : "You are warm, efficient, and proactive. You speak with quiet confidence and occasional dry humor.";
+  const result =
+    traits.length > 0
+      ? traits.join("\n")
+      : "You are warm, efficient, and proactive. You speak with quiet confidence and occasional dry humor.";
 
   _cachedPersonality = result;
   _cachedPersonalityLoadedAt = now;
@@ -124,7 +126,8 @@ function loadVoiceIdentity(overrides?: Partial<VoiceIdentity>): VoiceIdentity {
   let timezone = "America/Los_Angeles";
   try {
     const settings = loadSettings();
-    timezone = (settings as Record<string, unknown> as { principal?: { timezone?: string } }).principal?.timezone ?? timezone;
+    timezone =
+      (settings as Record<string, unknown> as { principal?: { timezone?: string } }).principal?.timezone ?? timezone;
   } catch {
     // Use default timezone
   }
@@ -168,7 +171,7 @@ export function buildVoiceSystemPrompt(options?: VoiceSystemPromptOptions): stri
     `- Address ${identity.userName} by name occasionally but not every turn.`,
     `- ${identity.timezone} is ${identity.userName}'s timezone. Reference time naturally ("this afternoon", "tomorrow morning").`,
     "- Contractions are encouraged. Speak like a real person.",
-    "- Never say \"Happy to help\" or \"Is there anything else?\" -- just respond naturally.",
+    '- Never say "Happy to help" or "Is there anything else?" -- just respond naturally.',
   ];
 
   if (contextSnippet) {
@@ -224,9 +227,6 @@ async function main(): Promise<void> {
       console.log(minimal);
       break;
     }
-
-    case "--help":
-    case "help":
     default: {
       console.log(`VoiceSystemPrompt - Voice-optimized system prompt builder
 

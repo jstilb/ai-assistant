@@ -12,17 +12,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // We test via CLI invocation since the module has side effects
-import { spawnSync } from "child_process";
+import { spawnSync } from "node:child_process";
+
+// Structural check helper: collapse whitespace and unify quote style so a formatter
+// (line wrapping, single vs double quotes) cannot break these source assertions.
+const readSource = (path: string): string => readFileSync(path, "utf-8").replace(/\s+/g, " ").replace(/'/g, '"');
 
 const TEST_DIR = "/tmp/voice-desktop-tests";
-const TOOL_PATH = join(
-  import.meta.dir,
-  "DesktopVoiceClient.ts"
-);
+const TOOL_PATH = join(import.meta.dir, "DesktopVoiceClient.ts");
 
 describe("DesktopVoiceClient", () => {
   beforeEach(() => {
@@ -83,7 +84,7 @@ describe("DesktopVoiceClient", () => {
   describe("Exit Commands - Regression Test", () => {
     it("should import isExitCommand from VoiceCommon", async () => {
       // DesktopVoiceClient delegates exit detection to VoiceCommon.isExitCommand
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
 
       // Verify isExitCommand is imported from VoiceCommon
       expect(source).toContain("isExitCommand");
@@ -91,24 +92,22 @@ describe("DesktopVoiceClient", () => {
     });
 
     it("should check exit commands in continuous loop", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // The startContinuous function should check isExitCommand
       expect(source).toContain("isExitCommand");
     });
 
     it("should handle exit consistently in conversation command", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // The conversation CLI command should also reference isExitCommand
-      const conversationBlock = source.slice(
-        source.indexOf('case "conversation"')
-      );
+      const conversationBlock = source.slice(source.indexOf('case "conversation"'));
       expect(conversationBlock).toContain("isExitCommand");
     });
   });
 
   describe("StateManager Usage", () => {
     it("should not contain raw JSON.parse(readFileSync()) for state", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // PID file reads are acceptable (not JSON state management)
       // But no raw JSON.parse(readFileSync(...)) for session state
       const matches = source.match(/JSON\.parse\s*\(\s*readFileSync/g);
@@ -117,13 +116,13 @@ describe("DesktopVoiceClient", () => {
     });
 
     it("should use getSessionManager from VoiceCommon", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       expect(source).toContain("getSessionManager");
-      expect(source).toContain("from \"./VoiceCommon.ts\"");
+      expect(source).toContain('from "./VoiceCommon.ts"');
     });
 
     it("should pass all required fields when updating session", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // The update() call should spread existing state to preserve required fields
       // Look for proper spread pattern in the update callback
       const updateBlocks = source.match(/manager\.update\s*\(\s*\([\w]+\)\s*=>\s*\({[^}]+}\)/gs);
@@ -131,7 +130,11 @@ describe("DesktopVoiceClient", () => {
         for (const block of updateBlocks) {
           // Should spread the existing state or include all required fields
           const hasSpread = block.includes("...s") || block.includes("...state") || block.includes("...current");
-          const hasAllFields = block.includes("id") && block.includes("startedAt") && block.includes("messages") && block.includes("turnCount");
+          const hasAllFields =
+            block.includes("id") &&
+            block.includes("startedAt") &&
+            block.includes("messages") &&
+            block.includes("turnCount");
           expect(hasSpread || hasAllFields).toBe(true);
         }
       }
@@ -140,12 +143,12 @@ describe("DesktopVoiceClient", () => {
 
   describe("Error Handling", () => {
     it("should have top-level error handler on main()", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       expect(source).toContain("main().catch");
     });
 
     it("should handle errors gracefully in continuous loop", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // The while loop should have try/catch
       expect(source).toContain("catch (err");
     });
@@ -153,11 +156,11 @@ describe("DesktopVoiceClient", () => {
 
   describe("No Raw fetch() Calls", () => {
     it("should not contain direct fetch() calls (except localhost health checks)", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // Match standalone fetch( but not httpClient.fetch( or .fetch(
       // Filter out localhost health checks (not external API calls)
-      const lines = source.split('\n').filter(l => !l.includes('localhost'));
-      const rawFetchMatches = lines.join('\n').match(/(?<!\w)fetch\s*\(/g);
+      const lines = source.split("\n").filter((l) => !l.includes("localhost"));
+      const rawFetchMatches = lines.join("\n").match(/(?<!\w)fetch\s*\(/g);
       expect(rawFetchMatches).toBeNull();
     });
   });

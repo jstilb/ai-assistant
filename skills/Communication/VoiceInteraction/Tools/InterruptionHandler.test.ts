@@ -11,15 +11,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
-import { join } from "path";
-import { spawnSync } from "child_process";
+import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+
+// Structural check helper: collapse whitespace and unify quote style so a formatter
+// (line wrapping, single vs double quotes) cannot break these source assertions.
+const readSource = (path: string): string => readFileSync(path, "utf-8").replace(/\s+/g, " ").replace(/'/g, '"');
 
 const TEST_DIR = "/tmp/voice-interruption-tests";
-const TOOL_PATH = join(
-  import.meta.dir,
-  "InterruptionHandler.ts"
-);
+const TOOL_PATH = join(import.meta.dir, "InterruptionHandler.ts");
 
 describe("InterruptionHandler", () => {
   const SHARED_STATE_DIR = "/tmp/voice-interaction";
@@ -67,14 +68,10 @@ describe("InterruptionHandler", () => {
     });
 
     it("should register an active response", () => {
-      const result = spawnSync(
-        "bun",
-        [TOOL_PATH, "register", "test-session-1", "desktop"],
-        {
-          encoding: "utf-8",
-          timeout: 10000,
-        }
-      );
+      const result = spawnSync("bun", [TOOL_PATH, "register", "test-session-1", "desktop"], {
+        encoding: "utf-8",
+        timeout: 10000,
+      });
       const parsed = JSON.parse(result.stdout.trim());
       expect(parsed.registered).toBe(true);
       expect(parsed.sessionId).toBe("test-session-1");
@@ -114,14 +111,10 @@ describe("InterruptionHandler", () => {
     });
 
     it("should handle cancel for non-existent session gracefully", () => {
-      const result = spawnSync(
-        "bun",
-        [TOOL_PATH, "cancel", "nonexistent-session"],
-        {
-          encoding: "utf-8",
-          timeout: 10000,
-        }
-      );
+      const result = spawnSync("bun", [TOOL_PATH, "cancel", "nonexistent-session"], {
+        encoding: "utf-8",
+        timeout: 10000,
+      });
       const parsed = JSON.parse(result.stdout.trim());
       expect(parsed.cancelled).toBe(false);
     });
@@ -148,13 +141,13 @@ describe("InterruptionHandler", () => {
 
   describe("StateManager Usage", () => {
     it("should use getInterruptionManager from VoiceCommon", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       expect(source).toContain("getInterruptionManager");
-      expect(source).toContain("from \"./VoiceCommon.ts\"");
+      expect(source).toContain('from "./VoiceCommon.ts"');
     });
 
     it("should not contain raw JSON.parse(readFileSync()) for state", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       const matches = source.match(/JSON\.parse\s*\(\s*readFileSync/g);
       expect(matches).toBeNull();
     });
@@ -162,12 +155,12 @@ describe("InterruptionHandler", () => {
 
   describe("Error Handling", () => {
     it("should have top-level error handler on main()", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       expect(source).toContain("main().catch");
     });
 
     it("should handle process kill failures gracefully", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // process.kill should be in try/catch
       expect(source).toContain("process.kill");
       expect(source).toContain("catch");
@@ -176,7 +169,7 @@ describe("InterruptionHandler", () => {
 
   describe("No Raw fetch() Calls", () => {
     it("should not contain direct fetch() calls", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       const rawFetchMatches = source.match(/(?<!\w)fetch\s*\(/g);
       expect(rawFetchMatches).toBeNull();
     });
@@ -184,18 +177,16 @@ describe("InterruptionHandler", () => {
 
   describe("Async Semantics", () => {
     it("should use async functions for state operations", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       expect(source).toContain("async function registerResponse");
       expect(source).toContain("async function cancelResponse");
       expect(source).toContain("async function cancelAll");
     });
 
     it("should preserve interruption state atomically via manager.update", () => {
-      const source = readFileSync(TOOL_PATH, "utf-8");
+      const source = readSource(TOOL_PATH);
       // Should use manager.update() or manager.save() for state changes
-      expect(
-        source.includes("manager.update") || source.includes("manager.save")
-      ).toBe(true);
+      expect(source.includes("manager.update") || source.includes("manager.save")).toBe(true);
     });
   });
 });

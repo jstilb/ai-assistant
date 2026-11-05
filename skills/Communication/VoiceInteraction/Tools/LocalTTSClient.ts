@@ -50,8 +50,8 @@ export type TTSModel = "kokoro" | "chatterbox" | "qwen3-tts";
 /** Model ID mapping */
 const MODEL_IDS: Record<TTSModel, string> = {
   kokoro: "prince-canuma/Kokoro-82M",
-  chatterbox: "chatterbox-turbo",        // Update when MLX version available
-  "qwen3-tts": "Qwen/Qwen3-TTS-0.6B",   // Update when MLX version available
+  chatterbox: "chatterbox-turbo", // Update when MLX version available
+  "qwen3-tts": "Qwen/Qwen3-TTS-0.6B", // Update when MLX version available
 };
 
 /** TTS generation result */
@@ -161,10 +161,7 @@ function getConfigManager(): StateManager<LocalTTSConfig> {
  * @param options - TTS options (voice, model, speed, format, timeout)
  * @returns TTSResult with audio Buffer and metadata
  */
-export async function generateSpeech(
-  text: string,
-  options: TTSOptions = {}
-): Promise<TTSResult> {
+export async function generateSpeech(text: string, options: TTSOptions = {}): Promise<TTSResult> {
   const manager = getConfigManager();
   const config = await manager.load();
 
@@ -190,22 +187,19 @@ export async function generateSpeech(
   const startTime = Date.now();
 
   try {
-    const response = await httpClient.fetch(
-      `${serverUrl}${SPEECH_ENDPOINT}`,
-      {
-        cache: "none",
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: MODEL_IDS[model],
-          input: text,
-          voice: voice,
-          response_format: format,
-          speed: speed,
-        }),
-        timeout: timeout,
-      }
-    );
+    const response = await httpClient.fetch(`${serverUrl}${SPEECH_ENDPOINT}`, {
+      cache: "none",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL_IDS[model],
+        input: text,
+        voice: voice,
+        response_format: format,
+        speed: speed,
+      }),
+      timeout: timeout,
+    });
 
     if (!response.ok) {
       const errorBody = await response.text();
@@ -232,18 +226,15 @@ export async function generateSpeech(
 /**
  * Generate speech using macOS `say` command as emergency fallback.
  */
-async function generateFallbackSpeech(
-  text: string,
-  startTime: number
-): Promise<TTSResult> {
+async function generateFallbackSpeech(text: string, startTime: number): Promise<TTSResult> {
   const manager = getConfigManager();
   await manager.update((c) => ({
     ...c,
     totalFallbacks: c.totalFallbacks + 1,
   }));
 
-  const { spawnSync } = await import("child_process");
-  const { mkdirSync, existsSync } = await import("fs");
+  const { spawnSync } = await import("node:child_process");
+  const { mkdirSync, existsSync } = await import("node:fs");
 
   const tmpDir = "/tmp/voice-interaction";
   if (!existsSync(tmpDir)) {
@@ -252,25 +243,25 @@ async function generateFallbackSpeech(
 
   const outputPath = `${tmpDir}/fallback-${Date.now()}.aiff`;
 
-  const result = spawnSync("/usr/bin/say", [
-    "-v", "Samantha",
-    "-r", "180",
-    "-o", outputPath,
-    "--data-format=LEF32@22050",
-    text,
-  ], { timeout: 30000 });
+  const result = spawnSync(
+    "/usr/bin/say",
+    ["-v", "Samantha", "-r", "180", "-o", outputPath, "--data-format=LEF32@22050", text],
+    { timeout: 30000 },
+  );
 
   if (result.status !== 0) {
     throw new Error("macOS say fallback also failed");
   }
 
-  const { readFileSync, unlinkSync } = await import("fs");
+  const { readFileSync, unlinkSync } = await import("node:fs");
   const audioBuffer = Buffer.from(readFileSync(outputPath));
 
   // Cleanup
   try {
     unlinkSync(outputPath);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return {
     audio: audioBuffer,
@@ -290,10 +281,7 @@ export async function isServerHealthy(): Promise<boolean> {
   const config = await manager.load();
 
   try {
-    const response = await httpClient.fetch(
-      `${config.serverUrl}/v1/models`,
-      { cache: "none", timeout: 3000 }
-    );
+    const response = await httpClient.fetch(`${config.serverUrl}/v1/models`, { cache: "none", timeout: 3000 });
     return response.ok;
   } catch {
     return false;
@@ -311,9 +299,7 @@ export async function getConfig(): Promise<LocalTTSConfig> {
 /**
  * Update configuration.
  */
-export async function updateConfig(
-  updates: Partial<LocalTTSConfig>
-): Promise<void> {
+export async function updateConfig(updates: Partial<LocalTTSConfig>): Promise<void> {
   const manager = getConfigManager();
   await manager.update((config) => ({
     ...config,
@@ -328,7 +314,7 @@ export async function updateConfig(
  */
 export async function generateSpeechBatch(
   text: string,
-  _outputFormat?: string
+  _outputFormat?: string,
 ): Promise<{ audio: Buffer; size_bytes: number; duration_ms: number; format: "mp3" | "ogg" }> {
   const result = await generateSpeech(text, { format: "mp3" });
   return {
@@ -354,9 +340,9 @@ async function main(): Promise<void> {
         console.error("Usage: speak <text>");
         process.exit(1);
       }
-      const { writeFileSync, unlinkSync } = await import("fs");
-      const { spawnSync } = await import("child_process");
-      const { mkdirSync, existsSync } = await import("fs");
+      const { writeFileSync, unlinkSync } = await import("node:fs");
+      const { spawnSync } = await import("node:child_process");
+      const { mkdirSync, existsSync } = await import("node:fs");
 
       const tmpDir = "/tmp/voice-interaction";
       if (!existsSync(tmpDir)) {
@@ -368,7 +354,11 @@ async function main(): Promise<void> {
       const tempPath = `${tmpDir}/tts-${Date.now()}.${ext}`;
       writeFileSync(tempPath, result.audio);
       spawnSync("afplay", [tempPath], { timeout: 60000 });
-      try { unlinkSync(tempPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        /* ignore */
+      }
       console.log(JSON.stringify({ ...result, audio: `<${result.size_bytes} bytes>` }, null, 2));
       break;
     }

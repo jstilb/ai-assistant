@@ -33,14 +33,20 @@
  */
 
 import { z } from "zod";
-import { join } from "path";
-import { spawn, spawnSync } from "child_process";
+import { join } from "node:path";
+import { spawn, spawnSync } from "node:child_process";
 import { CLAUDE_PATH, buildHardenedClaudeEnv } from "../../../../lib/core/Inference.ts";
-import { getIdentity, getRealtimeVoiceConfig, loadSecrets } from "./VoiceCommon.ts";
+import { getRealtimeVoiceConfig, loadSecrets } from "./VoiceCommon.ts";
 import { SentenceChunker } from "./SentenceChunker.ts";
 import { polishTranscription } from "./STTPolishPipeline.ts";
 import { buildVoiceSystemPrompt, getMinimalContext } from "./VoiceSystemPrompt.ts";
-import { withTimeout, handleSTTError, handleLLMError, handleTTSError, handleCapacityError, speakError } from "./RealtimeErrorHandler.ts";
+import {
+  withTimeout,
+  handleSTTError,
+  handleLLMError,
+  handleCapacityError,
+  speakError,
+} from "./RealtimeErrorHandler.ts";
 import { RealtimeHealthMonitor } from "./RealtimeHealthMonitor.ts";
 import type { Server, ServerWebSocket } from "bun";
 
@@ -228,7 +234,14 @@ interface SessionAckMessage {
   conversationLength: number;
 }
 
-type ServerMessage = TranscriptMessage | ResponseTextMessage | AudioOutMessage | StatusMessage | ErrorMessage | PongMessage | SessionAckMessage;
+type ServerMessage =
+  | TranscriptMessage
+  | ResponseTextMessage
+  | AudioOutMessage
+  | StatusMessage
+  | ErrorMessage
+  | PongMessage
+  | SessionAckMessage;
 
 // ============================================================================
 // ClaudeSession: Persistent interactive Claude subprocess (stream-json)
@@ -255,32 +268,42 @@ class ClaudeSession {
 
     const voiceSettingsPath = join(import.meta.dir, "../Config/voice-session-settings.json");
 
-    this.proc = spawn(CLAUDE_PATH, [
-      "-p",
-      "--input-format", "stream-json",
-      "--output-format", "stream-json",
-      "--verbose",
-      "--include-partial-messages",
-      "--model", "sonnet",
-      "--permission-mode", "bypassPermissions",
-      "--settings", voiceSettingsPath,
-      "--append-system-prompt", [
-        "CRITICAL VOICE MODE OVERRIDE — SUPERSEDES ALL OTHER FORMAT INSTRUCTIONS:",
-        "This is a real-time voice conversation. Your response will be converted to speech via TTS.",
-        "",
-        "FORMAT RULES (override CLAUDE.md):",
-        "- Do NOT use the 📋 SUMMARY / 🔍 ANALYSIS / ⚡ ACTIONS / ⭐ RATE / 🗣️ Kaya format.",
-        "- Do NOT use emoji, markdown, bullet points, numbered lists, or headers.",
-        "- Respond in 1-3 natural spoken sentences only.",
-        "- Speak as if talking to someone in person. Be warm, concise, direct.",
-        "- The user's name is Jm. You are Kaya.",
-        "",
-        systemPrompt,
-      ].join("\n"),
-    ], {
-      env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    this.proc = spawn(
+      CLAUDE_PATH,
+      [
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+        "--model",
+        "sonnet",
+        "--permission-mode",
+        "bypassPermissions",
+        "--settings",
+        voiceSettingsPath,
+        "--append-system-prompt",
+        [
+          "CRITICAL VOICE MODE OVERRIDE — SUPERSEDES ALL OTHER FORMAT INSTRUCTIONS:",
+          "This is a real-time voice conversation. Your response will be converted to speech via TTS.",
+          "",
+          "FORMAT RULES (override CLAUDE.md):",
+          "- Do NOT use the 📋 SUMMARY / 🔍 ANALYSIS / ⚡ ACTIONS / ⭐ RATE / 🗣️ Kaya format.",
+          "- Do NOT use emoji, markdown, bullet points, numbered lists, or headers.",
+          "- Respond in 1-3 natural spoken sentences only.",
+          "- Speak as if talking to someone in person. Be warm, concise, direct.",
+          "- The user's name is Jm. You are Kaya.",
+          "",
+          systemPrompt,
+        ].join("\n"),
+      ],
+      {
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
 
     this.proc.stdout!.on("data", (chunk: Buffer) => {
       this.stdoutBuffer += chunk.toString();
@@ -448,10 +471,7 @@ if (sessionCleanupInterval.unref) sessionCleanupInterval.unref();
 /**
  * Handle session_init message: recover an existing session or acknowledge a new one.
  */
-function handleSessionInit(
-  ws: ServerWebSocket<{ sessionId: string }>,
-  requestedSessionId: string | undefined,
-): void {
+function handleSessionInit(ws: ServerWebSocket<{ sessionId: string }>, requestedSessionId: string | undefined): void {
   const currentSession = sessions.get(ws);
   if (!currentSession) return;
 
@@ -556,7 +576,7 @@ async function transcribeAudio(audioData: ArrayBuffer, sessionId: string): Promi
       return null;
     }
 
-    const result = await response.json() as { text?: string };
+    const result = (await response.json()) as { text?: string };
     const sttLatency = Date.now() - sttStart;
     console.log(`[${sessionId}] STT completed in ${sttLatency}ms`);
     healthMonitor.recordSTTResult(true);
@@ -572,10 +592,7 @@ async function transcribeAudio(audioData: ArrayBuffer, sessionId: string): Promi
 // LLM: Claude CLI Persistent Session (stream-json protocol)
 // ============================================================================
 
-async function* streamLLM(
-  session: SessionState,
-  signal: AbortSignal,
-): AsyncGenerator<string, void, unknown> {
+async function* streamLLM(session: SessionState, signal: AbortSignal): AsyncGenerator<string, void, unknown> {
   // Spawn ClaudeSession on first turn if not already running
   if (!session.claudeSession?.isAlive()) {
     console.log(`[${session.id}] Spawning persistent Claude session`);
@@ -584,7 +601,7 @@ async function* streamLLM(
 
   // Get the latest user message
   const lastMessage = session.conversationHistory[session.conversationHistory.length - 1];
-  if (!lastMessage || lastMessage.role !== "user") {
+  if (lastMessage?.role !== "user") {
     throw new Error("No user message to send");
   }
 
@@ -599,11 +616,7 @@ async function* streamLLM(
 // TTS: Text-to-Speech via mlx-audio/Kokoro with fallback chain
 // ============================================================================
 
-async function synthesizeSpeech(
-  text: string,
-  voice: string,
-  sessionId: string,
-): Promise<ArrayBuffer | null> {
+async function synthesizeSpeech(text: string, voice: string, sessionId: string): Promise<ArrayBuffer | null> {
   // Try MLX TTS (primary)
   try {
     const response = await fetch(TTS_URL, {
@@ -640,7 +653,11 @@ async function synthesizeSpeech(
         if (await file.exists()) {
           const buffer = await file.arrayBuffer();
           // Clean up temp file
-          try { await Bun.write(`${tmpFile}.cleanup`, ""); } catch { /* ignore */ }
+          try {
+            await Bun.write(`${tmpFile}.cleanup`, "");
+          } catch {
+            /* ignore */
+          }
           healthMonitor.recordTTSResult(true, true); // true = fallback
           healthMonitor.setTTSAvailable(true, "macos-say");
           console.warn(`[${sessionId}] TTS: Using macOS say fallback`);
@@ -701,11 +718,7 @@ async function runLLMAndTTSPipeline(
       const sentence = chunker.addToken(token);
 
       if (sentence) {
-        const audioBuffer = await synthesizeSpeech(
-          sentence,
-          session.config.voice,
-          session.id,
-        );
+        const audioBuffer = await synthesizeSpeech(sentence, session.config.voice, session.id);
 
         if (abortController.signal.aborted) break;
 
@@ -729,11 +742,7 @@ async function runLLMAndTTSPipeline(
     if (!abortController.signal.aborted) {
       const remaining = chunker.flush();
       if (remaining) {
-        const audioBuffer = await synthesizeSpeech(
-          remaining,
-          session.config.voice,
-          session.id,
-        );
+        const audioBuffer = await synthesizeSpeech(remaining, session.config.voice, session.id);
 
         if (!abortController.signal.aborted && audioBuffer) {
           if (!firstAudioSent) {
@@ -766,9 +775,7 @@ async function runLLMAndTTSPipeline(
       totalMs,
     });
 
-    console.log(
-      `[${session.id}] Turn complete: STT=${sttMs}ms, LLM=${llmMs}ms, total=${totalMs}ms`,
-    );
+    console.log(`[${session.id}] Turn complete: STT=${sttMs}ms, LLM=${llmMs}ms, total=${totalMs}ms`);
   } catch (error) {
     if (abortController.signal.aborted) {
       console.log(`[${session.id}] Turn aborted`);
@@ -786,7 +793,10 @@ async function runLLMAndTTSPipeline(
           healthMonitor.recordLLMTimeout();
         }
 
-        const errorAudio = await speakError(errMsg.text ?? "I'm having trouble thinking right now.", session.config.voice);
+        const errorAudio = await speakError(
+          errMsg.text ?? "I'm having trouble thinking right now.",
+          session.config.voice,
+        );
         if (errorAudio) {
           sendMessage(ws, { type: "audio", data: errorAudio });
         }
@@ -808,10 +818,7 @@ async function runLLMAndTTSPipeline(
 // Pipeline: Full voice turn (audio input -> STT -> LLM -> TTS)
 // ============================================================================
 
-async function handleAudioTurn(
-  ws: ServerWebSocket<{ sessionId: string }>,
-  audioData: ArrayBuffer,
-): Promise<void> {
+async function handleAudioTurn(ws: ServerWebSocket<{ sessionId: string }>, audioData: ArrayBuffer): Promise<void> {
   const session = sessions.get(ws);
   if (!session) return;
 
@@ -852,7 +859,9 @@ async function handleAudioTurn(
   try {
     const polishResult = await polishTranscription(transcript);
     if (polishResult.polished) {
-      console.log(`[${session.id}] STT polished: "${transcript}" → "${polishResult.text}" (${polishResult.model}, ${polishResult.duration_ms}ms)`);
+      console.log(
+        `[${session.id}] STT polished: "${transcript}" → "${polishResult.text}" (${polishResult.model}, ${polishResult.duration_ms}ms)`,
+      );
       finalTranscript = polishResult.text;
     }
   } catch (err) {
@@ -884,10 +893,7 @@ async function handleAudioTurn(
  * Handle a text message (no STT needed).
  * Adds the text to conversation history and runs the LLM+TTS pipeline.
  */
-async function handleTextTurn(
-  ws: ServerWebSocket<{ sessionId: string }>,
-  text: string,
-): Promise<void> {
+async function handleTextTurn(ws: ServerWebSocket<{ sessionId: string }>, text: string): Promise<void> {
   const session = sessions.get(ws);
   if (!session) return;
 
@@ -970,10 +976,7 @@ async function tryCaptureGate(
 // Client Message Handling
 // ============================================================================
 
-function handleClientMessage(
-  ws: ServerWebSocket<{ sessionId: string }>,
-  message: ClientMessage,
-): void {
+function handleClientMessage(ws: ServerWebSocket<{ sessionId: string }>, message: ClientMessage): void {
   const session = sessions.get(ws);
   if (!session) return;
 
@@ -1050,10 +1053,7 @@ interface ServiceHealth {
   error?: string;
 }
 
-async function checkServiceHealth(
-  url: string,
-  _name: string,
-): Promise<ServiceHealth> {
+async function checkServiceHealth(url: string, _name: string): Promise<ServiceHealth> {
   const start = Date.now();
   try {
     // Plain fetch, not httpClient: its 5-minute GET cache would report a dead
@@ -1095,9 +1095,7 @@ async function getHealthStatus(): Promise<Record<string, unknown>> {
   let llm: ServiceHealth;
   try {
     const result = spawnSync(CLAUDE_PATH, ["--version"], { timeout: 5000 });
-    llm = result.status === 0
-      ? { status: "ok" }
-      : { status: "error", error: "Claude CLI not responding" };
+    llm = result.status === 0 ? { status: "ok" } : { status: "error", error: "Claude CLI not responding" };
   } catch {
     llm = { status: "error", error: "Claude CLI not found" };
   }
@@ -1125,11 +1123,11 @@ async function getHealthStatus(): Promise<Record<string, unknown>> {
 // Server
 // ============================================================================
 
-function startServer(port: number = PORT, hostname: string = HOST): Server {
+function startServer(port: number = PORT, hostname: string = HOST): Server<{ sessionId: string }> {
   // Start periodic health checks
   healthMonitor.startHealthChecks(30000);
 
-  const srv: Server = Bun.serve<{ sessionId: string }>({
+  const srv: Server<{ sessionId: string }> = Bun.serve<{ sessionId: string }>({
     port,
     hostname,
 
@@ -1208,8 +1206,8 @@ function startServer(port: number = PORT, hostname: string = HOST): Server {
           let html = await Bun.file(htmlPath).text();
           // Inject the auth key into the client-side JS so WebSocket connects with it
           html = html.replace(
-            "return `${proto}//${host}/ws`;",
-            `return \`\${proto}//\${host}/ws?key=${VOICE_AUTH_TOKEN}\`;`
+            `return \`\${proto}//\${host}/ws\`;`,
+            `return \`\${proto}//\${host}/ws?key=${VOICE_AUTH_TOKEN}\`;`,
           );
           return new Response(html, {
             headers: {
@@ -1258,15 +1256,17 @@ function startServer(port: number = PORT, hostname: string = HOST): Server {
         });
 
         // Fire-and-forget: upgrade system prompt with dynamic context
-        loadSessionContext().then((snippet) => {
-          // Only upgrade if conversation hasn't started yet
-          if (session.conversationHistory.length === 0) {
-            session.config.systemPrompt = buildVoiceSystemPrompt({ contextSnippet: snippet });
-            console.log(`[${session.id}] System prompt upgraded with dynamic context`);
-          }
-        }).catch((err) => {
-          console.warn(`[${session.id}] Context loading failed:`, err);
-        });
+        loadSessionContext()
+          .then((snippet) => {
+            // Only upgrade if conversation hasn't started yet
+            if (session.conversationHistory.length === 0) {
+              session.config.systemPrompt = buildVoiceSystemPrompt({ contextSnippet: snippet });
+              console.log(`[${session.id}] System prompt upgraded with dynamic context`);
+            }
+          })
+          .catch((err) => {
+            console.warn(`[${session.id}] Context loading failed:`, err);
+          });
       },
 
       message(ws, message) {
@@ -1276,7 +1276,9 @@ function startServer(port: number = PORT, hostname: string = HOST): Server {
         // Binary data = audio
         if (message instanceof ArrayBuffer || message instanceof Uint8Array) {
           const audioData =
-            message instanceof Uint8Array ? message.buffer.slice(message.byteOffset, message.byteOffset + message.byteLength) : message;
+            message instanceof Uint8Array
+              ? message.buffer.slice(message.byteOffset, message.byteOffset + message.byteLength)
+              : message;
           handleAudioTurn(ws, audioData).catch((error) => {
             const errorObj = error instanceof Error ? error : new Error(String(error));
             console.error(`[${session.id}] Audio turn error:`, errorObj);
@@ -1296,7 +1298,10 @@ function startServer(port: number = PORT, hostname: string = HOST): Server {
           } catch (error) {
             if (error instanceof z.ZodError) {
               const issues = Array.isArray(error.issues) ? error.issues : [];
-              sendError(ws, `Invalid message format: ${issues.map((e: { message: string }) => e.message).join(", ") || "validation failed"}`);
+              sendError(
+                ws,
+                `Invalid message format: ${issues.map((e: { message: string }) => e.message).join(", ") || "validation failed"}`,
+              );
             } else {
               sendError(ws, "Failed to parse message as JSON");
             }
@@ -1345,7 +1350,7 @@ function startServer(port: number = PORT, hostname: string = HOST): Server {
   return srv;
 }
 
-function gracefulShutdown(srv: Server): void {
+function gracefulShutdown(srv: Server<{ sessionId: string }>): void {
   console.log("[Server] Shutdown signal received, cleaning up...");
   healthMonitor.stopHealthChecks();
 
@@ -1353,7 +1358,9 @@ function gracefulShutdown(srv: Server): void {
     if (session.abortController) {
       session.abortController.abort();
     }
-    try { ws.close(1001, "Server shutting down"); } catch {}
+    try {
+      ws.close(1001, "Server shutting down");
+    } catch {}
   }
   sessions.clear();
   clearInterval(sessionCleanupInterval);
@@ -1363,15 +1370,41 @@ function gracefulShutdown(srv: Server): void {
   process.exit(0);
 }
 
-let server: Server | undefined;
+let server: Server<{ sessionId: string }> | undefined;
 if (typeof Bun !== "undefined" && import.meta.main) {
   server = startServer();
 
-  process.on("SIGTERM", () => { if (server) gracefulShutdown(server); });
-  process.on("SIGINT", () => { if (server) gracefulShutdown(server); });
+  process.on("SIGTERM", () => {
+    if (server) gracefulShutdown(server);
+  });
+  process.on("SIGINT", () => {
+    if (server) gracefulShutdown(server);
+  });
 }
 
-export { server, startServer, checkServiceHealth, createSession, SentenceChunker, sessions, sessionStore, getHealthStatus, handleAudioTurn, handleTextTurn, handleClientMessage, handleSessionInit, runLLMAndTTSPipeline, transcribeAudio, streamLLM, synthesizeSpeech, sendMessage, sendStatus, sendError, healthMonitor, SESSION_RECOVERY_TTL_MS };
+export {
+  server,
+  startServer,
+  checkServiceHealth,
+  createSession,
+  SentenceChunker,
+  sessions,
+  sessionStore,
+  getHealthStatus,
+  handleAudioTurn,
+  handleTextTurn,
+  handleClientMessage,
+  handleSessionInit,
+  runLLMAndTTSPipeline,
+  transcribeAudio,
+  streamLLM,
+  synthesizeSpeech,
+  sendMessage,
+  sendStatus,
+  sendError,
+  healthMonitor,
+  SESSION_RECOVERY_TTL_MS,
+};
 export type {
   SessionState,
   SessionConfig,

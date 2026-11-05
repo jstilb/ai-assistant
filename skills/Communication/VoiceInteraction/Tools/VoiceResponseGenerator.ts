@@ -13,19 +13,11 @@
  *   bun VoiceResponseGenerator.ts stop                           # Stop current playback
  */
 
-import { spawnSync } from "child_process";
-import { writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
-import {
-  generateSpeech as localGenerateSpeech,
-  type TTSOptions,
-} from "./LocalTTSClient.ts";
-import {
-  TEMP_DIR,
-  ensureTempDir,
-  getLocalTTSConfig,
-  resolveVoiceId,
-} from "./VoiceCommon.ts";
+import { spawnSync } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { generateSpeech as localGenerateSpeech, type TTSOptions } from "./LocalTTSClient.ts";
+import { TEMP_DIR, ensureTempDir, getLocalTTSConfig, resolveVoiceId } from "./VoiceCommon.ts";
 
 // Kept for backward compatibility with any code that imports this constant
 const STREAMING_TTFB_TIMEOUT_MS = 2000;
@@ -48,7 +40,7 @@ interface GenerationResult {
  */
 async function generateSpeech(
   text: string,
-  outputFormat: "mp3_44100_128" | "ogg_vorbis" = "mp3_44100_128"
+  outputFormat: "mp3_44100_128" | "ogg_vorbis" = "mp3_44100_128",
 ): Promise<Buffer> {
   const format = outputFormat === "ogg_vorbis" ? "wav" : "mp3";
   const config = getLocalTTSConfig();
@@ -67,7 +59,7 @@ async function generateSpeech(
  */
 async function generateSpeechLocal(
   text: string,
-  outputPath: string
+  outputPath: string,
 ): Promise<{ size_bytes: number; duration_ms: number; usedFallback: boolean }> {
   const result = await localGenerateSpeech(text);
 
@@ -88,7 +80,7 @@ async function generateSpeechLocal(
 async function generateToFile(
   text: string,
   outputPath?: string,
-  format: "mp3" | "ogg" = "mp3"
+  format: "mp3" | "ogg" = "mp3",
 ): Promise<GenerationResult> {
   const startTime = Date.now();
   // mlx-audio supports mp3 and wav but not ogg natively.
@@ -120,7 +112,7 @@ async function generateToFile(
  * @param text - Text to speak
  * @param forceBatch - Ignored (kept for backward compatibility)
  */
-async function speakText(text: string, forceBatch = false): Promise<GenerationResult> {
+async function speakText(text: string, _forceBatch = false): Promise<GenerationResult> {
   const startTime = Date.now();
   const outputPath = join(TEMP_DIR, `response-${Date.now()}.mp3`);
 
@@ -133,7 +125,11 @@ async function speakText(text: string, forceBatch = false): Promise<GenerationRe
   }
 
   // Clean up temp file
-  try { unlinkSync(outputPath); } catch { /* ignore */ }
+  try {
+    unlinkSync(outputPath);
+  } catch {
+    /* ignore */
+  }
 
   return {
     outputPath,
@@ -149,10 +145,7 @@ async function speakText(text: string, forceBatch = false): Promise<GenerationRe
  * Note: mlx-audio outputs wav for non-mp3 formats.
  * If Telegram requires strict OGG, use ffmpeg externally.
  */
-async function generateForTelegram(
-  text: string,
-  outputPath?: string
-): Promise<GenerationResult> {
+async function generateForTelegram(text: string, outputPath?: string): Promise<GenerationResult> {
   return generateToFile(text, outputPath, "ogg");
 }
 

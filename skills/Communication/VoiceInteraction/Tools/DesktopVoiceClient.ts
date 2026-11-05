@@ -18,8 +18,8 @@
  *   bun DesktopVoiceClient.ts conversation              # Single conversation turn
  */
 
-import { spawnSync, spawn } from "child_process";
-import { existsSync, writeFileSync } from "fs";
+import { spawnSync, spawn } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
 import {
   VOICE_INPUT_TOOL,
   VOICE_RESPONSE_TOOL,
@@ -99,7 +99,11 @@ Say "goodbye" or "stop listening" to end.
 Press Ctrl+C to force stop.
 `);
 
-  try { notifySync("Starting real-time desktop voice mode"); } catch { /* non-blocking */ }
+  try {
+    notifySync("Starting real-time desktop voice mode");
+  } catch {
+    /* non-blocking */
+  }
 
   // Graceful shutdown
   const cleanup = () => {
@@ -137,11 +141,7 @@ async function checkRealtimeServer(port: number): Promise<boolean> {
  * Connect to WebSocket and run the real-time voice loop.
  * Implements reconnection with exponential backoff.
  */
-async function connectAndRun(
-  wsUrl: string,
-  state: RealtimeClientState,
-  cleanup: () => void,
-): Promise<void> {
+async function connectAndRun(wsUrl: string, state: RealtimeClientState, cleanup: () => void): Promise<void> {
   return new Promise<void>((resolve) => {
     function connect(): void {
       if (state.aborted) {
@@ -190,9 +190,11 @@ async function connectAndRun(
 
         // Attempt reconnection with exponential backoff
         if (state.reconnectAttempts < state.maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 30000);
+          const delay = Math.min(1000 * 2 ** state.reconnectAttempts, 30000);
           state.reconnectAttempts++;
-          console.error(`Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts}/${state.maxReconnectAttempts})...`);
+          console.error(
+            `Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts}/${state.maxReconnectAttempts})...`,
+          );
           setTimeout(connect, delay);
         } else {
           console.error("Max reconnection attempts reached. Falling back to batch pipeline.");
@@ -201,7 +203,9 @@ async function connectAndRun(
             timeout: 10000,
           });
           // Fall back to batch mode
-          startContinuous("push-to-talk").then(resolve).catch(() => resolve());
+          startContinuous("push-to-talk")
+            .then(resolve)
+            .catch(() => resolve());
         }
       };
 
@@ -217,30 +221,40 @@ async function connectAndRun(
 /**
  * Record audio and send to the real-time voice server in a loop.
  */
-async function recordAndSendLoop(
-  ws: WebSocket,
-  state: RealtimeClientState,
-  cleanup: () => void,
-): Promise<void> {
+async function recordAndSendLoop(ws: WebSocket, state: RealtimeClientState, cleanup: () => void): Promise<void> {
   const voiceConfig = getVoiceInteractionConfig();
 
   while (!state.aborted && ws.readyState === WebSocket.OPEN) {
     try {
       // Record audio via sox
       const tmpFile = `/tmp/voice-rt-${Date.now()}.wav`;
-      const recordResult = spawnSync("sox", [
-        "-d",               // default audio device
-        "-r", "16000",      // 16kHz sample rate
-        "-c", "1",          // mono
-        "-b", "16",         // 16-bit
-        tmpFile,
-        "silence", "1", "0.1", `${voiceConfig.silenceThreshold}%`,
-        "1", `${voiceConfig.silenceDuration}`, `${voiceConfig.silenceThreshold}%`,
-        "trim", "0", `${voiceConfig.maxDuration}`,
-      ], {
-        encoding: "utf-8",
-        timeout: (voiceConfig.maxDuration + 10) * 1000,
-      });
+      const recordResult = spawnSync(
+        "sox",
+        [
+          "-d", // default audio device
+          "-r",
+          "16000", // 16kHz sample rate
+          "-c",
+          "1", // mono
+          "-b",
+          "16", // 16-bit
+          tmpFile,
+          "silence",
+          "1",
+          "0.1",
+          `${voiceConfig.silenceThreshold}%`,
+          "1",
+          `${voiceConfig.silenceDuration}`,
+          `${voiceConfig.silenceThreshold}%`,
+          "trim",
+          "0",
+          `${voiceConfig.maxDuration}`,
+        ],
+        {
+          encoding: "utf-8",
+          timeout: (voiceConfig.maxDuration + 10) * 1000,
+        },
+      );
 
       if (state.aborted || ws.readyState !== WebSocket.OPEN) break;
 
@@ -257,7 +271,11 @@ async function recordAndSendLoop(
       const audioData = await audioFile.arrayBuffer();
 
       // Clean up temp file
-      try { writeFileSync(tmpFile, ""); } catch { /* ignore */ }
+      try {
+        writeFileSync(tmpFile, "");
+      } catch {
+        /* ignore */
+      }
 
       if (audioData.byteLength < 1000) {
         continue; // Too short, likely silence
@@ -368,7 +386,11 @@ function playBase64Audio(base64Data: string): void {
 
     child.on("exit", () => {
       // Clean up temp file after playback
-      try { writeFileSync(tmpFile, ""); } catch { /* ignore */ }
+      try {
+        writeFileSync(tmpFile, "");
+      } catch {
+        /* ignore */
+      }
     });
   } catch (err) {
     console.error("Audio playback error:", err);
@@ -417,14 +439,15 @@ function validateDependencies(): { valid: boolean; missing: string[] } {
 /**
  * Build conversation context for inference, returning separate system and user prompts
  */
-function buildConversationPrompt(session: ConversationSession, newInput: string): { systemPrompt: string; userPrompt: string } {
+function buildConversationPrompt(
+  session: ConversationSession,
+  newInput: string,
+): { systemPrompt: string; userPrompt: string } {
   const { assistantName, userName } = getIdentity();
 
   // Build context from recent messages (last 10)
   const recentMessages = session.messages.slice(-10);
-  const history = recentMessages
-    .map((m) => `${m.role === "user" ? userName : assistantName}: ${m.content}`)
-    .join("\n");
+  const history = recentMessages.map((m) => `${m.role === "user" ? userName : assistantName}: ${m.content}`).join("\n");
 
   const systemPrompt = `You are ${assistantName}, a personal AI assistant having a voice conversation with ${userName}.
 Respond naturally and concisely as if speaking aloud. Keep responses under 3 sentences unless the question requires more detail.
@@ -462,16 +485,21 @@ async function conversationTurn(config: VoiceInteractionConfig): Promise<{
   // Step 1: Listen (record + transcribe)
   console.error("Listening... (speak now)");
 
-  const listenResult = spawnSync("bun", [
-    VOICE_INPUT_TOOL, "once",
-    `--model=${config.whisperModel}`,
-    `--silence-threshold=${config.silenceThreshold}`,
-    `--silence-duration=${config.silenceDuration}`,
-    `--max-duration=${config.maxDuration}`,
-  ], {
-    encoding: "utf-8",
-    timeout: (config.maxDuration + 30) * 1000,
-  });
+  const listenResult = spawnSync(
+    "bun",
+    [
+      VOICE_INPUT_TOOL,
+      "once",
+      `--model=${config.whisperModel}`,
+      `--silence-threshold=${config.silenceThreshold}`,
+      `--silence-duration=${config.silenceDuration}`,
+      `--max-duration=${config.maxDuration}`,
+    ],
+    {
+      encoding: "utf-8",
+      timeout: (config.maxDuration + 30) * 1000,
+    },
+  );
 
   if (listenResult.status !== 0) {
     throw new Error("No speech detected or recording failed");
@@ -494,12 +522,7 @@ async function conversationTurn(config: VoiceInteractionConfig): Promise<{
   });
 
   const { systemPrompt, userPrompt } = buildConversationPrompt(currentSession, userSaid);
-  const inferResult = spawnSync("bun", [
-    INFERENCE_TOOL,
-    "--level", config.inferenceLevel,
-    systemPrompt,
-    userPrompt,
-  ], {
+  const inferResult = spawnSync("bun", [INFERENCE_TOOL, "--level", config.inferenceLevel, systemPrompt, userPrompt], {
     encoding: "utf-8",
     timeout: 30000,
   });
@@ -585,7 +608,11 @@ Press Ctrl+C to force stop.
 `);
 
   // Voice notification before starting desktop voice mode
-  try { notifySync(`Starting desktop voice mode in ${config.mode} mode`); } catch { /* non-blocking */ }
+  try {
+    notifySync(`Starting desktop voice mode in ${config.mode} mode`);
+  } catch {
+    /* non-blocking */
+  }
 
   // Graceful shutdown
   const cleanup = () => {
@@ -665,13 +692,15 @@ async function status(): Promise<void> {
     process.kill(pidState.pid, 0);
     const manager = getSessionManager();
     const session = await manager.load();
-    console.log(JSON.stringify({
-      running: true,
-      pid: pidState.pid,
-      sessionId: session.id,
-      turnCount: session.turnCount,
-      startedAt: session.startedAt,
-    }));
+    console.log(
+      JSON.stringify({
+        running: true,
+        pid: pidState.pid,
+        sessionId: session.id,
+        turnCount: session.turnCount,
+        startedAt: session.startedAt,
+      }),
+    );
   } catch {
     console.log(JSON.stringify({ running: false, stale_pid: pidState.pid }));
     await pidManager.save({});

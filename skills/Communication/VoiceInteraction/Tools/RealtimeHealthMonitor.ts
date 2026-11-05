@@ -121,7 +121,9 @@ class RealtimeHealthMonitor {
     // Also check memory pressure
     const memoryMB = this.getMemoryMB();
     if (memoryMB > this.config.memoryWarningMB) {
-      console.warn(`[HealthMonitor] Memory pressure: ${memoryMB.toFixed(0)}MB > ${this.config.memoryWarningMB}MB warning threshold`);
+      console.warn(
+        `[HealthMonitor] Memory pressure: ${memoryMB.toFixed(0)}MB > ${this.config.memoryWarningMB}MB warning threshold`,
+      );
       // Don't reject, but log warning
     }
     return true;
@@ -239,7 +241,9 @@ class RealtimeHealthMonitor {
     this.memoryCheckInterval = setInterval(() => {
       const memoryMB = this.getMemoryMB();
       if (memoryMB > this.config.memoryWarningMB) {
-        console.warn(`[HealthMonitor] High memory: ${memoryMB.toFixed(0)}MB (threshold: ${this.config.memoryWarningMB}MB)`);
+        console.warn(
+          `[HealthMonitor] High memory: ${memoryMB.toFixed(0)}MB (threshold: ${this.config.memoryWarningMB}MB)`,
+        );
       }
     }, 60000); // Every 60 seconds
   }
@@ -331,25 +335,34 @@ async function main(): Promise<void> {
           const health = await response.json();
           console.log(JSON.stringify(health, null, 2));
         } else {
-          console.log(JSON.stringify({
-            status: "unreachable",
-            error: `Server returned HTTP ${response.status}`,
-            port: config.port,
-          }, null, 2));
+          console.log(
+            JSON.stringify(
+              {
+                status: "unreachable",
+                error: `Server returned HTTP ${response.status}`,
+                port: config.port,
+              },
+              null,
+              2,
+            ),
+          );
         }
       } catch {
         // Server not running, show local health check
-        console.log(JSON.stringify({
-          status: "offline",
-          message: `Real-time voice server not running on port ${config.port}`,
-          port: config.port,
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              status: "offline",
+              message: `Real-time voice server not running on port ${config.port}`,
+              port: config.port,
+            },
+            null,
+            2,
+          ),
+        );
       }
       break;
     }
-
-    case "--help":
-    case "help":
     default: {
       console.log(`RealtimeHealthMonitor - Health checks and metrics for real-time voice
 

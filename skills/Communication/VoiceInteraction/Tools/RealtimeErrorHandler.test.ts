@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, spyOn } from "bun:test";
-import * as childProcess from "child_process";
+import * as childProcess from "node:child_process";
 import * as VoiceCommon from "./VoiceCommon.ts";
 
 // spyOn (restored in afterAll) rather than mock.module: bun's module mocks
@@ -15,9 +15,14 @@ const configSpy = spyOn(VoiceCommon, "getRealtimeVoiceConfig").mockImplementatio
   VoiceCommon.RealtimeVoiceConfigSchema.parse({ macOsSayFallback: true }),
 );
 // macOS `say` must never run in tests: every spawnSync reports failure.
-const spawnSyncSpy = spyOn(childProcess, "spawnSync").mockImplementation(
-  () => ({ pid: 0, output: [], stdout: "", stderr: "", status: 1, signal: null }),
-);
+const spawnSyncSpy = spyOn(childProcess, "spawnSync").mockImplementation((() => ({
+  pid: 0,
+  output: [],
+  stdout: "",
+  stderr: "",
+  status: 1,
+  signal: null,
+})) as unknown as typeof childProcess.spawnSync);
 
 afterAll(() => {
   configSpy.mockRestore();
@@ -39,18 +44,12 @@ import {
 
 describe("withTimeout", () => {
   it("resolves with value when promise completes before timeout", async () => {
-    const result = await withTimeout(
-      Promise.resolve("hello"),
-      1000,
-      "fallback",
-    );
+    const result = await withTimeout(Promise.resolve("hello"), 1000, "fallback");
     expect(result).toBe("hello");
   });
 
   it("returns fallback when promise exceeds timeout", async () => {
-    const slow = new Promise<string>((resolve) =>
-      setTimeout(() => resolve("late"), 5000),
-    );
+    const slow = new Promise<string>((resolve) => setTimeout(() => resolve("late"), 5000));
     const result = await withTimeout(slow, 50, "timed-out");
     expect(result).toBe("timed-out");
   });
@@ -77,13 +76,9 @@ describe("withTimeout", () => {
 
   it("logs with label when timing out", async () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
-    const slow = new Promise<string>((resolve) =>
-      setTimeout(() => resolve("late"), 5000),
-    );
+    const slow = new Promise<string>((resolve) => setTimeout(() => resolve("late"), 5000));
     await withTimeout(slow, 50, "fallback", "test-op");
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("test-op timed out"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("test-op timed out"));
     warnSpy.mockRestore();
   });
 });

@@ -16,8 +16,8 @@
  *   bun VocabularyStore.ts remove <term>
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { z } from "zod";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 
@@ -32,9 +32,7 @@ const EMPTY_VOCABULARY: Vocabulary = { terms: [], phrases: [] };
 
 /** Resolved at call time (never a module-scope const) so tests can pin KAYA_HOME. */
 export function vocabularyPath(): string {
-  return kayaHomePath(
-    "USER/SKILLCUSTOMIZATIONS/VoiceInteraction/vocabulary.json"
-  );
+  return kayaHomePath("USER/SKILLCUSTOMIZATIONS/VoiceInteraction/vocabulary.json");
 }
 
 /**
@@ -48,16 +46,13 @@ export function loadVocabulary(path: string = vocabularyPath()): Vocabulary {
   } catch (err) {
     console.warn(
       `[VocabularyStore] ${path} is malformed — vocabulary not applied.`,
-      err instanceof Error ? err.message : String(err)
+      err instanceof Error ? err.message : String(err),
     );
     return EMPTY_VOCABULARY;
   }
 }
 
-export function saveVocabulary(
-  vocab: Vocabulary,
-  path: string = vocabularyPath()
-): void {
+export function saveVocabulary(vocab: Vocabulary, path: string = vocabularyPath()): void {
   const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(path, JSON.stringify(vocab, null, 2) + "\n");
@@ -73,9 +68,7 @@ const WHISPER_PROMPT_MAX_CHARS = 700;
  * Build the Whisper initial_prompt that biases decoding toward the personal
  * vocabulary. Returns "" when there is nothing to prime with.
  */
-export function buildWhisperPrompt(
-  vocab: Vocabulary = loadVocabulary()
-): string {
+export function buildWhisperPrompt(vocab: Vocabulary = loadVocabulary()): string {
   const items = [...vocab.terms, ...vocab.phrases].filter(Boolean);
   if (items.length === 0) return "";
 
@@ -97,9 +90,7 @@ export function buildWhisperPrompt(
  * local model corrects mis-heard proper nouns toward known spellings.
  * Returns "" when the vocabulary is empty.
  */
-export function buildPolishVocabSection(
-  vocab: Vocabulary = loadVocabulary()
-): string {
+export function buildPolishVocabSection(vocab: Vocabulary = loadVocabulary()): string {
   const items = [...vocab.terms, ...vocab.phrases].filter(Boolean);
   if (items.length === 0) return "";
   return (
@@ -126,9 +117,7 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const vocab = loadVocabulary();
-      const existing = new Set(
-        [...vocab.terms, ...vocab.phrases].map((t) => t.toLowerCase())
-      );
+      const existing = new Set([...vocab.terms, ...vocab.phrases].map((t) => t.toLowerCase()));
       for (const term of args) {
         if (existing.has(term.toLowerCase())) continue;
         if (term.includes(" ")) vocab.phrases.push(term);
@@ -136,9 +125,7 @@ async function main(): Promise<void> {
         existing.add(term.toLowerCase());
       }
       saveVocabulary(vocab);
-      console.log(
-        JSON.stringify({ terms: vocab.terms.length, phrases: vocab.phrases.length })
-      );
+      console.log(JSON.stringify({ terms: vocab.terms.length, phrases: vocab.phrases.length }));
       break;
     }
 
@@ -153,9 +140,7 @@ async function main(): Promise<void> {
       vocab.terms = vocab.terms.filter((t) => t.toLowerCase() !== lower);
       vocab.phrases = vocab.phrases.filter((t) => t.toLowerCase() !== lower);
       saveVocabulary(vocab);
-      console.log(
-        JSON.stringify({ terms: vocab.terms.length, phrases: vocab.phrases.length })
-      );
+      console.log(JSON.stringify({ terms: vocab.terms.length, phrases: vocab.phrases.length }));
       break;
     }
 

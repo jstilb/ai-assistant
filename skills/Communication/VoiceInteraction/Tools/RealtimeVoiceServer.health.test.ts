@@ -1,5 +1,18 @@
-import { describe, it, expect } from "bun:test";
-import { checkServiceHealth } from "./RealtimeVoiceServer.ts";
+import { describe, it, expect, afterAll, spyOn } from "bun:test";
+import * as VoiceCommon from "./VoiceCommon.ts";
+
+// The server reads its auth token from secrets.json at import time. Inject a fake
+// so the test never reads the live secrets file (hermetic on any host).
+const secretsSpy = spyOn(VoiceCommon, "loadSecrets").mockImplementation(() => ({
+  voice_auth_token: "test-voice-auth-token",
+}));
+const { checkServiceHealth } = (await import(
+  "./RealtimeVoiceServer.ts" + "?health-test"
+)) as typeof import("./RealtimeVoiceServer.ts");
+
+afterAll(() => {
+  secretsSpy.mockRestore();
+});
 
 describe("checkServiceHealth", () => {
   it("reports error on the first check after the service stops (no stale cache)", async () => {

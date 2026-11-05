@@ -16,13 +16,8 @@
  *   bun InterruptionHandler.ts status                     # Show active responses
  */
 
-import { spawnSync } from "child_process";
-import {
-  ensureTempDir,
-  getInterruptionManager,
-  type ActiveResponse,
-  type InterruptionState,
-} from "./VoiceCommon.ts";
+import { spawnSync } from "node:child_process";
+import { ensureTempDir, getInterruptionManager, type ActiveResponse, type InterruptionState } from "./VoiceCommon.ts";
 
 /**
  * Register an active voice response being generated/played
@@ -31,14 +26,12 @@ async function registerResponse(
   sessionId: string,
   channel: "desktop" | "telegram",
   pid?: number,
-  audioFile?: string
+  audioFile?: string,
 ): Promise<void> {
   const manager = getInterruptionManager();
   await manager.update((state) => {
     // Remove any existing entry for this session
-    const filtered = state.activeResponses.filter(
-      (r) => r.sessionId !== sessionId
-    );
+    const filtered = state.activeResponses.filter((r) => r.sessionId !== sessionId);
 
     filtered.push({
       sessionId,
@@ -220,11 +213,5 @@ main().catch((err) => {
   process.exit(1);
 });
 
-export {
-  registerResponse,
-  cancelResponse,
-  cancelAll,
-  hasActiveResponse,
-  getStatus,
-};
+export { registerResponse, cancelResponse, cancelAll, hasActiveResponse, getStatus };
 export type { ActiveResponse, InterruptionState };

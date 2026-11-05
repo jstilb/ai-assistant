@@ -22,9 +22,9 @@
  * Reversal: `ollama rm dictation:latest` (polish falls back to the base model).
  */
 
-import { spawnSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 import { loadVocabulary, type Vocabulary } from "./VocabularyStore.ts";
@@ -62,8 +62,10 @@ export function loadPairs(path: string = pairsPath()): TrainingPair[] {
     try {
       const parsed = JSON.parse(trimmed) as Partial<TrainingPair>;
       if (
-        typeof parsed.raw === "string" && parsed.raw.length > 0 &&
-        typeof parsed.polished === "string" && parsed.polished.length > 0
+        typeof parsed.raw === "string" &&
+        parsed.raw.length > 0 &&
+        typeof parsed.polished === "string" &&
+        parsed.polished.length > 0
       ) {
         pairs.push({
           timestamp: parsed.timestamp ?? "",
@@ -97,14 +99,12 @@ export function isQualityPair(pair: TrainingPair): boolean {
  * Select few-shot examples: newest quality pairs first, deduplicated by raw
  * text, returned in chronological order.
  */
-export function selectFewShot(
-  pairs: TrainingPair[],
-  count: number = FEW_SHOT_COUNT
-): TrainingPair[] {
+export function selectFewShot(pairs: TrainingPair[], count: number = FEW_SHOT_COUNT): TrainingPair[] {
   const seen = new Set<string>();
   const selected: TrainingPair[] = [];
   for (let i = pairs.length - 1; i >= 0 && selected.length < count; i--) {
     const pair = pairs[i];
+    if (!pair) continue;
     const key = pair.raw.toLowerCase();
     if (seen.has(key) || !isQualityPair(pair)) continue;
     seen.add(key);
@@ -132,21 +132,20 @@ export function buildModelfile(opts?: {
   const vocab = opts?.vocab ?? loadVocabulary();
   const pairs = opts?.pairs ?? loadPairs();
   const seedPairs = opts?.pairs ? [] : loadPairs(seedPairsPath());
-  const fewShot = [
-    ...seedPairs,
-    ...selectFewShot(pairs, opts?.fewShotCount ?? FEW_SHOT_COUNT),
-  ];
+  const fewShot = [...seedPairs, ...selectFewShot(pairs, opts?.fewShotCount ?? FEW_SHOT_COUNT)];
 
   const vocabItems = [...vocab.terms, ...vocab.phrases].filter(Boolean);
-  const vocabLine = vocabItems.length > 0
-    ? `\nKnown domain terms — prefer these exact spellings when a similar-sounding word appears: ${vocabItems.join(", ")}.`
-    : "";
+  const vocabLine =
+    vocabItems.length > 0
+      ? `\nKnown domain terms — prefer these exact spellings when a similar-sounding word appears: ${vocabItems.join(", ")}.`
+      : "";
 
   const system = escapeModelfileText(
     "You clean up speech-to-text dictation output. Fix ONLY spelling, " +
-    "punctuation, and capitalization. Keep the same words; never rephrase, " +
-    "reword, or add commentary. Use straight apostrophes. Output only the " +
-    "corrected text." + vocabLine
+      "punctuation, and capitalization. Keep the same words; never rephrase, " +
+      "reword, or add commentary. Use straight apostrophes. Output only the " +
+      "corrected text." +
+      vocabLine,
   );
 
   const lines: string[] = [
@@ -170,7 +169,11 @@ export function buildModelfile(opts?: {
  */
 export function wordF1(expected: string, actual: string): number {
   const tokenize = (text: string): string[] =>
-    text.toLowerCase().replace(/[^a-z0-9\s']/g, "").split(/\s+/).filter(Boolean);
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g, "")
+      .split(/\s+/)
+      .filter(Boolean);
 
   const expectedWords = tokenize(expected);
   const actualWords = tokenize(actual);
@@ -195,10 +198,7 @@ export function wordF1(expected: string, actual: string): number {
   return (2 * precision * recall) / (precision + recall);
 }
 
-async function generateViaOllama(
-  model: string,
-  prompt: string
-): Promise<string | null> {
+async function generateViaOllama(model: string, prompt: string): Promise<string | null> {
   try {
     const response = await httpClient.fetch(`${OLLAMA_URL}/api/generate`, {
       cache: "none",
@@ -213,7 +213,7 @@ async function generateViaOllama(
       timeout: EVAL_TIMEOUT_MS,
     });
     if (!response.ok) return null;
-    const data = await response.json() as { response?: string };
+    const data = (await response.json()) as { response?: string };
     return data?.response?.trim() || null;
   } catch {
     return null;
@@ -231,10 +231,7 @@ interface EvalResult {
  * Score a model against pairs.jsonl: for each pair, run the polish prompt on
  * the raw text and compare the output to the stored polished target.
  */
-async function evalModel(
-  model: string,
-  pairs: TrainingPair[]
-): Promise<EvalResult> {
+async function evalModel(model: string, pairs: TrainingPair[]): Promise<EvalResult> {
   const prompt = buildPolishPrompt();
   let failed = 0;
   let totalF1 = 0;
@@ -274,11 +271,10 @@ function train(): void {
   writeFileSync(modelfilePath, modelfile);
 
   console.log(`Building ${DICTATION_MODEL} from ${modelfilePath}...`);
-  const result = spawnSync(
-    "ollama",
-    ["create", DICTATION_MODEL, "-f", modelfilePath],
-    { encoding: "utf-8", timeout: 120000 }
-  );
+  const result = spawnSync("ollama", ["create", DICTATION_MODEL, "-f", modelfilePath], {
+    encoding: "utf-8",
+    timeout: 120000,
+  });
 
   if (result.status !== 0) {
     throw new Error(`ollama create failed: ${result.stderr || result.stdout}`);
@@ -296,19 +292,25 @@ async function main(): Promise<void> {
       const pairs = loadPairs();
       const vocab = loadVocabulary();
       const stats = await getPolishStats();
-      console.log(JSON.stringify({
-        pairs: pairs.length,
-        fewShotUsed: selectFewShot(pairs).length,
-        vocabTerms: vocab.terms.length,
-        vocabPhrases: vocab.phrases.length,
-        dictationModelExists: ollamaModelExists(DICTATION_MODEL),
-        baseModelExists: ollamaModelExists(BASE_MODEL),
-        polishStats: {
-          totalPolished: stats.totalPolished,
-          totalRejected: stats.totalRejected,
-          totalRaw: stats.totalRaw,
-        },
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            pairs: pairs.length,
+            fewShotUsed: selectFewShot(pairs).length,
+            vocabTerms: vocab.terms.length,
+            vocabPhrases: vocab.phrases.length,
+            dictationModelExists: ollamaModelExists(DICTATION_MODEL),
+            baseModelExists: ollamaModelExists(BASE_MODEL),
+            polishStats: {
+              totalPolished: stats.totalPolished,
+              totalRejected: stats.totalRejected,
+              totalRaw: stats.totalRaw,
+            },
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
@@ -340,9 +342,7 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const base = await evalModel(BASE_MODEL, pairs);
-      const dictation = ollamaModelExists(DICTATION_MODEL)
-        ? await evalModel(DICTATION_MODEL, pairs)
-        : null;
+      const dictation = ollamaModelExists(DICTATION_MODEL) ? await evalModel(DICTATION_MODEL, pairs) : null;
       console.log(JSON.stringify({ base, dictation }, null, 2));
       break;
     }

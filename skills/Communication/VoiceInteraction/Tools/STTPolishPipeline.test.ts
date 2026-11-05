@@ -7,12 +7,16 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { calculateWordOverlap, cleanPolishOutput, countAddedWords } from "./STTPolishPipeline.ts";
 
+// Structural check helper: collapse whitespace and unify quote style so a formatter
+// (line wrapping, single vs double quotes) cannot break these source assertions.
+const readSource = (path: string): string => readFileSync(path, "utf-8").replace(/\s+/g, " ").replace(/'/g, '"');
+
 const PIPELINE_PATH = join(import.meta.dir, "STTPolishPipeline.ts");
-const sourceCode = readFileSync(PIPELINE_PATH, "utf-8");
+const sourceCode = readSource(PIPELINE_PATH);
 
 describe("STTPolishPipeline", () => {
   describe("Source Code Patterns", () => {
@@ -108,12 +112,7 @@ describe("STTPolishPipeline", () => {
     });
 
     it("counts content words injected by the model", () => {
-      expect(
-        countAddedWords(
-          "review the daily briefing",
-          "Review the daily briefing tomorrow morning."
-        )
-      ).toBe(2);
+      expect(countAddedWords("review the daily briefing", "Review the daily briefing tomorrow morning.")).toBe(2);
     });
 
     it("allows a single vocabulary respelling", () => {

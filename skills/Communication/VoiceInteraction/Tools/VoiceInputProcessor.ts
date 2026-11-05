@@ -12,17 +12,11 @@
  *   bun VoiceInputProcessor.ts record-and-transcribe             # Record from mic + transcribe
  */
 
-import { spawn, spawnSync } from "child_process";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
-import { join } from "path";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
-import {
-  KAYA_HOME,
-  VOICE_INPUT_TOOL,
-  ensureTempDir,
-  getVoiceInteractionConfig,
-  getSecret,
-} from "./VoiceCommon.ts";
+import { KAYA_HOME, VOICE_INPUT_TOOL, ensureTempDir, getVoiceInteractionConfig, getSecret } from "./VoiceCommon.ts";
 import { polishTranscription } from "./STTPolishPipeline.ts";
 import { buildWhisperPrompt } from "./VocabularyStore.ts";
 
@@ -33,7 +27,7 @@ import { buildWhisperPrompt } from "./VocabularyStore.ts";
 function runCommand(
   cmd: string,
   args: string[],
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -44,8 +38,12 @@ function runCommand(
       timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
-    child.stdout.on("data", (d) => { stdout += d; });
-    child.stderr.on("data", (d) => { stderr += d; });
+    child.stdout.on("data", (d) => {
+      stdout += d;
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d;
+    });
     child.on("error", (err) => {
       clearTimeout(timer);
       reject(err);
@@ -63,22 +61,19 @@ function runCommand(
 
 interface TranscriptionResult {
   text: string;
-  rawText?: string;          // Original Whisper output before polish
+  rawText?: string; // Original Whisper output before polish
   source: "whisper" | "gemini";
   duration_ms: number;
   model?: string;
   confidence?: number;
-  polishModel?: string;      // Which model polished (if any)
+  polishModel?: string; // Which model polished (if any)
   polishDuration_ms?: number;
 }
 
 /**
  * Transcribe an audio file using local Whisper via VoiceInput CORE tool
  */
-async function transcribeWithWhisper(
-  audioPath: string,
-  model?: string
-): Promise<TranscriptionResult> {
+async function transcribeWithWhisper(audioPath: string, model?: string): Promise<TranscriptionResult> {
   const config = getVoiceInteractionConfig();
   const whisperModel = model || config.whisperModel;
   const startTime = Date.now();
@@ -86,11 +81,7 @@ async function transcribeWithWhisper(
   // Use the extract-transcript.py script directly for file transcription
   const extractScript = join(KAYA_HOME, "lib/core/extract-transcript.py");
 
-  const args = [
-    "run", extractScript, audioPath,
-    "--model", whisperModel,
-    "--format", "txt",
-  ];
+  const args = ["run", extractScript, audioPath, "--model", whisperModel, "--format", "txt"];
 
   // Personal vocabulary priming — biases decoding toward Jm's domain terms
   const vocabPrompt = buildWhisperPrompt();
@@ -111,7 +102,11 @@ async function transcribeWithWhisper(
   }
 
   const rawText = readFileSync(transcriptPath, "utf-8").trim();
-  try { unlinkSync(transcriptPath); } catch { /* ignore */ }
+  try {
+    unlinkSync(transcriptPath);
+  } catch {
+    /* ignore */
+  }
 
   // Polish the raw transcription (Whisper output only -- Gemini is already clean)
   const polishResult = await polishTranscription(rawText);
@@ -130,39 +125,38 @@ async function transcribeWithWhisper(
 /**
  * Transcribe audio buffer using Gemini API (for Telegram OGG messages)
  */
-async function transcribeWithGemini(
-  audioBase64: string,
-  mimeType: string = "audio/ogg"
-): Promise<TranscriptionResult> {
+async function transcribeWithGemini(audioBase64: string, mimeType: string = "audio/ogg"): Promise<TranscriptionResult> {
   const startTime = Date.now();
   const apiKey = getSecret("GEMINI_API_KEY");
 
   const response = await httpClient.fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
     {
-      cache: 'none', // Don't cache transcriptions
+      cache: "none", // Don't cache transcriptions
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            {
-              text: "Transcribe this audio message exactly. Return ONLY the transcription text, no commentary, formatting, or quotation marks.",
-            },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: audioBase64,
+        contents: [
+          {
+            parts: [
+              {
+                text: "Transcribe this audio message exactly. Return ONLY the transcription text, no commentary, formatting, or quotation marks.",
               },
-            },
-          ],
-        }],
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: audioBase64,
+                },
+              },
+            ],
+          },
+        ],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 2048,
         },
       }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -176,7 +170,7 @@ async function transcribeWithGemini(
     }>;
   }
 
-  const data: GeminiResponse = await response.json();
+  const data = (await response.json()) as GeminiResponse;
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
 
   if (!text) {
@@ -199,18 +193,19 @@ async function transcribeWithGemini(
  * is only tried when Whisper fails AND allowCloudSTT is enabled in config
  * (default false; FREE is the hard constraint for personal infra).
  */
-async function transcribeBuffer(
-  audioBase64: string,
-  mimeType: string = "audio/ogg"
-): Promise<TranscriptionResult> {
+async function transcribeBuffer(audioBase64: string, mimeType: string = "audio/ogg"): Promise<TranscriptionResult> {
   const config = getVoiceInteractionConfig();
   ensureTempDir();
 
-  const ext = mimeType.includes("ogg") ? "ogg"
-    : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3"
-    : mimeType.includes("wav") ? "wav"
-    : mimeType.includes("m4a") || mimeType.includes("mp4") ? "m4a"
-    : "ogg";
+  const ext = mimeType.includes("ogg")
+    ? "ogg"
+    : mimeType.includes("mp3") || mimeType.includes("mpeg")
+      ? "mp3"
+      : mimeType.includes("wav")
+        ? "wav"
+        : mimeType.includes("m4a") || mimeType.includes("mp4")
+          ? "m4a"
+          : "ogg";
   const tempPath = join("/tmp/voice-interaction", `buffer-${Date.now()}.${ext}`);
 
   try {
@@ -219,15 +214,19 @@ async function transcribeBuffer(
   } catch (whisperError) {
     if (config.allowCloudSTT) {
       console.error(
-        `Local Whisper failed (${whisperError instanceof Error ? whisperError.message : whisperError}); falling back to Gemini (allowCloudSTT=true)`
+        `Local Whisper failed (${whisperError instanceof Error ? whisperError.message : whisperError}); falling back to Gemini (allowCloudSTT=true)`,
       );
       return transcribeWithGemini(audioBase64, mimeType);
     }
     throw new Error(
-      `Local Whisper transcription failed and cloud STT is disabled (set allowCloudSTT=true in VoiceInteraction config to allow the paid Gemini fallback): ${whisperError instanceof Error ? whisperError.message : whisperError}`
+      `Local Whisper transcription failed and cloud STT is disabled (set allowCloudSTT=true in VoiceInteraction config to allow the paid Gemini fallback): ${whisperError instanceof Error ? whisperError.message : whisperError}`,
     );
   } finally {
-    try { unlinkSync(tempPath); } catch { /* ignore */ }
+    try {
+      unlinkSync(tempPath);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -238,17 +237,22 @@ async function recordAndTranscribe(): Promise<TranscriptionResult> {
   const config = getVoiceInteractionConfig();
 
   // Use VoiceInput tool in "once" mode
-  const result = spawnSync("bun", [
-    VOICE_INPUT_TOOL, "once",
-    "--json",
-    `--model=${config.whisperModel}`,
-    `--silence-threshold=${config.silenceThreshold}`,
-    `--silence-duration=${config.silenceDuration}`,
-    `--max-duration=${config.maxDuration}`,
-  ], {
-    encoding: "utf-8",
-    timeout: (config.maxDuration + 30) * 1000,
-  });
+  const result = spawnSync(
+    "bun",
+    [
+      VOICE_INPUT_TOOL,
+      "once",
+      "--json",
+      `--model=${config.whisperModel}`,
+      `--silence-threshold=${config.silenceThreshold}`,
+      `--silence-duration=${config.silenceDuration}`,
+      `--max-duration=${config.maxDuration}`,
+    ],
+    {
+      encoding: "utf-8",
+      timeout: (config.maxDuration + 30) * 1000,
+    },
+  );
 
   if (result.status !== 0) {
     throw new Error(`Recording failed: ${result.stderr}`);

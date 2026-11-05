@@ -13,8 +13,8 @@
  *   import { KAYA_HOME, TEMP_DIR, loadSecrets, getVoiceInteractionConfig, ... } from "./VoiceCommon.ts";
  */
 
-import { existsSync, readFileSync, mkdirSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
 import { createStateManager, type StateManager } from "../../../../lib/core/StateManager.ts";
@@ -28,7 +28,10 @@ export const KAYA_HOME = getKayaHome();
 export const TEMP_DIR = "/tmp/voice-interaction";
 
 export const VOICE_INPUT_TOOL = join(KAYA_HOME, "lib/core/VoiceInput.ts");
-export const VOICE_RESPONSE_TOOL = join(KAYA_HOME, "skills/Communication/VoiceInteraction/Tools/VoiceResponseGenerator.ts");
+export const VOICE_RESPONSE_TOOL = join(
+  KAYA_HOME,
+  "skills/Communication/VoiceInteraction/Tools/VoiceResponseGenerator.ts",
+);
 export const INTERRUPTION_TOOL = join(KAYA_HOME, "skills/Communication/VoiceInteraction/Tools/InterruptionHandler.ts");
 export const INFERENCE_TOOL = join(KAYA_HOME, "lib/core/Inference.ts");
 export const TELEGRAM_CLIENT = join(KAYA_HOME, "skills/Communication/Telegram/Tools/TelegramClient.ts");
@@ -109,7 +112,7 @@ export function loadCustomizations(): VoiceCustomizations {
     } catch (err) {
       console.warn(
         `[VoiceCommon] config.json at ${configPath} is malformed — customizations not applied.`,
-        err instanceof Error ? err.message : String(err)
+        err instanceof Error ? err.message : String(err),
       );
     }
   }
@@ -185,11 +188,7 @@ export function getVoiceInteractionConfig(): VoiceInteractionConfig {
 
     const modeRaw = customizations.mode;
     const mode: "push-to-talk" | "vad" =
-      modeRaw === "push-to-talk" || modeRaw === "vad"
-        ? modeRaw
-        : vi.activation === "vad"
-        ? "vad"
-        : "push-to-talk";
+      modeRaw === "push-to-talk" || modeRaw === "vad" ? modeRaw : vi.activation === "vad" ? "vad" : "push-to-talk";
     const inferenceRaw = customizations.inferenceLevel;
     const inferenceLevel: "fast" | "standard" | "smart" =
       inferenceRaw === "fast" || inferenceRaw === "standard" || inferenceRaw === "smart"
@@ -253,7 +252,7 @@ let _secretsCachedAt = 0;
  */
 export function loadSecrets(): Record<string, unknown> {
   const now = Date.now();
-  if (_cachedSecrets && (now - _secretsCachedAt) < SECRETS_CACHE_TTL_MS) {
+  if (_cachedSecrets && now - _secretsCachedAt < SECRETS_CACHE_TTL_MS) {
     return _cachedSecrets;
   }
 
@@ -417,8 +416,12 @@ export function getRealtimeVoiceConfig(): RealtimeVoiceConfig {
     if (typeof maxTokensOverride === "number" && maxTokensOverride > 0) {
       return RealtimeVoiceConfigSchema.parse({ maxTokens: maxTokensOverride });
     }
-  } catch {
-    // Fall through to defaults
+  } catch (err) {
+    // Fall through to defaults, but say why the settings.json override was not applied.
+    console.error(
+      "[VoiceCommon] Realtime voice settings override ignored, using defaults: %s",
+      err instanceof Error ? err.message : err,
+    );
   }
   return RealtimeVoiceConfigSchema.parse({});
 }
@@ -475,11 +478,13 @@ export const ActiveResponseSchema = z.object({
 
 export const InterruptionStateSchema = z.object({
   activeResponses: z.array(ActiveResponseSchema),
-  lastInterruption: z.object({
-    sessionId: z.string(),
-    at: z.string(),
-    reason: z.string(),
-  }).optional(),
+  lastInterruption: z
+    .object({
+      sessionId: z.string(),
+      at: z.string(),
+      reason: z.string(),
+    })
+    .optional(),
 });
 
 export type ActiveResponse = z.infer<typeof ActiveResponseSchema>;

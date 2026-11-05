@@ -33,7 +33,7 @@ function createMonitor(overrides?: Partial<RealtimeVoiceConfig>): RealtimeHealth
     systemPromptTemplatePath: null,
     ...overrides,
   };
-  return new RealtimeHealthMonitor(config);
+  return new RealtimeHealthMonitor(config as RealtimeVoiceConfig); // fixture carries a stale geminiModel field and host?: from overrides
 }
 
 // ============================================================================
