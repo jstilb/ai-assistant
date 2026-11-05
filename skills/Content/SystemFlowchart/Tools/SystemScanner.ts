@@ -13,13 +13,11 @@
  *   bun SystemScanner.ts changes [hash]    # Check if system changed since hash
  */
 
-import { readdir, readFile, stat } from 'fs/promises';
-import { join, basename } from 'path';
-import { existsSync } from 'fs';
-import { createHash } from 'crypto';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-
-const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join, basename } from "node:path";
+import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -36,8 +34,8 @@ export interface SkillInfo {
   triggers: string[];
   workflows: string[];
   tools: string[];
-  dependencies: string[];  // Skills this skill references
-  isPrivate: boolean;      // _PREFIX naming convention
+  dependencies: string[]; // Skills this skill references
+  isPrivate: boolean; // _PREFIX naming convention
   hasTools: boolean;
   workflowCount: number;
 }
@@ -50,13 +48,13 @@ export interface HookInfo {
 }
 
 export type HookEventType =
-  | 'SessionStart'
-  | 'SessionEnd'
-  | 'UserPromptSubmit'
-  | 'PreToolUse'
-  | 'PostToolUse'
-  | 'Stop'
-  | 'Unknown';
+  | "SessionStart"
+  | "SessionEnd"
+  | "UserPromptSubmit"
+  | "PreToolUse"
+  | "PostToolUse"
+  | "Stop"
+  | "Unknown";
 
 export interface MemoryInfo {
   directories: DirectoryInfo[];
@@ -97,16 +95,16 @@ export interface SystemScan {
  * Parse SKILL.md frontmatter and content for metadata
  */
 async function parseSkillFile(skillPath: string): Promise<Partial<SkillInfo>> {
-  const skillFile = join(skillPath, 'SKILL.md');
+  const skillFile = join(skillPath, "SKILL.md");
   if (!existsSync(skillFile)) {
     return {};
   }
 
-  const content = await readFile(skillFile, 'utf-8');
+  const content = await readFile(skillFile, "utf-8");
 
   // Parse YAML frontmatter
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-  const frontmatter = frontmatterMatch ? frontmatterMatch[1] : '';
+  const frontmatter = frontmatterMatch?.[1] ?? "";
 
   // Extract name
   const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
@@ -114,25 +112,24 @@ async function parseSkillFile(skillPath: string): Promise<Partial<SkillInfo>> {
 
   // Extract description (USE WHEN triggers are usually in here)
   const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-  const description = descMatch?.[1]?.trim() || '';
+  const description = descMatch?.[1]?.trim() || "";
 
   // Extract triggers from description (after "USE WHEN")
   const triggers: string[] = [];
   const useWhenMatch = description.match(/USE WHEN\s+(.+)/i);
   if (useWhenMatch) {
-    const triggerText = useWhenMatch[1];
+    const triggerText = useWhenMatch[1] ?? "";
     // Split on common delimiters
     const rawTriggers = triggerText.split(/,\s*|\s+OR\s+/i);
-    triggers.push(...rawTriggers.map(t => t.trim().replace(/\.$/, '')));
+    triggers.push(...rawTriggers.map((t) => t.trim().replace(/\.$/, "")));
   }
 
   // Extract dependencies (skills referenced in content)
   const dependencies: string[] = [];
   const skillRefPattern = /skills\/([A-Za-z_]+)\//g;
-  let match;
-  while ((match = skillRefPattern.exec(content)) !== null) {
+  for (let match = skillRefPattern.exec(content); match !== null; match = skillRefPattern.exec(content)) {
     const dep = match[1];
-    if (dep !== name && !dependencies.includes(dep)) {
+    if (dep !== undefined && dep !== name && !dependencies.includes(dep)) {
       dependencies.push(dep);
     }
   }
@@ -150,38 +147,38 @@ async function buildSkillInfo(skillPath: string, dirName: string, category: stri
   const parsed = await parseSkillFile(skillPath);
 
   // Check for workflows
-  const workflowsDir = join(skillPath, 'Workflows');
+  const workflowsDir = join(skillPath, "Workflows");
   let workflows: string[] = [];
   if (existsSync(workflowsDir)) {
     const wfEntries = await readdir(workflowsDir);
-    workflows = wfEntries.filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''));
+    workflows = wfEntries.filter((f) => f.endsWith(".md")).map((f) => f.replace(".md", ""));
   }
 
   // Check for tools
-  const toolsDir = join(skillPath, 'Tools');
+  const toolsDir = join(skillPath, "Tools");
   let tools: string[] = [];
   if (existsSync(toolsDir)) {
     const toolEntries = await readdir(toolsDir);
-    tools = toolEntries.filter(f => f.endsWith('.ts')).map(f => f.replace('.ts', ''));
+    tools = toolEntries.filter((f) => f.endsWith(".ts")).map((f) => f.replace(".ts", ""));
   }
 
   return {
     name: parsed.name || dirName,
     directory: dirName,
     category,
-    description: parsed.description || '',
+    description: parsed.description || "",
     triggers: parsed.triggers || [],
     workflows,
     tools,
     dependencies: parsed.dependencies || [],
-    isPrivate: dirName.startsWith('_'),
+    isPrivate: dirName.startsWith("_"),
     hasTools: tools.length > 0,
     workflowCount: workflows.length,
   };
 }
 
 export async function scanSkills(): Promise<SkillInfo[]> {
-  const skillsDir = join(KAYA_DIR, 'skills');
+  const skillsDir = join(getKayaHome(), "skills");
   if (!existsSync(skillsDir)) {
     return [];
   }
@@ -190,14 +187,14 @@ export async function scanSkills(): Promise<SkillInfo[]> {
   const topEntries = await readdir(skillsDir, { withFileTypes: true });
 
   for (const topEntry of topEntries) {
-    if (!topEntry.isDirectory() || topEntry.name.startsWith('.')) continue;
+    if (!topEntry.isDirectory() || topEntry.name.startsWith(".")) continue;
 
     const topPath = join(skillsDir, topEntry.name);
     const subEntries = await readdir(topPath, { withFileTypes: true });
 
     // Check if any subdirectory contains a SKILL.md (i.e. this is a category)
     const skillSubDirs = subEntries.filter(
-      e => e.isDirectory() && !e.name.startsWith('.') && existsSync(join(topPath, e.name, 'SKILL.md'))
+      (e) => e.isDirectory() && !e.name.startsWith(".") && existsSync(join(topPath, e.name, "SKILL.md")),
     );
 
     if (skillSubDirs.length > 0) {
@@ -206,16 +203,16 @@ export async function scanSkills(): Promise<SkillInfo[]> {
         const subPath = join(topPath, subEntry.name);
         skills.push(await buildSkillInfo(subPath, subEntry.name, topEntry.name));
       }
-    } else if (existsSync(join(topPath, 'SKILL.md'))) {
+    } else if (existsSync(join(topPath, "SKILL.md"))) {
       // Leaf skill: no skill subdirectories, treat as a direct skill (no parent category)
-      skills.push(await buildSkillInfo(topPath, topEntry.name, ''));
+      skills.push(await buildSkillInfo(topPath, topEntry.name, ""));
     }
   }
 
   if (skills.length < 10) {
     console.warn(
       `[SystemScanner] Warning: only ${skills.length} skills found. ` +
-      `Expected ≥ 10. Check that skills directory uses category/skill/ nesting: ${skillsDir}`
+        `Expected ≥ 10. Check that skills directory uses category/skill/ nesting: ${skillsDir}`,
     );
   }
 
@@ -232,29 +229,29 @@ export async function scanSkills(): Promise<SkillInfo[]> {
 function determineHookEventType(filename: string, content: string): HookEventType {
   const lower = filename.toLowerCase();
 
-  if (lower.includes('sessionstart') || lower.includes('startup')) return 'SessionStart';
-  if (lower.includes('sessionend')) return 'SessionEnd';
-  if (lower.includes('userpromptsubmit') || lower.includes('promptsubmit')) return 'UserPromptSubmit';
-  if (lower.includes('pretooluse')) return 'PreToolUse';
-  if (lower.includes('posttooluse')) return 'PostToolUse';
-  if (lower.includes('stop')) return 'Stop';
+  if (lower.includes("sessionstart") || lower.includes("startup")) return "SessionStart";
+  if (lower.includes("sessionend")) return "SessionEnd";
+  if (lower.includes("userpromptsubmit") || lower.includes("promptsubmit")) return "UserPromptSubmit";
+  if (lower.includes("pretooluse")) return "PreToolUse";
+  if (lower.includes("posttooluse")) return "PostToolUse";
+  if (lower.includes("stop")) return "Stop";
 
   // Check content for event type hints
-  if (content.includes('SessionStart')) return 'SessionStart';
-  if (content.includes('SessionEnd')) return 'SessionEnd';
-  if (content.includes('UserPromptSubmit')) return 'UserPromptSubmit';
-  if (content.includes('PreToolUse')) return 'PreToolUse';
-  if (content.includes('PostToolUse')) return 'PostToolUse';
-  if (content.includes('Stop')) return 'Stop';
+  if (content.includes("SessionStart")) return "SessionStart";
+  if (content.includes("SessionEnd")) return "SessionEnd";
+  if (content.includes("UserPromptSubmit")) return "UserPromptSubmit";
+  if (content.includes("PreToolUse")) return "PreToolUse";
+  if (content.includes("PostToolUse")) return "PostToolUse";
+  if (content.includes("Stop")) return "Stop";
 
-  return 'Unknown';
+  return "Unknown";
 }
 
 /**
  * Scan all hooks in the hooks directory
  */
 export async function scanHooks(): Promise<HookInfo[]> {
-  const hooksDir = join(KAYA_DIR, 'hooks');
+  const hooksDir = join(getKayaHome(), "hooks");
   if (!existsSync(hooksDir)) {
     return [];
   }
@@ -263,17 +260,17 @@ export async function scanHooks(): Promise<HookInfo[]> {
   const entries = await readdir(hooksDir, { withFileTypes: true });
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
+    if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
 
     const hookPath = join(hooksDir, entry.name);
-    const content = await readFile(hookPath, 'utf-8');
+    const content = await readFile(hookPath, "utf-8");
 
     // Extract description from JSDoc or first comment
     const descMatch = content.match(/\/\*\*\s*\n\s*\*\s*([^\n]+)/);
-    const description = descMatch?.[1]?.trim() || entry.name.replace('.ts', '');
+    const description = descMatch?.[1]?.trim() || entry.name.replace(".ts", "");
 
     hooks.push({
-      name: entry.name.replace('.ts', ''),
+      name: entry.name.replace(".ts", ""),
       path: hookPath,
       eventType: determineHookEventType(entry.name, content),
       description,
@@ -290,7 +287,7 @@ export async function scanHooks(): Promise<HookInfo[]> {
 /**
  * Recursively count files and get directory info
  */
-async function scanDirectory(dirPath: string, depth: number = 0): Promise<DirectoryInfo | null> {
+async function scanDirectory(dirPath: string): Promise<DirectoryInfo | null> {
   if (!existsSync(dirPath)) {
     return null;
   }
@@ -300,7 +297,7 @@ async function scanDirectory(dirPath: string, depth: number = 0): Promise<Direct
   let fileCount = 0;
 
   for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
+    if (entry.name.startsWith(".")) continue;
 
     if (entry.isDirectory()) {
       subdirectories.push(entry.name);
@@ -325,7 +322,7 @@ async function countFilesAndSize(path: string): Promise<{ count: number; size: n
   let size = 0;
   const entries = await readdir(path, { withFileTypes: true });
   for (const e of entries) {
-    if (e.name.startsWith('.')) continue;
+    if (e.name.startsWith(".")) continue;
     const fullPath = join(path, e.name);
     if (e.isDirectory()) {
       const sub = await countFilesAndSize(fullPath);
@@ -337,7 +334,9 @@ async function countFilesAndSize(path: string): Promise<{ count: number; size: n
         const s = await stat(fullPath);
         size += s.size;
       } catch (err) {
-        console.warn(`[SystemScanner] stat failed for ${fullPath}: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(
+          `[SystemScanner] stat failed for ${fullPath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
         // File counted but size contribution = 0
       }
     }
@@ -349,7 +348,7 @@ async function countFilesAndSize(path: string): Promise<{ count: number; size: n
  * Scan MEMORY directory structure
  */
 export async function scanMemory(): Promise<MemoryInfo> {
-  const memoryDir = join(KAYA_DIR, 'MEMORY');
+  const memoryDir = join(getKayaHome(), "MEMORY");
   const directories: DirectoryInfo[] = [];
   const structure: Record<string, DirectoryInfo> = {};
   let totalFiles = 0;
@@ -362,7 +361,7 @@ export async function scanMemory(): Promise<MemoryInfo> {
   const topLevel = await readdir(memoryDir, { withFileTypes: true });
 
   for (const entry of topLevel) {
-    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
 
     const dirPath = join(memoryDir, entry.name);
     const info = await scanDirectory(dirPath);
@@ -388,32 +387,34 @@ export async function scanMemory(): Promise<MemoryInfo> {
  * Generate a hash of the system state for change detection
  */
 export async function generateSystemHash(): Promise<string> {
-  const hash = createHash('sha256');
+  const hash = createHash("sha256");
 
   // Hash skills directory structure using two-level scan
-  const skillsDir = join(KAYA_DIR, 'skills');
+  const skillsDir = join(getKayaHome(), "skills");
   if (existsSync(skillsDir)) {
-    const categories = (await readdir(skillsDir, { withFileTypes: true }))
-      .filter(e => e.isDirectory() && !e.name.startsWith('.'));
+    const categories = (await readdir(skillsDir, { withFileTypes: true })).filter(
+      (e) => e.isDirectory() && !e.name.startsWith("."),
+    );
 
     for (const cat of categories.sort((a, b) => a.name.localeCompare(b.name))) {
       const catPath = join(skillsDir, cat.name);
-      const subEntries = (await readdir(catPath, { withFileTypes: true }))
-        .filter(e => e.isDirectory() && !e.name.startsWith('.'));
+      const subEntries = (await readdir(catPath, { withFileTypes: true })).filter(
+        (e) => e.isDirectory() && !e.name.startsWith("."),
+      );
 
       // Check if any subdirectory has SKILL.md (category with nested skills)
-      const skillSubDirs = subEntries.filter(e => existsSync(join(catPath, e.name, 'SKILL.md')));
+      const skillSubDirs = subEntries.filter((e) => existsSync(join(catPath, e.name, "SKILL.md")));
 
       if (skillSubDirs.length > 0) {
         // Hash each nested skill's SKILL.md mtime
         for (const skill of skillSubDirs.sort((a, b) => a.name.localeCompare(b.name))) {
-          const skillMd = join(catPath, skill.name, 'SKILL.md');
+          const skillMd = join(catPath, skill.name, "SKILL.md");
           const s = await stat(skillMd);
           hash.update(`skill:${cat.name}/${skill.name}:mtime:${s.mtime.getTime()}`);
         }
       } else {
         // Leaf skill: hash category-level SKILL.md if present
-        const catSkillMd = join(catPath, 'SKILL.md');
+        const catSkillMd = join(catPath, "SKILL.md");
         if (existsSync(catSkillMd)) {
           const s = await stat(catSkillMd);
           hash.update(`skill:${cat.name}:mtime:${s.mtime.getTime()}`);
@@ -423,7 +424,7 @@ export async function generateSystemHash(): Promise<string> {
   }
 
   // Hash hooks directory structure
-  const hooksDir = join(KAYA_DIR, 'hooks');
+  const hooksDir = join(getKayaHome(), "hooks");
   if (existsSync(hooksDir)) {
     const hooks = await readdir(hooksDir);
     for (const hook of hooks.sort()) {
@@ -437,13 +438,13 @@ export async function generateSystemHash(): Promise<string> {
   }
 
   // Hash memory top-level structure
-  const memoryDir = join(KAYA_DIR, 'MEMORY');
+  const memoryDir = join(getKayaHome(), "MEMORY");
   if (existsSync(memoryDir)) {
     const memDirs = await readdir(memoryDir);
-    hash.update(`memory:${memDirs.sort().join(',')}`);
+    hash.update(`memory:${memDirs.sort().join(",")}`);
   }
 
-  return hash.digest('hex').substring(0, 16);
+  return hash.digest("hex").substring(0, 16);
 }
 
 /**
@@ -468,14 +469,14 @@ export async function fullScan(): Promise<SystemScan> {
   const hash = await generateSystemHash();
 
   // Calculate stats
-  const publicSkills = skills.filter(s => !s.isPrivate);
-  const privateSkills = skills.filter(s => s.isPrivate);
+  const publicSkills = skills.filter((s) => !s.isPrivate);
+  const privateSkills = skills.filter((s) => s.isPrivate);
   const totalWorkflows = skills.reduce((sum, s) => sum + s.workflowCount, 0);
   const totalTools = skills.reduce((sum, s) => sum + s.tools.length, 0);
 
   return {
     timestamp: new Date().toISOString(),
-    kayaDirectory: KAYA_DIR,
+    kayaDirectory: getKayaHome(),
     hash,
     skills,
     hooks,
@@ -497,44 +498,50 @@ export async function fullScan(): Promise<SystemScan> {
 
 async function main() {
   const args = process.argv.slice(2);
-  const command = args[0] || 'scan';
+  const command = args[0] || "scan";
 
   switch (command) {
-    case 'scan':
+    case "scan": {
       const scan = await fullScan();
       console.log(JSON.stringify(scan, null, 2));
       break;
+    }
 
-    case 'skills':
+    case "skills": {
       const skills = await scanSkills();
       console.log(JSON.stringify(skills, null, 2));
       break;
+    }
 
-    case 'hooks':
+    case "hooks": {
       const hooks = await scanHooks();
       console.log(JSON.stringify(hooks, null, 2));
       break;
+    }
 
-    case 'memory':
+    case "memory": {
       const memory = await scanMemory();
       console.log(JSON.stringify(memory, null, 2));
       break;
+    }
 
-    case 'hash':
+    case "hash": {
       const hash = await generateSystemHash();
       console.log(hash);
       break;
+    }
 
-    case 'changes':
+    case "changes": {
       const cachedHash = args[1];
       if (!cachedHash) {
-        console.error('Usage: SystemScanner.ts changes <cached-hash>');
+        console.error("Usage: SystemScanner.ts changes <cached-hash>");
         process.exit(1);
       }
       const changed = await detectChanges(cachedHash);
-      console.log(changed ? 'true' : 'false');
+      console.log(changed ? "true" : "false");
       process.exit(changed ? 0 : 1);
       break;
+    }
 
     default:
       console.log(`

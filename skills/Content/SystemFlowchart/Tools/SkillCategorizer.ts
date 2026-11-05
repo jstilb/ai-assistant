@@ -21,13 +21,13 @@
  *   bun SkillCategorizer.ts --diagram      # Output for diagram generation
  */
 
-import { scanSkills, type SkillInfo } from './SystemScanner.ts';
+import { scanSkills, type SkillInfo } from "./SystemScanner.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type SkillCategory = 'Meta' | 'Orchestration' | 'Specialized';
+export type SkillCategory = "Meta" | "Orchestration" | "Specialized";
 
 export interface CategorizedSkill extends SkillInfo {
   bucket: SkillCategory;
@@ -64,9 +64,9 @@ export interface CategorizationResult {
  * listed here defaults to Specialized. No description/trigger text is interpreted.
  */
 const CATEGORY_TO_BUCKET: Record<string, SkillCategory> = {
-  System: 'Meta',
-  Agents: 'Orchestration',
-  Automation: 'Orchestration',
+  System: "Meta",
+  Agents: "Orchestration",
+  Automation: "Orchestration",
 };
 
 // ============================================================================
@@ -77,10 +77,10 @@ const CATEGORY_TO_BUCKET: Record<string, SkillCategory> = {
  * Determine the display bucket of a skill from its ground-truth parent directory.
  */
 export function categorizeSkill(skill: SkillInfo): { bucket: SkillCategory; reason: string } {
-  const bucket = CATEGORY_TO_BUCKET[skill.category] ?? 'Specialized';
+  const bucket = CATEGORY_TO_BUCKET[skill.category] ?? "Specialized";
   const reason = skill.category
     ? `Parent directory category: ${skill.category}`
-    : 'No parent category directory found (defaults to Specialized)';
+    : "No parent category directory found (defaults to Specialized)";
   return { bucket, reason };
 }
 
@@ -90,7 +90,7 @@ export function categorizeSkill(skill: SkillInfo): { bucket: SkillCategory; reas
 export async function categorizeSkills(): Promise<CategorizationResult> {
   const skills = await scanSkills();
 
-  const categorized: CategorizedSkill[] = skills.map(skill => {
+  const categorized: CategorizedSkill[] = skills.map((skill) => {
     const { bucket, reason } = categorizeSkill(skill);
     return {
       ...skill,
@@ -100,26 +100,26 @@ export async function categorizeSkills(): Promise<CategorizationResult> {
   });
 
   // Group by bucket
-  const meta = categorized.filter(s => s.bucket === 'Meta');
-  const orchestration = categorized.filter(s => s.bucket === 'Orchestration');
-  const specialized = categorized.filter(s => s.bucket === 'Specialized');
+  const meta = categorized.filter((s) => s.bucket === "Meta");
+  const orchestration = categorized.filter((s) => s.bucket === "Orchestration");
+  const specialized = categorized.filter((s) => s.bucket === "Specialized");
 
   const categories: CategoryGroup[] = [
     {
-      category: 'Meta',
-      description: 'Skills about skills/system - infrastructure, configuration, visualization',
+      category: "Meta",
+      description: "Skills about skills/system - infrastructure, configuration, visualization",
       skills: meta,
       count: meta.length,
     },
     {
-      category: 'Orchestration',
-      description: 'Coordination/execution engines - multi-agent, workflows, scheduling',
+      category: "Orchestration",
+      description: "Coordination/execution engines - multi-agent, workflows, scheduling",
       skills: orchestration,
       count: orchestration.length,
     },
     {
-      category: 'Specialized',
-      description: 'Domain-specific functionality - research, automation, content',
+      category: "Specialized",
+      description: "Domain-specific functionality - research, automation, content",
       skills: specialized,
       count: specialized.length,
     },
@@ -129,9 +129,9 @@ export async function categorizeSkills(): Promise<CategorizationResult> {
     timestamp: new Date().toISOString(),
     categories,
     skillsByCategory: {
-      Meta: meta.map(s => s.name),
-      Orchestration: orchestration.map(s => s.name),
-      Specialized: specialized.map(s => s.name),
+      Meta: meta.map((s) => s.name),
+      Orchestration: orchestration.map((s) => s.name),
+      Specialized: specialized.map((s) => s.name),
     },
     stats: {
       total: skills.length,
@@ -154,8 +154,8 @@ export async function generateDiagramData(): Promise<string> {
 `;
 
   // Add Meta skills
-  for (const skill of result.categories[0].skills) {
-    const id = skill.name.replace(/[^a-zA-Z0-9]/g, '');
+  for (const skill of result.categories[0]?.skills ?? []) {
+    const id = skill.name.replace(/[^a-zA-Z0-9]/g, "");
     mermaid += `        ${id}["${skill.name}"]\n`;
   }
 
@@ -166,8 +166,8 @@ export async function generateDiagramData(): Promise<string> {
 `;
 
   // Add Orchestration skills
-  for (const skill of result.categories[1].skills) {
-    const id = skill.name.replace(/[^a-zA-Z0-9]/g, '');
+  for (const skill of result.categories[1]?.skills ?? []) {
+    const id = skill.name.replace(/[^a-zA-Z0-9]/g, "");
     mermaid += `        ${id}["${skill.name}"]\n`;
   }
 
@@ -178,11 +178,11 @@ export async function generateDiagramData(): Promise<string> {
 `;
 
   // Add Specialized skills (grouped in rows for readability)
-  const specialized = result.categories[2].skills;
+  const specialized = result.categories[2]?.skills ?? [];
   for (let i = 0; i < specialized.length; i += 4) {
     const row = specialized.slice(i, i + 4);
     for (const skill of row) {
-      const id = skill.name.replace(/[^a-zA-Z0-9]/g, '');
+      const id = skill.name.replace(/[^a-zA-Z0-9]/g, "");
       mermaid += `        ${id}["${skill.name}"]\n`;
     }
   }
@@ -204,8 +204,8 @@ export async function generateDiagramData(): Promise<string> {
 
 async function main() {
   const args = process.argv.slice(2);
-  const isJson = args.includes('--json');
-  const isDiagram = args.includes('--diagram');
+  const isJson = args.includes("--json");
+  const isDiagram = args.includes("--diagram");
 
   if (isDiagram) {
     const diagram = await generateDiagramData();
@@ -221,7 +221,7 @@ async function main() {
   }
 
   // Pretty print
-  console.log('\n📊 Kaya Skill Categorization\n');
+  console.log("\n📊 Kaya Skill Categorization\n");
   console.log(`Total Skills: ${result.stats.total}`);
   console.log(`  Meta: ${result.stats.meta}`);
   console.log(`  Orchestration: ${result.stats.orchestration}`);
@@ -231,7 +231,7 @@ async function main() {
     console.log(`\n## ${group.category} (${group.count})`);
     console.log(`${group.description}\n`);
     for (const skill of group.skills) {
-      const privateTag = skill.isPrivate ? ' [private]' : '';
+      const privateTag = skill.isPrivate ? " [private]" : "";
       console.log(`  - ${skill.name}${privateTag}`);
       console.log(`    Reason: ${skill.categoryReason}`);
     }

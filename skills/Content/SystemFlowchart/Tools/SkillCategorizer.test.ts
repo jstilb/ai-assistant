@@ -12,7 +12,8 @@
  * decision is driven solely by that ground-truth category, not by description/trigger keywords.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "node:path";
 import { scanSkills, type SkillInfo } from "./SystemScanner.ts";
 import { categorizeSkill } from "./SkillCategorizer.ts";
 
@@ -34,6 +35,20 @@ function makeSkill(overrides: Partial<SkillInfo>): SkillInfo {
 }
 
 describe("SystemScanner.scanSkills — ground-truth category", () => {
+  // Point the scanner at THIS checkout (not ~/.claude, which is not a Kaya tree on Linux/CI).
+  const REPO_ROOT = resolve(import.meta.dir, "../../../..");
+  const saved = { home: process.env.KAYA_HOME, dir: process.env.KAYA_DIR };
+  beforeAll(() => {
+    process.env.KAYA_HOME = REPO_ROOT;
+    process.env.KAYA_DIR = REPO_ROOT;
+  });
+  afterAll(() => {
+    if (saved.home === undefined) delete process.env.KAYA_HOME;
+    else process.env.KAYA_HOME = saved.home;
+    if (saved.dir === undefined) delete process.env.KAYA_DIR;
+    else process.env.KAYA_DIR = saved.dir;
+  });
+
   test("skills/Content/SystemFlowchart scans with category 'Content'", async () => {
     const skills = await scanSkills();
     const self = skills.find((s) => s.name === "SystemFlowchart");
@@ -76,8 +91,7 @@ describe("SkillCategorizer.categorizeSkill — ground-truth bucket mapping", () 
     const loadedWithMetaKeywords = makeSkill({
       category: "Content",
       name: "SystemFlowchart",
-      description:
-        "Kaya system architecture visualization. USE WHEN system audit, skill sync, architecture flowchart.",
+      description: "Kaya system architecture visualization. USE WHEN system audit, skill sync, architecture flowchart.",
       triggers: ["system diagram", "skill audit", "architecture sync"],
     });
     const { bucket, reason } = categorizeSkill(loadedWithMetaKeywords);

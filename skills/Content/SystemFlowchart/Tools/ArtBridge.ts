@@ -11,24 +11,24 @@
  *   bun ArtBridge.ts batch --input markdown/ --output images/
  */
 
-import { $ } from 'bun';
-import { readFile, writeFile, readdir, mkdir } from 'fs/promises';
-import { join, basename } from 'path';
-import { existsSync } from 'fs';
-import { generateAllDiagrams, type DiagramOutput, type DiagramSet } from './DiagramBuilder.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { $ } from "bun";
+import { readFile, readdir, mkdir } from "node:fs/promises";
+import { join, basename } from "node:path";
+import { existsSync } from "node:fs";
+import { generateAllDiagrams, type DiagramOutput } from "./DiagramBuilder.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
-const ART_GENERATE = join(KAYA_DIR, 'skills', 'Content', 'Art', 'Tools', 'Generate.ts');
+const ART_GENERATE = join(KAYA_DIR, "skills", "Content", "Art", "Tools", "Generate.ts");
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface GenerateOptions {
-  model?: 'nano-banana' | 'nano-banana-pro' | 'flux';
-  size?: '1K' | '2K' | '4K';
-  aspectRatio?: '16:9' | '1:1' | '21:9' | '3:2';
+  model?: "nano-banana" | "nano-banana-pro" | "flux";
+  size?: "1K" | "2K" | "4K";
+  aspectRatio?: "16:9" | "1:1" | "21:9" | "3:2";
   output: string;
 }
 
@@ -59,7 +59,7 @@ STYLE: Architect aesthetic — professional, approachable, hand-drawn quality li
 
 TYPOGRAPHY:
 - HEADER: Elegant wedge-serif italic font, large size, white color, top-left position. Text: "${title}"
-${subtitle ? `- SUBTITLE: Same wedge-serif regular weight, smaller size, light gray #CCCCCC color, below header. Text: "${subtitle}"` : ''}
+${subtitle ? `- SUBTITLE: Same wedge-serif regular weight, smaller size, light gray #CCCCCC color, below header. Text: "${subtitle}"` : ""}
 - LABELS: Geometric sans-serif font (Avenir-style), medium size, white color, for all component names
 - INSIGHTS: Condensed italic sans-serif, smaller size, Purple #4A148C or Teal #00796B, with asterisks like "*key insight*"
 
@@ -67,7 +67,7 @@ DIAGRAM CONTENT:
 ${diagramDescription}
 
 ELEMENTS TO INCLUDE:
-${elements.map(e => `- ${e}`).join('\n')}
+${elements.map((e) => `- ${e}`).join("\n")}
 
 COLOR PALETTE:
 - Background: Pure black #000000
@@ -90,37 +90,37 @@ function parseMermaidDiagram(mermaid: string): {
   nodes: string[];
   connections: string[];
 } {
-  const lines = mermaid.split('\n');
+  const lines = mermaid.split("\n");
   const subgraphs: string[] = [];
   const nodes: string[] = [];
   const connections: string[] = [];
-  let type = 'flowchart';
+  let type = "flowchart";
 
   for (const line of lines) {
     const trimmed = line.trim();
 
     // Detect diagram type
-    if (trimmed.startsWith('flowchart') || trimmed.startsWith('graph')) {
-      type = 'flowchart';
-    } else if (trimmed.startsWith('sequenceDiagram')) {
-      type = 'sequence';
+    if (trimmed.startsWith("flowchart") || trimmed.startsWith("graph")) {
+      type = "flowchart";
+    } else if (trimmed.startsWith("sequenceDiagram")) {
+      type = "sequence";
     }
 
     // Extract subgraph titles
     const subgraphMatch = trimmed.match(/subgraph\s+(\w+)\["([^"]+)"\]/);
     if (subgraphMatch) {
-      subgraphs.push(subgraphMatch[2]);
+      subgraphs.push(subgraphMatch[2] ?? "");
     }
 
     // Extract nodes
     const nodeMatch = trimmed.match(/(\w+)\["([^"]+)"\]/);
-    if (nodeMatch && !trimmed.startsWith('subgraph')) {
-      nodes.push(nodeMatch[2]);
+    if (nodeMatch && !trimmed.startsWith("subgraph")) {
+      nodes.push(nodeMatch[2] ?? "");
     }
 
     // Extract connections
-    if (trimmed.includes('-->') || trimmed.includes('->>')) {
-      connections.push(trimmed.replace(/-->|->>/g, '→'));
+    if (trimmed.includes("-->") || trimmed.includes("->>")) {
+      connections.push(trimmed.replace(/-->|->>/g, "→"));
     }
   }
 
@@ -135,7 +135,15 @@ function parseMermaidDiagram(mermaid: string): {
  * Generate a PNG diagram using Art skill's Generate.ts
  */
 export async function generateDiagram(options: DiagramGenerateOptions): Promise<string> {
-  const { title, subtitle, diagramContent, output, model = 'nano-banana-pro', size = '2K', aspectRatio = '16:9' } = options;
+  const {
+    title,
+    subtitle,
+    diagramContent,
+    output,
+    model = "nano-banana-pro",
+    size = "2K",
+    aspectRatio = "16:9",
+  } = options;
 
   // Parse the Mermaid content
   const parsed = parseMermaidDiagram(diagramContent);
@@ -146,9 +154,9 @@ export async function generateDiagram(options: DiagramGenerateOptions): Promise<
     subtitle,
     diagramDescription: `A ${parsed.type} diagram showing the Kaya system architecture.`,
     elements: [
-      ...parsed.subgraphs.map(s => `Section: ${s}`),
-      ...parsed.nodes.slice(0, 10).map(n => `Component: ${n}`),
-      ...(parsed.connections.length > 0 ? [`Key relationships: ${parsed.connections.slice(0, 5).join(', ')}`] : []),
+      ...parsed.subgraphs.map((s) => `Section: ${s}`),
+      ...parsed.nodes.slice(0, 10).map((n) => `Component: ${n}`),
+      ...(parsed.connections.length > 0 ? [`Key relationships: ${parsed.connections.slice(0, 5).join(", ")}`] : []),
     ],
   });
 
@@ -179,24 +187,24 @@ export async function generateDiagram(options: DiagramGenerateOptions): Promise<
 export async function generateFromDiagramOutput(
   diagram: DiagramOutput,
   outputDir: string,
-  options?: Partial<GenerateOptions>
+  options?: Partial<GenerateOptions>,
 ): Promise<string> {
   const outputPath = join(outputDir, `${diagram.name}.png`);
 
   // Extract title from name
   const title = diagram.name
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 
   return generateDiagram({
     title,
     subtitle: diagram.description,
     diagramContent: diagram.mermaid,
     output: outputPath,
-    model: options?.model || 'nano-banana-pro',
-    size: options?.size || '2K',
-    aspectRatio: options?.aspectRatio || '16:9',
+    model: options?.model || "nano-banana-pro",
+    size: options?.size || "2K",
+    aspectRatio: options?.aspectRatio || "16:9",
   });
 }
 
@@ -237,15 +245,15 @@ export async function batchConvert(inputDir: string, outputDir: string): Promise
   }
 
   const files = await readdir(inputDir);
-  const mdFiles = files.filter(f => f.endsWith('.md'));
+  const mdFiles = files.filter((f) => f.endsWith(".md"));
   const generated: string[] = [];
 
   for (const file of mdFiles) {
-    const content = await readFile(join(inputDir, file), 'utf-8');
+    const content = await readFile(join(inputDir, file), "utf-8");
 
     // Extract title from first heading
     const titleMatch = content.match(/^#\s+(.+)$/m);
-    const title = titleMatch?.[1] || basename(file, '.md');
+    const title = titleMatch?.[1] || basename(file, ".md");
 
     // Extract description (first paragraph after title)
     const descMatch = content.match(/^#\s+.+\n\n(.+)$/m);
@@ -253,18 +261,19 @@ export async function batchConvert(inputDir: string, outputDir: string): Promise
 
     // Extract Mermaid content
     const mermaidMatch = content.match(/```mermaid\n([\s\S]+?)\n```/);
-    if (!mermaidMatch) {
+    const mermaidContent = mermaidMatch?.[1];
+    if (mermaidContent === undefined) {
       console.log(`No Mermaid diagram found in ${file}, skipping`);
       continue;
     }
 
-    const outputPath = join(outputDir, basename(file, '.md') + '.png');
+    const outputPath = join(outputDir, basename(file, ".md") + ".png");
 
     try {
       await generateDiagram({
         title,
         subtitle,
-        diagramContent: mermaidMatch[1],
+        diagramContent: mermaidContent,
         output: outputPath,
       });
       generated.push(outputPath);
@@ -284,7 +293,7 @@ async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (!command || command === '--help' || command === '-h') {
+  if (!command || command === "--help" || command === "-h") {
     console.log(`
 ArtBridge - Generate PNG Diagrams via Art Skill
 
@@ -319,28 +328,28 @@ Options:
   };
 
   switch (command) {
-    case 'generate': {
-      const title = getArg('title');
-      const subtitle = getArg('subtitle');
-      const content = getArg('content');
-      const file = getArg('file');
-      const output = getArg('output');
-      const model = getArg('model') as GenerateOptions['model'];
-      const size = getArg('size') as GenerateOptions['size'];
-      const aspectRatio = getArg('aspect-ratio') as GenerateOptions['aspectRatio'];
+    case "generate": {
+      const title = getArg("title");
+      const subtitle = getArg("subtitle");
+      const content = getArg("content");
+      const file = getArg("file");
+      const output = getArg("output");
+      const model = getArg("model") as GenerateOptions["model"];
+      const size = getArg("size") as GenerateOptions["size"];
+      const aspectRatio = getArg("aspect-ratio") as GenerateOptions["aspectRatio"];
 
       if (!title || !output) {
-        console.error('Required: --title and --output');
+        console.error("Required: --title and --output");
         process.exit(1);
       }
 
       let diagramContent = content;
       if (file) {
-        diagramContent = await readFile(file, 'utf-8');
+        diagramContent = await readFile(file, "utf-8");
       }
 
       if (!diagramContent) {
-        console.error('Required: --content or --file');
+        console.error("Required: --content or --file");
         process.exit(1);
       }
 
@@ -356,12 +365,12 @@ Options:
       break;
     }
 
-    case 'batch': {
-      const input = getArg('input');
-      const output = getArg('output');
+    case "batch": {
+      const input = getArg("input");
+      const output = getArg("output");
 
       if (!input || !output) {
-        console.error('Required: --input and --output');
+        console.error("Required: --input and --output");
         process.exit(1);
       }
 
@@ -370,8 +379,8 @@ Options:
       break;
     }
 
-    case 'all': {
-      const output = getArg('output') || join(KAYA_DIR, 'skills', 'Content', 'SystemFlowchart', 'Output', 'images');
+    case "all": {
+      const output = getArg("output") || join(KAYA_DIR, "skills", "Content", "SystemFlowchart", "Output", "images");
       const generated = await generateAllPNGs(output);
       console.log(`\nGenerated ${generated.length} PNG diagrams to ${output}`);
       break;

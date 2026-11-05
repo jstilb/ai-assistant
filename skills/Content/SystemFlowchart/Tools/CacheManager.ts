@@ -12,15 +12,15 @@
  *   bun CacheManager.ts invalidate          # Force invalidate cache
  */
 
-import { readFile, writeFile, stat, readdir, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
-import { createHash } from 'crypto';
-import { generateSystemHash } from './SystemScanner.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { generateSystemHash } from "./SystemScanner.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
-const CACHE_FILE = join(KAYA_DIR, 'skills', 'Content', 'SystemFlowchart', 'Output', '.cache-state.json');
+const CACHE_FILE = join(KAYA_DIR, "skills", "Content", "SystemFlowchart", "Output", ".cache-state.json");
 
 // ============================================================================
 // Types
@@ -39,7 +39,7 @@ export interface CacheState {
 
 export interface GeneratedFile {
   path: string;
-  type: 'markdown' | 'png';
+  type: "markdown" | "png";
   generatedAt: string;
   hash: string;
 }
@@ -66,7 +66,7 @@ export async function loadCacheState(): Promise<CacheState | null> {
   }
 
   try {
-    const content = await readFile(CACHE_FILE, 'utf-8');
+    const content = await readFile(CACHE_FILE, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
@@ -77,7 +77,7 @@ export async function loadCacheState(): Promise<CacheState | null> {
  * Save cache state to file
  */
 export async function saveCacheState(state: CacheState): Promise<void> {
-  const dir = join(KAYA_DIR, 'skills', 'Content', 'SystemFlowchart', 'Output');
+  const dir = join(KAYA_DIR, "skills", "Content", "SystemFlowchart", "Output");
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
   }
@@ -90,11 +90,11 @@ export async function saveCacheState(state: CacheState): Promise<void> {
  */
 async function hashFile(filePath: string): Promise<string> {
   if (!existsSync(filePath)) {
-    return 'missing';
+    return "missing";
   }
 
   const content = await readFile(filePath);
-  return createHash('sha256').update(content).digest('hex').substring(0, 16);
+  return createHash("sha256").update(content).digest("hex").substring(0, 16);
 }
 
 /**
@@ -106,7 +106,7 @@ async function countDirectory(dirPath: string): Promise<number> {
   }
 
   const entries = await readdir(dirPath, { withFileTypes: true });
-  return entries.filter(e => !e.name.startsWith('.')).length;
+  return entries.filter((e) => !e.name.startsWith(".")).length;
 }
 
 /**
@@ -128,9 +128,9 @@ async function checkGeneratedFiles(files: GeneratedFile[]): Promise<string[]> {
  * Get current system stats for comparison
  */
 async function getCurrentStats(): Promise<{ skillCount: number; hookCount: number; memoryDirs: number }> {
-  const skillCount = await countDirectory(join(KAYA_DIR, 'skills'));
-  const hookCount = await countDirectory(join(KAYA_DIR, 'hooks'));
-  const memoryDirs = await countDirectory(join(KAYA_DIR, 'MEMORY'));
+  const skillCount = await countDirectory(join(KAYA_DIR, "skills"));
+  const hookCount = await countDirectory(join(KAYA_DIR, "hooks"));
+  const memoryDirs = await countDirectory(join(KAYA_DIR, "MEMORY"));
 
   return { skillCount, hookCount, memoryDirs };
 }
@@ -138,9 +138,7 @@ async function getCurrentStats(): Promise<{ skillCount: number; hookCount: numbe
 /**
  * Check if cache is stale and regeneration is needed
  */
-export async function checkCacheStatus(
-  hashFn: () => Promise<string> = generateSystemHash
-): Promise<CacheStatus> {
+export async function checkCacheStatus(hashFn: () => Promise<string> = generateSystemHash): Promise<CacheStatus> {
   const currentHash = await hashFn();
   const cached = await loadCacheState();
 
@@ -148,7 +146,7 @@ export async function checkCacheStatus(
   if (!cached) {
     return {
       isStale: true,
-      reason: 'No cache exists - first generation needed',
+      reason: "No cache exists - first generation needed",
       lastGenerated: null,
       currentHash,
       cachedHash: null,
@@ -160,7 +158,7 @@ export async function checkCacheStatus(
   if (cached.systemHash !== currentHash) {
     return {
       isStale: true,
-      reason: 'System hash changed - skills, hooks, or memory modified',
+      reason: "System hash changed - skills, hooks, or memory modified",
       lastGenerated: cached.lastGenerated,
       currentHash,
       cachedHash: cached.systemHash,
@@ -189,7 +187,7 @@ export async function checkCacheStatus(
   ) {
     return {
       isStale: true,
-      reason: 'Significant change in skill or hook count',
+      reason: "Significant change in skill or hook count",
       lastGenerated: cached.lastGenerated,
       currentHash,
       cachedHash: cached.systemHash,
@@ -200,7 +198,7 @@ export async function checkCacheStatus(
   // Cache is fresh
   return {
     isStale: false,
-    reason: 'Cache is up to date',
+    reason: "Cache is up to date",
     lastGenerated: cached.lastGenerated,
     currentHash,
     cachedHash: cached.systemHash,
@@ -213,7 +211,7 @@ export async function checkCacheStatus(
  */
 export async function updateCache(
   generatedFiles: string[],
-  hashFn: () => Promise<string> = generateSystemHash
+  hashFn: () => Promise<string> = generateSystemHash,
 ): Promise<CacheState> {
   const systemHash = await hashFn();
   const stats = await getCurrentStats();
@@ -223,7 +221,7 @@ export async function updateCache(
     const fileHash = await hashFile(filePath);
     files.push({
       path: filePath,
-      type: filePath.endsWith('.png') ? 'png' : 'markdown',
+      type: filePath.endsWith(".png") ? "png" : "markdown",
       generatedAt: new Date().toISOString(),
       hash: fileHash,
     });
@@ -246,7 +244,7 @@ export async function updateCache(
 export async function invalidateCache(): Promise<void> {
   const cached = await loadCacheState();
   if (cached) {
-    cached.systemHash = 'invalidated';
+    cached.systemHash = "invalidated";
     await saveCacheState(cached);
   }
 }
@@ -263,10 +261,10 @@ function timeSince(dateString: string): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-  return 'just now';
+  if (days > 0) return `${days} day${days > 1 ? "s" : ""} ago`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+  return "just now";
 }
 
 // ============================================================================
@@ -275,24 +273,24 @@ function timeSince(dateString: string): string {
 
 async function main() {
   const args = process.argv.slice(2);
-  const command = args[0] || 'status';
+  const command = args[0] || "status";
 
   switch (command) {
-    case 'status': {
+    case "status": {
       const status = await checkCacheStatus();
       const cached = await loadCacheState();
 
-      console.log('\n📊 SystemFlowchart Cache Status\n');
+      console.log("\n📊 SystemFlowchart Cache Status\n");
 
       if (status.isStale) {
-        console.log('⚠️  Status: STALE (regeneration needed)');
+        console.log("⚠️  Status: STALE (regeneration needed)");
         console.log(`   Reason: ${status.reason}`);
       } else {
-        console.log('✅ Status: FRESH (no regeneration needed)');
+        console.log("✅ Status: FRESH (no regeneration needed)");
       }
 
       console.log(`\n   Current hash: ${status.currentHash}`);
-      console.log(`   Cached hash:  ${status.cachedHash || 'none'}`);
+      console.log(`   Cached hash:  ${status.cachedHash || "none"}`);
 
       if (status.lastGenerated) {
         console.log(`   Last generated: ${timeSince(status.lastGenerated)}`);
@@ -300,8 +298,8 @@ async function main() {
 
       if (cached) {
         console.log(`\n   Generated files: ${cached.generatedFiles.length}`);
-        console.log(`   - Markdown: ${cached.generatedFiles.filter(f => f.type === 'markdown').length}`);
-        console.log(`   - PNG: ${cached.generatedFiles.filter(f => f.type === 'png').length}`);
+        console.log(`   - Markdown: ${cached.generatedFiles.filter((f) => f.type === "markdown").length}`);
+        console.log(`   - PNG: ${cached.generatedFiles.filter((f) => f.type === "png").length}`);
 
         console.log(`\n   System stats when generated:`);
         console.log(`   - Skills: ${cached.stats.skillCount}`);
@@ -319,34 +317,34 @@ async function main() {
       break;
     }
 
-    case 'check': {
+    case "check": {
       const status = await checkCacheStatus();
       if (status.isStale) {
         console.log(`Stale: ${status.reason}`);
         process.exit(0); // Exit 0 = stale, regeneration needed
       } else {
-        console.log('Fresh: No regeneration needed');
+        console.log("Fresh: No regeneration needed");
         process.exit(1); // Exit 1 = fresh, skip regeneration
       }
       break;
     }
 
-    case 'update': {
-      const outputDir = join(KAYA_DIR, 'skills', 'Content', 'SystemFlowchart', 'Output');
+    case "update": {
+      const outputDir = join(KAYA_DIR, "skills", "Content", "SystemFlowchart", "Output");
       const files: string[] = [];
 
       // Collect markdown files
-      const mdDir = join(outputDir, 'markdown');
+      const mdDir = join(outputDir, "markdown");
       if (existsSync(mdDir)) {
         const mdFiles = await readdir(mdDir);
-        files.push(...mdFiles.filter(f => f.endsWith('.md')).map(f => join(mdDir, f)));
+        files.push(...mdFiles.filter((f) => f.endsWith(".md")).map((f) => join(mdDir, f)));
       }
 
       // Collect image files
-      const imgDir = join(outputDir, 'images');
+      const imgDir = join(outputDir, "images");
       if (existsSync(imgDir)) {
         const imgFiles = await readdir(imgDir);
-        files.push(...imgFiles.filter(f => f.endsWith('.png')).map(f => join(imgDir, f)));
+        files.push(...imgFiles.filter((f) => f.endsWith(".png")).map((f) => join(imgDir, f)));
       }
 
       const state = await updateCache(files);
@@ -355,13 +353,13 @@ async function main() {
       break;
     }
 
-    case 'invalidate': {
+    case "invalidate": {
       await invalidateCache();
-      console.log('✅ Cache invalidated - next check will trigger regeneration');
+      console.log("✅ Cache invalidated - next check will trigger regeneration");
       break;
     }
 
-    case 'hash': {
+    case "hash": {
       const hash = await generateSystemHash();
       console.log(hash);
       break;

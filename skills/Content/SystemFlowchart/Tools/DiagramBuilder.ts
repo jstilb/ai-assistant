@@ -13,12 +13,12 @@
  *   bun DiagramBuilder.ts all              # Generate all diagrams
  */
 
-import { fullScan, type SystemScan, type HookInfo } from './SystemScanner.ts';
-import { categorizeSkills, type CategorizationResult } from './SkillCategorizer.ts';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { fullScan, type SystemScan, type HookInfo } from "./SystemScanner.ts";
+import { categorizeSkills, type CategorizationResult } from "./SkillCategorizer.ts";
+import { writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
 
@@ -28,7 +28,7 @@ const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
 
 export interface DiagramOutput {
   name: string;
-  type: 'flowchart' | 'sequence' | 'classDiagram' | 'graph';
+  type: "flowchart" | "sequence" | "classDiagram" | "graph";
   mermaid: string;
   description: string;
 }
@@ -89,10 +89,10 @@ export async function buildSystemOverview(scan: SystemScan): Promise<DiagramOutp
     class TaskAgents,NamedAgents agents`;
 
   return {
-    name: 'system-overview',
-    type: 'flowchart',
+    name: "system-overview",
+    type: "flowchart",
     mermaid,
-    description: 'High-level Kaya system architecture showing core components and relationships',
+    description: "High-level Kaya system architecture showing core components and relationships",
   };
 }
 
@@ -103,17 +103,16 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
   // Group hooks by event type
   const byEvent: Record<string, HookInfo[]> = {};
   for (const hook of hooks) {
-    if (!byEvent[hook.eventType]) {
-      byEvent[hook.eventType] = [];
-    }
-    byEvent[hook.eventType].push(hook);
+    const group = byEvent[hook.eventType] ?? [];
+    group.push(hook);
+    byEvent[hook.eventType] = group;
   }
 
-  const sessionStartHooks = byEvent['SessionStart'] || [];
-  const promptSubmitHooks = byEvent['UserPromptSubmit'] || [];
-  const preToolHooks = byEvent['PreToolUse'] || [];
-  const stopHooks = byEvent['Stop'] || [];
-  const sessionEndHooks = byEvent['SessionEnd'] || [];
+  const sessionStartHooks = byEvent["SessionStart"] || [];
+  const promptSubmitHooks = byEvent["UserPromptSubmit"] || [];
+  const preToolHooks = byEvent["PreToolUse"] || [];
+  const stopHooks = byEvent["Stop"] || [];
+  const sessionEndHooks = byEvent["SessionEnd"] || [];
 
   const mermaid = `sequenceDiagram
     participant U as User
@@ -127,7 +126,7 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
 
     rect rgb(30, 58, 95)
     Note right of CC: SessionStart Event
-    ${sessionStartHooks.map(h => `    CC->>H: ${h.name}`).join('\n    ')}
+    ${sessionStartHooks.map((h) => `    CC->>H: ${h.name}`).join("\n    ")}
     H->>V: Voice greeting
     H->>CC: Load CORE context
     end
@@ -136,7 +135,7 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
 
     rect rgb(6, 78, 59)
     Note right of CC: UserPromptSubmit Event
-    ${promptSubmitHooks.map(h => `    CC->>H: ${h.name}`).join('\n    ')}
+    ${promptSubmitHooks.map((h) => `    CC->>H: ${h.name}`).join("\n    ")}
     H->>M: Rating/sentiment capture
     end
 
@@ -144,7 +143,7 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
 
     rect rgb(76, 29, 149)
     Note right of CC: PreToolUse Event
-    ${preToolHooks.map(h => `    CC->>H: ${h.name}`).join('\n    ')}
+    ${preToolHooks.map((h) => `    CC->>H: ${h.name}`).join("\n    ")}
     H->>CC: Security validation
     end
 
@@ -153,7 +152,7 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
 
     rect rgb(124, 45, 18)
     Note right of CC: Stop Event
-    ${stopHooks.map(h => `    CC->>H: ${h.name}`).join('\n    ')}
+    ${stopHooks.map((h) => `    CC->>H: ${h.name}`).join("\n    ")}
     H->>V: Voice completion
     end
 
@@ -161,15 +160,15 @@ export async function buildSessionLifecycle(hooks: HookInfo[]): Promise<DiagramO
 
     rect rgb(51, 65, 85)
     Note right of CC: SessionEnd Event
-    ${sessionEndHooks.map(h => `    CC->>H: ${h.name}`).join('\n    ')}
+    ${sessionEndHooks.map((h) => `    CC->>H: ${h.name}`).join("\n    ")}
     H->>M: Session summary capture
     end`;
 
   return {
-    name: 'session-lifecycle',
-    type: 'sequence',
+    name: "session-lifecycle",
+    type: "sequence",
     mermaid,
-    description: 'Session lifecycle showing hook execution order from start to end',
+    description: "Session lifecycle showing hook execution order from start to end",
   };
 }
 
@@ -182,21 +181,27 @@ export async function buildSkillEcosystem(categories: CategorizationResult): Pro
   const specSkills = categories.skillsByCategory.Specialized;
 
   // Build subgraphs for each category
-  const metaNodes = metaSkills.map(s => {
-    const id = s.replace(/[^a-zA-Z0-9]/g, '');
-    return `        ${id}["${s}"]`;
-  }).join('\n');
+  const metaNodes = metaSkills
+    .map((s) => {
+      const id = s.replace(/[^a-zA-Z0-9]/g, "");
+      return `        ${id}["${s}"]`;
+    })
+    .join("\n");
 
-  const orchNodes = orchSkills.map(s => {
-    const id = s.replace(/[^a-zA-Z0-9]/g, '');
-    return `        ${id}["${s}"]`;
-  }).join('\n');
+  const orchNodes = orchSkills
+    .map((s) => {
+      const id = s.replace(/[^a-zA-Z0-9]/g, "");
+      return `        ${id}["${s}"]`;
+    })
+    .join("\n");
 
   // Group specialized skills for readability (max 6 per row)
-  const specNodes = specSkills.map(s => {
-    const id = s.replace(/[^a-zA-Z0-9]/g, '');
-    return `        ${id}["${s}"]`;
-  }).join('\n');
+  const specNodes = specSkills
+    .map((s) => {
+      const id = s.replace(/[^a-zA-Z0-9]/g, "");
+      return `        ${id}["${s}"]`;
+    })
+    .join("\n");
 
   const mermaid = `flowchart TB
     subgraph Meta["Meta Skills (${metaSkills.length})"]
@@ -226,15 +231,15 @@ ${specNodes}
     classDef orch fill:#4c1d95,stroke:#c4b5fd,color:#fff
     classDef spec fill:#064e3b,stroke:#6ee7b7,color:#fff
 
-    class ${metaSkills.map(s => s.replace(/[^a-zA-Z0-9]/g, '')).join(',')} meta
-    class ${orchSkills.map(s => s.replace(/[^a-zA-Z0-9]/g, '')).join(',')} orch
-    class ${specSkills.map(s => s.replace(/[^a-zA-Z0-9]/g, '')).join(',')} spec`;
+    class ${metaSkills.map((s) => s.replace(/[^a-zA-Z0-9]/g, "")).join(",")} meta
+    class ${orchSkills.map((s) => s.replace(/[^a-zA-Z0-9]/g, "")).join(",")} orch
+    class ${specSkills.map((s) => s.replace(/[^a-zA-Z0-9]/g, "")).join(",")} spec`;
 
   return {
-    name: 'skill-ecosystem',
-    type: 'flowchart',
+    name: "skill-ecosystem",
+    type: "flowchart",
     mermaid,
-    description: 'Skill ecosystem organized by Meta/Orchestration/Specialized categories',
+    description: "Skill ecosystem organized by Meta/Orchestration/Specialized categories",
   };
 }
 
@@ -242,51 +247,79 @@ ${specNodes}
  * Build memory structure diagram
  */
 export async function buildMemoryStructure(scan: SystemScan): Promise<DiagramOutput> {
-  const memDirs = scan.memory.directories.map(d => d.name);
+  const memDirs = scan.memory.directories.map((d) => d.name);
 
   const mermaid = `flowchart TB
     subgraph MEMORY["MEMORY/ (${scan.memory.totalFiles} files)"]
         direction TB
 
-        ${memDirs.includes('WORK') ? `subgraph WORK["WORK/"]
+        ${
+          memDirs.includes("WORK")
+            ? `subgraph WORK["WORK/"]
             WorkSession["Session directories"]
             WorkMeta["META.yaml"]
             WorkIdeal["IDEAL.md"]
             WorkItems["items/"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('LEARNING') ? `subgraph LEARNING["LEARNING/"]
+        ${
+          memDirs.includes("LEARNING")
+            ? `subgraph LEARNING["LEARNING/"]
             Signals["SIGNALS/"]
             Ratings["ratings.jsonl"]
             Algorithm["ALGORITHM/"]
             Patterns["PATTERNS/"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('State') ? `subgraph STATE["State/"]
+        ${
+          memDirs.includes("State")
+            ? `subgraph STATE["State/"]
             CurrentWork["current-work.json"]
             IntegrityState["integrity-state.json"]
             TabTitle["tab-title.json"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('MAINTENANCE') ? `subgraph MAINTENANCE["MAINTENANCE/"]
+        ${
+          memDirs.includes("MAINTENANCE")
+            ? `subgraph MAINTENANCE["MAINTENANCE/"]
             Daily["daily/"]
             Weekly["weekly/"]
             Monthly["monthly/"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('VALIDATION') ? `subgraph VALIDATION["VALIDATION/"]
+        ${
+          memDirs.includes("VALIDATION")
+            ? `subgraph VALIDATION["VALIDATION/"]
             Evals["evals/ (eval results)"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('research') ? `subgraph RESEARCH["research/"]
+        ${
+          memDirs.includes("research")
+            ? `subgraph RESEARCH["research/"]
             ResearchOut["Agent research outputs"]
-        end` : ''}
+        end`
+            : ""
+        }
 
-        ${memDirs.includes('KNOWLEDGE') ? `subgraph KNOWLEDGE["KNOWLEDGE/"]
+        ${
+          memDirs.includes("KNOWLEDGE")
+            ? `subgraph KNOWLEDGE["KNOWLEDGE/"]
             KnowDaily["daily/"]
             KnowWeekly["weekly/"]
             KnowMonthly["monthly/"]
-        end` : ''}
+        end`
+            : ""
+        }
     end
 
     %% Data flows
@@ -299,10 +332,10 @@ export async function buildMemoryStructure(scan: SystemScan): Promise<DiagramOut
     classDef flow fill:#1e3a5f,stroke:#93c5fd,color:#fff`;
 
   return {
-    name: 'memory-structure',
-    type: 'flowchart',
+    name: "memory-structure",
+    type: "flowchart",
     mermaid,
-    description: 'MEMORY/ directory organization and data flow',
+    description: "MEMORY/ directory organization and data flow",
   };
 }
 
@@ -349,10 +382,10 @@ export async function buildConfigurationFlow(): Promise<DiagramOutput> {
     class UserResponse,UserSecurity,UserSkills,UserCustom user`;
 
   return {
-    name: 'configuration-flow',
-    type: 'flowchart',
+    name: "configuration-flow",
+    type: "flowchart",
     mermaid,
-    description: 'Configuration inheritance from settings.json through SYSTEM/USER tiers',
+    description: "Configuration inheritance from settings.json through SYSTEM/USER tiers",
   };
 }
 
@@ -402,10 +435,10 @@ export async function buildAgentArchitecture(): Promise<DiagramOutput> {
     classDef named fill:#7c2d12,stroke:#fdba74,color:#fff`;
 
   return {
-    name: 'agent-architecture',
-    type: 'flowchart',
+    name: "agent-architecture",
+    type: "flowchart",
     mermaid,
-    description: 'Agent system showing Task subagents, research agents, custom agents, and named agents',
+    description: "Agent system showing Task subagents, research agents, custom agents, and named agents",
   };
 }
 
@@ -439,7 +472,7 @@ export async function generateAllDiagrams(): Promise<DiagramSet> {
  * Save diagrams to Output directory as markdown files
  */
 export async function saveDiagrams(set: DiagramSet, outputDir?: string): Promise<string[]> {
-  const dir = outputDir || join(KAYA_DIR, 'skills', 'Content', 'SystemFlowchart', 'Output', 'markdown');
+  const dir = outputDir || join(KAYA_DIR, "skills", "Content", "SystemFlowchart", "Output", "markdown");
 
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
@@ -448,7 +481,7 @@ export async function saveDiagrams(set: DiagramSet, outputDir?: string): Promise
   const savedFiles: string[] = [];
 
   for (const diagram of set.diagrams) {
-    const content = `# ${diagram.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+    const content = `# ${diagram.name.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
 
 ${diagram.description}
 
@@ -473,7 +506,7 @@ ${diagram.mermaid}
 
 async function main() {
   const args = process.argv.slice(2);
-  const command = args[0] || 'all';
+  const command = args[0] || "all";
 
   const scan = await fullScan();
   const categories = await categorizeSkills();
@@ -481,44 +514,46 @@ async function main() {
   let diagram: DiagramOutput | null = null;
 
   switch (command) {
-    case 'overview':
+    case "overview":
       diagram = await buildSystemOverview(scan);
       break;
 
-    case 'lifecycle':
+    case "lifecycle":
       diagram = await buildSessionLifecycle(scan.hooks);
       break;
 
-    case 'ecosystem':
+    case "ecosystem":
       diagram = await buildSkillEcosystem(categories);
       break;
 
-    case 'memory':
+    case "memory":
       diagram = await buildMemoryStructure(scan);
       break;
 
-    case 'config':
+    case "config":
       diagram = await buildConfigurationFlow();
       break;
 
-    case 'agents':
+    case "agents":
       diagram = await buildAgentArchitecture();
       break;
 
-    case 'all':
+    case "all": {
       const set = await generateAllDiagrams();
       const savedFiles = await saveDiagrams(set);
-      console.log('Generated diagrams:');
+      console.log("Generated diagrams:");
       for (const file of savedFiles) {
         console.log(`  - ${file}`);
       }
       console.log(`\nTotal: ${savedFiles.length} diagrams`);
       return;
+    }
 
-    case '--json':
+    case "--json": {
       const allDiagrams = await generateAllDiagrams();
       console.log(JSON.stringify(allDiagrams, null, 2));
       return;
+    }
 
     default:
       console.log(`
@@ -540,9 +575,9 @@ Usage:
   if (diagram) {
     console.log(`# ${diagram.name}\n`);
     console.log(`${diagram.description}\n`);
-    console.log('```mermaid');
+    console.log("```mermaid");
     console.log(diagram.mermaid);
-    console.log('```');
+    console.log("```");
   }
 }
 
