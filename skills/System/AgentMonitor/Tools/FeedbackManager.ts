@@ -2,7 +2,7 @@
 /**
  * FeedbackManager - Pattern-based corrective feedback for agents
  *
- * Detects error patterns, tool inefficiencies, and decision quality issues
+ * Detects error patterns and resource-use issues
  * in trace data, then generates structured feedback messages appended to
  * each agent's feedback file for optional consumption.
  *
@@ -12,29 +12,29 @@
  *   const feedback = manager.analyze(agentId, traces);
  */
 
-import { existsSync, mkdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import type { AgentTrace } from './TraceCollector.ts';
-import { auditLog } from './AuditLogger.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createAppendLog, type AppendLog } from '../../../../lib/core/AppendLog.ts';
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { AgentTrace } from "./TraceCollector.ts";
+import { auditLog } from "./AuditLogger.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type FeedbackCategory =
-  | 'error_recovery'
-  | 'tool_efficiency'
-  | 'decision_quality'
-  | 'compliance'
-  | 'resource_optimization';
+export type FeedbackCategory =
+  | "error_recovery"
+  | "tool_efficiency"
+  | "decision_quality"
+  | "compliance"
+  | "resource_optimization";
 
 interface FeedbackMessage {
   timestamp: number;
   feedbackId: string;
   category: FeedbackCategory;
-  severity: 'info' | 'warning';
+  severity: "info" | "warning";
   agentId: string;
   pattern: string;
   suggestion: string;
@@ -44,8 +44,6 @@ interface FeedbackMessage {
 interface FeedbackManagerConfig {
   /** Min consecutive errors of same type before generating feedback */
   errorPatternThreshold: number;
-  /** Min redundant tool calls before efficiency feedback */
-  toolRedundancyThreshold: number;
   /** Cooldown between same feedback category (ms) */
   feedbackCooldownMs: number;
   /** Max feedback messages per agent per hour */
@@ -70,11 +68,10 @@ interface FeedbackManager {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const FEEDBACK_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'feedback');
+const FEEDBACK_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "feedback");
 
 const DEFAULT_CONFIG: FeedbackManagerConfig = {
   errorPatternThreshold: 5,
-  toolRedundancyThreshold: 8,
   feedbackCooldownMs: 300000,
   maxFeedbackPerHour: 10,
 };
@@ -92,99 +89,57 @@ interface FeedbackTemplate {
 
 const TEMPLATES: FeedbackTemplate[] = [
   {
-    category: 'error_recovery',
-    pattern: 'consecutive_file_errors',
+    category: "error_recovery",
+    pattern: "consecutive_file_errors",
     detect(traces) {
-      const errors = traces.filter(t => t.eventType === 'error');
-      const fileErrors = errors.filter(t =>
-        (t.metadata.errorMessage || '').includes('not found') ||
-        (t.metadata.errorMessage || '').includes('ENOENT') ||
-        (t.metadata.errorMessage || '').includes('FileNotFound')
+      const errors = traces.filter((t) => t.eventType === "error");
+      const fileErrors = errors.filter(
+        (t) =>
+          (t.metadata.errorMessage || "").includes("not found") ||
+          (t.metadata.errorMessage || "").includes("ENOENT") ||
+          (t.metadata.errorMessage || "").includes("FileNotFound"),
       );
       if (fileErrors.length >= 3) {
         return {
           match: true,
           evidence: {
-            errorType: 'FileNotFoundError',
+            errorType: "FileNotFoundError",
             occurrences: fileErrors.length,
-            files: fileErrors.map(e => e.metadata.errorMessage).slice(-5),
+            files: fileErrors.map((e) => e.metadata.errorMessage).slice(-5),
           },
         };
       }
       return null;
     },
-    suggest: () => 'Before calling ReadFile, verify file exists with Glob or ls to avoid FileNotFound errors.',
+    suggest: () => "Before calling ReadFile, verify file exists with Glob or ls to avoid FileNotFound errors.",
   },
   {
-    category: 'error_recovery',
-    pattern: 'consecutive_errors_same_type',
+    category: "error_recovery",
+    pattern: "consecutive_errors_same_type",
     detect(traces) {
-      const errors = traces.filter(t => t.eventType === 'error');
+      const errors = traces.filter((t) => t.eventType === "error");
       if (errors.length < 5) return null;
       const recent = errors.slice(-5);
-      const types = recent.map(e => (e.metadata.errorMessage || '').split(':')[0]);
-      const allSame = types.every(t => t === types[0]);
+      const types = recent.map((e) => (e.metadata.errorMessage || "").split(":")[0]);
+      const allSame = types.every((t) => t === types[0]);
       if (allSame) {
         return {
           match: true,
           evidence: {
             errorType: types[0],
             occurrences: recent.length,
-            messages: recent.map(e => e.metadata.errorMessage).slice(-3),
+            messages: recent.map((e) => e.metadata.errorMessage).slice(-3),
           },
         };
       }
       return null;
     },
-    suggest: (evidence) => `Detected ${evidence.occurrences} consecutive "${evidence.errorType}" errors. Consider a different approach or checking preconditions before retrying.`,
+    suggest: (evidence) =>
+      `Detected ${evidence.occurrences} consecutive "${evidence.errorType}" errors. Consider a different approach or checking preconditions before retrying.`,
   },
   {
-    category: 'tool_efficiency',
-    pattern: 'redundant_read_calls',
-    detect(traces) {
-      const reads = traces.filter(t => t.eventType === 'tool_call' && t.metadata.toolName === 'Read');
-      if (reads.length < 5) return null;
-      const fileCounts = new Map<string, number>();
-      for (const r of reads) {
-        const file = String(r.metadata.args?.file_path || 'unknown');
-        fileCounts.set(file, (fileCounts.get(file) || 0) + 1);
-      }
-      const redundant = Array.from(fileCounts.entries()).filter(([, count]) => count >= 3);
-      if (redundant.length > 0) {
-        return {
-          match: true,
-          evidence: {
-            redundantFiles: redundant.map(([file, count]) => ({ file, count })),
-            totalReads: reads.length,
-          },
-        };
-      }
-      return null;
-    },
-    suggest: (evidence) => {
-      const files = (evidence.redundantFiles as { file: string; count: number }[]);
-      return `File "${files[0]?.file}" read ${files[0]?.count} times. Cache the content in memory instead of re-reading.`;
-    },
-  },
-  {
-    category: 'tool_efficiency',
-    pattern: 'excessive_glob_patterns',
-    detect(traces) {
-      const globs = traces.filter(t => t.eventType === 'tool_call' && t.metadata.toolName === 'Glob');
-      if (globs.length < 8) return null;
-      return {
-        match: true,
-        evidence: {
-          globCount: globs.length,
-          patterns: globs.map(g => g.metadata.args?.pattern).slice(-5),
-        },
-      };
-    },
-    suggest: () => 'High number of Glob calls detected. Consider using the Explore agent for broad codebase searches instead of sequential Glob patterns.',
-  },
-  {
-    category: 'resource_optimization',
-    pattern: 'high_token_usage',
+    category: "resource_optimization",
+    pattern: "high_token_usage",
     detect(traces) {
       const totalTokens = traces.reduce((sum, t) => sum + (t.metadata.tokensUsed || 0), 0);
       if (totalTokens > 200000) {
@@ -195,29 +150,8 @@ const TEMPLATES: FeedbackTemplate[] = [
       }
       return null;
     },
-    suggest: (evidence) => `Total token usage is ${evidence.totalTokens}. Consider breaking the task into smaller sub-tasks or using the haiku model for simpler operations.`,
-  },
-  {
-    category: 'compliance',
-    pattern: 'missing_validation',
-    detect(traces) {
-      const writes = traces.filter(t =>
-        t.eventType === 'tool_call' &&
-        (t.metadata.toolName === 'Write' || t.metadata.toolName === 'Edit')
-      );
-      const reads = traces.filter(t =>
-        t.eventType === 'tool_call' && t.metadata.toolName === 'Read'
-      );
-      // Check if writes happen without preceding reads
-      if (writes.length > 3 && reads.length === 0) {
-        return {
-          match: true,
-          evidence: { writeCount: writes.length, readCount: reads.length },
-        };
-      }
-      return null;
-    },
-    suggest: () => 'Multiple file writes detected without any preceding reads. Kaya convention requires reading files before modifying them.',
+    suggest: (evidence) =>
+      `Total token usage is ${evidence.totalTokens}. Consider breaking the task into smaller sub-tasks or using the haiku model for simpler operations.`,
   },
 ];
 
@@ -293,7 +227,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
 
       for (const template of TEMPLATES) {
         const result = template.detect(traces);
-        if (!result || !result.match) continue;
+        if (!result?.match) continue;
 
         // Check cooldown
         if (!checkCooldown(agentId, template.category)) {
@@ -311,7 +245,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
           timestamp: Date.now(),
           feedbackId: generateFeedbackId(),
           category: template.category,
-          severity: template.category === 'compliance' ? 'warning' : 'info',
+          severity: template.category === "compliance" ? "warning" : "info",
           agentId,
           pattern: template.pattern,
           suggestion: template.suggest(result.evidence),
@@ -334,7 +268,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
         getFeedbackLog(message.agentId).append(message);
 
         auditLog({
-          action: 'feedback_delivered',
+          action: "feedback_delivered",
           details: {
             feedbackId: message.feedbackId,
             agentId: message.agentId,
@@ -347,7 +281,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
         return true;
       } catch (err) {
         auditLog({
-          action: 'feedback_delivery_failed',
+          action: "feedback_delivery_failed",
           details: { agentId: message.agentId, error: String(err) },
           success: false,
           errorMessage: String(err),
@@ -360,18 +294,18 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
       const path = feedbackFilePath(agentId);
       if (!existsSync(path)) return [];
 
-      const content = readFileSync(path, 'utf-8').trim();
+      const content = readFileSync(path, "utf-8").trim();
       if (!content) return [];
 
-      const lines = content.split('\n');
+      const lines = content.split("\n");
       const messages: FeedbackMessage[] = [];
       const start = Math.max(0, lines.length - limit);
 
       for (let i = start; i < lines.length; i++) {
         try {
-          messages.push(JSON.parse(lines[i]));
+          messages.push(JSON.parse(lines[i] ?? ""));
         } catch {
-          // Skip malformed lines
+          // intentionally silent: torn or partial JSONL line
         }
       }
 
@@ -383,15 +317,15 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
       const stats: Record<string, { total: number; byCategory: Record<string, number> }> = {};
 
       try {
-        const { readdirSync } = require('fs');
-        const files = readdirSync(FEEDBACK_DIR).filter((f: string) => f.endsWith('.jsonl'));
+        const { readdirSync } = require("node:fs");
+        const files = readdirSync(FEEDBACK_DIR).filter((f: string) => f.endsWith(".jsonl"));
 
         for (const file of files) {
-          const agentId = file.replace('.jsonl', '');
-          const content = readFileSync(join(FEEDBACK_DIR, file), 'utf-8').trim();
+          const agentId = file.replace(".jsonl", "");
+          const content = readFileSync(join(FEEDBACK_DIR, file), "utf-8").trim();
           if (!content) continue;
 
-          const lines = content.split('\n');
+          const lines = content.split("\n");
           const byCategory: Record<string, number> = {};
 
           for (const line of lines) {
@@ -399,7 +333,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
               const msg: FeedbackMessage = JSON.parse(line);
               byCategory[msg.category] = (byCategory[msg.category] || 0) + 1;
             } catch {
-              // Skip
+              // intentionally silent: torn or partial JSONL line
             }
           }
 
@@ -409,7 +343,7 @@ export function createFeedbackManager(config?: Partial<FeedbackManagerConfig>): 
           };
         }
       } catch {
-        // Feedback dir might not exist
+        // intentionally silent: feedback dir not created yet
       }
 
       return stats;

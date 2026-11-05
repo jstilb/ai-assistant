@@ -12,11 +12,11 @@
  *   const results = auditor.query({ type: 'pause', date: '2026-02-05' });
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createAppendLog } from '../../../../lib/core/AppendLog.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 
 // ============================================================================
 // Types
@@ -27,22 +27,22 @@ export interface InterventionAuditEntry {
   timestamp: number;
   workflowId: string;
   agentId?: string;
-  type: 'pause' | 'throttle' | 'feedback' | 'resume' | 'emergency_stop';
+  type: "pause" | "throttle" | "feedback" | "resume" | "emergency_stop";
   trigger: {
     anomaly?: string;
-    severity?: 'warning' | 'critical';
+    severity?: "warning" | "critical";
     evidence?: Record<string, unknown>;
   };
   policy?: string;
   approval?: {
     required: boolean;
-    status: 'pending' | 'approved' | 'denied' | 'timeout' | 'snoozed';
+    status: "pending" | "approved" | "denied" | "timeout" | "snoozed";
     approvedBy?: string;
     approvedAt?: number;
     decision?: string;
   };
   execution: {
-    status: 'pending' | 'executing' | 'completed' | 'failed' | 'dry_run';
+    status: "pending" | "executing" | "completed" | "failed" | "dry_run";
     startedAt?: number;
     completedAt?: number;
     error?: string;
@@ -57,9 +57,9 @@ export interface InterventionAuditEntry {
 
 interface AuditQueryOptions {
   workflowId?: string;
-  type?: InterventionAuditEntry['type'];
+  type?: InterventionAuditEntry["type"];
   date?: string;
-  approved?: 'yes' | 'no' | 'all';
+  approved?: "yes" | "no" | "all";
   limit?: number;
 }
 
@@ -86,10 +86,10 @@ interface InterventionAuditor {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const AUDIT_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'audit');
-const INTERVENTIONS_LOG = join(AUDIT_DIR, 'interventions.jsonl');
-const SUMMARY_DIR = join(AUDIT_DIR, 'intervention-summary');
-const INTEGRITY_FILE = join(AUDIT_DIR, 'interventions.sha256');
+const AUDIT_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "audit");
+const INTERVENTIONS_LOG = join(AUDIT_DIR, "interventions.jsonl");
+const SUMMARY_DIR = join(AUDIT_DIR, "intervention-summary");
+const INTEGRITY_FILE = join(AUDIT_DIR, "interventions.sha256");
 
 // ============================================================================
 // Implementation
@@ -102,21 +102,21 @@ function ensureDir(dir: string): void {
 }
 
 function computeHash(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
+  return createHash("sha256").update(content).digest("hex");
 }
 
 function readAllEntries(): InterventionAuditEntry[] {
   if (!existsSync(INTERVENTIONS_LOG)) return [];
 
-  const content = readFileSync(INTERVENTIONS_LOG, 'utf-8').trim();
+  const content = readFileSync(INTERVENTIONS_LOG, "utf-8").trim();
   if (!content) return [];
 
   const entries: InterventionAuditEntry[] = [];
-  for (const line of content.split('\n')) {
+  for (const line of content.split("\n")) {
     try {
       entries.push(JSON.parse(line));
     } catch {
-      // Skip malformed lines
+      // intentionally silent: torn or partial JSONL line
     }
   }
 
@@ -125,7 +125,7 @@ function readAllEntries(): InterventionAuditEntry[] {
 
 function dateStr(timestamp?: number): string {
   const d = timestamp ? new Date(timestamp) : new Date();
-  return d.toISOString().split('T')[0];
+  return d.toISOString().slice(0, 10);
 }
 
 // ISC AppendLog seam: one instance reused for the interventions audit trail.
@@ -139,32 +139,30 @@ export function createInterventionAuditor(): InterventionAuditor {
       interventionsLog.append(entry);
 
       // Update integrity hash
-      const currentContent = existsSync(INTERVENTIONS_LOG)
-        ? readFileSync(INTERVENTIONS_LOG, 'utf-8')
-        : '';
+      const currentContent = existsSync(INTERVENTIONS_LOG) ? readFileSync(INTERVENTIONS_LOG, "utf-8") : "";
       const hash = computeHash(currentContent);
-      writeFileSync(INTEGRITY_FILE, hash, 'utf-8');
+      writeFileSync(INTEGRITY_FILE, hash, "utf-8");
     },
 
     query(options: AuditQueryOptions): InterventionAuditEntry[] {
       let entries = readAllEntries();
 
       if (options.workflowId) {
-        entries = entries.filter(e => e.workflowId === options.workflowId);
+        entries = entries.filter((e) => e.workflowId === options.workflowId);
       }
 
       if (options.type) {
-        entries = entries.filter(e => e.type === options.type);
+        entries = entries.filter((e) => e.type === options.type);
       }
 
       if (options.date) {
-        entries = entries.filter(e => dateStr(e.timestamp) === options.date);
+        entries = entries.filter((e) => dateStr(e.timestamp) === options.date);
       }
 
-      if (options.approved === 'yes') {
-        entries = entries.filter(e => e.approval?.status === 'approved');
-      } else if (options.approved === 'no') {
-        entries = entries.filter(e => e.approval?.status === 'denied' || e.approval?.status === 'timeout');
+      if (options.approved === "yes") {
+        entries = entries.filter((e) => e.approval?.status === "approved");
+      } else if (options.approved === "no") {
+        entries = entries.filter((e) => e.approval?.status === "denied" || e.approval?.status === "timeout");
       }
 
       if (options.limit) {
@@ -176,7 +174,7 @@ export function createInterventionAuditor(): InterventionAuditor {
 
     generateDailySummary(date?: string): DailySummary {
       const targetDate = date || dateStr();
-      const entries = readAllEntries().filter(e => dateStr(e.timestamp) === targetDate);
+      const entries = readAllEntries().filter((e) => dateStr(e.timestamp) === targetDate);
 
       const byType: Record<string, number> = {};
       const byWorkflow: Record<string, number> = {};
@@ -189,7 +187,7 @@ export function createInterventionAuditor(): InterventionAuditor {
         byType[entry.type] = (byType[entry.type] || 0) + 1;
         byWorkflow[entry.workflowId] = (byWorkflow[entry.workflowId] || 0) + 1;
 
-        if (entry.approval?.status === 'approved') approvedCount++;
+        if (entry.approval?.status === "approved") approvedCount++;
         if (entry.outcome.success) successCount++;
 
         if (entry.approval?.approvedAt && entry.timestamp) {
@@ -227,28 +225,31 @@ export function createInterventionAuditor(): InterventionAuditor {
 
       // Check hash
       if (existsSync(INTEGRITY_FILE)) {
-        const storedHash = readFileSync(INTEGRITY_FILE, 'utf-8').trim();
-        const currentContent = readFileSync(INTERVENTIONS_LOG, 'utf-8');
+        const storedHash = readFileSync(INTEGRITY_FILE, "utf-8").trim();
+        const currentContent = readFileSync(INTERVENTIONS_LOG, "utf-8");
         const currentHash = computeHash(currentContent);
 
         if (storedHash !== currentHash) {
-          errors.push(`Integrity check failed: stored hash ${storedHash.slice(0, 12)}... != current ${currentHash.slice(0, 12)}...`);
+          errors.push(
+            `Integrity check failed: stored hash ${storedHash.slice(0, 12)}... != current ${currentHash.slice(0, 12)}...`,
+          );
         }
       } else {
-        errors.push('No integrity hash file found — cannot verify audit log');
+        errors.push("No integrity hash file found — cannot verify audit log");
       }
 
       // Check entry ordering (timestamps should be monotonically increasing)
       const entries = readAllEntries();
       for (let i = 1; i < entries.length; i++) {
-        if (entries[i].timestamp < entries[i - 1].timestamp) {
-          errors.push(`Out-of-order entry at index ${i}: ${entries[i].timestamp} < ${entries[i - 1].timestamp}`);
+        const prev = entries[i - 1];
+        const cur = entries[i];
+        if (prev && cur && cur.timestamp < prev.timestamp) {
+          errors.push(`Out-of-order entry at index ${i}: ${cur.timestamp} < ${prev.timestamp}`);
         }
       }
 
       // Check required fields
-      for (let i = 0; i < entries.length; i++) {
-        const e = entries[i];
+      for (const [i, e] of entries.entries()) {
         if (!e.interventionId) errors.push(`Entry ${i}: missing interventionId`);
         if (!e.timestamp) errors.push(`Entry ${i}: missing timestamp`);
         if (!e.workflowId) errors.push(`Entry ${i}: missing workflowId`);
@@ -267,7 +268,7 @@ export function createInterventionAuditor(): InterventionAuditor {
 
       for (const entry of entries) {
         byType[entry.type] = (byType[entry.type] || 0) + 1;
-        if (entry.approval?.status === 'approved') approvedCount++;
+        if (entry.approval?.status === "approved") approvedCount++;
       }
 
       return {
@@ -286,29 +287,29 @@ export function createInterventionAuditor(): InterventionAuditor {
 function generateSummaryMarkdown(summary: DailySummary): string {
   const lines: string[] = [
     `# Intervention Summary — ${summary.date}`,
-    '',
+    "",
     `**Total Interventions:** ${summary.totalInterventions}`,
     `**Approval Rate:** ${(summary.approvalRate * 100).toFixed(1)}%`,
     `**Success Rate:** ${(summary.successRate * 100).toFixed(1)}%`,
     `**Avg Response Time:** ${(summary.avgResponseTimeMs / 1000).toFixed(1)}s`,
-    '',
-    '## By Type',
-    '',
-    '| Type | Count |',
-    '|------|-------|',
+    "",
+    "## By Type",
+    "",
+    "| Type | Count |",
+    "|------|-------|",
   ];
 
   for (const [type, count] of Object.entries(summary.byType)) {
     lines.push(`| ${type} | ${count} |`);
   }
 
-  lines.push('', '## By Workflow', '', '| Workflow | Count |', '|----------|-------|');
+  lines.push("", "## By Workflow", "", "| Workflow | Count |", "|----------|-------|");
   for (const [wf, count] of Object.entries(summary.byWorkflow)) {
     lines.push(`| ${wf} | ${count} |`);
   }
 
-  lines.push('');
-  return lines.join('\n');
+  lines.push("");
+  return lines.join("\n");
 }
 
 // ============================================================================
@@ -319,48 +320,50 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const auditor = createInterventionAuditor();
 
-  if (args[0] === 'query') {
+  if (args[0] === "query") {
     const getArg = (name: string): string | undefined => {
       const idx = args.indexOf(name);
       return idx >= 0 && args[idx + 1] ? args[idx + 1] : undefined;
     };
 
     const results = auditor.query({
-      workflowId: getArg('--workflow'),
-      type: getArg('--type') as InterventionAuditEntry['type'] | undefined,
-      date: getArg('--date'),
-      approved: getArg('--approved') as 'yes' | 'no' | 'all' | undefined,
-      limit: getArg('--limit') ? parseInt(getArg('--limit')!) : undefined,
+      workflowId: getArg("--workflow"),
+      type: getArg("--type") as InterventionAuditEntry["type"] | undefined,
+      date: getArg("--date"),
+      approved: getArg("--approved") as "yes" | "no" | "all" | undefined,
+      limit: getArg("--limit") ? parseInt(getArg("--limit")!) : undefined,
     });
 
-    if (args.includes('--json')) {
+    if (args.includes("--json")) {
       console.log(JSON.stringify(results, null, 2));
     } else {
       console.log(`\nIntervention Audit — ${results.length} results\n`);
-      console.log('| ID | Type | Workflow | Status | Outcome |');
-      console.log('|----|------|----------|--------|---------|');
+      console.log("| ID | Type | Workflow | Status | Outcome |");
+      console.log("|----|------|----------|--------|---------|");
       for (const e of results) {
-        console.log(`| ${e.interventionId.slice(0, 12)} | ${e.type} | ${e.workflowId.slice(0, 20)} | ${e.execution.status} | ${e.outcome.success ? 'OK' : 'FAIL'} |`);
+        console.log(
+          `| ${e.interventionId.slice(0, 12)} | ${e.type} | ${e.workflowId.slice(0, 20)} | ${e.execution.status} | ${e.outcome.success ? "OK" : "FAIL"} |`,
+        );
       }
     }
-  } else if (args[0] === 'summary') {
+  } else if (args[0] === "summary") {
     const date = args[1];
     const summary = auditor.generateDailySummary(date);
     console.log(JSON.stringify(summary, null, 2));
-  } else if (args[0] === 'validate') {
+  } else if (args[0] === "validate") {
     const result = auditor.validateIntegrity();
     if (result.valid) {
-      console.log('Audit log integrity: VALID');
+      console.log("Audit log integrity: VALID");
     } else {
-      console.log('Audit log integrity: INVALID');
+      console.log("Audit log integrity: INVALID");
       for (const err of result.errors) {
         console.log(`  - ${err}`);
       }
     }
-  } else if (args[0] === 'stats') {
+  } else if (args[0] === "stats") {
     const stats = auditor.getStats();
     console.log(JSON.stringify(stats, null, 2));
   } else {
-    console.log('Usage: InterventionAuditor.ts <query|summary|validate|stats> [options]');
+    console.log("Usage: InterventionAuditor.ts <query|summary|validate|stats> [options]");
   }
 }

@@ -13,17 +13,17 @@
  *   manager.releaseThrottle(agentId, metric);
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { join } from 'path';
-import { auditLog } from './AuditLogger.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { auditLog } from "./AuditLogger.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface ThrottleRule {
-  metric: 'tokensPerMinute' | 'toolCallsPerMinute' | 'inferencesPerMinute';
+  metric: "tokensPerMinute" | "toolCallsPerMinute" | "inferencesPerMinute";
   limit: number;
   startedAt: number;
   interventionId: string;
@@ -42,10 +42,10 @@ interface ThrottleConfig {
 
 interface ThrottleApplication {
   agentId: string;
-  metric: ThrottleRule['metric'];
+  metric: ThrottleRule["metric"];
   limit: number;
   interventionId: string;
-  releaseCondition?: ThrottleRule['releaseCondition'];
+  releaseCondition?: ThrottleRule["releaseCondition"];
 }
 
 interface ThrottleResult {
@@ -71,8 +71,8 @@ interface ThrottleManager {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const THROTTLES_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'throttles');
-const STATE_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'state');
+const THROTTLES_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "throttles");
+const STATE_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "state");
 
 // ============================================================================
 // Implementation
@@ -89,9 +89,9 @@ function throttleFilePath(agentId: string): string {
 }
 
 function atomicWrite(filePath: string, data: unknown): void {
-  const tmpPath = filePath + '.tmp';
+  const tmpPath = filePath + ".tmp";
   writeFileSync(tmpPath, JSON.stringify(data, null, 2));
-  const { renameSync } = require('fs');
+  const { renameSync } = require("node:fs");
   renameSync(tmpPath, filePath);
 }
 
@@ -99,7 +99,7 @@ function readThrottleConfig(agentId: string): ThrottleConfig | null {
   const path = throttleFilePath(agentId);
   if (!existsSync(path)) return null;
   try {
-    const content = readFileSync(path, 'utf-8');
+    const content = readFileSync(path, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
@@ -127,8 +127,8 @@ export function createThrottleManager(): ThrottleManager {
       }
 
       // Check if throttle already exists for this metric
-      const existingIdx = config.throttles.findIndex(t => t.metric === metric);
-      const previousLimit = existingIdx >= 0 ? config.throttles[existingIdx].limit : null;
+      const existingIdx = config.throttles.findIndex((t) => t.metric === metric);
+      const previousLimit = config.throttles[existingIdx]?.limit ?? null;
 
       // Store previous limit for rollback
       if (!(metric in config.previousLimits)) {
@@ -159,7 +159,7 @@ export function createThrottleManager(): ThrottleManager {
       this._persistActiveThrottles();
 
       auditLog({
-        action: 'throttle_applied',
+        action: "throttle_applied",
         details: { agentId, metric, limit, interventionId, previousLimit },
         success: true,
       });
@@ -179,18 +179,23 @@ export function createThrottleManager(): ThrottleManager {
         return { success: false, agentId, metric, error: `No throttle config for agent ${agentId}` };
       }
 
-      const idx = config.throttles.findIndex(t => t.metric === metric);
+      const idx = config.throttles.findIndex((t) => t.metric === metric);
       if (idx < 0) {
         return { success: false, agentId, metric, error: `No throttle for metric ${metric}` };
       }
 
-      const released = config.throttles.splice(idx, 1)[0];
+      const [released] = config.throttles.splice(idx, 1);
+      if (!released) return { success: false, agentId, metric, error: `No throttle for metric ${metric}` };
       config.updatedAt = Date.now();
 
       if (config.throttles.length === 0) {
         // Remove file entirely if no throttles remain
-        const { unlinkSync } = require('fs');
-        try { unlinkSync(throttleFilePath(agentId)); } catch { /* ok */ }
+        const { unlinkSync } = require("node:fs");
+        try {
+          unlinkSync(throttleFilePath(agentId));
+        } catch {
+          /* intentionally silent: throttle file already gone */
+        }
       } else {
         atomicWrite(throttleFilePath(agentId), config);
       }
@@ -198,7 +203,7 @@ export function createThrottleManager(): ThrottleManager {
       this._persistActiveThrottles();
 
       auditLog({
-        action: 'throttle_released',
+        action: "throttle_released",
         details: { agentId, metric, releasedLimit: released.limit },
         success: true,
       });
@@ -209,26 +214,30 @@ export function createThrottleManager(): ThrottleManager {
     rollbackThrottle(agentId: string): ThrottleResult {
       const config = readThrottleConfig(agentId);
       if (!config) {
-        return { success: false, agentId, metric: 'all', error: `No throttle config for agent ${agentId}` };
+        return { success: false, agentId, metric: "all", error: `No throttle config for agent ${agentId}` };
       }
 
       // Restore previous limits (remove all current throttles)
-      const removedMetrics = config.throttles.map(t => t.metric);
+      const removedMetrics = config.throttles.map((t) => t.metric);
       config.throttles = [];
       config.updatedAt = Date.now();
 
-      const { unlinkSync } = require('fs');
-      try { unlinkSync(throttleFilePath(agentId)); } catch { /* ok */ }
+      const { unlinkSync } = require("node:fs");
+      try {
+        unlinkSync(throttleFilePath(agentId));
+      } catch {
+        /* intentionally silent: throttle file already gone */
+      }
 
       this._persistActiveThrottles();
 
       auditLog({
-        action: 'throttle_rollback',
+        action: "throttle_rollback",
         details: { agentId, removedMetrics, previousLimits: config.previousLimits },
         success: true,
       });
 
-      return { success: true, agentId, metric: 'all', previousLimit: null };
+      return { success: true, agentId, metric: "all", previousLimit: null };
     },
 
     getActiveThrottles(): ThrottleConfig[] {
@@ -236,20 +245,20 @@ export function createThrottleManager(): ThrottleManager {
       const configs: ThrottleConfig[] = [];
 
       try {
-        const files = readdirSync(THROTTLES_DIR).filter(f => f.endsWith('.json') && !f.endsWith('.tmp'));
+        const files = readdirSync(THROTTLES_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".tmp"));
         for (const file of files) {
           try {
-            const content = readFileSync(join(THROTTLES_DIR, file), 'utf-8');
+            const content = readFileSync(join(THROTTLES_DIR, file), "utf-8");
             const config = JSON.parse(content);
             if (config.throttles && config.throttles.length > 0) {
               configs.push(config);
             }
           } catch {
-            // Skip malformed files
+            // intentionally silent: corrupt throttle file is skipped
           }
         }
       } catch {
-        // Directory might not exist yet
+        // intentionally silent: throttle dir not created yet
       }
 
       return configs;
@@ -297,11 +306,11 @@ export function createThrottleManager(): ThrottleManager {
     _persistActiveThrottles(): void {
       ensureDir(STATE_DIR);
       const active = this.getActiveThrottles();
-      const summary = active.map(c => ({
+      const summary = active.map((c) => ({
         agentId: c.agentId,
-        throttles: c.throttles.map(t => ({ metric: t.metric, limit: t.limit })),
+        throttles: c.throttles.map((t) => ({ metric: t.metric, limit: t.limit })),
       }));
-      atomicWrite(join(STATE_DIR, 'active-throttles.json'), { active: summary, updatedAt: Date.now() });
+      atomicWrite(join(STATE_DIR, "active-throttles.json"), { active: summary, updatedAt: Date.now() });
     },
   } as ThrottleManager & { _persistActiveThrottles(): void };
 }

@@ -15,18 +15,18 @@
  *   emitTrace({ workflowId: 'wf1', agentId: 'eng', eventType: 'tool_call', metadata: { toolName: 'Read' } });
  */
 
-import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import type { AgentTrace } from './TraceCollector.ts';
-import { createAppendLog, type AppendLog } from '../../../../lib/core/AppendLog.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import type { AgentTrace } from "./TraceCollector.ts";
+import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const TRACES_DIR: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
+const TRACES_DIR: string = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
 
 // ============================================================================
 // Core Functions
@@ -49,7 +49,7 @@ function getTraceLog(filePath: string): AppendLog {
   return log;
 }
 
-function emitTrace(trace: Omit<AgentTrace, 'timestamp'> & { timestamp?: number }): void {
+function emitTrace(trace: Omit<AgentTrace, "timestamp"> & { timestamp?: number }): void {
   ensureTracesDir();
 
   const fullTrace: AgentTrace = {
@@ -67,25 +67,8 @@ export function emitWorkflowStart(workflowId: string, agentId: string, context?:
   emitTrace({
     workflowId,
     agentId,
-    eventType: 'start',
+    eventType: "start",
     metadata: {},
-    context: context || {},
-  });
-}
-
-export function emitToolCall(
-  workflowId: string,
-  agentId: string,
-  toolName: string,
-  latencyMs?: number,
-  tokensUsed?: number,
-  context?: Record<string, unknown>
-): void {
-  emitTrace({
-    workflowId,
-    agentId,
-    eventType: 'tool_call',
-    metadata: { toolName, latencyMs, tokensUsed },
     context: context || {},
   });
 }
@@ -94,12 +77,12 @@ export function emitDecision(
   workflowId: string,
   agentId: string,
   iscCompletionRate?: number,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void {
   emitTrace({
     workflowId,
     agentId,
-    eventType: 'decision',
+    eventType: "decision",
     metadata: { iscCompletionRate },
     context: context || {},
   });
@@ -110,12 +93,12 @@ export function emitCompletion(
   agentId: string,
   tokensUsed?: number,
   latencyMs?: number,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void {
   emitTrace({
     workflowId,
     agentId,
-    eventType: 'completion',
+    eventType: "completion",
     metadata: { tokensUsed, latencyMs },
     context: context || {},
   });
@@ -125,12 +108,12 @@ export function emitError(
   workflowId: string,
   agentId: string,
   errorMessage: string,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void {
   emitTrace({
     workflowId,
     agentId,
-    eventType: 'error',
+    eventType: "error",
     metadata: { errorMessage },
     context: context || {},
   });
@@ -170,7 +153,7 @@ Examples:
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     printUsage();
     return;
   }
@@ -182,35 +165,35 @@ async function main(): Promise<void> {
 
   const hasFlag = (name: string): boolean => args.includes(name);
 
-  const workflowId = getArg('--workflow');
-  const agentId = getArg('--agent');
-  const eventType = getArg('--event') as AgentTrace['eventType'];
+  const workflowId = getArg("--workflow");
+  const agentId = getArg("--agent");
+  const eventType = getArg("--event") as AgentTrace["eventType"];
 
   if (!workflowId || !agentId || !eventType) {
-    console.error('Error: --workflow, --agent, and --event are required');
+    console.error("Error: --workflow, --agent, and --event are required");
     process.exit(1);
   }
 
-  const validEvents = ['start', 'tool_call', 'decision', 'completion', 'error'];
+  const validEvents = ["start", "tool_call", "decision", "completion", "error"];
   if (!validEvents.includes(eventType)) {
-    console.error(`Error: --event must be one of: ${validEvents.join(', ')}`);
+    console.error(`Error: --event must be one of: ${validEvents.join(", ")}`);
     process.exit(1);
   }
 
-  const metadata: AgentTrace['metadata'] = {};
-  const toolName = getArg('--tool');
+  const metadata: AgentTrace["metadata"] = {};
+  const toolName = getArg("--tool");
   if (toolName) metadata.toolName = toolName;
 
-  const latency = getArg('--latency');
+  const latency = getArg("--latency");
   if (latency) metadata.latencyMs = parseInt(latency, 10);
 
-  const tokens = getArg('--tokens');
+  const tokens = getArg("--tokens");
   if (tokens) metadata.tokensUsed = parseInt(tokens, 10);
 
-  const errorMsg = getArg('--error');
+  const errorMsg = getArg("--error");
   if (errorMsg) metadata.errorMessage = errorMsg;
 
-  const isc = getArg('--isc');
+  const isc = getArg("--isc");
   if (isc) metadata.iscCompletionRate = parseFloat(isc);
 
   const trace: AgentTrace = {
@@ -224,7 +207,7 @@ async function main(): Promise<void> {
 
   emitTrace(trace);
 
-  if (hasFlag('--json')) {
+  if (hasFlag("--json")) {
     console.log(JSON.stringify(trace, null, 2));
   } else {
     console.log(`Trace emitted: ${eventType} for ${agentId} in ${workflowId}`);

@@ -17,34 +17,46 @@
  *   const summary = await getBaselineSummary();
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
-import { type LatencyPercentiles } from './Percentiles.ts';
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
+// Persisted shape (matches LatencyPercentilesSchema below), not Percentiles.ts's LatencyPercentiles.
+interface StoredLatencyPercentiles {
+  p50: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  max: number;
+}
+
 interface BaselineData {
   lastUpdated: number;
   sampleCount: number;
   latency: {
-    percentiles: LatencyPercentiles;
-    byTool: Record<string, LatencyPercentiles>;
+    percentiles: StoredLatencyPercentiles;
+    byTool: Record<string, StoredLatencyPercentiles>;
   };
   resources: {
     avgTokensPerWorkflow: number;
     avgToolCallsPerWorkflow: number;
     avgErrorRate: number;
   };
-  agents: Record<string, {
-    avgScore: number;
-    evaluationCount: number;
-    lastEvaluation: number;
-  }>;
+  agents: Record<
+    string,
+    {
+      avgScore: number;
+      evaluationCount: number;
+      lastEvaluation: number;
+    }
+  >;
 }
 
 // ============================================================================
@@ -72,11 +84,14 @@ const BaselineDataSchema = z.object({
     avgToolCallsPerWorkflow: z.number(),
     avgErrorRate: z.number(),
   }),
-  agents: z.record(z.string(), z.object({
-    avgScore: z.number(),
-    evaluationCount: z.number(),
-    lastEvaluation: z.number(),
-  })),
+  agents: z.record(
+    z.string(),
+    z.object({
+      avgScore: z.number(),
+      evaluationCount: z.number(),
+      lastEvaluation: z.number(),
+    }),
+  ),
 });
 
 // ============================================================================
@@ -84,7 +99,7 @@ const BaselineDataSchema = z.object({
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const BASELINES_PATH: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'baselines', 'baselines.json');
+const BASELINES_PATH: string = join(KAYA_HOME, "MEMORY", "MONITORING", "baselines", "baselines.json");
 
 // ============================================================================
 // State Manager
@@ -120,30 +135,30 @@ async function getBaseline(): Promise<BaselineData | null> {
 
 export async function getBaselineSummary(): Promise<string> {
   const baseline = await getBaseline();
-  if (!baseline) return 'No baseline data available. Run evaluations to build baselines.';
+  if (!baseline) return "No baseline data available. Run evaluations to build baselines.";
 
   const lines: string[] = [];
   lines.push(`Baseline Summary (${baseline.sampleCount} samples)`);
   lines.push(`Last updated: ${new Date(baseline.lastUpdated).toISOString()}`);
-  lines.push('');
-  lines.push('Latency Percentiles:');
+  lines.push("");
+  lines.push("Latency Percentiles:");
   lines.push(`  P50: ${baseline.latency.percentiles.p50}ms`);
   lines.push(`  P95: ${baseline.latency.percentiles.p95}ms`);
   lines.push(`  P99: ${baseline.latency.percentiles.p99}ms`);
-  lines.push('');
-  lines.push('Resource Averages:');
+  lines.push("");
+  lines.push("Resource Averages:");
   lines.push(`  Tokens/workflow: ${baseline.resources.avgTokensPerWorkflow}`);
   lines.push(`  Tool calls/workflow: ${baseline.resources.avgToolCallsPerWorkflow}`);
   lines.push(`  Error rate: ${(baseline.resources.avgErrorRate * 100).toFixed(1)}%`);
-  lines.push('');
+  lines.push("");
 
   const agentEntries = Object.entries(baseline.agents);
   if (agentEntries.length > 0) {
-    lines.push('Agent Baselines:');
+    lines.push("Agent Baselines:");
     for (const [agentId, data] of agentEntries) {
       lines.push(`  ${agentId}: avg score ${data.avgScore}, ${data.evaluationCount} evals`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }

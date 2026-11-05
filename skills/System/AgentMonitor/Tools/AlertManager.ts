@@ -11,11 +11,11 @@
  *   sendAlert({ severity: 'critical', message: 'Agent failed', workflowId: 'wf1' });
  */
 
-import { join } from 'path';
-import { auditLog } from './AuditLogger.ts';
-import { notifySync } from '../../../../lib/core/NotificationService';
-import { createAppendLog } from '../../../../lib/core/AppendLog.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { join } from "node:path";
+import { auditLog } from "./AuditLogger.ts";
+import { notifySync } from "../../../../lib/core/NotificationService.ts";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -23,7 +23,7 @@ import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
 
 export interface Alert {
   timestamp: number;
-  severity: 'info' | 'warning' | 'critical';
+  severity: "info" | "warning" | "critical";
   workflowId: string;
   message: string;
   score?: number;
@@ -43,7 +43,7 @@ export interface AlertConfig {
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const ALERTS_PATH: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'audit', 'alerts.jsonl');
+const ALERTS_PATH: string = join(KAYA_HOME, "MEMORY", "MONITORING", "audit", "alerts.jsonl");
 
 // ISC 601: route through the AppendLog seam (the former standalone JSONL
 // append/read helper module was folded in here — S6).
@@ -67,27 +67,27 @@ function logAlert(alert: Alert): void {
   alertsLog.append(alert);
 }
 
-function sendVoiceNotification(message: string, severity: 'critical' | 'warning'): void {
+function sendVoiceNotification(message: string, severity: "critical" | "warning"): void {
   try {
     notifySync(message, {
-      agentName: 'AgentMonitor Alert',
-      priority: severity === 'critical' ? 'critical' : 'high',
+      agentName: "AgentMonitor Alert",
+      priority: severity === "critical" ? "critical" : "high",
       fallback: true,
     });
   } catch (err: unknown) {
     // Voice notification is fire-and-forget, never block on failure
     // Log fallback for audit
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error('[AlertManager] Voice server unavailable, using JSONL fallback:', errMsg);
+    console.error("[AlertManager] Voice server unavailable, using JSONL fallback:", errMsg);
   }
 }
 
 export function sendAlert(
-  severity: Alert['severity'],
+  severity: Alert["severity"],
   workflowId: string,
   message: string,
   options?: { score?: number; evaluator?: string },
-  config?: Partial<AlertConfig>
+  config?: Partial<AlertConfig>,
 ): void {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
@@ -107,15 +107,16 @@ export function sendAlert(
   }
 
   // Send voice notification for critical/warning alerts
-  if (cfg.voiceNotifications && (severity === 'critical' || severity === 'warning')) {
-    const voiceMsg = severity === 'critical'
-      ? `Critical alert. Agent monitor detected issue. ${message.slice(0, 80)}`
-      : `Warning. Agent monitor. ${message.slice(0, 80)}`;
+  if (cfg.voiceNotifications && (severity === "critical" || severity === "warning")) {
+    const voiceMsg =
+      severity === "critical"
+        ? `Critical alert. Agent monitor detected issue. ${message.slice(0, 80)}`
+        : `Warning. Agent monitor. ${message.slice(0, 80)}`;
     sendVoiceNotification(voiceMsg, severity);
   }
 
   auditLog({
-    action: 'alert',
+    action: "alert",
     workflowId,
     details: { severity, message, score: options?.score },
     success: true,
@@ -127,13 +128,12 @@ export function getRecentAlerts(limit: number = 20): Alert[] {
   return alertsLog.readLastN<Alert>(limit);
 }
 
-
 export function ackAll(): number {
   const alerts = alertsLog.readLastN<Alert>(1000);
-  const unacked = alerts.filter(a => !a.acknowledged);
+  const unacked = alerts.filter((a) => !a.acknowledged);
   if (unacked.length === 0) return 0;
-  const { writeFileSync: wfs } = require('fs');
-  const lines = alerts.map(a => JSON.stringify({ ...a, acknowledged: true })).join('\n') + '\n';
+  const { writeFileSync: wfs } = require("node:fs");
+  const lines = alerts.map((a) => JSON.stringify({ ...a, acknowledged: true })).join("\n") + "\n";
   wfs(ALERTS_PATH, lines);
   return unacked.length;
 }

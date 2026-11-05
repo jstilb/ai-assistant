@@ -13,33 +13,33 @@
  *   await controller.resume(workflowId, interventionId);
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { z } from 'zod';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
-import { createAppendLog, type AppendLog } from '../../../../lib/core/AppendLog.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface PauseSignal {
-  signal: 'pause';
+  signal: "pause";
   timestamp: number;
   reason: string;
   interventionId: string;
 }
 
 interface ResumeSignal {
-  signal: 'resume';
+  signal: "resume";
   timestamp: number;
   interventionId: string;
   approvedBy?: string;
 }
 
 interface PauseAcknowledgment {
-  signal: 'pause-ack';
+  signal: "pause-ack";
   timestamp: number;
   interventionId: string;
   checkpointPath: string;
@@ -94,12 +94,12 @@ const PausedWorkflowsSchema = z.object({
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const SIGNALS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'signals');
-const CHECKPOINTS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'checkpoints');
-const STATE_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'state');
+const SIGNALS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "signals");
+const CHECKPOINTS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "checkpoints");
+const STATE_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "state");
 
 const pausedWorkflowsStateManager = createStateManager({
-  path: join(STATE_DIR, 'paused-workflows.json'),
+  path: join(STATE_DIR, "paused-workflows.json"),
   schema: PausedWorkflowsSchema,
   defaults: { paused: [], updatedAt: 0 },
 });
@@ -141,14 +141,14 @@ function checkpointDir(workflowId: string): string {
 
 function readLastLine(filePath: string): string | null {
   if (!existsSync(filePath)) return null;
-  const content = readFileSync(filePath, 'utf-8').trim();
+  const content = readFileSync(filePath, "utf-8").trim();
   if (!content) return null;
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   return lines[lines.length - 1] || null;
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function createPauseController(config?: Partial<PauseControllerConfig>): PauseController {
@@ -156,16 +156,21 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
   const pausedWorkflows = new Set<string>();
 
   // Load persisted state using StateManager (async, fire-and-forget on init)
-  pausedWorkflowsStateManager.load().then(validated => {
-    for (const wf of validated.paused) pausedWorkflows.add(wf);
-  }).catch(() => {
-    // Corrupted or invalid state file, start fresh
-  });
+  pausedWorkflowsStateManager
+    .load()
+    .then((validated) => {
+      for (const wf of validated.paused) pausedWorkflows.add(wf);
+    })
+    .catch((err) => {
+      console.error(`[PauseController] could not load paused-workflow state, starting fresh:`, err);
+    });
 
   function persistState(): void {
     ensureDir(STATE_DIR);
     const state = { paused: Array.from(pausedWorkflows), updatedAt: Date.now() };
-    pausedWorkflowsStateManager.save(state).catch(() => { /* best effort */ });
+    pausedWorkflowsStateManager.save(state).catch((err) => {
+      console.error(`[PauseController] could not persist paused-workflow state:`, err);
+    });
   }
 
   return {
@@ -174,17 +179,17 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
 
       // Write pause signal
       const signal: PauseSignal = {
-        signal: 'pause',
+        signal: "pause",
         timestamp: Date.now(),
         reason,
         interventionId,
       };
 
-      const pausePath = signalPath(workflowId, 'pause');
+      const pausePath = signalPath(workflowId, "pause");
       getSignalLog(pausePath).append(signal);
 
       // Wait for acknowledgment
-      const ackPath = signalPath(workflowId, 'pause-ack');
+      const ackPath = signalPath(workflowId, "pause-ack");
       const startTime = Date.now();
 
       while (Date.now() - startTime < cfg.pauseAckTimeoutMs) {
@@ -192,7 +197,7 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
         if (lastLine) {
           try {
             const ack: PauseAcknowledgment = JSON.parse(lastLine);
-            if (ack.interventionId === interventionId && ack.signal === 'pause-ack') {
+            if (ack.interventionId === interventionId && ack.signal === "pause-ack") {
               pausedWorkflows.add(workflowId);
               persistState();
               return {
@@ -204,7 +209,7 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
               };
             }
           } catch {
-            // Malformed ack, keep waiting
+            // intentionally silent: partial ack file while it is being written
           }
         }
         await sleep(cfg.pollIntervalMs);
@@ -236,13 +241,13 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
 
       // Write resume signal
       const signal: ResumeSignal = {
-        signal: 'resume',
+        signal: "resume",
         timestamp: Date.now(),
         interventionId,
         approvedBy,
       };
 
-      const resumePath = signalPath(workflowId, 'resume');
+      const resumePath = signalPath(workflowId, "resume");
       getSignalLog(resumePath).append(signal);
 
       pausedWorkflows.delete(workflowId);
@@ -269,16 +274,16 @@ export function createPauseController(config?: Partial<PauseControllerConfig>): 
       if (!existsSync(cpDir)) return null;
 
       // Find most recent checkpoint
-      const { readdirSync } = require('fs');
+      const { readdirSync } = require("node:fs");
       const files = readdirSync(cpDir)
-        .filter((f: string) => f.endsWith('-checkpoint.json'))
+        .filter((f: string) => f.endsWith("-checkpoint.json"))
         .sort()
         .reverse();
 
       if (files.length === 0) return null;
 
       try {
-        const cpContent = readFileSync(join(cpDir, files[0]), 'utf-8');
+        const cpContent = readFileSync(join(cpDir, files[0]), "utf-8");
         return JSON.parse(cpContent);
       } catch {
         return null;

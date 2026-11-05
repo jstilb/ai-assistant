@@ -10,23 +10,23 @@
  * @version 1.0.0
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
-import { join } from 'path';
-import { parseArgs } from 'util';
-import { execSync } from 'child_process';
-import { getTracesForWorkflow, getAllTraceFiles } from './TraceCollector';
-import { memoryStore } from '../../../../lib/core/MemoryStore';
-import type { AgentTrace } from './TraceCollector';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { execSync } from "node:child_process";
+import { getTracesForWorkflow } from "./TraceCollector.ts";
+import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
+import type { AgentTrace } from "./TraceCollector.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const AUDITS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'audits');
-const EVALUATIONS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'evaluations');
-const INFERENCE_TOOL = join(KAYA_HOME, 'tools', 'Inference.ts');
+const AUDITS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "audits");
+const EVALUATIONS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "evaluations");
+const INFERENCE_TOOL = join(KAYA_HOME, "tools", "Inference.ts");
 
 // ============================================================================
 // Evaluation Record (decoupled from the deleted EvaluatorPipeline.ts —
@@ -52,7 +52,7 @@ function loadEvaluation(workflowId: string): PipelineResult | null {
   const filePath = join(EVALUATIONS_DIR, `${workflowId}-eval.json`);
   if (!existsSync(filePath)) return null;
   try {
-    const content = readFileSync(filePath, 'utf-8');
+    const content = readFileSync(filePath, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
@@ -67,7 +67,7 @@ interface TraceAudit {
   workflowId: string;
   overallScore: number;
   rootCause: string;
-  failureCategory: 'tool_misuse' | 'infinite_loop' | 'error_cascade' | 'wrong_approach' | 'resource_waste' | 'unknown';
+  failureCategory: "tool_misuse" | "infinite_loop" | "error_cascade" | "wrong_approach" | "resource_waste" | "unknown";
   decisionErrors: Array<{
     timestamp: number;
     description: string;
@@ -86,13 +86,13 @@ interface TraceAudit {
 // ============================================================================
 
 function buildTraceSummary(traces: AgentTrace[]): string {
-  if (traces.length === 0) return 'No trace events found.';
+  if (traces.length === 0) return "No trace events found.";
 
   const lines: string[] = [];
   lines.push(`Total events: ${traces.length}`);
 
-  const startTime = traces[0].timestamp;
-  const endTime = traces[traces.length - 1].timestamp;
+  const startTime = traces[0]?.timestamp ?? 0;
+  const endTime = traces.at(-1)?.timestamp ?? startTime;
   lines.push(`Duration: ${((endTime - startTime) / 1000).toFixed(1)}s`);
 
   // Event type breakdown
@@ -100,33 +100,35 @@ function buildTraceSummary(traces: AgentTrace[]): string {
   for (const t of traces) {
     eventCounts[t.eventType] = (eventCounts[t.eventType] || 0) + 1;
   }
-  lines.push(`Event types: ${Object.entries(eventCounts).map(([k, v]) => `${k}(${v})`).join(', ')}`);
+  lines.push(
+    `Event types: ${Object.entries(eventCounts)
+      .map(([k, v]) => `${k}(${v})`)
+      .join(", ")}`,
+  );
 
   // Token usage
   const totalTokens = traces.reduce((s, t) => s + (t.metadata.tokensUsed || 0), 0);
   lines.push(`Total tokens: ${totalTokens}`);
 
   // Tool call chain
-  const toolCalls = traces
-    .filter(t => t.eventType === 'tool_call')
-    .map(t => t.metadata.toolName || 'unknown');
+  const toolCalls = traces.filter((t) => t.eventType === "tool_call").map((t) => t.metadata.toolName || "unknown");
   if (toolCalls.length > 0) {
-    lines.push(`Tool chain: ${toolCalls.join(' -> ')}`);
+    lines.push(`Tool chain: ${toolCalls.join(" -> ")}`);
   }
 
   // Errors
-  const errors = traces.filter(t => t.eventType === 'error');
+  const errors = traces.filter((t) => t.eventType === "error");
   if (errors.length > 0) {
     lines.push(`\nErrors (${errors.length}):`);
     for (const err of errors.slice(0, 5)) {
-      lines.push(`  - ${err.metadata.errorMessage || 'Unknown error'}`);
+      lines.push(`  - ${err.metadata.errorMessage || "Unknown error"}`);
     }
   }
 
   // ISC completion rates
   const iscRates = traces
-    .filter(t => t.metadata.iscCompletionRate !== undefined)
-    .map(t => t.metadata.iscCompletionRate!);
+    .filter((t) => t.metadata.iscCompletionRate !== undefined)
+    .map((t) => t.metadata.iscCompletionRate!);
   if (iscRates.length > 0) {
     const avgIsc = iscRates.reduce((s, r) => s + r, 0) / iscRates.length;
     lines.push(`Avg ISC completion: ${(avgIsc * 100).toFixed(1)}%`);
@@ -135,7 +137,7 @@ function buildTraceSummary(traces: AgentTrace[]): string {
   // Timing gaps (pauses > 30s between events)
   const gaps: Array<{ afterEvent: number; durationSec: number }> = [];
   for (let i = 1; i < traces.length; i++) {
-    const gap = (traces[i].timestamp - traces[i - 1].timestamp) / 1000;
+    const gap = ((traces[i]?.timestamp ?? 0) - (traces[i - 1]?.timestamp ?? 0)) / 1000;
     if (gap > 30) {
       gaps.push({ afterEvent: i - 1, durationSec: Math.round(gap) });
     }
@@ -147,7 +149,7 @@ function buildTraceSummary(traces: AgentTrace[]): string {
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ============================================================================
@@ -160,10 +162,13 @@ async function runLLMAudit(
   evaluation: PipelineResult | null,
 ): Promise<TraceAudit> {
   const evalContext = evaluation
-    ? `\nEvaluation score: ${evaluation.overallScore}/100 (${evaluation.overallPassed ? 'PASSED' : 'FAILED'})
+    ? `\nEvaluation score: ${evaluation.overallScore}/100 (${evaluation.overallPassed ? "PASSED" : "FAILED"})
 Evaluator findings:
-${evaluation.allFindings.slice(0, 10).map(f => `- [${f.severity}] ${f.category}: ${f.message}`).join('\n')}`
-    : '\nNo evaluation data available.';
+${evaluation.allFindings
+  .slice(0, 10)
+  .map((f) => `- [${f.severity}] ${f.category}: ${f.message}`)
+  .join("\n")}`
+    : "\nNo evaluation data available.";
 
   const prompt = `Analyze this agent workflow trace and identify the root cause of failure.
 
@@ -195,10 +200,11 @@ Rules:
 - Focus on actionable root causes`;
 
   try {
-    const result = execSync(
-      `echo ${JSON.stringify(prompt)} | bun "${INFERENCE_TOOL}" standard`,
-      { encoding: 'utf-8', timeout: 60000, maxBuffer: 1024 * 1024 },
-    );
+    const result = execSync(`echo ${JSON.stringify(prompt)} | bun "${INFERENCE_TOOL}" standard`, {
+      encoding: "utf-8",
+      timeout: 60000,
+      maxBuffer: 1024 * 1024,
+    });
 
     // Extract JSON from response
     const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -210,10 +216,10 @@ Rules:
     return {
       workflowId,
       overallScore: evaluation?.overallScore || 0,
-      rootCause: parsed.rootCause || 'Unable to determine root cause',
+      rootCause: parsed.rootCause || "Unable to determine root cause",
       failureCategory: validateCategory(parsed.failureCategory),
       decisionErrors: Array.isArray(parsed.decisionErrors) ? parsed.decisionErrors.slice(0, 3) : [],
-      confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
+      confidence: typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
     };
   } catch (err) {
     console.error(`LLM audit failed: ${err}`);
@@ -221,19 +227,24 @@ Rules:
   }
 }
 
-function validateCategory(cat: string): TraceAudit['failureCategory'] {
-  const valid: TraceAudit['failureCategory'][] = [
-    'tool_misuse', 'infinite_loop', 'error_cascade', 'wrong_approach', 'resource_waste', 'unknown',
+function validateCategory(cat: string): TraceAudit["failureCategory"] {
+  const valid: TraceAudit["failureCategory"][] = [
+    "tool_misuse",
+    "infinite_loop",
+    "error_cascade",
+    "wrong_approach",
+    "resource_waste",
+    "unknown",
   ];
-  return valid.includes(cat as TraceAudit['failureCategory']) ? cat as TraceAudit['failureCategory'] : 'unknown';
+  return valid.includes(cat as TraceAudit["failureCategory"]) ? (cat as TraceAudit["failureCategory"]) : "unknown";
 }
 
 function createFallbackAudit(workflowId: string, score: number): TraceAudit {
   return {
     workflowId,
     overallScore: score,
-    rootCause: 'LLM audit failed — manual review required',
-    failureCategory: 'unknown',
+    rootCause: "LLM audit failed — manual review required",
+    failureCategory: "unknown",
     decisionErrors: [],
     confidence: 0,
   };
@@ -246,7 +257,7 @@ function createFallbackAudit(workflowId: string, score: number): TraceAudit {
 async function enrichWithGraphContext(audit: TraceAudit): Promise<TraceAudit> {
   try {
     // cross-skill-allowed: audit results persist into the knowledge graph by design (lazy import)
-    const { getGraphPersistence } = await import('../../../Intelligence/Graph/Tools/GraphPersistence');
+    const { getGraphPersistence } = await import("../../../Intelligence/Graph/Tools/GraphPersistence.ts");
     const persistence = getGraphPersistence();
     const engine = persistence.loadIntoEngine();
 
@@ -256,30 +267,30 @@ async function enrichWithGraphContext(audit: TraceAudit): Promise<TraceAudit> {
     // Backward trace: what session/commit/file led to this trace?
     const backward = engine.traceBackward(traceId, 3);
     const relatedSessions = backward
-      .filter(r => r.node.type === 'session')
-      .map(r => r.node.title)
+      .filter((r) => r.node.type === "session")
+      .map((r) => r.node.title)
       .slice(0, 5);
 
     // Files touched by this trace
-    const forward = engine.traceForward(traceId, 1, ['modifies']);
+    const forward = engine.traceForward(traceId, 1, ["modifies"]);
     const relatedFiles = forward
-      .filter(r => r.node.type === 'file')
-      .map(r => r.node.title)
+      .filter((r) => r.node.type === "file")
+      .map((r) => r.node.title)
       .slice(0, 10);
 
     // Find other agent_traces with same failure category
-    const otherTraces = engine.findNodes({ type: 'agent_trace', tags: [audit.failureCategory] });
+    const otherTraces = engine.findNodes({ type: "agent_trace", tags: [audit.failureCategory] });
     const similarFailures = otherTraces
-      .filter(n => n.id !== traceId)
-      .map(n => `${n.title} (${n.metadata.evaluationScore || '?'}/100)`)
+      .filter((n) => n.id !== traceId)
+      .map((n) => `${n.title} (${n.metadata.evaluationScore || "?"}/100)`)
       .slice(0, 5);
 
     // Find other traces touching the same files
     if (relatedFiles.length > 0) {
-      for (const fileResult of forward.filter(r => r.node.type === 'file')) {
-        const otherTracesForFile = engine.traceBackward(fileResult.node.id, 1, ['modifies']);
+      for (const fileResult of forward.filter((r) => r.node.type === "file")) {
+        const otherTracesForFile = engine.traceBackward(fileResult.node.id, 1, ["modifies"]);
         for (const ot of otherTracesForFile) {
-          if (ot.node.type === 'agent_trace' && ot.node.id !== traceId) {
+          if (ot.node.type === "agent_trace" && ot.node.id !== traceId) {
             const failInfo = `${ot.node.title} (touches ${fileResult.node.title})`;
             if (!similarFailures.includes(failInfo)) {
               similarFailures.push(failInfo);
@@ -305,10 +316,7 @@ async function enrichWithGraphContext(audit: TraceAudit): Promise<TraceAudit> {
 // Main Audit Function
 // ============================================================================
 
-export async function auditTrace(
-  workflowId: string,
-  evaluation?: PipelineResult | null,
-): Promise<TraceAudit> {
+export async function auditTrace(workflowId: string, evaluation?: PipelineResult | null): Promise<TraceAudit> {
   const traces = getTracesForWorkflow(workflowId);
   const evalData = evaluation ?? loadEvaluation(workflowId);
 
@@ -323,26 +331,28 @@ export async function auditTrace(
     mkdirSync(AUDITS_DIR, { recursive: true });
   }
   const auditPath = join(AUDITS_DIR, `${workflowId}-audit.json`);
-  writeFileSync(auditPath, JSON.stringify(audit, null, 2), 'utf-8');
+  writeFileSync(auditPath, JSON.stringify(audit, null, 2), "utf-8");
 
   // Emit insight
-  memoryStore.capture({
-    source: 'AgentMonitor',
-    type: 'learning',
-    category: 'trace-audit',
-    title: `Trace audit: ${workflowId} — ${audit.failureCategory}`,
-    content: `Root cause: ${audit.rootCause}\nScore: ${audit.overallScore}/100\nCategory: ${audit.failureCategory}\nConfidence: ${audit.confidence}`,
-    tags: ['agent-monitor', 'trace-audit', audit.failureCategory, workflowId],
-    tier: 'warm',
-    metadata: {
-      workflowId,
-      overallScore: audit.overallScore,
-      failureCategory: audit.failureCategory,
-      confidence: audit.confidence,
-      decisionErrorCount: audit.decisionErrors.length,
-      hasGraphContext: !!audit.graphContext,
-    },
-  }).catch(err => console.error('[TraceAuditor] insight capture failed:', err instanceof Error ? err.message : err));
+  memoryStore
+    .capture({
+      source: "AgentMonitor",
+      type: "learning",
+      category: "trace-audit",
+      title: `Trace audit: ${workflowId} — ${audit.failureCategory}`,
+      content: `Root cause: ${audit.rootCause}\nScore: ${audit.overallScore}/100\nCategory: ${audit.failureCategory}\nConfidence: ${audit.confidence}`,
+      tags: ["agent-monitor", "trace-audit", audit.failureCategory, workflowId],
+      tier: "warm",
+      metadata: {
+        workflowId,
+        overallScore: audit.overallScore,
+        failureCategory: audit.failureCategory,
+        confidence: audit.confidence,
+        decisionErrorCount: audit.decisionErrors.length,
+        hasGraphContext: !!audit.graphContext,
+      },
+    })
+    .catch((err) => console.error("[TraceAuditor] insight capture failed:", err instanceof Error ? err.message : err));
 
   return audit;
 }
@@ -351,7 +361,7 @@ export function loadAudit(workflowId: string): TraceAudit | null {
   const auditPath = join(AUDITS_DIR, `${workflowId}-audit.json`);
   if (!existsSync(auditPath)) return null;
   try {
-    const content = readFileSync(auditPath, 'utf-8');
+    const content = readFileSync(auditPath, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
@@ -364,17 +374,18 @@ export function loadAudit(workflowId: string): TraceAudit | null {
 
 async function batchAudit(sinceHours: number): Promise<{ audited: number; skipped: number; errors: number }> {
   const sinceMs = Date.now() - sinceHours * 60 * 60 * 1000;
-  let audited = 0, skipped = 0, errors = 0;
+  let audited = 0,
+    skipped = 0,
+    errors = 0;
 
   if (!existsSync(EVALUATIONS_DIR)) return { audited, skipped, errors };
 
-  const evalFiles = readdirSync(EVALUATIONS_DIR)
-    .filter(f => f.endsWith('-eval.json'));
+  const evalFiles = readdirSync(EVALUATIONS_DIR).filter((f) => f.endsWith("-eval.json"));
 
   for (const file of evalFiles) {
     try {
       const evalPath = join(EVALUATIONS_DIR, file);
-      const evalContent = readFileSync(evalPath, 'utf-8');
+      const evalContent = readFileSync(evalPath, "utf-8");
       const evaluation: PipelineResult = JSON.parse(evalContent);
 
       // Skip if evaluation is too old
@@ -390,7 +401,7 @@ async function batchAudit(sinceHours: number): Promise<{ audited: number; skippe
       }
 
       // Skip if already audited
-      const workflowId = file.replace('-eval.json', '');
+      const workflowId = file.replace("-eval.json", "");
       const auditPath = join(AUDITS_DIR, `${workflowId}-audit.json`);
       if (existsSync(auditPath)) {
         skipped++;
@@ -417,11 +428,11 @@ if (import.meta.main) {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      workflow: { type: 'string' },
-      batch: { type: 'boolean' },
-      since: { type: 'string', default: '24h' },
-      json: { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' },
+      workflow: { type: "string" },
+      batch: { type: "boolean" },
+      since: { type: "string", default: "24h" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
     },
   });
 
@@ -439,11 +450,11 @@ Usage:
   }
 
   if (values.batch) {
-    const sinceMatch = (values.since || '24h').match(/^(\d+)h$/);
-    const sinceHours = sinceMatch ? parseInt(sinceMatch[1]) : 24;
+    const sinceMatch = (values.since || "24h").match(/^(\d+)h$/);
+    const sinceHours = sinceMatch ? parseInt(sinceMatch[1] ?? "24", 10) : 24;
 
     console.log(`TraceAuditor - Batch Mode (since ${sinceHours}h ago)`);
-    console.log('='.repeat(50));
+    console.log("=".repeat(50));
 
     const result = await batchAudit(sinceHours);
     console.log(`\nResults: ${result.audited} audited, ${result.skipped} skipped, ${result.errors} errors`);
@@ -453,8 +464,8 @@ Usage:
     if (values.json) {
       console.log(JSON.stringify(audit, null, 2));
     } else {
-      console.log('TraceAuditor');
-      console.log('============\n');
+      console.log("TraceAuditor");
+      console.log("============\n");
       console.log(`Workflow: ${audit.workflowId}`);
       console.log(`Score: ${audit.overallScore}/100`);
       console.log(`Root Cause: ${audit.rootCause}`);
@@ -470,19 +481,19 @@ Usage:
       }
 
       if (audit.graphContext) {
-        console.log('\nGraph Context:');
+        console.log("\nGraph Context:");
         if (audit.graphContext.relatedSessions.length > 0) {
-          console.log(`  Sessions: ${audit.graphContext.relatedSessions.join(', ')}`);
+          console.log(`  Sessions: ${audit.graphContext.relatedSessions.join(", ")}`);
         }
         if (audit.graphContext.relatedFiles.length > 0) {
-          console.log(`  Files: ${audit.graphContext.relatedFiles.join(', ')}`);
+          console.log(`  Files: ${audit.graphContext.relatedFiles.join(", ")}`);
         }
         if (audit.graphContext.similarFailures.length > 0) {
-          console.log(`  Similar failures: ${audit.graphContext.similarFailures.join(', ')}`);
+          console.log(`  Similar failures: ${audit.graphContext.similarFailures.join(", ")}`);
         }
       }
     }
   } else {
-    console.log('Use --workflow <id> or --batch. Use --help for more info.');
+    console.log("Use --workflow <id> or --batch. Use --help for more info.");
   }
 }

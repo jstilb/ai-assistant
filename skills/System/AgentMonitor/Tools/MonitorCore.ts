@@ -19,20 +19,20 @@
  *   bun run MonitorCore.ts query --workflow <id> [--live]
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { z } from 'zod';
-import { getTracesForWorkflow, getAllTraceFiles, computeTraceStats, parseTraceLine } from './TraceCollector.ts';
-import type { AgentTrace } from './TraceCollector.ts';
-import { getBaselineSummary } from './BaselineManager.ts';
-import { getRecentAlerts, ackAll } from './AlertManager.ts';
-import { auditLog, getAuditStats } from './AuditLogger.ts';
-import { startStreamingPipeline } from './StreamingPipeline.ts';
-import { createApprovalManager } from './ApprovalManager.ts';
-import { createInterventionManager, type InterventionConfig } from './InterventionManager.ts';
-import { runThresholdReplay, selectTraceFilesByDateRange } from './ReplayEngine.ts';
-import { injectScenario, type ScenarioType, type PipelineMode } from './SyntheticInjector.ts';
-import { comparePolicies } from './PolicyComparator.ts';
-import { resolveStaleAnomalies } from './AnomalyDetector.ts';
+import { existsSync, readFileSync } from "node:fs";
+import { z } from "zod";
+import { getTracesForWorkflow, getAllTraceFiles, computeTraceStats, parseTraceLine } from "./TraceCollector.ts";
+import type { AgentTrace } from "./TraceCollector.ts";
+import { getBaselineSummary } from "./BaselineManager.ts";
+import { getRecentAlerts, ackAll } from "./AlertManager.ts";
+import { auditLog, getAuditStats } from "./AuditLogger.ts";
+import { startStreamingPipeline } from "./StreamingPipeline.ts";
+import { createApprovalManager } from "./ApprovalManager.ts";
+import { createInterventionManager, type InterventionConfig } from "./InterventionManager.ts";
+import { runThresholdReplay, selectTraceFilesByDateRange } from "./ReplayEngine.ts";
+import { injectScenario, type ScenarioType, type PipelineMode } from "./SyntheticInjector.ts";
+import { comparePolicies } from "./PolicyComparator.ts";
+import { resolveStaleAnomalies } from "./AnomalyDetector.ts";
 
 // ============================================================================
 // Policy Config Loader with Zod validation (ISC 606, 607)
@@ -43,7 +43,7 @@ const PolicyConfigEntrySchema = z.object({
   policy: z.record(z.string(), z.unknown()),
 });
 
-const PolicyConfigsSchema = z.array(PolicyConfigEntrySchema).min(2, 'compare-policies requires at least 2 configs');
+const PolicyConfigsSchema = z.array(PolicyConfigEntrySchema).min(2, "compare-policies requires at least 2 configs");
 
 function loadPolicyConfigs(filePath: string): Array<{ name: string; policy: unknown }> {
   if (!existsSync(filePath)) {
@@ -51,7 +51,7 @@ function loadPolicyConfigs(filePath: string): Array<{ name: string; policy: unkn
   }
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(filePath, 'utf-8'));
+    raw = JSON.parse(readFileSync(filePath, "utf-8"));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`configs file is not valid JSON: ${msg}`);
@@ -64,26 +64,26 @@ function loadPolicyConfigs(filePath: string): Array<{ name: string; policy: unkn
 // ============================================================================
 
 async function showStatus(): Promise<void> {
-  console.log('\nAgentMonitor Status');
-  console.log('='.repeat(50));
+  console.log("\nAgentMonitor Status");
+  console.log("=".repeat(50));
 
   // Trace files
   const traceFiles = getAllTraceFiles();
   console.log(`\nTrace Files: ${traceFiles.length}`);
   if (traceFiles.length > 0) {
-    console.log(`  Most recent: ${traceFiles.slice(0, 5).join(', ')}`);
+    console.log(`  Most recent: ${traceFiles.slice(0, 5).join(", ")}`);
   }
 
   // Baselines
-  console.log('');
+  console.log("");
   console.log(await getBaselineSummary());
 
   // Recent alerts
   const alerts = getRecentAlerts(5);
   if (alerts.length > 0) {
-    console.log('\nRecent Alerts:');
+    console.log("\nRecent Alerts:");
     for (const alert of alerts) {
-      const time = new Date(alert.timestamp).toISOString().replace('T', ' ').slice(0, 19);
+      const time = new Date(alert.timestamp).toISOString().replace("T", " ").slice(0, 19);
       console.log(`  [${alert.severity.toUpperCase()}] ${time} - ${alert.message.slice(0, 60)}`);
     }
   }
@@ -99,8 +99,8 @@ async function showStatus(): Promise<void> {
 
 async function watchLive(noDashboard: boolean, quiet: boolean): Promise<void> {
   if (!quiet) {
-    console.log('\nStarting live agent monitoring...');
-    console.log('Press Ctrl+C to stop.\n');
+    console.log("\nStarting live agent monitoring...");
+    console.log("Press Ctrl+C to stop.\n");
   }
 
   const pipeline = startStreamingPipeline({
@@ -115,15 +115,15 @@ async function watchLive(noDashboard: boolean, quiet: boolean): Promise<void> {
   });
 
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on("SIGINT", () => {
     pipeline.stop();
     const stats = pipeline.getStats();
-    console.log('\n');
-    console.log('Live monitoring stopped.');
+    console.log("\n");
+    console.log("Live monitoring stopped.");
     console.log(`  Traces processed: ${stats.tracesProcessed}`);
     console.log(`  Anomalies detected: ${stats.anomaliesDetected}`);
     console.log(`  Active workflows: ${stats.activeWorkflows}`);
-    console.log(`  Uptime: ${((stats.uptimeMs) / 1000 / 60).toFixed(1)} minutes`);
+    console.log(`  Uptime: ${(stats.uptimeMs / 1000 / 60).toFixed(1)} minutes`);
     process.exit(0);
   });
 
@@ -133,7 +133,7 @@ async function watchLive(noDashboard: boolean, quiet: boolean): Promise<void> {
 
 async function queryWorkflow(workflowId: string, live: boolean): Promise<void> {
   console.log(`\nQuerying workflow: ${workflowId}`);
-  console.log('='.repeat(50));
+  console.log("=".repeat(50));
 
   // Historical data
   const traces = getTracesForWorkflow(workflowId);
@@ -144,7 +144,7 @@ async function queryWorkflow(workflowId: string, live: boolean): Promise<void> {
 
   if (traces.length > 0) {
     const stats = computeTraceStats(traces);
-    console.log('\nTrace Statistics:');
+    console.log("\nTrace Statistics:");
     console.log(`  Total traces: ${stats.totalTraces}`);
     console.log(`  Unique agents: ${stats.uniqueAgents}`);
     console.log(`  Event types: ${JSON.stringify(stats.eventTypeCounts)}`);
@@ -156,51 +156,52 @@ async function queryWorkflow(workflowId: string, live: boolean): Promise<void> {
     }
 
     // Recent tool calls
-    const toolCalls = traces.filter(t => t.eventType === 'tool_call');
+    const toolCalls = traces.filter((t) => t.eventType === "tool_call");
     if (toolCalls.length > 0) {
       const toolCounts = new Map<string, number>();
       for (const tc of toolCalls) {
-        const name = tc.metadata.toolName || 'unknown';
+        const name = tc.metadata.toolName || "unknown";
         toolCounts.set(name, (toolCounts.get(name) || 0) + 1);
       }
-      console.log('\nTool Call Distribution:');
+      console.log("\nTool Call Distribution:");
       const sorted = Array.from(toolCounts.entries()).sort((a, b) => b[1] - a[1]);
       for (const [name, count] of sorted.slice(0, 10)) {
-        const bar = '='.repeat(Math.min(count, 30));
+        const bar = "=".repeat(Math.min(count, 30));
         console.log(`  ${name.padEnd(20)} ${count.toString().padStart(4)} ${bar}`);
       }
     }
 
     // Errors
-    const errors = traces.filter(t => t.eventType === 'error');
+    const errors = traces.filter((t) => t.eventType === "error");
     if (errors.length > 0) {
       console.log(`\nErrors (${errors.length}):`);
       for (const e of errors.slice(-5)) {
         const time = new Date(e.timestamp).toISOString().slice(11, 19);
-        console.log(`  [${time}] ${e.metadata.errorMessage?.slice(0, 70) || 'Unknown error'}`);
+        console.log(`  [${time}] ${e.metadata.errorMessage?.slice(0, 70) || "Unknown error"}`);
       }
     }
   }
 
   if (live) {
-    console.log('\nWatching for live updates... (Ctrl+C to stop)');
+    console.log("\nWatching for live updates... (Ctrl+C to stop)");
     const pipeline = startStreamingPipeline({
       dashboard: false,
       quiet: true,
       onTrace: (trace) => {
         if (trace.workflowId === workflowId) {
           const time = new Date(trace.timestamp).toISOString().slice(11, 19);
-          const detail = trace.eventType === 'tool_call'
-            ? `tool=${trace.metadata.toolName || 'unknown'}`
-            : trace.eventType === 'error'
-              ? `err=${trace.metadata.errorMessage?.slice(0, 40) || ''}`
-              : '';
+          const detail =
+            trace.eventType === "tool_call"
+              ? `tool=${trace.metadata.toolName || "unknown"}`
+              : trace.eventType === "error"
+                ? `err=${trace.metadata.errorMessage?.slice(0, 40) || ""}`
+                : "";
           console.log(`  [${time}] ${trace.eventType.padEnd(12)} ${trace.agentId.padEnd(15)} ${detail}`);
         }
       },
     });
 
-    process.on('SIGINT', () => {
+    process.on("SIGINT", () => {
       pipeline.stop();
       process.exit(0);
     });
@@ -273,7 +274,7 @@ Examples:
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     printUsage();
     return;
   }
@@ -285,36 +286,36 @@ async function main(): Promise<void> {
   };
 
   switch (command) {
-    case 'status': {
+    case "status": {
       await showStatus();
       break;
     }
 
-    case 'watch': {
-      const noDashboard = args.includes('--no-dashboard');
-      const quiet = args.includes('--quiet');
+    case "watch": {
+      const noDashboard = args.includes("--no-dashboard");
+      const quiet = args.includes("--quiet");
       await watchLive(noDashboard, quiet);
       break;
     }
 
-    case 'query': {
-      const queryWorkflowId = getArg('--workflow');
+    case "query": {
+      const queryWorkflowId = getArg("--workflow");
       if (!queryWorkflowId) {
-        console.error('Error: --workflow is required');
+        console.error("Error: --workflow is required");
         process.exit(1);
       }
-      const live = args.includes('--live');
+      const live = args.includes("--live");
       await queryWorkflow(queryWorkflowId, live);
       break;
     }
 
-    case 'intervene': {
+    case "intervene": {
       const subcommand = args[1];
       switch (subcommand) {
-        case 'approve': {
+        case "approve": {
           const interventionId = args[2];
           if (!interventionId) {
-            console.error('Error: intervention ID required');
+            console.error("Error: intervention ID required");
             process.exit(1);
           }
           const approvalManager = createApprovalManager();
@@ -323,11 +324,11 @@ async function main(): Promise<void> {
           break;
         }
 
-        case 'deny': {
+        case "deny": {
           const interventionId = args[2];
-          const reason = args.slice(3).join(' ') || 'Manual denial';
+          const reason = args.slice(3).join(" ") || "Manual denial";
           if (!interventionId) {
-            console.error('Error: intervention ID required');
+            console.error("Error: intervention ID required");
             process.exit(1);
           }
           const approvalManager = createApprovalManager();
@@ -336,60 +337,60 @@ async function main(): Promise<void> {
           break;
         }
 
-        case 'list-pending': {
+        case "list-pending": {
           const approvalManager = createApprovalManager();
           const pending = await approvalManager.getPendingApprovals();
           console.log(JSON.stringify({ pending, count: pending.length }, null, 2));
           break;
         }
 
-        case 'emergency-stop': {
+        case "emergency-stop": {
           const interventionManager = createInterventionManager();
           await interventionManager.emergencyStop();
-          console.log(JSON.stringify({ emergencyStop: true, message: 'All interventions halted' }));
+          console.log(JSON.stringify({ emergencyStop: true, message: "All interventions halted" }));
           break;
         }
 
-        case 'dry-run': {
+        case "dry-run": {
           const mode = args[2];
-          if (!mode || !['on', 'off'].includes(mode)) {
+          if (!mode || !["on", "off"].includes(mode)) {
             console.error('Error: dry-run requires "on" or "off"');
             process.exit(1);
           }
           const interventionManager = createInterventionManager();
-          interventionManager.setDryRun(mode === 'on');
-          console.log(JSON.stringify({ dryRun: mode === 'on' }));
+          interventionManager.setDryRun(mode === "on");
+          console.log(JSON.stringify({ dryRun: mode === "on" }));
           break;
         }
 
         default: {
           console.error(`Unknown intervene subcommand: ${subcommand}`);
-          console.error('Available: approve, deny, list-pending, emergency-stop, dry-run');
+          console.error("Available: approve, deny, list-pending, emergency-stop, dry-run");
           process.exit(1);
         }
       }
       break;
     }
 
-    case 'replay': {
-      const traceFile = getArg('--trace');
-      const fromDate = getArg('--from');
-      const toDate = getArg('--to');
-      const thresholdsFile = getArg('--thresholds');
-      const anomalyFilter = getArg('--anomaly-filter');
+    case "replay": {
+      const traceFile = getArg("--trace");
+      const fromDate = getArg("--from");
+      const toDate = getArg("--to");
+      const thresholdsFile = getArg("--thresholds");
+      const anomalyFilter = getArg("--anomaly-filter");
 
       if (!thresholdsFile) {
-        console.error('Error: --thresholds is required for replay command');
+        console.error("Error: --thresholds is required for replay command");
         process.exit(1);
       }
 
       if (!traceFile && (!fromDate || !toDate)) {
-        console.error('Error: replay requires either --trace <file> or --from <date> --to <date>');
+        console.error("Error: replay requires either --trace <file> or --from <date> --to <date>");
         process.exit(1);
       }
 
       if (traceFile === undefined && (fromDate === undefined || toDate === undefined)) {
-        console.error('Error: --from and --to must both be provided when using date range');
+        console.error("Error: --from and --to must both be provided when using date range");
         process.exit(1);
       }
 
@@ -406,32 +407,44 @@ async function main(): Promise<void> {
       if (toDate) options.toDate = toDate;
       if (anomalyFilter) options.anomalyFilter = anomalyFilter;
 
-      const result = await runThresholdReplay(traceFile ?? '', thresholdsFile, options);
-      console.log(JSON.stringify({
-        traceCount: result.traceCount,
-        detectionRateChange: result.detectionRateChange,
-        wouldHaveCaught: result.wouldHaveCaught,
-        wouldHaveMissed: result.wouldHaveMissed,
-        falsePositives: result.falsePositives,
-        reportPath: result.reportPath,
-      }, null, 2));
+      const result = await runThresholdReplay(traceFile ?? "", thresholdsFile, options);
+      console.log(
+        JSON.stringify(
+          {
+            traceCount: result.traceCount,
+            detectionRateChange: result.detectionRateChange,
+            wouldHaveCaught: result.wouldHaveCaught,
+            wouldHaveMissed: result.wouldHaveMissed,
+            falsePositives: result.falsePositives,
+            reportPath: result.reportPath,
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
-    case 'inject': {
-      const scenario = getArg('--scenario') as ScenarioType | undefined;
-      const pipeline = (getArg('--pipeline') ?? 'offline') as PipelineMode;
-      const countStr = getArg('--count');
+    case "inject": {
+      const scenario = getArg("--scenario") as ScenarioType | undefined;
+      const pipeline = (getArg("--pipeline") ?? "offline") as PipelineMode;
+      const countStr = getArg("--count");
       const count = countStr ? Math.min(parseInt(countStr, 10), 500) : 20;
 
       const validScenarios: ScenarioType[] = [
-        'token_spike', 'error_burst', 'infinite_loop', 'message_flood',
-        'communication_deadlock', 'team_divergence', 'orphaned_member', 'high_load',
+        "token_spike",
+        "error_burst",
+        "infinite_loop",
+        "message_flood",
+        "communication_deadlock",
+        "team_divergence",
+        "orphaned_member",
+        "high_load",
       ];
-      const validPipelines: PipelineMode[] = ['live', 'offline'];
+      const validPipelines: PipelineMode[] = ["live", "offline"];
 
       if (!scenario || !validScenarios.includes(scenario)) {
-        console.error(`Error: --scenario is required. Valid values: ${validScenarios.join(', ')}`);
+        console.error(`Error: --scenario is required. Valid values: ${validScenarios.join(", ")}`);
         process.exit(1);
       }
 
@@ -441,55 +454,73 @@ async function main(): Promise<void> {
       }
 
       const report = await injectScenario(scenario, pipeline, count);
-      console.log(JSON.stringify({
-        scenario: report.scenario,
-        tracesInjected: report.tracesInjected,
-        anomaliesDetected: report.anomaliesDetected.length,
-        interventionsTriggered: report.interventionsTriggered.length,
-        chainComplete: report.chainComplete,
-        durationMs: report.durationMs,
-        reportPath: report.reportPath,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            scenario: report.scenario,
+            tracesInjected: report.tracesInjected,
+            anomaliesDetected: report.anomaliesDetected.length,
+            interventionsTriggered: report.interventionsTriggered.length,
+            chainComplete: report.chainComplete,
+            durationMs: report.durationMs,
+            reportPath: report.reportPath,
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
-    case 'resolve-stale-anomalies': {
-      console.log('\nResolving stale anomalies...');
+    case "resolve-stale-anomalies": {
+      console.log("\nResolving stale anomalies...");
       const count = await resolveStaleAnomalies();
-      console.log(JSON.stringify({
-        resolved: count,
-        message: `Resolved ${count} stale anomalies (aged-out >30d or test workflows >7d)`,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            resolved: count,
+            message: `Resolved ${count} stale anomalies (aged-out >30d or test workflows >7d)`,
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
-    case 'ack': {
-      const ackAllFlag = args.includes('--all');
+    case "ack": {
+      const ackAllFlag = args.includes("--all");
       if (!ackAllFlag) {
-        console.error('Error: --all flag required for ack command');
+        console.error("Error: --all flag required for ack command");
         process.exit(1);
       }
       const count = ackAll();
-      console.log(JSON.stringify({
-        acknowledged: count,
-        message: `Acknowledged ${count} alerts`,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            acknowledged: count,
+            message: `Acknowledged ${count} alerts`,
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
-    case 'compare-policies': {
-      const traceFile = getArg('--trace');
-      const fromDate = getArg('--from');
-      const toDate = getArg('--to');
-      const configsFile = getArg('--configs');
+    case "compare-policies": {
+      const traceFile = getArg("--trace");
+      const fromDate = getArg("--from");
+      const toDate = getArg("--to");
+      const configsFile = getArg("--configs");
 
       if (!configsFile) {
-        console.error('Error: --configs is required for compare-policies command');
+        console.error("Error: --configs is required for compare-policies command");
         process.exit(1);
       }
 
       if (!traceFile && (!fromDate || !toDate)) {
-        console.error('Error: compare-policies requires either --trace <file> or --from <date> --to <date>');
+        console.error("Error: compare-policies requires either --trace <file> or --from <date> --to <date>");
         process.exit(1);
       }
 
@@ -510,7 +541,9 @@ async function main(): Promise<void> {
           console.error(`Error: trace file does not exist: ${traceFile}`);
           process.exit(1);
         }
-        traceLines = readFileSync(traceFile, 'utf-8').split('\n').filter((l: string) => l.trim());
+        traceLines = readFileSync(traceFile, "utf-8")
+          .split("\n")
+          .filter((l: string) => l.trim());
       } else if (fromDate && toDate) {
         const files = selectTraceFilesByDateRange(fromDate, toDate);
         if (files.length === 0) {
@@ -518,7 +551,11 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         for (const f of files) {
-            traceLines.push(...readFileSync(f, 'utf-8').split('\n').filter((l: string) => l.trim()));
+          traceLines.push(
+            ...readFileSync(f, "utf-8")
+              .split("\n")
+              .filter((l: string) => l.trim()),
+          );
         }
       }
 
@@ -534,15 +571,24 @@ async function main(): Promise<void> {
         if (trace) traces.push(trace);
       }
 
-      const results = await comparePolicies(traces, policyConfigs as Array<{ name: string; policy: InterventionConfig }>);
-      console.log(JSON.stringify({
-        policies: results.map(r => ({
-          name: r.policyName,
-          interventionsTriggered: r.interventionsTriggered,
-          chainComplete: r.interventionsTriggered > 0,
-        })),
-        reportPath: results[0]?.reportPath,
-      }, null, 2));
+      const results = await comparePolicies(
+        traces,
+        policyConfigs as Array<{ name: string; policy: InterventionConfig }>,
+      );
+      console.log(
+        JSON.stringify(
+          {
+            policies: results.map((r) => ({
+              name: r.policyName,
+              interventionsTriggered: r.interventionsTriggered,
+              chainComplete: r.interventionsTriggered > 0,
+            })),
+            reportPath: results[0]?.reportPath,
+          },
+          null,
+          2,
+        ),
+      );
       break;
     }
 
@@ -559,8 +605,8 @@ if (import.meta.main) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error(`Fatal error: ${errMsg}`);
     auditLog({
-      action: 'error',
-      details: { error: errMsg, command: process.argv.slice(2).join(' ') },
+      action: "error",
+      details: { error: errMsg, command: process.argv.slice(2).join(" ") },
       success: false,
       errorMessage: errMsg,
     });

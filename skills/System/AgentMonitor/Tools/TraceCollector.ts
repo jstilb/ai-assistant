@@ -10,10 +10,10 @@
  *   const traces = await getTracesForWorkflow('workflow-123');
  */
 
-import { existsSync, readFileSync, readdirSync, watch } from 'fs';
-import { join } from 'path';
-import { auditLog } from './AuditLogger.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { auditLog } from "./AuditLogger.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -32,8 +32,15 @@ import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
  * site while still accepting real-world category values.
  */
 export type KnownTraceEventType =
-  | 'start' | 'tool_call' | 'decision' | 'completion' | 'error'
-  | 'team_spawn' | 'team_message' | 'team_task_update' | 'team_cleanup';
+  | "start"
+  | "tool_call"
+  | "decision"
+  | "completion"
+  | "error"
+  | "team_spawn"
+  | "team_message"
+  | "team_task_update"
+  | "team_cleanup";
 export type TraceEventType = KnownTraceEventType | (string & {});
 
 export interface AgentTrace {
@@ -69,14 +76,6 @@ interface RawNewFormatTraceLine {
   payload?: Record<string, unknown>;
 }
 
-interface TraceFilter {
-  workflowId?: string;
-  agentId?: string;
-  eventType?: AgentTrace['eventType'];
-  startTime?: number;
-  endTime?: number;
-}
-
 interface TraceStats {
   totalTraces: number;
   uniqueWorkflows: number;
@@ -90,7 +89,7 @@ interface TraceStats {
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const TRACES_DIR: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
+const TRACES_DIR: string = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
 
 // ============================================================================
 // Core Functions
@@ -107,32 +106,31 @@ const TRACES_DIR: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
  * `timestamp` or `ts`).
  */
 function normalizeRawTrace(raw: Record<string, unknown>): AgentTrace | null {
-  const workflowId = typeof raw.workflowId === 'string' ? raw.workflowId : null;
+  const workflowId = typeof raw.workflowId === "string" ? raw.workflowId : null;
   if (!workflowId) return null;
 
-  const agentId = typeof raw.agentId === 'string' ? raw.agentId : '';
+  const agentId = typeof raw.agentId === "string" ? raw.agentId : "";
 
   // Resolve timestamp — prefer legacy `timestamp`, fall back to new-format `ts`
   const rawTs = raw.timestamp !== undefined ? raw.timestamp : (raw as RawNewFormatTraceLine).ts;
-  const timestamp = typeof rawTs === 'number' ? rawTs : NaN;
+  const timestamp = typeof rawTs === "number" ? rawTs : NaN;
   if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
 
   // Resolve eventType — prefer legacy `eventType`, fall back to new-format `category`
-  const eventType: TraceEventType | '' = typeof raw.eventType === 'string'
-    ? raw.eventType
-    : (typeof raw.category === 'string' ? raw.category : '');
+  const eventType: TraceEventType | "" =
+    typeof raw.eventType === "string" ? raw.eventType : typeof raw.category === "string" ? raw.category : "";
   if (!eventType) return null;
 
   // Resolve metadata — prefer legacy `metadata`, fall back to new-format `payload`
-  const metadata = (raw.metadata !== null && typeof raw.metadata === 'object')
-    ? raw.metadata as AgentTrace['metadata']
-    : (raw.payload !== null && typeof raw.payload === 'object'
-      ? raw.payload as AgentTrace['metadata']
-      : {});
+  const metadata =
+    raw.metadata !== null && typeof raw.metadata === "object"
+      ? (raw.metadata as AgentTrace["metadata"])
+      : raw.payload !== null && typeof raw.payload === "object"
+        ? (raw.payload as AgentTrace["metadata"])
+        : {};
 
-  const context = (raw.context !== null && typeof raw.context === 'object')
-    ? raw.context as Record<string, unknown>
-    : {};
+  const context =
+    raw.context !== null && typeof raw.context === "object" ? (raw.context as Record<string, unknown>) : {};
 
   return { workflowId, agentId, timestamp, eventType, metadata, context };
 }
@@ -146,7 +144,7 @@ function normalizeRawTrace(raw: Record<string, unknown>): AgentTrace | null {
 export function parseTraceLine(line: string): AgentTrace | null {
   try {
     const parsed = JSON.parse(line);
-    if (parsed === null || typeof parsed !== 'object') return null;
+    if (parsed === null || typeof parsed !== "object") return null;
     return normalizeRawTrace(parsed as Record<string, unknown>);
   } catch {
     return null;
@@ -158,19 +156,19 @@ export function getTracesForWorkflow(workflowId: string): AgentTrace[] {
 
   if (!existsSync(filePath)) {
     auditLog({
-      action: 'collect_trace',
+      action: "collect_trace",
       workflowId,
-      details: { error: 'trace file not found', path: filePath },
+      details: { error: "trace file not found", path: filePath },
       success: false,
       errorMessage: `Trace file not found: ${filePath}`,
     });
     return [];
   }
 
-  const content = readFileSync(filePath, 'utf-8').trim();
+  const content = readFileSync(filePath, "utf-8").trim();
   if (!content) return [];
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const traces: AgentTrace[] = [];
   let parseErrors = 0;
 
@@ -191,7 +189,7 @@ export function getTracesForWorkflow(workflowId: string): AgentTrace[] {
   }
 
   auditLog({
-    action: 'collect_trace',
+    action: "collect_trace",
     workflowId,
     details: { traceCount: traces.length, parseErrors },
     success: true,
@@ -203,8 +201,8 @@ export function getTracesForWorkflow(workflowId: string): AgentTrace[] {
 export function getAllTraceFiles(): string[] {
   if (!existsSync(TRACES_DIR)) return [];
   return readdirSync(TRACES_DIR)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => f.replace('.jsonl', ''));
+    .filter((f) => f.endsWith(".jsonl"))
+    .map((f) => f.replace(".jsonl", ""));
 }
 
 export function getTracesForDate(dateStr: string): Map<string, AgentTrace[]> {
@@ -217,220 +215,13 @@ export function getTracesForDate(dateStr: string): Map<string, AgentTrace[]> {
 
   for (const wfId of workflowIds) {
     const traces = getTracesForWorkflow(wfId);
-    const filtered = traces.filter(t => t.timestamp >= dayStart && t.timestamp < dayEnd);
+    const filtered = traces.filter((t) => t.timestamp >= dayStart && t.timestamp < dayEnd);
     if (filtered.length > 0) {
       result.set(wfId, filtered);
     }
   }
 
   return result;
-}
-
-function filterTraces(traces: AgentTrace[], filter: TraceFilter): AgentTrace[] {
-  return traces.filter(t => {
-    if (filter.workflowId && t.workflowId !== filter.workflowId) return false;
-    if (filter.agentId && t.agentId !== filter.agentId) return false;
-    if (filter.eventType && t.eventType !== filter.eventType) return false;
-    if (filter.startTime && t.timestamp < filter.startTime) return false;
-    if (filter.endTime && t.timestamp > filter.endTime) return false;
-    return true;
-  });
-}
-
-// ============================================================================
-// Team Trace Functions
-// ============================================================================
-
-const TEAMS_DIR: string = join(KAYA_HOME, 'MEMORY', 'teams');
-
-/**
- * Read team inbox files and convert to AgentTrace format.
- * Scans MEMORY/teams/{teamId}/inboxes/ for message files and converts
- * each message to a team_message trace event.
- */
-function getTeamTraces(teamId: string): AgentTrace[] {
-  const teamDir = join(TEAMS_DIR, teamId);
-  const inboxesDir = join(teamDir, 'inboxes');
-  const traces: AgentTrace[] = [];
-
-  if (!existsSync(inboxesDir)) {
-    auditLog({
-      action: 'collect_trace',
-      workflowId: teamId,
-      details: { error: 'team inboxes not found', path: inboxesDir },
-      success: false,
-      errorMessage: `Team inboxes not found: ${inboxesDir}`,
-    });
-    return [];
-  }
-
-  // Read manifest for team metadata
-  const manifestPath = join(teamDir, 'manifest.json');
-  let teamName = teamId;
-  if (existsSync(manifestPath)) {
-    try {
-      const content = readFileSync(manifestPath, 'utf-8');
-      const manifest = JSON.parse(content);
-      teamName = manifest.teamName || teamId;
-    } catch { /* use teamId as fallback */ }
-  }
-
-  // Scan each member's inbox
-  const memberDirs = readdirSync(inboxesDir);
-  for (const memberId of memberDirs) {
-    const messagesPath = join(inboxesDir, memberId, 'messages.json');
-    if (!existsSync(messagesPath)) continue;
-
-    try {
-      const content = readFileSync(messagesPath, 'utf-8');
-      const messages = JSON.parse(content);
-      if (!Array.isArray(messages)) continue;
-
-      for (const msg of messages) {
-        if (!msg.from || !msg.timestamp) continue;
-
-        const eventType: AgentTrace['eventType'] = msg.content === 'SHUTDOWN_REQUESTED'
-          ? 'team_cleanup'
-          : 'team_message';
-
-        traces.push({
-          workflowId: teamId,
-          agentId: msg.from,
-          timestamp: new Date(msg.timestamp).getTime(),
-          eventType,
-          metadata: {
-            toolName: `inbox:${memberId}`,
-          },
-          context: {
-            teamName,
-            to: msg.to,
-            from: msg.from,
-            contentLength: msg.content?.length || 0,
-            isBroadcast: msg.to === 'all',
-          },
-        });
-      }
-    } catch { /* skip malformed inbox files */ }
-  }
-
-  // Also check results directory for spawn/completion traces
-  const resultsDir = join(teamDir, 'results');
-  if (existsSync(resultsDir)) {
-    const resultFiles = readdirSync(resultsDir).filter(f => f.endsWith('.json'));
-    for (const file of resultFiles) {
-      try {
-        const content = readFileSync(join(resultsDir, file), 'utf-8');
-        const result = JSON.parse(content);
-        traces.push({
-          workflowId: teamId,
-          agentId: result.role || file.replace('.json', ''),
-          timestamp: Date.now(),
-          eventType: result.status === 'completed' ? 'completion' : 'team_spawn',
-          metadata: {
-            latencyMs: result.durationMs,
-          },
-          context: {
-            teamName,
-            status: result.status,
-            model: result.model,
-            hasOutput: !!result.output,
-          },
-        });
-      } catch { /* skip malformed result files */ }
-    }
-  }
-
-  auditLog({
-    action: 'collect_trace',
-    workflowId: teamId,
-    details: { traceCount: traces.length, source: 'team_inboxes' },
-    success: true,
-  });
-
-  return traces.sort((a, b) => a.timestamp - b.timestamp);
-}
-
-/**
- * Watch team inboxes for real-time monitoring.
- * Uses fs.watch on each member's messages.json file and invokes
- * callback with new traces as messages arrive.
- *
- * Returns a cleanup function to stop watching.
- */
-function watchTeamInboxes(
-  teamId: string,
-  callback: (trace: AgentTrace) => void
-): () => void {
-  const inboxesDir = join(TEAMS_DIR, teamId, 'inboxes');
-  const watchers: ReturnType<typeof watch>[] = [];
-  const lastCounts = new Map<string, number>();
-
-  if (!existsSync(inboxesDir)) {
-    return () => {};
-  }
-
-  const memberDirs = readdirSync(inboxesDir);
-
-  for (const memberId of memberDirs) {
-    const messagesPath = join(inboxesDir, memberId, 'messages.json');
-    if (!existsSync(messagesPath)) continue;
-
-    // Track initial message count
-    try {
-      const initContent = readFileSync(messagesPath, 'utf-8');
-      const initial = JSON.parse(initContent);
-      lastCounts.set(memberId, Array.isArray(initial) ? initial.length : 0);
-    } catch {
-      lastCounts.set(memberId, 0);
-    }
-
-    const watcher = watch(messagesPath, (eventType) => {
-      if (eventType !== 'change') return;
-
-      try {
-        const msgContent = readFileSync(messagesPath, 'utf-8');
-        const messages = JSON.parse(msgContent);
-        if (!Array.isArray(messages)) return;
-
-        const lastCount = lastCounts.get(memberId) || 0;
-        if (messages.length <= lastCount) return;
-
-        // Process new messages only
-        const newMessages = messages.slice(lastCount);
-        lastCounts.set(memberId, messages.length);
-
-        for (const msg of newMessages) {
-          if (!msg.from || !msg.timestamp) continue;
-
-          callback({
-            workflowId: teamId,
-            agentId: msg.from,
-            timestamp: new Date(msg.timestamp).getTime(),
-            eventType: msg.content === 'SHUTDOWN_REQUESTED' ? 'team_cleanup' : 'team_message',
-            metadata: {
-              toolName: `inbox:${memberId}`,
-            },
-            context: {
-              to: msg.to,
-              from: msg.from,
-              contentLength: msg.content?.length || 0,
-              isBroadcast: msg.to === 'all',
-            },
-          });
-        }
-      } catch { /* ignore read errors during rapid writes */ }
-    });
-
-    watchers.push(watcher);
-  }
-
-  // Return cleanup function
-  return () => {
-    for (const watcher of watchers) {
-      watcher.close();
-    }
-    watchers.length = 0;
-  };
 }
 
 export function computeTraceStats(traces: AgentTrace[]): TraceStats {

@@ -15,11 +15,11 @@
  *   watcher.stop();
  */
 
-import { watch, existsSync, readFileSync, mkdirSync, type FSWatcher } from 'fs';
-import { join, basename } from 'path';
-import { parseTraceLine, type AgentTrace } from './TraceCollector.ts';
-import { auditLog } from './AuditLogger.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { watch, existsSync, readFileSync, mkdirSync, type FSWatcher } from "node:fs";
+import { join, basename } from "node:path";
+import { parseTraceLine, type AgentTrace } from "./TraceCollector.ts";
+import { auditLog } from "./AuditLogger.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -53,7 +53,7 @@ export interface LiveWatcher {
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const TRACES_DIR: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
+const TRACES_DIR: string = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
 
 // ============================================================================
 // Core Implementation
@@ -76,7 +76,7 @@ export function parseTraceFileContent(newContent: string): { traces: AgentTrace[
   const traces: AgentTrace[] = [];
   let dropped = 0;
 
-  for (const line of newContent.trim().split('\n')) {
+  for (const line of newContent.trim().split("\n")) {
     if (!line.trim()) continue;
 
     const trace = parseTraceLine(line);
@@ -110,7 +110,7 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
   function updateEventsPerSecond(): void {
     const now = Date.now();
     // Remove timestamps older than window
-    while (recentTimestamps.length > 0 && recentTimestamps[0] < now - EPS_WINDOW_MS) {
+    while (recentTimestamps.length > 0 && (recentTimestamps[0] ?? Number.POSITIVE_INFINITY) < now - EPS_WINDOW_MS) {
       recentTimestamps.shift();
     }
     stats.eventsPerSecond = recentTimestamps.length / (EPS_WINDOW_MS / 1000);
@@ -118,13 +118,13 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
 
   function processNewLines(filePath: string): void {
     const fileName = basename(filePath);
-    if (!fileName.endsWith('.jsonl')) return;
+    if (!fileName.endsWith(".jsonl")) return;
 
-    const workflowId = fileName.replace('.jsonl', '');
+    const workflowId = fileName.replace(".jsonl", "");
     const currentOffset = fileOffsets.get(fileName) || 0;
 
     try {
-      const content = readFileSync(filePath, 'utf-8');
+      const content = readFileSync(filePath, "utf-8");
       const newContent = content.slice(currentOffset);
       fileOffsets.set(fileName, content.length);
 
@@ -141,10 +141,10 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
         updateEventsPerSecond();
 
         // Detect workflow lifecycle events
-        if (trace.eventType === 'start' && callbacks.onWorkflowStart) {
+        if (trace.eventType === "start" && callbacks.onWorkflowStart) {
           callbacks.onWorkflowStart(workflowId);
         }
-        if (trace.eventType === 'completion' && callbacks.onWorkflowEnd) {
+        if (trace.eventType === "completion" && callbacks.onWorkflowEnd) {
           callbacks.onWorkflowEnd(workflowId);
           stats.activeWorkflows.delete(workflowId);
         }
@@ -161,12 +161,12 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
   function initializeOffsets(): void {
     if (!existsSync(TRACES_DIR)) return;
 
-    const files = Bun.spawnSync(['ls', TRACES_DIR]).stdout.toString().trim().split('\n');
+    const files = Bun.spawnSync(["ls", TRACES_DIR]).stdout.toString().trim().split("\n");
     for (const file of files) {
-      if (file.endsWith('.jsonl')) {
+      if (file.endsWith(".jsonl")) {
         const filePath = join(TRACES_DIR, file);
         try {
-          const content = readFileSync(filePath, 'utf-8');
+          const content = readFileSync(filePath, "utf-8");
           fileOffsets.set(file, content.length);
         } catch {
           fileOffsets.set(file, 0);
@@ -204,8 +204,8 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
       });
 
       auditLog({
-        action: 'config_change',
-        details: { event: 'live_watcher_started' },
+        action: "config_change",
+        details: { event: "live_watcher_started" },
         success: true,
       });
     },
@@ -220,9 +220,9 @@ export function createLiveWatcher(callbacks: LiveWatcherCallbacks): LiveWatcher 
       }
 
       auditLog({
-        action: 'config_change',
+        action: "config_change",
         details: {
-          event: 'live_watcher_stopped',
+          event: "live_watcher_stopped",
           tracesReceived: stats.tracesReceived,
           droppedTraces: stats.droppedTraces,
           uptimeMs: Date.now() - stats.startedAt,

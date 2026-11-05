@@ -9,29 +9,29 @@
  *   const report = await injectScenario('token_spike', 'offline');
  */
 
-import { writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import type { AgentTrace } from './TraceCollector.ts';
-import type { Anomaly } from './AnomalyDetector.ts';
-import { createAnomalyDetector, deterministicRepetitionAssessor } from './AnomalyDetector.ts';
-import { createInterventionManager, type InterventionResult } from './InterventionManager.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import type { AgentTrace } from "./TraceCollector.ts";
+import type { Anomaly } from "./AnomalyDetector.ts";
+import { createAnomalyDetector, deterministicRepetitionAssessor } from "./AnomalyDetector.ts";
+import { createInterventionManager, type InterventionResult } from "./InterventionManager.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export type ScenarioType =
-  | 'token_spike'
-  | 'error_burst'
-  | 'infinite_loop'
-  | 'message_flood'
-  | 'communication_deadlock'
-  | 'team_divergence'
-  | 'orphaned_member'
-  | 'high_load';
+  | "token_spike"
+  | "error_burst"
+  | "infinite_loop"
+  | "message_flood"
+  | "communication_deadlock"
+  | "team_divergence"
+  | "orphaned_member"
+  | "high_load";
 
-export type PipelineMode = 'offline' | 'live';
+export type PipelineMode = "offline" | "live";
 
 export interface InjectionReport {
   scenario: ScenarioType;
@@ -49,10 +49,10 @@ export interface InjectionReport {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const TRACES_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
-const REPORTS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'reports');
+const TRACES_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
+const REPORTS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "reports");
 
-const SIM_SOURCE = 'simulation' as const;
+const SIM_SOURCE = "simulation" as const;
 
 // ============================================================================
 // Trace Generators
@@ -63,7 +63,7 @@ function makeBaseTrace(workflowId: string, agentId: string, ts: number): AgentTr
     workflowId,
     agentId,
     timestamp: ts,
-    eventType: 'tool_call',
+    eventType: "tool_call",
     metadata: {},
     context: { source: SIM_SOURCE },
   };
@@ -75,18 +75,18 @@ function generateScenarioTraces(scenario: ScenarioType, count: number = 20): Age
   const traces: AgentTrace[] = [];
 
   switch (scenario) {
-    case 'token_spike': {
+    case "token_spike": {
       // Generate traces with very high token usage in a short window
       for (let i = 0; i < count; i++) {
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-1', now + i * 10),
+          ...makeBaseTrace(workflowId, "agent-1", now + i * 10),
           metadata: { tokensUsed: 15000 + i * 1000 },
         });
       }
       break;
     }
 
-    case 'error_burst': {
+    case "error_burst": {
       // Generate error events across multiple workflow IDs to ensure the
       // minOccurrences policy threshold is reached.
       // Each workflowId fires one error_burst anomaly; with 3 workflows we
@@ -96,8 +96,8 @@ function generateScenarioTraces(scenario: ScenarioType, count: number = 20): Age
         const wfId = `${workflowId}-wf${w}`;
         for (let i = 0; i < 5; i++) {
           traces.push({
-            ...makeBaseTrace(wfId, 'agent-1', now + w * 100 + i * 10),
-            eventType: 'error',
+            ...makeBaseTrace(wfId, "agent-1", now + w * 100 + i * 10),
+            eventType: "error",
             metadata: { errorMessage: `Simulated error burst event w${w}e${i}` },
           });
         }
@@ -105,81 +105,81 @@ function generateScenarioTraces(scenario: ScenarioType, count: number = 20): Age
       break;
     }
 
-    case 'infinite_loop': {
+    case "infinite_loop": {
       // Repeat the same tool call many times
       for (let i = 0; i < count; i++) {
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-1', now + i * 100),
-          eventType: 'tool_call',
-          metadata: { toolName: 'Read' },
+          ...makeBaseTrace(workflowId, "agent-1", now + i * 100),
+          eventType: "tool_call",
+          metadata: { toolName: "Read" },
         });
       }
       break;
     }
 
-    case 'message_flood': {
+    case "message_flood": {
       // One agent sending massive number of messages
       for (let i = 0; i < count; i++) {
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-1', now + i * 100),
-          eventType: 'team_message',
+          ...makeBaseTrace(workflowId, "agent-1", now + i * 100),
+          eventType: "team_message",
           metadata: {},
         });
       }
       break;
     }
 
-    case 'communication_deadlock': {
+    case "communication_deadlock": {
       // Two agents both waiting for each other (simulated via pending messages)
       for (let i = 0; i < Math.floor(count / 2); i++) {
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-1', now + i * 1000),
-          eventType: 'team_message',
+          ...makeBaseTrace(workflowId, "agent-1", now + i * 1000),
+          eventType: "team_message",
           metadata: {},
-          context: { source: SIM_SOURCE, targetAgent: 'agent-2' },
+          context: { source: SIM_SOURCE, targetAgent: "agent-2" },
         });
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-2', now + i * 1000 + 1),
-          eventType: 'team_message',
+          ...makeBaseTrace(workflowId, "agent-2", now + i * 1000 + 1),
+          eventType: "team_message",
           metadata: {},
-          context: { source: SIM_SOURCE, targetAgent: 'agent-1' },
+          context: { source: SIM_SOURCE, targetAgent: "agent-1" },
         });
       }
       break;
     }
 
-    case 'team_divergence': {
+    case "team_divergence": {
       // Some agents progress fast, some slow
       for (let i = 0; i < count; i++) {
-        const agent = i % 2 === 0 ? 'agent-fast' : 'agent-slow';
-        const progress = agent === 'agent-fast' ? i * 10 : i;
+        const agent = i % 2 === 0 ? "agent-fast" : "agent-slow";
+        const progress = agent === "agent-fast" ? i * 10 : i;
         traces.push({
           ...makeBaseTrace(workflowId, agent, now + i * 100),
-          eventType: 'team_task_update',
+          eventType: "team_task_update",
           metadata: { iscCompletionRate: progress / count },
         });
       }
       break;
     }
 
-    case 'orphaned_member': {
+    case "orphaned_member": {
       // One agent goes silent for a long time
       traces.push({
-        ...makeBaseTrace(workflowId, 'agent-orphaned', now - 600000), // 10 min ago
-        eventType: 'start',
+        ...makeBaseTrace(workflowId, "agent-orphaned", now - 600000), // 10 min ago
+        eventType: "start",
         metadata: {},
       });
       // Active agent keeps going
       for (let i = 0; i < count - 1; i++) {
         traces.push({
-          ...makeBaseTrace(workflowId, 'agent-active', now + i * 100),
+          ...makeBaseTrace(workflowId, "agent-active", now + i * 100),
           metadata: {},
         });
       }
       break;
     }
 
-    case 'high_load': {
+    case "high_load": {
       // High event rate — many events in a short window
       for (let i = 0; i < count; i++) {
         traces.push({
@@ -198,9 +198,9 @@ function generateScenarioTraces(scenario: ScenarioType, count: number = 20): Age
 // Report Writing
 // ============================================================================
 
-function writeInjectionReport(report: Omit<InjectionReport, 'reportPath'>): string {
+function writeInjectionReport(report: Omit<InjectionReport, "reportPath">): string {
   mkdirSync(REPORTS_DIR, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const reportPath = join(REPORTS_DIR, `inject-${ts}.md`);
 
   const lines: string[] = [
@@ -209,7 +209,7 @@ function writeInjectionReport(report: Omit<InjectionReport, 'reportPath'>): stri
     `## Summary`,
     ``,
     `- **Scenario:** ${report.scenario}`,
-    `- **Pipeline mode:** ${report.simulationSource ? 'offline' : 'live'}`,
+    `- **Pipeline mode:** ${report.simulationSource ? "offline" : "live"}`,
     `- **Traces injected:** ${report.tracesInjected}`,
     `- **Anomalies detected:** ${report.anomaliesDetected.length}`,
     `- **Interventions triggered:** ${report.interventionsTriggered.length}`,
@@ -220,22 +220,18 @@ function writeInjectionReport(report: Omit<InjectionReport, 'reportPath'>): stri
     `## Anomalies Detected`,
     ``,
     report.anomaliesDetected.length > 0
-      ? report.anomaliesDetected.map(a =>
-          `- **${a.type}** (${a.severity}): ${a.message}`
-        ).join('\n')
-      : '_No anomalies detected_',
+      ? report.anomaliesDetected.map((a) => `- **${a.type}** (${a.severity}): ${a.message}`).join("\n")
+      : "_No anomalies detected_",
     ``,
     `## Interventions Triggered`,
     ``,
     report.interventionsTriggered.length > 0
-      ? report.interventionsTriggered.map(r =>
-          `- **${r.type}** (dryRun: ${r.dryRun}): ${r.message}`
-        ).join('\n')
-      : '_No interventions triggered_',
+      ? report.interventionsTriggered.map((r) => `- **${r.type}** (dryRun: ${r.dryRun}): ${r.message}`).join("\n")
+      : "_No interventions triggered_",
     ``,
   ];
 
-  writeFileSync(reportPath, lines.join('\n'), 'utf-8');
+  writeFileSync(reportPath, lines.join("\n"), "utf-8");
   return reportPath;
 }
 
@@ -253,10 +249,10 @@ export async function injectScenario(
   // Generate synthetic traces (all carry context.source: 'simulation')
   const traces = generateScenarioTraces(scenarioType, Math.min(count, 500));
 
-  let anomaliesDetected: Anomaly[] = [];
-  let interventionsTriggered: InterventionResult[] = [];
+  const anomaliesDetected: Anomaly[] = [];
+  const interventionsTriggered: InterventionResult[] = [];
 
-  if (pipelineMode === 'offline') {
+  if (pipelineMode === "offline") {
     // Offline mode: push directly to fresh detector with allowSimulation: true.
     // Synthetic injection is hermetic: use the deterministic repetition assessor
     // (no live LLM in checkInfiniteLoop) and persistState:false (no writes to
@@ -296,8 +292,8 @@ export async function injectScenario(
           if (result) {
             interventionsTriggered.push({ ...result, dryRun: true });
           }
-        } catch {
-          // Intervention errors are non-fatal in injection runs
+        } catch (err) {
+          console.error(`[SyntheticInjector] synthetic intervention failed (non-fatal):`, err);
         }
       }
     }
@@ -308,8 +304,8 @@ export async function injectScenario(
     const tempFile = join(TRACES_DIR, `sim-${ts}-${scenarioType}.jsonl`);
 
     try {
-      const jsonlContent = traces.map(t => JSON.stringify(t)).join('\n');
-      writeFileSync(tempFile, jsonlContent, 'utf-8');
+      const jsonlContent = traces.map((t) => JSON.stringify(t)).join("\n");
+      writeFileSync(tempFile, jsonlContent, "utf-8");
 
       // Process traces through offline detector with allowSimulation (live watcher
       // would skip simulation traces; we process them here in isolation). Hermetic:
@@ -340,8 +336,8 @@ export async function injectScenario(
             if (result) {
               interventionsTriggered.push({ ...result, dryRun: true });
             }
-          } catch {
-            // non-fatal
+          } catch (err) {
+            console.error(`[SyntheticInjector] synthetic intervention failed (non-fatal):`, err);
           }
         }
       }
@@ -352,7 +348,7 @@ export async function injectScenario(
           unlinkSync(tempFile);
         }
       } catch {
-        // Best effort cleanup
+        // intentionally silent: synthetic cleanup is optional
       }
     }
   }
@@ -360,7 +356,7 @@ export async function injectScenario(
   const durationMs = Date.now() - startMs;
   const chainComplete = anomaliesDetected.length > 0 && interventionsTriggered.length > 0;
 
-  const reportBase: Omit<InjectionReport, 'reportPath'> = {
+  const reportBase: Omit<InjectionReport, "reportPath"> = {
     scenario: scenarioType,
     tracesInjected: traces.length,
     anomaliesDetected,

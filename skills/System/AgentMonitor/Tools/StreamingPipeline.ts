@@ -18,18 +18,21 @@
  *   pipeline.stop();
  */
 
-import type { AgentTrace } from './TraceCollector.ts';
-import { createLiveWatcher, type LiveWatcher } from './LiveTraceWatcher.ts';
-import { createAnomalyDetector, type AnomalyDetector, type AnomalyDetectorConfig } from './AnomalyDetector.ts';
-import { createDashboardStateManager, startDashboardLoop, type DashboardConfig } from './LiveDashboard.ts';
-import { createInterventionManager, type InterventionManager as IManager, type InterventionResult } from './InterventionManager.ts';
-import { auditLog } from './AuditLogger.ts';
-import { sendAlert } from './AlertManager.ts';
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { z } from 'zod';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
+import type { AgentTrace } from "./TraceCollector.ts";
+import { createLiveWatcher } from "./LiveTraceWatcher.ts";
+import { createAnomalyDetector, type AnomalyDetectorConfig } from "./AnomalyDetector.ts";
+import { createDashboardStateManager, startDashboardLoop, type DashboardConfig } from "./LiveDashboard.ts";
+import {
+  createInterventionManager,
+  type InterventionManager as IManager,
+  type InterventionResult,
+} from "./InterventionManager.ts";
+import { auditLog } from "./AuditLogger.ts";
+import { sendAlert } from "./AlertManager.ts";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { z } from "zod";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -45,7 +48,7 @@ export interface StreamingPipelineConfig {
   /** Callback for each trace received */
   onTrace?: (trace: AgentTrace) => void;
   /** Callback for anomaly detection */
-  onAnomaly?: (anomaly: import('./AnomalyDetector.ts').Anomaly) => void;
+  onAnomaly?: (anomaly: import("./AnomalyDetector.ts").Anomaly) => void;
   /** Enable intervention system (pause/throttle/feedback on anomalies) */
   intervention?: boolean;
   /** Start in dry-run mode (log interventions without executing) */
@@ -84,7 +87,7 @@ const DEFAULT_CONFIG: StreamingPipelineConfig = {
 };
 
 const KAYA_HOME = getKayaHome();
-const LOCK_PATH = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'state', 'pipeline.lock');
+const LOCK_PATH = join(KAYA_HOME, "MEMORY", "MONITORING", "state", "pipeline.lock");
 
 const PipelineLockSchema = z.object({
   pid: z.number(),
@@ -94,12 +97,6 @@ const PipelineLockSchema = z.object({
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const STALE_TTL_MS = HEARTBEAT_INTERVAL_MS * 3; // 90s: 3 missed heartbeats = stale
-
-const pipelineLockManager = createStateManager({
-  path: LOCK_PATH,
-  schema: PipelineLockSchema,
-  defaults: { pid: 0, startedAt: 0 },
-});
 
 function isProcessAlive(pid: number): boolean {
   try {
@@ -118,26 +115,32 @@ function acquirePipelineLock(): void {
 
   if (existsSync(LOCK_PATH)) {
     try {
-      const raw = readFileSync(LOCK_PATH, 'utf-8');
+      const raw = readFileSync(LOCK_PATH, "utf-8");
       const parsed = PipelineLockSchema.safeParse(JSON.parse(raw));
       const lock = parsed.success ? parsed.data : null;
-      if (lock && lock.pid && isProcessAlive(lock.pid)) {
+      if (lock?.pid && isProcessAlive(lock.pid)) {
         // Process alive — check if heartbeat is recent
-        const heartbeatAge = lock.heartbeatAt
-          ? Date.now() - lock.heartbeatAt
-          : Date.now() - lock.startedAt;
+        const heartbeatAge = lock.heartbeatAt ? Date.now() - lock.heartbeatAt : Date.now() - lock.startedAt;
         if (heartbeatAge < STALE_TTL_MS) {
-          throw new Error(`Pipeline already running (PID: ${lock.pid}, started: ${new Date(lock.startedAt).toISOString()})`);
+          throw new Error(
+            `Pipeline already running (PID: ${lock.pid}, started: ${new Date(lock.startedAt).toISOString()})`,
+          );
         }
         // Process alive but heartbeat too old — treat as stale (zombie/hung)
-        console.error(`[StreamingPipeline] Stale lock: PID ${lock.pid} alive but heartbeat ${heartbeatAge}ms old. Removing.`);
+        console.error(
+          `[StreamingPipeline] Stale lock: PID ${lock.pid} alive but heartbeat ${heartbeatAge}ms old. Removing.`,
+        );
       }
       // Stale lock — remove it
       unlinkSync(LOCK_PATH);
     } catch (err) {
-      if (err instanceof Error && err.message.startsWith('Pipeline already running')) throw err;
+      if (err instanceof Error && err.message.startsWith("Pipeline already running")) throw err;
       // Corrupted lock file — remove and proceed
-      try { unlinkSync(LOCK_PATH); } catch { /* ignore */ }
+      try {
+        unlinkSync(LOCK_PATH);
+      } catch (err) {
+        console.error(`[StreamingPipeline] could not remove corrupt pipeline lock:`, err);
+      }
     }
   }
 
@@ -147,14 +150,16 @@ function acquirePipelineLock(): void {
 function releasePipelineLock(): void {
   try {
     if (existsSync(LOCK_PATH)) {
-      const raw = readFileSync(LOCK_PATH, 'utf-8');
+      const raw = readFileSync(LOCK_PATH, "utf-8");
       const parsed = PipelineLockSchema.safeParse(JSON.parse(raw));
       // Only remove if we own it
       if (parsed.success && parsed.data.pid === process.pid) {
         unlinkSync(LOCK_PATH);
       }
     }
-  } catch { /* best effort */ }
+  } catch (err) {
+    console.error(`[StreamingPipeline] pipeline lock release failed:`, err);
+  }
 }
 
 // ============================================================================
@@ -174,9 +179,9 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
 
   // Clean up lock on unexpected exit
   const cleanupLock = () => releasePipelineLock();
-  process.on('exit', cleanupLock);
-  process.on('SIGTERM', cleanupLock);
-  process.on('SIGINT', cleanupLock);
+  process.on("exit", cleanupLock);
+  process.on("SIGTERM", cleanupLock);
+  process.on("SIGINT", cleanupLock);
 
   // Create components
   const anomalyDetector = createAnomalyDetector(cfg.anomalyConfig, (anomaly) => {
@@ -188,7 +193,7 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
       });
     }
     auditLog({
-      action: 'alert',
+      action: "alert",
       workflowId: anomaly.workflowId,
       details: { anomalyType: anomaly.type, severity: anomaly.severity, message: anomaly.message },
       success: true,
@@ -213,44 +218,50 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
       tracesProcessed++;
 
       // Route through anomaly detector (ingest is async — process results via .then())
-      anomalyDetector.ingest(trace).then(newAnomalies => {
-        anomaliesDetected += newAnomalies.length;
+      anomalyDetector
+        .ingest(trace)
+        .then((newAnomalies) => {
+          anomaliesDetected += newAnomalies.length;
 
-        // Route anomalies through intervention system
-        if (interventionManager && interventionManager.isEnabled()) {
-          for (const anomaly of newAnomalies) {
-            interventionManager.handleAnomaly(anomaly).then(result => {
-              if (result) {
-                interventionsTriggered++;
-                if (cfg.onIntervention) {
-                  cfg.onIntervention(result);
-                }
-              }
-            }).catch(err => {
-              if (!cfg.quiet) {
-                console.error(`[StreamingPipeline] Intervention error: ${err.message}`);
-              }
-            });
+          // Route anomalies through intervention system
+          if (interventionManager?.isEnabled()) {
+            for (const anomaly of newAnomalies) {
+              interventionManager
+                .handleAnomaly(anomaly)
+                .then((result) => {
+                  if (result) {
+                    interventionsTriggered++;
+                    if (cfg.onIntervention) {
+                      cfg.onIntervention(result);
+                    }
+                  }
+                })
+                .catch((err) => {
+                  if (!cfg.quiet) {
+                    console.error(`[StreamingPipeline] Intervention error: ${err.message}`);
+                  }
+                });
+            }
           }
-        }
 
-        // Update dashboard state
-        dashboardManager.update(trace);
-        dashboardManager.setWatcherStats(watcher.getStats());
-        dashboardManager.setAnomalies(anomalyDetector.getActiveAnomalies());
+          // Update dashboard state
+          dashboardManager.update(trace);
+          dashboardManager.setWatcherStats(watcher.getStats());
+          dashboardManager.setAnomalies(anomalyDetector.getActiveAnomalies());
 
-        // Update workflow health for this workflow
-        const health = anomalyDetector.getWorkflowHealth(trace.workflowId);
-        dashboardManager.setWorkflowHealth(trace.workflowId, health);
+          // Update workflow health for this workflow
+          const health = anomalyDetector.getWorkflowHealth(trace.workflowId);
+          dashboardManager.setWorkflowHealth(trace.workflowId, health);
 
-        for (const anomaly of newAnomalies) {
-          if (cfg.onAnomaly) cfg.onAnomaly(anomaly);
-        }
-      }).catch(err => {
-        if (!cfg.quiet) {
-          console.error(`[StreamingPipeline] Anomaly detection error: ${err.message}`);
-        }
-      });
+          for (const anomaly of newAnomalies) {
+            if (cfg.onAnomaly) cfg.onAnomaly(anomaly);
+          }
+        })
+        .catch((err) => {
+          if (!cfg.quiet) {
+            console.error(`[StreamingPipeline] Anomaly detection error: ${err.message}`);
+          }
+        });
 
       // Fire user trace callback immediately (doesn't depend on anomaly results)
       if (cfg.onTrace) cfg.onTrace(trace);
@@ -261,8 +272,8 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
         console.error(`[StreamingPipeline] Error: ${error.message}`);
       }
       auditLog({
-        action: 'error',
-        details: { component: 'streaming_pipeline', error: error.message },
+        action: "error",
+        details: { component: "streaming_pipeline", error: error.message },
         success: false,
         errorMessage: error.message,
       });
@@ -287,21 +298,18 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
   // Start dashboard if enabled
   let dashboardStopper: { stop: () => void } | null = null;
   if (cfg.dashboard) {
-    dashboardStopper = startDashboardLoop(
-      () => dashboardManager.getState(),
-      cfg.dashboardConfig
-    );
+    dashboardStopper = startDashboardLoop(() => dashboardManager.getState(), cfg.dashboardConfig);
   } else if (!cfg.quiet) {
-    console.log('[StreamingPipeline] Live monitoring started. Watching for traces...');
-    console.log('[StreamingPipeline] Press Ctrl+C to stop.');
+    console.log("[StreamingPipeline] Live monitoring started. Watching for traces...");
+    console.log("[StreamingPipeline] Press Ctrl+C to stop.");
   }
 
   auditLog({
-    action: 'config_change',
+    action: "config_change",
     details: {
-      event: 'streaming_pipeline_started',
+      event: "streaming_pipeline_started",
       dashboard: cfg.dashboard,
-      anomalyConfig: cfg.anomalyConfig || 'defaults',
+      anomalyConfig: cfg.anomalyConfig || "defaults",
     },
     success: true,
   });
@@ -310,11 +318,10 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
   const heartbeatInterval = setInterval(() => {
     if (!running) return;
     try {
-      writeFileSync(
-        LOCK_PATH,
-        JSON.stringify({ pid: process.pid, startedAt, heartbeatAt: Date.now() })
-      );
-    } catch { /* best effort — don't crash pipeline on heartbeat failure */ }
+      writeFileSync(LOCK_PATH, JSON.stringify({ pid: process.pid, startedAt, heartbeatAt: Date.now() }));
+    } catch (err) {
+      console.error(`[StreamingPipeline] pipeline heartbeat write failed:`, err);
+    }
   }, HEARTBEAT_INTERVAL_MS);
 
   // Periodic stale workflow check (every 30 seconds)
@@ -326,10 +333,10 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
     for (const [workflowId, health] of state.workflowHealthMap) {
       if (health.lastTraceAt && now - health.lastTraceAt > (cfg.anomalyConfig?.staleWorkflowThresholdMs || 300000)) {
         // Mark as potentially stale - this is informational
-        if (health.status !== 'unknown') {
+        if (health.status !== "unknown") {
           dashboardManager.setWorkflowHealth(workflowId, {
             ...health,
-            status: 'warning',
+            status: "warning",
           });
         }
       }
@@ -346,9 +353,9 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
       releasePipelineLock();
 
       auditLog({
-        action: 'config_change',
+        action: "config_change",
         details: {
-          event: 'streaming_pipeline_stopped',
+          event: "streaming_pipeline_stopped",
           tracesProcessed,
           anomaliesDetected,
           uptimeMs: Date.now() - startedAt,
@@ -384,10 +391,10 @@ export function startStreamingPipeline(config?: Partial<StreamingPipelineConfig>
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const noDashboard = args.includes('--no-dashboard');
-  const quiet = args.includes('--quiet');
+  const noDashboard = args.includes("--no-dashboard");
+  const quiet = args.includes("--quiet");
 
-  if (args.includes('--help') || args.includes('-h')) {
+  if (args.includes("--help") || args.includes("-h")) {
     console.log(`
 StreamingPipeline - Live agent monitoring
 
@@ -408,14 +415,14 @@ Options:
   });
 
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on("SIGINT", () => {
     pipeline.stop();
     const stats = pipeline.getStats();
-    console.log('\n');
-    console.log('Live monitoring stopped.');
+    console.log("\n");
+    console.log("Live monitoring stopped.");
     console.log(`Traces processed: ${stats.tracesProcessed}`);
     console.log(`Anomalies detected: ${stats.anomaliesDetected}`);
-    console.log(`Uptime: ${((stats.uptimeMs) / 1000 / 60).toFixed(1)} minutes`);
+    console.log(`Uptime: ${(stats.uptimeMs / 1000 / 60).toFixed(1)} minutes`);
     process.exit(0);
   });
 }

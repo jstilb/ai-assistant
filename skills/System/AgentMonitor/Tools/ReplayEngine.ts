@@ -9,29 +9,29 @@
  *   const result = await runThresholdReplay(traceFile, thresholdsFile);
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'fs';
-import { join, basename } from 'path';
-import { parseTraceLine, type AgentTrace } from './TraceCollector.ts';
-import type { AnomalyDetectorConfig, Anomaly } from './AnomalyDetector.ts';
-import { createAnomalyDetector, deterministicRepetitionAssessor } from './AnomalyDetector.ts';
-import { computePercentiles } from './Percentiles.ts';
-import type { LatencyPercentiles } from './Percentiles.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { parseTraceLine, type AgentTrace } from "./TraceCollector.ts";
+import type { AnomalyDetectorConfig } from "./AnomalyDetector.ts";
+import { createAnomalyDetector, deterministicRepetitionAssessor } from "./AnomalyDetector.ts";
+import { computePercentiles } from "./Percentiles.ts";
+import type { LatencyPercentiles } from "./Percentiles.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export type AnomalyType =
-  | 'token_spike'
-  | 'error_burst'
-  | 'infinite_loop'
-  | 'stale_workflow'
-  | 'high_load'
-  | 'communication_deadlock'
-  | 'message_flood'
-  | 'orphaned_member'
-  | 'team_divergence';
+  | "token_spike"
+  | "error_burst"
+  | "infinite_loop"
+  | "stale_workflow"
+  | "high_load"
+  | "communication_deadlock"
+  | "message_flood"
+  | "orphaned_member"
+  | "team_divergence";
 
 export interface ReplayResult {
   traceCount: number;
@@ -57,8 +57,8 @@ export interface ReplayOptions {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const TRACES_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
-const REPORTS_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'reports');
+const TRACES_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
+const REPORTS_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "reports");
 
 // ============================================================================
 // JSONL Parsing
@@ -68,7 +68,9 @@ function parseJsonlFile(filePath: string): AgentTrace[] {
   if (!existsSync(filePath)) {
     throw new Error(`Trace file does not exist: ${filePath}`);
   }
-  const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
+  const lines = readFileSync(filePath, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim());
   const traces: AgentTrace[] = [];
   for (const line of lines) {
     // Delegate to TraceCollector's dual-format parser rather than forking a
@@ -94,19 +96,19 @@ function parseJsonlFile(filePath: string): AgentTrace[] {
 
 export function selectTraceFilesByDateRange(fromDate: string, toDate: string): string[] {
   if (!existsSync(TRACES_DIR)) return [];
-  const files = readdirSync(TRACES_DIR).filter(f => f.endsWith('.jsonl'));
+  const files = readdirSync(TRACES_DIR).filter((f) => f.endsWith(".jsonl"));
   const from = new Date(fromDate).getTime();
   const to = new Date(toDate).getTime();
 
   return files
-    .filter(f => {
+    .filter((f) => {
       // Extract date from filename — look for YYYY-MM-DD pattern
       const match = f.match(/(\d{4}-\d{2}-\d{2})/);
       if (!match) return false;
-      const fileDate = new Date(match[1]).getTime();
+      const fileDate = new Date(match[1] ?? "").getTime();
       return fileDate >= from && fileDate <= to;
     })
-    .map(f => join(TRACES_DIR, f));
+    .map((f) => join(TRACES_DIR, f));
 }
 
 // ============================================================================
@@ -118,17 +120,27 @@ function loadThresholdsConfig(thresholdsFile: string): Partial<AnomalyDetectorCo
     throw new Error(`Thresholds file does not exist: ${thresholdsFile}`);
   }
   try {
-    const raw = JSON.parse(readFileSync(thresholdsFile, 'utf-8'));
-    if (typeof raw !== 'object' || raw === null) {
-      throw new Error('Thresholds JSON must be an object');
+    const raw = JSON.parse(readFileSync(thresholdsFile, "utf-8"));
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error("Thresholds JSON must be an object");
     }
     // Pick only known AnomalyDetectorConfig keys, ignore unknown
     const knownKeys: Array<keyof AnomalyDetectorConfig> = [
-      'tokenSpikeThreshold', 'tokenSpikeWindowMs', 'errorBurstThreshold',
-      'errorBurstWindowMs', 'infiniteLoopThreshold', 'infiniteLoopWindow',
-      'staleWorkflowThresholdMs', 'highLoadEventsPerSecond', 'highLoadWindowMs',
-      'voiceAlerts', 'jsonlAlerts', 'messageFloodThreshold', 'messageFloodWindowMs',
-      'orphanedMemberThresholdMs', 'teamDivergenceRatio',
+      "tokenSpikeThreshold",
+      "tokenSpikeWindowMs",
+      "errorBurstThreshold",
+      "errorBurstWindowMs",
+      "infiniteLoopThreshold",
+      "infiniteLoopWindow",
+      "staleWorkflowThresholdMs",
+      "highLoadEventsPerSecond",
+      "highLoadWindowMs",
+      "voiceAlerts",
+      "jsonlAlerts",
+      "messageFloodThreshold",
+      "messageFloodWindowMs",
+      "orphanedMemberThresholdMs",
+      "teamDivergenceRatio",
     ];
     const config: Partial<AnomalyDetectorConfig> = {};
     for (const key of knownKeys) {
@@ -148,9 +160,7 @@ function loadThresholdsConfig(thresholdsFile: string): Partial<AnomalyDetectorCo
 // ============================================================================
 
 function deriveBaseline(traces: AgentTrace[]): LatencyPercentiles {
-  const latencies = traces
-    .map(t => t.metadata?.latencyMs)
-    .filter((v): v is number => typeof v === 'number');
+  const latencies = traces.map((t) => t.metadata?.latencyMs).filter((v): v is number => typeof v === "number");
   return computePercentiles(latencies);
 }
 
@@ -176,7 +186,7 @@ async function runDetector(traces: AgentTrace[], config: Partial<AnomalyDetector
     // Mark as simulation source so live detector ignores but replay detector processes
     const traceWithSim: AgentTrace = {
       ...trace,
-      context: { ...trace.context, source: 'simulation' },
+      context: { ...trace.context, source: "simulation" },
     };
     const anomalies = await detector.ingest(traceWithSim);
     for (const a of anomalies) {
@@ -191,12 +201,12 @@ async function runDetector(traces: AgentTrace[], config: Partial<AnomalyDetector
 // ============================================================================
 
 function writeReplayReport(
-  result: Omit<ReplayResult, 'reportPath'>,
+  result: Omit<ReplayResult, "reportPath">,
   hypotheticalConfig: Partial<AnomalyDetectorConfig>,
   traceFile: string,
 ): string {
   mkdirSync(REPORTS_DIR, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const reportPath = join(REPORTS_DIR, `replay-${ts}.md`);
 
   const lines: string[] = [
@@ -218,28 +228,20 @@ function writeReplayReport(
     ``,
     `| Anomaly Type | Original Fires | Hypothetical Fires |`,
     `|-------------|---------------|-------------------|`,
-    ...Object.entries(result.perAnomaly).map(([k, v]) =>
-      `| ${k} | ${v.original} | ${v.hypothetical} |`
-    ),
+    ...Object.entries(result.perAnomaly).map(([k, v]) => `| ${k} | ${v.original} | ${v.hypothetical} |`),
     ``,
     `### Would Have Caught`,
-    result.wouldHaveCaught.length > 0
-      ? result.wouldHaveCaught.map(t => `- ${t}`).join('\n')
-      : '_None_',
+    result.wouldHaveCaught.length > 0 ? result.wouldHaveCaught.map((t) => `- ${t}`).join("\n") : "_None_",
     ``,
     `### Would Have Missed`,
-    result.wouldHaveMissed.length > 0
-      ? result.wouldHaveMissed.map(t => `- ${t}`).join('\n')
-      : '_None_',
+    result.wouldHaveMissed.length > 0 ? result.wouldHaveMissed.map((t) => `- ${t}`).join("\n") : "_None_",
     ``,
     `### False Positives`,
-    result.falsePositives.length > 0
-      ? result.falsePositives.map(t => `- ${t}`).join('\n')
-      : '_None_',
+    result.falsePositives.length > 0 ? result.falsePositives.map((t) => `- ${t}`).join("\n") : "_None_",
     ``,
     `## Detection Rate Change`,
     ``,
-    `**${result.detectionRateChange >= 0 ? '+' : ''}${result.detectionRateChange.toFixed(1)}%**`,
+    `**${result.detectionRateChange >= 0 ? "+" : ""}${result.detectionRateChange.toFixed(1)}%**`,
     ``,
     `## Recommendation`,
     ``,
@@ -247,11 +249,11 @@ function writeReplayReport(
     ``,
   ];
 
-  writeFileSync(reportPath, lines.join('\n'), 'utf-8');
+  writeFileSync(reportPath, lines.join("\n"), "utf-8");
   return reportPath;
 }
 
-function generateRecommendation(result: Omit<ReplayResult, 'reportPath'>): string {
+function generateRecommendation(result: Omit<ReplayResult, "reportPath">): string {
   if (result.wouldHaveCaught.length > 0 && result.falsePositives.length === 0) {
     return `The hypothetical config would improve detection without false positives. Consider applying it.`;
   } else if (result.falsePositives.length > result.wouldHaveCaught.length) {
@@ -280,7 +282,7 @@ export async function runThresholdReplay(
     if (files.length === 0) {
       throw new Error(`Date range ${options.fromDate}–${options.toDate} selected zero trace files`);
     }
-    traces = files.flatMap(f => parseJsonlFile(f));
+    traces = files.flatMap((f) => parseJsonlFile(f));
   } else {
     // Single file mode
     traces = parseJsonlFile(traceFileOrDir);
@@ -325,24 +327,25 @@ export async function runThresholdReplay(
 
   // Calculate diffs
   const allTypes = new Set([...originalFired, ...hypotheticalFired]);
-  const wouldHaveCaught: AnomalyType[] = hypotheticalFired.filter(t => !originalFired.includes(t));
-  const wouldHaveMissed: AnomalyType[] = originalFired.filter(t => !hypotheticalFired.includes(t));
-  const falsePositives: AnomalyType[] = hypotheticalFired.filter(t => !originalFired.includes(t));
+  const wouldHaveCaught: AnomalyType[] = hypotheticalFired.filter((t) => !originalFired.includes(t));
+  const wouldHaveMissed: AnomalyType[] = originalFired.filter((t) => !hypotheticalFired.includes(t));
+  const falsePositives: AnomalyType[] = hypotheticalFired.filter((t) => !originalFired.includes(t));
 
-  const detectionRateChange = originalFired.length > 0
-    ? ((hypotheticalFired.length - originalFired.length) / originalFired.length) * 100
-    : hypotheticalFired.length > 0 ? 100 : 0;
+  const detectionRateChange =
+    originalFired.length > 0
+      ? ((hypotheticalFired.length - originalFired.length) / originalFired.length) * 100
+      : hypotheticalFired.length > 0
+        ? 100
+        : 0;
 
   // Build perAnomaly record
   const perAnomaly: Record<string, { original: number; hypothetical: number }> = {};
-  const typesToReport = options.anomalyFilter
-    ? [options.anomalyFilter]
-    : Array.from(allTypes);
+  const typesToReport = options.anomalyFilter ? [options.anomalyFilter] : Array.from(allTypes);
 
   for (const type of typesToReport) {
     perAnomaly[type] = {
-      original: originalFired.filter(t => t === type).length,
-      hypothetical: hypotheticalFired.filter(t => t === type).length,
+      original: originalFired.filter((t) => t === type).length,
+      hypothetical: hypotheticalFired.filter((t) => t === type).length,
     };
   }
 

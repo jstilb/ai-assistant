@@ -38,12 +38,12 @@ export function computePercentiles(values: number[]): LatencyPercentiles {
 
   const sorted = [...values].sort((a, b) => a - b);
   const mean = sorted.reduce((s, v) => s + v, 0) / sorted.length;
-  const variance = sorted.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / sorted.length;
+  const variance = sorted.reduce((s, v) => s + (v - mean) ** 2, 0) / sorted.length;
   const stddev = Math.sqrt(variance);
 
   const percentile = (p: number): number => {
     const idx = Math.ceil((p / 100) * sorted.length) - 1;
-    return sorted[Math.max(0, idx)];
+    return sorted[Math.max(0, idx)] ?? 0;
   };
 
   return {
@@ -52,7 +52,7 @@ export function computePercentiles(values: number[]): LatencyPercentiles {
     p99: percentile(99),
     mean: Math.round(mean),
     stddev: Math.round(stddev),
-    min: sorted[0],
-    max: sorted[sorted.length - 1],
+    min: sorted[0] ?? 0,
+    max: sorted.at(-1) ?? 0,
   };
 }

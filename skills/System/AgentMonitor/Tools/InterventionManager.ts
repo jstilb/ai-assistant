@@ -12,18 +12,18 @@
  *   const result = await manager.handleAnomaly(anomaly);
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
-import type { Anomaly } from './AnomalyDetector.ts';
-import { createPauseController } from './PauseController.ts';
-import { createThrottleManager } from './ThrottleManager.ts';
-import { createFeedbackManager } from './FeedbackManager.ts';
-import { createApprovalManager } from './ApprovalManager.ts';
-import { createInterventionAuditor, type InterventionAuditEntry } from './InterventionAuditor.ts';
-import { auditLog } from './AuditLogger.ts';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import type { Anomaly } from "./AnomalyDetector.ts";
+import { createPauseController } from "./PauseController.ts";
+import { createThrottleManager } from "./ThrottleManager.ts";
+import { createFeedbackManager, type FeedbackCategory } from "./FeedbackManager.ts";
+import { createApprovalManager } from "./ApprovalManager.ts";
+import { createInterventionAuditor, type InterventionAuditEntry } from "./InterventionAuditor.ts";
+import { auditLog } from "./AuditLogger.ts";
 
 // ============================================================================
 // Types
@@ -35,17 +35,17 @@ export interface InterventionPolicy {
   enabled: boolean;
   trigger: {
     anomalyRules: string[];
-    severity: ('warning' | 'critical')[];
+    severity: ("warning" | "critical")[];
     minOccurrences: number;
   };
   action: {
-    type: 'pause' | 'throttle' | 'feedback';
+    type: "pause" | "throttle" | "feedback";
     parameters: Record<string, unknown>;
   };
   approval: {
     required: boolean;
     timeoutMs: number;
-    defaultAction: 'execute' | 'skip' | 'escalate';
+    defaultAction: "execute" | "skip" | "escalate";
   };
   escalation?: {
     afterMs: number;
@@ -77,7 +77,7 @@ export interface InterventionConfig {
 
 export interface InterventionResult {
   interventionId: string;
-  type: 'pause' | 'throttle' | 'feedback';
+  type: "pause" | "throttle" | "feedback";
   workflowId: string;
   success: boolean;
   message: string;
@@ -104,9 +104,9 @@ export interface InterventionManager {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const POLICIES_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'policies');
-const CONFIG_PATH = join(POLICIES_DIR, 'intervention-config.json');
-const STATE_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'state');
+const POLICIES_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "policies");
+const CONFIG_PATH = join(POLICIES_DIR, "intervention-config.json");
+const STATE_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "state");
 
 // ============================================================================
 // Schemas
@@ -118,22 +118,24 @@ const InterventionPolicySchema = z.object({
   enabled: z.boolean(),
   trigger: z.object({
     anomalyRules: z.array(z.string()),
-    severity: z.array(z.enum(['warning', 'critical'])),
+    severity: z.array(z.enum(["warning", "critical"])),
     minOccurrences: z.number(),
   }),
   action: z.object({
-    type: z.enum(['pause', 'throttle', 'feedback']),
+    type: z.enum(["pause", "throttle", "feedback"]),
     parameters: z.record(z.string(), z.unknown()),
   }),
   approval: z.object({
     required: z.boolean(),
     timeoutMs: z.number(),
-    defaultAction: z.enum(['execute', 'skip', 'escalate']),
+    defaultAction: z.enum(["execute", "skip", "escalate"]),
   }),
-  escalation: z.object({
-    afterMs: z.number(),
-    toPolicy: z.string(),
-  }).optional(),
+  escalation: z
+    .object({
+      afterMs: z.number(),
+      toPolicy: z.string(),
+    })
+    .optional(),
 });
 
 const InterventionConfigSchema = z.object({
@@ -173,47 +175,47 @@ const DEFAULT_CONFIG: InterventionConfig = {
     },
     policies: [
       {
-        id: 'critical-pause',
-        name: 'Pause on Critical Error Storm',
+        id: "critical-pause",
+        name: "Pause on Critical Error Storm",
         enabled: true,
         trigger: {
-          anomalyRules: ['error_burst', 'infinite_loop'],
-          severity: ['critical'],
+          anomalyRules: ["error_burst", "infinite_loop"],
+          severity: ["critical"],
           minOccurrences: 1,
         },
-        action: { type: 'pause', parameters: {} },
-        approval: { required: true, timeoutMs: 120000, defaultAction: 'execute' },
+        action: { type: "pause", parameters: {} },
+        approval: { required: true, timeoutMs: 120000, defaultAction: "execute" },
       },
       {
-        id: 'token-throttle',
-        name: 'Throttle on Token Spike',
+        id: "token-throttle",
+        name: "Throttle on Token Spike",
         enabled: true,
         trigger: {
-          anomalyRules: ['token_spike'],
-          severity: ['warning', 'critical'],
+          anomalyRules: ["token_spike"],
+          severity: ["warning", "critical"],
           minOccurrences: 2,
         },
         action: {
-          type: 'throttle',
-          parameters: { metric: 'tokensPerMinute', limitMultiplier: 1.5, baselineSource: 'p95' },
+          type: "throttle",
+          parameters: { metric: "tokensPerMinute", limitMultiplier: 1.5, baselineSource: "p95" },
         },
-        approval: { required: false, timeoutMs: 0, defaultAction: 'execute' },
-        escalation: { afterMs: 600000, toPolicy: 'critical-pause' },
+        approval: { required: false, timeoutMs: 0, defaultAction: "execute" },
+        escalation: { afterMs: 600000, toPolicy: "critical-pause" },
       },
       {
-        id: 'error-feedback',
-        name: 'Feedback on Error Patterns',
+        id: "error-feedback",
+        name: "Feedback on Error Patterns",
         enabled: true,
         trigger: {
-          anomalyRules: ['error_burst'],
-          severity: ['warning'],
+          anomalyRules: ["error_burst"],
+          severity: ["warning"],
           minOccurrences: 3,
         },
         action: {
-          type: 'feedback',
-          parameters: { category: 'error_recovery', cooldownMs: 300000 },
+          type: "feedback",
+          parameters: { category: "error_recovery", cooldownMs: 300000 },
         },
-        approval: { required: false, timeoutMs: 0, defaultAction: 'execute' },
+        approval: { required: false, timeoutMs: 0, defaultAction: "execute" },
       },
     ],
     workflowOverrides: {
@@ -256,7 +258,7 @@ function loadWorkflowPolicy(workflowId: string): Partial<InterventionPolicy> | n
   const path = join(POLICIES_DIR, `${workflowId}.json`);
   if (!existsSync(path)) return null;
   try {
-    const content = readFileSync(path, 'utf-8');
+    const content = readFileSync(path, "utf-8");
     return JSON.parse(content);
   } catch {
     return null;
@@ -279,7 +281,7 @@ const RateLimitStateSchema = z.object({
 type RateLimitState = z.infer<typeof RateLimitStateSchema>;
 
 const rateLimitStateManager = createStateManager<RateLimitState>({
-  path: join(STATE_DIR, 'rate-limit-state.json'),
+  path: join(STATE_DIR, "rate-limit-state.json"),
   schema: RateLimitStateSchema,
   defaults: { recentPauses: [], throttlesPerAgent: {}, anomalyOccurrences: {} },
 });
@@ -295,7 +297,9 @@ async function loadRateLimitState(): Promise<RateLimitState> {
 async function saveRateLimitState(state: RateLimitState): Promise<void> {
   try {
     await rateLimitStateManager.save(state);
-  } catch { /* best effort — don't break interventions over persistence failure */ }
+  } catch (err) {
+    console.error(`[InterventionManager] could not persist rate-limit state:`, err);
+  }
 }
 
 export function createInterventionManager(opts?: { dryRun?: boolean }): InterventionManager {
@@ -309,7 +313,13 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
     return dryRunOverride !== undefined ? dryRunOverride : config.intervention.dryRun;
   }
   // Load config asynchronously on creation; use DEFAULT_CONFIG until loaded
-  loadConfig().then(c => { config = c; }).catch(() => { /* keep DEFAULT_CONFIG */ });
+  loadConfig()
+    .then((c) => {
+      config = c;
+    })
+    .catch((err) => {
+      console.error(`[InterventionManager] could not load intervention config, keeping defaults:`, err);
+    });
   let emergencyStopped = false;
 
   // In-memory mirrors (fast path), synced from/to disk
@@ -367,15 +377,18 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
   function checkRateLimit(type: string, agentId?: string): boolean {
     const now = Date.now();
 
-    if (type === 'pause') {
+    if (type === "pause") {
       // Clean old entries
-      while (recentPauses.length > 0 && recentPauses[0] < now - config.intervention.rateLimiting.windowMs) {
+      while (
+        recentPauses.length > 0 &&
+        (recentPauses[0] ?? Number.POSITIVE_INFINITY) < now - config.intervention.rateLimiting.windowMs
+      ) {
         recentPauses.shift();
       }
       return recentPauses.length < config.intervention.rateLimiting.maxPausesPerWindow;
     }
 
-    if (type === 'throttle' && agentId) {
+    if (type === "throttle" && agentId) {
       const count = recentThrottlesPerAgent.get(agentId) || 0;
       return count < config.intervention.rateLimiting.maxThrottlesPerAgent;
     }
@@ -386,16 +399,16 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
   function checkWorkflowOptOut(workflowId: string, type: string): boolean {
     // Check global opt-out
     if (config.intervention.workflowOverrides.optOutWorkflows.includes(workflowId)) {
-      if (type === 'pause') return false;
+      if (type === "pause") return false;
     }
 
     // Check per-workflow policy
     const wfPolicy = loadWorkflowPolicy(workflowId);
     if (wfPolicy && (wfPolicy as Record<string, unknown>).interventionPolicy) {
       const ip = (wfPolicy as Record<string, unknown>).interventionPolicy as Record<string, boolean>;
-      if (type === 'pause' && ip.allowPause === false) return false;
-      if (type === 'throttle' && ip.allowThrottle === false) return false;
-      if (type === 'feedback' && ip.allowFeedback === false) return false;
+      if (type === "pause" && ip.allowPause === false) return false;
+      if (type === "throttle" && ip.allowThrottle === false) return false;
+      if (type === "feedback" && ip.allowFeedback === false) return false;
     }
 
     return true;
@@ -416,9 +429,9 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
       // Check workflow opt-out
       if (!checkWorkflowOptOut(anomaly.workflowId, type)) {
         auditLog({
-          action: 'intervention_skipped',
+          action: "intervention_skipped",
           workflowId: anomaly.workflowId,
-          details: { reason: 'workflow_opted_out', type, policy: policy.id },
+          details: { reason: "workflow_opted_out", type, policy: policy.id },
           success: true,
         });
         return null;
@@ -427,7 +440,7 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
       // Check rate limit
       if (!checkRateLimit(type, anomaly.agentId)) {
         auditLog({
-          action: 'intervention_rate_limited',
+          action: "intervention_rate_limited",
           workflowId: anomaly.workflowId,
           details: { type, policy: policy.id },
           success: true,
@@ -450,54 +463,62 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
         policy: policy.id,
         approval: {
           required: policy.approval.required,
-          status: 'pending',
+          status: "pending",
         },
-        execution: { status: 'pending' },
-        outcome: { success: false, message: 'pending' },
+        execution: { status: "pending" },
+        outcome: { success: false, message: "pending" },
       };
 
       // Request approval if required
       let approved = !policy.approval.required;
       if (policy.approval.required && !isDryRunActive()) {
-        const approvalResult = await approvalManager.requestApproval({
-          interventionId,
-          workflowId: anomaly.workflowId,
-          agentId: anomaly.agentId,
-          interventionType: type,
-          severity: anomaly.severity,
-          description: anomaly.message,
-          evidence: anomaly.evidence,
-          requestedAt: Date.now(),
-        }, policy.approval.timeoutMs);
+        const approvalResult = await approvalManager.requestApproval(
+          {
+            interventionId,
+            workflowId: anomaly.workflowId,
+            agentId: anomaly.agentId,
+            interventionType: type,
+            severity: anomaly.severity,
+            description: anomaly.message,
+            evidence: anomaly.evidence,
+            requestedAt: Date.now(),
+          },
+          policy.approval.timeoutMs,
+        );
 
         auditEntry.approval = {
           required: true,
-          status: approvalResult.decision === 'approved' ? 'approved' :
-            approvalResult.decision === 'denied' ? 'denied' :
-              approvalResult.decision === 'snoozed' ? 'snoozed' : 'timeout',
+          status:
+            approvalResult.decision === "approved"
+              ? "approved"
+              : approvalResult.decision === "denied"
+                ? "denied"
+                : approvalResult.decision === "snoozed"
+                  ? "snoozed"
+                  : "timeout",
           approvedBy: approvalResult.decidedBy,
           approvedAt: approvalResult.decidedAt,
         };
 
-        if (approvalResult.decision === 'approved') {
+        if (approvalResult.decision === "approved") {
           approved = true;
-        } else if (approvalResult.decision === 'timeout') {
-          approved = policy.approval.defaultAction === 'execute';
+        } else if (approvalResult.decision === "timeout") {
+          approved = policy.approval.defaultAction === "execute";
         } else {
           approved = false;
         }
       }
 
       if (!approved) {
-        auditEntry.execution = { status: 'completed', completedAt: Date.now() };
-        auditEntry.outcome = { success: false, message: 'Not approved' };
+        auditEntry.execution = { status: "completed", completedAt: Date.now() };
+        auditEntry.outcome = { success: false, message: "Not approved" };
         auditor.logIntervention(auditEntry);
         return {
           interventionId,
           type,
           workflowId: anomaly.workflowId,
           success: false,
-          message: 'Intervention not approved',
+          message: "Intervention not approved",
           approval: { required: true, status: auditEntry.approval!.status },
           dryRun: false,
         };
@@ -505,45 +526,45 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
 
       // Dry run mode — log but don't execute
       if (isDryRunActive()) {
-        auditEntry.execution = { status: 'dry_run', completedAt: Date.now() };
-        auditEntry.outcome = { success: true, message: 'Dry run — no action taken' };
+        auditEntry.execution = { status: "dry_run", completedAt: Date.now() };
+        auditEntry.outcome = { success: true, message: "Dry run — no action taken" };
         auditor.logIntervention(auditEntry);
         return {
           interventionId,
           type,
           workflowId: anomaly.workflowId,
           success: true,
-          message: 'Dry run — no action taken',
+          message: "Dry run — no action taken",
           dryRun: true,
         };
       }
 
       // Execute intervention
-      auditEntry.execution.status = 'executing';
+      auditEntry.execution.status = "executing";
       auditEntry.execution.startedAt = Date.now();
 
       try {
-        let message = '';
+        let message = "";
 
         switch (type) {
-          case 'pause': {
+          case "pause": {
             const result = await pauseController.pause(anomaly.workflowId, anomaly.message, interventionId);
             if (result.success) {
               recentPauses.push(Date.now());
               await persistToDisk();
               message = `Workflow ${anomaly.workflowId} paused successfully`;
             } else {
-              message = result.error || 'Pause failed';
+              message = result.error || "Pause failed";
               throw new Error(message);
             }
             break;
           }
 
-          case 'throttle': {
+          case "throttle": {
             const params = policy.action.parameters;
             const result = throttleManager.applyThrottle({
               agentId: anomaly.agentId || anomaly.workflowId,
-              metric: (params.metric as 'tokensPerMinute') || 'tokensPerMinute',
+              metric: (params.metric as "tokensPerMinute") || "tokensPerMinute",
               limit: (params.limitValue as number) || 15000,
               interventionId,
             });
@@ -553,19 +574,19 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
               await persistToDisk();
               message = `Throttle applied to ${agentId}: ${result.appliedLimit}`;
             } else {
-              message = result.error || 'Throttle failed';
+              message = result.error || "Throttle failed";
               throw new Error(message);
             }
             break;
           }
 
-          case 'feedback': {
+          case "feedback": {
             // Feedback doesn't need full trace analysis — generate targeted feedback from anomaly
             const fbMessage = {
               timestamp: Date.now(),
               feedbackId: `fb_${interventionId}`,
-              category: (policy.action.parameters.category as string) || 'error_recovery',
-              severity: 'warning' as const,
+              category: (policy.action.parameters.category as FeedbackCategory | undefined) || "error_recovery",
+              severity: "warning" as const,
               agentId: anomaly.agentId || anomaly.workflowId,
               pattern: anomaly.type,
               suggestion: `Anomaly detected: ${anomaly.message}. Review recent actions and adjust approach.`,
@@ -578,7 +599,7 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
         }
 
         auditEntry.execution = {
-          status: 'completed',
+          status: "completed",
           startedAt: auditEntry.execution.startedAt,
           completedAt: Date.now(),
         };
@@ -591,15 +612,13 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
           workflowId: anomaly.workflowId,
           success: true,
           message,
-          approval: policy.approval.required
-            ? { required: true, status: 'approved' }
-            : undefined,
+          approval: policy.approval.required ? { required: true, status: "approved" } : undefined,
           dryRun: false,
         };
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         auditEntry.execution = {
-          status: 'failed',
+          status: "failed",
           startedAt: auditEntry.execution.startedAt,
           completedAt: Date.now(),
           error: errMsg,
@@ -624,17 +643,17 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
       // Cancel all pending approvals
       const pending = await approvalManager.getPendingApprovals();
       for (const p of pending) {
-        await approvalManager.denyViaCLI(p.interventionId, 'Emergency stop');
+        await approvalManager.denyViaCLI(p.interventionId, "Emergency stop");
       }
 
       // Log emergency stop
       const auditEntry: InterventionAuditEntry = {
         interventionId: generateInterventionId(),
         timestamp: Date.now(),
-        workflowId: 'system',
-        type: 'emergency_stop',
-        trigger: { anomaly: 'manual', severity: 'critical' },
-        execution: { status: 'completed', completedAt: Date.now() },
+        workflowId: "system",
+        type: "emergency_stop",
+        trigger: { anomaly: "manual", severity: "critical" },
+        execution: { status: "completed", completedAt: Date.now() },
         outcome: {
           success: true,
           message: `Emergency stop: cancelled ${pending.length} pending approvals, disabled all interventions`,
@@ -643,7 +662,7 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
       auditor.logIntervention(auditEntry);
 
       auditLog({
-        action: 'emergency_stop',
+        action: "emergency_stop",
         details: { cancelledApprovals: pending.length },
         success: true,
       });
@@ -665,18 +684,25 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
 
       // Persist to config
       ensureDir(POLICIES_DIR);
-      loadConfig().then(current => {
-        current.intervention.dryRun = enabled;
-        writeFileSync(CONFIG_PATH, JSON.stringify(current, null, 2));
-      }).catch(() => { /* best effort */ });
+      loadConfig()
+        .then((current) => {
+          current.intervention.dryRun = enabled;
+          writeFileSync(CONFIG_PATH, JSON.stringify(current, null, 2));
+        })
+        .catch((err) => {
+          console.error(`[InterventionManager] could not persist dry-run toggle:`, err);
+        });
     },
 
     getActiveInterventions(): InterventionAuditEntry[] {
-      return auditor.query({}).filter(e =>
-        e.execution.status === 'executing' ||
-        (e.type === 'pause' && e.outcome.success && !e.outcome.rollback) ||
-        (e.type === 'throttle' && e.outcome.success && !e.outcome.rollback)
-      );
+      return auditor
+        .query({})
+        .filter(
+          (e) =>
+            e.execution.status === "executing" ||
+            (e.type === "pause" && e.outcome.success && !e.outcome.rollback) ||
+            (e.type === "throttle" && e.outcome.success && !e.outcome.rollback),
+        );
     },
 
     getConfig(): InterventionConfig {
@@ -684,7 +710,13 @@ export function createInterventionManager(opts?: { dryRun?: boolean }): Interven
     },
 
     reloadConfig(): void {
-      loadConfig().then(c => { config = c; }).catch(() => { /* keep existing */ });
+      loadConfig()
+        .then((c) => {
+          config = c;
+        })
+        .catch((err) => {
+          console.error(`[InterventionManager] could not reload intervention config, keeping current:`, err);
+        });
     },
   };
 }

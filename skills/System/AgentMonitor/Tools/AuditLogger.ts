@@ -10,10 +10,10 @@
  *   auditLog({ action: 'evaluate', workflowId: 'abc', details: { ... } });
  */
 
-import { existsSync, mkdirSync, readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { createAppendLog } from '../../../../lib/core/AppendLog.ts';
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 
 // ============================================================================
 // Types
@@ -21,7 +21,30 @@ import { createAppendLog } from '../../../../lib/core/AppendLog.ts';
 
 export interface AuditEvent {
   timestamp: number;
-  action: 'evaluate' | 'collect_trace' | 'emit_trace' | 'generate_report' | 'update_baseline' | 'alert' | 'retro' | 'config_change' | 'error';
+  action:
+    | "evaluate"
+    | "collect_trace"
+    | "emit_trace"
+    | "generate_report"
+    | "update_baseline"
+    | "alert"
+    | "retro"
+    | "config_change"
+    | "error"
+    // Intervention pipeline (ApprovalManager, FeedbackManager, InterventionManager, ThrottleManager)
+    | "approval_requested"
+    | "approval_timeout"
+    | "approval_granted"
+    | "approval_denied"
+    | "approval_snoozed"
+    | "feedback_delivered"
+    | "feedback_delivery_failed"
+    | "intervention_skipped"
+    | "intervention_rate_limited"
+    | "emergency_stop"
+    | "throttle_applied"
+    | "throttle_released"
+    | "throttle_rollback";
   workflowId?: string;
   agentId?: string;
   details: Record<string, unknown>;
@@ -35,7 +58,7 @@ export interface AuditEvent {
 // ============================================================================
 
 const KAYA_HOME: string = getKayaHome();
-const AUDIT_PATH: string = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'audit', 'monitor-audit.jsonl');
+const AUDIT_PATH: string = join(KAYA_HOME, "MEMORY", "MONITORING", "audit", "monitor-audit.jsonl");
 
 // ============================================================================
 // Core Functions
@@ -51,7 +74,7 @@ function ensureAuditDir(): void {
 // ISC AppendLog seam: one instance reused for the monitor audit trail.
 const monitorAuditLog = createAppendLog(AUDIT_PATH);
 
-export function auditLog(event: Omit<AuditEvent, 'timestamp'>): void {
+export function auditLog(event: Omit<AuditEvent, "timestamp">): void {
   ensureAuditDir();
 
   const fullEvent: AuditEvent = {
@@ -67,19 +90,19 @@ export function readAuditLog(limit: number = 50): AuditEvent[] {
     return [];
   }
 
-  const content = readFileSync(AUDIT_PATH, 'utf-8').trim();
+  const content = readFileSync(AUDIT_PATH, "utf-8").trim();
   if (!content) return [];
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const events: AuditEvent[] = [];
 
   // Read from end for most recent
   const start = Math.max(0, lines.length - limit);
   for (let i = start; i < lines.length; i++) {
     try {
-      events.push(JSON.parse(lines[i]));
+      events.push(JSON.parse(lines[i] ?? ""));
     } catch {
-      // Skip malformed lines
+      // intentionally silent: torn or partial JSONL line
     }
   }
 
@@ -88,8 +111,8 @@ export function readAuditLog(limit: number = 50): AuditEvent[] {
 
 export function getAuditStats(): { totalEvents: number; errorCount: number; lastEvent: AuditEvent | null } {
   const events = readAuditLog(1000);
-  const errorCount = events.filter(e => !e.success).length;
-  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+  const errorCount = events.filter((e) => !e.success).length;
+  const lastEvent = events.at(-1) ?? null;
 
   return { totalEvents: events.length, errorCount, lastEvent };
 }
