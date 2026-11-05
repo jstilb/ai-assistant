@@ -6,7 +6,6 @@ set -euo pipefail
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -42,7 +41,8 @@ test_ytdlp() {
 
     log_test "Check yt-dlp version"
     if yt-dlp --version &> /dev/null; then
-        local version=$(yt-dlp --version)
+        local version
+        version=$(yt-dlp --version) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "yt-dlp version: $version"
     else
         log_fail "yt-dlp version check failed"
@@ -71,7 +71,8 @@ test_gcalcli() {
 
     log_test "Check gcalcli version"
     if gcalcli --version &> /dev/null; then
-        local version=$(gcalcli --version)
+        local version
+        version=$(gcalcli --version) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "gcalcli version: $version"
     else
         log_fail "gcalcli version check failed"
@@ -100,7 +101,8 @@ test_rclone() {
 
     log_test "Check rclone version"
     if rclone version | head -1 | grep -q "rclone"; then
-        local version=$(rclone version | head -1)
+        local version
+        version=$(rclone version | head -1) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "rclone version: $version"
     else
         log_fail "rclone version check failed"
@@ -129,7 +131,8 @@ test_gog() {
 
     log_test "Check gog version"
     if gog version | grep -q "v[0-9]"; then
-        local version=$(gog version)
+        local version
+        version=$(gog version) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "gog version: $version"
     else
         log_fail "gog version check failed"
@@ -158,7 +161,8 @@ test_gemini() {
 
     log_test "Check gemini version"
     if gemini --version &> /dev/null; then
-        local version=$(gemini --version 2>&1 | grep -v "DeprecationWarning" | head -1)
+        local version
+        version=$(gemini --version 2>&1 | grep -v "DeprecationWarning" | head -1) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "gemini version: $version"
     else
         log_fail "gemini version check failed"
@@ -190,7 +194,8 @@ test_bsky() {
 
     log_test "Check bsky version"
     if bsky --version &> /dev/null; then
-        local version=$(bsky --version 2>&1)
+        local version
+        version=$(bsky --version 2>&1) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "bsky version: $version"
     else
         log_fail "bsky version check failed (may not be supported)"
@@ -212,7 +217,8 @@ test_bun() {
 
     log_test "Check bun version"
     if bun --version &> /dev/null; then
-        local version=$(bun --version)
+        local version
+        version=$(bun --version) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "bun version: $version"
     else
         log_fail "bun version check failed"

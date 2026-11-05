@@ -81,6 +81,7 @@ test_calendar_awk() {
 
     log_test "Parse calendar with awk"
     if "$KAYA_CLI" calendar list &> /dev/null; then
+        # shellcheck disable=SC2034 # only the exit status is tested
         if result=$("$KAYA_CLI" calendar agenda --tsv 2>/dev/null | awk -F'\t' '{print $1}' 2>/dev/null | head -1); then
             log_pass "Calendar + awk pipe works"
         else
@@ -129,6 +130,7 @@ test_drive_jq() {
 
     log_test "Parse Drive info with jq"
     if "$KAYA_CLI" drive lsd gdrive: &> /dev/null; then
+        # shellcheck disable=SC2034 # only the exit status is tested
         if info=$("$KAYA_CLI" drive about gdrive: --json 2>/dev/null | jq -r '.total' 2>/dev/null); then
             log_pass "Drive + jq pipe works"
         else
@@ -200,7 +202,8 @@ test_output_redirect() {
 
     log_test "Redirect YouTube metadata to file"
     local test_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
 
     if "$KAYA_CLI" youtube --get-title "$test_url" > "$temp_file" 2>/dev/null; then
         if [[ -s "$temp_file" ]]; then

@@ -6,8 +6,8 @@
  * Usage: kaya-cli weather [location] [options]
  */
 
-import { parseArgs } from 'util';
-import { httpClient } from '../../../../lib/core/CachedHTTPClient';
+import { parseArgs } from "node:util";
+import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 
 const HELP = `
 Weather CLI - Current conditions and forecasts via wttr.in
@@ -92,15 +92,15 @@ interface WttrResponse {
   }>;
 }
 
-async function fetchWeather(location: string, format: string = 'j1'): Promise<WttrResponse> {
+async function fetchWeather(location: string, format: string = "j1"): Promise<WttrResponse> {
   const encodedLocation = encodeURIComponent(location);
   const url = `https://wttr.in/${encodedLocation}?format=${format}`;
 
   return httpClient.fetchJson<WttrResponse>(url, {
-    cache: 'memory',
+    cache: "memory",
     ttl: 600,
     retry: 2,
-    headers: { 'User-Agent': 'kaya-cli/1.0 (weather)' },
+    headers: { "User-Agent": "kaya-cli/1.0 (weather)" },
   });
 }
 
@@ -109,17 +109,29 @@ async function fetchWeatherText(location: string, format: string): Promise<strin
   const url = `https://wttr.in/${encodedLocation}?format=${encodeURIComponent(format)}`;
 
   return httpClient.fetchText(url, {
-    cache: 'memory',
+    cache: "memory",
     ttl: 600,
     retry: 2,
-    headers: { 'User-Agent': 'kaya-cli/1.0 (weather)' },
+    headers: { "User-Agent": "kaya-cli/1.0 (weather)" },
   });
+}
+
+function describeLocation(data: WttrResponse): string {
+  const area = data.nearest_area[0];
+  const name = area?.areaName[0]?.value;
+  const country = area?.country[0]?.value;
+  if (!name || !country) {
+    throw new Error("Weather service returned no location data");
+  }
+  return `${name}, ${country}`;
 }
 
 function formatCurrentConditions(data: WttrResponse, useImperial: boolean): string {
   const current = data.current_condition[0];
-  const area = data.nearest_area[0];
-  const location = `${area.areaName[0].value}, ${area.country[0].value}`;
+  if (!current) {
+    throw new Error("Weather service returned no current conditions");
+  }
+  const location = describeLocation(data);
 
   const temp = useImperial ? `${current.temp_F}°F` : `${current.temp_C}°C`;
   const feelsLike = useImperial ? `${current.FeelsLikeF}°F` : `${current.FeelsLikeC}°C`;
@@ -130,35 +142,34 @@ function formatCurrentConditions(data: WttrResponse, useImperial: boolean): stri
   const lines = [
     `📍 ${location}`,
     `🌡️  Temperature: ${temp} (feels like ${feelsLike})`,
-    `☁️  Conditions: ${current.weatherDesc[0].value}`,
+    `☁️  Conditions: ${current.weatherDesc[0]?.value ?? "Unknown"}`,
     `💨 Wind: ${wind}`,
     `💧 Humidity: ${current.humidity}%`,
     `👁️  Visibility: ${current.visibility} km`,
     `☀️  UV Index: ${current.uvIndex}`,
   ];
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function formatForecast(data: WttrResponse, useImperial: boolean): string {
   const lines: string[] = [];
-  const area = data.nearest_area[0];
-  const location = `${area.areaName[0].value}, ${area.country[0].value}`;
+  const location = describeLocation(data);
 
   lines.push(`📍 ${location} - 3-Day Forecast`);
-  lines.push('');
+  lines.push("");
 
   for (const day of data.weather) {
     const date = new Date(day.date);
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const dayName = date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
     const high = useImperial ? `${day.maxtempF}°F` : `${day.maxtempC}°C`;
     const low = useImperial ? `${day.mintempF}°F` : `${day.mintempC}°C`;
 
     // Get noon conditions for representative weather
-    const noonHour = day.hourly.find(h => h.time === '1200') || day.hourly[4];
-    const conditions = noonHour?.weatherDesc[0].value || 'Unknown';
-    const rainChance = noonHour?.chanceofrain || '0';
+    const noonHour = day.hourly.find((h) => h.time === "1200") || day.hourly[4];
+    const conditions = noonHour?.weatherDesc[0]?.value || "Unknown";
+    const rainChance = noonHour?.chanceofrain || "0";
 
     lines.push(`📅 ${dayName}`);
     lines.push(`   High: ${high} / Low: ${low}`);
@@ -166,23 +177,23 @@ function formatForecast(data: WttrResponse, useImperial: boolean): string {
     if (parseInt(rainChance) > 20) {
       lines.push(`   🌧️  ${rainChance}% chance of rain`);
     }
-    lines.push('');
+    lines.push("");
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 async function main() {
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      forecast: { type: 'boolean', short: 'f', default: false },
-      json: { type: 'boolean', short: 'j', default: false },
-      metric: { type: 'boolean', short: 'm', default: true },
-      imperial: { type: 'boolean', short: 'i', default: false },
-      oneline: { type: 'boolean', short: '1', default: false },
-      quiet: { type: 'boolean', short: 'q', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
+      forecast: { type: "boolean", short: "f", default: false },
+      json: { type: "boolean", short: "j", default: false },
+      metric: { type: "boolean", short: "m", default: true },
+      imperial: { type: "boolean", short: "i", default: false },
+      oneline: { type: "boolean", short: "1", default: false },
+      quiet: { type: "boolean", short: "q", default: false },
+      help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
     strict: false,
@@ -204,12 +215,12 @@ async function main() {
   }
 
   // Location is any positional argument (may include spaces if quoted)
-  const location = positionals.join(' ') || '';
+  const location = positionals.join(" ") || "";
 
   try {
     // One-line format
     if (opts.oneline) {
-      const format = opts.imperial ? '%l:+%t+%C+%w' : '%l:+%t+%C+%w';
+      const format = opts.imperial ? "%l:+%t+%C+%w" : "%l:+%t+%C+%w";
       const result = await fetchWeatherText(location, format);
       console.log(result.trim());
       return;
@@ -217,7 +228,7 @@ async function main() {
 
     // Quiet format (temp only)
     if (opts.quiet) {
-      const format = opts.imperial ? '%t' : '%t';
+      const format = opts.imperial ? "%t" : "%t";
       const result = await fetchWeatherText(location, format);
       console.log(result.trim());
       return;
@@ -241,7 +252,7 @@ async function main() {
       console.log(formatCurrentConditions(data, useImperial));
     }
   } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : String(error));
+    console.error("Error:", error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }

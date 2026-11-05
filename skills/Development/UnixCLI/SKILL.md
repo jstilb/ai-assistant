@@ -377,7 +377,7 @@ For services without mature CLI tools, create a TypeScript file in `Tools/`:
 ### Configuration
 - Secrets: `~/.claude/secrets.json` (API keys, tokens)
 - Google OAuth: `~/.config/google/credentials.json`
-- Task DB: `skills/Productivity/LucidTasks/Data/tasks.db` (local SQLite)
+- Task DB: `skills/Productivity/LucidTasks/Data/lucidtasks.db` (local SQLite)
 
 ---
 

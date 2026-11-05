@@ -21,17 +21,17 @@
  * For read/execute/summarize: Chrome > View > Developer > Allow JavaScript from Apple Events
  */
 
-import { maybeEncode } from '../../../../lib/core/ToonHelper';
-import { inference, type InferenceLevel } from '../../../../lib/core/Inference';
+import { maybeEncode } from "../../../../lib/core/ToonHelper.ts";
+import { inference, type InferenceLevel } from "../../../../lib/core/Inference.ts";
 
 const COLORS = {
-  red: '\x1b[0;31m',
-  green: '\x1b[0;32m',
-  yellow: '\x1b[1;33m',
-  blue: '\x1b[0;34m',
-  cyan: '\x1b[0;36m',
-  dim: '\x1b[2m',
-  nc: '\x1b[0m',
+  red: "\x1b[0;31m",
+  green: "\x1b[0;32m",
+  yellow: "\x1b[1;33m",
+  blue: "\x1b[0;34m",
+  cyan: "\x1b[0;36m",
+  dim: "\x1b[2m",
+  nc: "\x1b[0m",
 };
 
 // ---------------------------------------------------------------------------
@@ -41,21 +41,21 @@ const COLORS = {
 class AppleEventsError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'AppleEventsError';
+    this.name = "AppleEventsError";
   }
 }
 
 class ChromeNotRunningError extends Error {
   constructor() {
-    super('Google Chrome is not running');
-    this.name = 'ChromeNotRunningError';
+    super("Google Chrome is not running");
+    this.name = "ChromeNotRunningError";
   }
 }
 
 class TabNotFoundError extends Error {
   constructor(tabId: string) {
     super(`Tab not found: ${tabId}`);
-    this.name = 'TabNotFoundError';
+    this.name = "TabNotFoundError";
   }
 }
 
@@ -64,9 +64,9 @@ class TabNotFoundError extends Error {
 // ---------------------------------------------------------------------------
 
 function chromeCLI(args: string[], env?: Record<string, string>): string {
-  const result = Bun.spawnSync(['chrome-cli', ...args], {
-    stdout: 'pipe',
-    stderr: 'pipe',
+  const result = Bun.spawnSync(["chrome-cli", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
     env: { ...process.env, ...env },
   });
 
@@ -75,17 +75,17 @@ function chromeCLI(args: string[], env?: Record<string, string>): string {
   if (result.exitCode !== 0 || stderr) {
     const lower = stderr.toLowerCase();
 
-    if (lower.includes('apple events') || lower.includes('not allowed') || lower.includes('osascript')) {
+    if (lower.includes("apple events") || lower.includes("not allowed") || lower.includes("osascript")) {
       throw new AppleEventsError(
-        `Apple Events not enabled. Enable in Chrome: View > Developer > Allow JavaScript from Apple Events\n${stderr}`
+        `Apple Events not enabled. Enable in Chrome: View > Developer > Allow JavaScript from Apple Events\n${stderr}`,
       );
     }
-    if (lower.includes('not running') || lower.includes('connection') || lower.includes('unable to connect')) {
+    if (lower.includes("not running") || lower.includes("connection") || lower.includes("unable to connect")) {
       throw new ChromeNotRunningError();
     }
-    if (lower.includes('not found') || lower.includes('invalid tab')) {
-      const tabMatch = args.find(a => /^\d+$/.test(a));
-      throw new TabNotFoundError(tabMatch ?? 'unknown');
+    if (lower.includes("not found") || lower.includes("invalid tab")) {
+      const tabMatch = args.find((a) => /^\d+$/.test(a));
+      throw new TabNotFoundError(tabMatch ?? "unknown");
     }
     if (stderr && result.exitCode !== 0) {
       throw new Error(`chrome-cli error: ${stderr}`);
@@ -96,7 +96,7 @@ function chromeCLI(args: string[], env?: Record<string, string>): string {
 }
 
 function isChromeCLIInstalled(): boolean {
-  const result = Bun.spawnSync(['which', 'chrome-cli'], { stdout: 'pipe', stderr: 'pipe' });
+  const result = Bun.spawnSync(["which", "chrome-cli"], { stdout: "pipe", stderr: "pipe" });
   return result.exitCode === 0;
 }
 
@@ -106,24 +106,22 @@ function isChromeCLIInstalled(): boolean {
  */
 function executeJS(js: string, tabId?: string): string {
   // Build AppleScript that runs JS in Chrome and returns the result
-  const tabRef = tabId
-    ? `tab id ${tabId} of window 1`
-    : 'active tab of front window';
+  const tabRef = tabId ? `tab id ${tabId} of window 1` : "active tab of front window";
 
   const script = `tell application "Google Chrome" to execute ${tabRef} javascript ${JSON.stringify(js)}`;
 
-  const result = Bun.spawnSync(['osascript', '-e', script], {
-    stdout: 'pipe',
-    stderr: 'pipe',
+  const result = Bun.spawnSync(["osascript", "-e", script], {
+    stdout: "pipe",
+    stderr: "pipe",
   });
 
   const stderr = new TextDecoder().decode(result.stderr).trim();
 
   if (result.exitCode !== 0 || stderr) {
     const lower = stderr.toLowerCase();
-    if (lower.includes('not allowed') || lower.includes('apple events') || lower.includes('1743')) {
+    if (lower.includes("not allowed") || lower.includes("apple events") || lower.includes("1743")) {
       throw new AppleEventsError(
-        'Apple Events not enabled. Enable in Chrome: View > Developer > Allow JavaScript from Apple Events'
+        "Apple Events not enabled. Enable in Chrome: View > Developer > Allow JavaScript from Apple Events",
       );
     }
     if (stderr && result.exitCode !== 0) {
@@ -155,9 +153,9 @@ interface WindowInfo {
 function parseIdLines(raw: string): Array<{ id: number; text: string }> {
   // chrome-cli outputs lines like: [554501844] Some text
   const entries: Array<{ id: number; text: string }> = [];
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     const match = line.trim().match(/^\[(\d+)\]\s+(.+)/);
-    if (match) {
+    if (match?.[1] && match[2]) {
       entries.push({ id: parseInt(match[1], 10), text: match[2].trim() });
     }
   }
@@ -167,29 +165,29 @@ function parseIdLines(raw: string): Array<{ id: number; text: string }> {
 function parseTabsList(): TabInfo[] {
   // chrome-cli list tabs: [id] Title
   // chrome-cli list links: [id] URL  (same IDs, matching order)
-  const tabsRaw = chromeCLI(['list', 'tabs']);
-  const linksRaw = chromeCLI(['list', 'links']);
+  const tabsRaw = chromeCLI(["list", "tabs"]);
+  const linksRaw = chromeCLI(["list", "links"]);
 
   const tabEntries = parseIdLines(tabsRaw);
   const linkEntries = parseIdLines(linksRaw);
-  const urlMap = new Map(linkEntries.map(l => [l.id, l.text]));
+  const urlMap = new Map(linkEntries.map((l) => [l.id, l.text]));
 
-  return tabEntries.map(t => ({
+  return tabEntries.map((t) => ({
     id: t.id,
     title: t.text,
-    url: urlMap.get(t.id) ?? '',
+    url: urlMap.get(t.id) ?? "",
   }));
 }
 
 function parseWindowsList(raw: string): WindowInfo[] {
   const windows: WindowInfo[] = [];
 
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
     const match = trimmed.match(/^\[(\d+)\]\s+(.+)/);
-    if (match) {
+    if (match?.[1] && match[2]) {
       windows.push({
         id: parseInt(match[1], 10),
         name: match[2].trim(),
@@ -202,18 +200,18 @@ function parseWindowsList(raw: string): WindowInfo[] {
 
 function parseTabInfo(raw: string): Partial<TabInfo> & { loading?: boolean } {
   const info: Record<string, string> = {};
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     const match = line.match(/^(\w[\w\s]*?):\s+(.+)/);
-    if (match) {
+    if (match?.[1] && match[2]) {
       info[match[1].trim().toLowerCase()] = match[2].trim();
     }
   }
 
   return {
-    id: info['id'] ? parseInt(info['id'], 10) : undefined,
-    title: info['title'] ?? '',
-    url: info['url'] ?? '',
-    loading: info['loading'] === 'Yes',
+    id: info["id"] ? parseInt(info["id"], 10) : undefined,
+    title: info["title"] ?? "",
+    url: info["url"] ?? "",
+    loading: info["loading"] === "Yes",
   };
 }
 
@@ -268,49 +266,50 @@ interface ParsedArgs {
 
 function parseArgs(argv: string[]): ParsedArgs {
   const result: ParsedArgs = {
-    command: '',
+    command: "",
     positional: [],
     json: false,
     toon: false,
     html: false,
-    level: 'fast',
-    query: '',
-    tabId: '',
+    level: "fast",
+    query: "",
+    tabId: "",
   };
 
   let i = 0;
   while (i < argv.length) {
-    const arg = argv[i];
-    if (arg === '--json') {
+    const arg = argv[i] ?? "";
+    const next = argv[i + 1];
+    if (arg === "--json") {
       result.json = true;
-    } else if (arg === '--toon') {
+    } else if (arg === "--toon") {
       result.toon = true;
-    } else if (arg === '--html') {
+    } else if (arg === "--html") {
       result.html = true;
-    } else if (arg === '--level' && argv[i + 1]) {
-      const lvl = argv[i + 1].toLowerCase();
-      if (['fast', 'standard', 'smart'].includes(lvl)) {
+    } else if (arg === "--level" && next) {
+      const lvl = next.toLowerCase();
+      if (["fast", "standard", "smart"].includes(lvl)) {
         result.level = lvl as InferenceLevel;
       }
       i++;
-    } else if (arg === '--query' && argv[i + 1]) {
-      result.query = argv[i + 1];
+    } else if (arg === "--query" && next) {
+      result.query = next;
       i++;
-    } else if (arg === '-t' && argv[i + 1]) {
-      result.tabId = argv[i + 1];
+    } else if (arg === "-t" && next) {
+      result.tabId = next;
       i++;
-    } else if (!arg.startsWith('-')) {
+    } else if (!arg.startsWith("-")) {
       result.positional.push(arg);
     }
     i++;
   }
 
-  result.command = result.positional.shift() ?? '';
+  result.command = result.positional.shift() ?? "";
 
   // First positional after command may be a tab-id or subcommand arg
   if (result.positional.length > 0 && !result.tabId) {
     // Check if it looks like a tab-id (numeric)
-    if (/^\d+$/.test(result.positional[0]) && !['open', 'search', 'execute'].includes(result.command)) {
+    if (/^\d+$/.test(result.positional[0] ?? "") && !["open", "search", "execute"].includes(result.command)) {
       result.tabId = result.positional.shift()!;
     }
   }
@@ -324,7 +323,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function cmdStatus(args: ParsedArgs): void {
   const installed = isChromeCLIInstalled();
-  let version = '';
+  let version = "";
   let chromeRunning = false;
   let tabCount = 0;
   let windowCount = 0;
@@ -332,11 +331,13 @@ function cmdStatus(args: ParsedArgs): void {
 
   if (installed) {
     try {
-      version = chromeCLI(['version']);
-    } catch { /* not running */ }
+      version = chromeCLI(["version"]);
+    } catch {
+      /* not running */
+    }
 
     try {
-      const tabsRaw = chromeCLI(['list', 'tabs']);
+      const tabsRaw = chromeCLI(["list", "tabs"]);
       chromeRunning = true;
       tabCount = parseIdLines(tabsRaw).length;
     } catch (e) {
@@ -346,13 +347,15 @@ function cmdStatus(args: ParsedArgs): void {
     }
 
     try {
-      const windowsRaw = chromeCLI(['list', 'windows']);
+      const windowsRaw = chromeCLI(["list", "windows"]);
       windowCount = parseWindowsList(windowsRaw).length;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     if (chromeRunning) {
       try {
-        executeJS('1+1');
+        executeJS("1+1");
         appleEventsOk = true;
       } catch (e) {
         if (e instanceof AppleEventsError) {
@@ -363,21 +366,33 @@ function cmdStatus(args: ParsedArgs): void {
   }
 
   if (args.json) {
-    console.log(JSON.stringify({
-      chromeCli: { installed, version },
-      chrome: { running: chromeRunning, tabs: tabCount, windows: windowCount },
-      appleEvents: appleEventsOk,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          chromeCli: { installed, version },
+          chrome: { running: chromeRunning, tabs: tabCount, windows: windowCount },
+          appleEvents: appleEventsOk,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`${COLORS.cyan}Chrome CLI Status${COLORS.nc}\n`);
-  console.log(`  chrome-cli:    ${installed ? `${COLORS.green}installed${COLORS.nc} (${version})` : `${COLORS.red}not installed${COLORS.nc} — brew install chrome-cli`}`);
-  console.log(`  Chrome:        ${chromeRunning ? `${COLORS.green}running${COLORS.nc}` : `${COLORS.red}not running${COLORS.nc}`}`);
+  console.log(
+    `  chrome-cli:    ${installed ? `${COLORS.green}installed${COLORS.nc} (${version})` : `${COLORS.red}not installed${COLORS.nc} — brew install chrome-cli`}`,
+  );
+  console.log(
+    `  Chrome:        ${chromeRunning ? `${COLORS.green}running${COLORS.nc}` : `${COLORS.red}not running${COLORS.nc}`}`,
+  );
   if (chromeRunning) {
     console.log(`  Tabs:          ${tabCount}`);
     console.log(`  Windows:       ${windowCount}`);
-    console.log(`  Apple Events:  ${appleEventsOk ? `${COLORS.green}enabled${COLORS.nc}` : `${COLORS.yellow}disabled${COLORS.nc} — View > Developer > Allow JavaScript from Apple Events`}`);
+    console.log(
+      `  Apple Events:  ${appleEventsOk ? `${COLORS.green}enabled${COLORS.nc}` : `${COLORS.yellow}disabled${COLORS.nc} — View > Developer > Allow JavaScript from Apple Events`}`,
+    );
   }
 }
 
@@ -392,7 +407,7 @@ function cmdTabs(args: ParsedArgs): void {
   } else {
     console.log(`${COLORS.cyan}Open Tabs (${tabs.length}):${COLORS.nc}\n`);
     for (const tab of tabs) {
-      const shortUrl = tab.url.length > 60 ? tab.url.slice(0, 57) + '...' : tab.url;
+      const shortUrl = tab.url.length > 60 ? tab.url.slice(0, 57) + "..." : tab.url;
       console.log(`  ${COLORS.green}[${tab.id}]${COLORS.nc} ${tab.title}`);
       console.log(`       ${COLORS.dim}${shortUrl}${COLORS.nc}`);
     }
@@ -400,7 +415,7 @@ function cmdTabs(args: ParsedArgs): void {
 }
 
 function cmdWindows(args: ParsedArgs): void {
-  const raw = chromeCLI(['list', 'windows']);
+  const raw = chromeCLI(["list", "windows"]);
   const windows = parseWindowsList(raw);
 
   if (args.json) {
@@ -414,7 +429,7 @@ function cmdWindows(args: ParsedArgs): void {
 }
 
 function cmdInfo(args: ParsedArgs): void {
-  const cliArgs = args.tabId ? ['info', '-t', args.tabId] : ['info'];
+  const cliArgs = args.tabId ? ["info", "-t", args.tabId] : ["info"];
   const raw = chromeCLI(cliArgs);
   const info = parseTabInfo(raw);
 
@@ -425,7 +440,7 @@ function cmdInfo(args: ParsedArgs): void {
     if (info.id) console.log(`  ${COLORS.blue}ID:${COLORS.nc}      ${info.id}`);
     if (info.title) console.log(`  ${COLORS.blue}Title:${COLORS.nc}   ${info.title}`);
     if (info.url) console.log(`  ${COLORS.blue}URL:${COLORS.nc}     ${info.url}`);
-    if (info.loading !== undefined) console.log(`  ${COLORS.blue}Loading:${COLORS.nc} ${info.loading ? 'Yes' : 'No'}`);
+    if (info.loading !== undefined) console.log(`  ${COLORS.blue}Loading:${COLORS.nc} ${info.loading ? "Yes" : "No"}`);
   }
 }
 
@@ -433,10 +448,10 @@ function cmdOpen(args: ParsedArgs): void {
   const url = args.positional[0];
   if (!url) {
     console.error(`${COLORS.red}Error:${COLORS.nc} URL required`);
-    console.error('Usage: kaya-cli chrome open <url>');
+    console.error("Usage: kaya-cli chrome open <url>");
     process.exit(1);
   }
-  const raw = chromeCLI(['open', url]);
+  const raw = chromeCLI(["open", url]);
   if (args.json) {
     console.log(JSON.stringify({ opened: url, result: raw }));
   } else {
@@ -445,12 +460,12 @@ function cmdOpen(args: ParsedArgs): void {
 }
 
 function cmdClose(args: ParsedArgs): void {
-  const cliArgs = args.tabId ? ['close', '-t', args.tabId] : ['close'];
+  const cliArgs = args.tabId ? ["close", "-t", args.tabId] : ["close"];
   chromeCLI(cliArgs);
   if (args.json) {
-    console.log(JSON.stringify({ closed: args.tabId || 'active' }));
+    console.log(JSON.stringify({ closed: args.tabId || "active" }));
   } else {
-    console.log(`${COLORS.green}Closed${COLORS.nc} tab ${args.tabId || '(active)'}`);
+    console.log(`${COLORS.green}Closed${COLORS.nc} tab ${args.tabId || "(active)"}`);
   }
 }
 
@@ -458,10 +473,10 @@ function cmdActivate(args: ParsedArgs): void {
   const tabId = args.tabId || args.positional[0];
   if (!tabId) {
     console.error(`${COLORS.red}Error:${COLORS.nc} Tab ID required`);
-    console.error('Usage: kaya-cli chrome activate <tab-id>');
+    console.error("Usage: kaya-cli chrome activate <tab-id>");
     process.exit(1);
   }
-  chromeCLI(['activate', '-t', tabId]);
+  chromeCLI(["activate", "-t", tabId]);
   if (args.json) {
     console.log(JSON.stringify({ activated: tabId }));
   } else {
@@ -470,23 +485,23 @@ function cmdActivate(args: ParsedArgs): void {
 }
 
 function cmdReload(args: ParsedArgs): void {
-  const cliArgs = args.tabId ? ['reload', '-t', args.tabId] : ['reload'];
+  const cliArgs = args.tabId ? ["reload", "-t", args.tabId] : ["reload"];
   chromeCLI(cliArgs);
   if (args.json) {
-    console.log(JSON.stringify({ reloaded: args.tabId || 'active' }));
+    console.log(JSON.stringify({ reloaded: args.tabId || "active" }));
   } else {
-    console.log(`${COLORS.green}Reloaded${COLORS.nc} tab ${args.tabId || '(active)'}`);
+    console.log(`${COLORS.green}Reloaded${COLORS.nc} tab ${args.tabId || "(active)"}`);
   }
 }
 
 function cmdRead(args: ParsedArgs): void {
   if (args.html) {
     // Raw HTML source
-    const cliArgs = args.tabId ? ['source', '-t', args.tabId] : ['source'];
+    const cliArgs = args.tabId ? ["source", "-t", args.tabId] : ["source"];
     const html = chromeCLI(cliArgs);
     if (args.json) {
       // Get info for metadata
-      const infoArgs = args.tabId ? ['info', '-t', args.tabId] : ['info'];
+      const infoArgs = args.tabId ? ["info", "-t", args.tabId] : ["info"];
       const info = parseTabInfo(chromeCLI(infoArgs));
       console.log(JSON.stringify({ title: info.title, url: info.url, html }));
     } else {
@@ -499,7 +514,7 @@ function cmdRead(args: ParsedArgs): void {
   const text = executeJS(EXTRACT_TEXT_JS, args.tabId || undefined);
 
   if (args.json) {
-    const infoArgs = args.tabId ? ['info', '-t', args.tabId] : ['info'];
+    const infoArgs = args.tabId ? ["info", "-t", args.tabId] : ["info"];
     const info = parseTabInfo(chromeCLI(infoArgs));
     console.log(JSON.stringify({ title: info.title, url: info.url, text }, null, 2));
   } else {
@@ -509,7 +524,7 @@ function cmdRead(args: ParsedArgs): void {
 
 function cmdExecute(args: ParsedArgs): void {
   // The JS expression is the remaining positional args joined
-  const js = args.positional.join(' ');
+  const js = args.positional.join(" ");
   if (!js) {
     console.error(`${COLORS.red}Error:${COLORS.nc} JavaScript expression required`);
     console.error("Usage: kaya-cli chrome execute 'document.title'");
@@ -522,24 +537,21 @@ function cmdExecute(args: ParsedArgs): void {
 }
 
 function cmdSearch(args: ParsedArgs): void {
-  const query = args.positional.join(' ') || args.query;
+  const query = args.positional.join(" ") || args.query;
   if (!query) {
     console.error(`${COLORS.red}Error:${COLORS.nc} Search query required`);
-    console.error('Usage: kaya-cli chrome search <query>');
+    console.error("Usage: kaya-cli chrome search <query>");
     process.exit(1);
   }
 
   const tabs = parseTabsList();
 
   const scored = tabs
-    .map(tab => ({
+    .map((tab) => ({
       ...tab,
-      score: Math.max(
-        fuzzyScore(query, tab.title),
-        fuzzyScore(query, tab.url)
-      ),
+      score: Math.max(fuzzyScore(query, tab.title), fuzzyScore(query, tab.url)),
     }))
-    .filter(t => t.score > 0)
+    .filter((t) => t.score > 0)
     .sort((a, b) => b.score - a.score);
 
   if (args.toon) {
@@ -554,8 +566,10 @@ function cmdSearch(args: ParsedArgs): void {
     }
     console.log(`${COLORS.cyan}Tabs matching "${query}" (${scored.length}):${COLORS.nc}\n`);
     for (const tab of scored) {
-      const shortUrl = tab.url.length > 60 ? tab.url.slice(0, 57) + '...' : tab.url;
-      console.log(`  ${COLORS.green}[${tab.id}]${COLORS.nc} ${tab.title} ${COLORS.dim}(score: ${tab.score})${COLORS.nc}`);
+      const shortUrl = tab.url.length > 60 ? tab.url.slice(0, 57) + "..." : tab.url;
+      console.log(
+        `  ${COLORS.green}[${tab.id}]${COLORS.nc} ${tab.title} ${COLORS.dim}(score: ${tab.score})${COLORS.nc}`,
+      );
       console.log(`       ${COLORS.dim}${shortUrl}${COLORS.nc}`);
     }
   }
@@ -572,21 +586,21 @@ async function cmdSummarize(args: ParsedArgs): Promise<void> {
   }
 
   async function summarizeTab(tabId?: string): Promise<TabSummary> {
-    const infoArgs = tabId ? ['info', '-t', tabId] : ['info'];
+    const infoArgs = tabId ? ["info", "-t", tabId] : ["info"];
     const info = parseTabInfo(chromeCLI(infoArgs));
 
     const text = executeJS(EXTRACT_TEXT_JS, tabId);
 
     const result = await inference({
       level: args.level,
-      systemPrompt: 'Summarize this web page in 2-4 concise sentences. Focus on the main content and purpose.',
+      systemPrompt: "Summarize this web page in 2-4 concise sentences. Focus on the main content and purpose.",
       userPrompt: `Title: ${info.title}\nURL: ${info.url}\n\n${text.slice(0, 8000)}`,
     });
 
     return {
       id: info.id ?? 0,
-      title: info.title ?? '',
-      url: info.url ?? '',
+      title: info.title ?? "",
+      url: info.url ?? "",
       summary: result.success ? result.output : `Error: ${result.error}`,
     };
   }
@@ -609,11 +623,9 @@ async function cmdSummarize(args: ParsedArgs): Promise<void> {
   // Multiple tabs: 'all' or search query
   let tabs = parseTabsList();
 
-  if (target !== 'all') {
+  if (target !== "all") {
     // Filter by search query
-    tabs = tabs.filter(t =>
-      fuzzyScore(target, t.title) > 0 || fuzzyScore(target, t.url) > 0
-    );
+    tabs = tabs.filter((t) => fuzzyScore(target, t.title) > 0 || fuzzyScore(target, t.url) > 0);
   }
 
   if (tabs.length === 0) {
@@ -655,9 +667,7 @@ function cmdCollect(args: ParsedArgs): void {
   // Apply query filter
   const query = args.query || args.positional[0];
   if (query) {
-    tabs = tabs.filter(t =>
-      fuzzyScore(query, t.title) > 0 || fuzzyScore(query, t.url) > 0
-    );
+    tabs = tabs.filter((t) => fuzzyScore(query, t.title) > 0 || fuzzyScore(query, t.url) > 0);
   }
 
   interface CollectedTab {
@@ -698,12 +708,12 @@ function cmdCollect(args: ParsedArgs): void {
     if (errors.length > 0) {
       console.log(`${COLORS.yellow}${errors.length} tab(s) failed (Apple Events?)${COLORS.nc}`);
     }
-    console.log('');
+    console.log("");
     for (const tab of collected) {
       console.log(`${COLORS.green}[${tab.id}]${COLORS.nc} ${COLORS.cyan}${tab.title}${COLORS.nc}`);
       console.log(`${COLORS.dim}${tab.url}${COLORS.nc}`);
-      const preview = tab.text.slice(0, 200).replace(/\n/g, ' ');
-      console.log(`${preview}${tab.text.length > 200 ? '...' : ''}\n`);
+      const preview = tab.text.slice(0, 200).replace(/\n/g, " ");
+      console.log(`${preview}${tab.text.length > 200 ? "..." : ""}\n`);
     }
   }
 }
@@ -770,7 +780,7 @@ ${COLORS.blue}Pipe composition:${COLORS.nc}
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  if (!args.command || args.command === 'help' || args.command === '--help' || args.command === '-h') {
+  if (!args.command || args.command === "help" || args.command === "--help" || args.command === "-h") {
     showHelp();
     process.exit(0);
   }
@@ -778,61 +788,61 @@ async function main(): Promise<void> {
   // Check chrome-cli is installed for all commands except help
   if (!isChromeCLIInstalled()) {
     console.error(`${COLORS.red}Error:${COLORS.nc} chrome-cli not installed`);
-    console.error('Install: brew install chrome-cli');
+    console.error("Install: brew install chrome-cli");
     process.exit(1);
   }
 
   try {
     switch (args.command) {
-      case 'status': {
+      case "status": {
         cmdStatus(args);
         break;
       }
-      case 'tabs': {
+      case "tabs": {
         cmdTabs(args);
         break;
       }
-      case 'windows': {
+      case "windows": {
         cmdWindows(args);
         break;
       }
-      case 'info': {
+      case "info": {
         cmdInfo(args);
         break;
       }
-      case 'open': {
+      case "open": {
         cmdOpen(args);
         break;
       }
-      case 'close': {
+      case "close": {
         cmdClose(args);
         break;
       }
-      case 'activate': {
+      case "activate": {
         cmdActivate(args);
         break;
       }
-      case 'reload': {
+      case "reload": {
         cmdReload(args);
         break;
       }
-      case 'read': {
+      case "read": {
         cmdRead(args);
         break;
       }
-      case 'execute': {
+      case "execute": {
         cmdExecute(args);
         break;
       }
-      case 'search': {
+      case "search": {
         cmdSearch(args);
         break;
       }
-      case 'summarize': {
+      case "summarize": {
         await cmdSummarize(args);
         break;
       }
-      case 'collect': {
+      case "collect": {
         cmdCollect(args);
         break;
       }

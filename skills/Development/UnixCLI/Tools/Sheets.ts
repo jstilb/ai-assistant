@@ -38,23 +38,24 @@
  *   kaya-cli sheets named-ranges <id> delete <name> - Delete named range
  */
 
-import { google } from 'googleapis';
-import { homedir } from 'os';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
-import { dirname, join } from 'path';
-import { randomUUID } from 'crypto';
-import { z } from 'zod';
-import { createStateManager } from '../../../../lib/core/StateManager';
-import { maybeEncode } from '../../../../lib/core/ToonHelper';
-import { columnLetter as indexToColumn } from '../../../../lib/core/SheetsA1.ts';
+import { google, type sheets_v4 } from "googleapis";
+import { homedir } from "node:os";
+import { writeFileSync, mkdirSync, renameSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { maybeEncode } from "../../../../lib/core/ToonHelper.ts";
+import { columnLetter as indexToColumn } from "../../../../lib/core/SheetsA1.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 const COLORS = {
-  red: '\x1b[0;31m',
-  green: '\x1b[0;32m',
-  yellow: '\x1b[1;33m',
-  blue: '\x1b[0;34m',
-  cyan: '\x1b[0;36m',
-  nc: '\x1b[0m'
+  red: "\x1b[0;31m",
+  green: "\x1b[0;32m",
+  yellow: "\x1b[1;33m",
+  blue: "\x1b[0;34m",
+  cyan: "\x1b[0;36m",
+  nc: "\x1b[0m",
 };
 
 // Auth configuration
@@ -83,7 +84,7 @@ export function persistTokenAtomic(path: string, data: Record<string, unknown>):
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
   const tmpPath = join(dir, `.${randomUUID()}.tmp`);
-  writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
   renameSync(tmpPath, path);
 }
 
@@ -135,6 +136,11 @@ export async function writeStdoutDrained(text: string): Promise<void> {
  * no such key of its own. So this reaches the refresh POST without touching
  * any call site inside google-auth-library itself.
  */
+/** Value of a `--name=value` argument: everything after the first "=" (so values may contain "="). */
+function flagValue(arg: string): string {
+  return arg.slice(arg.indexOf("=") + 1);
+}
+
 export function buildOAuth2Client(
   clientId: string,
   clientSecret: string,
@@ -153,11 +159,14 @@ export function buildOAuth2Client(
  * Parse hex color (#RRGGBB or #RGB) to Google Sheets RGB format (0-1 range)
  */
 function parseHexColor(hex: string): { red: number; green: number; blue: number } {
-  let cleanHex = hex.replace('#', '');
+  let cleanHex = hex.replace("#", "");
 
   // Expand shorthand (#RGB -> #RRGGBB)
   if (cleanHex.length === 3) {
-    cleanHex = cleanHex.split('').map(c => c + c).join('');
+    cleanHex = cleanHex
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
 
   const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
@@ -182,10 +191,10 @@ function parseA1Range(range: string): {
   let sheetName: string | undefined;
   let cellRange = range;
 
-  if (range.includes('!')) {
-    const parts = range.split('!');
+  if (range.includes("!")) {
+    const parts = range.split("!");
     sheetName = parts[0];
-    cellRange = parts[1];
+    cellRange = parts[1] ?? "";
   }
 
   // Parse "A1:B10" or "A1"
@@ -194,17 +203,21 @@ function parseA1Range(range: string): {
     throw new Error(`Invalid range format: ${range}`);
   }
 
-  const startCol = columnToIndex(rangeMatch[1]);
-  const startRow = parseInt(rangeMatch[2]) - 1; // 0-indexed
-  const endCol = rangeMatch[3] ? columnToIndex(rangeMatch[3]) + 1 : startCol + 1;
-  const endRow = rangeMatch[4] ? parseInt(rangeMatch[4]) : startRow + 1;
+  const [, startColName, startRowText, endColName, endRowText] = rangeMatch;
+  if (!startColName || !startRowText) {
+    throw new Error(`Invalid range format: ${range}`);
+  }
+  const startCol = columnToIndex(startColName);
+  const startRow = parseInt(startRowText) - 1; // 0-indexed
+  const endCol = endColName ? columnToIndex(endColName) + 1 : startCol + 1;
+  const endRow = endRowText ? parseInt(endRowText) : startRow + 1;
 
   return {
     sheetName,
     startColumnIndex: startCol,
     endColumnIndex: endCol,
     startRowIndex: startRow,
-    endRowIndex: endRow
+    endRowIndex: endRow,
   };
 }
 
@@ -214,7 +227,7 @@ function parseA1Range(range: string): {
 function columnToIndex(col: string): number {
   let index = 0;
   for (let i = 0; i < col.length; i++) {
-    index = index * 26 + (col.charCodeAt(i) - 'A'.charCodeAt(0) + 1);
+    index = index * 26 + (col.charCodeAt(i) - "A".charCodeAt(0) + 1);
   }
   return index - 1;
 }
@@ -224,10 +237,10 @@ function columnToIndex(col: string): number {
  */
 async function getSheetId(spreadsheetId: string, sheetName: string): Promise<number> {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets?.find(s => s.properties?.title === sheetName);
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === sheetName);
 
   if (!sheet?.properties?.sheetId) {
     throw new Error(`Sheet "${sheetName}" not found`);
@@ -237,25 +250,33 @@ async function getSheetId(spreadsheetId: string, sheetName: string): Promise<num
 }
 
 // Schema for Google OAuth credentials
-const GoogleCredentialsSchema = z.object({
-  installed: z.object({
-    client_id: z.string(),
-    client_secret: z.string(),
-    redirect_uris: z.array(z.string()),
-  }).optional(),
-  web: z.object({
-    client_id: z.string(),
-    client_secret: z.string(),
-    redirect_uris: z.array(z.string()),
-  }).optional(),
-}).passthrough();
+const GoogleCredentialsSchema = z
+  .object({
+    installed: z
+      .object({
+        client_id: z.string(),
+        client_secret: z.string(),
+        redirect_uris: z.array(z.string()),
+      })
+      .optional(),
+    web: z
+      .object({
+        client_id: z.string(),
+        client_secret: z.string(),
+        redirect_uris: z.array(z.string()),
+      })
+      .optional(),
+  })
+  .passthrough();
 
-const GoogleTokenSchema = z.object({
-  access_token: z.string().optional(),
-  refresh_token: z.string().optional(),
-  token_type: z.string().optional(),
-  expiry_date: z.number().optional(),
-}).passthrough();
+const GoogleTokenSchema = z
+  .object({
+    access_token: z.string().optional(),
+    refresh_token: z.string().optional(),
+    token_type: z.string().optional(),
+    expiry_date: z.number().optional(),
+  })
+  .passthrough();
 
 async function getAuthClient(): Promise<InstanceType<typeof google.auth.OAuth2>> {
   if (_cachedAuthClient) return _cachedAuthClient;
@@ -273,9 +294,10 @@ async function getAuthClient(): Promise<InstanceType<typeof google.auth.OAuth2>>
   }
 
   const credentials = await credentialsManager.load();
-  const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web || { client_id: '', client_secret: '', redirect_uris: [] };
+  const { client_id, client_secret, redirect_uris } = credentials.installed ||
+    credentials.web || { client_id: "", client_secret: "", redirect_uris: [] };
 
-  const oauth2Client = buildOAuth2Client(client_id, client_secret, redirect_uris[0]);
+  const oauth2Client = buildOAuth2Client(client_id, client_secret, redirect_uris[0] ?? "");
 
   const tokenManager = createStateManager({
     path: TOKEN_PATH,
@@ -300,11 +322,13 @@ async function getAuthClient(): Promise<InstanceType<typeof google.auth.OAuth2>>
     // Google's refresh-grant response never includes `refresh_token` (only
     // the initial consent grant does), so `merged` below is what carries the
     // long-lived refresh_token forward on every access-token rotation.
-    oauth2Client.on('tokens', (newTokens) => {
+    oauth2Client.on("tokens", (newTokens) => {
       try {
         const merged = { ...token, ...newTokens };
         persistTokenAtomic(TOKEN_PATH, merged);
-      } catch { /* best-effort; next run re-refreshes */ }
+      } catch {
+        /* best-effort; next run re-refreshes */
+      }
     });
     _cachedAuthClient = oauth2Client;
     return oauth2Client;
@@ -318,13 +342,13 @@ async function getAuthClient(): Promise<InstanceType<typeof google.auth.OAuth2>>
 
 async function listSpreadsheets(limit = 10) {
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   const response = await drive.files.list({
     q: "mimeType='application/vnd.google-apps.spreadsheet'",
     pageSize: limit,
-    fields: 'files(id, name, modifiedTime)',
-    orderBy: 'modifiedTime desc'
+    fields: "files(id, name, modifiedTime)",
+    orderBy: "modifiedTime desc",
   });
 
   return response.data.files || [];
@@ -332,58 +356,58 @@ async function listSpreadsheets(limit = 10) {
 
 async function readSheet(spreadsheetId: string, range?: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   if (!range) {
     // Get first sheet name
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
-    const firstSheet = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    const firstSheet = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
     range = firstSheet;
   }
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range
+    range,
   });
 
   return response.data.values || [];
 }
 
-async function writeSheet(spreadsheetId: string, range: string, values: any[][]) {
+async function writeSheet(spreadsheetId: string, range: string, values: unknown[][]) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.values.update({
     spreadsheetId,
     range,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values }
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values },
   });
 
   return response.data;
 }
 
-async function appendToSheet(spreadsheetId: string, values: any[][], sheetName?: string) {
+async function appendToSheet(spreadsheetId: string, values: unknown[][], sheetName?: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   if (!sheetName) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
     const allSheets = meta.data.sheets ?? [];
-    sheetName = allSheets[0]?.properties?.title || 'Sheet1';
+    sheetName = allSheets[0]?.properties?.title || "Sheet1";
     console.error(
       `${COLORS.yellow}Warning:${COLORS.nc} 'sheets append' was not given a sheet name — ` +
-      `defaulting to the first tab ("${sheetName}")${allSheets.length > 1 ? ` out of ${allSheets.length} tabs in this workbook` : ''}. ` +
-      `If this isn't the intended tab, use 'sheets batch' with an explicit range instead.`
+        `defaulting to the first tab ("${sheetName}")${allSheets.length > 1 ? ` out of ${allSheets.length} tabs in this workbook` : ""}. ` +
+        `If this isn't the intended tab, use 'sheets batch' with an explicit range instead.`,
     );
   }
 
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: sheetName,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values }
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values },
   });
 
   return response.data;
@@ -391,19 +415,19 @@ async function appendToSheet(spreadsheetId: string, values: any[][], sheetName?:
 
 async function getSheetInfo(spreadsheetId: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.get({ spreadsheetId });
 
   return {
     title: response.data.properties?.title,
     locale: response.data.properties?.locale,
-    sheets: response.data.sheets?.map(s => ({
+    sheets: response.data.sheets?.map((s) => ({
       title: s.properties?.title,
       index: s.properties?.index,
       rows: s.properties?.gridProperties?.rowCount,
-      cols: s.properties?.gridProperties?.columnCount
-    }))
+      cols: s.properties?.gridProperties?.columnCount,
+    })),
   };
 }
 
@@ -418,18 +442,18 @@ async function formatRange(
     italic?: boolean;
     bgColor?: string;
     fgColor?: string;
-    align?: 'left' | 'center' | 'right';
-  }
+    align?: "left" | "center" | "right";
+  },
 ) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const parsed = parseA1Range(range);
-  const sheetName = parsed.sheetName || 'Sheet1';
+  const sheetName = parsed.sheetName || "Sheet1";
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
   // Build cell format
-  const cellFormat: any = {};
+  const cellFormat: sheets_v4.Schema$CellFormat = {};
   const fields: string[] = [];
 
   // Text formatting
@@ -437,138 +461,134 @@ async function formatRange(
     cellFormat.textFormat = {};
     if (options.bold !== undefined) {
       cellFormat.textFormat.bold = options.bold;
-      fields.push('userEnteredFormat.textFormat.bold');
+      fields.push("userEnteredFormat.textFormat.bold");
     }
     if (options.italic !== undefined) {
       cellFormat.textFormat.italic = options.italic;
-      fields.push('userEnteredFormat.textFormat.italic');
+      fields.push("userEnteredFormat.textFormat.italic");
     }
     if (options.fgColor) {
       cellFormat.textFormat.foregroundColor = parseHexColor(options.fgColor);
-      fields.push('userEnteredFormat.textFormat.foregroundColor');
+      fields.push("userEnteredFormat.textFormat.foregroundColor");
     }
   }
 
   // Background color
   if (options.bgColor) {
     cellFormat.backgroundColor = parseHexColor(options.bgColor);
-    fields.push('userEnteredFormat.backgroundColor');
+    fields.push("userEnteredFormat.backgroundColor");
   }
 
   // Horizontal alignment
   if (options.align) {
-    const alignMap = { left: 'LEFT', center: 'CENTER', right: 'RIGHT' };
+    const alignMap = { left: "LEFT", center: "CENTER", right: "RIGHT" };
     cellFormat.horizontalAlignment = alignMap[options.align];
-    fields.push('userEnteredFormat.horizontalAlignment');
+    fields.push("userEnteredFormat.horizontalAlignment");
   }
 
-  const response = await sheets.spreadsheets.batchUpdate({
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: parsed.startRowIndex,
-            endRowIndex: parsed.endRowIndex,
-            startColumnIndex: parsed.startColumnIndex,
-            endColumnIndex: parsed.endColumnIndex
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: parsed.startRowIndex,
+              endRowIndex: parsed.endRowIndex,
+              startColumnIndex: parsed.startColumnIndex,
+              endColumnIndex: parsed.endColumnIndex,
+            },
+            cell: { userEnteredFormat: cellFormat },
+            fields: fields.join(","),
           },
-          cell: { userEnteredFormat: cellFormat },
-          fields: fields.join(',')
-        }
-      }]
-    }
+        },
+      ],
+    },
   });
 
   return {
     success: true,
     range,
-    appliedFormats: Object.keys(options).filter(k => options[k as keyof typeof options] !== undefined)
+    appliedFormats: Object.keys(options).filter((k) => options[k as keyof typeof options] !== undefined),
   };
 }
 
 /**
  * Freeze rows and/or columns in a sheet
  */
-async function freezeRowsCols(
-  spreadsheetId: string,
-  sheetName: string,
-  options: { rows?: number; cols?: number }
-) {
+async function freezeRowsCols(spreadsheetId: string, sheetName: string, options: { rows?: number; cols?: number }) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
-  const gridProperties: any = {};
+  const gridProperties: sheets_v4.Schema$GridProperties = {};
   const fields: string[] = [];
 
   if (options.rows !== undefined) {
     gridProperties.frozenRowCount = options.rows;
-    fields.push('frozenRowCount');
+    fields.push("frozenRowCount");
   }
   if (options.cols !== undefined) {
     gridProperties.frozenColumnCount = options.cols;
-    fields.push('frozenColumnCount');
+    fields.push("frozenColumnCount");
   }
 
-  const response = await sheets.spreadsheets.batchUpdate({
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        updateSheetProperties: {
-          properties: {
-            sheetId,
-            gridProperties
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties,
+            },
+            fields: `gridProperties(${fields.join(",")})`,
           },
-          fields: `gridProperties(${fields.join(',')})`
-        }
-      }]
-    }
+        },
+      ],
+    },
   });
 
   return {
     success: true,
     sheet: sheetName,
     frozenRows: options.rows,
-    frozenCols: options.cols
+    frozenCols: options.cols,
   };
 }
 
 /**
  * Share a spreadsheet with a user
  */
-async function shareSpreadsheet(
-  spreadsheetId: string,
-  email: string,
-  role: 'reader' | 'writer' | 'commenter'
-) {
+async function shareSpreadsheet(spreadsheetId: string, email: string, role: "reader" | "writer" | "commenter") {
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   // Map CLI role names to Drive API roles
   const roleMap = {
-    reader: 'reader',
-    writer: 'writer',
-    commenter: 'commenter'
+    reader: "reader",
+    writer: "writer",
+    commenter: "commenter",
   };
 
   const response = await drive.permissions.create({
     fileId: spreadsheetId,
     requestBody: {
-      type: 'user',
+      type: "user",
       role: roleMap[role],
-      emailAddress: email
+      emailAddress: email,
     },
-    sendNotificationEmail: true
+    sendNotificationEmail: true,
   });
 
   return {
     success: true,
     email,
     role,
-    permissionId: response.data.id
+    permissionId: response.data.id,
   };
 }
 
@@ -587,16 +607,16 @@ async function shareSpreadsheet(
 
 /** Map a friendly `--format` alias to the MIME type Drive exports it under. */
 const EXPORT_MIME_BY_FORMAT: Record<string, string> = {
-  csv: 'text/csv',
-  tsv: 'text/tab-separated-values',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ods: 'application/vnd.oasis.opendocument.spreadsheet',
-  pdf: 'application/pdf',
-  html: 'text/html',
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  pdf: "application/pdf",
+  html: "text/html",
 };
 
 /** Binary export formats must be written to a file, not printed to stdout. */
-const BINARY_EXPORT_FORMATS = new Set(['xlsx', 'ods', 'pdf']);
+const BINARY_EXPORT_FORMATS = new Set(["xlsx", "ods", "pdf"]);
 
 /**
  * Resolve a `--format` alias (default 'csv') to its Drive export MIME type.
@@ -605,12 +625,10 @@ const BINARY_EXPORT_FORMATS = new Set(['xlsx', 'ods', 'pdf']);
  * exporting the wrong (or no) format.
  */
 export function resolveExportMime(format?: string): string {
-  const key = (format ?? 'csv').toLowerCase();
+  const key = (format ?? "csv").toLowerCase();
   const mime = EXPORT_MIME_BY_FORMAT[key];
   if (!mime) {
-    throw new Error(
-      `Unknown export format "${format}". Supported: ${Object.keys(EXPORT_MIME_BY_FORMAT).join(', ')}`,
-    );
+    throw new Error(`Unknown export format "${format}". Supported: ${Object.keys(EXPORT_MIME_BY_FORMAT).join(", ")}`);
   }
   return mime;
 }
@@ -633,7 +651,7 @@ interface RevisionSummary {
  */
 async function listRevisions(spreadsheetId: string, hardCap = 10000): Promise<RevisionSummary[]> {
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   const revisions: RevisionSummary[] = [];
   let pageToken: string | undefined;
@@ -643,17 +661,15 @@ async function listRevisions(spreadsheetId: string, hardCap = 10000): Promise<Re
       fileId: spreadsheetId,
       pageSize: 200,
       pageToken,
-      fields: 'nextPageToken, revisions(id, modifiedTime, keepForever, size, lastModifyingUser(displayName, emailAddress))',
+      fields:
+        "nextPageToken, revisions(id, modifiedTime, keepForever, size, lastModifyingUser(displayName, emailAddress))",
     });
 
     for (const rev of response.data.revisions || []) {
       revisions.push({
-        id: rev.id || '',
+        id: rev.id || "",
         modifiedTime: rev.modifiedTime || undefined,
-        lastModifyingUser:
-          rev.lastModifyingUser?.displayName ||
-          rev.lastModifyingUser?.emailAddress ||
-          undefined,
+        lastModifyingUser: rev.lastModifyingUser?.displayName || rev.lastModifyingUser?.emailAddress || undefined,
         keepForever: rev.keepForever || undefined,
         size: rev.size || undefined,
       });
@@ -678,25 +694,23 @@ async function listRevisions(spreadsheetId: string, hardCap = 10000): Promise<Re
 async function exportRevision(
   spreadsheetId: string,
   revisionId: string,
-  format = 'csv',
+  format = "csv",
 ): Promise<{ text?: string; buffer?: Buffer; mimeType: string }> {
   const mimeType = resolveExportMime(format);
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   const rev = await drive.revisions.get({
     fileId: spreadsheetId,
     revisionId,
-    fields: 'id, modifiedTime, exportLinks',
+    fields: "id, modifiedTime, exportLinks",
   });
 
   const exportLinks = (rev.data.exportLinks || {}) as Record<string, string>;
   const url = exportLinks[mimeType];
   if (!url) {
-    const available = Object.keys(exportLinks).join(', ') || '(none)';
-    throw new Error(
-      `Revision ${revisionId} has no export link for ${mimeType}. Available: ${available}`,
-    );
+    const available = Object.keys(exportLinks).join(", ") || "(none)";
+    throw new Error(`Revision ${revisionId} has no export link for ${mimeType}. Available: ${available}`);
   }
 
   // exportLinks are plain download URLs — authorize them with the OAuth
@@ -704,7 +718,7 @@ async function exportRevision(
   // cached token is stale).
   const { token } = await auth.getAccessToken();
   if (!token) {
-    throw new Error('Could not obtain an access token to fetch the revision content');
+    throw new Error("Could not obtain an access token to fetch the revision content");
   }
 
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -724,11 +738,11 @@ async function exportRevision(
  */
 async function listPermissions(spreadsheetId: string) {
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   const response = await drive.permissions.list({
     fileId: spreadsheetId,
-    fields: 'permissions(id, type, role, emailAddress, displayName)'
+    fields: "permissions(id, type, role, emailAddress, displayName)",
   });
 
   return response.data.permissions || [];
@@ -737,37 +751,35 @@ async function listPermissions(spreadsheetId: string) {
 /**
  * Protect a range in a spreadsheet
  */
-async function protectRange(
-  spreadsheetId: string,
-  range: string,
-  description?: string
-) {
+async function protectRange(spreadsheetId: string, range: string, description?: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const parsed = parseA1Range(range);
-  const sheetName = parsed.sheetName || 'Sheet1';
+  const sheetName = parsed.sheetName || "Sheet1";
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
   const response = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        addProtectedRange: {
-          protectedRange: {
-            range: {
-              sheetId,
-              startRowIndex: parsed.startRowIndex,
-              endRowIndex: parsed.endRowIndex,
-              startColumnIndex: parsed.startColumnIndex,
-              endColumnIndex: parsed.endColumnIndex
+      requests: [
+        {
+          addProtectedRange: {
+            protectedRange: {
+              range: {
+                sheetId,
+                startRowIndex: parsed.startRowIndex,
+                endRowIndex: parsed.endRowIndex,
+                startColumnIndex: parsed.startColumnIndex,
+                endColumnIndex: parsed.endColumnIndex,
+              },
+              description: description || `Protected range: ${range}`,
+              warningOnly: false,
             },
-            description: description || `Protected range: ${range}`,
-            warningOnly: false
-          }
-        }
-      }]
-    }
+          },
+        },
+      ],
+    },
   });
 
   const protectedRangeId = response.data.replies?.[0]?.addProtectedRange?.protectedRange?.protectedRangeId;
@@ -776,7 +788,7 @@ async function protectRange(
     success: true,
     range,
     description: description || `Protected range: ${range}`,
-    protectedRangeId
+    protectedRangeId,
   };
 }
 
@@ -789,18 +801,18 @@ async function protectRange(
  */
 async function createSpreadsheet(title: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.create({
     requestBody: {
-      properties: { title }
-    }
+      properties: { title },
+    },
   });
 
   return {
     spreadsheetId: response.data.spreadsheetId,
     title: response.data.properties?.title,
-    url: response.data.spreadsheetUrl
+    url: response.data.spreadsheetUrl,
   };
 }
 
@@ -809,16 +821,16 @@ async function createSpreadsheet(title: string) {
  */
 async function clearRange(spreadsheetId: string, range: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range
+    range,
   });
 
   return {
     clearedRange: response.data.clearedRange,
-    spreadsheetId: response.data.spreadsheetId
+    spreadsheetId: response.data.spreadsheetId,
   };
 }
 
@@ -827,127 +839,136 @@ async function clearRange(spreadsheetId: string, range: string) {
  */
 async function deleteRows(spreadsheetId: string, sheetName: string, startRow: number, endRow: number) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
   const response = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId,
-            dimension: 'ROWS',
-            startIndex: startRow - 1,  // 0-indexed
-            endIndex: endRow           // exclusive
-          }
-        }
-      }]
-    }
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: startRow - 1, // 0-indexed
+              endIndex: endRow, // exclusive
+            },
+          },
+        },
+      ],
+    },
   });
 
   return {
     deletedRows: endRow - startRow + 1,
-    spreadsheetId: response.data.spreadsheetId
+    spreadsheetId: response.data.spreadsheetId,
   };
 }
 
 /**
  * Import CSV/TSV data into a sheet
  */
-async function importData(spreadsheetId: string, data: string, sheetName?: string, delimiter = ',') {
+async function importData(spreadsheetId: string, data: string, sheetName?: string, delimiter = ",") {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   if (!sheetName) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
-    sheetName = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    sheetName = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
   }
 
   // Parse CSV/TSV data with proper quote handling
-  const rows = data.trim().split('\n').map(line => {
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
+  const rows = data
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const values: string[] = [];
+      let current = "";
+      let inQuotes = false;
 
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i++; // Skip escaped quote
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++; // Skip escaped quote
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === delimiter && !inQuotes) {
+          values.push(current);
+          current = "";
         } else {
-          inQuotes = !inQuotes;
+          current += char;
         }
-      } else if (char === delimiter && !inQuotes) {
-        values.push(current);
-        current = '';
-      } else {
-        current += char;
       }
-    }
-    values.push(current);
-    return values;
-  });
+      values.push(current);
+      return values;
+    });
 
   const response = await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${sheetName}!A1`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: rows }
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: rows },
   });
 
   return {
     updatedRange: response.data.updatedRange,
     updatedRows: response.data.updatedRows,
-    updatedCells: response.data.updatedCells
+    updatedCells: response.data.updatedCells,
   };
 }
 
 /**
  * Export sheet data to CSV/TSV format
  */
-async function exportData(spreadsheetId: string, range?: string, delimiter = ',') {
+async function exportData(spreadsheetId: string, range?: string, delimiter = ",") {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   if (!range) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
-    range = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    range = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
   }
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range
+    range,
   });
 
   const rows = response.data.values || [];
 
   // Convert to CSV/TSV with proper escaping
-  return rows.map(row =>
-    row.map(cell => {
-      const str = String(cell ?? '');
-      // Quote if contains delimiter, newline, or quote
-      if (str.includes(delimiter) || str.includes('\n') || str.includes('"')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    }).join(delimiter)
-  ).join('\n');
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const str = String(cell ?? "");
+          // Quote if contains delimiter, newline, or quote
+          if (str.includes(delimiter) || str.includes("\n") || str.includes('"')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        })
+        .join(delimiter),
+    )
+    .join("\n");
 }
 
 /**
  * Batch operations interface
  */
 interface BatchOperation {
-  op: 'write' | 'append' | 'clear';
+  op: "write" | "append" | "clear";
   range?: string;
-  values?: any[][];
+  values?: unknown[][];
   sheet?: string;
   // Optional. Defaults to USER_ENTERED for back-compat. Set to 'RAW' to prevent
   // auto-interpretation of strings (e.g. "2026-04-23" becoming a serial date).
-  valueInputOption?: 'RAW' | 'USER_ENTERED';
+  valueInputOption?: "RAW" | "USER_ENTERED";
 }
 
 /**
@@ -955,101 +976,74 @@ interface BatchOperation {
  */
 async function batchOperations(spreadsheetId: string, operations: BatchOperation[]) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
-  const results: any[] = [];
+  const results: Array<Record<string, unknown>> = [];
 
   for (const operation of operations) {
     switch (operation.op) {
-      case 'write': {
+      case "write": {
         if (!operation.range || !operation.values) {
-          results.push({ op: 'write', error: 'Missing range or values' });
+          results.push({ op: "write", error: "Missing range or values" });
           continue;
         }
         const response = await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: operation.range,
-          valueInputOption: operation.valueInputOption ?? 'USER_ENTERED',
-          requestBody: { values: operation.values }
+          valueInputOption: operation.valueInputOption ?? "USER_ENTERED",
+          requestBody: { values: operation.values },
         });
         results.push({
-          op: 'write',
+          op: "write",
           range: response.data.updatedRange,
-          updatedCells: response.data.updatedCells
+          updatedCells: response.data.updatedCells,
         });
         break;
       }
 
-      case 'append': {
+      case "append": {
         if (!operation.values) {
-          results.push({ op: 'append', error: 'Missing values' });
+          results.push({ op: "append", error: "Missing values" });
           continue;
         }
-        const targetSheet = operation.sheet || operation.range || 'Sheet1';
+        const targetSheet = operation.sheet || operation.range || "Sheet1";
         const response = await sheets.spreadsheets.values.append({
           spreadsheetId,
           range: targetSheet,
-          valueInputOption: operation.valueInputOption ?? 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: operation.values }
+          valueInputOption: operation.valueInputOption ?? "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: { values: operation.values },
         });
         results.push({
-          op: 'append',
+          op: "append",
           range: response.data.updates?.updatedRange,
-          updatedRows: response.data.updates?.updatedRows
+          updatedRows: response.data.updates?.updatedRows,
         });
         break;
       }
 
-      case 'clear': {
+      case "clear": {
         if (!operation.range) {
-          results.push({ op: 'clear', error: 'Missing range' });
+          results.push({ op: "clear", error: "Missing range" });
           continue;
         }
         const response = await sheets.spreadsheets.values.clear({
           spreadsheetId,
-          range: operation.range
+          range: operation.range,
         });
         results.push({
-          op: 'clear',
-          clearedRange: response.data.clearedRange
+          op: "clear",
+          clearedRange: response.data.clearedRange,
         });
         break;
       }
 
       default:
-        results.push({ op: (operation as any).op, error: 'Unknown operation' });
+        results.push({ op: (operation as { op?: string }).op, error: "Unknown operation" });
     }
   }
 
   return results;
-}
-
-/**
- * Read data from stdin (for piped input)
- */
-async function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-
-    // Check if stdin has data (is piped)
-    if (process.stdin.isTTY) {
-      resolve('');
-      return;
-    }
-
-    process.stdin.on('readable', () => {
-      let chunk;
-      while ((chunk = process.stdin.read()) !== null) {
-        data += chunk;
-      }
-    });
-
-    process.stdin.on('end', () => {
-      resolve(data);
-    });
-  });
 }
 
 // ============================================================================
@@ -1061,26 +1055,28 @@ async function readStdin(): Promise<string> {
  */
 async function addSheetTab(spreadsheetId: string, sheetName: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        addSheet: {
-          properties: {
-            title: sheetName
-          }
-        }
-      }]
-    }
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: sheetName,
+            },
+          },
+        },
+      ],
+    },
   });
 
   const newSheet = response.data.replies?.[0]?.addSheet?.properties;
   return {
     title: newSheet?.title,
     sheetId: newSheet?.sheetId,
-    index: newSheet?.index
+    index: newSheet?.index,
   };
 }
 
@@ -1090,17 +1086,19 @@ async function addSheetTab(spreadsheetId: string, sheetName: string) {
 async function deleteSheetTab(spreadsheetId: string, sheetName: string) {
   const sheetId = await getSheetId(spreadsheetId, sheetName);
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        deleteSheet: {
-          sheetId
-        }
-      }]
-    }
+      requests: [
+        {
+          deleteSheet: {
+            sheetId,
+          },
+        },
+      ],
+    },
   });
 
   return { deleted: sheetName, sheetId };
@@ -1112,21 +1110,23 @@ async function deleteSheetTab(spreadsheetId: string, sheetName: string) {
 async function renameSheetTab(spreadsheetId: string, oldName: string, newName: string) {
   const sheetId = await getSheetId(spreadsheetId, oldName);
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        updateSheetProperties: {
-          properties: {
-            sheetId,
-            title: newName
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              title: newName,
+            },
+            fields: "title",
           },
-          fields: 'title'
-        }
-      }]
-    }
+        },
+      ],
+    },
   });
 
   return { oldName, newName, sheetId };
@@ -1138,21 +1138,21 @@ async function renameSheetTab(spreadsheetId: string, oldName: string, newName: s
 async function copySheetTab(spreadsheetId: string, sheetName: string, destinationId?: string) {
   const sheetId = await getSheetId(spreadsheetId, sheetName);
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.sheets.copyTo({
     spreadsheetId,
     sheetId,
     requestBody: {
-      destinationSpreadsheetId: destinationId || spreadsheetId
-    }
+      destinationSpreadsheetId: destinationId || spreadsheetId,
+    },
   });
 
   return {
     title: response.data.title,
     sheetId: response.data.sheetId,
     index: response.data.index,
-    destinationSpreadsheetId: destinationId || spreadsheetId
+    destinationSpreadsheetId: destinationId || spreadsheetId,
   };
 }
 
@@ -1161,11 +1161,11 @@ async function copySheetTab(spreadsheetId: string, sheetName: string, destinatio
  */
 async function duplicateSpreadsheet(spreadsheetId: string, newName?: string) {
   const auth = await getAuthClient();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: "v3", auth });
 
   // Get original name if not provided
   if (!newName) {
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = google.sheets({ version: "v4", auth });
     const original = await sheets.spreadsheets.get({ spreadsheetId });
     newName = `Copy of ${original.data.properties?.title}`;
   }
@@ -1173,13 +1173,13 @@ async function duplicateSpreadsheet(spreadsheetId: string, newName?: string) {
   const response = await drive.files.copy({
     fileId: spreadsheetId,
     requestBody: {
-      name: newName
-    }
+      name: newName,
+    },
   });
 
   return {
     id: response.data.id,
-    name: response.data.name
+    name: response.data.name,
   };
 }
 
@@ -1204,16 +1204,16 @@ interface FindResult {
  */
 async function findInSheet(spreadsheetId: string, searchTerm: string, sheetName?: string): Promise<FindResult[]> {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   if (!sheetName) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
-    sheetName = meta.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    sheetName = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
   }
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: sheetName
+    range: sheetName,
   });
 
   const data = response.data.values || [];
@@ -1230,7 +1230,7 @@ async function findInSheet(spreadsheetId: string, searchTerm: string, sheetName?
           col: colIndex + 1,
           colLetter,
           value: cellStr,
-          cell: `${colLetter}${rowIndex + 1}`
+          cell: `${colLetter}${rowIndex + 1}`,
         });
       }
     });
@@ -1249,10 +1249,10 @@ interface SortOptions {
  */
 async function sortRange(spreadsheetId: string, range: string, options: SortOptions) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const parsed = parseA1Range(range);
-  const sheetName = parsed.sheetName || 'Sheet1';
+  const sheetName = parsed.sheetName || "Sheet1";
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
   // Calculate column index for sorting (0-indexed)
@@ -1265,29 +1265,33 @@ async function sortRange(spreadsheetId: string, range: string, options: SortOpti
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        sortRange: {
-          range: {
-            sheetId,
-            startRowIndex: parsed.startRowIndex,
-            endRowIndex: parsed.endRowIndex,
-            startColumnIndex: parsed.startColumnIndex,
-            endColumnIndex: parsed.endColumnIndex
+      requests: [
+        {
+          sortRange: {
+            range: {
+              sheetId,
+              startRowIndex: parsed.startRowIndex,
+              endRowIndex: parsed.endRowIndex,
+              startColumnIndex: parsed.startColumnIndex,
+              endColumnIndex: parsed.endColumnIndex,
+            },
+            sortSpecs: [
+              {
+                dimensionIndex: sortColIndex,
+                sortOrder: options.descending ? "DESCENDING" : "ASCENDING",
+              },
+            ],
           },
-          sortSpecs: [{
-            dimensionIndex: sortColIndex,
-            sortOrder: options.descending ? 'DESCENDING' : 'ASCENDING'
-          }]
-        }
-      }]
-    }
+        },
+      ],
+    },
   });
 
   return {
     success: true,
     range,
     sortedBy: options.column,
-    order: options.descending ? 'descending' : 'ascending'
+    order: options.descending ? "descending" : "ascending",
   };
 }
 
@@ -1306,24 +1310,29 @@ interface FilterOptions {
 /**
  * Filter rows based on column conditions
  */
-async function filterRows(spreadsheetId: string, range: string, options: FilterOptions): Promise<{ headers: string[]; rows: any[][]; matchCount: number }> {
+async function filterRows(
+  spreadsheetId: string,
+  range: string,
+  options: FilterOptions,
+): Promise<{ headers: string[]; rows: unknown[][]; matchCount: number }> {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const parsed = parseA1Range(range);
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range
+    range,
   });
 
   const data = response.data.values || [];
-  if (data.length === 0) {
+  const headerRow = data[0];
+  if (!headerRow) {
     return { headers: [], rows: [], matchCount: 0 };
   }
 
   // First row is headers
-  const headers = data[0].map(String);
+  const headers = headerRow.map(String);
   const rows = data.slice(1);
 
   // Find column index relative to range start
@@ -1332,21 +1341,23 @@ async function filterRows(spreadsheetId: string, range: string, options: FilterO
     throw new Error(`Column ${options.column} is outside the range`);
   }
 
-  const filteredRows = rows.filter(row => {
+  const filteredRows = rows.filter((row) => {
     const cellValue = row[colIndex];
     if (cellValue === undefined || cellValue === null) return false;
 
     const strValue = String(cellValue);
     const numValue = parseFloat(strValue);
 
-    if (options.gt !== undefined && (isNaN(numValue) || numValue <= options.gt)) return false;
-    if (options.lt !== undefined && (isNaN(numValue) || numValue >= options.lt)) return false;
-    if (options.gte !== undefined && (isNaN(numValue) || numValue < options.gte)) return false;
-    if (options.lte !== undefined && (isNaN(numValue) || numValue > options.lte)) return false;
+    if (options.gt !== undefined && (Number.isNaN(numValue) || numValue <= options.gt)) return false;
+    if (options.lt !== undefined && (Number.isNaN(numValue) || numValue >= options.lt)) return false;
+    if (options.gte !== undefined && (Number.isNaN(numValue) || numValue < options.gte)) return false;
+    if (options.lte !== undefined && (Number.isNaN(numValue) || numValue > options.lte)) return false;
     if (options.eq !== undefined && strValue !== options.eq) return false;
     if (options.neq !== undefined && strValue === options.neq) return false;
-    if (options.contains !== undefined && !strValue.toLowerCase().includes(options.contains.toLowerCase())) return false;
-    if (options.notContains !== undefined && strValue.toLowerCase().includes(options.notContains.toLowerCase())) return false;
+    if (options.contains !== undefined && !strValue.toLowerCase().includes(options.contains.toLowerCase()))
+      return false;
+    if (options.notContains !== undefined && strValue.toLowerCase().includes(options.notContains.toLowerCase()))
+      return false;
 
     return true;
   });
@@ -1354,7 +1365,7 @@ async function filterRows(spreadsheetId: string, range: string, options: FilterO
   return {
     headers,
     rows: filteredRows,
-    matchCount: filteredRows.length
+    matchCount: filteredRows.length,
   };
 }
 
@@ -1363,21 +1374,21 @@ async function filterRows(spreadsheetId: string, range: string, options: FilterO
  */
 async function setFormula(spreadsheetId: string, cell: string, formula: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: cell,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[formula]]
-    }
+      values: [[formula]],
+    },
   });
 
   return {
     cell,
     formula,
-    updatedCells: response.data.updatedCells
+    updatedCells: response.data.updatedCells,
   };
 }
 
@@ -1392,20 +1403,20 @@ interface NamedRange {
  */
 async function listNamedRanges(spreadsheetId: string): Promise<NamedRange[]> {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const response = await sheets.spreadsheets.get({ spreadsheetId });
   const namedRanges = response.data.namedRanges || [];
   const sheetsData = response.data.sheets || [];
 
-  return namedRanges.map(nr => {
+  return namedRanges.map((nr) => {
     const range = nr.range;
-    let rangeStr = '';
+    let rangeStr = "";
 
     if (range) {
       // Find sheet name
-      const sheet = sheetsData.find(s => s.properties?.sheetId === range.sheetId);
-      const sheetName = sheet?.properties?.title || 'Sheet1';
+      const sheet = sheetsData.find((s) => s.properties?.sheetId === range.sheetId);
+      const sheetName = sheet?.properties?.title || "Sheet1";
 
       // Convert grid range to A1 notation
       const startCol = indexToColumn(range.startColumnIndex || 0);
@@ -1417,9 +1428,9 @@ async function listNamedRanges(spreadsheetId: string): Promise<NamedRange[]> {
     }
 
     return {
-      name: nr.name || '',
+      name: nr.name || "",
       range: rangeStr,
-      namedRangeId: nr.namedRangeId
+      namedRangeId: nr.namedRangeId ?? undefined,
     };
   });
 }
@@ -1429,36 +1440,38 @@ async function listNamedRanges(spreadsheetId: string): Promise<NamedRange[]> {
  */
 async function addNamedRange(spreadsheetId: string, name: string, range: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   const parsed = parseA1Range(range);
-  const sheetName = parsed.sheetName || 'Sheet1';
+  const sheetName = parsed.sheetName || "Sheet1";
   const sheetId = await getSheetId(spreadsheetId, sheetName);
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        addNamedRange: {
-          namedRange: {
-            name,
-            range: {
-              sheetId,
-              startRowIndex: parsed.startRowIndex,
-              endRowIndex: parsed.endRowIndex,
-              startColumnIndex: parsed.startColumnIndex,
-              endColumnIndex: parsed.endColumnIndex
-            }
-          }
-        }
-      }]
-    }
+      requests: [
+        {
+          addNamedRange: {
+            namedRange: {
+              name,
+              range: {
+                sheetId,
+                startRowIndex: parsed.startRowIndex,
+                endRowIndex: parsed.endRowIndex,
+                startColumnIndex: parsed.startColumnIndex,
+                endColumnIndex: parsed.endColumnIndex,
+              },
+            },
+          },
+        },
+      ],
+    },
   });
 
   return {
     success: true,
     name,
-    range
+    range,
   };
 }
 
@@ -1467,30 +1480,32 @@ async function addNamedRange(spreadsheetId: string, name: string, range: string)
  */
 async function deleteNamedRange(spreadsheetId: string, name: string) {
   const auth = await getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
   // First, find the named range ID
   const namedRanges = await listNamedRanges(spreadsheetId);
-  const target = namedRanges.find(nr => nr.name === name);
+  const target = namedRanges.find((nr) => nr.name === name);
 
-  if (!target || !target.namedRangeId) {
+  if (!target?.namedRangeId) {
     throw new Error(`Named range "${name}" not found`);
   }
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [{
-        deleteNamedRange: {
-          namedRangeId: target.namedRangeId
-        }
-      }]
-    }
+      requests: [
+        {
+          deleteNamedRange: {
+            namedRangeId: target.namedRangeId,
+          },
+        },
+      ],
+    },
   });
 
   return {
     success: true,
-    deleted: name
+    deleted: name,
   };
 }
 
@@ -1632,22 +1647,22 @@ ${COLORS.blue}Data Format:${COLORS.nc}
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
+  if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
     showHelp();
     process.exit(0);
   }
 
   const command = args[0];
-  const jsonOutput = args.includes('--json');
-  const toonOutput = args.includes('--toon');
-  const tsvOutput = args.includes('--tsv');
-  const filteredArgs = args.filter(a => !a.startsWith('--'));
+  const jsonOutput = args.includes("--json");
+  const toonOutput = args.includes("--toon");
+  const tsvOutput = args.includes("--tsv");
+  const filteredArgs = args.filter((a) => !a.startsWith("--"));
 
   try {
     switch (command) {
-      case 'list': {
-        const limitIdx = args.indexOf('--limit');
-        const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) : 10;
+      case "list": {
+        const limitIdx = args.indexOf("--limit");
+        const limit = limitIdx >= 0 ? Number.parseInt(args[limitIdx + 1] ?? "", 10) : 10;
         const files = await listSpreadsheets(limit);
 
         if (toonOutput) {
@@ -1656,10 +1671,10 @@ async function main() {
         } else if (jsonOutput) {
           console.log(JSON.stringify(files, null, 2));
         } else if (tsvOutput) {
-          files.forEach(f => console.log(`${f.id}\t${f.name}\t${f.modifiedTime}`));
+          for (const f of files) console.log(`${f.id}\t${f.name}\t${f.modifiedTime}`);
         } else {
           console.log(`${COLORS.cyan}Recent Spreadsheets:${COLORS.nc}\n`);
-          files.forEach(f => {
+          files.forEach((f) => {
             console.log(`  ${COLORS.green}${f.name}${COLORS.nc}`);
             console.log(`    ID: ${f.id}`);
             console.log(`    Modified: ${f.modifiedTime}\n`);
@@ -1668,7 +1683,7 @@ async function main() {
         break;
       }
 
-      case 'create': {
+      case "create": {
         const title = filteredArgs[1];
 
         if (!title) {
@@ -1688,7 +1703,7 @@ async function main() {
         break;
       }
 
-      case 'clear': {
+      case "clear": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
@@ -1707,7 +1722,7 @@ async function main() {
         break;
       }
 
-      case 'delete-rows': {
+      case "delete-rows": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
         const rowRange = filteredArgs[3];
@@ -1718,11 +1733,11 @@ async function main() {
           process.exit(1);
         }
 
-        const [startStr, endStr] = rowRange.split(':');
+        const [startStr = "", endStr = ""] = rowRange.split(":");
         const startRow = parseInt(startStr);
         const endRow = parseInt(endStr);
 
-        if (isNaN(startRow) || isNaN(endRow)) {
+        if (Number.isNaN(startRow) || Number.isNaN(endRow)) {
           console.error(`${COLORS.red}Error:${COLORS.nc} Invalid row range. Use format: start:end (e.g., 5:10)`);
           process.exit(1);
         }
@@ -1737,7 +1752,7 @@ async function main() {
         break;
       }
 
-      case 'import': {
+      case "import": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
 
@@ -1746,27 +1761,30 @@ async function main() {
           process.exit(1);
         }
 
-        const stdinData = await readStdin();
+        const stdinData = await readStdinText({ trim: false });
 
         if (!stdinData) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} No data received from stdin. Pipe CSV/TSV data to this command.`);
+          console.error(
+            `${COLORS.red}Error:${COLORS.nc} No data received from stdin. Pipe CSV/TSV data to this command.`,
+          );
           console.error(`  Example: cat data.csv | kaya-cli sheets import ${spreadsheetId}`);
           process.exit(1);
         }
 
-        const csvOutput = args.includes('--csv');
-        const delimiter = tsvOutput ? '\t' : ',';
+        const delimiter = tsvOutput ? "\t" : ",";
         const result = await importData(spreadsheetId, stdinData, sheetName, delimiter);
 
         if (jsonOutput) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          console.log(`${COLORS.green}Imported${COLORS.nc} ${result.updatedRows} rows (${result.updatedCells} cells) to ${result.updatedRange}`);
+          console.log(
+            `${COLORS.green}Imported${COLORS.nc} ${result.updatedRows} rows (${result.updatedCells} cells) to ${result.updatedRange}`,
+          );
         }
         break;
       }
 
-      case 'export': {
+      case "export": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
@@ -1775,8 +1793,7 @@ async function main() {
           process.exit(1);
         }
 
-        const csvOutput = args.includes('--csv');
-        const delimiter = tsvOutput ? '\t' : ',';
+        const delimiter = tsvOutput ? "\t" : ",";
         const data = await exportData(spreadsheetId, range, delimiter);
 
         // Export outputs raw data for piping
@@ -1784,7 +1801,7 @@ async function main() {
         break;
       }
 
-      case 'batch': {
+      case "batch": {
         const spreadsheetId = filteredArgs[1];
         const opsStr = filteredArgs[2];
 
@@ -1812,7 +1829,7 @@ async function main() {
         break;
       }
 
-      case 'read': {
+      case "read": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
@@ -1832,14 +1849,14 @@ async function main() {
         } else if (jsonOutput) {
           await writeStdoutDrained(`${JSON.stringify(data, null, 2)}\n`);
         } else if (tsvOutput) {
-          if (data.length > 0) await writeStdoutDrained(data.map(row => row.join('\t')).join('\n') + '\n');
+          if (data.length > 0) await writeStdoutDrained(data.map((row) => row.join("\t")).join("\n") + "\n");
         } else {
-          if (data.length > 0) await writeStdoutDrained(data.map(row => row.join(' | ')).join('\n') + '\n');
+          if (data.length > 0) await writeStdoutDrained(data.map((row) => row.join(" | ")).join("\n") + "\n");
         }
         break;
       }
 
-      case 'write': {
+      case "write": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
         const dataStr = filteredArgs[3];
@@ -1860,7 +1877,7 @@ async function main() {
         break;
       }
 
-      case 'append': {
+      case "append": {
         const spreadsheetId = filteredArgs[1];
         const dataStr = filteredArgs[2];
 
@@ -1880,7 +1897,7 @@ async function main() {
         break;
       }
 
-      case 'info': {
+      case "info": {
         const spreadsheetId = filteredArgs[1];
 
         if (!spreadsheetId) {
@@ -1896,43 +1913,51 @@ async function main() {
           console.log(`${COLORS.cyan}${info.title}${COLORS.nc}\n`);
           console.log(`Locale: ${info.locale}`);
           console.log(`\n${COLORS.blue}Sheets:${COLORS.nc}`);
-          info.sheets?.forEach(s => {
+          info.sheets?.forEach((s) => {
             console.log(`  ${COLORS.green}${s.title}${COLORS.nc} (${s.rows}x${s.cols})`);
           });
         }
         break;
       }
 
-      case 'format': {
+      case "format": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
         if (!spreadsheetId || !range) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets format <id> <range> [--bold] [--italic] [--bg=#HEX] [--fg=#HEX] [--align=left|center|right]`);
+          console.error(
+            `${COLORS.red}Error:${COLORS.nc} Usage: sheets format <id> <range> [--bold] [--italic] [--bg=#HEX] [--fg=#HEX] [--align=left|center|right]`,
+          );
           process.exit(1);
         }
 
-        const options: { bold?: boolean; italic?: boolean; bgColor?: string; fgColor?: string; align?: 'left' | 'center' | 'right' } = {};
-        if (args.includes('--bold')) options.bold = true;
-        if (args.includes('--italic')) options.italic = true;
-        const bgArg = args.find(a => a.startsWith('--bg='));
-        if (bgArg) options.bgColor = bgArg.split('=')[1];
-        const fgArg = args.find(a => a.startsWith('--fg='));
-        if (fgArg) options.fgColor = fgArg.split('=')[1];
-        const alignArg = args.find(a => a.startsWith('--align='));
-        if (alignArg) options.align = alignArg.split('=')[1] as 'left' | 'center' | 'right';
+        const options: {
+          bold?: boolean;
+          italic?: boolean;
+          bgColor?: string;
+          fgColor?: string;
+          align?: "left" | "center" | "right";
+        } = {};
+        if (args.includes("--bold")) options.bold = true;
+        if (args.includes("--italic")) options.italic = true;
+        const bgArg = args.find((a) => a.startsWith("--bg="));
+        if (bgArg) options.bgColor = flagValue(bgArg);
+        const fgArg = args.find((a) => a.startsWith("--fg="));
+        if (fgArg) options.fgColor = flagValue(fgArg);
+        const alignArg = args.find((a) => a.startsWith("--align="));
+        if (alignArg) options.align = flagValue(alignArg) as "left" | "center" | "right";
 
         const result = await formatRange(spreadsheetId, range, options);
 
         if (jsonOutput) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          console.log(`${COLORS.green}Formatted${COLORS.nc} ${range}: ${result.appliedFormats.join(', ')}`);
+          console.log(`${COLORS.green}Formatted${COLORS.nc} ${range}: ${result.appliedFormats.join(", ")}`);
         }
         break;
       }
 
-      case 'freeze': {
+      case "freeze": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
 
@@ -1942,10 +1967,10 @@ async function main() {
         }
 
         const options: { rows?: number; cols?: number } = {};
-        const rowsArg = args.find(a => a.startsWith('--rows='));
-        if (rowsArg) options.rows = parseInt(rowsArg.split('=')[1]);
-        const colsArg = args.find(a => a.startsWith('--cols='));
-        if (colsArg) options.cols = parseInt(colsArg.split('=')[1]);
+        const rowsArg = args.find((a) => a.startsWith("--rows="));
+        if (rowsArg) options.rows = parseInt(flagValue(rowsArg));
+        const colsArg = args.find((a) => a.startsWith("--cols="));
+        if (colsArg) options.cols = parseInt(flagValue(colsArg));
 
         const result = await freezeRowsCols(spreadsheetId, sheetName, options);
 
@@ -1955,22 +1980,24 @@ async function main() {
           const parts = [];
           if (result.frozenRows) parts.push(`${result.frozenRows} rows`);
           if (result.frozenCols) parts.push(`${result.frozenCols} columns`);
-          console.log(`${COLORS.green}Froze${COLORS.nc} ${parts.join(' and ')} in "${sheetName}"`);
+          console.log(`${COLORS.green}Froze${COLORS.nc} ${parts.join(" and ")} in "${sheetName}"`);
         }
         break;
       }
 
-      case 'share': {
+      case "share": {
         const spreadsheetId = filteredArgs[1];
         const email = filteredArgs[2];
 
         if (!spreadsheetId || !email) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets share <id> <email> [--role=reader|writer|commenter]`);
+          console.error(
+            `${COLORS.red}Error:${COLORS.nc} Usage: sheets share <id> <email> [--role=reader|writer|commenter]`,
+          );
           process.exit(1);
         }
 
-        const roleArg = args.find(a => a.startsWith('--role='));
-        const role = (roleArg ? roleArg.split('=')[1] : 'reader') as 'reader' | 'writer' | 'commenter';
+        const roleArg = args.find((a) => a.startsWith("--role="));
+        const role = (roleArg ? flagValue(roleArg) : "reader") as "reader" | "writer" | "commenter";
 
         const result = await shareSpreadsheet(spreadsheetId, email, role);
 
@@ -1982,7 +2009,7 @@ async function main() {
         break;
       }
 
-      case 'permissions': {
+      case "permissions": {
         const spreadsheetId = filteredArgs[1];
 
         if (!spreadsheetId) {
@@ -1999,7 +2026,7 @@ async function main() {
           console.log(JSON.stringify(permissions, null, 2));
         } else {
           console.log(`${COLORS.cyan}Permissions:${COLORS.nc}\n`);
-          permissions.forEach((p: any) => {
+          permissions.forEach((p) => {
             const name = p.displayName || p.emailAddress || p.type;
             console.log(`  ${COLORS.green}${name}${COLORS.nc} - ${p.role}`);
           });
@@ -2007,19 +2034,19 @@ async function main() {
         break;
       }
 
-      case 'history':
-      case 'revisions': {
+      case "history":
+      case "revisions": {
         // `--limit N` passes its value as a separate bare token; exclude it
         // from the positional args so it is never mistaken for a revisionId.
-        const limitIdx = args.indexOf('--limit');
-        const positionals = args.filter(
-          (a, i) => !a.startsWith('--') && !(limitIdx >= 0 && i === limitIdx + 1),
-        );
+        const limitIdx = args.indexOf("--limit");
+        const positionals = args.filter((a, i) => !a.startsWith("--") && !(limitIdx >= 0 && i === limitIdx + 1));
         const spreadsheetId = positionals[1];
         const revisionId = positionals[2];
 
         if (!spreadsheetId) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets history <id> [revisionId] [--format=csv|tsv|xlsx|ods|pdf] [--out=file]`);
+          console.error(
+            `${COLORS.red}Error:${COLORS.nc} Usage: sheets history <id> [revisionId] [--format=csv|tsv|xlsx|ods|pdf] [--out=file]`,
+          );
           process.exit(1);
         }
 
@@ -2027,7 +2054,7 @@ async function main() {
         //   sheets history <id>              -> list all revisions
         //   sheets history <id> <revisionId> -> export that revision's content
         if (!revisionId) {
-          const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) : Infinity;
+          const limit = limitIdx >= 0 ? Number.parseInt(args[limitIdx + 1] ?? "", 10) : Infinity;
           // listRevisions returns the full history newest-first; slice the
           // newest `limit` so `--limit N` means "the N most recent revisions".
           const revisions = (await listRevisions(spreadsheetId)).slice(0, limit);
@@ -2037,27 +2064,31 @@ async function main() {
           } else if (jsonOutput) {
             console.log(JSON.stringify(revisions, null, 2));
           } else if (tsvOutput) {
-            revisions.forEach(r =>
-              console.log(`${r.id}\t${r.modifiedTime || ''}\t${r.lastModifyingUser || ''}\t${r.keepForever ? 'pinned' : ''}`),
-            );
+            for (const r of revisions) {
+              console.log(
+                `${r.id}\t${r.modifiedTime || ""}\t${r.lastModifyingUser || ""}\t${r.keepForever ? "pinned" : ""}`,
+              );
+            }
           } else if (revisions.length === 0) {
             console.log(`${COLORS.yellow}No revision history available${COLORS.nc}`);
           } else {
             console.log(`${COLORS.cyan}Revision history (${revisions.length}, newest first):${COLORS.nc}\n`);
-            revisions.forEach(r => {
-              const who = r.lastModifyingUser ? ` by ${r.lastModifyingUser}` : '';
-              const pinned = r.keepForever ? ` ${COLORS.yellow}[pinned]${COLORS.nc}` : '';
-              console.log(`  ${COLORS.green}${r.id}${COLORS.nc}  ${r.modifiedTime || '(unknown time)'}${who}${pinned}`);
+            revisions.forEach((r) => {
+              const who = r.lastModifyingUser ? ` by ${r.lastModifyingUser}` : "";
+              const pinned = r.keepForever ? ` ${COLORS.yellow}[pinned]${COLORS.nc}` : "";
+              console.log(`  ${COLORS.green}${r.id}${COLORS.nc}  ${r.modifiedTime || "(unknown time)"}${who}${pinned}`);
             });
-            console.log(`\n${COLORS.blue}Recover a revision:${COLORS.nc} sheets history ${spreadsheetId} <revisionId> [--format=csv] [--out=file.csv]`);
+            console.log(
+              `\n${COLORS.blue}Recover a revision:${COLORS.nc} sheets history ${spreadsheetId} <revisionId> [--format=csv] [--out=file.csv]`,
+            );
           }
           break;
         }
 
-        const formatArg = args.find(a => a.startsWith('--format='));
-        const format = formatArg ? formatArg.split('=')[1] : 'csv';
-        const outArg = args.find(a => a.startsWith('--out='));
-        const outFile = outArg ? outArg.split('=')[1] : undefined;
+        const formatArg = args.find((a) => a.startsWith("--format="));
+        const format = formatArg ? flagValue(formatArg) : "csv";
+        const outArg = args.find((a) => a.startsWith("--out="));
+        const outFile = outArg ? flagValue(outArg) : undefined;
 
         const result = await exportRevision(spreadsheetId, revisionId, format);
 
@@ -2070,16 +2101,16 @@ async function main() {
           writeFileSync(outFile, result.buffer);
           console.error(`${COLORS.green}Saved${COLORS.nc} revision ${revisionId} (${format}) to ${outFile}`);
         } else if (outFile) {
-          writeFileSync(outFile, result.text ?? '');
+          writeFileSync(outFile, result.text ?? "");
           console.error(`${COLORS.green}Saved${COLORS.nc} revision ${revisionId} (${format}) to ${outFile}`);
         } else {
           // Print raw text content for piping/recovery.
-          console.log(result.text ?? '');
+          console.log(result.text ?? "");
         }
         break;
       }
 
-      case 'protect': {
+      case "protect": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
@@ -2088,8 +2119,8 @@ async function main() {
           process.exit(1);
         }
 
-        const descArg = args.find(a => a.startsWith('--description='));
-        const description = descArg ? descArg.split('=')[1].replace(/^["']|["']$/g, '') : undefined;
+        const descArg = args.find((a) => a.startsWith("--description="));
+        const description = descArg ? flagValue(descArg).replace(/^["']|["']$/g, "") : undefined;
 
         const result = await protectRange(spreadsheetId, range, description);
 
@@ -2103,7 +2134,7 @@ async function main() {
 
       // Phase 2: Sheet/Tab Management Commands
 
-      case 'add-sheet': {
+      case "add-sheet": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
 
@@ -2122,7 +2153,7 @@ async function main() {
         break;
       }
 
-      case 'delete-sheet': {
+      case "delete-sheet": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
 
@@ -2141,7 +2172,7 @@ async function main() {
         break;
       }
 
-      case 'rename-sheet': {
+      case "rename-sheet": {
         const spreadsheetId = filteredArgs[1];
         const oldName = filteredArgs[2];
         const newName = filteredArgs[3];
@@ -2161,7 +2192,7 @@ async function main() {
         break;
       }
 
-      case 'copy-sheet': {
+      case "copy-sheet": {
         const spreadsheetId = filteredArgs[1];
         const sheetName = filteredArgs[2];
 
@@ -2170,7 +2201,7 @@ async function main() {
           process.exit(1);
         }
 
-        const toIdx = args.indexOf('--to');
+        const toIdx = args.indexOf("--to");
         const destinationId = toIdx >= 0 ? args[toIdx + 1] : undefined;
 
         const result = await copySheetTab(spreadsheetId, sheetName, destinationId);
@@ -2178,13 +2209,13 @@ async function main() {
         if (jsonOutput) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          const dest = destinationId ? ` to spreadsheet ${destinationId}` : '';
+          const dest = destinationId ? ` to spreadsheet ${destinationId}` : "";
           console.log(`${COLORS.green}Copied${COLORS.nc} "${sheetName}" as "${result.title}"${dest}`);
         }
         break;
       }
 
-      case 'duplicate': {
+      case "duplicate": {
         const spreadsheetId = filteredArgs[1];
         const newName = filteredArgs[2];
 
@@ -2206,7 +2237,7 @@ async function main() {
 
       // Phase 3: Data Intelligence Commands
 
-      case 'find': {
+      case "find": {
         const spreadsheetId = filteredArgs[1];
         const searchTerm = filteredArgs[2];
 
@@ -2215,8 +2246,8 @@ async function main() {
           process.exit(1);
         }
 
-        const sheetArg = args.find(a => a.startsWith('--sheet='));
-        const sheetName = sheetArg ? sheetArg.split('=')[1].replace(/^["']|["']$/g, '') : undefined;
+        const sheetArg = args.find((a) => a.startsWith("--sheet="));
+        const sheetName = sheetArg ? flagValue(sheetArg).replace(/^["']|["']$/g, "") : undefined;
 
         const results = await findInSheet(spreadsheetId, searchTerm, sheetName);
 
@@ -2229,14 +2260,14 @@ async function main() {
           console.log(`${COLORS.yellow}No matches found${COLORS.nc} for "${searchTerm}"`);
         } else {
           console.log(`${COLORS.cyan}Found ${results.length} matches:${COLORS.nc}\n`);
-          results.forEach(r => {
+          results.forEach((r) => {
             console.log(`  ${COLORS.green}${r.cell}${COLORS.nc}: ${r.value}`);
           });
         }
         break;
       }
 
-      case 'sort': {
+      case "sort": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
@@ -2245,13 +2276,13 @@ async function main() {
           process.exit(1);
         }
 
-        const byArg = args.find(a => a.startsWith('--by='));
+        const byArg = args.find((a) => a.startsWith("--by="));
         if (!byArg) {
           console.error(`${COLORS.red}Error:${COLORS.nc} --by=COLUMN is required (e.g., --by=B)`);
           process.exit(1);
         }
-        const column = byArg.split('=')[1];
-        const descending = args.includes('--desc');
+        const column = flagValue(byArg);
+        const descending = args.includes("--desc");
 
         const result = await sortRange(spreadsheetId, range, { column, descending });
 
@@ -2263,37 +2294,39 @@ async function main() {
         break;
       }
 
-      case 'filter': {
+      case "filter": {
         const spreadsheetId = filteredArgs[1];
         const range = filteredArgs[2];
 
         if (!spreadsheetId || !range) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets filter <id> <range> --col=COLUMN [--gt=N] [--lt=N] [--eq="value"] [--contains="text"]`);
+          console.error(
+            `${COLORS.red}Error:${COLORS.nc} Usage: sheets filter <id> <range> --col=COLUMN [--gt=N] [--lt=N] [--eq="value"] [--contains="text"]`,
+          );
           process.exit(1);
         }
 
-        const colArg = args.find(a => a.startsWith('--col='));
+        const colArg = args.find((a) => a.startsWith("--col="));
         if (!colArg) {
           console.error(`${COLORS.red}Error:${COLORS.nc} --col=COLUMN is required (e.g., --col=B)`);
           process.exit(1);
         }
 
-        const filterOpts: FilterOptions = { column: colArg.split('=')[1] };
+        const filterOpts: FilterOptions = { column: flagValue(colArg) };
 
-        const gtArg = args.find(a => a.startsWith('--gt='));
-        if (gtArg) filterOpts.gt = parseFloat(gtArg.split('=')[1]);
-        const ltArg = args.find(a => a.startsWith('--lt='));
-        if (ltArg) filterOpts.lt = parseFloat(ltArg.split('=')[1]);
-        const gteArg = args.find(a => a.startsWith('--gte='));
-        if (gteArg) filterOpts.gte = parseFloat(gteArg.split('=')[1]);
-        const lteArg = args.find(a => a.startsWith('--lte='));
-        if (lteArg) filterOpts.lte = parseFloat(lteArg.split('=')[1]);
-        const eqArg = args.find(a => a.startsWith('--eq='));
-        if (eqArg) filterOpts.eq = eqArg.split('=')[1].replace(/^["']|["']$/g, '');
-        const neqArg = args.find(a => a.startsWith('--neq='));
-        if (neqArg) filterOpts.neq = neqArg.split('=')[1].replace(/^["']|["']$/g, '');
-        const containsArg = args.find(a => a.startsWith('--contains='));
-        if (containsArg) filterOpts.contains = containsArg.split('=')[1].replace(/^["']|["']$/g, '');
+        const gtArg = args.find((a) => a.startsWith("--gt="));
+        if (gtArg) filterOpts.gt = parseFloat(flagValue(gtArg));
+        const ltArg = args.find((a) => a.startsWith("--lt="));
+        if (ltArg) filterOpts.lt = parseFloat(flagValue(ltArg));
+        const gteArg = args.find((a) => a.startsWith("--gte="));
+        if (gteArg) filterOpts.gte = parseFloat(flagValue(gteArg));
+        const lteArg = args.find((a) => a.startsWith("--lte="));
+        if (lteArg) filterOpts.lte = parseFloat(flagValue(lteArg));
+        const eqArg = args.find((a) => a.startsWith("--eq="));
+        if (eqArg) filterOpts.eq = flagValue(eqArg).replace(/^["']|["']$/g, "");
+        const neqArg = args.find((a) => a.startsWith("--neq="));
+        if (neqArg) filterOpts.neq = flagValue(neqArg).replace(/^["']|["']$/g, "");
+        const containsArg = args.find((a) => a.startsWith("--contains="));
+        if (containsArg) filterOpts.contains = flagValue(containsArg).replace(/^["']|["']$/g, "");
 
         const result = await filterRows(spreadsheetId, range, filterOpts);
 
@@ -2306,16 +2339,16 @@ async function main() {
           console.log(`${COLORS.yellow}No matching rows found${COLORS.nc}`);
         } else {
           console.log(`${COLORS.cyan}Found ${result.matchCount} matching rows:${COLORS.nc}\n`);
-          console.log(`  ${COLORS.blue}${result.headers.join(' | ')}${COLORS.nc}`);
-          console.log(`  ${'-'.repeat(result.headers.join(' | ').length)}`);
-          result.rows.forEach(row => {
-            console.log(`  ${row.join(' | ')}`);
+          console.log(`  ${COLORS.blue}${result.headers.join(" | ")}${COLORS.nc}`);
+          console.log(`  ${"-".repeat(result.headers.join(" | ").length)}`);
+          result.rows.forEach((row) => {
+            console.log(`  ${row.join(" | ")}`);
           });
         }
         break;
       }
 
-      case 'formula': {
+      case "formula": {
         const spreadsheetId = filteredArgs[1];
         const cell = filteredArgs[2];
         const formula = filteredArgs[3];
@@ -2336,7 +2369,7 @@ async function main() {
         break;
       }
 
-      case 'named-ranges': {
+      case "named-ranges": {
         const spreadsheetId = filteredArgs[1];
         const action = filteredArgs[2];
 
@@ -2347,7 +2380,7 @@ async function main() {
         }
 
         switch (action) {
-          case 'list': {
+          case "list": {
             const ranges = await listNamedRanges(spreadsheetId);
 
             if (toonOutput) {
@@ -2359,14 +2392,14 @@ async function main() {
               console.log(`${COLORS.yellow}No named ranges found${COLORS.nc}`);
             } else {
               console.log(`${COLORS.cyan}Named Ranges:${COLORS.nc}\n`);
-              ranges.forEach(r => {
+              ranges.forEach((r) => {
                 console.log(`  ${COLORS.green}${r.name}${COLORS.nc}: ${r.range}`);
               });
             }
             break;
           }
 
-          case 'add': {
+          case "add": {
             const name = filteredArgs[3];
             const range = filteredArgs[4];
 
@@ -2386,7 +2419,7 @@ async function main() {
             break;
           }
 
-          case 'delete': {
+          case "delete": {
             const name = filteredArgs[3];
 
             if (!name) {
@@ -2417,8 +2450,8 @@ async function main() {
         console.error(`Run 'kaya-cli sheets help' for usage`);
         process.exit(1);
     }
-  } catch (error: any) {
-    console.error(`${COLORS.red}Error:${COLORS.nc} ${error.message}`);
+  } catch (error: unknown) {
+    console.error(`${COLORS.red}Error:${COLORS.nc} ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

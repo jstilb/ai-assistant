@@ -210,10 +210,13 @@ install_completions() {
 
         # Check if already configured
         if ! grep -q "/.claude/bin/completions" "$zshrc" 2>/dev/null; then
-            echo '' >> "$zshrc"
-            echo '# Kaya CLI completions' >> "$zshrc"
-            echo 'fpath=(~/.claude/bin/completions $fpath)' >> "$zshrc"
-            echo 'autoload -Uz compinit && compinit' >> "$zshrc"
+            # shellcheck disable=SC2016 # single quotes on purpose: $fpath must be written literally into .zshrc
+            {
+                echo ''
+                echo '# Kaya CLI completions'
+                echo 'fpath=(~/.claude/bin/completions $fpath)'
+                echo 'autoload -Uz compinit && compinit'
+            } >> "$zshrc"
             log_success "Added Zsh completion config to ~/.zshrc"
             log_warning "Run 'source ~/.zshrc' or restart terminal to activate"
         else
@@ -228,9 +231,11 @@ install_completions() {
 
         # Check if already configured
         if ! grep -q "/.claude/bin/completions/_kaya-cli.bash" "$bashrc" 2>/dev/null; then
-            echo '' >> "$bashrc"
-            echo '# Kaya CLI completions' >> "$bashrc"
-            echo 'source ~/.claude/bin/completions/_kaya-cli.bash' >> "$bashrc"
+            {
+                echo ''
+                echo '# Kaya CLI completions'
+                echo 'source ~/.claude/bin/completions/_kaya-cli.bash'
+            } >> "$bashrc"
             log_success "Added Bash completion config to ~/.bashrc"
             log_warning "Run 'source ~/.bashrc' or restart terminal to activate"
         else

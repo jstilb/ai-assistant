@@ -75,7 +75,7 @@ configure_bsky() {
     fi
 
     echo ""
-    read -p "Enter your Bluesky handle (e.g., user.bsky.social): " bsky_handle
+    read -r -p "Enter your Bluesky handle (e.g., user.bsky.social): " bsky_handle
 
     log_info "Running bsky login (you'll be prompted for app password)..."
     echo ""

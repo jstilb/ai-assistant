@@ -6,40 +6,49 @@
  * tab completion, and context persistence.
  */
 
-import * as readline from 'readline';
-import { spawn } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome, defaultKayaHome } from '../../../../../../lib/core/KayaHome.ts';
+import * as readline from "node:readline";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome, defaultKayaHome } from "../../../../../../lib/core/KayaHome.ts";
 
-const HISTORY_FILE = join(getKayaHome(), '.kaya-cli-history');
+const HISTORY_FILE = join(getKayaHome(), ".kaya-cli-history");
 const MAX_HISTORY = 1000;
 
 const SERVICES = [
-  'youtube', 'yt',
-  'calendar', 'gcal',
-  'drive',
-  'gmail',
-  'gemini', 'ai',
-  'sheets',
-  'places',
-  'tasks', 'lt',
-  'playwright', 'pw', 'browser',
-  'bluesky', 'bsky',
-  'weather',
-  'linear',
-  'slack',
-  'github', 'gh',
-  'gitlab',
-  'op', 'secrets',
-  'stripe',
-  'supabase',
-  'firebase',
+  "youtube",
+  "yt",
+  "calendar",
+  "gcal",
+  "drive",
+  "gmail",
+  "gemini",
+  "ai",
+  "sheets",
+  "places",
+  "tasks",
+  "lt",
+  "playwright",
+  "pw",
+  "browser",
+  "bluesky",
+  "bsky",
+  "weather",
+  "linear",
+  "slack",
+  "github",
+  "gh",
+  "gitlab",
+  "op",
+  "secrets",
+  "stripe",
+  "supabase",
+  "firebase",
 ];
 
-const TASKS_SUBCOMMANDS = ['list', 'add', 'complete', 'delete', 'update', 'search', 'stats', 'inbox'];
-const GITHUB_SUBCOMMANDS = ['pr', 'issue', 'repo', 'workflow', 'release'];
-const GITLAB_SUBCOMMANDS = ['mr', 'issue', 'project', 'pipeline'];
+const TASKS_SUBCOMMANDS = ["list", "add", "complete", "delete", "update", "search", "stats", "inbox"];
+const GITHUB_SUBCOMMANDS = ["pr", "issue", "repo", "workflow", "release"];
+const GITLAB_SUBCOMMANDS = ["mr", "issue", "project", "pipeline"];
 
 const BANNER = `
 \x1b[36m╔══════════════════════════════════════════════════════════════╗
@@ -62,7 +71,6 @@ const BANNER = `
 class KayaCliRepl {
   private rl: readline.Interface;
   private history: string[] = [];
-  private context: Map<string, any> = new Map();
 
   constructor() {
     this.loadHistory();
@@ -70,25 +78,27 @@ class KayaCliRepl {
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: '\x1b[32mkaya>\x1b[0m ',
+      prompt: "\x1b[32mkaya>\x1b[0m ",
       historySize: MAX_HISTORY,
       completer: this.completer.bind(this),
     });
 
     // Load history into readline
     for (const cmd of this.history) {
-      (this.rl as any).history.push(cmd);
+      // readline keeps its history array on an undocumented property
+      (this.rl as unknown as { history: string[] }).history.push(cmd);
     }
   }
 
   private loadHistory(): void {
     try {
       if (existsSync(HISTORY_FILE)) {
-        const content = readFileSync(HISTORY_FILE, 'utf-8');
-        this.history = content.split('\n').filter(Boolean);
+        const content = readFileSync(HISTORY_FILE, "utf-8");
+        this.history = content.split("\n").filter(Boolean);
       }
-    } catch (e) {
-      // Ignore history load errors
+    } catch (err) {
+      // History is a convenience: keep the REPL usable, but say why it is empty.
+      console.error(`Could not load history: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -98,9 +108,9 @@ class KayaCliRepl {
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
       }
-      writeFileSync(HISTORY_FILE, this.history.slice(-MAX_HISTORY).join('\n'));
-    } catch (e) {
-      // Ignore history save errors
+      writeFileSync(HISTORY_FILE, this.history.slice(-MAX_HISTORY).join("\n"));
+    } catch (err) {
+      console.error(`Could not save history: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -113,11 +123,11 @@ class KayaCliRepl {
 
   private completer(line: string): [string[], string] {
     const parts = line.split(/\s+/);
-    const current = parts[parts.length - 1];
+    const current = parts[parts.length - 1] ?? "";
 
     if (parts.length === 1) {
       // Complete service names
-      const matches = SERVICES.filter(s => s.startsWith(current));
+      const matches = SERVICES.filter((s) => s.startsWith(current));
       return [matches.length ? matches : SERVICES, current];
     }
 
@@ -125,15 +135,15 @@ class KayaCliRepl {
     if (parts.length === 2) {
       // Complete subcommands
       let subcommands: string[] = [];
-      if (service === 'tasks' || service === 'lt') {
+      if (service === "tasks" || service === "lt") {
         subcommands = TASKS_SUBCOMMANDS;
-      } else if (service === 'github' || service === 'gh') {
+      } else if (service === "github" || service === "gh") {
         subcommands = GITHUB_SUBCOMMANDS;
-      } else if (service === 'gitlab') {
+      } else if (service === "gitlab") {
         subcommands = GITLAB_SUBCOMMANDS;
       }
 
-      const matches = subcommands.filter(s => s.startsWith(current));
+      const matches = subcommands.filter((s) => s.startsWith(current));
       return [matches.length ? matches : subcommands, current];
     }
 
@@ -142,22 +152,21 @@ class KayaCliRepl {
 
   private async executeCommand(cmd: string): Promise<void> {
     return new Promise((resolve) => {
-      const args = ['kaya-cli', ...this.parseCommand(cmd)];
-      const kayaCli = join(defaultKayaHome(), 'bin', 'kaya-cli');
+      const kayaCli = join(defaultKayaHome(), "bin", "kaya-cli");
 
       const proc = spawn(kayaCli, this.parseCommand(cmd), {
-        stdio: 'inherit',
+        stdio: "inherit",
         env: process.env,
       });
 
-      proc.on('close', (code) => {
+      proc.on("close", (code) => {
         if (code !== 0) {
           console.log(`\x1b[33mCommand exited with code ${code}\x1b[0m`);
         }
         resolve();
       });
 
-      proc.on('error', (err) => {
+      proc.on("error", (err) => {
         console.error(`\x1b[31mError: ${err.message}\x1b[0m`);
         resolve();
       });
@@ -166,9 +175,9 @@ class KayaCliRepl {
 
   private parseCommand(cmd: string): string[] {
     const args: string[] = [];
-    let current = '';
+    let current = "";
     let inQuote = false;
-    let quoteChar = '';
+    let quoteChar = "";
 
     for (const char of cmd) {
       if ((char === '"' || char === "'") && !inQuote) {
@@ -176,11 +185,11 @@ class KayaCliRepl {
         quoteChar = char;
       } else if (char === quoteChar && inQuote) {
         inQuote = false;
-        quoteChar = '';
-      } else if (char === ' ' && !inQuote) {
+        quoteChar = "";
+      } else if (char === " " && !inQuote) {
         if (current) {
           args.push(current);
-          current = '';
+          current = "";
         }
       } else {
         current += char;
@@ -198,47 +207,48 @@ class KayaCliRepl {
     const trimmed = cmd.trim().toLowerCase();
 
     switch (trimmed) {
-      case 'help':
-      case '?':
+      case "help":
+      case "?":
         console.log(BANNER);
         return true;
 
-      case 'services':
-        console.log('\n\x1b[36mAvailable services:\x1b[0m');
+      case "services": {
+        console.log("\n\x1b[36mAvailable services:\x1b[0m");
         const grouped = {
-          'Media': ['youtube/yt'],
-          'Google': ['calendar/gcal', 'drive', 'gmail', 'gemini/ai', 'sheets', 'places'],
-          'Task Management': ['tasks/lt', 'linear'],
-          'Code': ['github/gh', 'gitlab'],
-          'Communication': ['slack', 'bluesky/bsky'],
-          'Cloud': ['stripe', 'supabase', 'firebase'],
-          'Security': ['op/secrets'],
-          'Other': ['weather', 'playwright/pw/browser'],
+          Media: ["youtube/yt"],
+          Google: ["calendar/gcal", "drive", "gmail", "gemini/ai", "sheets", "places"],
+          "Task Management": ["tasks/lt", "linear"],
+          Code: ["github/gh", "gitlab"],
+          Communication: ["slack", "bluesky/bsky"],
+          Cloud: ["stripe", "supabase", "firebase"],
+          Security: ["op/secrets"],
+          Other: ["weather", "playwright/pw/browser"],
         };
         for (const [category, services] of Object.entries(grouped)) {
-          console.log(`  \x1b[33m${category}:\x1b[0m ${services.join(', ')}`);
+          console.log(`  \x1b[33m${category}:\x1b[0m ${services.join(", ")}`);
         }
-        console.log('');
+        console.log("");
         return true;
+      }
 
-      case 'history':
-        console.log('\n\x1b[36mRecent commands:\x1b[0m');
+      case "history":
+        console.log("\n\x1b[36mRecent commands:\x1b[0m");
         this.history.slice(-20).forEach((cmd, i) => {
           console.log(`  ${i + 1}. ${cmd}`);
         });
-        console.log('');
+        console.log("");
         return true;
 
-      case 'clear':
+      case "clear":
         console.clear();
         return true;
 
-      case 'exit':
-      case 'quit':
-      case '.exit':
-        console.log('\x1b[36mGoodbye!\x1b[0m');
+      case "exit":
+      case "quit":
+      case ".exit":
+        console.log("\x1b[36mGoodbye!\x1b[0m");
         this.rl.close();
-        process.exit(0);
+        return process.exit(0);
 
       default:
         return false;
@@ -250,7 +260,7 @@ class KayaCliRepl {
 
     this.rl.prompt();
 
-    this.rl.on('line', async (line) => {
+    this.rl.on("line", async (line) => {
       const cmd = line.trim();
 
       if (!cmd) {
@@ -270,13 +280,13 @@ class KayaCliRepl {
       this.rl.prompt();
     });
 
-    this.rl.on('close', () => {
-      console.log('\n\x1b[36mGoodbye!\x1b[0m');
+    this.rl.on("close", () => {
+      console.log("\n\x1b[36mGoodbye!\x1b[0m");
       process.exit(0);
     });
 
     // Handle SIGINT (Ctrl+C)
-    process.on('SIGINT', () => {
+    process.on("SIGINT", () => {
       console.log('\n\x1b[33mUse "exit" or Ctrl+D to quit\x1b[0m');
       this.rl.prompt();
     });

@@ -4,7 +4,7 @@
   "description": "Unix-style CLI tools for Kaya",
   "type": "module",
   "dependencies": {
-    "@toon-format/toon": "^2.1.0",
+    "@toon-format/toon": "^4.4.0",
     "googleapis": "^144.0.0"
   }
 }

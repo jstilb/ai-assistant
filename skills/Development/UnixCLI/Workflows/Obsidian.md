@@ -19,7 +19,7 @@ obsidian-cli set-default obsidian
 obsidian-cli print-default
 ```
 
-**Current Default:** `/Users/[user]/Desktop/obsidian`
+**Current Default:** `~/Desktop/obsidian`
 
 ## Commands
 

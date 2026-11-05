@@ -49,7 +49,8 @@ test_youtube_e2e() {
         log_pass "YouTube metadata extraction works"
 
         # Check if we can extract specific fields
-        local title=$("$KAYA_CLI" youtube --get-title "$test_url" 2>/dev/null)
+        local title
+        title=$("$KAYA_CLI" youtube --get-title "$test_url" 2>/dev/null) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         if [[ -n "$title" ]]; then
             log_pass "YouTube title extraction works: $title"
         else

@@ -12,7 +12,7 @@
  * See: https://github.com/jacob-bd/notebooklm-cli
  */
 
-import { spawn } from 'child_process';
+import { spawn } from "node:child_process";
 
 const HELP = `
 NotebookLM CLI - Command-line interface for Google NotebookLM
@@ -90,33 +90,33 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   // Show Kaya help if no args or --help
-  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     console.log(HELP);
     process.exit(0);
   }
 
   // Check if nlm is installed
-  const which = Bun.spawnSync(['which', 'nlm']);
+  const which = Bun.spawnSync(["which", "nlm"]);
   if (which.exitCode !== 0) {
-    console.error('Error: nlm CLI not found');
-    console.error('');
-    console.error('Install it with: pipx install notebooklm-cli');
-    console.error('Requires: Python 3.10+, Google Chrome');
+    console.error("Error: nlm CLI not found");
+    console.error("");
+    console.error("Install it with: pipx install notebooklm-cli");
+    console.error("Requires: Python 3.10+, Google Chrome");
     process.exit(1);
   }
 
   // Pass through to nlm
-  const nlm = spawn('nlm', args, {
-    stdio: 'inherit',
+  const nlm = spawn("nlm", args, {
+    stdio: "inherit",
     env: process.env,
   });
 
-  nlm.on('close', (code) => {
+  nlm.on("close", (code) => {
     process.exit(code ?? 0);
   });
 
-  nlm.on('error', (err) => {
-    console.error('Error running nlm:', err.message);
+  nlm.on("error", (err) => {
+    console.error("Error running nlm:", err.message);
     process.exit(1);
   });
 }

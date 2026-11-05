@@ -10,8 +10,9 @@
  * Docs: https://github.com/toon-format/toon
  */
 
-import { parseArgs } from 'util';
-import { encode, decode } from '@toon-format/toon';
+import { parseArgs } from "node:util";
+import { encode, decode } from "@toon-format/toon";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 const HELP = `
 TOON CLI - Convert between JSON and TOON (Token-Oriented Object Notation)
@@ -63,13 +64,9 @@ async function readInput(filePath?: string): Promise<string> {
   }
 
   // Read from stdin
-  const chunks: Buffer[] = [];
-  for await (const chunk of Bun.stdin.stream()) {
-    chunks.push(Buffer.from(chunk));
-  }
-  const text = Buffer.concat(chunks).toString('utf-8').trim();
+  const text = await readStdinText();
   if (!text) {
-    throw new Error('No input received. Provide a file path or pipe data via stdin.');
+    throw new Error("No input received. Provide a file path or pipe data via stdin.");
   }
   return text;
 }
@@ -85,10 +82,10 @@ async function encodeCmd(filePath: string | undefined, _opts: ToonOptions): Prom
   try {
     data = JSON.parse(input);
   } catch {
-    throw new Error('Invalid JSON input. Ensure the input is valid JSON.');
+    throw new Error("Invalid JSON input. Ensure the input is valid JSON.");
   }
   const toonStr = encode(data);
-  process.stdout.write(toonStr + '\n');
+  process.stdout.write(toonStr + "\n");
 }
 
 async function decodeCmd(filePath: string | undefined, opts: ToonOptions): Promise<void> {
@@ -97,10 +94,10 @@ async function decodeCmd(filePath: string | undefined, opts: ToonOptions): Promi
   try {
     data = decode(input);
   } catch {
-    throw new Error('Invalid TOON input. Ensure the input is valid TOON format.');
+    throw new Error("Invalid TOON input. Ensure the input is valid TOON format.");
   }
   const indent = opts.pretty ? 2 : undefined;
-  process.stdout.write(JSON.stringify(data, null, indent) + '\n');
+  process.stdout.write(JSON.stringify(data, null, indent) + "\n");
 }
 
 async function statsCmd(filePath: string | undefined, opts: ToonOptions): Promise<void> {
@@ -109,7 +106,7 @@ async function statsCmd(filePath: string | undefined, opts: ToonOptions): Promis
   try {
     data = JSON.parse(input);
   } catch {
-    throw new Error('Invalid JSON input. Provide valid JSON to estimate savings.');
+    throw new Error("Invalid JSON input. Provide valid JSON to estimate savings.");
   }
 
   const jsonStr = JSON.stringify(data);
@@ -150,9 +147,9 @@ async function main() {
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      pretty: { type: 'boolean', short: 'p', default: false },
-      json: { type: 'boolean', short: 'j', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
+      pretty: { type: "boolean", short: "p", default: false },
+      json: { type: "boolean", short: "j", default: false },
+      help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
     strict: false,
@@ -173,16 +170,16 @@ async function main() {
   const filePath = positionals[1];
 
   switch (command) {
-    case 'encode':
-    case 'e':
+    case "encode":
+    case "e":
       await encodeCmd(filePath, opts);
       break;
-    case 'decode':
-    case 'd':
+    case "decode":
+    case "d":
       await decodeCmd(filePath, opts);
       break;
-    case 'stats':
-    case 's':
+    case "stats":
+    case "s":
       await statsCmd(filePath, opts);
       break;
     default:
@@ -193,6 +190,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Error:', error instanceof Error ? error.message : String(error));
+  console.error("Error:", error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

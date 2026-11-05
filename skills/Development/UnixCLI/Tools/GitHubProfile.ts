@@ -8,12 +8,12 @@
  * Usage: kaya-cli gh profile <command> [options]
  */
 
-import { execSync } from 'child_process';
-import { parseArgs } from 'util';
-import { writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { maybeEncode } from '../../../../lib/core/ToonHelper';
+import { execSync } from "node:child_process";
+import { parseArgs } from "node:util";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { maybeEncode } from "../../../../lib/core/ToonHelper.ts";
 
 const HELP = `
 GitHub Profile CLI - Profile management via command line
@@ -126,14 +126,14 @@ function gh(args: string): string {
   try {
     const result = execSync(`gh ${args}`, {
       timeout: 30_000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     });
     return result.trim();
   } catch (e: unknown) {
     const err = e as { stderr?: Buffer; message?: string };
-    const stderr = err.stderr?.toString() || '';
-    if (stderr.includes('insufficient_scope') || stderr.includes('scope')) {
+    const stderr = err.stderr?.toString() || "";
+    if (stderr.includes("insufficient_scope") || stderr.includes("scope")) {
       throw new Error(`Insufficient scope. Try: gh auth refresh -s user,repo\n${stderr}`);
     }
     throw new Error(stderr || err.message || String(e));
@@ -147,12 +147,16 @@ function ghGraphQL<T>(query: string): GitHubAPIResponse<T> {
     writeFileSync(tmpFile, query);
     const raw = execSync(`gh api graphql --field query=@${tmpFile}`, {
       timeout: 30_000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     });
     return JSON.parse(raw.trim()) as GitHubAPIResponse<T>;
   } finally {
-    try { unlinkSync(tmpFile); } catch { /* cleanup is best-effort */ }
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      /* cleanup is best-effort */
+    }
   }
 }
 
@@ -164,12 +168,16 @@ function ghGraphQLWithVars<T>(query: string, variables: Record<string, unknown>)
     writeFileSync(tmpFile, payload);
     const raw = execSync(`gh api graphql --input "${tmpFile}"`, {
       timeout: 30_000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     });
     return JSON.parse(raw.trim()) as GitHubAPIResponse<T>;
   } finally {
-    try { unlinkSync(tmpFile); } catch { /* cleanup is best-effort */ }
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      /* cleanup is best-effort */
+    }
   }
 }
 
@@ -180,18 +188,22 @@ function ghRESTWithBody(method: string, path: string, body: Record<string, unkno
     writeFileSync(tmpFile, JSON.stringify(body));
     const raw = execSync(`gh api -X ${method} ${path} --input "${tmpFile}"`, {
       timeout: 30_000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     });
     if (!raw.trim()) return {};
     return JSON.parse(raw.trim());
   } finally {
-    try { unlinkSync(tmpFile); } catch {}
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      // Temp-file cleanup is best-effort (the file may already be gone).
+    }
   }
 }
 
 function getViewer(): string {
-  const raw = gh('api user --jq .login');
+  const raw = gh("api user --jq .login");
   return raw;
 }
 
@@ -231,20 +243,20 @@ async function cmdStatus(json: boolean): Promise<void> {
 
   output(v, json, (d) => {
     const lines = [
-      `Profile: ${d.login}${d.name ? ` (${d.name})` : ''}`,
-      d.bio ? `Bio: ${d.bio}` : '',
-      d.company ? `Company: ${d.company}` : '',
-      d.location ? `Location: ${d.location}` : '',
-      d.websiteUrl ? `Website: ${d.websiteUrl}` : '',
-      d.twitterUsername ? `Twitter: @${d.twitterUsername}` : '',
+      `Profile: ${d.login}${d.name ? ` (${d.name})` : ""}`,
+      d.bio ? `Bio: ${d.bio}` : "",
+      d.company ? `Company: ${d.company}` : "",
+      d.location ? `Location: ${d.location}` : "",
+      d.websiteUrl ? `Website: ${d.websiteUrl}` : "",
+      d.twitterUsername ? `Twitter: @${d.twitterUsername}` : "",
       `Followers: ${d.followers.totalCount} | Following: ${d.following.totalCount} | Repos: ${d.repositories.totalCount}`,
-      '',
+      "",
       `Pinned (${d.pinnedItems.nodes.length}):`,
       ...d.pinnedItems.nodes.map(
-        (r) => `  - ${r.nameWithOwner} (${r.stargazerCount} stars)${r.description ? `: ${r.description}` : ''}`
+        (r) => `  - ${r.nameWithOwner} (${r.stargazerCount} stars)${r.description ? `: ${r.description}` : ""}`,
       ),
     ];
-    return lines.filter(Boolean).join('\n');
+    return lines.filter(Boolean).join("\n");
   });
 }
 
@@ -276,24 +288,24 @@ async function cmdPins(json: boolean, toon: boolean): Promise<void> {
   }
 
   output(pins, json, (d) => {
-    if (!d.length) return 'No pinned repositories.';
+    if (!d.length) return "No pinned repositories.";
     return d
       .map(
         (r, i) =>
-          `${i + 1}. ${r.nameWithOwner}${r.primaryLanguage ? ` [${r.primaryLanguage.name}]` : ''} (${r.stargazerCount} stars)\n   ${r.description || '(no description)'}\n   ${r.url}`
+          `${i + 1}. ${r.nameWithOwner}${r.primaryLanguage ? ` [${r.primaryLanguage.name}]` : ""} (${r.stargazerCount} stars)\n   ${r.description || "(no description)"}\n   ${r.url}`,
       )
-      .join('\n\n');
+      .join("\n\n");
   });
 }
 
 async function cmdPin(repos: string[], json: boolean): Promise<void> {
   if (!repos.length) {
-    console.error('Error: Provide 1-6 repository names to pin.');
-    console.error('Usage: kaya-cli gh profile pin <repo1> [repo2] ...');
+    console.error("Error: Provide 1-6 repository names to pin.");
+    console.error("Usage: kaya-cli gh profile pin <repo1> [repo2] ...");
     process.exit(1);
   }
   if (repos.length > 6) {
-    console.error('Error: GitHub allows a maximum of 6 pinned repositories.');
+    console.error("Error: GitHub allows a maximum of 6 pinned repositories.");
     process.exit(1);
   }
 
@@ -302,9 +314,11 @@ async function cmdPin(repos: string[], json: boolean): Promise<void> {
   // Resolve repo node IDs
   const ids: string[] = [];
   for (const repo of repos) {
-    const repoName = repo.includes('/') ? repo : `${owner}/${repo}`;
+    const repoName = repo.includes("/") ? repo : `${owner}/${repo}`;
     try {
-      const result = ghGraphQL<{ repository: { id: string } }>(`{ repository(owner: "${repoName.split('/')[0]}", name: "${repoName.split('/')[1]}") { id } }`);
+      const result = ghGraphQL<{ repository: { id: string } }>(
+        `{ repository(owner: "${repoName.split("/")[0]}", name: "${repoName.split("/")[1]}") { id } }`,
+      );
       ids.push(result.data.repository.id);
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -325,39 +339,38 @@ async function cmdPin(repos: string[], json: boolean): Promise<void> {
       }
     }`;
 
-    const result = ghGraphQLWithVars<{ updateUserProfileShowcase: { clientMutationId: string | null } }>(mutation, { repositoryIds: ids, userId: viewerId });
+    const result = ghGraphQLWithVars<{ updateUserProfileShowcase: { clientMutationId: string | null } }>(mutation, {
+      repositoryIds: ids,
+      userId: viewerId,
+    });
 
     if (result.errors) {
-      throw new Error(result.errors.map((e) => e.message).join(', '));
+      throw new Error(result.errors.map((e) => e.message).join(", "));
     }
 
-    output(
-      { success: true, pinned: repos },
-      json,
-      () => `Pinned ${repos.length} repositories: ${repos.join(', ')}`
-    );
+    output({ success: true, pinned: repos }, json, () => `Pinned ${repos.length} repositories: ${repos.join(", ")}`);
   } catch (e: unknown) {
     const err = e as { message?: string };
     // Mutation may not be available in public schema
     const fallback = {
       success: false,
-      message: 'GraphQL mutation failed. This may require manual pinning.',
+      message: "GraphQL mutation failed. This may require manual pinning.",
       resolvedIds: ids.map((id, i) => ({ repo: repos[i], nodeId: id })),
       manualUrl: `https://github.com/${owner}?tab=repositories`,
-      scopeHint: 'Ensure user scope: gh auth refresh -s user',
+      scopeHint: "Ensure user scope: gh auth refresh -s user",
       error: err.message ?? String(e),
     };
 
     output(fallback, json, (d) => {
       return [
         `Pin mutation failed: ${d.error}`,
-        '',
-        'Resolved node IDs (for manual use):',
+        "",
+        "Resolved node IDs (for manual use):",
         ...d.resolvedIds.map((r) => `  ${r.repo}: ${r.nodeId}`),
-        '',
+        "",
         `Manual pinning: ${d.manualUrl}`,
         `Add scope: ${d.scopeHint}`,
-      ].join('\n');
+      ].join("\n");
     });
     process.exit(1);
   }
@@ -374,19 +387,21 @@ async function cmdUnpin(json: boolean): Promise<void> {
       }
     }`;
 
-    const result = ghGraphQLWithVars<{ updateUserProfileShowcase: { clientMutationId: string | null } }>(mutation, { userId: viewerId });
+    const result = ghGraphQLWithVars<{ updateUserProfileShowcase: { clientMutationId: string | null } }>(mutation, {
+      userId: viewerId,
+    });
 
     if (result.errors) {
-      throw new Error(result.errors.map((e) => e.message).join(', '));
+      throw new Error(result.errors.map((e) => e.message).join(", "));
     }
 
-    output({ success: true }, json, () => 'All pinned repositories cleared.');
+    output({ success: true }, json, () => "All pinned repositories cleared.");
   } catch (e: unknown) {
     const err = e as { message?: string };
     const fallback = {
       success: false,
-      message: 'Unpin mutation failed.',
-      manualUrl: 'https://github.com/settings/profile',
+      message: "Unpin mutation failed.",
+      manualUrl: "https://github.com/settings/profile",
       error: err.message ?? String(e),
     };
     output(fallback, json, (d) => `Unpin failed: ${d.error}\nManual: ${d.manualUrl}`);
@@ -398,22 +413,18 @@ async function cmdBio(newBio: string | undefined, json: boolean): Promise<void> 
   if (newBio === undefined) {
     // GET bio
     const result = ghGraphQL<{ viewer: { bio: string | null } }>(`{ viewer { bio } }`);
-    output(result.data.viewer, json, (d) => d.bio || '(no bio set)');
+    output(result.data.viewer, json, (d) => d.bio || "(no bio set)");
   } else {
     // SET bio via REST
-    const result = ghRESTWithBody('PATCH', '/user', { bio: newBio }) as { bio?: string };
-    output(
-      { success: true, bio: result.bio ?? newBio },
-      json,
-      (d) => `Bio updated: ${d.bio}`
-    );
+    const result = ghRESTWithBody("PATCH", "/user", { bio: newBio }) as { bio?: string };
+    output({ success: true, bio: result.bio ?? newBio }, json, (d) => `Bio updated: ${d.bio}`);
   }
 }
 
 async function cmdTopics(repo: string, newTopics: string[] | undefined, json: boolean): Promise<void> {
   const owner = getViewer();
-  const repoName = repo.includes('/') ? repo : `${owner}/${repo}`;
-  const [o, r] = repoName.split('/');
+  const repoName = repo.includes("/") ? repo : `${owner}/${repo}`;
+  const [o, r] = repoName.split("/");
 
   if (!newTopics || newTopics.length === 0) {
     // GET topics
@@ -421,15 +432,15 @@ async function cmdTopics(repo: string, newTopics: string[] | undefined, json: bo
     const result = JSON.parse(raw) as { names?: string[] };
     output(result, json, (d) => {
       if (!d.names?.length) return `${repoName}: no topics set`;
-      return `${repoName} topics:\n${d.names.map((t) => `  - ${t}`).join('\n')}`;
+      return `${repoName} topics:\n${d.names.map((t) => `  - ${t}`).join("\n")}`;
     });
   } else {
     // SET topics
-    const result = ghRESTWithBody('PUT', `/repos/${o}/${r}/topics`, { names: newTopics }) as { names?: string[] };
+    const result = ghRESTWithBody("PUT", `/repos/${o}/${r}/topics`, { names: newTopics }) as { names?: string[] };
     output(
       { success: true, repo: repoName, topics: result.names ?? newTopics },
       json,
-      (d) => `Topics set for ${d.repo}: ${d.topics.join(', ')}`
+      (d) => `Topics set for ${d.repo}: ${d.topics.join(", ")}`,
     );
   }
 }
@@ -457,17 +468,17 @@ async function cmdAnalytics(repo: string | undefined, json: boolean, toon: boole
 
     output(repos, json, (d) => {
       return [
-        'Top repositories by stars:',
+        "Top repositories by stars:",
         ...d.map((r) => `  ${r.name}: ${r.stargazerCount} stars, ${r.forkCount} forks`),
-        '',
-        'For detailed traffic: kaya-cli gh profile analytics <repo>',
-      ].join('\n');
+        "",
+        "For detailed traffic: kaya-cli gh profile analytics <repo>",
+      ].join("\n");
     });
     return;
   }
 
-  const repoName = repo.includes('/') ? repo : `${owner}/${repo}`;
-  const [o, r] = repoName.split('/');
+  const repoName = repo.includes("/") ? repo : `${owner}/${repo}`;
+  const [o, r] = repoName.split("/");
 
   // Fetch traffic data in parallel-ish (sequential for simplicity, gh handles auth)
   let views: TrafficResponse, clones: TrafficResponse, referrers: ReferrerEntry[], paths: PathEntry[];
@@ -478,7 +489,7 @@ async function cmdAnalytics(repo: string | undefined, json: boolean, toon: boole
     paths = JSON.parse(gh(`api /repos/${o}/${r}/traffic/popular/paths`)) as PathEntry[];
   } catch (e: unknown) {
     const err = e as { message?: string };
-    if (err.message?.includes('Must have push access')) {
+    if (err.message?.includes("Must have push access")) {
       console.error(`Error: Traffic analytics require push access to ${repoName}`);
       process.exit(1);
     }
@@ -496,26 +507,26 @@ async function cmdAnalytics(repo: string | undefined, json: boolean, toon: boole
   output(analytics, json, (d) => {
     const lines = [
       `Analytics for ${d.repo} (last 14 days):`,
-      '',
+      "",
       `Views: ${d.views.total} total, ${d.views.unique} unique`,
       `Clones: ${d.clones.total} total, ${d.clones.unique} unique`,
     ];
 
     if (d.referrers?.length) {
-      lines.push('', 'Top Referrers:');
+      lines.push("", "Top Referrers:");
       d.referrers.slice(0, 5).forEach((r) => {
         lines.push(`  ${r.referrer}: ${r.count} (${r.uniques} unique)`);
       });
     }
 
     if (d.popularPaths?.length) {
-      lines.push('', 'Popular Paths:');
+      lines.push("", "Popular Paths:");
       d.popularPaths.slice(0, 5).forEach((p) => {
         lines.push(`  ${p.path}: ${p.count} (${p.uniques} unique)`);
       });
     }
 
-    return lines.join('\n');
+    return lines.join("\n");
   });
 }
 
@@ -525,9 +536,9 @@ async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      json: { type: 'boolean', default: false },
-      toon: { type: 'boolean', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
+      json: { type: "boolean", default: false },
+      toon: { type: "boolean", default: false },
+      help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
   });
@@ -543,42 +554,42 @@ async function main(): Promise<void> {
 
   try {
     switch (command) {
-      case 'status':
+      case "status":
         await cmdStatus(jsonOutput);
         break;
 
-      case 'pins':
+      case "pins":
         await cmdPins(jsonOutput, toonOutput);
         break;
 
-      case 'pin':
+      case "pin":
         await cmdPin(args, jsonOutput);
         break;
 
-      case 'unpin':
+      case "unpin":
         await cmdUnpin(jsonOutput);
         break;
 
-      case 'bio':
+      case "bio":
         await cmdBio(args[0], jsonOutput);
         break;
 
-      case 'topics':
+      case "topics":
         if (!args[0]) {
-          console.error('Error: Provide a repository name.');
-          console.error('Usage: kaya-cli gh profile topics <repo> [topic1 topic2 ...]');
+          console.error("Error: Provide a repository name.");
+          console.error("Usage: kaya-cli gh profile topics <repo> [topic1 topic2 ...]");
           process.exit(1);
         }
         await cmdTopics(args[0], args.slice(1).length ? args.slice(1) : undefined, jsonOutput);
         break;
 
-      case 'analytics':
+      case "analytics":
         await cmdAnalytics(args[0], jsonOutput, toonOutput);
         break;
 
       default:
         console.error(`Error: Unknown command '${command}'`);
-        console.error('Run: kaya-cli gh profile --help');
+        console.error("Run: kaya-cli gh profile --help");
         process.exit(1);
     }
   } catch (e: unknown) {

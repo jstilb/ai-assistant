@@ -49,7 +49,7 @@ test_tool_installed() {
     log_test "Checking if $display_name is installed..."
 
     if command -v "$tool" &> /dev/null; then
-        log_pass "$display_name found: $(which $tool)"
+        log_pass "$display_name found: $(which "$tool")"
         return 0
     else
         log_fail "$display_name not found in PATH"
@@ -66,7 +66,8 @@ test_tool_version() {
     log_test "Checking $display_name version..."
 
     if eval "$version_cmd" &> /dev/null; then
-        local version=$(eval "$version_cmd" 2>&1 | head -1)
+        local version
+        version=$(eval "$version_cmd" 2>&1 | head -1) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "$display_name version: $version"
         return 0
     else
@@ -218,7 +219,8 @@ test_bsky() {
     # Check version (may not be supported)
     log_test "Checking bsky version..."
     if bsky --version &> /dev/null; then
-        local version=$(bsky --version 2>&1)
+        local version
+        version=$(bsky --version 2>&1) || true  # was masked by `local x=$(...)` under set -e; keep that behavior
         log_pass "bsky version: $version"
     else
         log_warn "bsky version check not supported (this is normal)"

@@ -10,27 +10,29 @@
  *   kaya-cli places types                - List available place types
  */
 
-import { homedir } from 'os';
-import { z } from 'zod';
-import { httpClient } from '../../../../lib/core/CachedHTTPClient';
-import { createStateManager } from '../../../../lib/core/StateManager';
-import { maybeEncode } from '../../../../lib/core/ToonHelper';
+import { homedir } from "node:os";
+import { z } from "zod";
+import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { maybeEncode } from "../../../../lib/core/ToonHelper.ts";
 
 const COLORS = {
-  red: '\x1b[0;31m',
-  green: '\x1b[0;32m',
-  yellow: '\x1b[1;33m',
-  blue: '\x1b[0;34m',
-  cyan: '\x1b[0;36m',
-  nc: '\x1b[0m'
+  red: "\x1b[0;31m",
+  green: "\x1b[0;32m",
+  yellow: "\x1b[1;33m",
+  blue: "\x1b[0;34m",
+  cyan: "\x1b[0;36m",
+  nc: "\x1b[0m",
 };
 
 const SECRETS_PATH = `${homedir()}/.claude/secrets.json`;
 
-const PlacesSecretsSchema = z.object({
-  GOOGLE_PLACES_API_KEY: z.string().optional(),
-  GOOGLE_API_KEY: z.string().optional(),
-}).passthrough();
+const PlacesSecretsSchema = z
+  .object({
+    GOOGLE_PLACES_API_KEY: z.string().optional(),
+    GOOGLE_API_KEY: z.string().optional(),
+  })
+  .passthrough();
 
 const placesSecretsManager = createStateManager({
   path: SECRETS_PATH,
@@ -66,10 +68,11 @@ async function getApiKeyAsync(): Promise<string> {
 async function getDefaultLocation(): Promise<{ lat: number; lng: number }> {
   // Try to get from IP geolocation as fallback
   try {
-    const data = await httpClient.fetchJson<{ latitude: number; longitude: number }>(
-      'https://ipapi.co/json/',
-      { cache: 'memory', ttl: 3600, retry: 1 }
-    );
+    const data = await httpClient.fetchJson<{ latitude: number; longitude: number }>("https://ipapi.co/json/", {
+      cache: "memory",
+      ttl: 3600,
+      retry: 1,
+    });
     return { lat: data.latitude, lng: data.longitude };
   } catch (err) {
     // IP geolocation failed — fall back to a hardcoded San Francisco
@@ -79,7 +82,7 @@ async function getDefaultLocation(): Promise<{ lat: number; lng: number }> {
     console.error(
       `${COLORS.yellow}Warning:${COLORS.nc} location auto-detect failed (${
         err instanceof Error ? err.message : String(err)
-      }) — falling back to San Francisco (37.7749, -122.4194). Pass --location <lat,lng> to override.`
+      }) — falling back to San Francisco (37.7749, -122.4194). Pass --location <lat,lng> to override.`,
     );
     return { lat: 37.7749, lng: -122.4194 };
   }
@@ -113,18 +116,18 @@ interface Place {
 
 async function nearbySearch(type: string, location: { lat: number; lng: number }, radius = 5000) {
   const apiKey = await getApiKeyAsync();
-  const url = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
-  url.searchParams.set('location', `${location.lat},${location.lng}`);
-  url.searchParams.set('radius', radius.toString());
-  url.searchParams.set('type', type);
-  url.searchParams.set('key', apiKey);
+  const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
+  url.searchParams.set("location", `${location.lat},${location.lng}`);
+  url.searchParams.set("radius", radius.toString());
+  url.searchParams.set("type", type);
+  url.searchParams.set("key", apiKey);
 
   const data = await httpClient.fetchJson<{ results: Place[]; status: string; error_message?: string }>(
     url.toString(),
-    { cache: 'memory', ttl: 300, retry: 2 }
+    { cache: "memory", ttl: 300, retry: 2 },
   );
 
-  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
     throw new Error(data.error_message || data.status);
   }
 
@@ -133,21 +136,21 @@ async function nearbySearch(type: string, location: { lat: number; lng: number }
 
 async function textSearch(query: string, location?: { lat: number; lng: number }) {
   const apiKey = await getApiKeyAsync();
-  const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-  url.searchParams.set('query', query);
-  url.searchParams.set('key', apiKey);
+  const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
+  url.searchParams.set("query", query);
+  url.searchParams.set("key", apiKey);
 
   if (location) {
-    url.searchParams.set('location', `${location.lat},${location.lng}`);
-    url.searchParams.set('radius', '10000');
+    url.searchParams.set("location", `${location.lat},${location.lng}`);
+    url.searchParams.set("radius", "10000");
   }
 
   const data = await httpClient.fetchJson<{ results: Place[]; status: string; error_message?: string }>(
     url.toString(),
-    { cache: 'memory', ttl: 300, retry: 2 }
+    { cache: "memory", ttl: 300, retry: 2 },
   );
 
-  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
     throw new Error(data.error_message || data.status);
   }
 
@@ -156,17 +159,21 @@ async function textSearch(query: string, location?: { lat: number; lng: number }
 
 async function getPlaceDetails(placeId: string) {
   const apiKey = await getApiKeyAsync();
-  const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-  url.searchParams.set('place_id', placeId);
-  url.searchParams.set('fields', 'name,formatted_address,formatted_phone_number,opening_hours,website,rating,user_ratings_total,price_level,types,reviews,url');
-  url.searchParams.set('key', apiKey);
-
-  const data = await httpClient.fetchJson<{ result: Place & { reviews?: Review[]; url?: string }; status: string; error_message?: string }>(
-    url.toString(),
-    { cache: 'memory', ttl: 600, retry: 2 }
+  const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
+  url.searchParams.set("place_id", placeId);
+  url.searchParams.set(
+    "fields",
+    "name,formatted_address,formatted_phone_number,opening_hours,website,rating,user_ratings_total,price_level,types,reviews,url",
   );
+  url.searchParams.set("key", apiKey);
 
-  if (data.status !== 'OK') {
+  const data = await httpClient.fetchJson<{
+    result: Place & { reviews?: Review[]; url?: string };
+    status: string;
+    error_message?: string;
+  }>(url.toString(), { cache: "memory", ttl: 600, retry: 2 });
+
+  if (data.status !== "OK") {
     throw new Error(data.error_message || data.status);
   }
 
@@ -174,25 +181,55 @@ async function getPlaceDetails(placeId: string) {
 }
 
 const PLACE_TYPES = [
-  'restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway',
-  'grocery_or_supermarket', 'convenience_store', 'pharmacy', 'hospital', 'doctor',
-  'gym', 'park', 'spa', 'hair_care', 'beauty_salon',
-  'gas_station', 'car_repair', 'car_wash', 'parking',
-  'bank', 'atm', 'post_office', 'laundry', 'hardware_store',
-  'book_store', 'clothing_store', 'electronics_store', 'furniture_store',
-  'movie_theater', 'museum', 'library', 'art_gallery', 'zoo',
-  'lodging', 'airport', 'train_station', 'bus_station', 'subway_station'
+  "restaurant",
+  "cafe",
+  "bar",
+  "bakery",
+  "meal_takeaway",
+  "grocery_or_supermarket",
+  "convenience_store",
+  "pharmacy",
+  "hospital",
+  "doctor",
+  "gym",
+  "park",
+  "spa",
+  "hair_care",
+  "beauty_salon",
+  "gas_station",
+  "car_repair",
+  "car_wash",
+  "parking",
+  "bank",
+  "atm",
+  "post_office",
+  "laundry",
+  "hardware_store",
+  "book_store",
+  "clothing_store",
+  "electronics_store",
+  "furniture_store",
+  "movie_theater",
+  "museum",
+  "library",
+  "art_gallery",
+  "zoo",
+  "lodging",
+  "airport",
+  "train_station",
+  "bus_station",
+  "subway_station",
 ];
 
 function formatRating(rating?: number, total?: number): string {
-  if (!rating) return '';
-  const stars = '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-  return `${stars} ${rating}${total ? ` (${total})` : ''}`;
+  if (!rating) return "";
+  const stars = "★".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating));
+  return `${stars} ${rating}${total ? ` (${total})` : ""}`;
 }
 
 function formatPrice(level?: number): string {
-  if (level === undefined) return '';
-  return '$'.repeat(level + 1);
+  if (level === undefined) return "";
+  return "$".repeat(level + 1);
 }
 
 function showHelp() {
@@ -234,41 +271,46 @@ ${COLORS.blue}Common Types:${COLORS.nc}
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
+  if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
     showHelp();
     process.exit(0);
   }
 
   const command = args[0];
-  const jsonOutput = args.includes('--json');
-  const toonOutput = args.includes('--toon');
+  const jsonOutput = args.includes("--json");
+  const toonOutput = args.includes("--toon");
 
   // Parse location override
-  const locationIdx = args.indexOf('--location');
+  const locationIdx = args.indexOf("--location");
   let location: { lat: number; lng: number } | undefined;
-  if (locationIdx >= 0 && args[locationIdx + 1]) {
-    const [lat, lng] = args[locationIdx + 1].split(',').map(Number);
+  const locationArg = locationIdx >= 0 ? args[locationIdx + 1] : undefined;
+  if (locationArg) {
+    const [lat, lng] = locationArg.split(",").map(Number);
+    if (lat === undefined || lng === undefined) {
+      console.error(`${COLORS.red}Error:${COLORS.nc} --location needs "lat,lng"`);
+      process.exit(1);
+    }
     location = { lat, lng };
   }
 
   // Parse radius
-  const radiusIdx = args.indexOf('--radius');
-  const radius = radiusIdx >= 0 ? parseInt(args[radiusIdx + 1]) : 5000;
+  const radiusIdx = args.indexOf("--radius");
+  const radius = radiusIdx >= 0 ? Number.parseInt(args[radiusIdx + 1] ?? "", 10) : 5000;
 
   // Parse limit
-  const limitIdx = args.indexOf('--limit');
-  const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) : 20;
+  const limitIdx = args.indexOf("--limit");
+  const limit = limitIdx >= 0 ? Number.parseInt(args[limitIdx + 1] ?? "", 10) : 20;
 
   // Filter out options from args
   const filteredArgs = args.filter((a, i) => {
-    if (a.startsWith('--')) return false;
-    if (i > 0 && args[i - 1].startsWith('--')) return false;
+    if (a.startsWith("--")) return false;
+    if (i > 0 && args[i - 1]?.startsWith("--")) return false;
     return true;
   });
 
   try {
     switch (command) {
-      case 'nearby': {
+      case "nearby": {
         const type = filteredArgs[1];
         if (!type) {
           console.error(`${COLORS.red}Error:${COLORS.nc} Place type required`);
@@ -276,7 +318,7 @@ async function main() {
           process.exit(1);
         }
 
-        const loc = location || await getDefaultLocation();
+        const loc = location || (await getDefaultLocation());
         const places = await nearbySearch(type, loc, radius);
         const limited = places.slice(0, limit);
 
@@ -303,14 +345,14 @@ async function main() {
         break;
       }
 
-      case 'search': {
-        const query = filteredArgs.slice(1).join(' ');
+      case "search": {
+        const query = filteredArgs.slice(1).join(" ");
         if (!query) {
           console.error(`${COLORS.red}Error:${COLORS.nc} Search query required`);
           process.exit(1);
         }
 
-        const loc = location || await getDefaultLocation();
+        const loc = location || (await getDefaultLocation());
         const places = await textSearch(query, loc);
         const limited = places.slice(0, limit);
 
@@ -337,7 +379,7 @@ async function main() {
         break;
       }
 
-      case 'hours': {
+      case "hours": {
         const placeId = filteredArgs[1];
         if (!placeId) {
           console.error(`${COLORS.red}Error:${COLORS.nc} Place ID required`);
@@ -352,17 +394,17 @@ async function main() {
           console.log(`${COLORS.cyan}${details.name}${COLORS.nc}\n`);
           if (details.opening_hours?.weekday_text) {
             console.log(`${COLORS.blue}Hours:${COLORS.nc}`);
-            details.opening_hours.weekday_text.forEach(day => {
+            details.opening_hours.weekday_text.forEach((day) => {
               console.log(`  ${day}`);
             });
           } else {
-            console.log('Hours not available');
+            console.log("Hours not available");
           }
         }
         break;
       }
 
-      case 'details': {
+      case "details": {
         const placeId = filteredArgs[1];
         if (!placeId) {
           console.error(`${COLORS.red}Error:${COLORS.nc} Place ID required`);
@@ -395,36 +437,47 @@ async function main() {
             });
           }
 
-          if (details.reviews?.length > 0) {
+          const reviews = details.reviews ?? [];
+          if (reviews.length > 0) {
             console.log(`\n${COLORS.blue}Recent Reviews:${COLORS.nc}`);
-            details.reviews.slice(0, 3).forEach((r: Review) => {
-              console.log(`  ${COLORS.green}${r.author_name}${COLORS.nc} - ${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}`);
-              console.log(`  "${r.text?.slice(0, 150)}${r.text?.length > 150 ? '...' : ''}"\n`);
+            reviews.slice(0, 3).forEach((r: Review) => {
+              console.log(
+                `  ${COLORS.green}${r.author_name}${COLORS.nc} - ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}`,
+              );
+              console.log(`  "${r.text?.slice(0, 150)}${(r.text?.length ?? 0) > 150 ? "..." : ""}"\n`);
             });
           }
         }
         break;
       }
 
-      case 'types': {
+      case "types": {
         if (jsonOutput) {
           console.log(JSON.stringify(PLACE_TYPES, null, 2));
         } else {
           console.log(`${COLORS.cyan}Available Place Types:${COLORS.nc}\n`);
 
           const categories: Record<string, string[]> = {
-            'Food & Drink': ['restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway'],
-            'Shopping': ['grocery_or_supermarket', 'convenience_store', 'clothing_store', 'electronics_store', 'book_store', 'furniture_store', 'hardware_store'],
-            'Health': ['pharmacy', 'hospital', 'doctor', 'gym', 'spa'],
-            'Services': ['bank', 'atm', 'post_office', 'laundry', 'hair_care', 'beauty_salon'],
-            'Auto': ['gas_station', 'car_repair', 'car_wash', 'parking'],
-            'Entertainment': ['movie_theater', 'museum', 'library', 'art_gallery', 'zoo', 'park'],
-            'Travel': ['lodging', 'airport', 'train_station', 'bus_station', 'subway_station']
+            "Food & Drink": ["restaurant", "cafe", "bar", "bakery", "meal_takeaway"],
+            Shopping: [
+              "grocery_or_supermarket",
+              "convenience_store",
+              "clothing_store",
+              "electronics_store",
+              "book_store",
+              "furniture_store",
+              "hardware_store",
+            ],
+            Health: ["pharmacy", "hospital", "doctor", "gym", "spa"],
+            Services: ["bank", "atm", "post_office", "laundry", "hair_care", "beauty_salon"],
+            Auto: ["gas_station", "car_repair", "car_wash", "parking"],
+            Entertainment: ["movie_theater", "museum", "library", "art_gallery", "zoo", "park"],
+            Travel: ["lodging", "airport", "train_station", "bus_station", "subway_station"],
           };
 
           Object.entries(categories).forEach(([category, types]) => {
             console.log(`${COLORS.blue}${category}:${COLORS.nc}`);
-            console.log(`  ${types.join(', ')}\n`);
+            console.log(`  ${types.join(", ")}\n`);
           });
         }
         break;

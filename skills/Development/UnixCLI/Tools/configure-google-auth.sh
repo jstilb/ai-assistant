@@ -64,7 +64,7 @@ configure_gcalcli() {
         return 1
     fi
 
-    read -p "Enter path to client_secret.json: " client_secret_path
+    read -r -p "Enter path to client_secret.json: " client_secret_path
     if [[ ! -f "$client_secret_path" ]]; then
         log_error "File not found: $client_secret_path"
         return 1
@@ -150,7 +150,7 @@ configure_gogcli() {
         return 1
     fi
 
-    read -p "Enter path to client_secret.json for gog: " gog_client_secret_path
+    read -r -p "Enter path to client_secret.json for gog: " gog_client_secret_path
     if [[ ! -f "$gog_client_secret_path" ]]; then
         log_error "File not found: $gog_client_secret_path"
         return 1
@@ -175,7 +175,7 @@ configure_gogcli() {
     gog auth list
 
     echo ""
-    read -p "Enter email to set as default account: " default_email
+    read -r -p "Enter email to set as default account: " default_email
     export GOG_ACCOUNT="$default_email"
 
     log_info "Add this to your ~/.zshrc or ~/.bashrc:"
