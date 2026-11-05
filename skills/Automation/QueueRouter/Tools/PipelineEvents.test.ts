@@ -15,8 +15,8 @@
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { join } from "path";
-import { mkdirSync } from "fs";
+import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
@@ -93,12 +93,12 @@ describe("1. pipeline_events — schema on fresh db", () => {
     expect(names).toEqual(["actor", "from_stage", "id", "item_id", "note", "to_stage", "ts"].sort());
 
     const byName = Object.fromEntries(cols.map((c) => [c.name, c]));
-    expect(byName.item_id.notnull).toBe(1);
-    expect(byName.to_stage.notnull).toBe(1);
-    expect(byName.actor.notnull).toBe(1);
-    expect(byName.ts.notnull).toBe(1);
-    expect(byName.from_stage.notnull).toBe(0);
-    expect(byName.note.notnull).toBe(0);
+    expect(byName?.item_id?.notnull).toBe(1);
+    expect(byName?.to_stage?.notnull).toBe(1);
+    expect(byName?.actor?.notnull).toBe(1);
+    expect(byName?.ts?.notnull).toBe(1);
+    expect(byName?.from_stage?.notnull).toBe(0);
+    expect(byName?.note?.notnull).toBe(0);
 
     pdb.close();
   });
@@ -110,7 +110,9 @@ describe("1. pipeline_events — schema on fresh db", () => {
     expect(indexes.some((i) => i.name === "idx_pipeline_events_ts")).toBe(true);
   });
 
-  afterAll(() => { resetPipelineDb(dbPath); });
+  afterAll(() => {
+    resetPipelineDb(dbPath);
+  });
 });
 
 // ============================================================================
@@ -121,7 +123,9 @@ describe("2-4. pipeline_events — transition() writes", () => {
   const dbPath = join(TEST_BASE, ".kaya", "runtime", "pipeline-events-transition.db");
   const repo = new PipelineRepository(dbPath);
 
-  afterAll(() => { resetPipelineDb(dbPath); });
+  afterAll(() => {
+    resetPipelineDb(dbPath);
+  });
 
   // Slice A2 made upsert() ALSO write an event (a "creation" event, from_stage
   // NULL) for every new item — makeItem()+upsert() below always creates a new
@@ -144,11 +148,11 @@ describe("2-4. pipeline_events — transition() writes", () => {
       .all(item.id) as EventRow[];
 
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBe("intake");
-    expect(rows[0].to_stage).toBe("researching");
-    expect(rows[0].actor).toBe("test-actor");
-    expect(rows[0].note).toBe("unit test");
-    expect(new Date(rows[0].ts).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(rows[0]?.from_stage).toBe("intake");
+    expect(rows[0]?.to_stage).toBe("researching");
+    expect(rows[0]?.actor).toBe("test-actor");
+    expect(rows[0]?.note).toBe("unit test");
+    expect(new Date(rows[0]?.ts ?? Number.NaN).getTime()).toBeGreaterThanOrEqual(before - 1000);
   });
 
   test("actor defaults to 'unknown' and note to null when not provided", () => {
@@ -169,7 +173,9 @@ describe("2-4. pipeline_events — transition() writes", () => {
     expect(() => repo.transition(item.id, "in-progress")).toThrow(/illegal transition "done" → "in-progress"/);
 
     const rawDb = getPipelineDb(dbPath).db;
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id);
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id);
     expect(rows.length).toBe(0);
 
     // Stage must be unchanged too
@@ -195,9 +201,9 @@ describe("2-4. pipeline_events — transition() writes", () => {
     `);
 
     try {
-      expect(() =>
-        repo.transition(item.id, "researching", { actor: "__TEST_FORCE_FAIL__" })
-      ).toThrow(/SIMULATED_FAILURE_FOR_ATOMICITY_TEST/);
+      expect(() => repo.transition(item.id, "researching", { actor: "__TEST_FORCE_FAIL__" })).toThrow(
+        /SIMULATED_FAILURE_FOR_ATOMICITY_TEST/,
+      );
     } finally {
       rawDb.exec("DROP TRIGGER IF EXISTS test_events_fail_trigger");
     }
@@ -208,7 +214,9 @@ describe("2-4. pipeline_events — transition() writes", () => {
     expect(reread?.stage).toBe("intake");
 
     // And no event row should have landed either.
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id);
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id);
     expect(rows.length).toBe(0);
   });
 });
@@ -255,19 +263,25 @@ describe("5. pipeline_events — existing-db upgrade path", () => {
       VALUES ('pre-existing-1', 'intake', 'Pre-existing item', 'Should survive schema upgrade')
     `);
 
-    const tablesBefore = oldDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    const tablesBefore = oldDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{
+      name: string;
+    }>;
     expect(tablesBefore.some((t) => t.name === "pipeline_events")).toBe(false);
     oldDb.close();
 
     // Reopen through the real production code path — initSchema() must add
     // pipeline_events via CREATE TABLE IF NOT EXISTS with zero migration ceremony.
     const pdb = new PipelineDB(dbPath);
-    const tablesAfter = pdb.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    const tablesAfter = pdb.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{
+      name: string;
+    }>;
     expect(tablesAfter.some((t) => t.name === "pipeline_events")).toBe(true);
 
-    const row = pdb.db
-      .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-      .get("pre-existing-1") as { id: string; title: string; description: string } | null;
+    const row = pdb.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get("pre-existing-1") as {
+      id: string;
+      title: string;
+      description: string;
+    } | null;
     expect(row).not.toBeNull();
     expect(row?.title).toBe("Pre-existing item");
     expect(row?.description).toBe("Should survive schema upgrade");

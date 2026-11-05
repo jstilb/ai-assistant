@@ -15,8 +15,8 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -64,9 +64,7 @@ export function defaultPipelineDbPath(): string {
   }
   const envHome = process.env.KAYA_HOME;
   const isRepoRootCollision = envHome !== undefined && envHome === defaultKayaHome();
-  const base = envHome && !isRepoRootCollision
-    ? join(envHome, ".kaya")
-    : join(process.env.HOME || "", ".kaya");
+  const base = envHome && !isRepoRootCollision ? join(envHome, ".kaya") : join(process.env.HOME || "", ".kaya");
   return join(base, "runtime", "pipeline.db");
 }
 
@@ -88,7 +86,7 @@ export function withRetry<T>(fn: () => T, maxRetries = 5): T {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("SQLITE_BUSY")) throw err;
       lastErr = err;
-      Bun.sleepSync(50 * Math.pow(2, i));
+      Bun.sleepSync(50 * 2 ** i);
     }
   }
   throw lastErr;

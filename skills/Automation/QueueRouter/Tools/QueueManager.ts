@@ -36,8 +36,8 @@
  * @module QueueManager
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, unlinkSync } from "fs";
-import { join, basename } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { createStateManager, type StateManager } from "../../../../lib/core/StateManager.ts";
 import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
@@ -53,10 +53,7 @@ import {
   appendQueueItemImpl,
   deriveStage,
 } from "./PipelineFacade.ts";
-import {
-  ALLOWED_TRANSITIONS as CANONICAL_TRANSITIONS,
-  type Stage,
-} from "./PipelineRepository.ts";
+import { ALLOWED_TRANSITIONS as CANONICAL_TRANSITIONS, type Stage } from "./PipelineRepository.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { generateId as generateCoreId } from "../../../../lib/core/GenerateId.ts";
 
@@ -117,11 +114,11 @@ export type QueueItemStatus =
 //   escalated        → escalated           needs-grilling  → needs-grilling
 const SPEC_STATUS_TO_STAGE: Record<string, Stage> = {
   "awaiting-context": "intake",
-  "researching":      "researching",
-  "generating-spec":  "generating-spec",
-  "revision-needed":  "revision-needed",
-  "escalated":        "escalated",
-  "needs-grilling":   "needs-grilling",
+  researching: "researching",
+  "generating-spec": "generating-spec",
+  "revision-needed": "revision-needed",
+  escalated: "escalated",
+  "needs-grilling": "needs-grilling",
 };
 
 /** Stamp written to `_meta.grillStamp` when a grill is finalized via attachContext(). */
@@ -187,11 +184,7 @@ export function hasValidGrillStamp(item: QueueItem): boolean {
  * swept 31 live items into the archive because the old logic blocklisted only
  * the three generic active statuses.
  */
-export const ARCHIVABLE_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
-  "completed",
-  "failed",
-  "rejected",
-]);
+export const ARCHIVABLE_TERMINAL_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "rejected"]);
 
 export type Priority = 1 | 2 | 3;
 
@@ -276,6 +269,8 @@ export interface QueueItem {
   };
 
   result?: {
+    /** Terminal outcome label written by archive paths (e.g. "skipped") */
+    status?: string;
     completedAt?: string;
     approvedAt?: string;
     completedBy?: string;
@@ -454,7 +449,7 @@ export async function releaseLucidTaskBacklinks(items: QueueItem[]): Promise<num
   if (!client) {
     console.warn(
       "[QueueManager] releaseLucidTaskBacklinks skipped (non-fatal) — no TaskClient registered. " +
-      "Import bin/wire-queue-task-integration.ts before calling this function.",
+        "Import bin/wire-queue-task-integration.ts before calling this function.",
     );
     return 0;
   }
@@ -564,11 +559,13 @@ export function loadState(): QueueState {
     // Remove internal version field if present
     const { _version, ...stateData } = parsed;
     const result = QueueStateSchema.safeParse(stateData);
-    return result.success ? result.data : {
-      lastUpdated: new Date().toISOString(),
-      queues: [],
-      stats: { totalItems: 0, totalProcessed: 0 },
-    };
+    return result.success
+      ? result.data
+      : {
+          lastUpdated: new Date().toISOString(),
+          queues: [],
+          stats: { totalItems: 0, totalProcessed: 0 },
+        };
   } catch {
     return {
       lastUpdated: new Date().toISOString(),
@@ -670,12 +667,17 @@ export class QueueManager {
    * Sync a queue item status to LucidTasks, with failure counting and alert file generation.
    * Per Bug NEW-3: After 3 consecutive failures, writes a sync-failure alert file.
    */
-  private async syncToLucid(lucidTaskId: string, status: QueueItemStatus, queueName: string, itemId: string): Promise<void> {
+  private async syncToLucid(
+    lucidTaskId: string,
+    status: QueueItemStatus,
+    queueName: string,
+    itemId: string,
+  ): Promise<void> {
     const sync = this.getLucidSync();
     if (!sync) {
       console.error(
         `[QueueManager] No TaskClient registered — cannot sync item ${itemId} status to LucidTask ${lucidTaskId}. ` +
-        "Import bin/wire-queue-task-integration.ts before calling QueueManager methods that sync to LucidTasks.",
+          "Import bin/wire-queue-task-integration.ts before calling QueueManager methods that sync to LucidTasks.",
       );
       return;
     }
@@ -727,7 +729,7 @@ export class QueueManager {
     try {
       const queuesDir = getQueuesDir();
       if (!existsSync(queuesDir)) return;
-      const files = readdirSync(queuesDir).filter(f => f.startsWith("sync-failure-") && f.endsWith(".json"));
+      const files = readdirSync(queuesDir).filter((f) => f.startsWith("sync-failure-") && f.endsWith(".json"));
       const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
       const archiveDir = join(queuesDir, "archive");
       for (const file of files) {
@@ -756,15 +758,13 @@ export class QueueManager {
    */
   async add(
     payload: { title: string; description: string; context?: Record<string, unknown> },
-    options: AddOptions = {}
+    options: AddOptions = {},
   ): Promise<string> {
     const type = options.type || "task";
     const routing = routeItem(`${type}:${payload.title}`);
 
     // When a spec is provided, route directly to approvals (bypass spec-pipeline)
-    const queueName = options.spec
-      ? (options.queue || "approvals")
-      : (options.queue || routing.queue);
+    const queueName = options.spec ? options.queue || "approvals" : options.queue || routing.queue;
     const priority = options.priority || routing.priority;
 
     // Spec-pipeline delegation: items without a spec go through spec-pipeline first
@@ -782,7 +782,7 @@ export class QueueManager {
     if (queueName === "approvals" && !options.spec) {
       throw new Error(
         `Cannot add item to approvals without a spec. ` +
-        `Items must go through spec-pipeline first, or use --spec to attach an existing spec.`
+          `Items must go through spec-pipeline first, or use --spec to attach an existing spec.`,
       );
     }
 
@@ -810,7 +810,7 @@ export class QueueManager {
     // Idempotency: skip if item with same custom ID already exists and is not terminal
     if (options.id) {
       const existing = loadQueueItems(queueName);
-      const match = existing.find(i => i.id === options.id && i.status !== "completed" && i.status !== "failed");
+      const match = existing.find((i) => i.id === options.id && i.status !== "completed" && i.status !== "failed");
       if (match) {
         return match.id;
       }
@@ -896,8 +896,9 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        const item = items[index];
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        const item = target;
         item.updated = new Date().toISOString();
 
         if (updates.status) {
@@ -940,29 +941,30 @@ export class QueueManager {
     const items = loadQueueItems(item.queue);
     const index = items.findIndex((i) => i.id === id);
 
-    if (index !== -1) {
+    const target = index === -1 ? undefined : items[index];
+    if (target) {
       // Phase verification gate: if progress tracking is initialized,
       // all phases must be completed before marking the item done
-      if (items[index].progress) {
-        const { phasesCompleted, totalPhases } = items[index].progress!;
+      if (target.progress) {
+        const { phasesCompleted, totalPhases } = target.progress!;
         if (phasesCompleted.length < totalPhases) {
           const missing = [];
           for (let p = 1; p <= totalPhases; p++) {
             if (!phasesCompleted.includes(p)) missing.push(p);
           }
           console.error(
-            `[QueueManager] BLOCKED: Cannot complete "${items[index].payload.title}" — ` +
-            `phases [${missing.join(", ")}] of ${totalPhases} not completed. ` +
-            `Use complete-phase to mark them done first.`
+            `[QueueManager] BLOCKED: Cannot complete "${target.payload.title}" — ` +
+              `phases [${missing.join(", ")}] of ${totalPhases} not completed. ` +
+              `Use complete-phase to mark them done first.`,
           );
           return null;
         }
       }
 
-      items[index].status = "completed";
-      items[index].updated = new Date().toISOString();
-      items[index].result = {
-        ...items[index].result,
+      target.status = "completed";
+      target.updated = new Date().toISOString();
+      target.result = {
+        ...target.result,
         completedAt: new Date().toISOString(),
         output: result?.output,
         completedBy: result?.completedBy,
@@ -970,9 +972,9 @@ export class QueueManager {
 
       saveQueueItems(item.queue, items);
 
-      const lucidTaskId = items[index].payload?.context?.lucidTaskId as string | undefined;
+      const lucidTaskId = target.payload?.context?.lucidTaskId as string | undefined;
       if (lucidTaskId) {
-        await this.syncToLucid(lucidTaskId, items[index].status, item.queue, items[index].id);
+        await this.syncToLucid(lucidTaskId, target.status, item.queue, target.id);
       }
 
       // Update state
@@ -981,7 +983,7 @@ export class QueueManager {
       state.stats.lastProcessedAt = new Date().toISOString();
       await saveState(state);
 
-      return items[index];
+      return target;
     }
 
     return null;
@@ -997,11 +999,12 @@ export class QueueManager {
     const items = loadQueueItems(item.queue);
     const index = items.findIndex((i) => i.id === id);
 
-    if (index !== -1) {
-      items[index].status = "failed";
-      items[index].updated = new Date().toISOString();
-      items[index].result = {
-        ...items[index].result,
+    const target = index === -1 ? undefined : items[index];
+    if (target) {
+      target.status = "failed";
+      target.updated = new Date().toISOString();
+      target.result = {
+        ...target.result,
         completedAt: new Date().toISOString(),
         error,
       };
@@ -1014,7 +1017,7 @@ export class QueueManager {
       state.stats.lastProcessedAt = new Date().toISOString();
       await saveState(state);
 
-      return items[index];
+      return target;
     }
 
     return null;
@@ -1042,10 +1045,10 @@ export class QueueManager {
 
     // For items in approvals queue: require approved spec before allowing approval
     if (item.queue === "approvals") {
-      if (!item.spec || item.spec.status !== "approved") {
+      if (item.spec?.status !== "approved") {
         throw new Error(
           `Cannot approve item "${item.payload.title}" — no approved spec. ` +
-          `Use /queue review to create and approve a spec first.`
+            `Use /queue review to create and approve a spec first.`,
         );
       }
     }
@@ -1071,8 +1074,13 @@ export class QueueManager {
     const actor = "QueueManager.approve";
     const note = options?.reviewer ? `approve:${options.reviewer}` : "approve";
 
-    const { stage: _stage, created_at: _createdAt, updated_at: _updatedAt, id: _pid, ...patch } =
-      queueItemToPipelineParams(updatedItem);
+    const {
+      stage: _stage,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      id: _pid,
+      ...patch
+    } = queueItemToPipelineParams(updatedItem);
 
     if (toStage === fromStage) {
       // Same-stage patch (e.g. re-approving an already-"approved" approved-work
@@ -1101,19 +1109,19 @@ export class QueueManager {
     // and never fails the approve operation itself.
     try {
       await memoryStore.capture({
-        type: 'decision',
-        category: 'queue-approval',
+        type: "decision",
+        category: "queue-approval",
         title: `Queue approve: ${item.payload.title || item.id}`,
         content: JSON.stringify({
           itemId: item.id,
           queue: item.queue,
-          action: 'approve',
+          action: "approve",
           reason: options?.notes,
           reviewer: options?.reviewer,
         }),
-        tags: ['queuerouter', 'approve', item.queue],
-        tier: 'warm',
-        source: 'QueueRouter/QueueManager',
+        tags: ["queuerouter", "approve", item.queue],
+        tier: "warm",
+        source: "QueueRouter/QueueManager",
       });
     } catch (err) {
       recordFailure({ source: "QueueManager.approve", error: err, context: { itemId: id }, tier: "log" });
@@ -1173,8 +1181,13 @@ export class QueueManager {
     const actor = "QueueManager.reject";
     const note = options?.reason ?? (options?.reviewer ? `reject:${options.reviewer}` : "reject");
 
-    const { stage: _stage, created_at: _createdAt, updated_at: _updatedAt, id: _pid, ...patch } =
-      queueItemToPipelineParams(updatedItem);
+    const {
+      stage: _stage,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      id: _pid,
+      ...patch
+    } = queueItemToPipelineParams(updatedItem);
 
     // mergeMetadata: true — patch.metadata comes from queueItemToPipelineParams,
     // a fixed-partial-key-set codec; merging preserves foreign metadata another
@@ -1189,19 +1202,19 @@ export class QueueManager {
     // and never fails the reject operation itself.
     try {
       await memoryStore.capture({
-        type: 'decision',
-        category: 'queue-rejection',
+        type: "decision",
+        category: "queue-rejection",
         title: `Queue reject: ${item.payload.title || item.id}`,
         content: JSON.stringify({
           itemId: item.id,
           queue: item.queue,
-          action: 'reject',
+          action: "reject",
           reason: options?.reason,
           reviewer: options?.reviewer,
         }),
-        tags: ['queuerouter', 'reject', item.queue],
-        tier: 'warm',
-        source: 'QueueRouter/QueueManager',
+        tags: ["queuerouter", "reject", item.queue],
+        tier: "warm",
+        source: "QueueRouter/QueueManager",
       });
     } catch (err) {
       recordFailure({ source: "QueueManager.reject", error: err, context: { itemId: id }, tier: "log" });
@@ -1402,13 +1415,13 @@ export class QueueManager {
   async addApprovedWork(
     payload: { title: string; description: string; context?: Record<string, unknown> },
     spec: QueueItemSpec,
-    options: Omit<AddOptions, "queue"> = {}
+    options: Omit<AddOptions, "queue"> = {},
   ): Promise<string> {
     // Validate spec has required fields
     if (!spec.id || !spec.path || spec.status !== "approved") {
       throw new Error(
         "Invalid spec: must have id, path, and status='approved'. " +
-        "Use WorkPromoter.promoteToApprovedWork() for the standard workflow."
+          "Use WorkPromoter.promoteToApprovedWork() for the standard workflow.",
       );
     }
 
@@ -1458,11 +1471,12 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        items[index].spec = spec;
-        items[index].updated = new Date().toISOString();
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        target.spec = spec;
+        target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
-        return items[index];
+        return target;
       }
     }
 
@@ -1486,17 +1500,18 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        items[index].progress = {
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        target.progress = {
           currentPhase: 1,
           totalPhases,
           phasesCompleted: [],
           iscStatus: {},
           lastUpdated: new Date().toISOString(),
         };
-        items[index].updated = new Date().toISOString();
+        target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
-        return items[index];
+        return target;
       }
     }
 
@@ -1516,19 +1531,20 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        if (!items[index].progress) {
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        if (!target.progress) {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
-        if (phase < 1 || phase > items[index].progress!.totalPhases) {
-          throw new Error(`Phase ${phase} out of range (1-${items[index].progress!.totalPhases})`);
+        if (phase < 1 || phase > target.progress!.totalPhases) {
+          throw new Error(`Phase ${phase} out of range (1-${target.progress!.totalPhases})`);
         }
 
-        items[index].progress!.currentPhase = phase;
-        items[index].progress!.lastUpdated = new Date().toISOString();
-        items[index].updated = new Date().toISOString();
+        target.progress!.currentPhase = phase;
+        target.progress!.lastUpdated = new Date().toISOString();
+        target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
-        return items[index];
+        return target;
       }
     }
 
@@ -1548,15 +1564,16 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        if (!items[index].progress) {
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        if (!target.progress) {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
-        if (phase < 1 || phase > items[index].progress!.totalPhases) {
-          throw new Error(`Phase ${phase} out of range (1-${items[index].progress!.totalPhases})`);
+        if (phase < 1 || phase > target.progress!.totalPhases) {
+          throw new Error(`Phase ${phase} out of range (1-${target.progress!.totalPhases})`);
         }
 
-        const progress = items[index].progress!;
+        const progress = target.progress!;
         if (!progress.phasesCompleted.includes(phase)) {
           progress.phasesCompleted.push(phase);
           progress.phasesCompleted.sort((a, b) => a - b);
@@ -1568,9 +1585,9 @@ export class QueueManager {
         }
 
         progress.lastUpdated = new Date().toISOString();
-        items[index].updated = new Date().toISOString();
+        target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
-        return items[index];
+        return target;
       }
     }
 
@@ -1585,12 +1602,7 @@ export class QueueManager {
    * @param completed - Whether the criterion is completed
    * @param evidence - REQUIRED evidence of completion (PR link, test output, etc.)
    */
-  async updateISC(
-    id: string,
-    criterion: string,
-    completed: boolean,
-    evidence: string
-  ): Promise<QueueItem | null> {
+  async updateISC(id: string, criterion: string, completed: boolean, evidence: string): Promise<QueueItem | null> {
     // Evidence is required for marking complete
     if (completed && (!evidence || evidence.trim() === "")) {
       throw new Error("Evidence is REQUIRED when marking an ISC criterion as completed");
@@ -1602,12 +1614,13 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        if (!items[index].progress) {
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        if (!target.progress) {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
 
-        const progress = items[index].progress!;
+        const progress = target.progress!;
         progress.iscStatus[criterion] = {
           completed,
           completedAt: completed ? new Date().toISOString() : undefined,
@@ -1615,9 +1628,9 @@ export class QueueManager {
         };
 
         progress.lastUpdated = new Date().toISOString();
-        items[index].updated = new Date().toISOString();
+        target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
-        return items[index];
+        return target;
       }
     }
 
@@ -1741,8 +1754,13 @@ export class QueueManager {
     const toStage = deriveStage(updatedItem.status, updatedItem.queue);
     const actor = "QueueManager.transfer";
 
-    const { stage: _stage, created_at: _createdAt, updated_at: _updatedAt, id: _pid, ...patch } =
-      queueItemToPipelineParams(updatedItem);
+    const {
+      stage: _stage,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      id: _pid,
+      ...patch
+    } = queueItemToPipelineParams(updatedItem);
 
     // Uniform upsert — never transition(). Same-stage moves hit upsert()'s
     // same-stage patch rule (no event); cross-stage moves hit upsert()'s
@@ -1763,13 +1781,22 @@ export class QueueManager {
 
     // Emit trace on transfer — never silent: a capture failure is recorded to
     // the central failure log (tier "log") rather than swallowed outright.
-    memoryStore.capture({
-      source: "QueueRouter/QueueManager",
-      type: "decision",
-      title: `Queue transfer: ${updatedItem.payload.title || id}`,
-      content: JSON.stringify({ itemId: id, from: sourceQueue, to: options.targetQueue, status: updatedItem.status }),
-      tags: ["queuerouter", "transfer", sourceQueue, options.targetQueue],
-    }).catch((err) => recordFailure({ source: "QueueManager.transfer", error: err, context: { itemId: id, sourceQueue, targetQueue: options.targetQueue }, tier: "log" }));
+    memoryStore
+      .capture({
+        source: "QueueRouter/QueueManager",
+        type: "decision",
+        title: `Queue transfer: ${updatedItem.payload.title || id}`,
+        content: JSON.stringify({ itemId: id, from: sourceQueue, to: options.targetQueue, status: updatedItem.status }),
+        tags: ["queuerouter", "transfer", sourceQueue, options.targetQueue],
+      })
+      .catch((err) =>
+        recordFailure({
+          source: "QueueManager.transfer",
+          error: err,
+          context: { itemId: id, sourceQueue, targetQueue: options.targetQueue },
+          tier: "log",
+        }),
+      );
 
     // Update state if target queue is new
     const state = loadState();
@@ -1835,7 +1862,7 @@ export class QueueManager {
     // Search all queues for the item
     for (const queueName of discoverQueues()) {
       const items = loadQueueItems(queueName);
-      const item = items.find(i => i.id === id);
+      const item = items.find((i) => i.id === id);
       if (item) {
         // Only boost (lower number = higher priority)
         if (newPriority < item.priority) {
@@ -1863,7 +1890,7 @@ export class QueueManager {
    */
   async addSpecPipelineItem(
     payload: { title: string; description: string; context?: Record<string, unknown> },
-    options: Omit<AddOptions, "queue"> = {}
+    options: Omit<AddOptions, "queue"> = {},
   ): Promise<string> {
     // Dedup: exact-title match against spec-pipeline, approvals, and approved-work.
     // Fuzzy word-overlap matching was removed (Slice 1b): "are these the same task?"
@@ -1893,7 +1920,7 @@ export class QueueManager {
 
     if (duplicate) {
       console.log(
-        `[spec-pipeline] Dedup: exact-title match — "${payload.title}" matches existing ${duplicate.id} in ${duplicate.queue || "spec-pipeline"} (status: ${duplicate.status})`
+        `[spec-pipeline] Dedup: exact-title match — "${payload.title}" matches existing ${duplicate.id} in ${duplicate.queue || "spec-pipeline"} (status: ${duplicate.status})`,
       );
       return duplicate.id;
     }
@@ -1942,17 +1969,20 @@ export class QueueManager {
 
     if (shouldAdvance) {
       const notes = typeof ctx.notes === "string" ? ctx.notes : payload.description;
-      const guidance = typeof ctx.researchGuidance === "string"
-        ? ctx.researchGuidance
-        : `Verdict: clear — ready for research`;
+      const guidance =
+        typeof ctx.researchGuidance === "string" ? ctx.researchGuidance : `Verdict: clear — ready for research`;
       try {
         await this.attachContext(item.id, notes, guidance, undefined, { autoRouted: true });
-        console.log(`[spec-pipeline] Advanced ${item.id} to researching (verdict: ${options.verdict ?? "explicit-context"})`);
+        console.log(
+          `[spec-pipeline] Advanced ${item.id} to researching (verdict: ${options.verdict ?? "explicit-context"})`,
+        );
       } catch (err) {
         console.error(`[spec-pipeline] Auto-advance failed for ${item.id}:`, err);
       }
     } else {
-      console.log(`[spec-pipeline] ${item.id} held at awaiting-context (verdict: ${options.verdict ?? "absent"} — no auto-advance)`);
+      console.log(
+        `[spec-pipeline] ${item.id} held at awaiting-context (verdict: ${options.verdict ?? "absent"} — no auto-advance)`,
+      );
     }
 
     return item.id;
@@ -1973,16 +2003,16 @@ export class QueueManager {
     id: string,
     newStatus: string,
     contextUpdates?: Record<string, unknown>,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ): Promise<QueueItem | null> {
     const items = loadQueueItems("spec-pipeline");
     const index = items.findIndex((i) => i.id === id);
 
-    if (index === -1) {
+    const item = index === -1 ? undefined : items[index];
+    if (!item) {
       return null;
     }
 
-    const item = items[index];
     const fromStatus = item.status;
 
     // A target that isn't a recognised spec-pipeline status is never a valid
@@ -1995,8 +2025,7 @@ export class QueueManager {
     const toStage = SPEC_STATUS_TO_STAGE[newStatus];
     if (toStage === undefined) {
       throw new Error(
-        `Invalid spec-pipeline transition: "${fromStatus}" → "${newStatus}" ` +
-        `(not a spec-pipeline status)`
+        `Invalid spec-pipeline transition: "${fromStatus}" → "${newStatus}" ` + `(not a spec-pipeline status)`,
       );
     }
 
@@ -2031,8 +2060,13 @@ export class QueueManager {
     // "dependencies" is included in the patch — PipelineRepository.transition()'s
     // blobFields set now covers it (slice A4), so it round-trips as JSON like the
     // other blob fields instead of crashing bun:sqlite's binder.
-    const { stage: _stage, created_at: _createdAt, updated_at: _updatedAt, id: _pid, ...patch } =
-      queueItemToPipelineParams(item);
+    const {
+      stage: _stage,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      id: _pid,
+      ...patch
+    } = queueItemToPipelineParams(item);
     try {
       // mergeMetadata: true — patch.metadata comes from queueItemToPipelineParams,
       // a fixed-partial-key-set codec; merging preserves foreign metadata another
@@ -2050,7 +2084,7 @@ export class QueueManager {
         const canonicalAllowed = fromStage ? CANONICAL_TRANSITIONS[fromStage] : undefined;
         throw new Error(
           `Invalid spec-pipeline transition: "${fromStatus}" → "${newStatus}". ` +
-          `Allowed from "${fromStage}": [${canonicalAllowed?.join(", ") || "none (terminal)"}]`
+            `Allowed from "${fromStage}": [${canonicalAllowed?.join(", ") || "none (terminal)"}]`,
         );
       }
       throw err;
@@ -2081,7 +2115,7 @@ export class QueueManager {
     notes: string,
     researchGuidance: string,
     scopeHints?: string,
-    options?: AttachContextOptions
+    options?: AttachContextOptions,
   ): Promise<QueueItem | null> {
     const contextUpdates: Record<string, unknown> = {
       notes,
@@ -2139,7 +2173,7 @@ export class QueueManager {
       id,
       "researching",
       contextUpdates,
-      Object.keys(metadata).length > 0 ? metadata : undefined
+      Object.keys(metadata).length > 0 ? metadata : undefined,
     );
   }
 
@@ -2153,11 +2187,7 @@ export class QueueManager {
    * @param reviewer - Optional reviewer name
    * @returns The transferred item or null if not found
    */
-  async rejectToSpecPipeline(
-    id: string,
-    reason: string,
-    reviewer?: string
-  ): Promise<QueueItem | null> {
+  async rejectToSpecPipeline(id: string, reason: string, reviewer?: string): Promise<QueueItem | null> {
     const item = await this.get(id);
     if (!item) return null;
 
@@ -2168,7 +2198,7 @@ export class QueueManager {
     if (index === -1) return null;
 
     // Get existing revisionCount from context._meta
-    const existingMeta = (items[index].payload.context?._meta as Record<string, unknown>) || {};
+    const existingMeta = (items[index]?.payload.context?._meta as Record<string, unknown>) || {};
     const currentRevisionCount = (existingMeta.revisionCount as number) || 0;
     const newRevisionCount = currentRevisionCount + 1;
 
@@ -2211,23 +2241,27 @@ export class QueueManager {
     saveQueueItems(item.queue, items);
 
     // Capture rejection-to-pipeline decision to memory
-    memoryStore.capture({
-      type: 'decision',
-      category: 'queue-rejection-to-pipeline',
-      title: `Queue reject-to-pipeline: ${item.payload.title || item.id}`,
-      content: JSON.stringify({
-        itemId: item.id,
-        queue: item.queue,
-        action: 'reject-to-pipeline',
-        reason,
-        reviewer,
-        revisionCount: newRevisionCount,
-        isEscalated,
-      }),
-      tags: ['queuerouter', 'reject-to-pipeline', item.queue],
-      tier: 'warm',
-      source: 'QueueRouter/QueueManager',
-    }).catch(() => {});
+    memoryStore
+      .capture({
+        type: "decision",
+        category: "queue-rejection-to-pipeline",
+        title: `Queue reject-to-pipeline: ${item.payload.title || item.id}`,
+        content: JSON.stringify({
+          itemId: item.id,
+          queue: item.queue,
+          action: "reject-to-pipeline",
+          reason,
+          reviewer,
+          revisionCount: newRevisionCount,
+          isEscalated,
+        }),
+        tags: ["queuerouter", "reject-to-pipeline", item.queue],
+        tier: "warm",
+        source: "QueueRouter/QueueManager",
+      })
+      .catch((err) => {
+        recordFailure({ source: "QueueManager.rejectToSpecPipeline.memoryCapture", error: err, tier: "log" });
+      });
 
     const state = loadState();
     if (!state.queues.includes("spec-pipeline")) {
@@ -2251,11 +2285,7 @@ export class QueueManager {
    * @param reviewer - Optional reviewer name
    * @returns The transferred item or null if not found
    */
-  async rejectToGrill(
-    id: string,
-    feedback: string,
-    reviewer?: string
-  ): Promise<QueueItem | null> {
+  async rejectToGrill(id: string, feedback: string, reviewer?: string): Promise<QueueItem | null> {
     const item = await this.get(id);
     if (!item) return null;
 
@@ -2266,7 +2296,7 @@ export class QueueManager {
     // Intent changed — any prior grill is stale, so drop its stamp: the item
     // must be re-grillable (and re-parkable) with the new intent.
     const { grillStamp: _staleGrillStamp, ...existingMeta } =
-      (items[index].payload.context?._meta as Record<string, unknown>) || {};
+      (items[index]?.payload.context?._meta as Record<string, unknown>) || {};
 
     const grillBrief = {
       missing: [feedback],
@@ -2305,21 +2335,25 @@ export class QueueManager {
     saveQueueItems(item.queue, items);
 
     // Capture intent-change rejection to memory
-    memoryStore.capture({
-      type: 'decision',
-      category: 'queue-rejection-to-grill',
-      title: `Queue reject-to-grill: ${item.payload.title || item.id}`,
-      content: JSON.stringify({
-        itemId: item.id,
-        queue: item.queue,
-        action: 'reject-to-grill',
-        feedback,
-        reviewer,
-      }),
-      tags: ['queuerouter', 'reject-to-grill', item.queue],
-      tier: 'warm',
-      source: 'QueueRouter/QueueManager',
-    }).catch(() => {});
+    memoryStore
+      .capture({
+        type: "decision",
+        category: "queue-rejection-to-grill",
+        title: `Queue reject-to-grill: ${item.payload.title || item.id}`,
+        content: JSON.stringify({
+          itemId: item.id,
+          queue: item.queue,
+          action: "reject-to-grill",
+          feedback,
+          reviewer,
+        }),
+        tags: ["queuerouter", "reject-to-grill", item.queue],
+        tier: "warm",
+        source: "QueueRouter/QueueManager",
+      })
+      .catch((err) => {
+        recordFailure({ source: "QueueManager.rejectToGrill.memoryCapture", error: err, tier: "log" });
+      });
 
     const state = loadState();
     if (!state.queues.includes("spec-pipeline")) {
@@ -2347,8 +2381,9 @@ export class QueueManager {
       const items = loadQueueItems(queueName);
       const index = items.findIndex((i) => i.id === id);
 
-      if (index !== -1) {
-        const item = items[index];
+      const target = index === -1 ? undefined : items[index];
+      if (target) {
+        const item = target;
 
         if (!item.spec) {
           throw new Error(`Item "${item.payload.title}" has no spec attached.`);
@@ -2413,7 +2448,7 @@ export class QueueManager {
       verdict?: string;
       reasoning?: string;
     },
-    opts?: { force?: boolean }
+    opts?: { force?: boolean },
   ): Promise<QueueItem | null> {
     if (!opts?.force) {
       const item = await this.get(id);
@@ -2422,7 +2457,7 @@ export class QueueManager {
         const stamp = meta.grillStamp as GrillStamp;
         throw new Error(
           `parkForGrill refused: item ${id} has a valid grill stamp (grilled ${stamp.at}) — ` +
-            `its grill answers are intact and it must not be re-parked. Pass {force:true} to override.`
+            `its grill answers are intact and it must not be re-parked. Pass {force:true} to override.`,
         );
       }
     }
@@ -2439,9 +2474,7 @@ export class QueueManager {
    * @returns Sorted array of parked items
    */
   listParkedForGrill(): QueueItem[] {
-    const items = loadQueueItems("spec-pipeline").filter(
-      (i) => i.status === "needs-grilling"
-    );
+    const items = loadQueueItems("spec-pipeline").filter((i) => i.status === "needs-grilling");
     items.sort((a, b) => {
       if (a.priority !== b.priority) {
         return a.priority - b.priority;
@@ -2518,6 +2551,7 @@ export class QueueManager {
       if (index === -1) continue;
 
       const item = items[index];
+      if (!item) continue;
 
       // Gate 1: approved-work items may already be executing — never archive them here.
       if (queueName === "approved-work") {
@@ -2554,8 +2588,9 @@ export class QueueManager {
       }
 
       // Stamp archival metadata onto the item before archiving.
-      const itemToArchive: QueueItem & { archiveReason?: string; archivedAt?: string } =
-        JSON.parse(JSON.stringify(item));
+      const itemToArchive: QueueItem & { archiveReason?: string; archivedAt?: string } = JSON.parse(
+        JSON.stringify(item),
+      );
       itemToArchive.archiveReason = reason;
       itemToArchive.archivedAt = new Date().toISOString();
       itemToArchive.updated = new Date().toISOString();

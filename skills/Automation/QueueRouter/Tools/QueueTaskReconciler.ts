@@ -22,8 +22,8 @@
  * @module QueueTaskReconciler
  */
 
-import { join } from "path";
-import { existsSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { loadQueueItems, QueueManager, type QueueItem } from "./QueueManager.ts";
 import { getTaskClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -52,13 +52,7 @@ const LINKABLE_QUEUES = ["spec-pipeline", "approvals", "approved-work"] as const
  * already have run, and re-triaging the task would redo it. Mirrors the
  * non-pre-execution set in QueueManager.archiveItemById.
  */
-const POST_EXECUTION_STATUSES = new Set([
-  "in_progress",
-  "completed",
-  "failed",
-  "rejected",
-  "approved",
-]);
+const POST_EXECUTION_STATUSES = new Set(["in_progress", "completed", "failed", "rejected", "approved"]);
 
 // ============================================================================
 // Types
@@ -123,10 +117,7 @@ export interface ActiveTask {
 }
 
 /** Where a task's linked queue item was found (or not). */
-export type ItemLocation =
-  | { found: "live" }
-  | { found: "archived"; status: string }
-  | { found: "missing" };
+export type ItemLocation = { found: "live" } | { found: "archived"; status: string } | { found: "missing" };
 
 /** Injectable deps — used in tests to avoid real subprocess spawning. */
 export interface ReconcileDeps {
@@ -160,9 +151,7 @@ export interface ReconcileDeps {
  *
  * Pure function — no I/O, fully unit-testable.
  */
-export function decideOrphanLinkAction(
-  loc: ItemLocation
-): "leave" | "clear" | "attention" {
+export function decideOrphanLinkAction(loc: ItemLocation): "leave" | "clear" | "attention" {
   if (loc.found === "live") return "leave";
   if (loc.found === "missing") return "clear";
   return POST_EXECUTION_STATUSES.has(loc.status) ? "attention" : "clear";
@@ -182,7 +171,7 @@ export async function fetchClosedTasksFromCLI(): Promise<ClosedTask[]> {
   if (!client) {
     console.error(
       "[QueueTaskReconciler] No TaskClient registered — cannot fetch closed tasks from " +
-      "LucidTasks. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.",
+        "LucidTasks. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.",
     );
     throw new Error("QueueTaskReconciler: TaskClient not registered — cannot fetch closed tasks");
   }
@@ -210,7 +199,7 @@ async function fetchActiveTasksFromCLI(): Promise<ActiveTask[]> {
   if (!client) {
     console.error(
       "[QueueTaskReconciler] No TaskClient registered — cannot fetch active tasks from " +
-      "LucidTasks. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.",
+        "LucidTasks. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.",
     );
     throw new Error("QueueTaskReconciler: TaskClient not registered — cannot fetch active tasks");
   }
@@ -238,7 +227,7 @@ async function clearTaskLinkViaCLI(taskId: string): Promise<boolean> {
   if (!client) {
     console.error(
       "[QueueTaskReconciler] No TaskClient registered — cannot clear queue_item_id link " +
-      `for task ${taskId}. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.`,
+        `for task ${taskId}. Import bin/wire-queue-task-integration.ts before calling reconcileQueueWithLucidTasks.`,
     );
     return false;
   }
@@ -401,7 +390,7 @@ async function reconcileOrphanedLinks(
     activeTasks = await ctx.fetchActive();
   } catch (err) {
     console.warn(
-      `[reconcile] orphaned-link pass skipped — could not list active tasks: ${err instanceof Error ? err.message : String(err)}`
+      `[reconcile] orphaned-link pass skipped — could not list active tasks: ${err instanceof Error ? err.message : String(err)}`,
     );
     return;
   }
@@ -440,9 +429,7 @@ async function reconcileOrphanedLinks(
     }
 
     // action === "clear"
-    const locationLabel = loc.found === "archived"
-      ? `archived (${(loc as { status: string }).status})`
-      : "missing";
+    const locationLabel = loc.found === "archived" ? `archived (${(loc as { status: string }).status})` : "missing";
 
     if (ctx.dryRun) {
       report.clearedLinks.push({
@@ -530,8 +517,10 @@ if (import.meta.main) {
     }
 
     if (
-      report.archived.length === 0 && report.skipped.length === 0 &&
-      report.clearedLinks.length === 0 && report.attention.length === 0
+      report.archived.length === 0 &&
+      report.skipped.length === 0 &&
+      report.clearedLinks.length === 0 &&
+      report.attention.length === 0
     ) {
       console.log("\nNo orphaned items found — queues are consistent with LucidTasks.");
     }

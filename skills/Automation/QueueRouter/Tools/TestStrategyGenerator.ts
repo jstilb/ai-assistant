@@ -93,9 +93,9 @@ export async function generateTestStrategy(
   specContent: string,
   title: string,
   specPath: string,
-  opts?: ComprehendSpecOpts
+  opts?: ComprehendSpecOpts,
 ): Promise<string | null> {
-  let comprehended;
+  let comprehended: Awaited<ReturnType<typeof comprehendSpec>>;
   try {
     comprehended = await comprehendSpec(specContent, opts);
   } catch {
@@ -121,51 +121,66 @@ export async function generateTestStrategy(
   }
 
   // Build ISC classification table
-  const classTable = classified.map((row) => {
-    const desc = row.description.length > 60
-      ? row.description.slice(0, 57) + "..."
-      : row.description;
-    const isSmoke = row.priority === "smoke" ? "yes" : "no";
-    const artifact = row.testLevel === "unit" ? "*.test.ts"
-      : row.testLevel === "integration" ? "*.integration.test.ts"
-      : row.testLevel === "e2e" ? "*.e2e.test.ts"
-      : "manual checklist";
-    return `| ${row.number} | ${desc} | ${row.testLevel} | ${isSmoke} | ${artifact} |`;
-  }).join("\n");
+  const classTable = classified
+    .map((row) => {
+      const desc = row.description.length > 60 ? row.description.slice(0, 57) + "..." : row.description;
+      const isSmoke = row.priority === "smoke" ? "yes" : "no";
+      const artifact =
+        row.testLevel === "unit"
+          ? "*.test.ts"
+          : row.testLevel === "integration"
+            ? "*.integration.test.ts"
+            : row.testLevel === "e2e"
+              ? "*.e2e.test.ts"
+              : "manual checklist";
+      return `| ${row.number} | ${desc} | ${row.testLevel} | ${isSmoke} | ${artifact} |`;
+    })
+    .join("\n");
 
   // Build smoke subset
   const smokeRows = classified.filter((r) => r.priority === "smoke");
-  const smokeList = smokeRows.length > 0
-    ? smokeRows.map((r, i) => {
-        const cmd = r.embeddedCommand || r.verifyMethod || "manual verification";
-        return `${i + 1}. ISC #${r.number}: ${r.description} → \`${cmd}\``;
-      }).join("\n")
-    : "*No smoke rows designated in spec — consider marking 2-4 critical-path rows as smoke.*";
+  const smokeList =
+    smokeRows.length > 0
+      ? smokeRows
+          .map((r, i) => {
+            const cmd = r.embeddedCommand || r.verifyMethod || "manual verification";
+            return `${i + 1}. ISC #${r.number}: ${r.description} → \`${cmd}\``;
+          })
+          .join("\n")
+      : "*No smoke rows designated in spec — consider marking 2-4 critical-path rows as smoke.*";
 
   // Build regression baseline
   const regressionRows = classified.filter((r) =>
-    /existing\s+\w+\s+continues|no regression|backward compat/i.test(r.description)
+    /existing\s+\w+\s+continues|no regression|backward compat/i.test(r.description),
   );
-  const regressionTable = regressionRows.length > 0
-    ? regressionRows.map((r) => {
-        const cmd = r.embeddedCommand || r.verifyMethod || "manual check";
-        return `| ${r.description} | ${r.testLevel} test | \`${cmd}\` |`;
-      }).join("\n")
-    : "| N/A — no regression criteria identified | — | — |";
+  const regressionTable =
+    regressionRows.length > 0
+      ? regressionRows
+          .map((r) => {
+            const cmd = r.embeddedCommand || r.verifyMethod || "manual check";
+            return `| ${r.description} | ${r.testLevel} test | \`${cmd}\` |`;
+          })
+          .join("\n")
+      : "| N/A — no regression criteria identified | — | — |";
 
   // Build non-functional section
   const nfRows = classified.filter((r) =>
-    /performance|latency|throughput|security|xss|injection|auth|accessibility|a11y|wcag/i.test(r.description)
+    /performance|latency|throughput|security|xss|injection|auth|accessibility|a11y|wcag/i.test(r.description),
   );
-  const nfTable = nfRows.length > 0
-    ? nfRows.map((r) => {
-        const cat = /performance|latency|throughput/i.test(r.description) ? "Performance"
-          : /security|xss|injection|auth/i.test(r.description) ? "Security"
-          : "Accessibility";
-        const method = r.embeddedCommand || r.verifyMethod || "manual review";
-        return `| ${cat} | ${r.number} | ${r.description} | \`${method}\` |`;
-      }).join("\n")
-    : "*(No non-functional ISC rows detected)*";
+  const nfTable =
+    nfRows.length > 0
+      ? nfRows
+          .map((r) => {
+            const cat = /performance|latency|throughput/i.test(r.description)
+              ? "Performance"
+              : /security|xss|injection|auth/i.test(r.description)
+                ? "Security"
+                : "Accessibility";
+            const method = r.embeddedCommand || r.verifyMethod || "manual review";
+            return `| ${cat} | ${r.number} | ${r.description} | \`${method}\` |`;
+          })
+          .join("\n")
+      : "*(No non-functional ISC rows detected)*";
 
   const now = new Date().toISOString().split("T")[0];
 

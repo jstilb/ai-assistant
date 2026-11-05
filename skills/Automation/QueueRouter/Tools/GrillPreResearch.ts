@@ -45,8 +45,8 @@
  * @module GrillPreResearch
  */
 
-import { join } from "path";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { z } from "zod";
 import {
   spawnAgentSync,
@@ -105,7 +105,7 @@ const PreResearchVerdictSchema = z.object({
       question: z.string(),
       answer: z.string(),
       evidence: z.string(),
-    })
+    }),
   ),
   remainingQuestions: z.array(z.string()),
   newQuestionsForJm: z.array(z.string()).optional(),
@@ -268,7 +268,7 @@ function writeArtifact(itemId: string, content: string): string {
 export async function runGrillPreResearch(
   itemId: string,
   opts: { dryRun?: boolean } = {},
-  deps: GrillPreResearchDeps = {}
+  deps: GrillPreResearchDeps = {},
 ): Promise<GrillPreResearchOutcome> {
   const item = loadQueueItems("spec-pipeline").find((i) => i.id === itemId);
 
@@ -312,7 +312,7 @@ export async function runGrillPreResearch(
       cwd: getKayaHome(),
       timeoutMs: PRE_RESEARCH_TIMEOUT_MS,
     },
-    deps
+    deps,
   );
 
   if (res.infraUnavailable) {

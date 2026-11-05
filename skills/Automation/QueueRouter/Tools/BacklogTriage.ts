@@ -32,8 +32,8 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -50,7 +50,7 @@ import { defaultPipelineDbPath } from "./PipelineDB.ts";
  * KAYA_HOME/skills/Productivity/LucidTasks/Data/lucidtasks.db. Resolved at
  * call time, not module load, so tests that repoint KAYA_HOME still work.
  */
-export function defaultLucidDbPath(): string {
+function defaultLucidDbPath(): string {
   const kayaHome = getKayaHome();
   return join(kayaHome, "skills/Productivity/LucidTasks/Data/lucidtasks.db");
 }
@@ -60,7 +60,7 @@ function getKayaHomeForOutput(): string {
 }
 
 /** Default report output directory: <KAYA_HOME>/MEMORY/WORK */
-export function defaultReportDir(): string {
+function defaultReportDir(): string {
   return join(getKayaHomeForOutput(), "MEMORY/WORK");
 }
 
@@ -90,13 +90,8 @@ export interface TriageCandidate {
   stampReasoning: string | null;
 }
 
-export const TriageVerdictEnum = z.enum([
-  "kill",
-  "merge-duplicate",
-  "downgrade-to-executor",
-  "keep-for-grill",
-]);
-export type TriageVerdict = z.infer<typeof TriageVerdictEnum>;
+const TriageVerdictEnum = z.enum(["kill", "merge-duplicate", "downgrade-to-executor", "keep-for-grill"]);
+type TriageVerdict = z.infer<typeof TriageVerdictEnum>;
 
 export const TriageProposalSchema = z
   .object({
@@ -118,7 +113,7 @@ export const TriageProposalSchema = z
       .transform((v) => v ?? undefined),
   })
   .superRefine((val, ctx) => {
-    if (val.verdict === "merge-duplicate" && !(val.survivor_id && val.survivor_id.trim())) {
+    if (val.verdict === "merge-duplicate" && !val.survivor_id?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["survivor_id"],
@@ -146,9 +141,7 @@ export function computeAgeDays(createdAt: string, now: Date = new Date()): numbe
 /** Cap candidates to the oldest `limit` (by createdAt ascending). Undefined limit = no cap. */
 export function capCandidates(candidates: TriageCandidate[], limit?: number): TriageCandidate[] {
   if (typeof limit !== "number") return candidates;
-  const sorted = [...candidates].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  const sorted = [...candidates].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   return sorted.slice(0, Math.max(0, limit));
 }
 
@@ -220,7 +213,7 @@ export function loadNeedsGrillingItems(pipelineDbPath: string): PipelineItemRow[
         `SELECT id, title, description, created_at, lucid_task_id
          FROM pipeline_items
          WHERE stage = 'needs-grilling'
-         ORDER BY created_at ASC`
+         ORDER BY created_at ASC`,
       )
       .all() as PipelineItemRow[];
   } finally {
@@ -268,9 +261,7 @@ function truncateSnippet(text: string, max = 240): string {
  * can see a database no TaskDB has opened since, so fall back to the old name.
  */
 function taskEventsTable(db: Database): "task_events" | "activity_log" {
-  const row = db
-    .query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_events'`)
-    .get();
+  const row = db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_events'`).get();
   return row ? "task_events" : "activity_log";
 }
 
@@ -280,14 +271,15 @@ function taskEventsTable(db: Database): "task_events" | "activity_log" {
  * Returns null if the task doesn't exist in this db.
  */
 function queryTaskEvidence(db: Database, taskId: string): LinkedTaskEvidence | null {
-  const task = db
-    .query(`SELECT status, disposition FROM tasks WHERE id = ?`)
-    .get(taskId) as { status: string; disposition: string | null } | null;
+  const task = db.query(`SELECT status, disposition FROM tasks WHERE id = ?`).get(taskId) as {
+    status: string;
+    disposition: string | null;
+  } | null;
   if (!task) return null;
 
   const comments = db
     .query(
-      `SELECT actor, changes FROM ${taskEventsTable(db)} WHERE task_id = ? AND action = 'comment' ORDER BY created_at ASC`
+      `SELECT actor, changes FROM ${taskEventsTable(db)} WHERE task_id = ? AND action = 'comment' ORDER BY created_at ASC`,
     )
     .all(taskId) as { actor: string; changes: string }[];
 
@@ -366,7 +358,7 @@ function parseTriageStamp(raw: string): { verdict: string; confidence: number; r
 export function buildCandidates(
   pipelineDbPath: string,
   lucidDbPath: string,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): TriageCandidate[] {
   const pipelineRows = loadNeedsGrillingItems(pipelineDbPath);
   const stampedRows = loadStampedInvisibleTasks(lucidDbPath);
@@ -376,8 +368,7 @@ export function buildCandidates(
     const candidates: TriageCandidate[] = [];
 
     for (const row of pipelineRows) {
-      const evidence =
-        row.lucid_task_id && lucidDb ? queryTaskEvidence(lucidDb, row.lucid_task_id) : null;
+      const evidence = row.lucid_task_id && lucidDb ? queryTaskEvidence(lucidDb, row.lucid_task_id) : null;
       candidates.push({
         id: row.id,
         kind: "pipeline-item",
@@ -437,10 +428,10 @@ export type TriageChunkClassifierFn = (
   candidates: TriageCandidate[],
   chunkIndex: number,
   totalChunks: number,
-  systemPrompt: string
+  systemPrompt: string,
 ) => Promise<TriageProposal[]>;
 
-export function buildTriageSystemPrompt(): string {
+function buildTriageSystemPrompt(): string {
   return `You are triaging Jm's stale Kaya spec-pipeline backlog for him. Two cohorts of items are mixed together — each item carries a "kind" field:
 
 - "pipeline-item": a spec-pipeline item stuck in needs-grilling (parked, waiting for a Socratic grill session before work can begin).
@@ -505,7 +496,7 @@ async function classifyChunk(
   candidates: TriageCandidate[],
   _chunkIndex: number,
   _totalChunks: number,
-  systemPrompt: string
+  systemPrompt: string,
 ): Promise<TriageProposal[]> {
   const payload = candidates.map((c) => ({
     id: c.id,
@@ -565,7 +556,7 @@ async function classifyChunk(
   return out;
 }
 
-export interface RunTriageResult {
+interface RunTriageResult {
   proposals: TriageProposal[];
   /** Candidate ids that never got a valid proposal this run (failed chunk OR silently omitted by the LLM). */
   unclassifiedIds: string[];
@@ -582,7 +573,7 @@ export interface RunTriageResult {
 export async function runBacklogTriage(
   candidates: TriageCandidate[],
   classifyFn: TriageChunkClassifierFn = classifyChunk,
-  chunkSize: number = CHUNK_SIZE
+  chunkSize: number = CHUNK_SIZE,
 ): Promise<RunTriageResult> {
   if (candidates.length === 0) {
     return { proposals: [], unclassifiedIds: [], failedChunks: 0, totalChunks: 0 };
@@ -597,13 +588,15 @@ export async function runBacklogTriage(
   const unclassifiedIds: string[] = [];
 
   for (let i = 0; i < chunks.length; i++) {
-    console.log(`[BacklogTriage] Chunk ${i + 1}/${chunks.length} (${chunks[i].length} items)…`);
+    const currentChunk = chunks[i];
+    if (!currentChunk) continue;
+    console.log(`[BacklogTriage] Chunk ${i + 1}/${chunks.length} (${currentChunk.length} items)…`);
     try {
-      const proposals = await classifyFn(chunks[i], i, chunks.length, systemPrompt);
+      const proposals = await classifyFn(currentChunk, i, chunks.length, systemPrompt);
       all.push(...proposals);
     } catch (err) {
       failedChunks++;
-      unclassifiedIds.push(...chunks[i].map((c) => c.id));
+      unclassifiedIds.push(...currentChunk.map((c) => c.id));
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[BacklogTriage] Chunk ${i + 1}/${chunks.length} failed: ${msg} — skipping.`);
     }
@@ -611,7 +604,7 @@ export async function runBacklogTriage(
 
   if (failedChunks === chunks.length && chunks.length > 0) {
     throw new Error(
-      `BacklogTriage: all ${chunks.length} chunk(s) failed — zero proposals produced. Check API availability.`
+      `BacklogTriage: all ${chunks.length} chunk(s) failed — zero proposals produced. Check API availability.`,
     );
   }
 
@@ -627,7 +620,7 @@ export async function runBacklogTriage(
 
   if (failedChunks > 0) {
     console.warn(
-      `[BacklogTriage] Partial success: ${failedChunks}/${chunks.length} chunk(s) failed, ${all.length} proposal(s) returned.`
+      `[BacklogTriage] Partial success: ${failedChunks}/${chunks.length} chunk(s) failed, ${all.length} proposal(s) returned.`,
     );
   }
 
@@ -638,14 +631,14 @@ export async function runBacklogTriage(
 // Grouping
 // ============================================================================
 
-export interface GroupedItem {
+interface GroupedItem {
   candidate: TriageCandidate;
   proposal: TriageProposal;
 }
 
-export type VerdictBucket = Record<TriageVerdict, GroupedItem[]>;
+type VerdictBucket = Record<TriageVerdict, GroupedItem[]>;
 
-export interface GroupedTriage {
+interface GroupedTriage {
   pipelineByVerdict: VerdictBucket;
   stampedByVerdict: VerdictBucket;
   unclassified: TriageCandidate[];
@@ -698,7 +691,7 @@ function computeVerdictCounts(grouped: GroupedTriage): Record<TriageVerdict, num
 // Report rendering — Markdown (Jm review) + JSON (H2 executor input)
 // ============================================================================
 
-export interface TriageReportMeta {
+interface TriageReportMeta {
   generatedAt: string;
   pipelineDbPath: string;
   lucidDbPath: string;
@@ -747,7 +740,7 @@ function renderVerdictSection(byVerdict: VerdictBucket): string {
 export function renderMarkdownReport(
   candidates: TriageCandidate[],
   grouped: GroupedTriage,
-  meta: TriageReportMeta
+  meta: TriageReportMeta,
 ): string {
   const pipelineTotal = candidates.filter((c) => c.kind === "pipeline-item").length;
   const stampedTotal = candidates.filter((c) => c.kind === "stamped-task").length;
@@ -777,7 +770,7 @@ export function renderMarkdownReport(
     "",
     `**Re-triage recommendation:** these ${stampedTotal} LucidTasks carry a \`kaya_triage\` stamp written before the \`scope\` field existed. Because the stamp's content-hash still matches, \`hasValidTriageStamp()\` skips them on every IntakeRunner run forever — they are permanently invisible even though the current enqueue path now visibly parks non-clear verdicts instead of silently stamping them. For every item below that is NOT verdict=kill, clear \`kaya_triage\` on the LucidTask (set to NULL) so the next \`IntakeRunner --enqueue\` run re-judges it fresh with the current scope-aware classifier and parks it visibly in needs-grilling.`,
     "",
-    renderVerdictSection(grouped.stampedByVerdict)
+    renderVerdictSection(grouped.stampedByVerdict),
   );
 
   if (grouped.unclassified.length > 0) {
@@ -785,20 +778,20 @@ export function renderMarkdownReport(
       "",
       "## Unclassified — inference gaps (rerun)",
       "",
-      grouped.unclassified.map((c, i) => `${i + 1}. \`${c.id}\` ${c.title} (age ${c.ageDays}d)`).join("\n")
+      grouped.unclassified.map((c, i) => `${i + 1}. \`${c.id}\` ${c.title} (age ${c.ageDays}d)`).join("\n"),
     );
   }
 
   lines.push(
     "",
     "---",
-    `_Generated ${meta.generatedAt} — pipeline db: \`${meta.pipelineDbPath}\`, lucid db: \`${meta.lucidDbPath}\`. Read-only analysis; zero writes to either database._`
+    `_Generated ${meta.generatedAt} — pipeline db: \`${meta.pipelineDbPath}\`, lucid db: \`${meta.lucidDbPath}\`. Read-only analysis; zero writes to either database._`,
   );
 
   return lines.join("\n");
 }
 
-export interface TriageJsonItem {
+interface TriageJsonItem {
   id: string;
   kind: CandidateKind;
   title: string;
@@ -819,7 +812,7 @@ export interface TriageJsonItem {
   };
 }
 
-export interface TriageJsonOutput {
+interface TriageJsonOutput {
   generatedAt: string;
   pipelineDbPath: string;
   lucidDbPath: string;
@@ -833,7 +826,7 @@ export interface TriageJsonOutput {
 export function buildJsonOutput(
   candidates: TriageCandidate[],
   grouped: GroupedTriage,
-  meta: TriageReportMeta
+  meta: TriageReportMeta,
 ): TriageJsonOutput {
   const items: TriageJsonItem[] = [];
   for (const bucket of [grouped.pipelineByVerdict, grouped.stampedByVerdict]) {
@@ -895,15 +888,14 @@ export function printConsoleSummary(grouped: GroupedTriage): void {
 // CLI entry point
 // ============================================================================
 
-const USAGE =
-  "Usage: bun BacklogTriage.ts [--limit N] [--pipeline-db PATH] [--lucid-db PATH] [--out-dir PATH]";
+const USAGE = "Usage: bun BacklogTriage.ts [--limit N] [--pipeline-db PATH] [--lucid-db PATH] [--out-dir PATH]";
 
 function argValue(argv: string[], flag: string): string | undefined {
   const idx = argv.indexOf(flag);
   return idx >= 0 ? argv[idx + 1] : undefined;
 }
 
-export interface RunCliResult {
+interface RunCliResult {
   mdPath: string;
   jsonPath: string;
   grouped: GroupedTriage;
@@ -924,7 +916,7 @@ export async function runCli(argv: string[]): Promise<RunCliResult> {
 
   console.log(
     `[BacklogTriage] ${candidates.length}/${allCandidates.length} candidate(s) selected for triage ` +
-      `(pipeline-db: ${pipelineDbPath}, lucid-db: ${lucidDbPath}).`
+      `(pipeline-db: ${pipelineDbPath}, lucid-db: ${lucidDbPath}).`,
   );
 
   const result = await runBacklogTriage(candidates);

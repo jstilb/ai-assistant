@@ -17,8 +17,8 @@
  * used to thread through every call here is gone too.
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   archiveItems,
   loadQueueItems,
@@ -106,9 +106,7 @@ export async function archiveOldItems(
  * Restore an archived item back to its original queue.
  * This is a NEW capability — previously items were permanently inaccessible after archiving.
  */
-export async function restoreArchivedItem(
-  itemId: string,
-): Promise<QueueItem | null> {
+export async function restoreArchivedItem(itemId: string): Promise<QueueItem | null> {
   const queues = discoverQueues();
 
   for (const queueName of queues) {
@@ -117,18 +115,25 @@ export async function restoreArchivedItem(
 
     const content = readFileSync(archivePath, "utf-8");
     const lines = content.trim().split("\n").filter(Boolean);
-    const items = lines.map(l => {
-      try { return JSON.parse(l) as QueueItem; } catch { return null; }
-    }).filter((i): i is QueueItem => i !== null);
+    const items = lines
+      .map((l) => {
+        try {
+          return JSON.parse(l) as QueueItem;
+        } catch {
+          return null;
+        }
+      })
+      .filter((i): i is QueueItem => i !== null);
 
-    const idx = items.findIndex(i => i.id === itemId);
+    const idx = items.findIndex((i) => i.id === itemId);
     if (idx === -1) continue;
 
     const [restored] = items.splice(idx, 1);
+    if (!restored) continue; // unreachable: idx came from findIndex
 
     // Write back archive without the restored item
-    const { writeFileSync } = await import("fs");
-    writeFileSync(archivePath, items.map(i => JSON.stringify(i)).join("\n") + (items.length > 0 ? "\n" : ""));
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(archivePath, items.map((i) => JSON.stringify(i)).join("\n") + (items.length > 0 ? "\n" : ""));
 
     // Re-add to original queue preserving the archived status — forcing
     // "pending" would corrupt spec-pipeline items, whose state machine has no
@@ -147,9 +152,7 @@ export async function restoreArchivedItem(
 /**
  * List all archived items, optionally filtered by queue name.
  */
-export function listArchivedItems(
-  queueName?: string,
-): QueueItem[] {
+export function listArchivedItems(queueName?: string): QueueItem[] {
   const result: QueueItem[] = [];
 
   const queuesToCheck = queueName ? [queueName] : discoverQueues();

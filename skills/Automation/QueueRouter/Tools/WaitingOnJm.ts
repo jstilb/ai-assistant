@@ -103,20 +103,16 @@ function ageDaysOf(now: Date, isoTimestamp: string): number {
  * @param now  - Clock to measure ages against (injectable for tests; defaults to real now)
  * @param deps - Injectable dependencies (default: real stores)
  */
-export async function getWaitingOnJm(
-  now: Date = new Date(),
-  deps: WaitingOnJmDeps = {}
-): Promise<WaitingOnJmSummary> {
+export async function getWaitingOnJm(now: Date = new Date(), deps: WaitingOnJmDeps = {}): Promise<WaitingOnJmSummary> {
   const grillSummaryFn = deps.getGrillBacklogSummary ?? getGrillBacklogSummary;
   const loadApprovalItems = deps.loadApprovalItems ?? (() => loadQueueItems("approvals"));
-  const listPendingApprovalMerges =
-    deps.listPendingApprovalMerges ?? (() => new Integrator().listPendingApproval());
+  const listPendingApprovalMerges = deps.listPendingApprovalMerges ?? (() => new Integrator().listPendingApproval());
   const taskClient = (deps.getTaskClient ?? getTaskClient)();
   if (!taskClient) {
     throw new Error(
       "WaitingOnJm: no TaskClient registered — the entry point must " +
-        "`await import(\"bin/wire-queue-task-integration.ts\")` in its main branch " +
-        "before calling getWaitingOnJm()"
+        '`await import("bin/wire-queue-task-integration.ts")` in its main branch ' +
+        "before calling getWaitingOnJm()",
     );
   }
 
@@ -193,7 +189,7 @@ if (import.meta.main) {
     console.log("=============");
     console.log(
       `Needs grilling:          ${summary.needsGrilling.count} ` +
-      `(oldest ${summary.needsGrilling.oldestAgeDays}d, median ${summary.needsGrilling.medianAgeDays}d)`
+        `(oldest ${summary.needsGrilling.oldestAgeDays}d, median ${summary.needsGrilling.medianAgeDays}d)`,
     );
     console.log(`Approvals pending:       ${summary.approvalsPending.count}`);
     console.log(`Pending approval merges: ${summary.pendingApprovalMerges.count}`);

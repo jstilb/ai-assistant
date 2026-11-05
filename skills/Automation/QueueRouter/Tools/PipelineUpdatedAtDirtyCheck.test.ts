@@ -27,8 +27,8 @@
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { join } from "path";
-import { mkdirSync } from "fs";
+import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
 // ============================================================================
@@ -46,11 +46,7 @@ import {
   type Stage,
 } from "./PipelineRepository.ts";
 import { resetPipelineDb } from "./PipelineDB.ts";
-import {
-  saveQueueItemsImpl,
-  getRepoForQueuesDir,
-  pipelineItemToQueueItem,
-} from "./PipelineFacade.ts";
+import { saveQueueItemsImpl, getRepoForQueuesDir, pipelineItemToQueueItem } from "./PipelineFacade.ts";
 import type { QueueItem } from "./QueueManager.ts";
 
 // ============================================================================
@@ -166,7 +162,7 @@ describe("upsert() updated_at dirty-check — whole-queue-resave shape", () => {
       .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
       .all(itemA.id) as EventRow[];
     expect(aEvents.length).toBe(1);
-    expect(aEvents[0].to_stage).toBe("researching");
+    expect(aEvents[0]?.to_stage).toBe("researching");
   });
 
   test("created_at is unaffected by the dirty-check (still preserved verbatim across every re-save)", async () => {
@@ -239,12 +235,7 @@ describe("saveQueueItemsImpl — mergeMetadata wiring preserves foreign metadata
 
     // Step A: initial whole-queue save through the REAL lossy-codec path —
     // mirrors production (QueueManager.add() etc.).
-    saveQueueItemsImpl(
-      "approved-work",
-      [richQueueItem, changingQueueItemInitial],
-      TEST_QUEUES_DIR,
-      TEST_ARCHIVE_DIR,
-    );
+    saveQueueItemsImpl("approved-work", [richQueueItem, changingQueueItemInitial], TEST_QUEUES_DIR, TEST_ARCHIVE_DIR);
 
     // Step B: simulate a DIFFERENT producer (e.g. WorkQueue, via its own
     // workItemToPipelineParams codec) subsequently writing attempts/isc_rows/
@@ -289,8 +280,8 @@ describe("saveQueueItemsImpl — mergeMetadata wiring preserves foreign metadata
     // QueueManager.complete() loads the array, mutates ONE item, saves the
     // WHOLE array back) — richId comes back completely unmodified.
     const reloaded = repo.list({ queue: "approved-work" });
-    const richReloaded = pipelineItemToQueueItem(reloaded.find(r => r.id === richId) ?? null);
-    const changingReloaded = pipelineItemToQueueItem(reloaded.find(r => r.id === changingId) ?? null);
+    const richReloaded = pipelineItemToQueueItem(reloaded.find((r) => r.id === richId) ?? null);
+    const changingReloaded = pipelineItemToQueueItem(reloaded.find((r) => r.id === changingId) ?? null);
     if (!richReloaded || !changingReloaded) throw new Error("setup failed: reload");
 
     // The one genuine change: changingId transitions pending -> completed.
@@ -301,12 +292,7 @@ describe("saveQueueItemsImpl — mergeMetadata wiring preserves foreign metadata
     };
 
     // ==== THE REAL CALL UNDER TEST ====
-    saveQueueItemsImpl(
-      "approved-work",
-      [richReloaded, changingModified],
-      TEST_QUEUES_DIR,
-      TEST_ARCHIVE_DIR,
-    );
+    saveQueueItemsImpl("approved-work", [richReloaded, changingModified], TEST_QUEUES_DIR, TEST_ARCHIVE_DIR);
 
     const richAfter = repo.get(richId);
     const changingAfter = repo.get(changingId);
@@ -338,8 +324,7 @@ describe("saveQueueItemsImpl — mergeMetadata wiring preserves foreign metadata
     expect(changingAfter.stage).toBe("done");
     expect(changingAfter.stage).not.toBe(changingBefore.stage);
     expect(changingAfter.updated_at).not.toBe(changingBefore.updated_at);
-    expect(new Date(changingAfter.updated_at).getTime())
-      .toBeGreaterThan(new Date(changingBefore.updated_at).getTime());
+    expect(new Date(changingAfter.updated_at).getTime()).toBeGreaterThan(new Date(changingBefore.updated_at).getTime());
   });
 });
 

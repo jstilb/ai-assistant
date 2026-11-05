@@ -16,7 +16,7 @@
  * that Kaya will not assist with this task.
  */
 
-import { join } from "path";
+import { join } from "node:path";
 // cross-skill-allowed: ADR-004 sanctioned conversational/bot lane
 import { sendTextMessage } from "../../Communication/Telegram/Tools/TelegramClient.ts";
 import { createAppendLog, type AppendLog } from "../../../lib/core/AppendLog.ts";
@@ -78,9 +78,7 @@ function getDefaultLedgerPath(): string {
  * @param skips  Array of skip records from the triage run
  * @returns      Result indicating whether a message was sent
  */
-export async function sendSkipDigest(
-  skips: SkipRecord[]
-): Promise<SendSkipDigestResult> {
+export async function sendSkipDigest(skips: SkipRecord[]): Promise<SendSkipDigestResult> {
   if (skips.length === 0) {
     return { sent: false, skipsCount: 0 };
   }
@@ -141,12 +139,8 @@ export async function handlePromote(taskId: string): Promise<void> {
   const qm = new QueueManager();
 
   // Find the spec-pipeline item linked to this LucidTask
-  const allItems = qm.listAll?.() ?? [];
-  const linked = allItems.find(
-    (i) =>
-      (i.context as Record<string, unknown> | undefined)?.lucidTaskId === taskId ||
-      i.title?.includes(taskId)
-  );
+  const allItems = await qm.list();
+  const linked = allItems.find((i) => i.payload.context?.lucidTaskId === taskId || i.payload.title?.includes(taskId));
 
   if (!linked) {
     console.warn(`[SkipDigestSender] handlePromote: no queue item found for taskId=${taskId}`);
@@ -180,7 +174,7 @@ export async function handleDismiss(
   taskId: string,
   title: string,
   reasoning: string,
-  ledgerPath?: string
+  ledgerPath?: string,
 ): Promise<void> {
   const path = ledgerPath ?? getDefaultLedgerPath();
 

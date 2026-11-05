@@ -16,7 +16,7 @@
  * and requires an authorized run context.
  */
 
-import { describe, test, expect, mock, beforeEach, afterEach, afterAll } from "bun:test";
+import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
 import type { InferenceResult } from "../../../../lib/core/Inference.ts";
 // Real namespaces captured BEFORE mock.module patches the registry — used by
 // afterAll to restore them (mock.module is process-global with no unmock; a
@@ -104,8 +104,7 @@ mock.module("../../../../lib/core/Inference.ts", () => ({
 mock.module("../../../../lib/core/FailureLog.ts", () => ({
   ...realFailureLogExports,
   logFailure: (...args: Parameters<typeof realFailureLogExports.logFailure>) => logFailureImpl(...args),
-  recordFailure: (...args: Parameters<typeof realFailureLogExports.recordFailure>) =>
-    recordFailureImpl(...args),
+  recordFailure: (...args: Parameters<typeof realFailureLogExports.recordFailure>) => recordFailureImpl(...args),
 }));
 
 afterAll(() => {
@@ -125,7 +124,10 @@ afterAll(() => {
 
 describe("judgeSpecQuality", () => {
   // Dynamic import so the mock is installed before the module initialises
-  let judgeSpecQuality: (spec: string, itemId?: string) => Promise<import("./SpecPipelineRunner.ts").SpecQualityJudgment>;
+  let judgeSpecQuality: (
+    spec: string,
+    itemId?: string,
+  ) => Promise<import("./SpecPipelineRunner.ts").SpecQualityJudgment>;
 
   beforeEach(async () => {
     const mod = await import("./SpecPipelineRunner.ts");
@@ -194,9 +196,15 @@ describe("judgeSpecQuality", () => {
   // --------------------------------------------------------------------------
 
   test("J4. judge returns FAIL → judgment.pass is false, reasons forwarded", async () => {
-    const reasons = ["ISC rows contain generic boilerplate like 'no regressions'", "Only 2 ISC rows — insufficient for a real spec"];
+    const reasons = [
+      "ISC rows contain generic boilerplate like 'no regressions'",
+      "Only 2 ISC rows — insufficient for a real spec",
+    ];
     inferenceMock = async () => successResult("FAIL", reasons);
-    const result = await judgeSpecQuality("# Skeleton spec\n\n| 1 | implementation matches problem context | Manual |", "test-id");
+    const result = await judgeSpecQuality(
+      "# Skeleton spec\n\n| 1 | implementation matches problem context | Manual |",
+      "test-id",
+    );
     expect(result.pass).toBe(false);
     expect(result.verdict).toBe("FAIL");
     expect(result.reasons).toEqual(reasons);
@@ -245,7 +253,9 @@ describe("judgeSpecQuality", () => {
   });
 
   test("J8. inference throws → JUDGE_UNAVAILABLE, pass:false (loud failure)", async () => {
-    inferenceMock = async () => { throw new Error("connection refused"); };
+    inferenceMock = async () => {
+      throw new Error("connection refused");
+    };
     const result = await judgeSpecQuality("# Some spec", "test-id");
     expect(result.pass).toBe(false);
     expect(result.verdict).toBe("JUDGE_UNAVAILABLE");

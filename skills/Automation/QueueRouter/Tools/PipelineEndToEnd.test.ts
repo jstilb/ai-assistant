@@ -13,16 +13,13 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { defaultPipelineDbPath, resetPipelineDb } from "./PipelineDB.ts";
 import { resetPipelineRepository } from "./PipelineRepository.ts";
-import {
-  saveQueueItemsImpl,
-  getRepoForQueuesDir,
-} from "./PipelineFacade.ts";
+import { saveQueueItemsImpl, getRepoForQueuesDir } from "./PipelineFacade.ts";
 
 let TMP: string;
 let ORIG_KAYA_HOME: string | undefined;
@@ -70,13 +67,13 @@ describe("Pipeline single-store — path convergence", () => {
     // Canonical path sanity check
     expect(canonical).toContain(process.env.KAYA_HOME as string);
 
-    // WorkQueue resolution for a no-arg (production-default) construction.
-    const { MEMORY } = await import("../../../../lib/core/MemoryPaths.ts");
-    const wqResolved =
-      MEMORY.work.queue.path() === MEMORY.work.queue.path()
-        ? defaultPipelineDbPath()
-        : "ISOLATED";
-    expect(wqResolved).toBe(canonical);
+    // WorkQueue resolution for a no-arg (production-default) construction: it must
+    // hold the SAME repository singleton (this used to compare a value with itself,
+    // so it could never fail).
+    // cross-skill-allowed: test fixture — proves a production-default WorkQueue shares the one pipeline.db singleton
+    const { WorkQueue } = await import("../../AutonomousWork/Tools/WorkQueue.ts");
+    const wq = new WorkQueue();
+    expect((wq as unknown as { repo: unknown }).repo).toBe(canonicalRepo);
   });
 });
 

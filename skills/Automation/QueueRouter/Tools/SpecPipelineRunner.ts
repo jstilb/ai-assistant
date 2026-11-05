@@ -19,14 +19,13 @@
  * @module SpecPipelineRunner
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
-import { basename, join } from "path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   QueueManager,
   loadQueueItems,
   saveQueueItems,
   archiveItems,
-  generateId,
   hasValidGrillStamp,
   type QueueItem,
   type QueueItemSpec,
@@ -71,7 +70,7 @@ async function getLensGenerator(): Promise<{
 // frozen at import; behavior-identical to prior frozen const
 const KAYA_HOME = getKayaHome();
 const WORK_DIR = join(KAYA_HOME, "MEMORY/WORK");
-const SPECS_DIR = join(KAYA_HOME, "Plans", "Specs", "Queue");
+const SPECS_DIR = join(KAYA_HOME, "plans", "Specs", "Queue");
 
 /**
  * Model for the research subagent spawn. AgentSpawner requires every caller to
@@ -127,15 +126,6 @@ interface StepResult {
  */
 type ResearchVerdict = "implement" | "skip" | "defer" | "bounce";
 
-/** Research findings from parallel agents */
-interface ResearchFindings {
-  itemId: string;
-  sessionId: string;
-  artifactPath: string;
-  findings: string;
-  completedAt: string;
-}
-
 /**
  * Extract the research verdict from findings content.
  * Looks for a VERDICT line in the research output (e.g., "VERDICT: skip").
@@ -149,19 +139,23 @@ interface ResearchFindings {
  * verdict (implement/skip/defer) drives routing exactly as before.
  */
 export function parseResearchVerdict(findings: string): { verdict: ResearchVerdict; reason: string } {
-  const verdictMatch = findings.match(/^##?\s*VERDICT:\s*(implement|skip|defer)\b/im)
-    || findings.match(/\bVERDICT:\s*(implement|skip|defer)\b/i);
+  const verdictMatch =
+    findings.match(/^##?\s*VERDICT:\s*(implement|skip|defer)\b/im) ||
+    findings.match(/\bVERDICT:\s*(implement|skip|defer)\b/i);
 
   if (!verdictMatch) {
-    return { verdict: "bounce", reason: "No explicit VERDICT token found — bouncing to awaiting-context for re-enrichment rather than generating a spec from incomplete research" };
+    return {
+      verdict: "bounce",
+      reason:
+        "No explicit VERDICT token found — bouncing to awaiting-context for re-enrichment rather than generating a spec from incomplete research",
+    };
   }
 
-  const verdict = verdictMatch[1].toLowerCase() as ResearchVerdict;
+  const verdict = (verdictMatch[1] ?? "").toLowerCase() as ResearchVerdict;
 
   // Extract the reason line that follows the verdict
   const afterVerdict = findings.slice(findings.indexOf(verdictMatch[0]) + verdictMatch[0].length);
-  const reasonMatch = afterVerdict.match(/^\s*[-—:]\s*(.+?)(?:\n|$)/m)
-    || afterVerdict.match(/^\s+(.+?)(?:\n|$)/m);
+  const reasonMatch = afterVerdict.match(/^\s*[-—:]\s*(.+?)(?:\n|$)/m) || afterVerdict.match(/^\s+(.+?)(?:\n|$)/m);
   const reason = reasonMatch?.[1]?.trim() || "No reason provided";
 
   return { verdict, reason };
@@ -184,7 +178,7 @@ export function parseResearchVerdict(findings: string): { verdict: ResearchVerdi
  * it would still falsely classify verdict-less prose as salvage-success.
  */
 export function decideTimeoutOutcome(
-  artifactContent: string | null
+  artifactContent: string | null,
 ): "salvage-success" | "resume-partial" | "hard-timeout" {
   if (!artifactContent || artifactContent.trim().length === 0) return "hard-timeout";
   if (/\bVERDICT:\s*(implement|skip|defer)\b/i.test(artifactContent)) return "salvage-success";
@@ -208,7 +202,10 @@ function ensureDir(dirPath: string): void {
  */
 function getOrCreateSessionId(itemId: string): string {
   const now = new Date();
-  const dateStr = now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 15);
+  const dateStr = now
+    .toISOString()
+    .replace(/[-:T.Z]/g, "")
+    .slice(0, 15);
   return `${dateStr}_spec-pipeline-${itemId.slice(0, 8)}`;
 }
 
@@ -336,11 +333,8 @@ On FAIL or NEEDS_REVIEW, reasons must list the specific issues.`;
  * @param specMarkdown - Full spec content (no truncation — full context avoids anchoring)
  * @param itemId       - Queue item ID for failure log context
  */
-export async function judgeSpecQuality(
-  specMarkdown: string,
-  itemId?: string
-): Promise<SpecQualityJudgment> {
-  let result;
+export async function judgeSpecQuality(specMarkdown: string, itemId?: string): Promise<SpecQualityJudgment> {
+  let result: Awaited<ReturnType<typeof inference>>;
   try {
     result = await inference({
       systemPrompt: SPEC_QUALITY_JUDGE_SYSTEM,
@@ -411,16 +405,18 @@ export async function judgeSpecQuality(
 async function loadQueueLearnings(): Promise<string> {
   try {
     const entries = await memoryStore.search({
-      type: ['decision', 'learning'],
-      tags: ['queuerouter'],
+      type: ["decision", "learning"],
+      tags: ["queuerouter"],
       limit: 5,
       since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     });
-    if (!entries.length) return '';
-    const lines = entries.map(e => `- ${e.title}: ${e.content?.slice(0, 200)}`).join('\n');
+    if (!entries.length) return "";
+    const lines = entries.map((e) => `- ${e.title}: ${e.content?.slice(0, 200)}`).join("\n");
     return `\n## Past Queue Decisions\n${lines}\n`;
-  } catch {
-    return '';
+  } catch (err) {
+    // Fail-open (prompt enrichment is optional) but visible: a silent "" here hid every failure.
+    console.warn(`[spec-pipeline] past-decisions lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+    return "";
   }
 }
 
@@ -512,9 +508,8 @@ export function findSkillContexts(skillsRoot = THIS_CHECKOUT_SKILLS_ROOT): Skill
 export function matchDomainContext(text: string, candidates: SkillContext[]): SkillContext | null {
   const haystack = text.toLowerCase();
   const matches = candidates.filter((c) => skillNameToRegex(c.skill).test(haystack));
-  if (matches.length === 0) return null;
   matches.sort((a, b) => b.skill.length - a.skill.length);
-  return matches[0];
+  return matches[0] ?? null;
 }
 
 /**
@@ -550,7 +545,11 @@ export function loadDomainVocabularyForItem(item: QueueItem): string {
     const vocab = extractDomainVocabulary(readFileSync(match.path, "utf-8"));
     if (!vocab) return "";
     return `\n## Domain Vocabulary (canonical — use these terms exactly; avoid the listed aliases)\n\nSource: ${match.category}/${match.skill}/CONTEXT.md\n\n${vocab}\n`;
-  } catch {
+  } catch (err) {
+    // Fail-open (prompt enrichment is optional) but visible.
+    console.warn(
+      `[spec-pipeline] domain vocabulary lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return "";
   }
 }
@@ -611,7 +610,7 @@ async function defaultSpawnSubagent(opts: {
     throw new Error(
       result.error?.startsWith("Timeout")
         ? `UX/UI agent timed out after ${opts.timeoutMs / 1000}s`
-        : `UX/UI agent exited with error: ${(result.error ?? "unknown").slice(0, 500)}`
+        : `UX/UI agent exited with error: ${(result.error ?? "unknown").slice(0, 500)}`,
     );
   }
   if (!result.output.trim()) {
@@ -640,11 +639,7 @@ export interface BundleFile {
 export function loadBundle(files: BundleFile[]): string {
   const sections: string[] = [];
   for (const f of files) {
-    const resolved = existsSync(f.path)
-      ? f.path
-      : f.fallback && existsSync(f.fallback)
-        ? f.fallback
-        : undefined;
+    const resolved = existsSync(f.path) ? f.path : f.fallback && existsSync(f.fallback) ? f.fallback : undefined;
     if (!resolved) continue;
     let content: string;
     try {
@@ -718,19 +713,17 @@ export const DESIGNER_BUNDLE: BundleFile[] = [
  *   - UIDesigner:  edits each `## Screen:` in place, adds State wireframes/components/a11y
  *   - Designer:    appends review notes after the existing UX/UI section
  */
-export function buildUXUIAgentPrompt(
-  step: StageStep,
-  specContent: string,
-  itemTitle: string
-): string {
-  const bundle = step.agent === "UXDesigner"
-    ? loadBundle(UX_DESIGNER_BUNDLE)
-    : step.agent === "UIDesigner"
-      ? loadBundle(UI_DESIGNER_BUNDLE)
-      : loadBundle(DESIGNER_BUNDLE);
+export function buildUXUIAgentPrompt(step: StageStep, specContent: string, itemTitle: string): string {
+  const bundle =
+    step.agent === "UXDesigner"
+      ? loadBundle(UX_DESIGNER_BUNDLE)
+      : step.agent === "UIDesigner"
+        ? loadBundle(UI_DESIGNER_BUNDLE)
+        : loadBundle(DESIGNER_BUNDLE);
 
-  const agentInstruction = step.agent === "UXDesigner"
-    ? `You are the UXDesigner agent. Your context documents are included below.
+  const agentInstruction =
+    step.agent === "UXDesigner"
+      ? `You are the UXDesigner agent. Your context documents are included below.
 
 Your task: Given the spec below, produce the \`## UX/UI Specification\` section for it.
 Follow UXUISpecFormat.md exactly:
@@ -742,8 +735,8 @@ Follow UXUISpecFormat.md exactly:
      - Acceptance Criteria: at least one Given/When/Then bullet per screen.
 
 Return ONLY the \`## UX/UI Specification\` section and its Screen sections. No preamble.`
-    : step.agent === "UIDesigner"
-      ? `You are the UIDesigner agent. Your context documents are included below.
+      : step.agent === "UIDesigner"
+        ? `You are the UIDesigner agent. Your context documents are included below.
 
 Your task: Given the spec + existing UX/UI section below, EDIT each \`## Screen:\` section
 in place, inserting for every state listed in the screen-inventory:
@@ -752,7 +745,7 @@ in place, inserting for every state listed in the screen-inventory:
   - \`### Accessibility (WCAG 2.2 AA)\` subsection mentioning ARIA roles AND contrast.
 
 Return the COMPLETE updated \`## UX/UI Specification\` section (all screens, all states). No preamble.`
-      : `You are the Designer agent (review pass). Your context documents are included below.
+        : `You are the Designer agent (review pass). Your context documents are included below.
 
 Your task: Review the UX/UI section below and append brief review notes.
 Append a \`### Designer Review\` subsection after the last screen section.
@@ -866,7 +859,7 @@ async function runResearchPhase(item: QueueItem, qm: QueueManager): Promise<Step
   // fresh research — which now receives the prior findings, see below).
   const grillArtifactPath = itemMeta.researchArtifactPath;
   if (
-    Boolean(itemMeta.grillFindingsProvided) &&
+    itemMeta.grillFindingsProvided &&
     !itemMeta.deepResearchRequested &&
     !ctx.lastRejectionReason &&
     typeof grillArtifactPath === "string" &&
@@ -898,19 +891,14 @@ async function runResearchPhase(item: QueueItem, qm: QueueManager): Promise<Step
       ? `\n\n## Prior Partial Findings (RESUME)\n\nA previous research attempt timed out after producing the partial findings below. CONTINUE from them — verify anything still open, fill the gaps, and produce the final verdict. Do NOT redo verification already marked [RESOLVED].\n\n${readFileSync(lastArtifact, "utf-8").slice(0, 8000)}`
       : "";
 
-  const researchGuidanceSection = ctx.autoRouted
-    ? ctx.notes
-    : ctx.researchGuidance;
+  const researchGuidanceSection = ctx.autoRouted ? ctx.notes : ctx.researchGuidance;
 
   // GrillMe lens analysis — adds directed research questions (~2s Haiku call).
   // Type classification is omitted: the LLM infers item nature from title+description.
   let grillDirectivesSection = "";
   try {
     const { generateDirectives } = await getLensGenerator();
-    const directives = await generateDirectives(
-      item.payload.title,
-      ctx.notes ?? item.payload.description
-    );
+    const directives = await generateDirectives(item.payload.title, ctx.notes ?? item.payload.description);
 
     if (directives.length > 0) {
       grillDirectivesSection = `\n\n## Directed Investigation\n\nApply these analytical lenses during research:\n\n${directives
@@ -1055,9 +1043,7 @@ Start by searching the codebase. Do not skip verification.`;
     }
 
     // The subagent may have written to artifactPath directly; if not, use its stdout
-    const findings = existsSync(artifactPath)
-      ? readFileSync(artifactPath, "utf-8")
-      : result.stdout.trim();
+    const findings = existsSync(artifactPath) ? readFileSync(artifactPath, "utf-8") : result.stdout.trim();
 
     if (!existsSync(artifactPath)) {
       const artifactContent = `# Research Findings: ${item.payload.title}
@@ -1107,9 +1093,7 @@ ${findings}
     // wall-clock kill / infra pause.
     if (isTimeout || isInfraUnavailable) {
       const meta = (item.payload.context?._meta as Record<string, unknown>) || {};
-      const artifactContent = existsSync(artifactPath)
-        ? readFileSync(artifactPath, "utf-8")
-        : null;
+      const artifactContent = existsSync(artifactPath) ? readFileSync(artifactPath, "utf-8") : null;
       const outcome = decideTimeoutOutcome(artifactContent);
 
       if (outcome === "salvage-success") {
@@ -1140,7 +1124,12 @@ ${findings}
         return {
           success: false,
           message: `Research ${reasonLabel} — partial findings preserved for resume (#${timeouts})`,
-          data: { bounced: true, researchTimeouts: timeouts, lastResearchArtifact: artifactPath, infraUnavailable: isInfraUnavailable },
+          data: {
+            bounced: true,
+            researchTimeouts: timeouts,
+            lastResearchArtifact: artifactPath,
+            infraUnavailable: isInfraUnavailable,
+          },
         };
       }
 
@@ -1149,23 +1138,17 @@ ${findings}
       // partial) so the next attempt RESUMES into the same artifact dir
       // instead of restarting blind — the root cause of heavy items
       // re-researching from scratch every run.
-      const hasPartial =
-        typeof artifactContent === "string" && artifactContent.trim().length > 0;
+      const hasPartial = typeof artifactContent === "string" && artifactContent.trim().length > 0;
       try {
         // Keep the bounce notice in _meta — overwriting researchGuidance would
         // destroy human-authored Item Context from an Interactive Grill.
-        await qm.updateSpecPipelineStatus(
-          item.id,
-          "awaiting-context",
-          undefined,
-          {
-            researchTimeouts: timeouts,
-            lastTimeoutAt: new Date().toISOString(),
-            sessionId,
-            ...(hasPartial ? { lastResearchArtifact: artifactPath } : {}),
-            researchTimeoutNote: `Research subagent ${reasonLabel} (${timeouts}x). Bounced from researching — re-enrich context or investigate before retry.`,
-          }
-        );
+        await qm.updateSpecPipelineStatus(item.id, "awaiting-context", undefined, {
+          researchTimeouts: timeouts,
+          lastTimeoutAt: new Date().toISOString(),
+          sessionId,
+          ...(hasPartial ? { lastResearchArtifact: artifactPath } : {}),
+          researchTimeoutNote: `Research subagent ${reasonLabel} (${timeouts}x). Bounced from researching — re-enrich context or investigate before retry.`,
+        });
       } catch {
         // Transition is best-effort; even if it fails, the run continues.
       }
@@ -1196,7 +1179,7 @@ export async function dispatchResearchVerdict(
   qm: QueueManager,
   findings: string,
   artifactPath: string,
-  sessionId: string
+  sessionId: string,
 ): Promise<StepResult> {
   // Parse the research verdict — trust the LLM's structured VERDICT output.
   // The research prompt already instructs the LLM to emit VERDICT: skip when
@@ -1228,7 +1211,7 @@ export async function dispatchResearchVerdict(
         qm,
         item.id,
         item.payload.title,
-        `Research verdict was "skip" but the item has a valid grill stamp (human-confirmed intent). Verdict reason: ${verdictReason}. Inspect ${artifactPath}`
+        `Research verdict was "skip" but the item has a valid grill stamp (human-confirmed intent). Verdict reason: ${verdictReason}. Inspect ${artifactPath}`,
       );
       notifySync(`SKIP OVERRIDDEN (grilled): ${item.payload.title} — held at awaiting-context`);
       return {
@@ -1250,7 +1233,10 @@ export async function dispatchResearchVerdict(
       };
       archiveItems("spec-pipeline", [itemToArchive]);
       // Remove from active pipeline
-      saveQueueItems("spec-pipeline", pipelineItems.filter((i) => i.id !== item.id));
+      saveQueueItems(
+        "spec-pipeline",
+        pipelineItems.filter((i) => i.id !== item.id),
+      );
     }
 
     notifySync(`SKIPPED: ${item.payload.title} — ${verdictReason}`);
@@ -1338,7 +1324,7 @@ export async function dispatchResearchVerdict(
  * When item.payload.context.surface ∈ {browser, native}, the UX/UI Stage runs
  * after base spec generation (ADR 0004: Stage runs before ISC derivation).
  *
- * Saves spec to Plans/Specs/Queue/{item-id}-spec.md and transfers item
+ * Saves spec to plans/Specs/Queue/{item-id}-spec.md and transfers item
  * to the approvals queue.
  *
  * @param _spawnFn — injectable subagent spawn function for testing (default: Bun.spawn claude -p)
@@ -1346,12 +1332,12 @@ export async function dispatchResearchVerdict(
 async function runSpecGenerationPhase(
   item: QueueItem,
   qm: QueueManager,
-  _spawnFn?: SpawnSubagentFn
+  _spawnFn?: SpawnSubagentFn,
 ): Promise<StepResult> {
   const ctx = extractItemContext(item);
   const complexity = getComplexity(item);
-  const sessionId = (item.payload.context?._meta as Record<string, unknown>)?.sessionId as string
-    || getOrCreateSessionId(item.id);
+  const sessionId =
+    ((item.payload.context?._meta as Record<string, unknown>)?.sessionId as string) || getOrCreateSessionId(item.id);
 
   ensureDir(SPECS_DIR);
 
@@ -1361,8 +1347,9 @@ async function runSpecGenerationPhase(
 
   // Load research findings if available
   let researchContent = "";
-  const researchArtifactPath = ctx.previousResearchPath
-    || ((item.payload.context?._meta as Record<string, unknown>)?.researchArtifactPath as string);
+  const researchArtifactPath =
+    ctx.previousResearchPath ||
+    ((item.payload.context?._meta as Record<string, unknown>)?.researchArtifactPath as string);
 
   if (researchArtifactPath && existsSync(researchArtifactPath)) {
     try {
@@ -1377,9 +1364,7 @@ async function runSpecGenerationPhase(
     ? `\n## Revision Feedback (MUST ADDRESS)\n${ctx.lastRejectionReason}\n\nThis is revision ${ctx.revisionCount}. The previous spec was rejected for the above reasons. Ensure this spec specifically addresses each point.\n`
     : "";
 
-  const scopeSection = ctx.scopeHints
-    ? `\n## Scope Constraints\n${ctx.scopeHints}\n`
-    : "";
+  const scopeSection = ctx.scopeHints ? `\n## Scope Constraints\n${ctx.scopeHints}\n` : "";
 
   const modelForComplexity = complexity === "low" ? "Haiku" : complexity === "high" ? "Opus" : "Sonnet";
 
@@ -1442,7 +1427,8 @@ Format as structured markdown. This spec will be reviewed by Jm before execution
 
   try {
     const result = await inference({
-      systemPrompt: "You are a specification writer creating detailed, structured specs for implementation, research, and discovery tasks.",
+      systemPrompt:
+        "You are a specification writer creating detailed, structured specs for implementation, research, and discovery tasks.",
       userPrompt: specPrompt,
       level: inferenceMode as "fast" | "standard" | "smart",
       // Full 9-section specs routinely take >90s to generate; the standard-level
@@ -1452,9 +1438,10 @@ Format as structured markdown. This spec will be reviewed by Jm before execution
       retryDelayMs: 4000,
     });
 
-    const baseSpecContent = result.success && result.output.trim()
-      ? result.output.trim()
-      : generateFallbackSpec(item, ctx, complexity, researchContent);
+    const baseSpecContent =
+      result.success && result.output.trim()
+        ? result.output.trim()
+        : generateFallbackSpec(item, ctx, complexity, researchContent);
 
     // ── UX/UI Stage (ADR 0004: runs BEFORE ISC derivation) ───────────────────
     // Fires only when surface ∈ {browser, native}. Non-UI items skip cleanly.
@@ -1529,9 +1516,8 @@ Format as structured markdown. This spec will be reviewed by Jm before execution
     // On judge unavailability, verdict is NEEDS_REVIEW (not auto-pass, not auto-fail).
     const judgment = await judgeSpecQuality(specContent, item.id);
     if (!judgment.pass) {
-      const reasonSummary = judgment.reasons.length > 0
-        ? judgment.reasons.join("; ")
-        : `Judge verdict: ${judgment.verdict}`;
+      const reasonSummary =
+        judgment.reasons.length > 0 ? judgment.reasons.join("; ") : `Judge verdict: ${judgment.verdict}`;
       const rejectReason = `Spec quality gate failed: ${reasonSummary}`;
       notifySync(`[QUALITY GATE] ${item.payload.title}: ${rejectReason}`);
 
@@ -1591,7 +1577,7 @@ ${specContent}
     // see a stale "needs human attention" task duplicating the approval surface.
     await closeEscalationIfOpen(
       item.id,
-      `Spec generated and moved to approvals (${specPath}) — research wedge resolved.`
+      `Spec generated and moved to approvals (${specPath}) — research wedge resolved.`,
     );
 
     // Attach spec to the transferred item in approvals
@@ -1616,8 +1602,9 @@ ${specContent}
       // Re-save approvals to capture metadata update
       const allApprovals = loadQueueItems("approvals");
       const idx = allApprovals.findIndex((i) => i.id === item.id);
-      if (idx !== -1) {
-        allApprovals[idx].payload.context = approvalItem.payload.context;
+      const approvalToUpdate = idx === -1 ? undefined : allApprovals[idx];
+      if (approvalToUpdate) {
+        approvalToUpdate.payload.context = approvalItem.payload.context;
         // Use saveQueueItems directly for atomic update
         const { saveQueueItems } = await import("./QueueManager.ts");
         saveQueueItems("approvals", allApprovals);
@@ -1657,9 +1644,7 @@ function mergeISCRows(specContent: string, rows: string[]): string {
     // Find the end of the table block (first blank line after the header)
     const after = specContent.slice(match.index);
     const tableEndMatch = after.match(/\n\n|\n(?!\|)/);
-    const insertOffset = tableEndMatch
-      ? match.index + (tableEndMatch.index ?? after.length)
-      : specContent.length;
+    const insertOffset = tableEndMatch ? match.index + (tableEndMatch.index ?? after.length) : specContent.length;
 
     const before = specContent.slice(0, insertOffset);
     const after2 = specContent.slice(insertOffset);
@@ -1667,9 +1652,12 @@ function mergeISCRows(specContent: string, rows: string[]): string {
   }
 
   // No existing table — append a new section
-  return specContent + "\n\n### Behavioral ISC (from UX/UI Acceptance Criteria)\n\n| ID | Criterion | Files | Verify | Effort |\n|----|-----------|-------|--------|--------|\n" + rows.join("\n");
+  return (
+    specContent +
+    "\n\n### Behavioral ISC (from UX/UI Acceptance Criteria)\n\n| ID | Criterion | Files | Verify | Effort |\n|----|-----------|-------|--------|--------|\n" +
+    rows.join("\n")
+  );
 }
-
 
 /**
  * Generate a clearly-marked fallback spec when Inference is unavailable.
@@ -1678,8 +1666,8 @@ function mergeISCRows(specContent: string, rows: string[]): string {
 export function generateFallbackSpec(
   item: QueueItem,
   ctx: ReturnType<typeof extractItemContext>,
-  complexity: Complexity,
-  researchContent: string
+  _complexity: Complexity,
+  researchContent: string,
 ): string {
   notifySync(`[FALLBACK SPEC] Inference unavailable for: ${item.payload.title}`);
 
@@ -1885,7 +1873,7 @@ export function buildWedgeGrillBrief(researchTimeouts: number): {
 export async function handleWedgedItem(
   qm: QueueManager,
   item: QueueItem,
-  researchTimeouts: number
+  researchTimeouts: number,
 ): Promise<{ action: "grill" | "escalate"; reason: string }> {
   const reason = buildEscalationReason(item, researchTimeouts);
   if (hasValidGrillStamp(item)) {
@@ -1900,7 +1888,7 @@ export async function handleWedgedItem(
     // above — so this is unexpected. Fall back to escalation so the wedge is
     // never silently lost.
     console.error(
-      `[spec-pipeline] handleWedgedItem: parkForGrill failed for ${item.id}: ${err instanceof Error ? err.message : err}`
+      `[spec-pipeline] handleWedgedItem: parkForGrill failed for ${item.id}: ${err instanceof Error ? err.message : err}`,
     );
     await escalateItem(qm, item.id, item.payload.title, reason);
     return { action: "escalate", reason };
@@ -1923,21 +1911,23 @@ export async function closeEscalationIfOpen(itemId: string, note: string): Promi
     const db = getTaskDB();
     const task = db.getTask(`manual-${itemId}`);
     if (task && task.status !== "done" && task.status !== "cancelled") {
-      const outcome = serializeOutcome(systemOutcome({
-        by: "SpecPipelineRunner",
-        headline: "Escalation closed: the spec pipeline moved past it",
-        noArtifact: `auto-closed by SpecPipelineRunner for item ${itemId}: ${note}`,
-      }));
+      const outcome = serializeOutcome(
+        systemOutcome({
+          by: "SpecPipelineRunner",
+          headline: "Escalation closed: the spec pipeline moved past it",
+          noArtifact: `auto-closed by SpecPipelineRunner for item ${itemId}: ${note}`,
+        }),
+      );
       db.updateTask(
         `manual-${itemId}`,
         { status: "done", description: `${task.description}\n\n[auto-closed] ${note}`, outcome },
-        "SpecPipelineRunner"
+        "SpecPipelineRunner",
       );
       return true;
     }
   } catch (err) {
     console.error(
-      `[spec-pipeline] closeEscalationIfOpen failed for ${itemId}: ${err instanceof Error ? err.message : err}`
+      `[spec-pipeline] closeEscalationIfOpen failed for ${itemId}: ${err instanceof Error ? err.message : err}`,
     );
   }
   return false;
@@ -1960,7 +1950,7 @@ export async function escalateItem(
   _qm: QueueManager,
   itemId: string,
   itemTitle: string,
-  reason: string
+  reason: string,
 ): Promise<boolean> {
   let created = false;
   try {
@@ -1977,7 +1967,7 @@ export async function escalateItem(
       // Task context standard (LucidTasks SKILL.md): the escalation task must
       // link the spec and the queue item so Jm can open them from the task.
       const item = await _qm.get(itemId);
-      const specPath = item?.payload.spec?.path;
+      const specPath = item?.spec?.path;
       const contextLinks = [
         ...(specPath ? [specPath] : []),
         `queue item ${itemId}`,
@@ -1989,7 +1979,7 @@ export async function escalateItem(
         `Spec-pipeline escalation: ${itemTitle.slice(0, 80)}`,
         `WHAT: Spec-pipeline item ${itemId} ("${itemTitle}") needs human attention.\nWHY: ${reason}\nDONE WHEN: the item is unwedged (re-queued, re-scoped, or removed) and this task is closed.\nCONTEXT: ${contextLinks.join(" | ")}`,
         projectId,
-        { priority: 1 }
+        { priority: 1 },
       );
       created = true;
       // Telegram only on creation — an already-open escalation was announced.
@@ -2004,9 +1994,7 @@ export async function escalateItem(
     }
   } catch (err) {
     // Escalation must never break the run — but its own failure must be loud.
-    console.error(
-      `[spec-pipeline] escalateItem failed for ${itemId}: ${err instanceof Error ? err.message : err}`
-    );
+    console.error(`[spec-pipeline] escalateItem failed for ${itemId}: ${err instanceof Error ? err.message : err}`);
   }
   return created;
 }
@@ -2044,9 +2032,8 @@ export async function processAll(): Promise<{
       console.log(
         `[spec-pipeline] Pre-pass: ${item.id} wedged in research (${researchTimeouts}x) — ${
           action === "grill" ? "routed to grill (never grilled)" : "escalated to Jm (already grilled)"
-        }`
+        }`,
       );
-      continue;
     }
     // Item is at awaiting-context without a reason to skip — leave it.
     // It will be advanced when KayaTaskClassifier backfill re-classifies it

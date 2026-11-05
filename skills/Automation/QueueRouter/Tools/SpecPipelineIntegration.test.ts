@@ -1,13 +1,12 @@
 import { describe, test, expect, mock, beforeAll, afterAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 import { ALLOWED_TRANSITIONS } from "./PipelineRepository.ts";
 
-import {
-  generateFallbackSpec,
-} from "./SpecPipelineRunner.ts";
+import { generateFallbackSpec } from "./SpecPipelineRunner.ts";
+import type { QueueItem } from "./QueueManager.ts";
 
 // Stub inference so the judgeSpecQuality tests below don't spawn a live LLM subprocess.
 // Tests that need specific judge behavior set inferenceStub before calling.
@@ -116,7 +115,10 @@ describe("canonical spec-pipeline transition validation", () => {
 // ============================================================================
 
 describe("judgeSpecQuality edge cases", () => {
-  let judgeSpecQuality: (spec: string, itemId?: string) => Promise<import("./SpecPipelineRunner.ts").SpecQualityJudgment>;
+  let judgeSpecQuality: (
+    spec: string,
+    itemId?: string,
+  ) => Promise<import("./SpecPipelineRunner.ts").SpecQualityJudgment>;
 
   // Import after mock.module() is installed
   beforeAll(async () => {
@@ -237,7 +239,7 @@ describe("judgeSpecQuality edge cases", () => {
 // ============================================================================
 
 describe("Fallback Spec -> Quality Gate", () => {
-  const mockItem = {
+  const mockItem: QueueItem = {
     id: "test-fallback-001",
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
@@ -262,10 +264,11 @@ describe("Fallback Spec -> Quality Gate", () => {
     lastRejectionReason: undefined as string | undefined,
     previousResearchPath: undefined as string | undefined,
     previousSpecPath: undefined as string | undefined,
+    autoRouted: false,
   };
 
   test("20. Fallback spec output has [FALLBACK] markers", async () => {
-    const content = generateFallbackSpec(mockItem as any, mockCtx, "medium", "");
+    const content = generateFallbackSpec(mockItem, mockCtx, "medium", "");
     expect(content).toContain("[FALLBACK]");
     expect(content).toContain("FALLBACK_SPEC:");
   });
@@ -284,13 +287,13 @@ describe("Fallback Spec -> Quality Gate", () => {
       estimatedCostUSD: 0,
     });
     const { judgeSpecQuality } = await import("./SpecPipelineRunner.ts");
-    const content = generateFallbackSpec(mockItem as any, mockCtx, "medium", "");
+    const content = generateFallbackSpec(mockItem, mockCtx, "medium", "");
     const result = await judgeSpecQuality(content);
     expect(result.pass).toBe(false);
   });
 
   test("22. Fallback spec ISC contains FALLBACK_SPEC: sentinel", async () => {
-    const content = generateFallbackSpec(mockItem as any, mockCtx, "medium", "");
+    const content = generateFallbackSpec(mockItem, mockCtx, "medium", "");
     const iscLine = content.split("\n").find((l) => l.includes("FALLBACK_SPEC:"));
     expect(iscLine).toBeDefined();
     expect(iscLine!).toContain("Inference unavailable");

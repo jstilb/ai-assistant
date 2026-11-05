@@ -24,32 +24,35 @@
 import { getPipelineDb, defaultPipelineDbPath, withRetry, resetPipelineDb } from "./PipelineDB.ts";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
+
+/** Named-parameter object accepted by bun:sqlite statement methods. */
+type SqlNamedParams = Record<string, string | number | bigint | boolean | null>;
 
 // ============================================================================
 // Stage Enum (unified pipeline stages)
 // ============================================================================
 
 export const STAGES = [
-  "intake",             // newly entered — equivalent to QueueItem "pending" / "awaiting-context"
-  "needs-grilling",     // HUMAN-GATE: /queue grill required
-  "researching",        // autonomous research phase
-  "generating-spec",    // spec generation in progress
-  "revision-needed",    // spec needs rework
-  "escalated",          // terminal for spec pipeline (no auto-transitions out)
-  "awaiting-approval",  // spec awaiting human approval
-  "approved",           // spec approved; eligible for work execution
-  "in-progress",        // work actively being executed
-  "partial",            // partially completed (multi-phase)
-  "needs-review",       // execution done, human review needed
-  "blocked",            // blocked on dependency or external factor
-  "done",               // terminal: successfully completed
-  "failed",             // terminal: failed (may retry via transition to intake)
-  "rejected",           // terminal: rejected by human
-  "archived",           // soft-deleted; excluded from normal queries
+  "intake", // newly entered — equivalent to QueueItem "pending" / "awaiting-context"
+  "needs-grilling", // HUMAN-GATE: /queue grill required
+  "researching", // autonomous research phase
+  "generating-spec", // spec generation in progress
+  "revision-needed", // spec needs rework
+  "escalated", // terminal for spec pipeline (no auto-transitions out)
+  "awaiting-approval", // spec awaiting human approval
+  "approved", // spec approved; eligible for work execution
+  "in-progress", // work actively being executed
+  "partial", // partially completed (multi-phase)
+  "needs-review", // execution done, human review needed
+  "blocked", // blocked on dependency or external factor
+  "done", // terminal: successfully completed
+  "failed", // terminal: failed (may retry via transition to intake)
+  "rejected", // terminal: rejected by human
+  "archived", // soft-deleted; excluded from normal queries
 ] as const;
 
-export type Stage = typeof STAGES[number];
+export type Stage = (typeof STAGES)[number];
 
 // ============================================================================
 // Unified Transition Table
@@ -89,14 +92,14 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
   // (maps to WorkQueue.pending→in_progress + QueueManager.awaiting-context→researching/needs-grilling)
   // self-loop: maps QueueManager's awaiting-context self-loop (metadata-only updates without
   // leaving the stage, e.g. resetting researchTimeouts for a human-attended retry).
-  "intake": [
-    "intake",            // self-loop: metadata-only update (QueueManager awaiting-context self-loop)
-    "in-progress",       // direct claim for work (WorkQueue path)
-    "researching",       // spec pipeline: advance to research
-    "needs-grilling",    // spec pipeline: human gate
+  intake: [
+    "intake", // self-loop: metadata-only update (QueueManager awaiting-context self-loop)
+    "in-progress", // direct claim for work (WorkQueue path)
+    "researching", // spec pipeline: advance to research
+    "needs-grilling", // spec pipeline: human gate
     "awaiting-approval", // spec already exists, skip pipeline
-    "approved",          // pre-approved work
-    "failed",            // immediate reject
+    "approved", // pre-approved work
+    "failed", // immediate reject
     "rejected",
     "archived",
   ],
@@ -104,20 +107,20 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
   // needs-grilling: HUMAN-GATE
   // (QueueManager.needs-grilling → researching | awaiting-context(=intake) | needs-grilling)
   "needs-grilling": [
-    "researching",       // grill finalized → advance
-    "intake",            // grill deferred → back to intake
-    "needs-grilling",    // idempotent re-park (update brief in place)
+    "researching", // grill finalized → advance
+    "intake", // grill deferred → back to intake
+    "needs-grilling", // idempotent re-park (update brief in place)
     "rejected",
     "archived",
   ],
 
   // researching: autonomous research phase
   // (QueueManager.researching → generating-spec | awaiting-context | needs-grilling)
-  "researching": [
-    "generating-spec",   // research complete → spec generation
-    "intake",            // needs more context → back to intake
-    "needs-grilling",    // pull back to grill
-    "escalated",         // unresolvable → escalate
+  researching: [
+    "generating-spec", // research complete → spec generation
+    "intake", // needs more context → back to intake
+    "needs-grilling", // pull back to grill
+    "escalated", // unresolvable → escalate
     "failed",
     "archived",
   ],
@@ -125,10 +128,10 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
   // generating-spec: spec generation in progress
   // (QueueManager.generating-spec → revision-needed | awaiting-context | needs-grilling)
   "generating-spec": [
-    "revision-needed",   // spec needs rework
+    "revision-needed", // spec needs rework
     "awaiting-approval", // spec ready for human approval
-    "intake",            // needs more context
-    "needs-grilling",    // pull back to grill
+    "intake", // needs more context
+    "needs-grilling", // pull back to grill
     "escalated",
     "failed",
     "archived",
@@ -137,59 +140,59 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
   // revision-needed: spec rework required
   // (QueueManager.revision-needed → researching | escalated)
   "revision-needed": [
-    "researching",       // rework: re-research
-    "generating-spec",   // direct re-spec attempt
-    "escalated",         // give up
+    "researching", // rework: re-research
+    "generating-spec", // direct re-spec attempt
+    "escalated", // give up
     "failed",
     "archived",
   ],
 
   // escalated: terminal for spec pipeline — no auto-transitions
   // (QueueManager.escalated → [])
-  "escalated": [
-    "intake",            // human manually resets
+  escalated: [
+    "intake", // human manually resets
     "archived",
   ],
 
   // awaiting-approval: human approval gate for specs
   // (QueueManager.awaiting_approval + WorkQueue has no direct equivalent — bridges here)
   "awaiting-approval": [
-    "approved",          // human approves
-    "rejected",          // human rejects
-    "revision-needed",   // human requests changes
+    "approved", // human approves
+    "rejected", // human rejects
+    "revision-needed", // human requests changes
     "archived",
   ],
 
   // approved: ready for work execution
   // (QueueManager.approved → in-progress via executor)
-  "approved": [
-    "in-progress",       // executor claims it
-    "rejected",          // human revokes
+  approved: [
+    "in-progress", // executor claims it
+    "rejected", // human revokes
     "archived",
   ],
 
   // in-progress: actively being executed
   // (WorkQueue.in_progress → completed|failed|partial|pending|blocked|in_progress|needs_review)
   "in-progress": [
-    "done",              // successfully completed
-    "failed",            // execution failed
-    "partial",           // partial completion (multi-phase)
-    "approved",          // reset to approved for retry/unblock (WorkQueue.in_progress→pending)
-    "intake",            // reset to beginning
-    "blocked",           // blocked on dep or external
-    "in-progress",       // self-loop: metadata update / re-claim
-    "needs-review",      // human review required
+    "done", // successfully completed
+    "failed", // execution failed
+    "partial", // partial completion (multi-phase)
+    "approved", // reset to approved for retry/unblock (WorkQueue.in_progress→pending)
+    "intake", // reset to beginning
+    "blocked", // blocked on dep or external
+    "in-progress", // self-loop: metadata update / re-claim
+    "needs-review", // human review required
     "archived",
   ],
 
   // partial: partially completed (multi-phase)
   // (WorkQueue.partial → in_progress | pending | partial)
-  "partial": [
-    "in-progress",       // resume next phase
-    "approved",          // reset to approved for retry (WorkQueue.partial→pending)
-    "intake",            // reset
-    "partial",           // self-loop: phase update
-    "done",              // all phases done
+  partial: [
+    "in-progress", // resume next phase
+    "approved", // reset to approved for retry (WorkQueue.partial→pending)
+    "intake", // reset
+    "partial", // self-loop: phase update
+    "done", // all phases done
     "failed",
     "archived",
   ],
@@ -197,41 +200,39 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
   // needs-review: awaiting human review after execution
   // (WorkQueue.needs_review → pending | in_progress | failed)
   "needs-review": [
-    "approved",          // reset to approved for retry (WorkQueue.needs_review→pending)
-    "intake",            // retry
-    "in-progress",       // resume
-    "failed",            // abandon
-    "done",              // human accepts as-is
+    "approved", // reset to approved for retry (WorkQueue.needs_review→pending)
+    "intake", // retry
+    "in-progress", // resume
+    "failed", // abandon
+    "done", // human accepts as-is
     "archived",
   ],
 
   // blocked: blocked on dependency or external
   // (WorkQueue.blocked → completed|failed|pending)
-  "blocked": [
-    "done",              // proxy completed (resolveBlocked)
-    "failed",            // abandon
-    "approved",          // re-approved once blocker clears (WorkQueue.blocked→pending)
-    "intake",            // re-pending once blocker clears (resumeBlocked)
-    "in-progress",       // directly resume
+  blocked: [
+    "done", // proxy completed (resolveBlocked)
+    "failed", // abandon
+    "approved", // re-approved once blocker clears (WorkQueue.blocked→pending)
+    "intake", // re-pending once blocker clears (resumeBlocked)
+    "in-progress", // directly resume
     "archived",
   ],
 
   // Terminal stages — extremely limited exits (only human rescue ops)
-  "done": [
-    "archived",          // archive completed work
+  done: [
+    "archived", // archive completed work
   ],
 
-  "failed": [
-    "approved",          // retry: reset to approved (WorkQueue.failed→pending)
-    "intake",            // retry: reset to beginning (WorkQueue.failed→pending)
+  failed: [
+    "approved", // retry: reset to approved (WorkQueue.failed→pending)
+    "intake", // retry: reset to beginning (WorkQueue.failed→pending)
     "archived",
   ],
 
-  "rejected": [
-    "archived",
-  ],
+  rejected: ["archived"],
 
-  "archived": [
+  archived: [
     // No transitions out — permanent soft-delete
   ],
 };
@@ -239,14 +240,6 @@ export const ALLOWED_TRANSITIONS: Record<Stage, Stage[]> = {
 // ============================================================================
 // PipelineItem Model
 // ============================================================================
-
-export interface PipelineItemSpec {
-  id: string;
-  path: string;
-  status: "draft" | "approved";
-  approvedAt?: string;
-  approvedBy?: string;
-}
 
 export interface PipelineItemProgress {
   currentPhase?: number;
@@ -338,7 +331,7 @@ export interface PipelineItem {
  * collide on `id`, and "give me everything after id N" is a single
  * indexed range scan with no ambiguity about ties.
  */
-export interface PipelineEvent {
+interface PipelineEvent {
   id: number;
   item_id: string;
   from_stage: Stage | null;
@@ -375,7 +368,7 @@ function rowToEvent(row: DbRow): PipelineEvent {
 // Integrity Report
 // ============================================================================
 
-export interface IntegrityReport {
+interface IntegrityReport {
   ok: boolean;
   errors: string[];
   warnings: string[];
@@ -390,7 +383,7 @@ export interface IntegrityReport {
 // Filter
 // ============================================================================
 
-export interface PipelineFilter {
+interface PipelineFilter {
   stage?: Stage | Stage[];
   priority?: 1 | 2 | 3;
   queue?: string;
@@ -499,9 +492,7 @@ export class PipelineRepository {
   // --------------------------------------------------------------------------
 
   get(id: string): PipelineItem | null {
-    const row = this.db
-      .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-      .get(id) as DbRow | null;
+    const row = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(id) as DbRow | null;
     return row ? rowToItem(row) : null;
   }
 
@@ -583,15 +574,16 @@ export class PipelineRepository {
     // key set (e.g. queueItemToPipelineParams), never from a caller that needs to
     // DELETE a metadata key (WorkQueue.setMetadata/resumeBlocked do; they must NOT
     // set this). See upsert() docstring, fable-remediation b1/b2.
-    opts?: { actor?: string; enforce?: boolean; mergeMetadata?: boolean }
+    opts?: { actor?: string; enforce?: boolean; mergeMetadata?: boolean },
   ): PipelineItem {
     const now = new Date().toISOString();
     const actor = opts?.actor ?? "upsert";
-    const enforceMode = opts?.enforce ?? (process.env.KAYA_PIPELINE_TRANSITION_ENFORCE !== "0");
+    const enforceMode = opts?.enforce ?? process.env.KAYA_PIPELINE_TRANSITION_ENFORCE !== "0";
 
     // Set inside the tx when an illegal crossing is observed in shadow mode; emitted
     // via recordFailure AFTER the tx commits (see docstring above).
-    let shadowIllegalVerdict: { id: string; from: Stage; to: Stage } | null = null;
+    // Asserted, not annotated: it is assigned inside the transaction callback, which TS does not track.
+    let shadowIllegalVerdict = null as { id: string; from: Stage; to: Stage } | null;
 
     // BEGIN IMMEDIATE: acquire write lock before reading the existing row.
     // db.transaction() uses BEGIN DEFERRED — two concurrent upserts on the same
@@ -603,9 +595,7 @@ export class PipelineRepository {
       this.db.exec("BEGIN IMMEDIATE");
       try {
         // Read existing row inside the write transaction (consistent view)
-        const existing = this.db
-          .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-          .get(item.id) as DbRow | null;
+        const existing = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(item.id) as DbRow | null;
         const existingItem = existing ? rowToItem(existing) : null;
 
         const stage = (item.stage ?? existingItem?.stage ?? "intake") as Stage;
@@ -631,7 +621,7 @@ export class PipelineRepository {
             this.db.exec("ROLLBACK");
             throw new Error(
               `PipelineRepository.upsert: illegal transition "${fromStage}" → "${stage}" for item ${item.id}. ` +
-              `Allowed from "${fromStage}": [${allowed?.join(", ") || "none"}]`
+                `Allowed from "${fromStage}": [${allowed?.join(", ") || "none"}]`,
             );
           } else {
             eventToWrite = { from: fromStage, to: stage, note: "shadow-illegal" };
@@ -662,21 +652,23 @@ export class PipelineRepository {
         const resolvedWorktreePath = item.worktree_path ?? existingItem?.worktree_path ?? null;
         const resolvedWorktreeBranch = item.worktree_branch ?? existingItem?.worktree_branch ?? null;
         const resolvedRetryEligibleAfter = item.retry_eligible_after ?? existingItem?.retry_eligible_after ?? null;
-        const resolvedMetadata = item.metadata !== undefined
-          ? (opts?.mergeMetadata && existingItem ? { ...existingItem.metadata, ...item.metadata } : item.metadata)
-          : (existingItem?.metadata ?? {});
+        const resolvedMetadata =
+          item.metadata !== undefined
+            ? opts?.mergeMetadata && existingItem
+              ? { ...existingItem.metadata, ...item.metadata }
+              : item.metadata
+            : (existingItem?.metadata ?? {});
         const resolvedContext = item.context ?? existingItem?.context ?? {};
         const resolvedAttempts = item.attempts ?? existingItem?.attempts ?? [];
         const resolvedProgress = item.progress ?? existingItem?.progress ?? {};
         const resolvedIscRows = item.isc_rows ?? existingItem?.isc_rows ?? [];
-        const resolvedVerification = item.verification !== undefined
-          ? item.verification
-          : existingItem?.verification;
+        const resolvedVerification = item.verification !== undefined ? item.verification : existingItem?.verification;
 
         // Scalars: direct equality (existing optional fields normalized ?? null to
         // match the resolved-value convention above). JSON blobs: canonicalJson so
         // key-order differences never produce a false "dirty" verdict.
-        const isDirty = !existingItem || (
+        const isDirty =
+          !existingItem ||
           stage !== existingItem.stage ||
           priority !== existingItem.priority ||
           resolvedSource !== (existingItem.source ?? null) ||
@@ -705,10 +697,10 @@ export class PipelineRepository {
           canonicalJson(resolvedAttempts) !== canonicalJson(existingItem.attempts) ||
           canonicalJson(resolvedProgress) !== canonicalJson(existingItem.progress) ||
           canonicalJson(resolvedIscRows) !== canonicalJson(existingItem.isc_rows) ||
-          canonicalJson(resolvedVerification) !== canonicalJson(existingItem.verification)
-        );
+          canonicalJson(resolvedVerification) !== canonicalJson(existingItem.verification);
 
-        this.db.prepare(`
+        this.db
+          .prepare(`
           INSERT INTO pipeline_items (
             id, stage, priority, source, type, queue, title, description,
             lucid_task_id,
@@ -761,66 +753,71 @@ export class PipelineRepository {
             isc_rows          = excluded.isc_rows,
             verification      = excluded.verification,
             updated_at        = excluded.updated_at
-        `).run({
-          $id: item.id,
-          $stage: stage,
-          $priority: priority,
-          $source: resolvedSource,
-          $type: resolvedType,
-          $queue: resolvedQueue,
-          $title: title,
-          $description: description,
-          $lucid_task_id: resolvedLucidTaskId,
-          $spec_id: resolvedSpecId,
-          $spec_path: resolvedSpecPath,
-          $spec_status: resolvedSpecStatus,
-          $spec_approved_at: resolvedSpecApprovedAt,
-          $spec_approved_by: resolvedSpecApprovedBy,
-          $dependencies: JSON.stringify(resolvedDependencies),
-          $started_at: resolvedStartedAt,
-          $completed_at: resolvedCompletedAt,
-          $result: resolvedResult,
-          $error: resolvedError,
-          $project_path: resolvedProjectPath,
-          $output_path: resolvedOutputPath,
-          $worktree_path: resolvedWorktreePath,
-          $worktree_branch: resolvedWorktreeBranch,
-          $retry_eligible_after: resolvedRetryEligibleAfter,
-          $metadata: JSON.stringify(resolvedMetadata),
-          $context: JSON.stringify(resolvedContext),
-          $attempts: JSON.stringify(resolvedAttempts),
-          $progress: JSON.stringify(resolvedProgress),
-          $isc_rows: JSON.stringify(resolvedIscRows),
-          $verification: resolvedVerification !== undefined ? JSON.stringify(resolvedVerification) : null,
-          $created_at: existingItem?.created_at ?? item.created_at ?? now,
-          // Preserve updated_at when nothing persisted actually changed (see
-          // dirty-check docstring above) — only a genuine change restamps it.
-          $updated_at: existingItem && !isDirty ? existingItem.updated_at : now,
-        });
+        `)
+          .run({
+            $id: item.id,
+            $stage: stage,
+            $priority: priority,
+            $source: resolvedSource,
+            $type: resolvedType,
+            $queue: resolvedQueue,
+            $title: title,
+            $description: description,
+            $lucid_task_id: resolvedLucidTaskId,
+            $spec_id: resolvedSpecId,
+            $spec_path: resolvedSpecPath,
+            $spec_status: resolvedSpecStatus,
+            $spec_approved_at: resolvedSpecApprovedAt,
+            $spec_approved_by: resolvedSpecApprovedBy,
+            $dependencies: JSON.stringify(resolvedDependencies),
+            $started_at: resolvedStartedAt,
+            $completed_at: resolvedCompletedAt,
+            $result: resolvedResult,
+            $error: resolvedError,
+            $project_path: resolvedProjectPath,
+            $output_path: resolvedOutputPath,
+            $worktree_path: resolvedWorktreePath,
+            $worktree_branch: resolvedWorktreeBranch,
+            $retry_eligible_after: resolvedRetryEligibleAfter,
+            $metadata: JSON.stringify(resolvedMetadata),
+            $context: JSON.stringify(resolvedContext),
+            $attempts: JSON.stringify(resolvedAttempts),
+            $progress: JSON.stringify(resolvedProgress),
+            $isc_rows: JSON.stringify(resolvedIscRows),
+            $verification: resolvedVerification !== undefined ? JSON.stringify(resolvedVerification) : null,
+            $created_at: existingItem?.created_at ?? item.created_at ?? now,
+            // Preserve updated_at when nothing persisted actually changed (see
+            // dirty-check docstring above) — only a genuine change restamps it.
+            $updated_at: existingItem && !isDirty ? existingItem.updated_at : now,
+          });
 
         // A2: append-only audit row for creation / stage-crossing upserts — same tx
         // as the pipeline_items write above, so both land or roll back together.
         if (eventToWrite) {
-          this.db.prepare(`
+          this.db
+            .prepare(`
             INSERT INTO pipeline_events (item_id, from_stage, to_stage, actor, note, ts)
             VALUES ($item_id, $from_stage, $to_stage, $actor, $note, $ts)
-          `).run({
-            $item_id: item.id,
-            $from_stage: eventToWrite.from,
-            $to_stage: eventToWrite.to,
-            $actor: actor,
-            $note: eventToWrite.note,
-            $ts: now,
-          });
+          `)
+            .run({
+              $item_id: item.id,
+              $from_stage: eventToWrite.from,
+              $to_stage: eventToWrite.to,
+              $actor: actor,
+              $note: eventToWrite.note,
+              $ts: now,
+            });
         }
 
-        const updated = this.db
-          .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-          .get(item.id) as DbRow;
+        const updated = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(item.id) as DbRow;
         this.db.exec("COMMIT");
         return rowToItem(updated);
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore rollback errors */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore rollback errors */
+        }
         throw err;
       }
     });
@@ -845,7 +842,7 @@ export class PipelineRepository {
 
   list(filter: PipelineFilter = {}): PipelineItem[] {
     const conditions: string[] = [];
-    const params: Record<string, unknown> = {};
+    const params: SqlNamedParams = {};
 
     if (!filter.includeArchived) {
       conditions.push("stage != 'archived'");
@@ -855,7 +852,9 @@ export class PipelineRepository {
       if (Array.isArray(filter.stage)) {
         const placeholders = filter.stage.map((_, i) => `$stage_${i}`).join(", ");
         conditions.push(`stage IN (${placeholders})`);
-        filter.stage.forEach((s, i) => { params[`$stage_${i}`] = s; });
+        filter.stage.forEach((s, i) => {
+          params[`$stage_${i}`] = s;
+        });
       } else {
         conditions.push("stage = $stage");
         params.$stage = filter.stage;
@@ -928,29 +927,26 @@ export class PipelineRepository {
    * At least one of the two must be provided; a bare call with neither would
    * silently return the entire audit table, which is never what a poller wants.
    */
-  getRecentEvents(
-    since?: string | null,
-    opts?: { toStage?: Stage; sinceId?: number }
-  ): PipelineEvent[] {
+  getRecentEvents(since?: string | null, opts?: { toStage?: Stage; sinceId?: number }): PipelineEvent[] {
     const sinceId = opts?.sinceId;
     const hasSinceId = sinceId !== undefined && sinceId !== null;
     const hasSince = since !== undefined && since !== null;
 
     if (!hasSinceId && !hasSince) {
       throw new Error(
-        "PipelineRepository.getRecentEvents: must provide either `since` (ISO-8601 ts) or `opts.sinceId` (event id)"
+        "PipelineRepository.getRecentEvents: must provide either `since` (ISO-8601 ts) or `opts.sinceId` (event id)",
       );
     }
 
     const conditions: string[] = [];
-    const params: Record<string, unknown> = {};
+    const params: SqlNamedParams = {};
 
     if (hasSinceId) {
       conditions.push("id > $sinceId");
       params.$sinceId = sinceId;
     } else {
       conditions.push("ts > $since");
-      params.$since = since;
+      params.$since = since ?? null; // non-null here: the guard above threw otherwise
     }
 
     if (opts?.toStage) {
@@ -1017,24 +1013,28 @@ export class PipelineRepository {
     const row = withRetry(() => {
       this.db.exec("BEGIN IMMEDIATE");
       try {
-        this.db.prepare(`
+        this.db
+          .prepare(`
           INSERT INTO pipeline_events (item_id, from_stage, to_stage, actor, note, ts)
           VALUES ($item_id, $from_stage, $to_stage, $actor, $note, $ts)
-        `).run({
-          $item_id: input.itemId,
-          $from_stage: input.fromStage ?? null,
-          $to_stage: input.toStage,
-          $actor: input.actor,
-          $note: input.note ?? null,
-          $ts: now,
-        });
-        const inserted = this.db
-          .prepare("SELECT * FROM pipeline_events WHERE id = last_insert_rowid()")
-          .get() as DbRow;
+        `)
+          .run({
+            $item_id: input.itemId,
+            $from_stage: input.fromStage ?? null,
+            $to_stage: input.toStage,
+            $actor: input.actor,
+            $note: input.note ?? null,
+            $ts: now,
+          });
+        const inserted = this.db.prepare("SELECT * FROM pipeline_events WHERE id = last_insert_rowid()").get() as DbRow;
         this.db.exec("COMMIT");
         return inserted;
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore rollback errors */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore rollback errors */
+        }
         throw err;
       }
     });
@@ -1075,7 +1075,7 @@ export class PipelineRepository {
       // (e.g. queueItemToPipelineParams), never from a caller that needs to DELETE
       // a metadata key. See upsert() docstring, fable-remediation b1/b2.
       mergeMetadata?: boolean;
-    }
+    },
   ): PipelineItem {
     const now = new Date().toISOString();
     const autoTimestamp = opts?.autoTimestamp ?? true;
@@ -1085,9 +1085,7 @@ export class PipelineRepository {
     const result = withRetry(() => {
       this.db.exec("BEGIN IMMEDIATE");
       try {
-        const row = this.db
-          .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-          .get(id) as DbRow | null;
+        const row = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(id) as DbRow | null;
 
         if (!row) {
           this.db.exec("ROLLBACK");
@@ -1100,13 +1098,13 @@ export class PipelineRepository {
           this.db.exec("ROLLBACK");
           throw new Error(
             `PipelineRepository.transition: illegal transition "${fromStage}" → "${toStage}" for item ${id}. ` +
-            `Allowed from "${fromStage}": [${allowed?.join(", ") || "none"}]`
+              `Allowed from "${fromStage}": [${allowed?.join(", ") || "none"}]`,
           );
         }
 
         const patch = opts?.patch ?? {};
         const setClauses: string[] = ["stage = $stage", "updated_at = $updated_at"];
-        const params: Record<string, unknown> = {
+        const params: SqlNamedParams = {
           $stage: toStage,
           $updated_at: now,
           $id: id,
@@ -1119,7 +1117,12 @@ export class PipelineRepository {
         }
 
         // Auto-set completed_at for terminal stages
-        if (autoTimestamp && (toStage === "done" || toStage === "failed" || toStage === "rejected") && !row.completed_at && !patch.completed_at) {
+        if (
+          autoTimestamp &&
+          (toStage === "done" || toStage === "failed" || toStage === "rejected") &&
+          !row.completed_at &&
+          !patch.completed_at
+        ) {
           setClauses.push("completed_at = $completed_at_auto");
           params.$completed_at_auto = now;
         }
@@ -1134,13 +1137,22 @@ export class PipelineRepository {
         // around it by stripping "dependencies" out of every transition() patch call
         // site (WorkQueue.updateStatus, QueueManager.updateSpecPipelineStatus); slice
         // A4 fixes it here so those call sites can stop stripping it.
-        const blobFields = new Set(["metadata", "context", "attempts", "progress", "isc_rows", "verification", "dependencies"]);
+        const blobFields = new Set([
+          "metadata",
+          "context",
+          "attempts",
+          "progress",
+          "isc_rows",
+          "verification",
+          "dependencies",
+        ]);
         // Existing metadata, parsed lazily (only when mergeMetadata is requested AND
         // the patch actually carries a metadata key) — same shallow-merge semantics
         // as upsert()'s mergeMetadata (see its docstring and this method's opts doc).
-        const existingMetadata = opts?.mergeMetadata && patch.metadata !== undefined
-          ? parseJson<Record<string, unknown>>(row.metadata, {})
-          : undefined;
+        const existingMetadata =
+          opts?.mergeMetadata && patch.metadata !== undefined
+            ? parseJson<Record<string, unknown>>(row.metadata, {})
+            : undefined;
         for (const [key, value] of Object.entries(patch)) {
           if (value === undefined) continue;
           const colName = key; // PipelineItem field names match column names
@@ -1151,7 +1163,8 @@ export class PipelineRepository {
           } else if (blobFields.has(key)) {
             params[paramName] = JSON.stringify(value);
           } else {
-            params[paramName] = value;
+            // Non-blob PipelineItem fields map to scalar columns (string/number/null).
+            params[paramName] = value as SqlNamedParams[string];
           }
         }
 
@@ -1160,25 +1173,29 @@ export class PipelineRepository {
 
         // Append-only audit row — same tx as the stage update above, so both
         // land or roll back together (see pipeline_events DDL in PipelineDB.ts).
-        this.db.prepare(`
+        this.db
+          .prepare(`
           INSERT INTO pipeline_events (item_id, from_stage, to_stage, actor, note, ts)
           VALUES ($item_id, $from_stage, $to_stage, $actor, $note, $ts)
-        `).run({
-          $item_id: id,
-          $from_stage: fromStage,
-          $to_stage: toStage,
-          $actor: actor,
-          $note: note,
-          $ts: now,
-        });
+        `)
+          .run({
+            $item_id: id,
+            $from_stage: fromStage,
+            $to_stage: toStage,
+            $actor: actor,
+            $note: note,
+            $ts: now,
+          });
 
-        const updated = this.db
-          .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-          .get(id) as DbRow;
+        const updated = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(id) as DbRow;
         this.db.exec("COMMIT");
         return updated;
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore rollback errors */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore rollback errors */
+        }
         throw err;
       }
     });
@@ -1205,13 +1222,15 @@ export class PipelineRepository {
     return withRetry(() => {
       this.db.exec("BEGIN IMMEDIATE");
       try {
-        const result = this.db
-          .prepare("DELETE FROM pipeline_items WHERE id = ?")
-          .run(id);
+        const result = this.db.prepare("DELETE FROM pipeline_items WHERE id = ?").run(id);
         this.db.exec("COMMIT");
         return result.changes > 0;
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore */
+        }
         throw err;
       }
     });
@@ -1242,7 +1261,7 @@ export class PipelineRepository {
     if (!testAllowed?.includes(toStage)) {
       throw new Error(
         `claimBatch: illegal transition "${fromStage}" → "${toStage}". ` +
-        `Allowed from "${fromStage}": [${testAllowed?.join(", ") || "none"}]`
+          `Allowed from "${fromStage}": [${testAllowed?.join(", ") || "none"}]`,
       );
     }
 
@@ -1260,14 +1279,14 @@ export class PipelineRepository {
              WHERE stage = ?
                AND (retry_eligible_after IS NULL OR retry_eligible_after <= ?)
              ORDER BY priority ASC, created_at ASC
-             LIMIT ?`
+             LIMIT ?`,
           )
           .all(fromStage, now, n) as { id: string }[];
 
         const claimedItems: PipelineItem[] = [];
         for (const { id } of rows) {
           const setClauses = ["stage = ?", "updated_at = ?"];
-          const params: unknown[] = [toStage, now];
+          const params: SQLQueryBindings[] = [toStage, now];
 
           // Auto started_at for in-progress
           if (toStage === "in-progress") {
@@ -1276,20 +1295,20 @@ export class PipelineRepository {
           }
 
           params.push(id);
-          this.db
-            .prepare(`UPDATE pipeline_items SET ${setClauses.join(", ")} WHERE id = ?`)
-            .run(...params);
+          this.db.prepare(`UPDATE pipeline_items SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
 
-          const updatedRow = this.db
-            .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-            .get(id) as DbRow;
+          const updatedRow = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(id) as DbRow;
           claimedItems.push(rowToItem(updatedRow));
         }
 
         this.db.exec("COMMIT");
         return claimedItems;
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore */
+        }
         throw err;
       }
     });
@@ -1332,7 +1351,7 @@ export class PipelineRepository {
     if (!testAllowed?.includes(toStage)) {
       throw new Error(
         `claimByIds: illegal transition "${fromStage}" → "${toStage}". ` +
-        `Allowed from "${fromStage}": [${testAllowed?.join(", ") || "none"}]`
+          `Allowed from "${fromStage}": [${testAllowed?.join(", ") || "none"}]`,
       );
     }
 
@@ -1345,7 +1364,7 @@ export class PipelineRepository {
 
         for (const id of candidateIds) {
           const setClauses = ["stage = ?", "updated_at = ?"];
-          const params: unknown[] = [toStage, now];
+          const params: SQLQueryBindings[] = [toStage, now];
 
           // Auto started_at for in-progress
           if (toStage === "in-progress") {
@@ -1357,15 +1376,11 @@ export class PipelineRepository {
           // If another process claimed it first, changes() returns 0 → skip.
           params.push(id, fromStage);
           const result = this.db
-            .prepare(
-              `UPDATE pipeline_items SET ${setClauses.join(", ")} WHERE id = ? AND stage = ?`
-            )
+            .prepare(`UPDATE pipeline_items SET ${setClauses.join(", ")} WHERE id = ? AND stage = ?`)
             .run(...params);
 
           if (result.changes > 0) {
-            const updatedRow = this.db
-              .prepare("SELECT * FROM pipeline_items WHERE id = ?")
-              .get(id) as DbRow;
+            const updatedRow = this.db.prepare("SELECT * FROM pipeline_items WHERE id = ?").get(id) as DbRow;
             claimedItems.push(rowToItem(updatedRow));
           }
         }
@@ -1373,7 +1388,11 @@ export class PipelineRepository {
         this.db.exec("COMMIT");
         return claimedItems;
       } catch (err) {
-        try { this.db.exec("ROLLBACK"); } catch { /* ignore */ }
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          /* ignore */
+        }
         throw err;
       }
     });
@@ -1399,9 +1418,7 @@ export class PipelineRepository {
     const warnings: string[] = [];
     const now = new Date().toISOString();
 
-    const allRows = this.db
-      .prepare("SELECT * FROM pipeline_items")
-      .all() as DbRow[];
+    const allRows = this.db.prepare("SELECT * FROM pipeline_items").all() as DbRow[];
 
     const allIds = new Set(allRows.map((r) => r.id as string));
     const stageEnum = new Set<string>(STAGES);
@@ -1435,7 +1452,7 @@ export class PipelineRepository {
       // (d) done items should have verification
       if (stage === "done") {
         const verification = parseJson<Record<string, unknown> | undefined>(row.verification, undefined);
-        if (!verification || !verification.verdict) {
+        if (!verification?.verdict) {
           warnings.push(`[${id}] stage=done but verification is missing or empty`);
         }
       }

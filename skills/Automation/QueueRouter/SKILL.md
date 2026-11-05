@@ -286,7 +286,6 @@ bun QueueManager.ts reject-to-pipeline <id> --reason "needs more detail"
 
 ### Tools
 - **QueueManager.ts** - Core queue CRUD operations
-- **SpecParser.ts** - Spec markdown parsing
 - **SpecPipelineRunner.ts** - Orchestrates research and spec generation phases
 - **MigrateApprovalsToSpecPipeline.ts** - One-time migration script
 

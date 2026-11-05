@@ -49,10 +49,10 @@
  *     called without KAYA_HOME override.
  */
 
-import { readdirSync, readFileSync, existsSync } from "fs";
-import { join, basename } from "path";
-import { parseArgs } from "util";
-import { getPipelineRepository, resetPipelineRepository } from "./PipelineRepository.ts";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { getPipelineRepository } from "./PipelineRepository.ts";
 import { defaultPipelineDbPath, getPipelineDb } from "./PipelineDB.ts";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -64,20 +64,15 @@ import { getTaskClient } from "../../../../lib/interfaces/QueueTaskIntegration.t
 // ============================================================================
 
 /** Stages that may be stuck. Explicitly excludes needs-grilling (human-paced). */
-const AUTONOMOUS_STAGES = [
-  "researching",
-  "generating-spec",
-  "approved",
-  "in-progress",
-] as const;
+const AUTONOMOUS_STAGES = ["researching", "generating-spec", "approved", "in-progress"] as const;
 
-type AutonomousStage = typeof AUTONOMOUS_STAGES[number];
+type AutonomousStage = (typeof AUTONOMOUS_STAGES)[number];
 
 const STUCK_THRESHOLDS_MS: Record<AutonomousStage, number> = {
-  "researching":      6  * 60 * 60 * 1000,  // 6h
-  "generating-spec":  6  * 60 * 60 * 1000,  // 6h
-  "approved":         48 * 60 * 60 * 1000,  // 48h
-  "in-progress":      24 * 60 * 60 * 1000,  // 24h
+  researching: 6 * 60 * 60 * 1000, // 6h
+  "generating-spec": 6 * 60 * 60 * 1000, // 6h
+  approved: 48 * 60 * 60 * 1000, // 48h
+  "in-progress": 24 * 60 * 60 * 1000, // 24h
 };
 
 /** Age bucket labels for fingerprinting (coarse-grained so a stable state dedupes) */
@@ -140,7 +135,7 @@ export interface IntegrityCheckReport {
   storeErrors: string[];
   storeWarnings: string[];
   guardBypassItems: GuardBypassItem[];
-  summary: string;          // machine-greppable one-liner
+  summary: string; // machine-greppable one-liner
   ok: boolean;
 }
 
@@ -154,12 +149,10 @@ function checkOrphanSpecs(specsDir: string, dbPath: string): OrphanSpec[] {
   // Load all pipeline IDs from the DB (all stages including archived)
   const repo = getPipelineRepository(dbPath);
   const allItems = repo.list({ includeArchived: true });
-  const knownIds = new Set(allItems.map(i => i.id));
+  const knownIds = new Set(allItems.map((i) => i.id));
 
   // Also check spec_id field
-  const knownSpecIds = new Set(
-    allItems.flatMap(i => [i.spec_id].filter(Boolean))
-  );
+  const knownSpecIds = new Set(allItems.flatMap((i) => [i.spec_id].filter(Boolean)));
 
   const orphans: OrphanSpec[] = [];
 
@@ -287,7 +280,8 @@ export function lucidTasksHumanGate(): HumanGatePredicate {
  */
 function checkGuardBypass(dbPath: string): GuardBypassItem[] {
   const pdb = getPipelineDb(dbPath);
-  const rows = pdb.db.prepare(`
+  const rows = pdb.db
+    .prepare(`
     SELECT p.id AS id, p.stage AS stage, e.to_stage AS latest_to_stage
     FROM pipeline_items p
     JOIN (
@@ -296,9 +290,10 @@ function checkGuardBypass(dbPath: string): GuardBypassItem[] {
       GROUP BY item_id
     ) e ON e.item_id = p.id
     WHERE p.stage != e.to_stage
-  `).all() as Array<{ id: string; stage: string; latest_to_stage: string }>;
+  `)
+    .all() as Array<{ id: string; stage: string; latest_to_stage: string }>;
 
-  return rows.map(r => ({ id: r.id, stage: r.stage, latestEventToStage: r.latest_to_stage }));
+  return rows.map((r) => ({ id: r.id, stage: r.stage, latestEventToStage: r.latest_to_stage }));
 }
 
 // ============================================================================
@@ -315,9 +310,8 @@ function checkGuardBypass(dbPath: string): GuardBypassItem[] {
  */
 function buildFingerprint(report: IntegrityCheckReport): string {
   const oldestOrphan = report.orphanSpecs.length > 0 ? "<static>" : "none";
-  const oldestStuck = report.stuckItems.length > 0
-    ? ageBucket(Math.max(...report.stuckItems.map(s => s.ageMs)))
-    : "none";
+  const oldestStuck =
+    report.stuckItems.length > 0 ? ageBucket(Math.max(...report.stuckItems.map((s) => s.ageMs))) : "none";
 
   return [
     `orphans=${report.orphanSpecs.length}`,
@@ -357,9 +351,8 @@ export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckR
   // join(home, ".kaya", ...) put the db under ~/.claude/.kaya in live runs (KAYA_HOME unset),
   // a non-existent file → every spec read as an orphan. Use the canonical resolver.
   const home = opts.kayaHome ?? getKayaHome();
-  const dbPath = opts.dbPath ?? (opts.kayaHome
-    ? join(opts.kayaHome, ".kaya", "runtime", "pipeline.db")
-    : defaultPipelineDbPath());
+  const dbPath =
+    opts.dbPath ?? (opts.kayaHome ? join(opts.kayaHome, ".kaya", "runtime", "pipeline.db") : defaultPipelineDbPath());
   const specsDir = opts.specsDir ?? join(home, "plans", "Specs", "Queue");
 
   const checkedAt = new Date().toISOString();
@@ -376,8 +369,8 @@ export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckR
   // Check 4: Guard bypass ("wrote around the guard", slice A2)
   const guardBypassItems = checkGuardBypass(dbPath);
 
-  const ok = orphanSpecs.length === 0 && storeErrors.length === 0 && stuckItems.length === 0
-    && guardBypassItems.length === 0;
+  const ok =
+    orphanSpecs.length === 0 && storeErrors.length === 0 && stuckItems.length === 0 && guardBypassItems.length === 0;
 
   // Machine-greppable summary line
   const summary = [
@@ -406,17 +399,27 @@ export async function runCheck(opts: CheckOptions = {}): Promise<IntegrityCheckR
     const messageParts: string[] = [`Pipeline integrity problem: ${summary}`];
 
     if (orphanSpecs.length > 0) {
-      messageParts.push(`Orphan specs (${orphanSpecs.length}): ${orphanSpecs.slice(0, 3).map(o => o.itemId).join(", ")}`);
+      messageParts.push(
+        `Orphan specs (${orphanSpecs.length}): ${orphanSpecs
+          .slice(0, 3)
+          .map((o) => o.itemId)
+          .join(", ")}`,
+      );
     }
     if (stuckItems.length > 0) {
-      const oldest = stuckItems.reduce((a, b) => a.ageMs > b.ageMs ? a : b);
+      const oldest = stuckItems.reduce((a, b) => (a.ageMs > b.ageMs ? a : b));
       messageParts.push(`Oldest stuck: ${oldest.id} in ${oldest.stage} for ${ageBucket(oldest.ageMs)}`);
     }
     if (storeErrors.length > 0) {
       messageParts.push(`Store errors (${storeErrors.length}): ${storeErrors.slice(0, 2).join("; ")}`);
     }
     if (guardBypassItems.length > 0) {
-      messageParts.push(`Guard bypass (${guardBypassItems.length}): ${guardBypassItems.slice(0, 3).map(g => `${g.id} (${g.latestEventToStage}→${g.stage})`).join(", ")}`);
+      messageParts.push(
+        `Guard bypass (${guardBypassItems.length}): ${guardBypassItems
+          .slice(0, 3)
+          .map((g) => `${g.id} (${g.latestEventToStage}→${g.stage})`)
+          .join(", ")}`,
+      );
     }
 
     sendAlert(messageParts.join("\n"), {
@@ -439,10 +442,10 @@ async function main(): Promise<void> {
     args: Bun.argv.slice(2),
     options: {
       "no-alert": { type: "boolean" },
-      json:       { type: "boolean", short: "j" },
-      help:       { type: "boolean", short: "h" },
+      json: { type: "boolean", short: "j" },
+      help: { type: "boolean", short: "h" },
       "kaya-home": { type: "string" },
-      "db-path":   { type: "string" },
+      "db-path": { type: "string" },
       "specs-dir": { type: "string" },
     },
     allowPositionals: true,
@@ -554,7 +557,7 @@ Machine-greppable summary line:
 }
 
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error(`[PipelineIntegrity] Fatal: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   });

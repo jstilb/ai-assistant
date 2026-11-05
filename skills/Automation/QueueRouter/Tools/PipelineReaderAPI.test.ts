@@ -21,7 +21,7 @@
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { join } from "path";
+import { join } from "node:path";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
 // ============================================================================
@@ -36,7 +36,6 @@ import {
   resetPipelineRepository,
   generatePipelineId,
   type PipelineItem,
-  type PipelineEvent,
   type Stage,
 } from "./PipelineRepository.ts";
 import { resetPipelineDb } from "./PipelineDB.ts";
@@ -94,34 +93,34 @@ describe("1. getEvents(itemId)", () => {
 
     // strictly ascending ids
     for (let i = 1; i < events.length; i++) {
-      expect(events[i].id).toBeGreaterThan(events[i - 1].id);
+      expect(events[i]?.id ?? Number.NaN).toBeGreaterThan(events[i - 1]?.id ?? Number.NaN);
     }
 
-    expect(events[0].from_stage).toBeNull();
-    expect(events[0].to_stage).toBe("intake");
-    expect(events[0].note).toBe("creation");
+    expect(events[0]?.from_stage).toBeNull();
+    expect(events[0]?.to_stage).toBe("intake");
+    expect(events[0]?.note).toBe("creation");
 
-    expect(events[1].from_stage).toBe("intake");
-    expect(events[1].to_stage).toBe("researching");
-    expect(events[1].actor).toBe("worker-a");
-    expect(events[1].note).toBe("step 1");
+    expect(events[1]?.from_stage).toBe("intake");
+    expect(events[1]?.to_stage).toBe("researching");
+    expect(events[1]?.actor).toBe("worker-a");
+    expect(events[1]?.note).toBe("step 1");
 
-    expect(events[2].from_stage).toBe("researching");
-    expect(events[2].to_stage).toBe("generating-spec");
-    expect(events[2].actor).toBe("worker-b");
-    expect(events[2].note).toBe("step 2");
+    expect(events[2]?.from_stage).toBe("researching");
+    expect(events[2]?.to_stage).toBe("generating-spec");
+    expect(events[2]?.actor).toBe("worker-b");
+    expect(events[2]?.note).toBe("step 2");
   });
 
   test("event shape includes id, item_id, from_stage, to_stage, actor, note, ts", () => {
     const item = repo.upsert(makeItem({ stage: "intake" }));
     const [event] = repo.getEvents(item.id);
-    expect(typeof event.id).toBe("number");
-    expect(event.item_id).toBe(item.id);
-    expect(event.from_stage).toBeNull();
-    expect(typeof event.to_stage).toBe("string");
-    expect(typeof event.actor).toBe("string");
-    expect(event.note === null || typeof event.note === "string").toBe(true);
-    expect(typeof event.ts).toBe("string");
+    expect(typeof event?.id).toBe("number");
+    expect(event?.item_id).toBe(item.id);
+    expect(event?.from_stage).toBeNull();
+    expect(typeof event?.to_stage).toBe("string");
+    expect(typeof event?.actor).toBe("string");
+    expect(event?.note === null || typeof event?.note === "string").toBe(true);
+    expect(typeof event?.ts).toBe("string");
   });
 
   test("only returns events scoped to the given item id", () => {
@@ -174,7 +173,7 @@ describe("2. getRecentEvents(since) — ts-based paging", () => {
 
     const events = repo.getRecentEvents(checkpoint);
     for (let i = 1; i < events.length; i++) {
-      expect(events[i].id).toBeGreaterThan(events[i - 1].id);
+      expect(events[i]?.id ?? Number.NaN).toBeGreaterThan(events[i - 1]?.id ?? Number.NaN);
     }
   });
 
@@ -197,7 +196,8 @@ describe("3. getRecentEvents(opts.sinceId) — id-based paging", () => {
   test("returns only events with id strictly greater than sinceId", () => {
     const a = repo.upsert(makeItem({ stage: "intake" })); // event 1
     const b = repo.upsert(makeItem({ stage: "intake" })); // event 2
-    const checkpointId = repo.getEvents(a.id)[0].id;
+    const checkpointId = repo.getEvents(a.id)[0]?.id;
+    if (checkpointId === undefined) throw new Error("expected a creation event");
 
     repo.transition(b.id, "researching"); // event 3
 
@@ -222,7 +222,7 @@ describe("3. getRecentEvents(opts.sinceId) — id-based paging", () => {
 
     const batch1 = repo.getRecentEvents(undefined, { sinceId: checkpoint });
     expect(batch1.length).toBeGreaterThanOrEqual(1);
-    checkpoint = batch1[batch1.length - 1].id;
+    checkpoint = batch1.at(-1)?.id ?? checkpoint;
 
     // Nothing new yet
     expect(repo.getRecentEvents(undefined, { sinceId: checkpoint })).toEqual([]);
@@ -230,7 +230,7 @@ describe("3. getRecentEvents(opts.sinceId) — id-based paging", () => {
     repo.transition(item.id, "researching");
     const batch2 = repo.getRecentEvents(undefined, { sinceId: checkpoint });
     expect(batch2.length).toBe(1);
-    expect(batch2[0].to_stage).toBe("researching");
+    expect(batch2[0]?.to_stage).toBe("researching");
   });
 });
 
@@ -258,13 +258,14 @@ describe("4. getRecentEvents(..., { toStage }) — stage filter", () => {
 
   test("combines with sinceId paging", () => {
     const item = repo.upsert(makeItem({ stage: "intake" }));
-    const afterCreate = repo.getEvents(item.id)[0].id;
+    const afterCreate = repo.getEvents(item.id)[0]?.id;
+    if (afterCreate === undefined) throw new Error("expected a creation event");
     repo.transition(item.id, "researching");
     repo.transition(item.id, "generating-spec");
 
     const events = repo.getRecentEvents(undefined, { sinceId: afterCreate, toStage: "researching" });
     expect(events.length).toBe(1);
-    expect(events[0].to_stage).toBe("researching");
+    expect(events[0]?.to_stage).toBe("researching");
   });
 });
 
@@ -284,7 +285,8 @@ describe("5. getRecentEvents input validation", () => {
 
   test("sinceId takes precedence when both since and sinceId are provided", () => {
     const item = repo.upsert(makeItem({ stage: "intake" }));
-    const creationId = repo.getEvents(item.id)[0].id;
+    const creationId = repo.getEvents(item.id)[0]?.id;
+    if (creationId === undefined) throw new Error("expected a creation event");
     repo.transition(item.id, "researching");
 
     // A `since` far in the past (would include everything) combined with a
@@ -340,7 +342,7 @@ describe("7. appendCrossRefEvent — Lane A spine visibility (slice F2)", () => 
     });
 
     expect(event.item_id).toBe("t-lane-a-abc123");
-    expect(event.to_stage).toBe("lane-a-started");
+    expect(event.to_stage as string | null).toBe("lane-a-started");
     expect(event.actor).toBe("executor:t-lane-a-abc123");
     expect(event.from_stage).toBeNull();
     expect(event.note).toBeNull();
@@ -367,15 +369,15 @@ describe("7. appendCrossRefEvent — Lane A spine visibility (slice F2)", () => 
 
     const events = repo.getEvents("t-lane-a-events1");
     expect(events.length).toBe(2);
-    expect(events[0].to_stage).toBe("lane-a-started");
-    expect(events[0].note).toBe("Build the thing");
-    expect(events[1].to_stage).toBe("lane-a-verified");
-    expect(events[1].note).toBe("pass");
+    expect(events[0]?.to_stage as string | null).toBe("lane-a-started");
+    expect(events[0]?.note).toBe("Build the thing");
+    expect(events[1]?.to_stage as string | null).toBe("lane-a-verified");
+    expect(events[1]?.note).toBe("pass");
   });
 
   test("readable via getRecentEvents(sinceId) alongside real pipeline_items transitions", () => {
     const before = repo.getRecentEvents(undefined, { sinceId: 0 });
-    const checkpoint = before.length > 0 ? before[before.length - 1].id : 0;
+    const checkpoint = before.length > 0 ? before[before.length - 1]?.id : 0;
 
     repo.appendCrossRefEvent({
       itemId: "t-lane-a-recent1",
@@ -387,7 +389,7 @@ describe("7. appendCrossRefEvent — Lane A spine visibility (slice F2)", () => 
     const after = repo.getRecentEvents(undefined, { sinceId: checkpoint });
     const crossRef = after.find((e) => e.item_id === "t-lane-a-recent1");
     expect(crossRef).toBeDefined();
-    expect(crossRef?.to_stage).toBe("lane-a-merged");
+    expect(crossRef?.to_stage as string | null).toBe("lane-a-merged");
     expect(crossRef?.note).toBe("abc1234");
   });
 
@@ -398,7 +400,7 @@ describe("7. appendCrossRefEvent — Lane A spine visibility (slice F2)", () => 
       fromStage: "lane-a-verified",
       actor: "executor:t-lane-a-fromstage",
     });
-    expect(event.from_stage).toBe("lane-a-verified");
+    expect(event.from_stage as string | null).toBe("lane-a-verified");
   });
 
   test("does not create or touch any pipeline_items row (orphan by design)", () => {

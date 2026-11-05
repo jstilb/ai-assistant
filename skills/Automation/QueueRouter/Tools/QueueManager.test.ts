@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test";
-import { join } from "path";
-import { mkdirSync, rmSync, existsSync } from "fs";
+import { join } from "node:path";
+import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 import {
   generateId,
@@ -13,11 +13,7 @@ import {
   type QueueItem,
   type QueueItemStatus,
 } from "./QueueManager.ts";
-import {
-  ALLOWED_TRANSITIONS,
-  getPipelineRepository,
-  resetPipelineRepository,
-} from "./PipelineRepository.ts";
+import { ALLOWED_TRANSITIONS, getPipelineRepository, resetPipelineRepository } from "./PipelineRepository.ts";
 
 // ============================================================================
 // Helpers
@@ -114,7 +110,7 @@ describe("canonical spec-pipeline transitions", () => {
 
   test("10. all spec-pipeline stages are present in canonical transition map", () => {
     const stages = [
-      "intake",           // awaiting-context → intake
+      "intake", // awaiting-context → intake
       "researching",
       "generating-spec",
       "revision-needed",
@@ -138,7 +134,9 @@ describe("JSONL persistence", () => {
   afterEach(() => {
     // Clean up any JSONL files created during tests
     for (const filePath of createdQueueFiles.splice(0)) {
-      try { if (existsSync(filePath)) rmSync(filePath); } catch {}
+      try {
+        if (existsSync(filePath)) rmSync(filePath);
+      } catch {}
     }
   });
 
@@ -155,8 +153,8 @@ describe("JSONL persistence", () => {
     createdQueueFiles.push(getQueueFilePath(q));
     const loaded = loadQueueItems(q);
     expect(loaded.length).toBe(1);
-    expect(loaded[0].id).toBe(item.id);
-    expect(loaded[0].payload.title).toBe("Test Task");
+    expect(loaded[0]?.id).toBe(item.id);
+    expect(loaded[0]?.payload.title).toBe("Test Task");
   });
 
   test("13. saveQueueItems and loadQueueItems round-trip multiple items", () => {
@@ -170,7 +168,7 @@ describe("JSONL persistence", () => {
     createdQueueFiles.push(getQueueFilePath(q));
     const loaded = loadQueueItems(q);
     expect(loaded.length).toBe(3);
-    const titles = loaded.map(i => i.payload.title);
+    const titles = loaded.map((i) => i.payload.title);
     expect(titles).toContain("Alpha");
     expect(titles).toContain("Beta");
     expect(titles).toContain("Gamma");
@@ -185,7 +183,7 @@ describe("JSONL persistence", () => {
     appendQueueItem(q, second);
     const loaded = loadQueueItems(q);
     expect(loaded.length).toBe(2);
-    expect(loaded[1].payload.title).toBe("Appended");
+    expect(loaded[1]?.payload.title).toBe("Appended");
   });
 
   test("15. appendQueueItem creates queue file if it does not exist", () => {
@@ -195,7 +193,7 @@ describe("JSONL persistence", () => {
     createdQueueFiles.push(getQueueFilePath(q));
     const loaded = loadQueueItems(q);
     expect(loaded.length).toBe(1);
-    expect(loaded[0].id).toBe(item.id);
+    expect(loaded[0]?.id).toBe(item.id);
   });
 
   test("16. saveQueueItems overwrites prior content", () => {
@@ -211,7 +209,7 @@ describe("JSONL persistence", () => {
     saveQueueItems(q, replacement);
     const loaded = loadQueueItems(q);
     expect(loaded.length).toBe(2);
-    expect(loaded.map(i => i.payload.title)).not.toContain("Test Task");
+    expect(loaded.map((i) => i.payload.title)).not.toContain("Test Task");
   });
 });
 
@@ -222,7 +220,9 @@ describe("JSONL persistence", () => {
 describe("archiveItems", () => {
   afterEach(() => {
     for (const filePath of createdQueueFiles.splice(0)) {
-      try { if (existsSync(filePath)) rmSync(filePath); } catch {}
+      try {
+        if (existsSync(filePath)) rmSync(filePath);
+      } catch {}
     }
   });
 
@@ -254,20 +254,20 @@ describe("archiveItems", () => {
 // ============================================================================
 
 describe("saveState atomic write", () => {
-  const qm = new (require("./QueueManager").QueueManager as typeof import("./QueueManager").QueueManager)();
+  const qm = new (require("./QueueManager.ts").QueueManager as typeof import("./QueueManager").QueueManager)();
 
   test("19. state.json is valid JSON after multiple concurrent add() calls", async () => {
     // Run 5 concurrent add operations — each eventually calls saveState()
     const q = testQueue("concurrent-state");
     const adds = Array.from({ length: 5 }, (_, i) =>
-      qm.add({ title: `Concurrent task ${i}`, description: `desc ${i}` }, { queue: q })
+      qm.add({ title: `Concurrent task ${i}`, description: `desc ${i}` }, { queue: q }),
     );
     await Promise.allSettled(adds);
 
     // state.json must still be valid JSON (no partial write)
     const stateFile = join(TEST_DIR, "MEMORY", "QUEUES", "state.json");
     if (existsSync(stateFile)) {
-      const content = require("fs").readFileSync(stateFile, "utf-8");
+      const content = require("node:fs").readFileSync(stateFile, "utf-8");
       expect(() => JSON.parse(content)).not.toThrow();
     }
   });
@@ -276,7 +276,7 @@ describe("saveState atomic write", () => {
     await qm.add({ title: "Cleanup check task", description: "test" }, { queue: testQueue("tmp-check") });
 
     const queuesDir = join(TEST_DIR, "MEMORY", "QUEUES");
-    const files = require("fs").readdirSync(queuesDir);
+    const files = require("node:fs").readdirSync(queuesDir);
     const tmpFiles = files.filter((f: string) => f.includes(".tmp."));
     expect(tmpFiles.length).toBe(0);
   });
@@ -287,18 +287,24 @@ describe("saveState atomic write", () => {
 // ============================================================================
 
 describe("cleanup archival policy", () => {
-  const qm = new (require("./QueueManager").QueueManager as typeof import("./QueueManager").QueueManager)();
+  const qm = new (require("./QueueManager.ts").QueueManager as typeof import("./QueueManager").QueueManager)();
   const OLD = new Date(Date.now() - 90 * 86400_000).toISOString();
 
   test("21. cleanup never archives live working statuses, regardless of age", async () => {
     const q = testQueue("cleanup-live");
     const liveStatuses: QueueItemStatus[] = [
-      "needs-grilling", "awaiting-context", "researching", "generating-spec",
-      "revision-needed", "escalated", "pending", "in_progress", "awaiting_approval", "approved",
+      "needs-grilling",
+      "awaiting-context",
+      "researching",
+      "generating-spec",
+      "revision-needed",
+      "escalated",
+      "pending",
+      "in_progress",
+      "awaiting_approval",
+      "approved",
     ];
-    const live = liveStatuses.map((status) =>
-      makeItem({ status, created: OLD, updated: OLD, queue: q })
-    );
+    const live = liveStatuses.map((status) => makeItem({ status, created: OLD, updated: OLD, queue: q }));
     saveQueueItems(q, live);
 
     await qm.cleanup(30, { releaseBacklinks: async () => 0 });
@@ -317,7 +323,7 @@ describe("cleanup archival policy", () => {
         updated: OLD,
         queue: q,
         payload: { title: `t-${status}`, description: "d", context: { lucidTaskId: `lt-${status}` } },
-      })
+      }),
     );
     const fresh = makeItem({ status: "completed", queue: q });
     saveQueueItems(q, [...swept, fresh]);
@@ -333,7 +339,9 @@ describe("cleanup archival policy", () => {
     const after = loadQueueItems(q);
     expect(after.map((i) => i.id)).toEqual([fresh.id]);
     expect(releasedItems.map((i) => i.payload.context?.lucidTaskId).sort()).toEqual([
-      "lt-completed", "lt-failed", "lt-rejected",
+      "lt-completed",
+      "lt-failed",
+      "lt-rejected",
     ]);
   });
 
@@ -401,7 +409,7 @@ describe("S4 — QueueManager.discoverQueues db-native (no JSONL)", () => {
     const { QueueManager } = await import("./QueueManager.ts");
     const qm = new QueueManager();
     const items = await qm.list();
-    const foundQueues = [...new Set(items.map(i => i.queue))];
+    const foundQueues = [...new Set(items.map((i) => i.queue))];
     expect(foundQueues).toContain(S4_QUEUE);
   });
 });
@@ -505,9 +513,9 @@ describe("A3 — updateSpecPipelineStatus atomic transition", () => {
 
     const rows = eventsFor(item.id);
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBe("intake");
-    expect(rows[0].to_stage).toBe("researching");
-    expect(rows[0].actor).toBe("QueueManager.updateSpecPipelineStatus");
+    expect(rows[0]?.from_stage).toBe("intake");
+    expect(rows[0]?.to_stage).toBe("researching");
+    expect(rows[0]?.actor).toBe("QueueManager.updateSpecPipelineStatus");
 
     const after = await qm.get(item.id);
     expect(after?.status).toBe("researching");
@@ -519,8 +527,9 @@ describe("A3 — updateSpecPipelineStatus atomic transition", () => {
 
     const { QueueManager } = await import("./QueueManager.ts");
     const qm = new QueueManager();
-    await expect(qm.updateSpecPipelineStatus(item.id, "generating-spec"))
-      .rejects.toThrow(/Invalid spec-pipeline transition/);
+    await expect(qm.updateSpecPipelineStatus(item.id, "generating-spec")).rejects.toThrow(
+      /Invalid spec-pipeline transition/,
+    );
 
     expect(eventsFor(item.id).length).toBe(0);
 

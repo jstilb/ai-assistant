@@ -16,9 +16,9 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, afterEach } from "bun:test";
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from "fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 // ============================================================================
 // KAYA_HOME isolation — set BEFORE any import that reads the env
@@ -29,11 +29,7 @@ const TEST_KAYA_HOME = TEST_BASE;
 process.env.KAYA_HOME = TEST_KAYA_HOME;
 
 // Now safe to import repository code
-import {
-  defaultPipelineDbPath,
-  getPipelineDb,
-  resetPipelineDb,
-} from "./PipelineDB.ts";
+import { defaultPipelineDbPath, getPipelineDb, resetPipelineDb } from "./PipelineDB.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 import {
@@ -49,7 +45,9 @@ import {
 // ============================================================================
 
 const LIVE_RUNTIME_PATH = join(process.env.HOME || "", ".kaya", "runtime", "pipeline.db");
-function liveDbExists(): boolean { return existsSync(LIVE_RUNTIME_PATH); }
+function liveDbExists(): boolean {
+  return existsSync(LIVE_RUNTIME_PATH);
+}
 const liveDbExistedBefore = liveDbExists();
 
 // Absolute path to PipelineRepository.ts for worker scripts
@@ -78,7 +76,11 @@ function makeItem(overrides: Partial<PipelineItem> & { id?: string } = {}): Part
 
 afterAll(() => {
   resetPipelineRepository();
-  try { rmSync(TEST_BASE, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(TEST_BASE, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 });
 
 // ============================================================================
@@ -185,7 +187,9 @@ describe("2. Transition matrix", () => {
     repo = new PipelineRepository(dbPath);
   });
 
-  afterAll(() => { resetPipelineDb(dbPath); });
+  afterAll(() => {
+    resetPipelineDb(dbPath);
+  });
 
   test("legal: intake → intake (self-loop for metadata updates)", () => {
     const item = repo.upsert(makeItem({ stage: "intake" }));
@@ -329,7 +333,9 @@ describe("3. integrity()", () => {
     repo = new PipelineRepository(dbPath);
   });
 
-  afterAll(() => { resetPipelineDb(dbPath); });
+  afterAll(() => {
+    resetPipelineDb(dbPath);
+  });
 
   test("empty store passes integrity", () => {
     const report = repo.integrity();
@@ -439,53 +445,59 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
     // Worker: each worker owns disjoint item IDs (no cross-worker lock contention on upserts).
     // NO try/catch on transitions — errors propagate and exit the worker non-zero.
     // This is the STRENGTHENED version: any SQLITE_BUSY escape = test fails.
-    writeFileSync(WORKER_SCRIPT, [
-      "#!/usr/bin/env bun",
-      `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
-      "",
-      "const workerId = parseInt(process.argv[2] ?? '0');",
-      "const dbPath = process.argv[3];",
-      "const itemCount = parseInt(process.argv[4] ?? '10');",
-      "",
-      "const repo = new PipelineRepository(dbPath);",
-      "const ids: string[] = [];",
-      "",
-      "// Phase 1: Insert (disjoint IDs — no cross-worker insert contention)",
-      "for (let i = 0; i < itemCount; i++) {",
-      "  const id = `w${workerId}-item-${i}`;",
-      "  ids.push(id);",
-      "  // withRetry inside upsert handles transient BUSY; if it escapes, we exit non-zero",
-      "  repo.upsert({ id, title: `Worker ${workerId} Item ${i}`, stage: 'intake', priority: 2,",
-      "    dependencies: [], metadata: { workerId, itemIndex: i }, context: {}, attempts: [], progress: {}, isc_rows: [] });",
-      "}",
-      "",
-      "// Phase 2: intake → in-progress (NO try/catch — must succeed)",
-      "for (const id of ids) {",
-      "  repo.transition(id, 'in-progress');",
-      "}",
-      "",
-      "// Phase 3: in-progress → done (NO try/catch — must succeed)",
-      "for (const id of ids) {",
-      "  repo.transition(id, 'done', {",
-      "    patch: {",
-      "      result: `Worker ${workerId} done`,",
-      "      verification: { status: 'verified', verifiedAt: new Date().toISOString(),",
-      "        verdict: 'PASS', concerns: [], iscRowsVerified: 1, iscRowsTotal: 1,",
-      "        verificationCost: 0, verifiedBy: 'skeptical_verifier', tiersExecuted: [1] },",
-      "    },",
-      "  });",
-      "}",
-      "",
-      "console.log(JSON.stringify({ workerId, ids, done: itemCount }));",
-    ].join("\n"));
+    writeFileSync(
+      WORKER_SCRIPT,
+      [
+        "#!/usr/bin/env bun",
+        `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
+        "",
+        "const workerId = parseInt(process.argv[2] ?? '0');",
+        "const dbPath = process.argv[3];",
+        "const itemCount = parseInt(process.argv[4] ?? '10');",
+        "",
+        "const repo = new PipelineRepository(dbPath);",
+        "const ids: string[] = [];",
+        "",
+        "// Phase 1: Insert (disjoint IDs — no cross-worker insert contention)",
+        "for (let i = 0; i < itemCount; i++) {",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "  const id = `w${workerId}-item-${i}`;",
+        "  ids.push(id);",
+        "  // withRetry inside upsert handles transient BUSY; if it escapes, we exit non-zero",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "  repo.upsert({ id, title: `Worker ${workerId} Item ${i}`, stage: 'intake', priority: 2,",
+        "    dependencies: [], metadata: { workerId, itemIndex: i }, context: {}, attempts: [], progress: {}, isc_rows: [] });",
+        "}",
+        "",
+        "// Phase 2: intake → in-progress (NO try/catch — must succeed)",
+        "for (const id of ids) {",
+        "  repo.transition(id, 'in-progress');",
+        "}",
+        "",
+        "// Phase 3: in-progress → done (NO try/catch — must succeed)",
+        "for (const id of ids) {",
+        "  repo.transition(id, 'done', {",
+        "    patch: {",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "      result: `Worker ${workerId} done`,",
+        "      verification: { status: 'verified', verifiedAt: new Date().toISOString(),",
+        "        verdict: 'PASS', concerns: [], iscRowsVerified: 1, iscRowsTotal: 1,",
+        "        verificationCost: 0, verifiedBy: 'skeptical_verifier', tiersExecuted: [1] },",
+        "    },",
+        "  });",
+        "}",
+        "",
+        "console.log(JSON.stringify({ workerId, ids, done: itemCount }));",
+      ].join("\n"),
+    );
   });
 
   test("3 concurrent workers: zero lost rows, zero BUSY drops, exact done count", async () => {
     const workers = Array.from({ length: WORKER_COUNT }, (_, i) =>
-      Bun.spawn(
-        ["bun", WORKER_SCRIPT, String(i), RACE_DB_PATH, String(ITEMS_PER_WORKER)],
-        { stdout: "pipe", stderr: "pipe" }
-      )
+      Bun.spawn(["bun", WORKER_SCRIPT, String(i), RACE_DB_PATH, String(ITEMS_PER_WORKER)], {
+        stdout: "pipe",
+        stderr: "pipe",
+      }),
     );
 
     const results = await Promise.all(
@@ -494,7 +506,7 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
         const stdout = await new Response(proc.stdout).text();
         const stderr = await new Response(proc.stderr).text();
         return { exitCode, stdout, stderr, workerId: i };
-      })
+      }),
     );
 
     // STRONG ASSERTION 1: All workers exit 0 — any non-zero means SQLITE_BUSY escaped withRetry
@@ -520,7 +532,9 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
         try {
           const parsed = JSON.parse(line) as { workerId: number; ids: string[]; done: number };
           allIds.push(...parsed.ids);
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
     }
 
@@ -548,11 +562,13 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
 
     if (doneCount !== expectedTotal) console.error(`Stage distribution: ${JSON.stringify(stageMap)}`);
 
-    expect(doneCount).toBe(expectedTotal);   // all items must reach done
-    expect(inProgressCount).toBe(0);         // no items stuck in-progress
-    expect(intakeCount).toBe(0);             // no items stuck in intake
+    expect(doneCount).toBe(expectedTotal); // all items must reach done
+    expect(inProgressCount).toBe(0); // no items stuck in-progress
+    expect(intakeCount).toBe(0); // no items stuck in intake
 
-    console.log(`Race proof PASSED: ${WORKER_COUNT} workers × ${ITEMS_PER_WORKER} = ${expectedTotal} items, ${doneCount} done (100%, 0 BUSY drops)`);
+    console.log(
+      `Race proof PASSED: ${WORKER_COUNT} workers × ${ITEMS_PER_WORKER} = ${expectedTotal} items, ${doneCount} done (100%, 0 BUSY drops)`,
+    );
 
     resetPipelineDb(RACE_DB_PATH);
   }, 60_000);
@@ -571,65 +587,72 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
 
     // Stress worker: same disjoint-item pattern, but counts BUSY drops explicitly
     // so we can report the exact number (expected: 0)
-    writeFileSync(STRESS_SCRIPT, [
-      "#!/usr/bin/env bun",
-      `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
-      "",
-      "const workerId = parseInt(process.argv[2] ?? '0');",
-      "const dbPath = process.argv[3];",
-      "const itemCount = parseInt(process.argv[4] ?? '10');",
-      "",
-      "let attempts = 0; let successes = 0; let busyDrops = 0;",
-      "const repo = new PipelineRepository(dbPath);",
-      "const ids: string[] = [];",
-      "",
-      "for (let i = 0; i < itemCount; i++) {",
-      "  const id = `stress-w${workerId}-${i}`;",
-      "  ids.push(id);",
-      "  attempts++;",
-      "  repo.upsert({ id, title: `Stress W${workerId} ${i}`, stage: 'intake', priority: 2,",
-      "    metadata: {}, context: {}, attempts: [], progress: {}, isc_rows: [], dependencies: [] });",
-      "  successes++;",
-      "}",
-      "",
-      "for (const id of ids) {",
-      "  attempts++;",
-      "  try {",
-      "    repo.transition(id, 'in-progress');",
-      "    successes++;",
-      "  } catch (err) {",
-      "    const msg = err instanceof Error ? err.message : String(err);",
-      "    if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {",
-      "      busyDrops++;",
-      "      process.stderr.write(`BUSY on in-progress: ${id}\\n`);",
-      "    } else { throw err; }",
-      "  }",
-      "}",
-      "",
-      "for (const id of ids) {",
-      "  const item = repo.get(id);",
-      "  if (item?.stage !== 'in-progress') continue;",
-      "  attempts++;",
-      "  try {",
-      "    repo.transition(id, 'done');",
-      "    successes++;",
-      "  } catch (err) {",
-      "    const msg = err instanceof Error ? err.message : String(err);",
-      "    if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {",
-      "      busyDrops++;",
-      "      process.stderr.write(`BUSY on done: ${id}\\n`);",
-      "    } else { throw err; }",
-      "  }",
-      "}",
-      "",
-      "console.log(JSON.stringify({ workerId, ids, attempts, successes, busyDrops }));",
-    ].join("\n"));
+    writeFileSync(
+      STRESS_SCRIPT,
+      [
+        "#!/usr/bin/env bun",
+        `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
+        "",
+        "const workerId = parseInt(process.argv[2] ?? '0');",
+        "const dbPath = process.argv[3];",
+        "const itemCount = parseInt(process.argv[4] ?? '10');",
+        "",
+        "let attempts = 0; let successes = 0; let busyDrops = 0;",
+        "const repo = new PipelineRepository(dbPath);",
+        "const ids: string[] = [];",
+        "",
+        "for (let i = 0; i < itemCount; i++) {",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "  const id = `stress-w${workerId}-${i}`;",
+        "  ids.push(id);",
+        "  attempts++;",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "  repo.upsert({ id, title: `Stress W${workerId} ${i}`, stage: 'intake', priority: 2,",
+        "    metadata: {}, context: {}, attempts: [], progress: {}, isc_rows: [], dependencies: [] });",
+        "  successes++;",
+        "}",
+        "",
+        "for (const id of ids) {",
+        "  attempts++;",
+        "  try {",
+        "    repo.transition(id, 'in-progress');",
+        "    successes++;",
+        "  } catch (err) {",
+        "    const msg = err instanceof Error ? err.message : String(err);",
+        "    if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {",
+        "      busyDrops++;",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "      process.stderr.write(`BUSY on in-progress: ${id}\\n`);",
+        "    } else { throw err; }",
+        "  }",
+        "}",
+        "",
+        "for (const id of ids) {",
+        "  const item = repo.get(id);",
+        "  if (item?.stage !== 'in-progress') continue;",
+        "  attempts++;",
+        "  try {",
+        "    repo.transition(id, 'done');",
+        "    successes++;",
+        "  } catch (err) {",
+        "    const msg = err instanceof Error ? err.message : String(err);",
+        "    if (msg.includes('database is locked') || msg.includes('SQLITE_BUSY')) {",
+        "      busyDrops++;",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: source of a generated worker script (template literals evaluated in the worker)
+        "      process.stderr.write(`BUSY on done: ${id}\\n`);",
+        "    } else { throw err; }",
+        "  }",
+        "}",
+        "",
+        "console.log(JSON.stringify({ workerId, ids, attempts, successes, busyDrops }));",
+      ].join("\n"),
+    );
 
     const stressWorkers = Array.from({ length: STRESS_WORKER_COUNT }, (_, i) =>
-      Bun.spawn(
-        ["bun", STRESS_SCRIPT, String(i), STRESS_DB_PATH, String(STRESS_ITEMS_PER_WORKER)],
-        { stdout: "pipe", stderr: "pipe" }
-      )
+      Bun.spawn(["bun", STRESS_SCRIPT, String(i), STRESS_DB_PATH, String(STRESS_ITEMS_PER_WORKER)], {
+        stdout: "pipe",
+        stderr: "pipe",
+      }),
     );
 
     const stressResults = await Promise.all(
@@ -638,7 +661,7 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
         const stdout = await new Response(proc.stdout).text();
         const stderr = await new Response(proc.stderr).text();
         return { exitCode, stdout, stderr, workerId: i };
-      })
+      }),
     );
 
     for (const r of stressResults) {
@@ -646,19 +669,29 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
       expect(r.exitCode).toBe(0);
     }
 
-    let totalAttempts = 0, totalSuccesses = 0, totalBusyDrops = 0;
+    let totalAttempts = 0,
+      totalSuccesses = 0,
+      totalBusyDrops = 0;
     const allStressIds: string[] = [];
 
     for (const { stdout } of stressResults) {
       for (const line of stdout.trim().split("\n")) {
         if (!line.trim()) continue;
         try {
-          const p = JSON.parse(line) as { workerId: number; ids: string[]; attempts: number; successes: number; busyDrops: number };
+          const p = JSON.parse(line) as {
+            workerId: number;
+            ids: string[];
+            attempts: number;
+            successes: number;
+            busyDrops: number;
+          };
           totalAttempts += p.attempts;
           totalSuccesses += p.successes;
           totalBusyDrops += p.busyDrops;
           allStressIds.push(...p.ids);
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
     }
 
@@ -671,9 +704,11 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
 
     const expectedItemCount = STRESS_WORKER_COUNT * STRESS_ITEMS_PER_WORKER;
     const doneCount = stageMap["done"] ?? 0;
-    const successRate = totalAttempts > 0 ? (totalSuccesses / totalAttempts * 100).toFixed(1) : "0";
+    const successRate = totalAttempts > 0 ? ((totalSuccesses / totalAttempts) * 100).toFixed(1) : "0";
 
-    console.log(`Stress probe: ${STRESS_WORKER_COUNT} workers × ${STRESS_ITEMS_PER_WORKER} = ${expectedItemCount} items`);
+    console.log(
+      `Stress probe: ${STRESS_WORKER_COUNT} workers × ${STRESS_ITEMS_PER_WORKER} = ${expectedItemCount} items`,
+    );
     console.log(`  attempts=${totalAttempts} successes=${totalSuccesses} BUSY_drops=${totalBusyDrops}`);
     console.log(`  success_rate=${successRate}% done=${doneCount}/${expectedItemCount}`);
     console.log(`  stage_map=${JSON.stringify(stageMap)}`);
@@ -696,17 +731,20 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
     resetPipelineDb(batchDbPath);
 
     const claimWorkerScript = join(TEST_BASE, "claim-worker.ts");
-    writeFileSync(claimWorkerScript, [
-      "#!/usr/bin/env bun",
-      `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
-      "const dbPath = process.argv[2];",
-      "const repo = new PipelineRepository(dbPath);",
-      "const claimed = repo.claimBatch(5, 'approved', 'in-progress');",
-      "console.log(JSON.stringify(claimed.map((i: { id: string }) => i.id)));",
-    ].join("\n"));
+    writeFileSync(
+      claimWorkerScript,
+      [
+        "#!/usr/bin/env bun",
+        `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
+        "const dbPath = process.argv[2];",
+        "const repo = new PipelineRepository(dbPath);",
+        "const claimed = repo.claimBatch(5, 'approved', 'in-progress');",
+        "console.log(JSON.stringify(claimed.map((i: { id: string }) => i.id)));",
+      ].join("\n"),
+    );
 
     const claimers = Array.from({ length: 3 }, () =>
-      Bun.spawn(["bun", claimWorkerScript, batchDbPath], { stdout: "pipe", stderr: "pipe" })
+      Bun.spawn(["bun", claimWorkerScript, batchDbPath], { stdout: "pipe", stderr: "pipe" }),
     );
 
     const claimResults = await Promise.all(
@@ -716,7 +754,7 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
         const stderr = await new Response(proc.stderr).text();
         if (stderr.trim()) console.error(`[Claimer ${i} stderr]:`, stderr.trim());
         return { exitCode, stdout };
-      })
+      }),
     );
 
     for (const r of claimResults) expect(r.exitCode).toBe(0);
@@ -725,7 +763,11 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
     for (const { stdout } of claimResults) {
       for (const line of stdout.trim().split("\n")) {
         if (!line.trim()) continue;
-        try { allClaimedIds.push(...(JSON.parse(line) as string[])); } catch { /* skip */ }
+        try {
+          allClaimedIds.push(...(JSON.parse(line) as string[]));
+        } catch {
+          /* skip */
+        }
       }
     }
 
@@ -758,25 +800,28 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
 
     // Worker: receives the full candidate list, calls claimByIds with the first ITEMS_PER_CLAIMER ids
     const claimByIdsWorkerScript = join(TEST_BASE, "claim-by-ids-worker.ts");
-    writeFileSync(claimByIdsWorkerScript, [
-      "#!/usr/bin/env bun",
-      `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
-      "const dbPath = process.argv[2];",
-      "const candidateIds: string[] = JSON.parse(process.argv[3] ?? '[]');",
-      "const repo = new PipelineRepository(dbPath);",
-      "const claimed = repo.claimByIds(candidateIds, 'approved', 'in-progress');",
-      "console.log(JSON.stringify(claimed.map((i: { id: string }) => i.id)));",
-    ].join("\n"));
+    writeFileSync(
+      claimByIdsWorkerScript,
+      [
+        "#!/usr/bin/env bun",
+        `import { PipelineRepository } from ${JSON.stringify(REPO_TS_PATH)};`,
+        "const dbPath = process.argv[2];",
+        "const candidateIds: string[] = JSON.parse(process.argv[3] ?? '[]');",
+        "const repo = new PipelineRepository(dbPath);",
+        "const claimed = repo.claimByIds(candidateIds, 'approved', 'in-progress');",
+        "console.log(JSON.stringify(claimed.map((i: { id: string }) => i.id)));",
+      ].join("\n"),
+    );
 
     // Each process gets the SAME full candidate list (simulates the concurrent
     // double-claim scenario the verifier found in Phase 3's non-atomic claim).
     const candidateIds = seededIds.slice(0, ITEMS_PER_CLAIMER);
 
     const claimers = Array.from({ length: CLAIMER_COUNT }, () =>
-      Bun.spawn(
-        ["bun", claimByIdsWorkerScript, CLAIM_BY_IDS_DB, JSON.stringify(candidateIds)],
-        { stdout: "pipe", stderr: "pipe" }
-      )
+      Bun.spawn(["bun", claimByIdsWorkerScript, CLAIM_BY_IDS_DB, JSON.stringify(candidateIds)], {
+        stdout: "pipe",
+        stderr: "pipe",
+      }),
     );
 
     const claimResults = await Promise.all(
@@ -786,7 +831,7 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
         const stderr = await new Response(proc.stderr).text();
         if (stderr.trim()) console.error(`[claimByIds claimer ${i} stderr]:`, stderr.trim());
         return { exitCode, stdout };
-      })
+      }),
     );
 
     for (const r of claimResults) expect(r.exitCode).toBe(0);
@@ -795,16 +840,22 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
     for (const { stdout } of claimResults) {
       for (const line of stdout.trim().split("\n")) {
         if (!line.trim()) continue;
-        try { allClaimedIds.push(...(JSON.parse(line) as string[])); } catch { /* skip */ }
+        try {
+          allClaimedIds.push(...(JSON.parse(line) as string[]));
+        } catch {
+          /* skip */
+        }
       }
     }
 
     const uniqueClaimedIds = new Set(allClaimedIds);
 
     // Zero double-claims: every claimed id must appear exactly once across all processes
-    const doubleClaims = allClaimedIds.filter(id => {
+    const doubleClaims = allClaimedIds.filter((id) => {
       let count = 0;
-      for (const c of allClaimedIds) { if (c === id) count++; }
+      for (const c of allClaimedIds) {
+        if (c === id) count++;
+      }
       return count > 1;
     });
     if (doubleClaims.length > 0) {
@@ -825,8 +876,10 @@ describe("1. Concurrent zero-lost-update (race proof) — strengthened", () => {
       expect(uniqueClaimedIds.has(item.id)).toBe(true);
     }
 
-    console.log(`claimByIds race: ${CLAIMER_COUNT} processes × ${ITEMS_PER_CLAIMER} candidates each = ` +
-      `${allClaimedIds.length} total claimed, ${uniqueClaimedIds.size} unique (0 double-claims)`);
+    console.log(
+      `claimByIds race: ${CLAIMER_COUNT} processes × ${ITEMS_PER_CLAIMER} candidates each = ` +
+        `${allClaimedIds.length} total claimed, ${uniqueClaimedIds.size} unique (0 double-claims)`,
+    );
 
     resetPipelineDb(CLAIM_BY_IDS_DB);
   }, 30_000);
@@ -845,7 +898,9 @@ describe("5. CRUD and list operations", () => {
     repo = new PipelineRepository(dbPath);
   });
 
-  afterAll(() => { resetPipelineDb(dbPath); });
+  afterAll(() => {
+    resetPipelineDb(dbPath);
+  });
 
   test("upsert creates a new item and get retrieves it", () => {
     const id = generatePipelineId();

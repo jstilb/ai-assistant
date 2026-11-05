@@ -284,7 +284,7 @@ export function composeDigest(
   const plainCronFailures = cronFailures.filter((f) => !isSleepChurn(f));
   const cronLines = groupByJobId(plainCronFailures);
   const backlogHasContent =
-    backlog !== null && (backlog.needsGrillingCount + backlog.approvalsPendingCount + backlog.laneAWaitingCount) > 0;
+    backlog !== null && backlog.needsGrillingCount + backlog.approvalsPendingCount + backlog.laneAWaitingCount > 0;
 
   if (
     digestByKey.size === 0 &&
@@ -365,18 +365,20 @@ export async function runSystemHealthDigest(deps: SystemHealthDigestDeps = {}): 
   }
 
   const gate = deps.gate ?? getAlertGate();
-  const send = deps.send ?? (async (message: string) => {
-    const { notify } = await import("../../../../lib/core/NotificationService.ts");
-    // notify() resolves successfully even when every channel attempt
-    // failed (it dead-letters to an in-memory queue instead of throwing).
-    // Must check the delivered result and throw here so the catch below
-    // re-spools — otherwise a failed send is indistinguishable from a
-    // successful one and the digest content is silently lost.
-    const delivered = await notify(message, { channel: "telegram", agentName: "System Health" });
-    if (!delivered) {
-      throw new Error("notify() reported non-delivery (all channel attempts failed)");
-    }
-  });
+  const send =
+    deps.send ??
+    (async (message: string) => {
+      const { notify } = await import("../../../../lib/core/NotificationService.ts");
+      // notify() resolves successfully even when every channel attempt
+      // failed (it dead-letters to an in-memory queue instead of throwing).
+      // Must check the delivered result and throw here so the catch below
+      // re-spools — otherwise a failed send is indistinguishable from a
+      // successful one and the digest content is silently lost.
+      const delivered = await notify(message, { channel: "telegram", agentName: "System Health" });
+      if (!delivered) {
+        throw new Error("notify() reported non-delivery (all channel attempts failed)");
+      }
+    });
   const cronFailures = deps.cronFailures ?? (() => scanLogs(CRON_LOOKBACK_MS));
   const getWaitingOnJmFn = deps.getWaitingOnJm ?? getWaitingOnJm;
 
@@ -428,10 +430,13 @@ export async function runSystemHealthDigest(deps: SystemHealthDigestDeps = {}): 
 
   try {
     await send(composed.text);
-    const omittedNote = composed.omittedEntries > 0
-      ? `, ${composed.omittedEntries} omitted by the ${TELEGRAM_MAX_MESSAGE_LENGTH}-char cap: ${composed.omittedKeys.join(", ")}`
-      : "";
-    console.log(`[SystemHealthDigest] sent (${entries.length} spool entries: ${composed.renderedEntries} rendered${omittedNote})`);
+    const omittedNote =
+      composed.omittedEntries > 0
+        ? `, ${composed.omittedEntries} omitted by the ${TELEGRAM_MAX_MESSAGE_LENGTH}-char cap: ${composed.omittedKeys.join(", ")}`
+        : "";
+    console.log(
+      `[SystemHealthDigest] sent (${entries.length} spool entries: ${composed.renderedEntries} rendered${omittedNote})`,
+    );
   } catch (err) {
     // Cap the re-spool (S6 — see RESPOOL_CAP's doc comment): drop-oldest,
     // keep the most recent RESPOOL_CAP entries, and always log the drop
@@ -440,7 +445,9 @@ export async function runSystemHealthDigest(deps: SystemHealthDigestDeps = {}): 
     const toRespool = dropCount > 0 ? entries.slice(dropCount) : entries;
     for (const e of toRespool) gate.spool(e.message, e.key, e.tier);
     const dropNote = dropCount > 0 ? ` (dropped ${dropCount} oldest entries past the ${RESPOOL_CAP}-entry cap)` : "";
-    console.error(`[SystemHealthDigest] send failed, re-spooled ${toRespool.length} entries${dropNote}: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `[SystemHealthDigest] send failed, re-spooled ${toRespool.length} entries${dropNote}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -448,7 +455,7 @@ if (import.meta.main) {
   // Composition root: the real getWaitingOnJm reads through the TaskClient
   // seam (F3) — register the adapters before running.
   await import("../../../../bin/wire-queue-task-integration.ts");
-  runSystemHealthDigest().catch(err => {
+  runSystemHealthDigest().catch((err) => {
     console.error("SystemHealthDigest FATAL:", err instanceof Error ? err.message : String(err));
     process.exit(1);
   });

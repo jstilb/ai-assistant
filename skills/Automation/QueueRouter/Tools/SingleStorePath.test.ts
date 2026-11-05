@@ -16,8 +16,8 @@
 // KAYA_HOME isolation — set BEFORE any import that reads the env
 // ============================================================================
 
-import { join } from "path";
-import { existsSync, readdirSync, mkdirSync } from "fs";
+import { join } from "node:path";
+import { existsSync, readdirSync, mkdirSync } from "node:fs";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
 const TEST_BASE = pinKayaHome("single-store-test-");
@@ -32,11 +32,7 @@ import {
   appendQueueItemImpl,
   loadQueueItemsImpl,
 } from "./PipelineFacade.ts";
-import {
-  getPipelineRepository,
-  resetPipelineRepository,
-  generatePipelineId,
-} from "./PipelineRepository.ts";
+import { getPipelineRepository, resetPipelineRepository, generatePipelineId } from "./PipelineRepository.ts";
 import { loadQueueItems } from "./QueueManager.ts";
 
 // ============================================================================
@@ -77,7 +73,11 @@ afterAll(async () => {
   resetPipelineRepository();
   // Also reset the arbitrary-path singleton if it was created (no-op in GREEN)
   const arbitraryDbPath = join(TEST_BASE, "arbitrary", ".kaya", "runtime", "pipeline.db");
-  try { resetPipelineRepository(arbitraryDbPath); } catch { /* not created post-fix */ }
+  try {
+    resetPipelineRepository(arbitraryDbPath);
+  } catch {
+    /* not created post-fix */
+  }
   await restoreKayaHome();
 });
 
@@ -86,7 +86,6 @@ afterAll(async () => {
 // ============================================================================
 
 describe("SingleStorePath — getRepoForQueuesDir always resolves canonical db", () => {
-
   test("Case 1: instance identity — any queuesDir arg returns the canonical singleton", () => {
     const canonical = getPipelineRepository();
 
@@ -110,21 +109,23 @@ describe("SingleStorePath — getRepoForQueuesDir always resolves canonical db",
     const now = new Date().toISOString();
 
     // Upsert via canonical repo using the codec (mirrors production write path)
-    canonical.upsert(queueItemToPipelineParams({
-      id: itemId,
-      queue: testQueue,
-      status: "pending",
-      created: now,
-      updated: now,
-      source: "SingleStorePath.test",
-      priority: 2,
-      type: "task",
-      payload: { title: "single-store guard item", description: "S1.5 guard" },
-    }));
+    canonical.upsert(
+      queueItemToPipelineParams({
+        id: itemId,
+        queue: testQueue,
+        status: "pending",
+        created: now,
+        updated: now,
+        source: "SingleStorePath.test",
+        priority: 2,
+        type: "task",
+        payload: { title: "single-store guard item", description: "S1.5 guard" },
+      }),
+    );
 
     // Read back via loadQueueItems (calls getRepoForQueuesDir internally)
     const items = loadQueueItems(testQueue);
-    const found = items.find(i => i.id === itemId);
+    const found = items.find((i) => i.id === itemId);
     expect(found).toBeDefined();
     expect(found?.payload?.title).toBe("single-store guard item");
 
@@ -176,16 +177,15 @@ describe("SingleStorePath — getRepoForQueuesDir always resolves canonical db",
 
     // load from pipeline.db and verify both items are present
     const loaded = loadQueueItemsImpl(testQueue, queuesDir);
-    const loadedIds = loaded.map(i => i.id);
+    const loadedIds = loaded.map((i) => i.id);
     expect(loadedIds).toContain(itemA.id);
     expect(loadedIds).toContain(itemB.id);
 
     // CRITICAL ASSERTION: no .jsonl files created in queuesDir
-    const jsonlFiles = readdirSync(queuesDir).filter(f => f.endsWith(".jsonl"));
+    const jsonlFiles = readdirSync(queuesDir).filter((f) => f.endsWith(".jsonl"));
     expect(jsonlFiles).toHaveLength(0);
 
     // loadQueueItemsFromJsonl is removed (compile-level: it must not be exported)
     expect((Facade as Record<string, unknown>)["loadQueueItemsFromJsonl"]).toBeUndefined();
   });
-
 });

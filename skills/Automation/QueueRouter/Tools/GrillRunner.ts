@@ -90,9 +90,7 @@ export interface DeferResult {
  * @param limit - Maximum number of items to return (default: 5)
  */
 export function listParkedForGrill(limit = 5): QueueItem[] {
-  const items = loadQueueItems("spec-pipeline").filter(
-    (i) => i.status === "needs-grilling"
-  );
+  const items = loadQueueItems("spec-pipeline").filter((i) => i.status === "needs-grilling");
   items.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority;
     return new Date(a.created).getTime() - new Date(b.created).getTime();
@@ -155,18 +153,17 @@ export interface GrillBacklogSummary {
  * @param now - Clock to measure age against (injectable for tests; defaults to real now)
  */
 export function getGrillBacklogSummary(now: Date = new Date()): GrillBacklogSummary {
-  const items = loadQueueItems("spec-pipeline").filter(
-    (i) => i.status === "needs-grilling"
-  );
+  const items = loadQueueItems("spec-pipeline").filter((i) => i.status === "needs-grilling");
 
-  if (items.length === 0) {
+  const first = items[0];
+  if (!first) {
     return { total: 0, oldestAgeDays: 0, medianAgeDays: 0, topItem: null };
   }
 
   const ageDaysOf = (item: QueueItem): number =>
     (now.getTime() - new Date(item.created).getTime()) / (1000 * 60 * 60 * 24);
 
-  let oldest = items[0];
+  let oldest = first;
   let oldestAge = ageDaysOf(oldest);
   const ages: number[] = [];
   for (const item of items) {
@@ -180,8 +177,7 @@ export function getGrillBacklogSummary(now: Date = new Date()): GrillBacklogSumm
 
   ages.sort((a, b) => a - b);
   const mid = Math.floor(ages.length / 2);
-  const rawMedian =
-    ages.length % 2 === 0 ? (ages[mid - 1] + ages[mid]) / 2 : ages[mid];
+  const rawMedian = ages.length % 2 === 0 ? ((ages[mid - 1] ?? 0) + (ages[mid] ?? 0)) / 2 : (ages[mid] ?? 0);
 
   const round1 = (n: number): number => Math.round(n * 10) / 10;
   const oldestAgeDays = round1(oldestAge);
@@ -205,9 +201,7 @@ export function getGrillBacklogSummary(now: Date = new Date()): GrillBacklogSumm
  */
 export function getGrillBrief(item: QueueItem): GrillBriefView {
   const meta = (item.payload.context?._meta as Record<string, unknown>) ?? {};
-  const brief = meta.grillBrief as
-    | { missing?: string[]; suggested_questions?: string[] }
-    | undefined;
+  const brief = meta.grillBrief as { missing?: string[]; suggested_questions?: string[] } | undefined;
   return {
     missing: brief?.missing ?? [],
     suggestedQuestions: brief?.suggested_questions ?? [],
@@ -236,7 +230,7 @@ export interface FinalizeGrillDeps {
     notes: string,
     researchGuidance: string,
     scopeHints?: string,
-    options?: AttachContextOptions
+    options?: AttachContextOptions,
   ) => Promise<QueueItem | null>;
   /** Process the item through the pipeline. Defaults to SpecPipelineRunner.processItem. */
   process?: (id: string) => Promise<{ success: boolean; message: string }>;
@@ -262,26 +256,21 @@ export interface FinalizeGrillDeps {
 export async function finalizeGrillToSpec(
   id: string,
   interview: GrillInterview,
-  deps?: FinalizeGrillDeps
+  deps?: FinalizeGrillDeps,
 ): Promise<FinalizeResult> {
   const qm = getQm();
 
-  const attachContext =
-    deps?.attachContext ?? qm.attachContext.bind(qm);
+  const attachContext = deps?.attachContext ?? qm.attachContext.bind(qm);
 
-  const process: (id: string) => Promise<{ success: boolean; message: string }> =
-    deps?.process ?? defaultProcessItem;
+  const process: (id: string) => Promise<{ success: boolean; message: string }> = deps?.process ?? defaultProcessItem;
 
   // Step 1: attach context (transitions → researching)
   // attachContext returns null when the item is missing (e.g. swept to archive
   // by QueueTaskReconciler mid-grill) — proceeding would false-report success.
-  const attached = await attachContext(
-    id,
-    interview.notes,
-    interview.researchGuidance,
-    interview.scopeHints,
-    { findingsPath: interview.findingsPath, deepResearch: interview.deepResearch }
-  );
+  const attached = await attachContext(id, interview.notes, interview.researchGuidance, interview.scopeHints, {
+    findingsPath: interview.findingsPath,
+    deepResearch: interview.deepResearch,
+  });
   if (attached === null) {
     return {
       ok: false,
@@ -414,11 +403,7 @@ export interface KillTaskDeps {
  * @param opts  - Optional lucidTaskId to cancel
  * @param deps  - Injectable dependencies
  */
-export async function killTask(
-  id: string,
-  opts?: { lucidTaskId?: string },
-  deps?: KillTaskDeps
-): Promise<KillResult> {
+export async function killTask(id: string, opts?: { lucidTaskId?: string }, deps?: KillTaskDeps): Promise<KillResult> {
   const qm = getQm();
 
   const archive = deps?.archive ?? (async (itemId: string) => qm.remove(itemId));
@@ -430,7 +415,7 @@ export async function killTask(
       if (!client) {
         console.error(
           "[GrillRunner] No TaskClient registered — cannot cancel LucidTask " +
-          `${lucidTaskId}. Import bin/wire-queue-task-integration.ts before calling killTask.`,
+            `${lucidTaskId}. Import bin/wire-queue-task-integration.ts before calling killTask.`,
         );
         return false;
       }
@@ -479,7 +464,7 @@ export async function splitTask(
   id: string,
   subtaskTitles: string[],
   opts?: { lucidParentId?: string },
-  deps?: SplitTaskDeps
+  deps?: SplitTaskDeps,
 ): Promise<SplitResult> {
   const qm = getQm();
 
@@ -490,7 +475,7 @@ export async function splitTask(
       if (!client) {
         console.error(
           "[GrillRunner] No TaskClient registered — cannot create LucidTask " +
-          `"${title}". Import bin/wire-queue-task-integration.ts before calling splitTask.`,
+            `"${title}". Import bin/wire-queue-task-integration.ts before calling splitTask.`,
         );
         throw new Error("GrillRunner: TaskClient not registered — cannot create LucidTask");
       }
@@ -510,7 +495,7 @@ export async function splitTask(
   const parent = deps?.createTask ? null : await qm.get(id);
   const contextLinks = [
     `queue item ${id}${parent ? ` ("${parent.payload.title}")` : ""}`,
-    ...(parent?.payload.spec?.path ? [`spec: ${parent.payload.spec.path}`] : []),
+    ...(parent?.spec?.path ? [`spec: ${parent.spec.path}`] : []),
     ...(opts?.lucidParentId ? [`parent task ${opts.lucidParentId}`] : []),
     `Inspect: bun ~/.claude/skills/Automation/QueueRouter/Tools/CLI.ts get ${id}`,
   ];
@@ -545,21 +530,13 @@ export async function splitTask(
  * @param id   - Spec-pipeline item ID (must be in needs-grilling)
  * @param opts - Optional until: ISO date string
  */
-export async function deferTask(
-  id: string,
-  opts?: { until?: string }
-): Promise<DeferResult> {
+export async function deferTask(id: string, opts?: { until?: string }): Promise<DeferResult> {
   const qm = getQm();
 
   const deferUntil = opts?.until ?? null;
   const deferredAt = new Date().toISOString();
 
-  const updated = await qm.updateSpecPipelineStatus(
-    id,
-    "awaiting-context",
-    undefined,
-    { deferUntil, deferredAt }
-  );
+  const updated = await qm.updateSpecPipelineStatus(id, "awaiting-context", undefined, { deferUntil, deferredAt });
 
   if (!updated) {
     return { ok: false, message: `Item ${id} not found in spec-pipeline` };
@@ -630,7 +607,7 @@ const DRAFT_FINDINGS_SYSTEM_PROMPT = `You are drafting a grill research findings
  */
 export function buildDraftFindingsPrompt(
   item: { id: string; title: string; description?: string },
-  transcript: string
+  transcript: string,
 ): string {
   return `## Item
 
@@ -693,7 +670,7 @@ const DRAFT_FINDINGS_TIMEOUT_MS = 5 * 60 * 1000;
 export async function draftFindings(
   id: string,
   transcript: string,
-  deps?: DraftFindingsDeps
+  deps?: DraftFindingsDeps,
 ): Promise<DraftFindingsResult> {
   const items = loadQueueItems("spec-pipeline");
   const item = items.find((i) => i.id === id);
@@ -701,14 +678,14 @@ export async function draftFindings(
     return { ok: false, itemId: id, draft: "", message: `Item ${id} not found in spec-pipeline` };
   }
 
-  if (!transcript || !transcript.trim()) {
+  if (!transcript?.trim()) {
     return { ok: false, itemId: id, draft: "", message: "Empty transcript — nothing to draft findings from." };
   }
 
   const infer = deps?.infer ?? inference;
   const userPrompt = buildDraftFindingsPrompt(
     { id: item.id, title: item.payload.title, description: item.payload.description },
-    transcript
+    transcript,
   );
 
   let result: { success: boolean; output: string; error?: string };
@@ -829,25 +806,42 @@ GrillRunner — subcommands (used by CLI.ts "grill" case)
       const findings = getArg("findings");
       const deepResearch = args.includes("--deep-research");
       if (!id || !notes || !research) {
-        console.error("Usage: finalize <id> --notes \"...\" --research \"...\" [--scope \"...\"] [--findings <path>] [--deep-research]");
+        console.error(
+          'Usage: finalize <id> --notes "..." --research "..." [--scope "..."] [--findings <path>] [--deep-research]',
+        );
         process.exit(1);
       }
-      finalizeGrillToSpec(id, { notes, researchGuidance: research, scopeHints: scope, findingsPath: findings, deepResearch })
+      finalizeGrillToSpec(id, {
+        notes,
+        researchGuidance: research,
+        scopeHints: scope,
+        findingsPath: findings,
+        deepResearch,
+      })
         .then((r) => {
           console.log(r.ok ? `Finalized: ${r.status}` : `Failed: ${r.message}`);
           if (r.specPath) console.log(`Spec: ${r.specPath}`);
         })
-        .catch((e) => { console.error(`Error: ${e}`); process.exit(1); });
+        .catch((e) => {
+          console.error(`Error: ${e}`);
+          process.exit(1);
+        });
       break;
     }
 
     case "kill": {
       const id = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
       const lucidTaskId = getArg("lucid");
-      if (!id) { console.error("Usage: kill <id> [--lucid <ltid>]"); process.exit(1); }
+      if (!id) {
+        console.error("Usage: kill <id> [--lucid <ltid>]");
+        process.exit(1);
+      }
       killTask(id, { lucidTaskId })
         .then((r) => console.log(r.ok ? r.message : `Failed: ${r.message}`))
-        .catch((e) => { console.error(`Error: ${e}`); process.exit(1); });
+        .catch((e) => {
+          console.error(`Error: ${e}`);
+          process.exit(1);
+        });
       break;
     }
 
@@ -855,24 +849,39 @@ GrillRunner — subcommands (used by CLI.ts "grill" case)
       const id = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
       const titlesRaw = getArg("titles");
       const lucidParentId = getArg("lucid");
-      if (!id || !titlesRaw) { console.error("Usage: split <id> --titles \"a|b|c\""); process.exit(1); }
-      const titles = titlesRaw.split("|").map((s) => s.trim()).filter(Boolean);
+      if (!id || !titlesRaw) {
+        console.error('Usage: split <id> --titles "a|b|c"');
+        process.exit(1);
+      }
+      const titles = titlesRaw
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
       splitTask(id, titles, { lucidParentId })
         .then((r) => {
           console.log(r.ok ? r.message : `Failed: ${r.message}`);
           if (r.childIds.length) console.log(`Child IDs: ${r.childIds.join(", ")}`);
         })
-        .catch((e) => { console.error(`Error: ${e}`); process.exit(1); });
+        .catch((e) => {
+          console.error(`Error: ${e}`);
+          process.exit(1);
+        });
       break;
     }
 
     case "defer": {
       const id = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
       const until = getArg("until");
-      if (!id) { console.error("Usage: defer <id> [--until <iso>]"); process.exit(1); }
+      if (!id) {
+        console.error("Usage: defer <id> [--until <iso>]");
+        process.exit(1);
+      }
       deferTask(id, { until })
         .then((r) => console.log(r.ok ? r.message : `Failed: ${r.message}`))
-        .catch((e) => { console.error(`Error: ${e}`); process.exit(1); });
+        .catch((e) => {
+          console.error(`Error: ${e}`);
+          process.exit(1);
+        });
       break;
     }
 

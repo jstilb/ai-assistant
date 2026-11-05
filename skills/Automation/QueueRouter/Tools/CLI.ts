@@ -11,18 +11,17 @@
  *   (See --help for full command reference)
  */
 
-import { existsSync, readFileSync } from "fs";
-import { basename, join, resolve } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   QueueManager,
   type QueueItem,
   type QueueItemStatus,
   type QueueItemSpec,
   type Priority,
-  generateId,
-  getQueueFilePath,
 } from "./QueueManager.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 /**
  * Render an absolute spec path as a clickable link to its file.
@@ -58,10 +57,10 @@ function formatItem(item: QueueItem): string {
     blocked: "blocked",
     // spec-pipeline statuses
     "awaiting-context": "awaiting-context",
-    "researching": "researching",
+    researching: "researching",
     "generating-spec": "generating-spec",
     "revision-needed": "revision-needed",
-    "escalated": "escalated",
+    escalated: "escalated",
   };
 
   const priorityLabel: Record<Priority, string> = {
@@ -83,7 +82,9 @@ function formatItem(item: QueueItem): string {
   ];
 
   if (item.payload?.description) {
-    lines.push(`Desc:     ${item.payload.description.slice(0, 60)}${item.payload.description.length > 60 ? "..." : ""}`);
+    lines.push(
+      `Desc:     ${item.payload.description.slice(0, 60)}${item.payload.description.length > 60 ? "..." : ""}`,
+    );
   }
 
   if (item.result?.completedAt) {
@@ -99,9 +100,10 @@ function formatItem(item: QueueItem): string {
   }
 
   // Show spec path as a clickable link for easy navigation (see specLink()).
-  const specPath = item.spec?.path
-    || (existsSync(join(getKayaHome(), `Plans/Specs/Queue/${item.id}-spec.md`))
-      ? join(getKayaHome(), `Plans/Specs/Queue/${item.id}-spec.md`)
+  const specPath =
+    item.spec?.path ||
+    (existsSync(join(getKayaHome(), `plans/Specs/Queue/${item.id}-spec.md`))
+      ? join(getKayaHome(), `plans/Specs/Queue/${item.id}-spec.md`)
       : undefined);
   if (specPath) {
     lines.push(`Spec:     ${specLink(specPath)}`);
@@ -251,7 +253,7 @@ Examples:
       // Build spec object from --spec <path> if provided
       let spec: QueueItemSpec | undefined;
       if (specPath) {
-        const { resolve } = await import("path");
+        const { resolve } = await import("node:path");
         const resolvedPath = resolve(specPath);
         if (!existsSync(resolvedPath)) {
           console.error(`Error: spec file not found: ${resolvedPath}`);
@@ -272,9 +274,10 @@ Examples:
       }
 
       // Use addSpecPipelineItem for spec-pipeline queue to ensure correct initial status
-      const addPromise = queue === "spec-pipeline"
-        ? qm.addSpecPipelineItem({ title, description, context }, { id, priority, type, source })
-        : qm.add({ title, description }, { id, queue, priority, type, source, notes, spec, context });
+      const addPromise =
+        queue === "spec-pipeline"
+          ? qm.addSpecPipelineItem({ title, description, context }, { id, priority, type, source })
+          : qm.add({ title, description }, { id, queue, priority, type, source, notes, spec, context });
 
       addPromise
         .then((newId) => {
@@ -626,7 +629,9 @@ ${Object.entries(stats.byQueue)
 
       qm.cleanup(days)
         .then((result) => {
-          console.log(`Cleanup complete: removed ${result.removed} items (${result.archived} archived to MEMORY/QUEUES/archive/)`);
+          console.log(
+            `Cleanup complete: removed ${result.removed} items (${result.archived} archived to MEMORY/QUEUES/archive/)`,
+          );
         })
         .catch((e) => {
           console.error(`Error: ${e}`);
@@ -647,7 +652,7 @@ ${Object.entries(stats.byQueue)
         console.error("Error: ID required");
         process.exit(1);
       }
-      if (!totalPhases || isNaN(totalPhases) || totalPhases < 1) {
+      if (!totalPhases || Number.isNaN(totalPhases) || totalPhases < 1) {
         console.error("Error: totalPhases must be a positive number");
         process.exit(1);
       }
@@ -677,7 +682,7 @@ ${Object.entries(stats.byQueue)
         console.error("Error: ID required");
         process.exit(1);
       }
-      if (!phase || isNaN(phase)) {
+      if (!phase || Number.isNaN(phase)) {
         console.error("Error: phase number required");
         process.exit(1);
       }
@@ -705,7 +710,7 @@ ${Object.entries(stats.byQueue)
         console.error("Error: ID required");
         process.exit(1);
       }
-      if (!phase || isNaN(phase)) {
+      if (!phase || Number.isNaN(phase)) {
         console.error("Error: phase number required");
         process.exit(1);
       }
@@ -898,7 +903,9 @@ Last Updated: ${progress.lastUpdated}
 
       if (!id) {
         console.error("Error: item ID required");
-        console.error("Usage: context <id> --notes \"Problem context\" --research \"Research guidance\" [--scope \"Scope hints\"]");
+        console.error(
+          'Usage: context <id> --notes "Problem context" --research "Research guidance" [--scope "Scope hints"]',
+        );
         process.exit(1);
       }
       if (!notes) {
@@ -936,12 +943,14 @@ Last Updated: ${progress.lastUpdated}
           if (items.length === 0) {
             console.log(`No spec-pipeline items${pipelineStatus ? ` with status "${pipelineStatus}"` : ""}.`);
           } else {
-            console.log(`\nSpec Pipeline (${items.length} items${pipelineStatus ? `, status: ${pipelineStatus}` : ""}):\n`);
+            console.log(
+              `\nSpec Pipeline (${items.length} items${pipelineStatus ? `, status: ${pipelineStatus}` : ""}):\n`,
+            );
             for (const item of items) {
               const ctx = item.payload.context as Record<string, unknown> | undefined;
               const meta = ctx?._meta as Record<string, unknown> | undefined;
               const revCount = meta?.revisionCount ?? 0;
-              const hasContext = !!(ctx?.notes);
+              const hasContext = !!ctx?.notes;
               const statusLine = `${item.status}${revCount ? ` (rev:${revCount})` : ""}${hasContext ? " [ctx]" : ""}`;
               console.log(`  ${item.id}  ${item.payload.title.slice(0, 50)}  [${statusLine}]`);
             }
@@ -996,8 +1005,10 @@ Last Updated: ${progress.lastUpdated}
 
       if (!id) {
         console.error("Error: item ID required");
-        console.error("Usage: park-for-grill <id> --brief '{\"missing\":[...],\"suggested_questions\":[...]}' [--confidence 0.7]");
-        console.error("   OR: park-for-grill <id> --missing \"a|b\" --questions \"a|b\" [--confidence 0.7]");
+        console.error(
+          'Usage: park-for-grill <id> --brief \'{"missing":[...],"suggested_questions":[...]}\' [--confidence 0.7]',
+        );
+        console.error('   OR: park-for-grill <id> --missing "a|b" --questions "a|b" [--confidence 0.7]');
         process.exit(1);
       }
 
@@ -1039,9 +1050,15 @@ Last Updated: ${progress.lastUpdated}
         const confidenceRaw = getArg("confidence");
         const confidence = confidenceRaw ? parseFloat(confidenceRaw) : undefined;
         brief = {
-          missing: missingRaw.split("|").map((s) => s.trim()).filter(Boolean),
-          suggested_questions: questionsRaw.split("|").map((s) => s.trim()).filter(Boolean),
-          ...(confidence !== undefined && !isNaN(confidence) ? { confidence } : {}),
+          missing: missingRaw
+            .split("|")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          suggested_questions: questionsRaw
+            .split("|")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          ...(confidence !== undefined && !Number.isNaN(confidence) ? { confidence } : {}),
         };
       }
 
@@ -1112,7 +1129,9 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
       } = await import("./GrillRunner.ts");
 
       const priorityLabel: Record<string, string> = {
-        "1": "HIGH", "2": "NORMAL", "3": "LOW",
+        "1": "HIGH",
+        "2": "NORMAL",
+        "3": "LOW",
       };
 
       switch (grillSub) {
@@ -1127,7 +1146,9 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
             console.log(`\nParked for Grill (${formatBacklogLabel(items.length, total)}):\n`);
             for (const item of items) {
               const brief = getGrillBrief(item);
-              console.log(`  ${item.id}  ${item.payload.title}  [${priorityLabel[String(item.priority)] ?? item.priority}]`);
+              console.log(
+                `  ${item.id}  ${item.payload.title}  [${priorityLabel[String(item.priority)] ?? item.priority}]`,
+              );
               if (brief.missing.length) {
                 console.log(`    Missing: ${brief.missing.join("; ")}`);
               }
@@ -1162,7 +1183,9 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
             for (const q of brief.suggestedQuestions) {
               console.log(`  ? ${q}`);
             }
-            console.log(`\nTip: bun ~/.claude/skills/Automation/QueueRouter/Tools/GrillPreResearch.ts ${summary.topItem.id}  (narrow to human-only questions before the interview)`);
+            console.log(
+              `\nTip: bun ~/.claude/skills/Automation/QueueRouter/Tools/GrillPreResearch.ts ${summary.topItem.id}  (narrow to human-only questions before the interview)`,
+            );
           }
           console.log("");
           break;
@@ -1177,7 +1200,9 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
 
           if (!id) {
             console.error("Error: item ID required");
-            console.error("Usage: grill draft-findings <id> [--file <transcriptPath>]  (reads stdin if --file omitted)");
+            console.error(
+              "Usage: grill draft-findings <id> [--file <transcriptPath>]  (reads stdin if --file omitted)",
+            );
             process.exit(1);
           }
 
@@ -1189,15 +1214,7 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
               }
               return readFileSync(filePath, "utf-8");
             }
-            const chunks: string[] = [];
-            const reader = Bun.stdin.stream().getReader();
-            const decoder = new TextDecoder();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              chunks.push(decoder.decode(value, { stream: true }));
-            }
-            return chunks.join("");
+            return await readStdinText({ trim: false });
           };
 
           readTranscript()
@@ -1211,8 +1228,12 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
                 console.error(`draft-findings failed: ${result.message}`);
                 process.exit(1);
               }
-              console.error(`Draft generated for ${id} — REVIEW before finalize (this is a draft, not a finalized artifact).`);
-              console.error(`To save it: re-run and redirect stdout, e.g.:\n  bun ~/.claude/skills/Automation/QueueRouter/Tools/CLI.ts grill draft-findings ${id} --file <transcript> > ~/.claude/MEMORY/WORK/grill-${id}-findings.md\n`);
+              console.error(
+                `Draft generated for ${id} — REVIEW before finalize (this is a draft, not a finalized artifact).`,
+              );
+              console.error(
+                `To save it: re-run and redirect stdout, e.g.:\n  bun ~/.claude/skills/Automation/QueueRouter/Tools/CLI.ts grill draft-findings ${id} --file <transcript> > ~/.claude/MEMORY/WORK/grill-${id}-findings.md\n`,
+              );
               console.log(result.draft);
             })
             .catch((e) => {
@@ -1232,7 +1253,9 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
 
           if (!id) {
             console.error("Error: item ID required");
-            console.error("Usage: grill finalize <id> --notes \"...\" --research \"...\" [--scope \"...\"] [--findings <path>] [--deep-research]");
+            console.error(
+              'Usage: grill finalize <id> --notes "..." --research "..." [--scope "..."] [--findings <path>] [--deep-research]',
+            );
             process.exit(1);
           }
           if (!notes) {
@@ -1248,7 +1271,13 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
             process.exit(1);
           }
 
-          finalizeGrillToSpec(id, { notes, researchGuidance: research, scopeHints: scope, findingsPath: findings, deepResearch })
+          finalizeGrillToSpec(id, {
+            notes,
+            researchGuidance: research,
+            scopeHints: scope,
+            findingsPath: findings,
+            deepResearch,
+          })
             .then((r) => {
               if (r.ok) {
                 console.log(`Finalized: ${id} → status: ${r.status}`);
@@ -1310,7 +1339,7 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
 
           if (!id) {
             console.error("Error: item ID required");
-            console.error("Usage: grill split <id> --titles \"a|b|c\" [--lucid <parentLtid>]");
+            console.error('Usage: grill split <id> --titles "a|b|c" [--lucid <parentLtid>]');
             process.exit(1);
           }
           if (!titlesRaw) {
@@ -1318,7 +1347,10 @@ WARNING: Never invoke grill headless, from cron, or via claude -p.
             process.exit(1);
           }
 
-          const titles = titlesRaw.split("|").map((s) => s.trim()).filter(Boolean);
+          const titles = titlesRaw
+            .split("|")
+            .map((s) => s.trim())
+            .filter(Boolean);
           if (titles.length === 0) {
             console.error("Error: --titles must contain at least one non-empty title");
             process.exit(1);

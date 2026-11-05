@@ -22,8 +22,8 @@
  */
 
 import { describe, test, expect, afterAll, afterEach } from "bun:test";
-import { join } from "path";
-import { existsSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
 // ============================================================================
@@ -115,14 +115,18 @@ describe("1. same-stage upsert (patch)", () => {
     expect(item.stage).toBe("revision-needed");
 
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const eventsAfterCreate = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ?").all(item.id) as EventRow[];
+    const eventsAfterCreate = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ?")
+      .all(item.id) as EventRow[];
     expect(eventsAfterCreate.length).toBe(1); // the creation event only
 
     const patched = repo.upsert({ id: item.id, stage: "revision-needed", title: "v2" });
     expect(patched.stage).toBe("revision-needed");
     expect(patched.title).toBe("v2");
 
-    const eventsAfterPatch = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ?").all(item.id) as EventRow[];
+    const eventsAfterPatch = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ?")
+      .all(item.id) as EventRow[];
     expect(eventsAfterPatch.length).toBe(1); // unchanged — no new event from the patch
 
     expect(readFailureLogLines().length).toBe(0);
@@ -157,19 +161,23 @@ describe("2. new-item creation event", () => {
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
     const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ?").all(item.id) as EventRow[];
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBeNull();
-    expect(rows[0].to_stage).toBe("approved");
-    expect(rows[0].note).toBe("creation");
+    expect(rows[0]?.from_stage).toBeNull();
+    expect(rows[0]?.to_stage).toBe("approved");
+    expect(rows[0]?.note).toBe("creation");
   });
 
   test("creation event actor defaults to 'upsert' and is overridable", () => {
     const item1 = repo.upsert(makeItem({ stage: "intake" }));
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const row1 = rawDb.prepare("SELECT actor FROM pipeline_events WHERE item_id = ?").get(item1.id) as { actor: string };
+    const row1 = rawDb.prepare("SELECT actor FROM pipeline_events WHERE item_id = ?").get(item1.id) as {
+      actor: string;
+    };
     expect(row1.actor).toBe("upsert");
 
     const item2 = repo.upsert(makeItem({ stage: "intake" }), { actor: "spec-pipeline-facade" });
-    const row2 = rawDb.prepare("SELECT actor FROM pipeline_events WHERE item_id = ?").get(item2.id) as { actor: string };
+    const row2 = rawDb.prepare("SELECT actor FROM pipeline_events WHERE item_id = ?").get(item2.id) as {
+      actor: string;
+    };
     expect(row2.actor).toBe("spec-pipeline-facade");
   });
 });
@@ -189,12 +197,14 @@ describe("3. legal stage-crossing via upsert", () => {
     expect(crossed.stage).toBe("researching");
 
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id) as EventRow[];
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id) as EventRow[];
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBe("intake");
-    expect(rows[0].to_stage).toBe("researching");
-    expect(rows[0].note).toBe("shadow-legal");
-    expect(rows[0].actor).toBe("upsert");
+    expect(rows[0]?.from_stage).toBe("intake");
+    expect(rows[0]?.to_stage).toBe("researching");
+    expect(rows[0]?.note).toBe("shadow-legal");
+    expect(rows[0]?.actor).toBe("upsert");
 
     expect(readFailureLogLines().length).toBe(0);
   });
@@ -213,14 +223,17 @@ describe("4. illegal stage-crossing via upsert — enforce mode (default)", () =
     const item = repo.upsert(makeItem({ stage: "done" }));
     const before = readFailureLogLines().length;
 
-    expect(() => repo.upsert({ id: item.id, stage: "in-progress" }))
-      .toThrow(/illegal transition "done" → "in-progress"/);
+    expect(() => repo.upsert({ id: item.id, stage: "in-progress" })).toThrow(
+      /illegal transition "done" → "in-progress"/,
+    );
 
     const reread = repo.get(item.id);
     expect(reread?.stage).toBe("done"); // unchanged — rolled back
 
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id) as EventRow[];
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id) as EventRow[];
     expect(rows.length).toBe(0);
 
     // Enforce mode throws instead of logging — recordFailure is a shadow-mode-only path.
@@ -245,19 +258,21 @@ describe("5. illegal stage-crossing via upsert — shadow opt-out + precedence",
     expect(crossed.stage).toBe("in-progress");
 
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id) as EventRow[];
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id) as EventRow[];
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBe("done");
-    expect(rows[0].to_stage).toBe("in-progress");
-    expect(rows[0].note).toBe("shadow-illegal");
+    expect(rows[0]?.from_stage).toBe("done");
+    expect(rows[0]?.to_stage).toBe("in-progress");
+    expect(rows[0]?.note).toBe("shadow-illegal");
 
     const lines = readFailureLogLines();
     expect(lines.length).toBe(before + 1);
     const entry = lines[lines.length - 1];
-    expect(entry.source).toBe("PipelineRepository.upsert.shadow");
-    expect(entry.context.id).toBe(item.id);
-    expect(entry.context.from).toBe("done");
-    expect(entry.context.to).toBe("in-progress");
+    expect(entry?.source).toBe("PipelineRepository.upsert.shadow");
+    expect(entry?.context.id).toBe(item.id);
+    expect(entry?.context.from).toBe("done");
+    expect(entry?.context.to).toBe("in-progress");
   });
 
   test("env var KAYA_PIPELINE_TRANSITION_ENFORCE=0 restores shadow mode with no option override (emergency escape hatch)", () => {
@@ -275,8 +290,9 @@ describe("5. illegal stage-crossing via upsert — shadow opt-out + precedence",
     const item = repo.upsert(makeItem({ stage: "done" }));
     process.env.KAYA_PIPELINE_TRANSITION_ENFORCE = "0";
 
-    expect(() => repo.upsert({ id: item.id, stage: "in-progress" }, { enforce: true }))
-      .toThrow(/illegal transition "done" → "in-progress"/);
+    expect(() => repo.upsert({ id: item.id, stage: "in-progress" }, { enforce: true })).toThrow(
+      /illegal transition "done" → "in-progress"/,
+    );
 
     const reread = repo.get(item.id);
     expect(reread?.stage).toBe("done"); // unchanged
@@ -296,9 +312,11 @@ describe("5. illegal stage-crossing via upsert — shadow opt-out + precedence",
     expect(crossed.stage).toBe("researching");
 
     const rawDb = (repo as unknown as { db: import("bun:sqlite").Database }).db;
-    const rows = rawDb.prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL").all(item.id) as EventRow[];
+    const rows = rawDb
+      .prepare("SELECT * FROM pipeline_events WHERE item_id = ? AND from_stage IS NOT NULL")
+      .all(item.id) as EventRow[];
     expect(rows.length).toBe(1);
-    expect(rows[0].note).toBe("shadow-legal");
+    expect(rows[0]?.note).toBe("shadow-legal");
   });
 });
 

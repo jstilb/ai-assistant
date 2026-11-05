@@ -33,10 +33,16 @@ async function loadSecrets(): Promise<TelegramSecrets | null> {
   try {
     const { getKayaHome } = await import("../../../../lib/core/KayaHome.ts");
     const home = getKayaHome();
-    const secrets = await Bun.file(`${home}/secrets.json`).json() as Record<string, unknown>;
+    const secrets = (await Bun.file(`${home}/secrets.json`).json()) as Record<string, unknown>;
     const tg = secrets.telegram as TelegramSecrets | undefined;
     return tg ?? null;
-  } catch {
+  } catch (err) {
+    // A missing secrets.json is expected (no Telegram configured); a corrupt one is not.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(
+        `[ApprovalNudge] could not read telegram secrets: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return null;
   }
 }
@@ -70,10 +76,11 @@ export async function runApprovalNudge(deps: ApprovalNudgeDeps = {}): Promise<vo
   }
 
   const cutoff = new Date(now() - STALE_AFTER_MS);
-  const stale = loadItems().filter((i) =>
-    (i.status === "pending" || i.status === "awaiting_approval") &&
-    i.spec?.status === "draft" &&
-    new Date(i.created) < cutoff
+  const stale = loadItems().filter(
+    (i) =>
+      (i.status === "pending" || i.status === "awaiting_approval") &&
+      i.spec?.status === "draft" &&
+      new Date(i.created) < cutoff,
   );
 
   if (stale.length === 0) {
@@ -85,17 +92,15 @@ export async function runApprovalNudge(deps: ApprovalNudgeDeps = {}): Promise<vo
   // first, then the task-side queue_item_id backlink.
   const closedTasks = await (deps.fetchClosedTasks ?? fetchClosedTasksFromCLI)();
   const closedById = new Map(closedTasks.map((t) => [t.id, t]));
-  const closedByItemId = new Map(
-    closedTasks.filter((t) => t.queueItemId).map((t) => [t.queueItemId as string, t]),
-  );
-  const archiveItem = deps.archiveItem ??
-    ((itemId: string, reason: string) => new QueueManager().archiveItemById(itemId, reason));
+  const closedByItemId = new Map(closedTasks.filter((t) => t.queueItemId).map((t) => [t.queueItemId as string, t]));
+  const archiveItem =
+    deps.archiveItem ?? ((itemId: string, reason: string) => new QueueManager().archiveItemById(itemId, reason));
 
   const open: QueueItem[] = [];
   for (const item of stale) {
     const lucidTaskId = item.payload.context?.lucidTaskId;
-    const closed = (typeof lucidTaskId === "string" ? closedById.get(lucidTaskId) : undefined) ??
-      closedByItemId.get(item.id);
+    const closed =
+      (typeof lucidTaskId === "string" ? closedById.get(lucidTaskId) : undefined) ?? closedByItemId.get(item.id);
     if (!closed) {
       open.push(item);
       continue;
@@ -104,7 +109,9 @@ export async function runApprovalNudge(deps: ApprovalNudgeDeps = {}): Promise<vo
     if (result.archived) {
       console.log(`[ApprovalNudge] Archived (task ${closed.id} ${closed.status}): ${item.id} "${item.payload.title}"`);
     } else {
-      console.error(`[ApprovalNudge] Task ${closed.id} is ${closed.status} but archive refused for ${item.id}: ${result.reason ?? "unknown"} — not nudging`);
+      console.error(
+        `[ApprovalNudge] Task ${closed.id} is ${closed.status} but archive refused for ${item.id}: ${result.reason ?? "unknown"} — not nudging`,
+      );
     }
   }
 
@@ -120,7 +127,9 @@ export async function runApprovalNudge(deps: ApprovalNudgeDeps = {}): Promise<vo
       gate.recordPaged(gateKey);
       console.log(`[ApprovalNudge] Nudged: ${item.id} "${item.payload.title}"`);
     } catch (err) {
-      console.error(`[ApprovalNudge] Failed to nudge item ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[ApprovalNudge] Failed to nudge item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

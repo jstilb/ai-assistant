@@ -19,8 +19,8 @@
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { join } from "path";
-import { mkdirSync, existsSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
 import type { Database } from "bun:sqlite";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 
@@ -127,13 +127,7 @@ describe("1. deriveStage(status, 'approvals') maps the real status vocabulary", 
 // ============================================================================
 
 describe("2. stageToQueueStatus/deriveStage bijection over the full STAGES list", () => {
-  const APPROVALS_STAGES = new Set<Stage>([
-    "awaiting-approval",
-    "approved",
-    "rejected",
-    "done",
-    "failed",
-  ]);
+  const APPROVALS_STAGES = new Set<Stage>(["awaiting-approval", "approved", "rejected", "done", "failed"]);
 
   for (const stage of STAGES) {
     const relevant = APPROVALS_STAGES.has(stage);

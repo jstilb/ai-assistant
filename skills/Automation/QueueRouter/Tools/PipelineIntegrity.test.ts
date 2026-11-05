@@ -16,10 +16,10 @@
  *   8. Guard-bypass detection (A2) — "wrote around the guard" tripwire
  */
 
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from "fs";
+import { describe, test, expect, afterAll, beforeEach } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 // ============================================================================
 // KAYA_HOME isolation — set BEFORE any import that reads the env
@@ -38,12 +38,7 @@ import {
   type PipelineItem,
 } from "./PipelineRepository.ts";
 import { resetPipelineDb } from "./PipelineDB.ts";
-import {
-  runCheck,
-  lucidTasksHumanGate,
-  type CheckOptions,
-  type IntegrityCheckReport,
-} from "./PipelineIntegrity.ts";
+import { runCheck, lucidTasksHumanGate, type CheckOptions } from "./PipelineIntegrity.ts";
 import { setTaskClient, type TaskClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 
 // ============================================================================
@@ -52,7 +47,9 @@ import { setTaskClient, type TaskClient } from "../../../../lib/interfaces/Queue
 
 const LIVE_PIPELINE_DB = join(process.env.HOME || "", ".kaya", "runtime", "pipeline.db");
 const LIVE_SPECS_DIR = join(process.env.HOME || "", ".claude", "plans", "Specs", "Queue");
-function liveDbExists(): boolean { return existsSync(LIVE_PIPELINE_DB); }
+function liveDbExists(): boolean {
+  return existsSync(LIVE_PIPELINE_DB);
+}
 const liveDbExistedBefore = liveDbExists();
 
 // ============================================================================
@@ -75,34 +72,20 @@ function makeTestHome(suffix: string): {
 }
 
 function makeSpecFile(specsDir: string, name: string, itemId: string): string {
-  const content = [
-    `# Spec: ${name}`,
-    "",
-    `**Item ID:** ${itemId}`,
-    "",
-    "## Description",
-    "A test spec.",
-  ].join("\n");
+  const content = [`# Spec: ${name}`, "", `**Item ID:** ${itemId}`, "", "## Description", "A test spec."].join("\n");
   const path = join(specsDir, `${name}-spec.md`);
   writeFileSync(path, content);
   return path;
 }
 
 function makeOldFormatSpec(specsDir: string, name: string): string {
-  const content = [
-    `# Spec: ${name}`,
-    "",
-    "## Description",
-    "An old-format spec without Item ID header.",
-  ].join("\n");
+  const content = [`# Spec: ${name}`, "", "## Description", "An old-format spec without Item ID header."].join("\n");
   const path = join(specsDir, `${name}-spec.md`);
   writeFileSync(path, content);
   return path;
 }
 
-function makeItem(
-  overrides: Partial<PipelineItem> & { id?: string } = {}
-): Partial<PipelineItem> & { id: string } {
+function makeItem(overrides: Partial<PipelineItem> & { id?: string } = {}): Partial<PipelineItem> & { id: string } {
   return {
     id: generatePipelineId(),
     title: "Test Item",
@@ -121,7 +104,7 @@ function makeItem(
 
 function opts(home: string, dbPath: string, specsDir: string, extra: Partial<CheckOptions> = {}): CheckOptions {
   return {
-    noAlert: true,           // always suppress alerts in tests
+    noAlert: true, // always suppress alerts in tests
     kayaHome: home,
     dbPath,
     specsDir,
@@ -136,7 +119,11 @@ function opts(home: string, dbPath: string, specsDir: string, extra: Partial<Che
 afterAll(() => {
   // Evict all singleton repos so file handles are released
   resetPipelineRepository();
-  try { rmSync(TEST_BASE, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(TEST_BASE, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 });
 
 beforeEach(() => {
@@ -149,7 +136,6 @@ beforeEach(() => {
 // ============================================================================
 
 describe("1. Orphan spec detection", () => {
-
   test("one orphan spec → check exits non-zero and summary contains PIPELINE_ORPHANS(1)", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("orphan1");
     const orphanId = "pi-orphan-001";
@@ -169,10 +155,13 @@ describe("1. Orphan spec detection", () => {
 
     // The CLI exits non-zero — verify by spawning it
     const cliPath = join(import.meta.dir, "PipelineIntegrity.ts");
-    const proc = Bun.spawnSync(["bun", cliPath, "check", "--no-alert",
-      "--kaya-home", home, "--db-path", dbPath, "--specs-dir", specsDir], {
-      stdout: "pipe", stderr: "pipe",
-    });
+    const proc = Bun.spawnSync(
+      ["bun", cliPath, "check", "--no-alert", "--kaya-home", home, "--db-path", dbPath, "--specs-dir", specsDir],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(proc.exitCode).toBe(1);
     const out = new TextDecoder().decode(proc.stdout);
     expect(out).toContain("PIPELINE_ORPHANS(1)");
@@ -260,7 +249,6 @@ describe("1. Orphan spec detection", () => {
 // ============================================================================
 
 describe("2. Clean state → exit 0 and PIPELINE_ORPHANS(0)", () => {
-
   test("empty db + empty specs dir → ok=true, all counts zero", async () => {
     const { home, dbPath, specsDir } = makeTestHome("clean1");
 
@@ -287,7 +275,7 @@ describe("2. Clean state → exit 0 and PIPELINE_ORPHANS(0)", () => {
     process.env.KAYA_ALERT_DRY_RUN = "1";
     try {
       const report = await runCheck({
-        noAlert: false,           // allow alerting
+        noAlert: false, // allow alerting
         kayaHome: home,
         dbPath,
         specsDir,
@@ -307,10 +295,13 @@ describe("2. Clean state → exit 0 and PIPELINE_ORPHANS(0)", () => {
     const { home, dbPath, specsDir } = makeTestHome("clean3");
     const cliPath = join(import.meta.dir, "PipelineIntegrity.ts");
 
-    const proc = Bun.spawnSync(["bun", cliPath, "check", "--no-alert",
-      "--kaya-home", home, "--db-path", dbPath, "--specs-dir", specsDir], {
-      stdout: "pipe", stderr: "pipe",
-    });
+    const proc = Bun.spawnSync(
+      ["bun", cliPath, "check", "--no-alert", "--kaya-home", home, "--db-path", dbPath, "--specs-dir", specsDir],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(proc.exitCode).toBe(0);
     const out = new TextDecoder().decode(proc.stdout);
     expect(out).toContain("PIPELINE_ORPHANS(0)");
@@ -324,7 +315,6 @@ describe("2. Clean state → exit 0 and PIPELINE_ORPHANS(0)", () => {
 // ============================================================================
 
 describe("3. needs-grilling spec with DB row is NOT an orphan", () => {
-
   test("item in needs-grilling + spec file → not orphan", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("grilling1");
 
@@ -345,7 +335,6 @@ describe("3. needs-grilling spec with DB row is NOT an orphan", () => {
 // ============================================================================
 
 describe("4. Stale needs-grilling is NOT flagged as stuck", () => {
-
   test("item in needs-grilling with 72h-old updated_at → NOT in stuckItems", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("grilling-stale1");
 
@@ -354,12 +343,11 @@ describe("4. Stale needs-grilling is NOT flagged as stuck", () => {
     const oldDate = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
     repo.upsert(makeItem({ id: itemId, stage: "needs-grilling" }));
     // Directly corrupt updated_at via raw SQL to simulate staleness
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(oldDate, itemId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(oldDate, itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
     // needs-grilling must NOT appear in stuck items
-    expect(report.stuckItems.filter(s => s.id === itemId)).toHaveLength(0);
+    expect(report.stuckItems.filter((s) => s.id === itemId)).toHaveLength(0);
 
     resetPipelineDb(dbPath);
   });
@@ -370,7 +358,6 @@ describe("4. Stale needs-grilling is NOT flagged as stuck", () => {
 // ============================================================================
 
 describe("5. Stuck items detection", () => {
-
   test("researching item older than 6h threshold → flagged as stuck", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("stuck1");
 
@@ -378,11 +365,10 @@ describe("5. Stuck items detection", () => {
     repo.upsert(makeItem({ id: itemId, stage: "researching" }));
     // Set updated_at to 7h ago (past 6h threshold)
     const oldDate = new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString();
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(oldDate, itemId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(oldDate, itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.stuckItems.some(s => s.id === itemId && s.stage === "researching")).toBe(true);
+    expect(report.stuckItems.some((s) => s.id === itemId && s.stage === "researching")).toBe(true);
     expect(report.ok).toBe(false);
     expect(report.summary).toContain("STUCK(1)");
 
@@ -396,11 +382,10 @@ describe("5. Stuck items detection", () => {
     repo.upsert(makeItem({ id: itemId, stage: "researching" }));
     // updated_at is recent — 2h ago
     const recentDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(recentDate, itemId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(recentDate, itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.stuckItems.some(s => s.id === itemId)).toBe(false);
+    expect(report.stuckItems.some((s) => s.id === itemId)).toBe(false);
 
     resetPipelineDb(dbPath);
   });
@@ -411,11 +396,10 @@ describe("5. Stuck items detection", () => {
     const itemId = generatePipelineId();
     repo.upsert(makeItem({ id: itemId, stage: "approved" }));
     const oldDate = new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString();
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(oldDate, itemId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(oldDate, itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.stuckItems.some(s => s.id === itemId && s.stage === "approved")).toBe(true);
+    expect(report.stuckItems.some((s) => s.id === itemId && s.stage === "approved")).toBe(true);
 
     resetPipelineDb(dbPath);
   });
@@ -426,11 +410,10 @@ describe("5. Stuck items detection", () => {
     const itemId = generatePipelineId();
     repo.upsert(makeItem({ id: itemId, stage: "done" }));
     const ancientDate = new Date(Date.now() - 200 * 60 * 60 * 1000).toISOString();
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(ancientDate, itemId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(ancientDate, itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.stuckItems.some(s => s.id === itemId)).toBe(false);
+    expect(report.stuckItems.some((s) => s.id === itemId)).toBe(false);
 
     resetPipelineDb(dbPath);
   });
@@ -441,14 +424,15 @@ describe("5. Stuck items detection", () => {
     const gatedId = generatePipelineId();
     repo.upsert(makeItem({ id: gatedId, stage: "approved" }));
     const oldDate = new Date(Date.now() - 500 * 60 * 60 * 1000).toISOString();
-    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?")
-      .run(oldDate, gatedId);
+    repo["db"].prepare("UPDATE pipeline_items SET updated_at = ? WHERE id = ?").run(oldDate, gatedId);
 
-    const report = await runCheck(opts(home, dbPath, specsDir, {
-      isHumanGated: async (id) => id === gatedId,
-    }));
-    expect(report.stuckItems.some(s => s.id === gatedId)).toBe(false);
-    expect(report.awaitingJmItems.some(s => s.id === gatedId && s.stage === "approved")).toBe(true);
+    const report = await runCheck(
+      opts(home, dbPath, specsDir, {
+        isHumanGated: async (id) => id === gatedId,
+      }),
+    );
+    expect(report.stuckItems.some((s) => s.id === gatedId)).toBe(false);
+    expect(report.awaitingJmItems.some((s) => s.id === gatedId && s.stage === "approved")).toBe(true);
     expect(report.summary).toContain("STUCK(0)");
     expect(report.summary).toContain("AWAITING_JM(1)");
     expect(report.ok).toBe(true);
@@ -466,11 +450,13 @@ describe("5. Stuck items detection", () => {
     const oldDate = new Date(Date.now() - 100 * 60 * 60 * 1000).toISOString();
     repo["db"].prepare("UPDATE pipeline_items SET updated_at = ?").run(oldDate);
 
-    const report = await runCheck(opts(home, dbPath, specsDir, {
-      isHumanGated: async (id) => id === gatedId,
-    }));
-    expect(report.stuckItems.map(s => s.id)).toEqual([stuckId]);
-    expect(report.awaitingJmItems.map(s => s.id)).toEqual([gatedId]);
+    const report = await runCheck(
+      opts(home, dbPath, specsDir, {
+        isHumanGated: async (id) => id === gatedId,
+      }),
+    );
+    expect(report.stuckItems.map((s) => s.id)).toEqual([stuckId]);
+    expect(report.awaitingJmItems.map((s) => s.id)).toEqual([gatedId]);
     expect(report.ok).toBe(false);
 
     resetPipelineDb(dbPath);
@@ -480,10 +466,10 @@ describe("5. Stuck items detection", () => {
 describe("5b. lucidTasksHumanGate", () => {
   afterAll(() => setTaskClient(null));
 
-  const clientWith = (tasks: Record<string, string>): TaskClient => ({
-    getTaskById: async (id: string) =>
-      id in tasks ? { id, status: tasks[id], title: id, queueItemId: null } : null,
-  } as unknown as TaskClient);
+  const clientWith = (tasks: Record<string, string>): TaskClient =>
+    ({
+      getTaskById: async (id: string) => (id in tasks ? { id, status: tasks[id], title: id, queueItemId: null } : null),
+    }) as unknown as TaskClient;
 
   test("open manual-<itemId> task (any non-terminal status, any project) → gated", async () => {
     setTaskClient(clientWith({ "manual-a": "next", "manual-b": "someday", "manual-c": "waiting" }));
@@ -504,7 +490,11 @@ describe("5b. lucidTasksHumanGate", () => {
   test("no TaskClient registered or a read error → not gated (fail toward alerting)", async () => {
     setTaskClient(null);
     expect(await lucidTasksHumanGate()("a")).toBe(false);
-    setTaskClient({ getTaskById: async () => { throw new Error("db locked"); } } as unknown as TaskClient);
+    setTaskClient({
+      getTaskById: async () => {
+        throw new Error("db locked");
+      },
+    } as unknown as TaskClient);
     expect(await lucidTasksHumanGate()("a")).toBe(false);
   });
 });
@@ -514,7 +504,6 @@ describe("5b. lucidTasksHumanGate", () => {
 // ============================================================================
 
 describe("6. Store integrity errors surface in report", () => {
-
   test("in-progress item with null started_at → storeErrors contains the item", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("storeint1");
 
@@ -524,7 +513,7 @@ describe("6. Store integrity errors surface in report", () => {
     repo["db"].prepare("UPDATE pipeline_items SET started_at = NULL WHERE id = ?").run(itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.storeErrors.some(e => e.includes(itemId))).toBe(true);
+    expect(report.storeErrors.some((e) => e.includes(itemId))).toBe(true);
     expect(report.ok).toBe(false);
     expect(report.summary).toContain("STORE_ERRORS(1)");
 
@@ -542,8 +531,7 @@ describe("7. Live path safety", () => {
       expect(liveDbExists()).toBe(false);
     }
     // Either way: the pipeline.db used in tests is NOT the live one
-    expect(join(TEST_BASE, ".kaya", "runtime", "pipeline.db"))
-      .not.toBe(LIVE_PIPELINE_DB);
+    expect(join(TEST_BASE, ".kaya", "runtime", "pipeline.db")).not.toBe(LIVE_PIPELINE_DB);
   });
 
   test("tests did NOT write to live specs dir", () => {
@@ -569,13 +557,12 @@ describe("7. Live path safety", () => {
 // ============================================================================
 
 describe("8. Guard-bypass detection (wrote around the guard)", () => {
-
   test("clean db: items driven entirely through upsert()/transition() → guardBypassItems empty", async () => {
     const { home, dbPath, specsDir, repo } = makeTestHome("guardbypass-clean");
 
     const id1 = generatePipelineId();
     repo.upsert(makeItem({ id: id1, stage: "intake" })); // creation event: null -> intake
-    repo.upsert({ id: id1, stage: "researching" });       // shadow-legal event: intake -> researching
+    repo.upsert({ id: id1, stage: "researching" }); // shadow-legal event: intake -> researching
 
     const report = await runCheck(opts(home, dbPath, specsDir));
     expect(report.guardBypassItems).toHaveLength(0);
@@ -611,13 +598,15 @@ describe("8. Guard-bypass detection (wrote around the guard)", () => {
     // Insert a pipeline_items row directly via raw SQL, bypassing upsert() entirely,
     // so it has zero pipeline_events rows — simulates pre-A1 data.
     const itemId = "pi-preA1-legacy-001";
-    repo["db"].prepare(`
+    repo["db"]
+      .prepare(`
       INSERT INTO pipeline_items (id, stage, title, description, created_at, updated_at)
       VALUES (?, 'in-progress', 'Legacy item', 'Predates event backfill', datetime('now'), datetime('now'))
-    `).run(itemId);
+    `)
+      .run(itemId);
 
     const report = await runCheck(opts(home, dbPath, specsDir));
-    expect(report.guardBypassItems.some(g => g.id === itemId)).toBe(false);
+    expect(report.guardBypassItems.some((g) => g.id === itemId)).toBe(false);
 
     resetPipelineDb(dbPath);
   });
@@ -659,7 +648,7 @@ describe("8. Guard-bypass detection (wrote around the guard)", () => {
 
     const report = await runCheck(opts(home, dbPath, specsDir));
     expect(report.guardBypassItems).toHaveLength(0);
-    expect(report.guardBypassItems.some(g => g.id === "t-lane-a-orphan-001")).toBe(false);
+    expect(report.guardBypassItems.some((g) => g.id === "t-lane-a-orphan-001")).toBe(false);
     expect(report.summary).toContain("GUARD_BYPASS(0)");
     expect(report.ok).toBe(true);
 

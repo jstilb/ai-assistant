@@ -64,22 +64,22 @@ export const QUEUE_STATUS_TO_LUCID_TASK_STATUS: Readonly<Record<string, TaskStat
 // ----------------------------------------------------------------------------
 
 export const WORK_STATUS_TO_STAGE: Record<WorkStatus, Stage> = {
-  pending:      "approved",
-  in_progress:  "in-progress",
-  completed:    "done",
-  partial:      "partial",
-  failed:       "failed",
-  blocked:      "blocked",
+  pending: "approved",
+  in_progress: "in-progress",
+  completed: "done",
+  partial: "partial",
+  failed: "failed",
+  blocked: "blocked",
   needs_review: "needs-review",
 };
 
 export const STAGE_TO_WORK_STATUS: Partial<Record<Stage, WorkStatus>> = {
-  "approved":     "pending",
-  "in-progress":  "in_progress",
-  "done":         "completed",
-  "partial":      "partial",
-  "failed":       "failed",
-  "blocked":      "blocked",
+  approved: "pending",
+  "in-progress": "in_progress",
+  done: "completed",
+  partial: "partial",
+  failed: "failed",
+  blocked: "blocked",
   "needs-review": "needs_review",
 };
 
@@ -92,13 +92,13 @@ export const STAGE_TO_WORK_STATUS: Partial<Record<Stage, WorkStatus>> = {
 
 export const WORK_PRIORITY_TO_PIPELINE_PRIORITY: Record<WorkPriority, 1 | 2 | 3> = {
   critical: 1,
-  high:     1,
-  normal:   2,
-  low:      3,
+  high: 1,
+  normal: 2,
+  low: 3,
 };
 
 export const PIPELINE_PRIORITY_TO_WORK_PRIORITY: Record<1 | 2 | 3, WorkPriority> = {
-  1: "high",   // critical is preserved in rawWorkItem; 1→high is the fallback
+  1: "high", // critical is preserved in rawWorkItem; 1→high is the fallback
   2: "normal",
   3: "low",
 };
@@ -107,9 +107,7 @@ export const PIPELINE_PRIORITY_TO_WORK_PRIORITY: Record<1 | 2 | 3, WorkPriority>
  * Convert a WorkItem into PipelineRepository upsert params.
  * The full WorkItem is stored in metadata.rawWorkItem for faithful round-tripping.
  */
-export function workItemToPipelineParams(
-  item: WorkItem,
-): Partial<PipelineItem> & { id: string } {
+export function workItemToPipelineParams(item: WorkItem): Partial<PipelineItem> & { id: string } {
   const stage = WORK_STATUS_TO_STAGE[item.status] ?? "approved";
   const priority = WORK_PRIORITY_TO_PIPELINE_PRIORITY[item.priority] ?? 2;
   return {
@@ -169,7 +167,7 @@ export function pipelineItemToWorkItem(pi: PipelineItem): WorkItem {
           id: pi.id,
           title: pi.title,
           description: pi.description,
-          priority: PIPELINE_PRIORITY_TO_WORK_PRIORITY[(pi.priority as 1 | 2 | 3)] ?? "normal",
+          priority: PIPELINE_PRIORITY_TO_WORK_PRIORITY[pi.priority as 1 | 2 | 3] ?? "normal",
           status: STAGE_TO_WORK_STATUS[pi.stage] ?? "pending",
           dependencies: pi.dependencies ?? [],
           source: (pi.source as "approval_queue" | "manual") ?? "manual",
@@ -206,10 +204,22 @@ export function pipelineItemToWorkItem(pi: PipelineItem): WorkItem {
 
 /** All valid Stage values — used for fallback mapping in unknown queues */
 export const VALID_STAGES = new Set<string>([
-  "intake", "needs-grilling", "researching", "generating-spec",
-  "revision-needed", "escalated", "awaiting-approval", "approved",
-  "in-progress", "partial", "needs-review", "blocked",
-  "done", "failed", "rejected", "archived",
+  "intake",
+  "needs-grilling",
+  "researching",
+  "generating-spec",
+  "revision-needed",
+  "escalated",
+  "awaiting-approval",
+  "approved",
+  "in-progress",
+  "partial",
+  "needs-review",
+  "blocked",
+  "done",
+  "failed",
+  "rejected",
+  "archived",
 ]);
 
 /**
@@ -241,10 +251,14 @@ export function deriveStage(status: string, queueName: string): Stage {
       case "awaiting_approval":
       case "pending":
         return "awaiting-approval";
-      case "approved": return "approved";           // QueueManager.approve() (pre-transfer)
-      case "rejected": return "rejected";            // QueueManager.reject()
-      case "completed": return "done";               // QueueManager.complete()
-      case "failed": return "failed";                // QueueManager.fail()
+      case "approved":
+        return "approved"; // QueueManager.approve() (pre-transfer)
+      case "rejected":
+        return "rejected"; // QueueManager.reject()
+      case "completed":
+        return "done"; // QueueManager.complete()
+      case "failed":
+        return "failed"; // QueueManager.fail()
       default:
         if (VALID_STAGES.has(status)) return status as Stage;
         return "awaiting-approval";
@@ -252,15 +266,23 @@ export function deriveStage(status: string, queueName: string): Stage {
   }
   if (queueName === "approved-work") {
     switch (status) {
-      case "pending": return "approved";
-      case "in_progress": return "in-progress";
-      case "partial": return "partial";
-      case "needs_review": return "needs-review";
-      case "blocked": return "blocked";
+      case "pending":
+        return "approved";
+      case "in_progress":
+        return "in-progress";
+      case "partial":
+        return "partial";
+      case "needs_review":
+        return "needs-review";
+      case "blocked":
+        return "blocked";
       case "completed":
-      case "approved": return "done";
-      case "failed": return "failed";
-      case "rejected": return "rejected";
+      case "approved":
+        return "done";
+      case "failed":
+        return "failed";
+      case "rejected":
+        return "rejected";
       default:
         if (VALID_STAGES.has(status)) return status as Stage;
         return "approved";
@@ -283,30 +305,47 @@ export function deriveStage(status: string, queueName: string): Stage {
 export function stageToQueueStatus(stage: Stage, queueName: string): QueueItemStatus {
   if (queueName === "approved-work") {
     switch (stage) {
-      case "approved":      return "pending";        // deriveStage("pending","approved-work") === "approved"
-      case "in-progress":   return "in_progress";
-      case "partial":       return "partial";
-      case "needs-review":  return "needs_review";
-      case "blocked":       return "blocked";
-      case "done":          return "completed";      // deriveStage("completed",...) === "done"
-      case "failed":        return "failed";
-      case "rejected":      return "rejected";
-      case "archived":      return "completed";
-      default:              return stage as QueueItemStatus;
+      case "approved":
+        return "pending"; // deriveStage("pending","approved-work") === "approved"
+      case "in-progress":
+        return "in_progress";
+      case "partial":
+        return "partial";
+      case "needs-review":
+        return "needs_review";
+      case "blocked":
+        return "blocked";
+      case "done":
+        return "completed"; // deriveStage("completed",...) === "done"
+      case "failed":
+        return "failed";
+      case "rejected":
+        return "rejected";
+      case "archived":
+        return "completed";
+      default:
+        return stage as QueueItemStatus;
     }
   }
   if (queueName === "approvals") {
     switch (stage) {
-      case "awaiting-approval": return "awaiting_approval"; // deriveStage("awaiting_approval","approvals") === "awaiting-approval"
-      case "approved":          return "approved";          // deriveStage("approved","approvals") === "approved"
-      case "rejected":          return "rejected";          // deriveStage("rejected","approvals") === "rejected"
-      case "done":              return "completed";          // deriveStage("completed","approvals") === "done"
-      case "failed":            return "failed";            // deriveStage("failed","approvals") === "failed"
+      case "awaiting-approval":
+        return "awaiting_approval"; // deriveStage("awaiting_approval","approvals") === "awaiting-approval"
+      case "approved":
+        return "approved"; // deriveStage("approved","approvals") === "approved"
+      case "rejected":
+        return "rejected"; // deriveStage("rejected","approvals") === "rejected"
+      case "done":
+        return "completed"; // deriveStage("completed","approvals") === "done"
+      case "failed":
+        return "failed"; // deriveStage("failed","approvals") === "failed"
       // "archived" parity with approved-work above — never hit via deriveStage
       // (archive() sets stage through transition(), not upsert) and list()
       // excludes archived rows, so this arm is defensive only.
-      case "archived":          return "completed";
-      default:                 return stage as QueueItemStatus;
+      case "archived":
+        return "completed";
+      default:
+        return stage as QueueItemStatus;
     }
   }
   if (queueName === "spec-pipeline") {
@@ -323,9 +362,7 @@ export function stageToQueueStatus(stage: Stage, queueName: string): QueueItemSt
  * Convert a QueueItem into PipelineRepository upsert params.
  * The full QueueItem is stored in metadata.rawQueueItem for faithful round-tripping.
  */
-export function queueItemToPipelineParams(
-  item: QueueItem
-): Partial<PipelineItem> & { id: string } {
+export function queueItemToPipelineParams(item: QueueItem): Partial<PipelineItem> & { id: string } {
   const stage = deriveStage(item.status, item.queue);
   const context = (item.payload?.context ?? {}) as Record<string, unknown>;
   // lucid_task_id is a first-class, indexed column (idx_pipeline_lucid in
@@ -335,9 +372,7 @@ export function queueItemToPipelineParams(
   // defensively: only a non-empty string counts, anything else (missing,
   // null, number, empty string) is treated as absent rather than thrown on.
   const lucidTaskId =
-    typeof context.lucidTaskId === "string" && context.lucidTaskId.length > 0
-      ? context.lucidTaskId
-      : undefined;
+    typeof context.lucidTaskId === "string" && context.lucidTaskId.length > 0 ? context.lucidTaskId : undefined;
   return {
     id: item.id,
     stage,

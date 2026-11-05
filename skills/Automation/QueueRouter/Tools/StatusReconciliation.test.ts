@@ -16,19 +16,11 @@ import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.t
 // KAYA_HOME isolation — set BEFORE any import that reads the env
 // ============================================================================
 
-const TEST_BASE = pinKayaHome("status-recon-test-");
+pinKayaHome("status-recon-test-");
 
 // Now safe to import pipeline code
-import {
-  PipelineRepository,
-  resetPipelineRepository,
-  generatePipelineId,
-  type Stage,
-} from "./PipelineRepository.ts";
-import {
-  pipelineItemToQueueItem,
-  deriveStage,
-} from "./PipelineFacade.ts";
+import { PipelineRepository, resetPipelineRepository, generatePipelineId, type Stage } from "./PipelineRepository.ts";
+import { pipelineItemToQueueItem, deriveStage } from "./PipelineFacade.ts";
 import { defaultPipelineDbPath } from "./PipelineDB.ts";
 import type { QueueItemStatus } from "./QueueManager.ts";
 
@@ -37,9 +29,7 @@ import type { QueueItemStatus } from "./QueueManager.ts";
 // (test probe for a function that does not yet exist).
 import * as PipelineFacade from "./PipelineFacade.ts";
 type StageToQsType = (stage: Stage, queue: string) => QueueItemStatus;
-const stageToQueueStatus = (
-  PipelineFacade as unknown as { stageToQueueStatus?: StageToQsType }
-).stageToQueueStatus;
+const stageToQueueStatus = (PipelineFacade as unknown as { stageToQueueStatus?: StageToQsType }).stageToQueueStatus;
 
 // ============================================================================
 // Lifecycle
@@ -59,11 +49,7 @@ function getRepo(): PipelineRepository {
 }
 
 /** Seed a pipeline_items row with the given stage and a stale rawQueueItem.status */
-function seedRow(
-  stage: Stage,
-  queue: string,
-  staleStatus: string = "pending",
-): string {
+function seedRow(stage: Stage, queue: string, staleStatus: string = "pending"): string {
   const repo = getRepo();
   const id = generatePipelineId();
   const now = new Date().toISOString();
@@ -201,26 +187,14 @@ describe("3. stageToQueueStatus is a verified left-inverse of deriveStage", () =
       // ApprovalsStageClamp.test.ts for the corruption-vector regression test.
       ["awaiting-approval", "approved", "rejected", "done", "failed"],
     ],
-    [
-      "spec-pipeline",
-      [
-        "intake",
-        "needs-grilling",
-        "researching",
-        "generating-spec",
-        "revision-needed",
-        "escalated",
-      ],
-    ],
+    ["spec-pipeline", ["intake", "needs-grilling", "researching", "generating-spec", "revision-needed", "escalated"]],
   ];
 
   for (const [queue, stages] of queueStages) {
     for (const stage of stages) {
       test(`stageToQueueStatus(${stage}, ${queue}) round-trips through deriveStage`, () => {
         if (!stageToQueueStatus) {
-          throw new Error(
-            "stageToQueueStatus not exported from PipelineFacade.ts — fix not applied"
-          );
+          throw new Error("stageToQueueStatus not exported from PipelineFacade.ts — fix not applied");
         }
         const displayStatus = stageToQueueStatus(stage, queue);
         const derivedStage = deriveStage(displayStatus, queue);

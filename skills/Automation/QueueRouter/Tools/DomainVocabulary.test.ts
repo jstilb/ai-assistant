@@ -119,7 +119,7 @@ function makeItem(title: string, notes = ""): QueueItem {
     created: "",
     updated: "",
     source: "test",
-    priority: "medium" as QueueItem["priority"],
+    priority: 2 as QueueItem["priority"],
     status: "generating-spec" as QueueItem["status"],
     type: "test",
     queue: "spec-pipeline",

@@ -45,8 +45,8 @@
  * @module WaitingOnJmNotifier
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { getPipelineRepository, type PipelineRepository } from "./PipelineRepository.ts";
 import { QueueManager, type QueueItem } from "./QueueManager.ts";
 import { getWaitingOnJm } from "./WaitingOnJm.ts";
@@ -156,7 +156,13 @@ async function loadTelegramSecrets(): Promise<TelegramSecrets | null> {
     const secrets = (await Bun.file(`${home}/secrets.json`).json()) as Record<string, unknown>;
     const tg = secrets.telegram as TelegramSecrets | undefined;
     return tg ?? null;
-  } catch {
+  } catch (err) {
+    // A missing secrets.json is expected (no Telegram configured); a corrupt one is not.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(
+        `[WaitingOnJmNotifier] could not read telegram secrets: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return null;
   }
 }
@@ -248,9 +254,7 @@ async function defaultGetQueueItem(id: string): Promise<QueueItem | null> {
 // runWaitingOnJmNotifier
 // ============================================================================
 
-export async function runWaitingOnJmNotifier(
-  deps: WaitingOnJmNotifierDeps = {}
-): Promise<WaitingOnJmNotifierResult> {
+export async function runWaitingOnJmNotifier(deps: WaitingOnJmNotifierDeps = {}): Promise<WaitingOnJmNotifierResult> {
   const repo = deps.repo ?? getPipelineRepository();
   const gate = deps.gate ?? getAlertGate();
   const now = deps.now ?? Date.now;
@@ -285,9 +289,7 @@ export async function runWaitingOnJmNotifier(
         lastRunAt: new Date(now()).toISOString(),
       };
       saveCheckpoint(checkpointPath, checkpoint);
-      console.log(
-        `[WaitingOnJmNotifier] bootstrap: initialized checkpoint at event #${maxId} — 0 notifications sent`
-      );
+      console.log(`[WaitingOnJmNotifier] bootstrap: initialized checkpoint at event #${maxId} — 0 notifications sent`);
       return {
         isFirstRun: true,
         newEventCount: 0,
@@ -331,7 +333,7 @@ export async function runWaitingOnJmNotifier(
           } else {
             await notifyGrillingFn(
               `Approval item ${event.item_id} needs review — item details unavailable (may have been swept). ` +
-              `Run \`queue approvals\` to check.`
+                `Run \`queue approvals\` to check.`,
             );
           }
         } else {
@@ -339,7 +341,7 @@ export async function runWaitingOnJmNotifier(
           const pipelineItem = repo.get(event.item_id);
           const title = pipelineItem?.title ?? event.item_id;
           await notifyGrillingFn(
-            `New needs-grilling item: "${title}" (${event.item_id}). Run \`grill next\` to work through the backlog.`
+            `New needs-grilling item: "${title}" (${event.item_id}). Run \`grill next\` to work through the backlog.`,
           );
         }
         gate.recordPaged(key, fingerprint);
@@ -417,13 +419,13 @@ export async function runWaitingOnJmNotifier(
     if (laneAIncreased) {
       await notifyGrillingFn(
         `Lane-A waiting deliverables increased: ${checkpoint.lastLaneAWaitingCount} → ${counts.laneAWaiting}. ` +
-        `Run \`waiting-on-jm\` for details.`
+          `Run \`waiting-on-jm\` for details.`,
       );
     }
     if (needsJmIncreased) {
       await notifyGrillingFn(
         `Needs-Jm escalations increased: ${checkpoint.lastNeedsJmCount} → ${counts.needsJm}. ` +
-        `Run \`waiting-on-jm\` for details.`
+          `Run \`waiting-on-jm\` for details.`,
       );
     }
 
@@ -446,8 +448,8 @@ export async function runWaitingOnJmNotifier(
     } else {
       console.log(
         `[WaitingOnJmNotifier] ${events.length} new event(s): ${sentCount} sent, ${suppressedCount} suppressed, ` +
-        `${failedCount} failed; laneA ${laneAIncreased ? "↑" : "="} ${counts.laneAWaiting}, ` +
-        `needsJm ${needsJmIncreased ? "↑" : "="} ${counts.needsJm}`
+          `${failedCount} failed; laneA ${laneAIncreased ? "↑" : "="} ${counts.laneAWaiting}, ` +
+          `needsJm ${needsJmIncreased ? "↑" : "="} ${counts.needsJm}`,
       );
     }
 

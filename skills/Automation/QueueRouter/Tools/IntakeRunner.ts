@@ -42,15 +42,15 @@
  * @module IntakeRunner
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
-import { QueueManager, type QueueItem } from "./QueueManager.ts";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { QueueManager } from "./QueueManager.ts";
 import { getRepoForQueuesDir } from "./PipelineFacade.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { getAlertGate, type AlertGate } from "../../../../lib/core/AlertGate.ts";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 // cross-skill-allowed: IntakeRunner IS the LucidTasks→queue intake bridge from the 07-02 pipeline overhaul — it reads/classifies/stamps tasks natively by design; seam candidate: TaskClient (would need list/classify/update surface — deferred, see D3 log)
-import { TaskDB, getTaskDB, type TaskStatus } from "../../../Productivity/LucidTasks/Tools/TaskDB.ts";
+import { type TaskDB, getTaskDB, type TaskStatus } from "../../../Productivity/LucidTasks/Tools/TaskDB.ts";
 import {
   classifyTasksForKaya,
   decideBackfillAction,
@@ -205,7 +205,7 @@ function stampTriage(taskDB: TaskDB, task: LucidTaskInput, verdict: ClarityVerdi
 /** Sort by created_at ascending (FIFO) then cap to `limit` if provided. */
 function capByCreatedAt<T extends { created_at?: string }>(items: T[], limit?: number): T[] {
   const sorted = [...items].sort(
-    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
   );
   return typeof limit === "number" ? sorted.slice(0, Math.max(0, limit)) : sorted;
 }
@@ -222,7 +222,7 @@ function capByCreated<T extends { created: string }>(items: T[], limit?: number)
 export async function runBackfillPhase(
   qm: QueueManager,
   classifyFn?: ChunkClassifierFn,
-  limit?: number
+  limit?: number,
 ): Promise<BackfillPhaseResult> {
   const allAwaiting = await qm.listSpecPipeline("awaiting-context");
   const { toJudge, grillSkipped } = partitionGrilledItems(allAwaiting);
@@ -273,18 +273,22 @@ export async function runBackfillPhase(
           item.id,
           item.payload.description || item.payload.title,
           `Re-judged clear by IntakeRunner backfill. ${v.reasoning}`,
-          v.confidence
+          v.confidence,
         );
         advanced++;
       } catch (err) {
-        console.warn(`[IntakeRunner:backfill] advanceClearItem failed for ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(
+          `[IntakeRunner:backfill] advanceClearItem failed for ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     } else {
       try {
         await qm.parkForGrill(item.id, buildGrillBrief(v));
         parked++;
       } catch (err) {
-        console.warn(`[IntakeRunner:backfill] parkForGrill failed for ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(
+          `[IntakeRunner:backfill] parkForGrill failed for ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
@@ -300,7 +304,7 @@ export async function runEnqueuePhase(
   taskDB: TaskDB,
   qm: QueueManager,
   classifyFn?: ChunkClassifierFn,
-  limit?: number
+  limit?: number,
 ): Promise<EnqueuePhaseResult> {
   const candidates = selectAutonomousCandidates(taskDB);
 
@@ -318,7 +322,9 @@ export async function runEnqueuePhase(
 
   const capped = capByCreatedAt(toJudgeAll, limit);
   if (capped.length < toJudgeAll.length) {
-    console.log(`[IntakeRunner:enqueue] --limit ${limit}: processing ${capped.length}/${toJudgeAll.length} candidate(s).`);
+    console.log(
+      `[IntakeRunner:enqueue] --limit ${limit}: processing ${capped.length}/${toJudgeAll.length} candidate(s).`,
+    );
   }
 
   if (capped.length === 0) {
@@ -350,7 +356,9 @@ export async function runEnqueuePhase(
     // enqueued but never backlinked queue_item_id). Never create a duplicate.
     const existing = repo.list({ lucid_task_id: task.id });
     if (existing.length > 0) {
-      console.log(`[IntakeRunner:enqueue] ${task.id} already linked to pipeline item ${existing[0].id} — stamping defensively, not re-enqueuing.`);
+      console.log(
+        `[IntakeRunner:enqueue] ${task.id} already linked to pipeline item ${existing[0]?.id} — stamping defensively, not re-enqueuing.`,
+      );
       stampTriage(taskDB, task, v);
       skippedStamped++;
       continue;
@@ -363,7 +371,7 @@ export async function runEnqueuePhase(
       if (scope === "project") {
         const itemId = await qm.addSpecPipelineItem(
           { title: task.title, description, context: { lucidTaskId: task.id } },
-          { source: "lucidtasks-autonomous-intake", verdict: "clear" }
+          { source: "lucidtasks-autonomous-intake", verdict: "clear" },
         );
         taskDB.updateTask(task.id, { queue_item_id: itemId }, "cron");
         enqueued++;
@@ -378,14 +386,16 @@ export async function runEnqueuePhase(
     // needs-grilling stays the single visible holding pen (zero invisible items).
     const itemId = await qm.addSpecPipelineItem(
       { title: task.title, description, context: { lucidTaskId: task.id } },
-      { source: "lucidtasks-autonomous-intake" }
+      { source: "lucidtasks-autonomous-intake" },
     );
     taskDB.updateTask(task.id, { queue_item_id: itemId }, "cron");
     try {
       await qm.parkForGrill(itemId, buildGrillBrief(v));
       parked++;
     } catch (err) {
-      console.warn(`[IntakeRunner:enqueue] parkForGrill failed for ${itemId} (task ${task.id}): ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(
+        `[IntakeRunner:enqueue] parkForGrill failed for ${itemId} (task ${task.id}): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -453,7 +463,7 @@ export async function runIntake(opts: RunOptions): Promise<RunResult> {
           tier: "page",
           fingerprint: `zero-classified:${n}`,
           cooldownMs: ZERO_CLASSIFIED_PAGE_COOLDOWN_MS,
-        }
+        },
       );
     }
   } else {
@@ -479,7 +489,7 @@ if (import.meta.main) {
   const enqueue = args.includes("--enqueue");
   const help = args.includes("--help");
   const limitIdx = args.indexOf("--limit");
-  const limit = limitIdx >= 0 && args[limitIdx + 1] ? parseInt(args[limitIdx + 1], 10) : undefined;
+  const limit = limitIdx >= 0 && args[limitIdx + 1] ? parseInt(args[limitIdx + 1] ?? "", 10) : undefined;
 
   if (help) {
     console.log(USAGE);

@@ -28,11 +28,8 @@
  * @module PipelineFacade
  */
 
-import {
-  existsSync,
-  readFileSync,
-} from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getPipelineRepository } from "./PipelineRepository.ts";
 import type { QueueItem } from "./QueueManager.ts";
@@ -49,13 +46,7 @@ import {
 // lib/vocabulary.ts; re-exported here for existing importers of this module).
 // ============================================================================
 
-export {
-  VALID_STAGES,
-  deriveStage,
-  stageToQueueStatus,
-  queueItemToPipelineParams,
-  pipelineItemToQueueItem,
-};
+export { VALID_STAGES, deriveStage, stageToQueueStatus, queueItemToPipelineParams, pipelineItemToQueueItem };
 
 // ============================================================================
 // Config → pipeline.db path resolution
@@ -100,10 +91,7 @@ function getArchiveLog(path: string): AppendLog {
  * The queuesDir param is accepted for call-site compatibility but is not used
  * for data access — pipeline.db is resolved via getRepoForQueuesDir().
  */
-export function loadQueueItemsImpl(
-  queueName: string,
-  queuesDir: string,
-): QueueItem[] {
+export function loadQueueItemsImpl(queueName: string, queuesDir: string): QueueItem[] {
   const repo = getRepoForQueuesDir(queuesDir);
 
   // Serve active (non-archived) rows
@@ -126,16 +114,11 @@ export function loadQueueItemsImpl(
  * current DB stage. Kept on shadow semantics post-flip (audited, see
  * PipelineRepository.upsert() docstring).
  */
-export function saveQueueItemsImpl(
-  queueName: string,
-  items: QueueItem[],
-  queuesDir: string,
-  archiveDir: string,
-): void {
+export function saveQueueItemsImpl(queueName: string, items: QueueItem[], queuesDir: string, archiveDir: string): void {
   const repo = getRepoForQueuesDir(queuesDir);
 
   // PRIMARY: Upsert all provided items into pipeline.db
-  const newIds = new Set(items.map(i => i.id));
+  const newIds = new Set(items.map((i) => i.id));
   for (const item of items) {
     // mergeMetadata: true — queueItemToPipelineParams reconstructs metadata
     // from a fixed, partial key set (rawQueueItem/projectName/.../reviewNotes,
@@ -149,7 +132,7 @@ export function saveQueueItemsImpl(
 
   // Archive absentees: active rows in this queue not present in the new set
   const activeRows = repo.list({ queue: queueName });
-  const absentees = activeRows.filter(r => !newIds.has(r.id));
+  const absentees = activeRows.filter((r) => !newIds.has(r.id));
   if (absentees.length > 0) {
     const absenteeQueueItems: QueueItem[] = [];
     for (const r of absentees) {
@@ -174,12 +157,16 @@ export function saveQueueItemsImpl(
             try {
               const parsed = JSON.parse(line) as { id?: string };
               if (parsed.id) alreadyArchivedIds.add(parsed.id);
-            } catch { /* skip corrupt lines */ }
+            } catch {
+              /* skip corrupt lines */
+            }
           }
-        } catch { /* non-fatal: if file unreadable, write all */ }
+        } catch {
+          /* non-fatal: if file unreadable, write all */
+        }
       }
 
-      const toAppend = absenteeQueueItems.filter(i => !alreadyArchivedIds.has(i.id));
+      const toAppend = absenteeQueueItems.filter((i) => !alreadyArchivedIds.has(i.id));
       if (toAppend.length > 0) {
         const archiveLog = getArchiveLog(archivePath);
         for (const item of toAppend) archiveLog.append(item);
@@ -205,11 +192,7 @@ export function saveQueueItemsImpl(
  * "Bypass the canonical transition check — this is an external transfer...").
  * Kept on shadow semantics post-flip so those call sites don't regress.
  */
-export function appendQueueItemImpl(
-  queueName: string,
-  item: QueueItem,
-  queuesDir: string,
-): void {
+export function appendQueueItemImpl(_queueName: string, item: QueueItem, queuesDir: string): void {
   const repo = getRepoForQueuesDir(queuesDir);
   // mergeMetadata: true — same codec as saveQueueItemsImpl (queueItemToPipelineParams),
   // same fixed-partial-key-set rationale. For genuinely new items existingItem is
