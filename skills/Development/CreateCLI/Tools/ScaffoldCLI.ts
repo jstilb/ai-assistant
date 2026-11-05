@@ -20,9 +20,9 @@
  * @version 1.0.0
  */
 
-import { parseArgs } from "util";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join, dirname } from "path";
+import { parseArgs } from "node:util";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { z } from "zod";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { memPath } from "../../../../lib/core/MemoryPaths.ts";
@@ -55,11 +55,13 @@ const RegistryEntrySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   apiKeyNames: z.array(z.string()),
-  commands: z.array(z.object({
-    name: z.string(),
-    description: z.string(),
-    args: z.array(z.string()),
-  })),
+  commands: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      args: z.array(z.string()),
+    }),
+  ),
 });
 
 export type RegistryEntry = z.infer<typeof RegistryEntrySchema>;
@@ -71,8 +73,9 @@ const RegistrySchema = z.array(RegistryEntrySchema);
 // ============================================================================
 
 // Allow test override via env var, otherwise resolve relative to this file
-const DEFAULT_REGISTRY_PATH = process.env.SCAFFOLD_REGISTRY_PATH
-  ?? join(dirname(import.meta.url.replace("file://", "")), "..", "State", "registry.json");
+const DEFAULT_REGISTRY_PATH =
+  process.env.SCAFFOLD_REGISTRY_PATH ??
+  join(dirname(import.meta.url.replace("file://", "")), "..", "State", "registry.json");
 
 export function loadRegistry(registryPath = DEFAULT_REGISTRY_PATH): RegistryEntry[] {
   if (!existsSync(registryPath)) {
@@ -170,24 +173,27 @@ async function run(args: string[]): Promise<void> {
 }
 `;
   }
-  const fns = commands.map((cmd) => {
-    const argList = cmd.args.map((a) => `${a}: string`).join(", ");
-    return `
+  const fns = commands
+    .map((cmd) => {
+      const argList = cmd.args.map((a) => `${a}: string`).join(", ");
+      return `
 async function cmd_${cmd.name}(${argList || "_args: string[]"}): Promise<void> {
   // TODO: implement ${cmd.name}
   console.error("Error: '${cmd.name}' is not yet implemented (generated stub — see TODO above)");
   console.log(JSON.stringify({ command: "${cmd.name}", status: "not_implemented" }, null, 2));
   process.exit(1);
 }`;
-  }).join("\n");
+    })
+    .join("\n");
 
-  const cases = commands.map((cmd) => {
-    const argCapture = cmd.args.length > 0
-      ? cmd.args.map((a, i) => `  const ${a} = args[${i + 1}] ?? "";`).join("\n") + "\n"
-      : "";
-    const callArgs = cmd.args.length > 0 ? cmd.args.join(", ") : "args.slice(1)";
-    return `    case "${cmd.name}":\n${argCapture}      await cmd_${cmd.name}(${callArgs});\n      break;`;
-  }).join("\n");
+  const cases = commands
+    .map((cmd) => {
+      const argCapture =
+        cmd.args.length > 0 ? cmd.args.map((a, i) => `  const ${a} = args[${i + 1}] ?? "";`).join("\n") + "\n" : "";
+      const callArgs = cmd.args.length > 0 ? cmd.args.join(", ") : "args.slice(1)";
+      return `    case "${cmd.name}":\n${argCapture}      await cmd_${cmd.name}(${callArgs});\n      break;`;
+    })
+    .join("\n");
 
   return `${fns}
 
@@ -205,9 +211,10 @@ ${cases}
 }
 
 function generateTier2Commands(commands: CommandSpec[], cliName: string): string {
-  const commandRegistrations = commands.map((cmd) => {
-    const argDefs = cmd.args.map((a) => `.argument("<${a}>", "${a}")`).join("\n    ");
-    return `
+  const commandRegistrations = commands
+    .map((cmd) => {
+      const argDefs = cmd.args.map((a) => `.argument("<${a}>", "${a}")`).join("\n    ");
+      return `
 program
   .command("${cmd.name}")
   .description("${cmd.description}")
@@ -218,7 +225,8 @@ program
     console.log(JSON.stringify({ command: "${cmd.name}", status: "not_implemented" }, null, 2));
     process.exit(1);
   });`;
-  }).join("\n");
+    })
+    .join("\n");
 
   return `import { Command } from "commander";
 
@@ -240,7 +248,12 @@ ${commandRegistrations}
 // (raw appendFileSync, matching Tier 1/2 CLI's "no unnecessary deps" contract)
 // is intentional, not a leftover to migrate. ScaffoldCLI.ts's OWN audit log
 // (auditLog() above) already uses createAppendLog().
-export function generateTier1Main(cliName: string, description: string, commands: CommandSpec[], apiKeyNames: string[]): string {
+export function generateTier1Main(
+  cliName: string,
+  description: string,
+  commands: CommandSpec[],
+  apiKeyNames: string[],
+): string {
   const secretsImport = generateSecretsImport(apiKeyNames);
   const commandHelp = commands.map((c) => `  ${c.name.padEnd(20)} ${c.description}`).join("\n");
   const commandSection = commandHelp || "  (no commands defined)";
@@ -265,6 +278,7 @@ function audit(event: Record<string, unknown>): void {
   const logPath = join(homedir(), ".claude", "MEMORY", "cli-audit.jsonl");
   const dir = dirname(logPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  // lint-allow: no-raw-append — generated CLIs stay dependency-free (see EXEMPT note above)
   appendFileSync(logPath, JSON.stringify({ cli: "${cliName}", ...event, ts: new Date().toISOString() }) + "\\n");
 }
 
@@ -326,7 +340,12 @@ main().catch((err: unknown) => {
 `;
 }
 
-export function generateTier2Main(cliName: string, description: string, commands: CommandSpec[], apiKeyNames: string[]): string {
+export function generateTier2Main(
+  cliName: string,
+  description: string,
+  commands: CommandSpec[],
+  apiKeyNames: string[],
+): string {
   const secretsImport = generateSecretsImport(apiKeyNames);
   const commandBody = generateTier2Commands(commands, cliName);
 
@@ -350,6 +369,7 @@ function audit(event: Record<string, unknown>): void {
   const logPath = join(homedir(), ".claude", "MEMORY", "cli-audit.jsonl");
   const dir = dirname(logPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  // lint-allow: no-raw-append — generated CLIs stay dependency-free (see EXEMPT note above)
   appendFileSync(logPath, JSON.stringify({ cli: "${cliName}", ...event, ts: new Date().toISOString() }) + "\\n");
 }
 
@@ -483,7 +503,12 @@ NOTES:
   const tier = tierNum as 1 | 2;
 
   const rawCommands = (values.commands as string) || "";
-  const commandNames = rawCommands ? rawCommands.split(",").map((c) => c.trim()).filter(Boolean) : [];
+  const commandNames = rawCommands
+    ? rawCommands
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean)
+    : [];
   const commands: CommandSpec[] = commandNames.map((name) => ({
     name,
     description: `${name} command`,
@@ -491,7 +516,12 @@ NOTES:
   }));
 
   const rawApiKeys = (values["api-keys"] as string) || "";
-  const apiKeyNames = rawApiKeys ? rawApiKeys.split(",").map((k) => k.trim()).filter(Boolean) : [];
+  const apiKeyNames = rawApiKeys
+    ? rawApiKeys
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean)
+    : [];
 
   const defaultOutputPath = join(getKayaHome(), "Bin", cliName, `${cliName}.ts`);
   const outputPath = (values.output as string | undefined) ?? defaultOutputPath;

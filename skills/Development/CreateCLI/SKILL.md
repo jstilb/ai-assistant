@@ -137,7 +137,7 @@ Generated CLIs follow Kaya standards:
 ### Repository Placement
 
 Generated CLIs go to:
-- `~/.claude/Bin/[cli-name]/` - Personal CLIs (like gnews)
+- `~/.claude/bin/[cli-name]/` - Personal CLIs (like gnews)
 - `~/Projects/[project-name]/` - Project-specific CLIs
 
 **SAFETY:** Always verify repository location before git operations
@@ -162,7 +162,7 @@ Every generated CLI follows:
 
 **Generated Structure:**
 ```
-~/.claude/Bin/ghcli/
+~/.claude/bin/ghcli/
 ├── ghcli.ts              # 350 lines, complete implementation
 ├── package.json          # Bun + TypeScript
 ├── tsconfig.json         # Strict mode
@@ -188,7 +188,7 @@ ghcli --help
 
 **Generated Structure:**
 ```
-~/.claude/Bin/md2html/
+~/.claude/bin/md2html/
 ├── md2html.ts
 ├── package.json
 ├── README.md
@@ -211,7 +211,7 @@ md2html extract-frontmatter post.md
 
 **Generated Structure:**
 ```
-~/.claude/Bin/data-cli/
+~/.claude/bin/data-cli/
 ├── data-cli.ts           # Commander.js with subcommands
 ├── package.json
 ├── README.md
@@ -313,7 +313,7 @@ The `gnews` CLI (Google News API) proves this pattern works:
 - **Patterns** - CLI patterns documented in FrameworkComparison.md and Patterns.md
 
 ### Feeds Into
-- **~/.claude/Bin/** - Personal CLI tools
+- **~/.claude/bin/** - Personal CLI tools
 - **~/Projects/** - Project-specific CLIs
 - **State/registry.json** - CLI registry (updated automatically by `Tools/ScaffoldCLI.ts`)
 
