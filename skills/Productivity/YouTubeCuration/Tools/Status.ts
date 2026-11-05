@@ -54,11 +54,15 @@ export async function buildStatusReport(overrides: StatusOverrides = {}): Promis
     const age = daysSince(intent.declaredAt, now);
     if (age !== null && age > STALE_INTENT_DAYS) {
       const weeks = Math.floor(age / 7);
-      lines.push(`⚠ intent is ${weeks} week${weeks === 1 ? "" : "s"} old (declared ${intent.declaredAt}) — still current?`);
+      lines.push(
+        `⚠ intent is ${weeks} week${weeks === 1 ? "" : "s"} old (declared ${intent.declaredAt}) — still current?`,
+      );
     }
     lines.push(`Intent: ${intent.topics.join(", ")} (declared ${intent.declaredAt})`);
   } else {
-    lines.push(`Intent: ${intentNote ?? "no intent declared"} — declare one with \`/youtube steer <what you want to see more of>\``);
+    lines.push(
+      `Intent: ${intentNote ?? "no intent declared"} — declare one with \`/youtube steer <what you want to see more of>\``,
+    );
   }
   lines.push("");
 
@@ -69,9 +73,8 @@ export async function buildStatusReport(overrides: StatusOverrides = {}): Promis
   // WL snapshot
   const snap = readWlSnapshotCount(state.wlSnapshot, overrides.fallbackSnapshotPath);
   if (snap.count !== null) {
-    const provenance = snap.source === "ticket-07-fallback"
-      ? ", ticket-07 asset — no wl run has captured a fresher one yet"
-      : "";
+    const provenance =
+      snap.source === "ticket-07-fallback" ? ", ticket-07 asset — no wl run has captured a fresher one yet" : "";
     lines.push(`Watch Later: ${snap.count} items (snapshot ${snap.capturedAt}${provenance})`);
   } else {
     lines.push(`Watch Later: unknown — ${snap.note}`);
@@ -93,7 +96,9 @@ export async function buildStatusReport(overrides: StatusOverrides = {}): Promis
   const heldHistory = state.held.history.length;
   const heldWl = state.held.watch_later.length;
   if (heldHistory > 0 || heldWl > 0) {
-    lines.push(`Held for review: ${heldHistory} history, ${heldWl} watch_later (from a prior run — bulk-approve next run)`);
+    lines.push(
+      `Held for review: ${heldHistory} history, ${heldWl} watch_later (from a prior run — bulk-approve next run)`,
+    );
     lines.push("");
   }
 

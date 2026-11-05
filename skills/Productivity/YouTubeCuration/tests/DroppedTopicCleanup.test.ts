@@ -56,7 +56,9 @@ test("enumerateDroppedTopicPlaylists(): finds Kaya-prefixed playlists whose topi
       });
     }
     if (req.url.includes("/playlistItems?")) {
-      return jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "v1" } } }, { snippet: { resourceId: { videoId: "v2" } } }] });
+      return jsonResponse(200, {
+        items: [{ snippet: { resourceId: { videoId: "v1" } } }, { snippet: { resourceId: { videoId: "v2" } } }],
+      });
     }
     throw new Error(`unexpected request: ${req.method} ${req.url}`);
   };
@@ -72,7 +74,8 @@ test("enumerateDroppedTopicPlaylists(): finds Kaya-prefixed playlists whose topi
 test("enumerateDroppedTopicPlaylists(): no dropped topics -> empty result, no playlistItems calls at all", async () => {
   let itemsCalled = false;
   const http: ApiFetcher = async (req) => {
-    if (req.url.includes("/playlists?")) return jsonResponse(200, { items: [{ id: "PL_kept", snippet: { title: "Kaya: jazz" } }] });
+    if (req.url.includes("/playlists?"))
+      return jsonResponse(200, { items: [{ id: "PL_kept", snippet: { title: "Kaya: jazz" } }] });
     itemsCalled = true;
     return jsonResponse(200, { items: [] });
   };
@@ -94,10 +97,21 @@ test("deleteDroppedTopicPlaylist(): deletes the given playlist and echoes back i
     return jsonResponse(204, "");
   };
 
-  const entry = { topic: "origami", playlistId: "PL_dropped", playlistTitle: "Kaya: origami", itemVideoIds: ["v1", "v2"] };
+  const entry = {
+    topic: "origami",
+    playlistId: "PL_dropped",
+    playlistTitle: "Kaya: origami",
+    itemVideoIds: ["v1", "v2"],
+  };
   const result = await deleteDroppedTopicPlaylist(entry, { http, getAccessToken: STUB_TOKEN });
 
-  expect(result).toEqual({ topic: "origami", playlistId: "PL_dropped", playlistTitle: "Kaya: origami", itemVideoIds: ["v1", "v2"], deleted: true });
+  expect(result).toEqual({
+    topic: "origami",
+    playlistId: "PL_dropped",
+    playlistTitle: "Kaya: origami",
+    itemVideoIds: ["v1", "v2"],
+    deleted: true,
+  });
   expect(calls).toHaveLength(1);
   expect(calls[0]?.method).toBe("DELETE");
   expect(calls[0]?.url).toContain("PL_dropped");
@@ -140,19 +154,10 @@ test("cleanupDroppedTopicPlaylists(): STRUCTURAL ordering — every enumeration 
   // EVERY enumeration call (list-playlists + both list-items reads) — proves
   // the full enumeration completed structurally before any delete began.
   const firstDeleteIndex = callOrder.findIndex((c) => c.startsWith("delete:"));
-  const lastEnumerationIndex = callOrder.reduce(
-    (max, c, i) => (!c.startsWith("delete:") ? Math.max(max, i) : max),
-    -1,
-  );
+  const lastEnumerationIndex = callOrder.reduce((max, c, i) => (!c.startsWith("delete:") ? Math.max(max, i) : max), -1);
   expect(firstDeleteIndex).toBeGreaterThan(-1);
   expect(firstDeleteIndex).toBeGreaterThan(lastEnumerationIndex);
-  expect(callOrder).toEqual([
-    "list-playlists",
-    "list-items:PL_a",
-    "list-items:PL_b",
-    "delete:PL_a",
-    "delete:PL_b",
-  ]);
+  expect(callOrder).toEqual(["list-playlists", "list-items:PL_a", "list-items:PL_b", "delete:PL_a", "delete:PL_b"]);
 });
 
 test("cleanupDroppedTopicPlaylists(): a delete failure for one playlist is caught, recorded as deleted:false with its log intact, and does not stop the rest", async () => {
@@ -180,13 +185,26 @@ test("cleanupDroppedTopicPlaylists(): a delete failure for one playlist is caugh
   expect(results).toHaveLength(2);
   const bad = results.find((r) => r.playlistId === "PL_bad");
   const good = results.find((r) => r.playlistId === "PL_good");
-  expect(bad).toEqual({ topic: "origami", playlistId: "PL_bad", playlistTitle: "Kaya: origami", itemVideoIds: ["v1"], deleted: false });
-  expect(good).toEqual({ topic: "birdwatching", playlistId: "PL_good", playlistTitle: "Kaya: birdwatching", itemVideoIds: ["v1"], deleted: true });
+  expect(bad).toEqual({
+    topic: "origami",
+    playlistId: "PL_bad",
+    playlistTitle: "Kaya: origami",
+    itemVideoIds: ["v1"],
+    deleted: false,
+  });
+  expect(good).toEqual({
+    topic: "birdwatching",
+    playlistId: "PL_good",
+    playlistTitle: "Kaya: birdwatching",
+    itemVideoIds: ["v1"],
+    deleted: true,
+  });
 });
 
 test("cleanupDroppedTopicPlaylists(): no dropped playlists -> empty result, zero DELETE calls", async () => {
   const http: ApiFetcher = async (req) => {
-    if (req.url.includes("/playlists?")) return jsonResponse(200, { items: [{ id: "PL_kept", snippet: { title: "Kaya: jazz" } }] });
+    if (req.url.includes("/playlists?"))
+      return jsonResponse(200, { items: [{ id: "PL_kept", snippet: { title: "Kaya: jazz" } }] });
     throw new Error(`unexpected request: ${req.method} ${req.url}`);
   };
 

@@ -37,7 +37,15 @@ const TMP = mkdtempSync(join(tmpdir(), "yt-seedsourcer-test-"));
 const RUBRIC_FIXTURE_PATH = join(TMP, "rubric-fixture.md");
 writeFileSync(
   RUBRIC_FIXTURE_PATH,
-  ["## §Channel quality — fixture", "", "FIXTURE-QUALITY guidance", "", "## §Seeding — fixture", "", "FIXTURE-SEEDING guidance"].join("\n"),
+  [
+    "## §Channel quality — fixture",
+    "",
+    "FIXTURE-QUALITY guidance",
+    "",
+    "## §Seeding — fixture",
+    "",
+    "FIXTURE-SEEDING guidance",
+  ].join("\n"),
 );
 
 afterAll(() => {
@@ -56,7 +64,14 @@ async function fixtureDbWithHistory(name: string, watchedVideoIds: string[]): Pr
     for (const id of watchedVideoIds) {
       await db.run(
         `INSERT INTO youtube_history (ts, video_id, title, channel, channel_url, source_export) VALUES ($ts::TIMESTAMP, $id, $title, $channel, $url, $src)`,
-        { ts: "2026-08-01T00:00:00Z", id, title: "Watched title", channel: "Some channel", url: null, src: "takeout:test" },
+        {
+          ts: "2026-08-01T00:00:00Z",
+          id,
+          title: "Watched title",
+          channel: "Some channel",
+          url: null,
+          src: "takeout:test",
+        },
       );
     }
   } finally {
@@ -82,7 +97,7 @@ const RUBRIC_FIXTURE = [
   "",
   "more prose",
   "",
-  '## §History — next section',
+  "## §History — next section",
   "",
   "history prose",
 ].join("\n");
@@ -168,7 +183,13 @@ test("getVideosMetadata(): maps a videos.list response to full metadata incl. st
       items: [
         {
           id: "v1",
-          snippet: { title: "Video One", channelTitle: "Chan A", channelId: "ch-a", description: "desc one", publishedAt: "2026-01-01T00:00:00Z" },
+          snippet: {
+            title: "Video One",
+            channelTitle: "Chan A",
+            channelId: "ch-a",
+            description: "desc one",
+            publishedAt: "2026-01-01T00:00:00Z",
+          },
           statistics: { viewCount: "1000", likeCount: "40" },
           contentDetails: { duration: "PT12M4S" },
         },
@@ -181,19 +202,36 @@ test("getVideosMetadata(): maps a videos.list response to full metadata incl. st
 
   expect(meta).toEqual([
     {
-      videoId: "v1", title: "Video One", channel: "Chan A", channelId: "ch-a", description: "desc one",
-      publishedAt: "2026-01-01T00:00:00Z", viewCount: "1000", likeCount: "40", duration: "PT12M4S",
+      videoId: "v1",
+      title: "Video One",
+      channel: "Chan A",
+      channelId: "ch-a",
+      description: "desc one",
+      publishedAt: "2026-01-01T00:00:00Z",
+      viewCount: "1000",
+      likeCount: "40",
+      duration: "PT12M4S",
     },
     {
-      videoId: "v2", title: "Video Two", channel: "Chan B", channelId: null, description: null,
-      publishedAt: null, viewCount: null, likeCount: null, duration: null,
+      videoId: "v2",
+      title: "Video Two",
+      channel: "Chan B",
+      channelId: null,
+      description: null,
+      publishedAt: null,
+      viewCount: null,
+      likeCount: null,
+      duration: null,
     },
   ]);
 });
 
 test("getVideosMetadata(): empty input short-circuits with zero HTTP calls", async () => {
   let calls = 0;
-  const http: ApiGetFetcher = async () => { calls += 1; return jsonResponse(200, { items: [] }); };
+  const http: ApiGetFetcher = async () => {
+    calls += 1;
+    return jsonResponse(200, { items: [] });
+  };
   const meta = await getVideosMetadata([], { http, apiKey: "stub-key" });
   expect(meta).toEqual([]);
   expect(calls).toBe(0);
@@ -291,8 +329,14 @@ test("sourceTopicCandidates(): composes search -> metadata -> watched-filter -> 
     expect(req.url).not.toContain("watched-1");
     return jsonResponse(200, {
       items: [
-        { id: "fresh-1", snippet: { title: "Fresh One", channelTitle: "Chan A", channelId: "ch-a", description: "on topic" } },
-        { id: "fresh-2", snippet: { title: "Fresh Two", channelTitle: "Chan B", channelId: "ch-b", description: "also on topic" } },
+        {
+          id: "fresh-1",
+          snippet: { title: "Fresh One", channelTitle: "Chan A", channelId: "ch-a", description: "on topic" },
+        },
+        {
+          id: "fresh-2",
+          snippet: { title: "Fresh Two", channelTitle: "Chan B", channelId: "ch-b", description: "also on topic" },
+        },
       ],
     });
   };
@@ -363,7 +407,13 @@ test("sourceTopicCandidates(): caps at TARGET_CANDIDATE_COUNT even if the LLM se
     estimatedCostUSD: 0,
   });
 
-  const result = await sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, inferenceFn, rubricPath: RUBRIC_FIXTURE_PATH });
+  const result = await sourceTopicCandidates("topic", ["topic"], {
+    http,
+    apiKey: "stub-key",
+    dbPath,
+    inferenceFn,
+    rubricPath: RUBRIC_FIXTURE_PATH,
+  });
 
   expect(result.candidates.length).toBe(TARGET_CANDIDATE_COUNT);
 });
@@ -385,7 +435,13 @@ test("sourceTopicCandidates(): a hallucinated video id outside the candidate set
     estimatedCostUSD: 0,
   });
 
-  const result = await sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, inferenceFn, rubricPath: RUBRIC_FIXTURE_PATH });
+  const result = await sourceTopicCandidates("topic", ["topic"], {
+    http,
+    apiKey: "stub-key",
+    dbPath,
+    inferenceFn,
+    rubricPath: RUBRIC_FIXTURE_PATH,
+  });
 
   expect(result.candidates).toEqual([{ videoId: "real-1", title: "Real One", channel: "Chan" }]);
 });
@@ -407,14 +463,31 @@ test("sourceTopicCandidates(): zero search results short-circuits with empty can
   const inferenceFn = async () => {
     inferenceCalled = true;
     return {
-      success: true, output: "", parsed: { selectedVideoIds: [], rejectedForQuality: [] }, latencyMs: 1,
-      level: "standard" as const, estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+      success: true,
+      output: "",
+      parsed: { selectedVideoIds: [], rejectedForQuality: [] },
+      latencyMs: 1,
+      level: "standard" as const,
+      estimatedTokens: { input: 0, output: 0, total: 0 },
+      estimatedCostUSD: 0,
     };
   };
 
-  const result = await sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, inferenceFn, rubricPath: RUBRIC_FIXTURE_PATH });
+  const result = await sourceTopicCandidates("topic", ["topic"], {
+    http,
+    apiKey: "stub-key",
+    dbPath,
+    inferenceFn,
+    rubricPath: RUBRIC_FIXTURE_PATH,
+  });
 
-  expect(result).toEqual({ topic: "topic", candidates: [], rejectedForQuality: [], searched: 0, afterWatchedFilter: 0 });
+  expect(result).toEqual({
+    topic: "topic",
+    candidates: [],
+    rejectedForQuality: [],
+    searched: 0,
+    afterWatchedFilter: 0,
+  });
   expect(metadataCalled).toBe(false);
   expect(dossierCalled).toBe(false);
   expect(inferenceCalled).toBe(false);
@@ -425,7 +498,8 @@ test("sourceTopicCandidates(): every search result already watched short-circuit
   let metadataCalled = false;
   let dossierCalled = false;
   const http: ApiGetFetcher = async (req) => {
-    if (req.url.includes("/search?")) return jsonResponse(200, { items: [{ id: { videoId: "w1" } }, { id: { videoId: "w2" } }] });
+    if (req.url.includes("/search?"))
+      return jsonResponse(200, { items: [{ id: { videoId: "w1" } }, { id: { videoId: "w2" } }] });
     if (req.url.includes("/channels?") || req.url.includes("/playlistItems?")) {
       dossierCalled = true;
       return jsonResponse(200, { items: [] });
@@ -434,9 +508,20 @@ test("sourceTopicCandidates(): every search result already watched short-circuit
     return jsonResponse(200, { items: [] });
   };
 
-  const result = await sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, rubricPath: RUBRIC_FIXTURE_PATH });
+  const result = await sourceTopicCandidates("topic", ["topic"], {
+    http,
+    apiKey: "stub-key",
+    dbPath,
+    rubricPath: RUBRIC_FIXTURE_PATH,
+  });
 
-  expect(result).toEqual({ topic: "topic", candidates: [], rejectedForQuality: [], searched: 2, afterWatchedFilter: 0 });
+  expect(result).toEqual({
+    topic: "topic",
+    candidates: [],
+    rejectedForQuality: [],
+    searched: 2,
+    afterWatchedFilter: 0,
+  });
   expect(metadataCalled).toBe(false);
   expect(dossierCalled).toBe(false);
 });
@@ -449,12 +534,23 @@ test("sourceTopicCandidates(): inference failure throws loud rather than returni
     return jsonResponse(200, { items: [{ id: "v1", snippet: { title: "T", channelTitle: "C" } }] });
   };
   const inferenceFn = async () => ({
-    success: false, output: "", error: "model timeout", latencyMs: 1,
-    level: "standard" as const, estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+    success: false,
+    output: "",
+    error: "model timeout",
+    latencyMs: 1,
+    level: "standard" as const,
+    estimatedTokens: { input: 0, output: 0, total: 0 },
+    estimatedCostUSD: 0,
   });
 
   await expect(
-    sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, inferenceFn, rubricPath: RUBRIC_FIXTURE_PATH }),
+    sourceTopicCandidates("topic", ["topic"], {
+      http,
+      apiKey: "stub-key",
+      dbPath,
+      inferenceFn,
+      rubricPath: RUBRIC_FIXTURE_PATH,
+    }),
   ).rejects.toThrow(/model timeout/);
 });
 
@@ -485,19 +581,31 @@ test("getChannelDossiers(): maps channels.list + uploads titles; hidden subscrib
       });
     }
     expect(req.url).toContain("playlistId=UU-a");
-    return jsonResponse(200, { items: [{ snippet: { title: "Upload One" } }, { snippet: { title: "Upload Two" } }, { snippet: {} }] });
+    return jsonResponse(200, {
+      items: [{ snippet: { title: "Upload One" } }, { snippet: { title: "Upload Two" } }, { snippet: {} }],
+    });
   };
 
   const dossiers = await getChannelDossiers(["ch-a", "ch-b", "ch-a"], { http, apiKey: "stub-key" });
 
   expect(dossiers).toEqual([
     {
-      channelId: "ch-a", title: "Chan A", description: "a creator", subscriberCount: "52000",
-      videoCount: "140", publishedAt: "2020-05-01T00:00:00Z", recentUploadTitles: ["Upload One", "Upload Two"],
+      channelId: "ch-a",
+      title: "Chan A",
+      description: "a creator",
+      subscriberCount: "52000",
+      videoCount: "140",
+      publishedAt: "2020-05-01T00:00:00Z",
+      recentUploadTitles: ["Upload One", "Upload Two"],
     },
     {
-      channelId: "ch-b", title: "Chan B", description: null, subscriberCount: null,
-      videoCount: "9", publishedAt: null, recentUploadTitles: [],
+      channelId: "ch-b",
+      title: "Chan B",
+      description: null,
+      subscriberCount: null,
+      videoCount: "9",
+      publishedAt: null,
+      recentUploadTitles: [],
     },
   ]);
   expect(calls.filter((u) => u.includes("/channels?"))).toHaveLength(1); // deduped into one batch
@@ -505,7 +613,10 @@ test("getChannelDossiers(): maps channels.list + uploads titles; hidden subscrib
 
 test("getChannelDossiers(): empty input short-circuits with zero HTTP calls", async () => {
   let calls = 0;
-  const http: ApiGetFetcher = async () => { calls += 1; return jsonResponse(200, { items: [] }); };
+  const http: ApiGetFetcher = async () => {
+    calls += 1;
+    return jsonResponse(200, { items: [] });
+  };
   expect(await getChannelDossiers([], { http, apiKey: "stub-key" })).toEqual([]);
   expect(calls).toBe(0);
 });
@@ -561,7 +672,8 @@ test("getChannelDossiers(): a per-channel uploads-fetch failure degrades that ON
 test("sourceTopicCandidates(): rejectedForQuality entries are enriched for the report; hallucinated ids and dupes dropped", async () => {
   const dbPath = join(TMP, "reject-test.db");
   const http: ApiGetFetcher = async (req) => {
-    if (req.url.includes("/search?")) return jsonResponse(200, { items: [{ id: { videoId: "good-1" } }, { id: { videoId: "farm-1" } }] });
+    if (req.url.includes("/search?"))
+      return jsonResponse(200, { items: [{ id: { videoId: "good-1" } }, { id: { videoId: "farm-1" } }] });
     if (req.url.includes("/channels?") || req.url.includes("/playlistItems?")) return jsonResponse(200, { items: [] });
     return jsonResponse(200, {
       items: [
@@ -581,10 +693,19 @@ test("sourceTopicCandidates(): rejectedForQuality entries are enriched for the r
         { videoId: "invented-id", reason: "hallucinated" }, // dropped — not in candidate set
       ],
     },
-    latencyMs: 1, level: "standard" as const, estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+    latencyMs: 1,
+    level: "standard" as const,
+    estimatedTokens: { input: 0, output: 0, total: 0 },
+    estimatedCostUSD: 0,
   });
 
-  const result = await sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath, inferenceFn, rubricPath: RUBRIC_FIXTURE_PATH });
+  const result = await sourceTopicCandidates("topic", ["topic"], {
+    http,
+    apiKey: "stub-key",
+    dbPath,
+    inferenceFn,
+    rubricPath: RUBRIC_FIXTURE_PATH,
+  });
 
   expect(result.rejectedForQuality).toEqual([
     { videoId: "farm-1", title: "SHOCKING!!", channel: "Farm Chan", reason: "templated clickbait channel" },
@@ -596,17 +717,31 @@ test("sourceTopicCandidates(): a rubric missing the seeding sections throws BEFO
   writeFileSync(badRubricPath, "# Rubric\n\n## §History — only\n\nprose");
   let httpCalls = 0;
   let inferenceCalled = false;
-  const http: ApiGetFetcher = async () => { httpCalls += 1; return jsonResponse(200, { items: [] }); };
+  const http: ApiGetFetcher = async () => {
+    httpCalls += 1;
+    return jsonResponse(200, { items: [] });
+  };
   const inferenceFn = async () => {
     inferenceCalled = true;
     return {
-      success: true, output: "", parsed: { selectedVideoIds: [], rejectedForQuality: [] }, latencyMs: 1,
-      level: "standard" as const, estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+      success: true,
+      output: "",
+      parsed: { selectedVideoIds: [], rejectedForQuality: [] },
+      latencyMs: 1,
+      level: "standard" as const,
+      estimatedTokens: { input: 0, output: 0, total: 0 },
+      estimatedCostUSD: 0,
     };
   };
 
   await expect(
-    sourceTopicCandidates("topic", ["topic"], { http, apiKey: "stub-key", dbPath: join(TMP, "unused.db"), inferenceFn, rubricPath: badRubricPath }),
+    sourceTopicCandidates("topic", ["topic"], {
+      http,
+      apiKey: "stub-key",
+      dbPath: join(TMP, "unused.db"),
+      inferenceFn,
+      rubricPath: badRubricPath,
+    }),
   ).rejects.toThrow(/rubric section .* not found/);
   expect(httpCalls).toBe(0);
   expect(inferenceCalled).toBe(false);

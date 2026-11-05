@@ -139,7 +139,8 @@ export function writeRunState(update: RunStateUpdate, options: WriteRunStateOpti
 
   const next: YouTubeCurationState = {
     held: {
-      history: update.held?.history !== undefined ? validateHeldList(update.held.history, "history") : existing.held.history,
+      history:
+        update.held?.history !== undefined ? validateHeldList(update.held.history, "history") : existing.held.history,
       watch_later:
         update.held?.watch_later !== undefined
           ? validateHeldList(update.held.watch_later, "watch_later")
@@ -170,7 +171,7 @@ async function main(): Promise<void> {
   const raw = argv[0];
   if (!raw || raw.startsWith("--")) {
     console.error(
-      "Usage: bun RunStateWriter.ts '<JSON update — e.g. {\"held\":{\"history\":[{\"videoId\":\"v1\",\"reason\":\"unsure\"}]},\"lastRun\":{\"mode\":\"prune\",\"runId\":\"run-1\",\"at\":\"2026-08-12T00:00:00Z\",\"summary\":\"5 deleted, 1 held\"}}>' [--path <path>]",
+      'Usage: bun RunStateWriter.ts \'<JSON update — e.g. {"held":{"history":[{"videoId":"v1","reason":"unsure"}]},"lastRun":{"mode":"prune","runId":"run-1","at":"2026-08-12T00:00:00Z","summary":"5 deleted, 1 held"}}>\' [--path <path>]',
     );
     process.exit(1);
   }

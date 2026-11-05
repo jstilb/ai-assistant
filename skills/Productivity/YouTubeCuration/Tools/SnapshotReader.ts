@@ -84,10 +84,7 @@ function readFallbackFile(path: string): WlSnapshotResult {
  * ticket-07 fallback asset. Never throws — degrades to `{ count: null,
  * source: "none" }` on any missing/malformed input.
  */
-export function readWlSnapshotCount(
-  statePointer: WlSnapshotPointer | null,
-  fallbackPath?: string,
-): WlSnapshotResult {
+export function readWlSnapshotCount(statePointer: WlSnapshotPointer | null, fallbackPath?: string): WlSnapshotResult {
   if (statePointer && existsSync(statePointer.path)) {
     return { count: statePointer.count, capturedAt: statePointer.capturedAt, source: "state-pointer", note: null };
   }

@@ -74,7 +74,9 @@ test("writeRunState(): held-items merge — writing watch_later (a wl run) prese
     { path },
   );
 
-  expect(after.held.watch_later).toEqual([{ videoId: "wl-new", title: "Fresh WL item", reason: "fresh judgment this run" }]);
+  expect(after.held.watch_later).toEqual([
+    { videoId: "wl-new", title: "Fresh WL item", reason: "fresh judgment this run" },
+  ]);
   expect(after.held.history).toEqual([{ videoId: "h-old", reason: "old history hold" }]);
 });
 
@@ -144,7 +146,10 @@ test("writeRunState(): existing corrupt file is safe — write proceeds as if st
 
 test("writeRunState(): missing existing file is safe — first-ever write just works", () => {
   const path = join(TMP, "never-existed", "nested", "state.json");
-  const written = writeRunState({ lastRun: { mode: "status", runId: "r1", at: "2026-08-12T00:00:00Z", summary: "ok" } }, { path });
+  const written = writeRunState(
+    { lastRun: { mode: "status", runId: "r1", at: "2026-08-12T00:00:00Z", summary: "ok" } },
+    { path },
+  );
   expect(written.lastRun?.runId).toBe("r1");
 });
 
@@ -167,7 +172,14 @@ test("writeRunState(): lastSteerDetail round-trips and survives an unrelated hel
     runId: "steer-42",
     at: "2026-08-12T00:00:00Z",
     topics: [
-      { topic: "woodworking", playlistId: "PL_wood", playlistTitle: "Kaya: woodworking", created: true, existingUnwatchedCount: 0, added: ["v1", "v2", "v3"] },
+      {
+        topic: "woodworking",
+        playlistId: "PL_wood",
+        playlistTitle: "Kaya: woodworking",
+        created: true,
+        existingUnwatchedCount: 0,
+        added: ["v1", "v2", "v3"],
+      },
     ],
     sweepActionCount: 5,
     searchesRun: 3,
@@ -185,8 +197,13 @@ test("writeRunState(): lastSteerDetail round-trips and survives an unrelated hel
 test("writeRunState(): malformed lastSteerDetail throws rather than silently keeping the old value", () => {
   const path = join(TMP, "bad-steer-detail.json");
   const good = {
-    runId: "steer-old", at: "2026-08-01T00:00:00Z", topics: [], sweepActionCount: 0, searchesRun: 0,
-    droppedTopicCleanups: [], subjectiveCheckIn: null,
+    runId: "steer-old",
+    at: "2026-08-01T00:00:00Z",
+    topics: [],
+    sweepActionCount: 0,
+    searchesRun: 0,
+    droppedTopicCleanups: [],
+    subjectiveCheckIn: null,
   };
   writeRunState({ lastSteerDetail: good }, { path });
 
@@ -210,8 +227,11 @@ test("writeRunState(): malformed lastRun throws rather than silently keeping the
 
   let threw: unknown = null;
   try {
-    // @ts-expect-error deliberately malformed — invalid mode
-    writeRunState({ lastRun: { mode: "bogus", runId: "run-new", at: "2026-08-12T00:00:00Z", summary: "new" } }, { path });
+    writeRunState(
+      // @ts-expect-error deliberately malformed — invalid mode
+      { lastRun: { mode: "bogus", runId: "run-new", at: "2026-08-12T00:00:00Z", summary: "new" } },
+      { path },
+    );
   } catch (err) {
     threw = err;
   }

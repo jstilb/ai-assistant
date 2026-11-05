@@ -40,7 +40,9 @@ test("ensureSomedayPlaylist(): a valid cachedId short-circuits with an id lookup
   const http: ApiFetcher = async (req) => {
     calls.push(req);
     if (req.url.includes("/channels?")) return jsonResponse(200, { items: [{ id: "UC_me" }] });
-    return jsonResponse(200, { items: [{ id: "PL_cached", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_me" } }] });
+    return jsonResponse(200, {
+      items: [{ id: "PL_cached", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_me" } }],
+    });
   };
 
   const result = await ensureSomedayPlaylist({ http, getAccessToken: STUB_TOKEN, cachedId: "PL_cached" });
@@ -71,7 +73,9 @@ test("ensureSomedayPlaylist(): cached-id validation sends a valid request shape 
     const rejected = incompatibleParamsGuard(req);
     if (rejected) return rejected;
     if (req.url.includes("/channels?")) return jsonResponse(200, { items: [{ id: "UC_me" }] });
-    return jsonResponse(200, { items: [{ id: "PL_cached", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_me" } }] });
+    return jsonResponse(200, {
+      items: [{ id: "PL_cached", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_me" } }],
+    });
   };
 
   const result = await ensureSomedayPlaylist({ http, getAccessToken: STUB_TOKEN, cachedId: "PL_cached" });
@@ -102,7 +106,9 @@ test("ensureSomedayPlaylist(): cachedId owned by a DIFFERENT channel does not va
     if (req.url.includes("/channels?")) return jsonResponse(200, { items: [{ id: "UC_me" }] });
     if (req.url.includes("id=PL_foreign")) {
       // Same title, wrong channel — the wrong-channel incident class (2026-08-14).
-      return jsonResponse(200, { items: [{ id: "PL_foreign", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_other" } }] });
+      return jsonResponse(200, {
+        items: [{ id: "PL_foreign", snippet: { title: SOMEDAY_PLAYLIST_TITLE, channelId: "UC_other" } }],
+      });
     }
     return jsonResponse(200, { items: [{ id: "PL_mine", snippet: { title: SOMEDAY_PLAYLIST_TITLE } }] });
   };
@@ -184,7 +190,8 @@ test("findPlaylistByTitle(): walks pageToken across multiple pages until a match
 
 test("findPlaylistByTitle(): exhausts all pages and returns null when no match anywhere", async () => {
   const http: ApiFetcher = async (req) => {
-    if (!req.url.includes("pageToken")) return jsonResponse(200, { items: [{ id: "PL_a", snippet: { title: "Nope" } }], nextPageToken: "tok2" });
+    if (!req.url.includes("pageToken"))
+      return jsonResponse(200, { items: [{ id: "PL_a", snippet: { title: "Nope" } }], nextPageToken: "tok2" });
     return jsonResponse(200, { items: [{ id: "PL_b", snippet: { title: "Also Nope" } }] });
   };
 
@@ -194,12 +201,16 @@ test("findPlaylistByTitle(): exhausts all pages and returns null when no match a
 
 test("listMyPlaylists(): accumulates items across every page", async () => {
   const http: ApiFetcher = async (req) => {
-    if (!req.url.includes("pageToken")) return jsonResponse(200, { items: [{ id: "PL_1", snippet: { title: "One" } }], nextPageToken: "tok2" });
+    if (!req.url.includes("pageToken"))
+      return jsonResponse(200, { items: [{ id: "PL_1", snippet: { title: "One" } }], nextPageToken: "tok2" });
     return jsonResponse(200, { items: [{ id: "PL_2", snippet: { title: "Two" } }] });
   };
 
   const result = await listMyPlaylists({ http, getAccessToken: STUB_TOKEN });
-  expect(result).toEqual([{ id: "PL_1", title: "One" }, { id: "PL_2", title: "Two" }]);
+  expect(result).toEqual([
+    { id: "PL_1", title: "One" },
+    { id: "PL_2", title: "Two" },
+  ]);
 });
 
 test("listPlaylistItemVideoIds(): accumulates video ids across every page", async () => {
@@ -222,11 +233,19 @@ test("listPlaylistItemVideoIds(): default (retryOn404 unset) — a 404 throws im
   const sleeps: number[] = [];
   const http: ApiFetcher = async () => {
     calls += 1;
-    return jsonResponse(404, { error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] } });
+    return jsonResponse(404, {
+      error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] },
+    });
   };
 
   await expect(
-    listPlaylistItemVideoIds("PL_x", { http, getAccessToken: STUB_TOKEN, sleepFn: async (ms) => { sleeps.push(ms); } }),
+    listPlaylistItemVideoIds("PL_x", {
+      http,
+      getAccessToken: STUB_TOKEN,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
+    }),
   ).rejects.toThrow(/HTTP 404/);
   expect(calls).toBe(1); // no retry without opting in
   expect(sleeps).toEqual([]);
@@ -238,7 +257,9 @@ test("listPlaylistItemVideoIds(): retryOn404 true — a 404 then success on retr
   const http: ApiFetcher = async () => {
     calls += 1;
     if (calls === 1) {
-      return jsonResponse(404, { error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] } });
+      return jsonResponse(404, {
+        error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] },
+      });
     }
     return jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "vid1" } } }] });
   };
@@ -247,7 +268,9 @@ test("listPlaylistItemVideoIds(): retryOn404 true — a 404 then success on retr
     http,
     getAccessToken: STUB_TOKEN,
     retryOn404: true,
-    sleepFn: async (ms) => { sleeps.push(ms); },
+    sleepFn: async (ms) => {
+      sleeps.push(ms);
+    },
   });
 
   expect(ids).toEqual(["vid1"]);
@@ -260,7 +283,9 @@ test("listPlaylistItemVideoIds(): retryOn404 true — 404 on every attempt still
   const sleeps: number[] = [];
   const http: ApiFetcher = async () => {
     calls += 1;
-    return jsonResponse(404, { error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] } });
+    return jsonResponse(404, {
+      error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] },
+    });
   };
 
   await expect(
@@ -268,7 +293,9 @@ test("listPlaylistItemVideoIds(): retryOn404 true — 404 on every attempt still
       http,
       getAccessToken: STUB_TOKEN,
       retryOn404: true,
-      sleepFn: async (ms) => { sleeps.push(ms); },
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
     }),
   ).rejects.toThrow(/HTTP 404/);
   expect(calls).toBe(3); // VERIFY_MAX_ATTEMPTS
@@ -279,7 +306,9 @@ test("listPlaylistItemVideoIds(): retryOn404 true — a non-404 failure (e.g. 40
   let calls = 0;
   const http: ApiFetcher = async () => {
     calls += 1;
-    return jsonResponse(401, { error: { code: 401, message: "Invalid Credentials", errors: [{ reason: "authError" }] } });
+    return jsonResponse(401, {
+      error: { code: 401, message: "Invalid Credentials", errors: [{ reason: "authError" }] },
+    });
   };
 
   await expect(
@@ -302,22 +331,28 @@ test("insertPlaylistItem(): posts the correct resourceId body and returns the ne
   const result = await insertPlaylistItem("PL_x", "vid123", { http, getAccessToken: STUB_TOKEN });
 
   expect(result).toEqual({ playlistItemId: "PLI_1" });
-  expect(seenBody).toEqual({ snippet: { playlistId: "PL_x", resourceId: { kind: "youtube#video", videoId: "vid123" } } });
+  expect(seenBody).toEqual({
+    snippet: { playlistId: "PL_x", resourceId: { kind: "youtube#video", videoId: "vid123" } },
+  });
 });
 
 test("insertPlaylistItem(): malformed response (no id) throws rather than returning a garbage result", async () => {
   const http: ApiFetcher = async () => jsonResponse(200, {});
-  await expect(insertPlaylistItem("PL_x", "vid123", { http, getAccessToken: STUB_TOKEN })).rejects.toThrow(/returned no id/);
+  await expect(insertPlaylistItem("PL_x", "vid123", { http, getAccessToken: STUB_TOKEN })).rejects.toThrow(
+    /returned no id/,
+  );
 });
 
 test("verifyPlaylistContainsVideo(): true when a fresh re-read finds the video", async () => {
-  const http: ApiFetcher = async () => jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "vid123" } } }] });
+  const http: ApiFetcher = async () =>
+    jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "vid123" } } }] });
   const contains = await verifyPlaylistContainsVideo("PL_x", "vid123", { http, getAccessToken: STUB_TOKEN });
   expect(contains).toBe(true);
 });
 
 test("verifyPlaylistContainsVideo(): false when the fresh re-read does NOT find the video", async () => {
-  const http: ApiFetcher = async () => jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "some-other-vid" } } }] });
+  const http: ApiFetcher = async () =>
+    jsonResponse(200, { items: [{ snippet: { resourceId: { videoId: "some-other-vid" } } }] });
   const contains = await verifyPlaylistContainsVideo("PL_x", "vid123", { http, getAccessToken: STUB_TOKEN });
   expect(contains).toBe(false);
 });
@@ -350,7 +385,9 @@ test("addAndVerifyPlaylistItem(): insert reports success but every verify retry 
     addAndVerifyPlaylistItem("PL_x", "vid123", {
       http,
       getAccessToken: STUB_TOKEN,
-      sleepFn: async (ms) => { sleeps.push(ms); },
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
     }),
   ).rejects.toThrow(/3 re-read attempt\(s\).*did NOT find it.*NOT retried on a verify miss/s);
 
@@ -377,7 +414,9 @@ test("addAndVerifyPlaylistItem(): a verify miss on the first attempt that succee
   const result = await addAndVerifyPlaylistItem("PL_x", "vid123", {
     http,
     getAccessToken: STUB_TOKEN,
-    sleepFn: async (ms) => { sleeps.push(ms); },
+    sleepFn: async (ms) => {
+      sleeps.push(ms);
+    },
   });
 
   expect(result).toEqual({ playlistItemId: "PLI_1", videoId: "vid123", playlistId: "PL_x" });
@@ -440,7 +479,10 @@ test("removeAndVerifyPlaylistItem(): finds the playlist item beyond the first pa
     }
     if (deleted) return jsonResponse(200, { items: [] });
     if (!req.url.includes("pageToken=")) {
-      return jsonResponse(200, { items: [{ id: "pi_1", snippet: { resourceId: { videoId: "vid_a" } } }], nextPageToken: "p2" });
+      return jsonResponse(200, {
+        items: [{ id: "pi_1", snippet: { resourceId: { videoId: "vid_a" } } }],
+        nextPageToken: "p2",
+      });
     }
     return jsonResponse(200, { items: [{ id: "pi_2", snippet: { resourceId: { videoId: "vid123" } } }] });
   };
@@ -532,7 +574,8 @@ test("deletePlaylist(): issues a DELETE with the playlist id as a query param", 
 // ----------------------------------------------------------------------------
 
 test("quota/auth failure: HTTP 401 throws a PlaylistApiError with the re-consent pointer", async () => {
-  const http: ApiFetcher = async () => jsonResponse(401, { error: { code: 401, message: "Invalid Credentials", errors: [{ reason: "authError" }] } });
+  const http: ApiFetcher = async () =>
+    jsonResponse(401, { error: { code: 401, message: "Invalid Credentials", errors: [{ reason: "authError" }] } });
 
   let threw: unknown = null;
   try {
@@ -562,9 +605,13 @@ test("quota/auth failure: HTTP 403 quotaExceeded says so explicitly, not a gener
 
 test("quota/auth failure: HTTP 403 non-quota reason still points at the re-consent pointer", async () => {
   const http: ApiFetcher = async () =>
-    jsonResponse(403, { error: { code: 403, message: "insufficient scope", errors: [{ reason: "insufficientPermissions" }] } });
+    jsonResponse(403, {
+      error: { code: 403, message: "insufficient scope", errors: [{ reason: "insufficientPermissions" }] },
+    });
 
-  await expect(insertPlaylistItem("PL_x", "vid1", { http, getAccessToken: STUB_TOKEN })).rejects.toThrow(/YouTubeOAuthBootstrap\.ts/);
+  await expect(insertPlaylistItem("PL_x", "vid1", { http, getAccessToken: STUB_TOKEN })).rejects.toThrow(
+    /YouTubeOAuthBootstrap\.ts/,
+  );
 });
 
 test("HTTP 500 (or any other non-2xx) throws with the status + message, never silently swallowed", async () => {
@@ -574,8 +621,13 @@ test("HTTP 500 (or any other non-2xx) throws with the status + message, never si
 
 test("getAccessToken failure propagates without ever calling http (no request attempted without a token)", async () => {
   let httpCalls = 0;
-  const http: ApiFetcher = async () => { httpCalls += 1; throw new Error("must not be called"); };
-  const getAccessToken = async () => { throw new Error("no refresh token — re-consent required"); };
+  const http: ApiFetcher = async () => {
+    httpCalls += 1;
+    throw new Error("must not be called");
+  };
+  const getAccessToken = async () => {
+    throw new Error("no refresh token — re-consent required");
+  };
 
   await expect(insertPlaylistItem("PL_x", "vid1", { http, getAccessToken })).rejects.toThrow(/re-consent required/);
   expect(httpCalls).toBe(0);

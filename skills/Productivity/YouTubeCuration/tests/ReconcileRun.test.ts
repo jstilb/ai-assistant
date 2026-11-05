@@ -22,7 +22,13 @@ afterAll(() => {
 test("reconcileRun(): matches when claimed counts equal what actually landed", async () => {
   const dbPath = join(TMP, "match.db");
   await writeLedgerRow(
-    { videoId: "v1", surface: "history", actions: ["deleted", "not-interested", "dont-recommend"], reason: "junk", runId: "run-A" },
+    {
+      videoId: "v1",
+      surface: "history",
+      actions: ["deleted", "not-interested", "dont-recommend"],
+      reason: "junk",
+      runId: "run-A",
+    },
     { dbPath },
   );
   await writeLedgerRow(

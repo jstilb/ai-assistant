@@ -12,8 +12,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-// cross-skill-allowed: test exercises the real, already-tested pure helper this build's YouTubeOAuthBootstrap.ts reuses (see that file's own cross-skill-allowed comment for the rationale).
-import { buildConsentUrl, mergeSecretsFile } from "../../AppUsageTracker/Tools/OAuthBootstrap.ts";
+import { buildConsentUrl, mergeSecretsFile } from "../../../../lib/core/GoogleOAuth.ts";
 import { YOUTUBE_SCOPES } from "../Tools/YouTubeOAuthBootstrap.ts";
 
 test("YOUTUBE_SCOPES: exactly one scope, youtube.force-ssl", () => {
@@ -43,14 +42,21 @@ test("mergeSecretsFile(GOOGLE_YOUTUBE_* keys): preserves unrelated keys includin
   const tmp = mkdtempSync(join(tmpdir(), "yt-oauth-bootstrap-"));
   try {
     const secretsPath = join(tmp, "secrets.json");
-    writeFileSync(secretsPath, JSON.stringify({
-      YOUTUBE_API_KEY: "AIza-existing",
-      GOOGLE_DPA_REFRESH_TOKEN: "1//dpa-refresh",
-      GOOGLE_DPA_ACCESS_TOKEN: "ya29.dpa-access",
-      GOOGLE_DPA_ACCESS_TOKEN_EXPIRES_AT: "1000000",
-      GOOGLE_DPA_GRANTED_SCOPES: "https://www.googleapis.com/auth/dataportability.myactivity.youtube",
-      UNRELATED_KEY: "untouched",
-    }, null, 2));
+    writeFileSync(
+      secretsPath,
+      JSON.stringify(
+        {
+          YOUTUBE_API_KEY: "AIza-existing",
+          GOOGLE_DPA_REFRESH_TOKEN: "1//dpa-refresh",
+          GOOGLE_DPA_ACCESS_TOKEN: "ya29.dpa-access",
+          GOOGLE_DPA_ACCESS_TOKEN_EXPIRES_AT: "1000000",
+          GOOGLE_DPA_GRANTED_SCOPES: "https://www.googleapis.com/auth/dataportability.myactivity.youtube",
+          UNRELATED_KEY: "untouched",
+        },
+        null,
+        2,
+      ),
+    );
 
     mergeSecretsFile(secretsPath, {
       GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",

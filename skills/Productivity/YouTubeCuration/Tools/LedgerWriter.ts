@@ -43,13 +43,7 @@ import { errMessage, isLockContention, LedgerLockError, LedgerTimeoutError, with
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 /** The only actions the ledger schema's `actions` column is expected to carry (spec.md §5, §6, §7, §8). */
-export const VALID_ACTIONS = [
-  "deleted",
-  "not-interested",
-  "dont-recommend",
-  "someday-add",
-  "wl-removed",
-] as const;
+export const VALID_ACTIONS = ["deleted", "not-interested", "dont-recommend", "someday-add", "wl-removed"] as const;
 export type LedgerAction = (typeof VALID_ACTIONS)[number];
 const VALID_ACTION_SET: ReadonlySet<string> = new Set(VALID_ACTIONS);
 

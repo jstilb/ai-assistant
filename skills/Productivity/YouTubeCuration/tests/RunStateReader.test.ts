@@ -56,7 +56,10 @@ test("readRunState(): valid state file round-trips held items + lastRun + wlSnap
   expect(result.state.held.history).toEqual([{ videoId: "v1", reason: "unsure — could be a rewatch" }]);
   expect(result.state.held.watch_later.length).toBe(1);
   expect(result.state.lastRun).toEqual({
-    mode: "prune", runId: "run-42", at: "2026-08-10T12:00:00Z", summary: "5 deleted, 0 held",
+    mode: "prune",
+    runId: "run-42",
+    at: "2026-08-10T12:00:00Z",
+    summary: "5 deleted, 0 held",
   });
   expect(result.state.wlSnapshot).toEqual({ path: "/some/path.json", capturedAt: "2026-08-09", count: 1094 });
   expect(result.state.somedayPlaylist).toEqual({ id: "PL_someday", title: "Kaya: Someday" });
@@ -72,7 +75,10 @@ test("readSomedayPlaylist-shaped input via readRunState: malformed somedayPlayli
 
 test("readRunState(): partially-shaped file (missing held) degrades that field only", () => {
   const path = join(TMP, "partial.json");
-  writeFileSync(path, JSON.stringify({ lastRun: { mode: "wl", runId: "r1", at: "2026-08-10T00:00:00Z", summary: "ok" } }));
+  writeFileSync(
+    path,
+    JSON.stringify({ lastRun: { mode: "wl", runId: "r1", at: "2026-08-10T00:00:00Z", summary: "ok" } }),
+  );
   const result = readRunState(path);
   expect(result.state.held.history).toEqual([]);
   expect(result.state.held.watch_later).toEqual([]);
@@ -85,12 +91,25 @@ test("readRunState(): valid lastSteerDetail round-trips every field", () => {
     runId: "steer-42",
     at: "2026-08-12T00:00:00Z",
     topics: [
-      { topic: "woodworking", playlistId: "PL_wood", playlistTitle: "Kaya: woodworking", created: false, existingUnwatchedCount: 3, added: ["v1", "v2"] },
+      {
+        topic: "woodworking",
+        playlistId: "PL_wood",
+        playlistTitle: "Kaya: woodworking",
+        created: false,
+        existingUnwatchedCount: 3,
+        added: ["v1", "v2"],
+      },
     ],
     sweepActionCount: 7,
     searchesRun: 4,
     droppedTopicCleanups: [
-      { topic: "origami", playlistId: "PL_origami", playlistTitle: "Kaya: origami", itemVideoIds: ["o1"], deleted: true },
+      {
+        topic: "origami",
+        playlistId: "PL_origami",
+        playlistTitle: "Kaya: origami",
+        itemVideoIds: ["o1"],
+        deleted: true,
+      },
     ],
     subjectiveCheckIn: "yes, homepage felt better",
   };
@@ -102,7 +121,10 @@ test("readRunState(): valid lastSteerDetail round-trips every field", () => {
 
 test("readRunState(): malformed lastSteerDetail (bad topics shape) degrades to null, does not throw", () => {
   const path = join(TMP, "bad-steer-detail.json");
-  writeFileSync(path, JSON.stringify({ lastSteerDetail: { runId: "r1", at: "2026-08-12T00:00:00Z", topics: "not-an-array" } }));
+  writeFileSync(
+    path,
+    JSON.stringify({ lastSteerDetail: { runId: "r1", at: "2026-08-12T00:00:00Z", topics: "not-an-array" } }),
+  );
   expect(() => readRunState(path)).not.toThrow();
   const result = readRunState(path);
   expect(result.state.lastSteerDetail).toBeNull();
@@ -111,8 +133,13 @@ test("readRunState(): malformed lastSteerDetail (bad topics shape) degrades to n
 test("readRunState(): lastSteerDetail with a null subjectiveCheckIn (not yet asked/answered) round-trips", () => {
   const path = join(TMP, "steer-detail-null-checkin.json");
   const lastSteerDetail = {
-    runId: "steer-1", at: "2026-08-12T00:00:00Z", topics: [], sweepActionCount: 0, searchesRun: 0,
-    droppedTopicCleanups: [], subjectiveCheckIn: null,
+    runId: "steer-1",
+    at: "2026-08-12T00:00:00Z",
+    topics: [],
+    sweepActionCount: 0,
+    searchesRun: 0,
+    droppedTopicCleanups: [],
+    subjectiveCheckIn: null,
   };
   writeFileSync(path, JSON.stringify({ lastSteerDetail }));
   const result = readRunState(path);

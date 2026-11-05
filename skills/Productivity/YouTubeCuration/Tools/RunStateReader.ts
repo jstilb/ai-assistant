@@ -149,9 +149,11 @@ const MODES = new Set(["prune", "steer", "wl", "status"]);
 export function isHeldItem(v: unknown): v is HeldItem {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
-  return typeof o.videoId === "string"
-    && typeof o.reason === "string"
-    && (o.title === undefined || typeof o.title === "string");
+  return (
+    typeof o.videoId === "string" &&
+    typeof o.reason === "string" &&
+    (o.title === undefined || typeof o.title === "string")
+  );
 }
 
 export function readHeldList(v: unknown): HeldItem[] {
@@ -163,10 +165,11 @@ export function readLastRun(v: unknown): LastRunSummary | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
   if (
-    typeof o.mode === "string" && MODES.has(o.mode)
-    && typeof o.runId === "string"
-    && typeof o.at === "string"
-    && typeof o.summary === "string"
+    typeof o.mode === "string" &&
+    MODES.has(o.mode) &&
+    typeof o.runId === "string" &&
+    typeof o.at === "string" &&
+    typeof o.summary === "string"
   ) {
     return { mode: o.mode as LastRunSummary["mode"], runId: o.runId, at: o.at, summary: o.summary };
   }
@@ -197,12 +200,13 @@ function isSteerTopicResult(v: unknown): v is SteerTopicResult {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
-    typeof o.topic === "string"
-    && typeof o.playlistId === "string"
-    && typeof o.playlistTitle === "string"
-    && typeof o.created === "boolean"
-    && typeof o.existingUnwatchedCount === "number"
-    && Array.isArray(o.added) && o.added.every((x) => typeof x === "string")
+    typeof o.topic === "string" &&
+    typeof o.playlistId === "string" &&
+    typeof o.playlistTitle === "string" &&
+    typeof o.created === "boolean" &&
+    typeof o.existingUnwatchedCount === "number" &&
+    Array.isArray(o.added) &&
+    o.added.every((x) => typeof x === "string")
   );
 }
 
@@ -210,11 +214,12 @@ function isSteerDroppedTopicCleanup(v: unknown): v is SteerDroppedTopicCleanup {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
-    typeof o.topic === "string"
-    && typeof o.playlistId === "string"
-    && typeof o.playlistTitle === "string"
-    && Array.isArray(o.itemVideoIds) && o.itemVideoIds.every((x) => typeof x === "string")
-    && typeof o.deleted === "boolean"
+    typeof o.topic === "string" &&
+    typeof o.playlistId === "string" &&
+    typeof o.playlistTitle === "string" &&
+    Array.isArray(o.itemVideoIds) &&
+    o.itemVideoIds.every((x) => typeof x === "string") &&
+    typeof o.deleted === "boolean"
   );
 }
 
@@ -224,13 +229,15 @@ export function readSteerRunDetail(v: unknown): SteerRunDetail | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
   if (
-    typeof o.runId === "string"
-    && typeof o.at === "string"
-    && Array.isArray(o.topics) && o.topics.every(isSteerTopicResult)
-    && typeof o.sweepActionCount === "number"
-    && typeof o.searchesRun === "number"
-    && Array.isArray(o.droppedTopicCleanups) && o.droppedTopicCleanups.every(isSteerDroppedTopicCleanup)
-    && (o.subjectiveCheckIn === null || typeof o.subjectiveCheckIn === "string")
+    typeof o.runId === "string" &&
+    typeof o.at === "string" &&
+    Array.isArray(o.topics) &&
+    o.topics.every(isSteerTopicResult) &&
+    typeof o.sweepActionCount === "number" &&
+    typeof o.searchesRun === "number" &&
+    Array.isArray(o.droppedTopicCleanups) &&
+    o.droppedTopicCleanups.every(isSteerDroppedTopicCleanup) &&
+    (o.subjectiveCheckIn === null || typeof o.subjectiveCheckIn === "string")
   ) {
     return {
       runId: o.runId,
@@ -273,7 +280,7 @@ export function readRunState(path?: string): RunStateReadResult {
   }
 
   const obj = parsed as Record<string, unknown>;
-  const heldObj = typeof obj.held === "object" && obj.held !== null ? obj.held as Record<string, unknown> : {};
+  const heldObj = typeof obj.held === "object" && obj.held !== null ? (obj.held as Record<string, unknown>) : {};
 
   const state: YouTubeCurationState = {
     held: {

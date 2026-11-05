@@ -131,7 +131,9 @@ export async function cleanupDroppedTopicPlaylists(
         deleted: false,
       });
       // Fail-loud visibility; the caller's run report surfaces `deleted: false` as an anomaly (spec.md §10).
-      console.error(`DroppedTopicCleanup: delete failed for "${entry.playlistTitle}" (${entry.playlistId}): ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `DroppedTopicCleanup: delete failed for "${entry.playlistTitle}" (${entry.playlistId}): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
   return results;
@@ -158,7 +160,10 @@ async function main(): Promise<void> {
     console.error(usage);
     process.exit(1);
   }
-  const currentTopics = currentTopicsRaw.split(",").map((t) => t.trim()).filter(Boolean);
+  const currentTopics = currentTopicsRaw
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   switch (cmd) {
     case "enumerate": {

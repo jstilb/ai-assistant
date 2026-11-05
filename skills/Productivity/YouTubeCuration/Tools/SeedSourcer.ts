@@ -35,6 +35,7 @@
  * this exact seam).
  */
 
+import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { inference, type InferenceOptions, type InferenceResult } from "../../../../lib/core/Inference.ts";
 import {
@@ -57,7 +58,7 @@ const DEFAULT_MAX_SEARCH_RESULTS = 25;
 /** spec.md §7: "top each topic playlist up to ~10 unwatched items." */
 export const TARGET_CANDIDATE_COUNT = 10;
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 const DEFAULT_SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 
 // ----------------------------------------------------------------------------
@@ -72,6 +73,7 @@ export function loadYouTubeApiKey(secretsPath: string = DEFAULT_SECRETS_PATH): s
     const key = parsed.YOUTUBE_API_KEY ?? parsed.youtube_api_key;
     return typeof key === "string" && key.length > 0 ? key : null;
   } catch {
+    // optional secrets file: missing or invalid JSON means no API key
     return null;
   }
 }
@@ -140,7 +142,9 @@ export async function searchTopicVideoIds(topic: string, options: SearchOptions 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
-    throw new Error(`SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`);
+    throw new Error(
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+    );
   }
   const maxResults = options.maxResults ?? DEFAULT_MAX_SEARCH_RESULTS;
 
@@ -194,7 +198,9 @@ export async function getVideosMetadata(videoIds: string[], options: SearchOptio
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
-    throw new Error(`SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`);
+    throw new Error(
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+    );
   }
 
   const res = await apiGet(http, timeoutMs, "videos.list", "/videos", {
@@ -267,7 +273,9 @@ export async function getChannelDossiers(channelIds: string[], options: SearchOp
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
-    throw new Error(`SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`);
+    throw new Error(
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+    );
   }
 
   const items: ChannelsListItem[] = [];
@@ -334,7 +342,10 @@ export interface AlreadyWatchedCheckOptions {
  * than throwing — a fresh events.db with no YouTube ingest yet is a valid
  * state, not an error.
  */
-export async function filterAlreadyWatched(videoIds: string[], options: AlreadyWatchedCheckOptions = {}): Promise<string[]> {
+export async function filterAlreadyWatched(
+  videoIds: string[],
+  options: AlreadyWatchedCheckOptions = {},
+): Promise<string[]> {
   if (videoIds.length === 0) return [];
   const dbPath = options.dbPath ?? CONFIG.dbPath;
   const timeoutMs = options.timeoutMs ?? DB_TIMEOUT_MS;
@@ -355,8 +366,10 @@ export async function filterAlreadyWatched(videoIds: string[], options: AlreadyW
   const { conn, instance } = opened;
   try {
     const placeholders = videoIds.map((_, i) => `$id${i}`).join(", ");
-    const params: Record<string, unknown> = {};
-    videoIds.forEach((id, i) => { params[`id${i}`] = id; });
+    const params: Record<string, string> = {};
+    videoIds.forEach((id, i) => {
+      params[`id${i}`] = id;
+    });
     const rows = await withTimeout(
       conn.runAndReadAll(`SELECT DISTINCT video_id FROM youtube_history WHERE video_id IN (${placeholders})`, params),
       timeoutMs,
@@ -562,7 +575,13 @@ export async function sourceTopicCandidates(
 
   const metadata = await getVideosMetadata(unwatchedIds, options);
   if (metadata.length === 0) {
-    return { topic, candidates: [], rejectedForQuality: [], searched: searchedIds.length, afterWatchedFilter: unwatchedIds.length };
+    return {
+      topic,
+      candidates: [],
+      rejectedForQuality: [],
+      searched: searchedIds.length,
+      afterWatchedFilter: unwatchedIds.length,
+    };
   }
 
   const dossiers = await getChannelDossiers(
@@ -609,7 +628,13 @@ export async function sourceTopicCandidates(
     }
   }
 
-  return { topic, candidates, rejectedForQuality, searched: searchedIds.length, afterWatchedFilter: unwatchedIds.length };
+  return {
+    topic,
+    candidates,
+    rejectedForQuality,
+    searched: searchedIds.length,
+    afterWatchedFilter: unwatchedIds.length,
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -631,7 +656,12 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  const intentTopics = intentTopicsRaw ? intentTopicsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [topic];
+  const intentTopics = intentTopicsRaw
+    ? intentTopicsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [topic];
   const maxResultsRaw = flag(argv, "--max-results");
   // Overrides CONFIG.dbPath (hardcoded to the LIVE events.db, doesn't honor
   // KAYA_HOME — same note as LedgerWriter.ts's --db-path). Real /youtube

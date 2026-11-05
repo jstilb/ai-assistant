@@ -14,12 +14,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 // cross-skill-allowed: test applies AppUsageTracker's REAL schema init path to a throwaway db so the DDL the ledger reads is the DDL production creates
 import { Db } from "../../AppUsageTracker/Tools/Db.ts";
-import {
-  LedgerLockError,
-  LedgerTimeoutError,
-  readLedgerTotals,
-  withTimeout,
-} from "../Tools/LedgerReader.ts";
+import { LedgerLockError, LedgerTimeoutError, readLedgerTotals, withTimeout } from "../Tools/LedgerReader.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "yt-ledger-test-"));
 
@@ -56,16 +51,37 @@ test("readLedgerTotals(): sums rows per surface correctly", async () => {
     VALUES ($video_id, $title, $channel, CAST(NULL AS TIMESTAMP), $surface, $actions, $reason, $extra, $run_id, $created_at::TIMESTAMP)`;
   const now = new Date().toISOString();
   await db.run(insert, {
-    video_id: "h1", title: "t", channel: "c", surface: "history",
-    actions: "deleted", reason: "junk", extra: null, run_id: "r1", created_at: now,
+    video_id: "h1",
+    title: "t",
+    channel: "c",
+    surface: "history",
+    actions: "deleted",
+    reason: "junk",
+    extra: null,
+    run_id: "r1",
+    created_at: now,
   });
   await db.run(insert, {
-    video_id: "h2", title: "t", channel: "c", surface: "history",
-    actions: "deleted", reason: "junk", extra: null, run_id: "r1", created_at: now,
+    video_id: "h2",
+    title: "t",
+    channel: "c",
+    surface: "history",
+    actions: "deleted",
+    reason: "junk",
+    extra: null,
+    run_id: "r1",
+    created_at: now,
   });
   await db.run(insert, {
-    video_id: "w1", title: "t", channel: "c", surface: "watch_later",
-    actions: "wl-removed", reason: "stale", extra: null, run_id: "r1", created_at: now,
+    video_id: "w1",
+    title: "t",
+    channel: "c",
+    surface: "watch_later",
+    actions: "wl-removed",
+    reason: "stale",
+    extra: null,
+    run_id: "r1",
+    created_at: now,
   });
   db.close();
 

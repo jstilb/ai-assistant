@@ -210,11 +210,7 @@ interface RawApiRequest {
   body?: string;
 }
 
-async function apiRequest(
-  client: ResolvedClient,
-  action: string,
-  req: RawApiRequest,
-): Promise<ApiResponse> {
+async function apiRequest(client: ResolvedClient, action: string, req: RawApiRequest): Promise<ApiResponse> {
   const qs = req.query ? `?${new URLSearchParams(req.query).toString()}` : "";
   const res = await withTimeout(
     client.http({
@@ -233,7 +229,12 @@ async function apiRequest(
   return res;
 }
 
-function apiGet(client: ResolvedClient, action: string, path: string, query: Record<string, string>): Promise<ApiResponse> {
+function apiGet(
+  client: ResolvedClient,
+  action: string,
+  path: string,
+  query: Record<string, string>,
+): Promise<ApiResponse> {
   return apiRequest(client, action, { method: "GET", path, query });
 }
 
@@ -260,7 +261,10 @@ interface PlaylistsListResponse {
  * (50/page). Returns the first exact match, or `null` if none of Jm's
  * playlists carry that title. Never creates anything.
  */
-export async function findPlaylistByTitle(title: string, options: PlaylistClientOptions = {}): Promise<PlaylistSummary | null> {
+export async function findPlaylistByTitle(
+  title: string,
+  options: PlaylistClientOptions = {},
+): Promise<PlaylistSummary | null> {
   const client = await resolveClient(options);
   let pageToken: string | undefined;
   do {
@@ -688,7 +692,10 @@ async function main(): Promise<void> {
     }
     case "create": {
       const title = flag(argv, "--title");
-      if (!title) { console.error(usage); process.exit(1); }
+      if (!title) {
+        console.error(usage);
+        process.exit(1);
+      }
       const description = flag(argv, "--description");
       const result = await createPlaylist(title, description ? { description } : {});
       console.log(JSON.stringify(result, null, 2));
@@ -696,7 +703,10 @@ async function main(): Promise<void> {
     }
     case "delete": {
       const playlistId = flag(argv, "--playlist-id");
-      if (!playlistId) { console.error(usage); process.exit(1); }
+      if (!playlistId) {
+        console.error(usage);
+        process.exit(1);
+      }
       await deletePlaylist(playlistId);
       console.log(JSON.stringify({ deleted: playlistId }, null, 2));
       return;
@@ -704,7 +714,10 @@ async function main(): Promise<void> {
     case "add": {
       const playlistId = flag(argv, "--playlist-id");
       const videoId = flag(argv, "--video-id");
-      if (!playlistId || !videoId) { console.error(usage); process.exit(1); }
+      if (!playlistId || !videoId) {
+        console.error(usage);
+        process.exit(1);
+      }
       const result = await insertPlaylistItem(playlistId, videoId);
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -712,7 +725,10 @@ async function main(): Promise<void> {
     case "add-verified": {
       const playlistId = flag(argv, "--playlist-id");
       const videoId = flag(argv, "--video-id");
-      if (!playlistId || !videoId) { console.error(usage); process.exit(1); }
+      if (!playlistId || !videoId) {
+        console.error(usage);
+        process.exit(1);
+      }
       const result = await addAndVerifyPlaylistItem(playlistId, videoId);
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -720,21 +736,30 @@ async function main(): Promise<void> {
     case "verify": {
       const playlistId = flag(argv, "--playlist-id");
       const videoId = flag(argv, "--video-id");
-      if (!playlistId || !videoId) { console.error(usage); process.exit(1); }
+      if (!playlistId || !videoId) {
+        console.error(usage);
+        process.exit(1);
+      }
       const contains = await verifyPlaylistContainsVideo(playlistId, videoId);
       console.log(JSON.stringify({ playlistId, videoId, contains }, null, 2));
       return;
     }
     case "list": {
       const playlistId = flag(argv, "--playlist-id");
-      if (!playlistId) { console.error(usage); process.exit(1); }
+      if (!playlistId) {
+        console.error(usage);
+        process.exit(1);
+      }
       const ids = await listPlaylistItemVideoIds(playlistId);
       console.log(JSON.stringify({ playlistId, videoIds: ids }, null, 2));
       return;
     }
     case "find": {
       const title = flag(argv, "--title");
-      if (!title) { console.error(usage); process.exit(1); }
+      if (!title) {
+        console.error(usage);
+        process.exit(1);
+      }
       const result = await findPlaylistByTitle(title);
       console.log(JSON.stringify(result, null, 2));
       return;

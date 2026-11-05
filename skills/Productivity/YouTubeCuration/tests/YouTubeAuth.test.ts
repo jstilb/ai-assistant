@@ -19,9 +19,12 @@ beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "yt-auth-test-"));
   secretsPath = join(tmp, "secrets.json");
   clientPath = join(tmp, "client_secret.json");
-  writeFileSync(clientPath, JSON.stringify({
-    installed: { client_id: "abc.apps.googleusercontent.com", client_secret: "GOCSPX-xyz" },
-  }));
+  writeFileSync(
+    clientPath,
+    JSON.stringify({
+      installed: { client_id: "abc.apps.googleusercontent.com", client_secret: "GOCSPX-xyz" },
+    }),
+  );
 });
 
 afterEach(() => {
@@ -67,14 +70,20 @@ test("getYouTubeAccessToken: caches the refreshed token to secrets.json (expiry 
 
 test("getYouTubeAccessToken: reuses cached access token when not near expiry, makes zero HTTP calls", async () => {
   const nowSec = 1_000_000_000;
-  writeFileSync(secretsPath, JSON.stringify({
-    GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
-    GOOGLE_YOUTUBE_ACCESS_TOKEN: "ya29.cached",
-    // Expires an hour from "now" — well outside the 60s skew window.
-    GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: String(nowSec + 3600),
-  }));
+  writeFileSync(
+    secretsPath,
+    JSON.stringify({
+      GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
+      GOOGLE_YOUTUBE_ACCESS_TOKEN: "ya29.cached",
+      // Expires an hour from "now" — well outside the 60s skew window.
+      GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: String(nowSec + 3600),
+    }),
+  );
   let calls = 0;
-  const http: HttpFetcher = async () => { calls += 1; throw new Error("must not be called — cache should be reused"); };
+  const http: HttpFetcher = async () => {
+    calls += 1;
+    throw new Error("must not be called — cache should be reused");
+  };
 
   const token = await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => nowSec * 1000 });
 
@@ -84,16 +93,23 @@ test("getYouTubeAccessToken: reuses cached access token when not near expiry, ma
 
 test("getYouTubeAccessToken: refreshes when cached token is within the expiry-skew window", async () => {
   const nowSec = 1_000_000_000;
-  writeFileSync(secretsPath, JSON.stringify({
-    GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
-    GOOGLE_YOUTUBE_ACCESS_TOKEN: "ya29.stale",
-    // Expires in 30s — inside the 60s skew window, must trigger a refresh.
-    GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: String(nowSec + 30),
-  }));
+  writeFileSync(
+    secretsPath,
+    JSON.stringify({
+      GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
+      GOOGLE_YOUTUBE_ACCESS_TOKEN: "ya29.stale",
+      // Expires in 30s — inside the 60s skew window, must trigger a refresh.
+      GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: String(nowSec + 30),
+    }),
+  );
   let calls = 0;
   const http: HttpFetcher = async () => {
     calls += 1;
-    return { status: 200, headers: {}, body: JSON.stringify({ access_token: "ya29.renewed", expires_in: 3600, token_type: "Bearer" }) };
+    return {
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ access_token: "ya29.renewed", expires_in: 3600, token_type: "Bearer" }),
+    };
   };
 
   const token = await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => nowSec * 1000 });
@@ -105,7 +121,10 @@ test("getYouTubeAccessToken: refreshes when cached token is within the expiry-sk
 test("getYouTubeAccessToken: fails loud with the re-consent pointer when refresh token is missing, never calls HTTP", async () => {
   writeFileSync(secretsPath, JSON.stringify({ YOUTUBE_API_KEY: "AIza-existing" }));
   let calls = 0;
-  const http: HttpFetcher = async () => { calls += 1; return { status: 200, headers: {}, body: "{}" }; };
+  const http: HttpFetcher = async () => {
+    calls += 1;
+    return { status: 200, headers: {}, body: "{}" };
+  };
 
   await expect(getYouTubeAccessToken({ secretsPath, clientPath, http })).rejects.toThrow(
     /GOOGLE_YOUTUBE_REFRESH_TOKEN missing.*YouTubeOAuthBootstrap\.ts/s,
@@ -134,12 +153,15 @@ test("getYouTubeAccessToken: fails loud (not a silent empty-string return) when 
 });
 
 test("getYouTubeAccessToken: a refresh preserves unrelated secrets.json keys including DPA keys", async () => {
-  writeFileSync(secretsPath, JSON.stringify({
-    GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
-    GOOGLE_DPA_REFRESH_TOKEN: "1//dpa-refresh",
-    GOOGLE_DPA_ACCESS_TOKEN: "ya29.dpa-access",
-    YOUTUBE_API_KEY: "AIza-existing",
-  }));
+  writeFileSync(
+    secretsPath,
+    JSON.stringify({
+      GOOGLE_YOUTUBE_REFRESH_TOKEN: "1//yt-refresh",
+      GOOGLE_DPA_REFRESH_TOKEN: "1//dpa-refresh",
+      GOOGLE_DPA_ACCESS_TOKEN: "ya29.dpa-access",
+      YOUTUBE_API_KEY: "AIza-existing",
+    }),
+  );
   const http: HttpFetcher = async () => ({
     status: 200,
     headers: {},

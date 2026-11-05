@@ -43,16 +43,14 @@ function stubResult(topics: string[]): InferenceResult {
 }
 
 test("parseIntentTopics(): extracts topics from a stubbed structured inference response", async () => {
-  const stub = async (_opts: InferenceOptions): Promise<InferenceResult> =>
-    stubResult(["woodworking", "jazz guitar"]);
+  const stub = async (_opts: InferenceOptions): Promise<InferenceResult> => stubResult(["woodworking", "jazz guitar"]);
 
   const result = await parseIntentTopics("more woodworking and jazz guitar, less politics", stub);
   expect(result.topics).toEqual(["woodworking", "jazz guitar"]);
 });
 
 test("parseIntentTopics(): no-write — parse leaves the filesystem untouched", async () => {
-  const stub = async (_opts: InferenceOptions): Promise<InferenceResult> =>
-    stubResult(["cooking"]);
+  const stub = async (_opts: InferenceOptions): Promise<InferenceResult> => stubResult(["cooking"]);
 
   const before = readdirSync(TMP);
   await parseIntentTopics("more cooking videos", stub);

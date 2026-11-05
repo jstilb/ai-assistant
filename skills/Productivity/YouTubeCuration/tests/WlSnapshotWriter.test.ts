@@ -20,8 +20,24 @@ afterAll(() => {
 });
 
 const SAMPLE_ITEMS: WlSnapshotItem[] = [
-  { position: 1, video_id: "v1", title: "Video One", channel: "Chan A", channel_url: "https://youtube.com/@a", duration: "12:34", progress_pct: null },
-  { position: 2, video_id: "v2", title: "Video Two", channel: "Chan B", channel_url: "https://youtube.com/@b", duration: "1:02:03", progress_pct: 45 },
+  {
+    position: 1,
+    video_id: "v1",
+    title: "Video One",
+    channel: "Chan A",
+    channel_url: "https://youtube.com/@a",
+    duration: "12:34",
+    progress_pct: null,
+  },
+  {
+    position: 2,
+    video_id: "v2",
+    title: "Video Two",
+    channel: "Chan B",
+    channel_url: "https://youtube.com/@b",
+    duration: "1:02:03",
+    progress_pct: 45,
+  },
 ];
 
 test("writeWlSnapshot(): writes a dated file in ticket-07's exact shape (captured_at, engine, header_count, complete, items)", () => {
@@ -63,7 +79,10 @@ test("writeWlSnapshot(): updates the run-state wlSnapshot pointer, round-trips t
   const dir = join(TMP, "state-roundtrip");
   const statePath = join(TMP, "state-roundtrip-state.json");
 
-  const result = writeWlSnapshot({ items: SAMPLE_ITEMS, headerCount: 2, complete: true }, { dir, statePath, now: new Date("2026-08-15T09:00:00.000Z") });
+  const result = writeWlSnapshot(
+    { items: SAMPLE_ITEMS, headerCount: 2, complete: true },
+    { dir, statePath, now: new Date("2026-08-15T09:00:00.000Z") },
+  );
 
   const { state } = readRunState(statePath);
   expect(state.wlSnapshot).toEqual({ path: result.path, capturedAt: "2026-08-15", count: 2 });
@@ -74,7 +93,10 @@ test("writeWlSnapshot(): the fresh wlSnapshot pointer is exactly what SnapshotRe
   const statePath = join(TMP, "snapshotreader-integration-state.json");
   const fallback = join(TMP, "unused-fallback.json");
 
-  writeWlSnapshot({ items: SAMPLE_ITEMS, headerCount: 2, complete: true }, { dir, statePath, now: new Date("2026-08-15T09:00:00.000Z") });
+  writeWlSnapshot(
+    { items: SAMPLE_ITEMS, headerCount: 2, complete: true },
+    { dir, statePath, now: new Date("2026-08-15T09:00:00.000Z") },
+  );
 
   const { state } = readRunState(statePath);
   const snap = readWlSnapshotCount(state.wlSnapshot, fallback);
@@ -89,12 +111,18 @@ test("writeWlSnapshot(): held items from a prior run survive untouched (partial-
   const statePath = join(TMP, "merge-preserve-state.json");
 
   // Simulate a prior run that had already held some history items.
-  writeWlSnapshot({ items: [], headerCount: 0, complete: true }, { dir, statePath, now: new Date("2026-08-01T00:00:00.000Z") });
+  writeWlSnapshot(
+    { items: [], headerCount: 0, complete: true },
+    { dir, statePath, now: new Date("2026-08-01T00:00:00.000Z") },
+  );
   const before = readRunState(statePath).state;
   expect(before.held.history).toEqual([]);
 
   // A fresh wl snapshot write must not disturb held.* at all.
-  writeWlSnapshot({ items: SAMPLE_ITEMS, headerCount: 2, complete: true }, { dir, statePath, now: new Date("2026-08-15T00:00:00.000Z") });
+  writeWlSnapshot(
+    { items: SAMPLE_ITEMS, headerCount: 2, complete: true },
+    { dir, statePath, now: new Date("2026-08-15T00:00:00.000Z") },
+  );
   const after = readRunState(statePath).state;
   expect(after.held.history).toEqual(before.held.history);
   expect(after.held.watch_later).toEqual(before.held.watch_later);
@@ -105,7 +133,10 @@ test("writeWlSnapshot(): creates the target directory if it doesn't exist yet", 
   const statePath = join(TMP, "nested-state.json");
   expect(existsSync(dir)).toBe(false);
 
-  writeWlSnapshot({ items: SAMPLE_ITEMS, headerCount: 2, complete: true }, { dir, statePath, now: new Date("2026-08-15T00:00:00.000Z") });
+  writeWlSnapshot(
+    { items: SAMPLE_ITEMS, headerCount: 2, complete: true },
+    { dir, statePath, now: new Date("2026-08-15T00:00:00.000Z") },
+  );
 
   expect(existsSync(dir)).toBe(true);
 });

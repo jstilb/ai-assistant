@@ -162,7 +162,9 @@ test("writeLedgerRow(): wl someday verdict — actions 'someday-add,wl-removed',
     expect(rows.length).toBe(1);
     expect(rows[0]?.actions).toBe("someday-add,wl-removed");
     expect(rows[0]?.watched_at).toBeNull();
-    expect(rows[0]?.extra).toBe(JSON.stringify({ duration: "45:12", publishedAgo: "2 years ago", listPosition: 1042, resumeFraction: null }));
+    expect(rows[0]?.extra).toBe(
+      JSON.stringify({ duration: "45:12", publishedAgo: "2 years ago", listPosition: 1042, resumeFraction: null }),
+    );
   } finally {
     db.close();
   }

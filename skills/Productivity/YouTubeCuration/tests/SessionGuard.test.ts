@@ -21,7 +21,7 @@ test("isBrowserSession(): false when CLAUDE_CONFIG_DIR is unset (ordinary sessio
 });
 
 test("isBrowserSession(): false when CLAUDE_CONFIG_DIR points somewhere else entirely", () => {
-  expect(isBrowserSession({ CLAUDE_CONFIG_DIR: "~/.claude" })).toBe(false);
+  expect(isBrowserSession({ CLAUDE_CONFIG_DIR: "/home/user/.claude" })).toBe(false);
 });
 
 test("isBrowserSession(): honors a CLAUDE_BROWSER_HOME override, matching bin/claude-browser's own derivation", () => {

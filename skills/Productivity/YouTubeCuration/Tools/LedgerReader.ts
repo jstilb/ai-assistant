@@ -95,7 +95,10 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number, label: str
 // Exported so ReconcileRun.ts (a second read-only consumer of this exact
 // open-with-timeout, lock-safe pattern) doesn't reimplement it — two real
 // consumers is the point where sharing earns its place (deletion test).
-export async function openReadOnly(dbPath: string, timeoutMs: number): Promise<{ conn: DuckDBConnection; instance: DuckDBInstanceT }> {
+export async function openReadOnly(
+  dbPath: string,
+  timeoutMs: number,
+): Promise<{ conn: DuckDBConnection; instance: DuckDBInstanceT }> {
   const instance = await withTimeout(
     DuckDBInstance.create(dbPath, { access_mode: "READ_ONLY" }),
     timeoutMs,

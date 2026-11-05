@@ -40,7 +40,10 @@ test("readWlSnapshotCount(): state pointer present and its file exists -> uses p
 test("readWlSnapshotCount(): state pointer's file is missing -> falls back to the fallback path", () => {
   const missingPointerPath = join(TMP, "gone.json");
   const fallbackPath = join(TMP, "fallback.json");
-  writeFileSync(fallbackPath, JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }));
+  writeFileSync(
+    fallbackPath,
+    JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }),
+  );
   const pointer: WlSnapshotPointer = { path: missingPointerPath, capturedAt: "2026-07-01", count: 999 };
   const result = readWlSnapshotCount(pointer, fallbackPath);
   expect(result.count).toBe(1094);
@@ -50,7 +53,10 @@ test("readWlSnapshotCount(): state pointer's file is missing -> falls back to th
 
 test("readWlSnapshotCount(): no state pointer, fallback file exists -> reads items.length + captured_at date", () => {
   const fallbackPath = join(TMP, "fallback2.json");
-  writeFileSync(fallbackPath, JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }));
+  writeFileSync(
+    fallbackPath,
+    JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }),
+  );
   const result = readWlSnapshotCount(null, fallbackPath);
   expect(result.count).toBe(1094);
   expect(result.capturedAt).toBe("2026-08-09");

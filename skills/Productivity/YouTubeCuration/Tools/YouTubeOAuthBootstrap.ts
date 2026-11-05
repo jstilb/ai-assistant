@@ -14,9 +14,8 @@
  *
  * Run:   bun Tools/YouTubeOAuthBootstrap.ts
  *
- * Flow (same shape as AppUsageTracker's OAuthBootstrap.ts, reused verbatim
- * where the two flows are actually the same code — see the cross-skill
- * imports below):
+ * Flow (same shape as AppUsageTracker's OAuthBootstrap.ts; both use the
+ * shared lib/core/GoogleOAuth.ts):
  *  1. Loads the Desktop OAuth client_id + client_secret from gcalcli's file
  *     (same Kaya Cloud project, kaya-484418, where DPA is enabled).
  *  2. Spins up a localhost server on a free port, builds the Google consent
@@ -29,14 +28,11 @@
  *     other key (mergeSecretsFile only ever sets the four keys named above).
  */
 
-import { spawn } from "node:child_process";
+import { homedir } from "node:os";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
-// cross-skill-allowed: reuse AppUsageTracker's pure, HttpFetcher-injectable OAuth helpers instead of forking a second copy — this flow is functionally identical to OAuthBootstrap.ts's, differing only in scope list and secrets key names (see file header).
-import { buildConsentUrl, exchangeCodeForTokens, mergeSecretsFile } from "../../AppUsageTracker/Tools/OAuthBootstrap.ts";
-// cross-skill-allowed: loadGoogleOAuthClient reads the one Desktop OAuth client Kaya already has registered (gcalcli's file) for project kaya-484418 — the same client this flow authorizes a new scope against.
-import { loadGoogleOAuthClient } from "../../AppUsageTracker/Tools/YouTubeDataPortability.ts";
+import { loadGoogleOAuthClient, mergeSecretsFile, runLoopbackConsent } from "../../../../lib/core/GoogleOAuth.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 const SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 
 /**
@@ -55,56 +51,10 @@ const SECRETS_PATH = `${HOME}/.claude/secrets.json`;
  */
 export const YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"] as const;
 
-function openBrowser(url: string): void {
-  // macOS only — the only platform this Kaya install targets.
-  const child = spawn("open", [url], { stdio: "ignore", detached: true });
-  child.unref();
-}
-
-interface CallbackResult {
-  code: string;
-  state: string;
-}
-
 async function main(): Promise<void> {
   const { clientId, clientSecret } = loadGoogleOAuthClient();
 
-  const state = crypto.randomUUID();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Bun: any = (globalThis as any).Bun;
-  if (!Bun?.serve) throw new Error("Bun.serve unavailable — run with bun");
-
-  let resolveCb: (r: CallbackResult) => void;
-  let rejectCb: (e: Error) => void;
-  const cbPromise = new Promise<CallbackResult>((resolve, reject) => { resolveCb = resolve; rejectCb = reject; });
-
-  const server = Bun.serve({
-    // The gcalcli OAuth client registered redirect_uri "http://localhost".
-    // Google's loopback rules let any port through, but the hostname must
-    // match the registered one — use `localhost`, not `127.0.0.1`.
-    hostname: "localhost",
-    port: 0,
-    fetch(req: Request) {
-      const u = new URL(req.url);
-      if (u.pathname !== "/callback") return new Response("not found", { status: 404 });
-      const code = u.searchParams.get("code");
-      const st = u.searchParams.get("state");
-      const err = u.searchParams.get("error");
-      if (err) { rejectCb(new Error(`OAuth error: ${err}`)); return new Response(`OAuth error: ${err}`, { status: 400 }); }
-      if (!code || !st) { rejectCb(new Error("missing code/state")); return new Response("missing", { status: 400 }); }
-      if (st !== state) { rejectCb(new Error("state mismatch")); return new Response("state mismatch", { status: 400 }); }
-      resolveCb({ code, state: st });
-      return new Response(
-        `<html><body style="font-family:system-ui;padding:2rem"><h2>Kaya YouTube playlist-write consent captured ✓</h2><p>You can close this tab. Token written to <code>~/.claude/secrets.json</code>.</p></body></html>`,
-        { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
-      );
-    },
-  });
-
-  const port = server.port as number;
-  const redirectUri = `http://localhost:${port}/callback`;
-  // buildConsentUrl (reused from OAuthBootstrap.ts) never sets
+  // buildConsentUrl (lib/core/GoogleOAuth.ts) never sets
   // include_granted_scopes — for DPA that omission is forced (Google 400s
   // "Incremental auth is not allowed" for DPA scopes). For this
   // youtube.force-ssl scope there's no such technical block: regular API
@@ -117,31 +67,12 @@ async function main(): Promise<void> {
   // revocable from GOOGLE_DPA_* (spec.md §4: "same Desktop client works for
   // non-DPA scopes in a separate consent"). Omitting it keeps this a
   // standalone grant containing exactly YOUTUBE_SCOPES.
-  const consentUrl = buildConsentUrl({ clientId, redirectUri, scopes: YOUTUBE_SCOPES, state });
-
-  console.log(`Loopback server listening on ${redirectUri}`);
-  console.log(`Requesting scope: ${YOUTUBE_SCOPES.join(", ")}`);
-  console.log(`Opening consent URL in browser…`);
-  console.log(`If the browser doesn't open, copy this URL:\n  ${consentUrl}`);
-  openBrowser(consentUrl);
-
-  const timeoutMs = 10 * 60 * 1000;
-  const timer = setTimeout(() => rejectCb(new Error(`OAuth callback timed out after ${timeoutMs}ms`)), timeoutMs);
-
-  let cb: CallbackResult;
-  try {
-    cb = await cbPromise;
-  } finally {
-    clearTimeout(timer);
-    server.stop(true);
-  }
-
-  console.log(`Exchange code for tokens…`);
-  const tokens = await exchangeCodeForTokens({
+  const tokens = await runLoopbackConsent({
     clientId,
     clientSecret,
-    redirectUri,
-    code: cb.code,
+    scopes: YOUTUBE_SCOPES,
+    successHeading: "Kaya YouTube playlist-write consent captured",
+    announce: `Requesting scope: ${YOUTUBE_SCOPES.join(", ")}`,
   });
 
   mergeSecretsFile(SECRETS_PATH, {
@@ -157,7 +88,7 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     logFailure("YouTubeOAuthBootstrap", err);
     console.error(`[YouTubeOAuthBootstrap] ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);

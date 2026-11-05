@@ -62,7 +62,10 @@ test("buildStatusReport(): intent >30 days old leads with a staleness banner", a
 
 test("buildStatusReport(): WL snapshot fallback asset renders count + date", async () => {
   const p = paths("wl-snap");
-  writeFileSync(p.fallbackSnapshotPath, JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }));
+  writeFileSync(
+    p.fallbackSnapshotPath,
+    JSON.stringify({ captured_at: "2026-08-09T12:33:00-0700", items: new Array(1094).fill({}) }),
+  );
   const lines = await buildStatusReport(p);
   const text = lines.join("\n");
   expect(text).toContain("1094");
@@ -89,10 +92,13 @@ test("buildStatusReport(): ledger totals render per surface when rows exist", as
 
 test("buildStatusReport(): held items + last run summary from state file are rendered", async () => {
   const p = paths("state-rich");
-  writeFileSync(p.statePath, JSON.stringify({
-    held: { history: [{ videoId: "h1", reason: "unsure" }], watch_later: [] },
-    lastRun: { mode: "prune", runId: "run-9", at: "2026-08-10T00:00:00Z", summary: "3 deleted, 1 held" },
-  }));
+  writeFileSync(
+    p.statePath,
+    JSON.stringify({
+      held: { history: [{ videoId: "h1", reason: "unsure" }], watch_later: [] },
+      lastRun: { mode: "prune", runId: "run-9", at: "2026-08-10T00:00:00Z", summary: "3 deleted, 1 held" },
+    }),
+  );
   const lines = await buildStatusReport(p);
   const text = lines.join("\n");
   expect(text).toContain("1 history");
@@ -141,7 +147,10 @@ test("buildStatusReport(): a locked events.db surfaces a loud, labeled failure l
 test("buildStatusReport(): ZERO MUTATION — no files created/modified by a status run over a pre-seeded tree", async () => {
   const p = paths("zero-mutation");
   writeFileSync(p.intentPath, "topics:\n  - cooking\ndeclared_at: '2026-08-01'\n");
-  writeFileSync(p.statePath, JSON.stringify({ lastRun: { mode: "wl", runId: "r1", at: "2026-08-01T00:00:00Z", summary: "ok" } }));
+  writeFileSync(
+    p.statePath,
+    JSON.stringify({ lastRun: { mode: "wl", runId: "r1", at: "2026-08-01T00:00:00Z", summary: "ok" } }),
+  );
   writeFileSync(p.fallbackSnapshotPath, JSON.stringify({ captured_at: "2026-08-09T00:00:00Z", items: [{}] }));
   const db = await Db.open(p.dbPath);
   await db.initSchema();

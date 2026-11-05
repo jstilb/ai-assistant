@@ -65,12 +65,14 @@ test("topUpTopicPlaylist(): playlist exists with enough unwatched items already 
     if (req.url.includes("/playlists?") && req.method === "GET") {
       return jsonResponse(200, { items: [{ id: "PL_existing", snippet: { title: "Kaya: jazz" } }] });
     }
-    if (req.method === "POST" && req.url.includes("/playlists?")) { createCalled = true; return jsonResponse(200, {}); }
+    if (req.method === "POST" && req.url.includes("/playlists?")) {
+      createCalled = true;
+      return jsonResponse(200, {});
+    }
     if (req.url.includes("/playlistItems?") && req.method === "GET") {
-      return jsonResponse(200, { items: [
-        { snippet: { resourceId: { videoId: "old1" } } },
-        { snippet: { resourceId: { videoId: "old2" } } },
-      ] });
+      return jsonResponse(200, {
+        items: [{ snippet: { resourceId: { videoId: "old1" } } }, { snippet: { resourceId: { videoId: "old2" } } }],
+      });
     }
     throw new Error(`unexpected request: ${req.method} ${req.url}`);
   };
@@ -107,7 +109,10 @@ test("topUpTopicPlaylist(): partial gap — only adds enough candidates to close
   // Verify (GET playlistItems, again) always reports whatever was inserted so far as present.
   const httpWithVerify: ApiFetcher = async (req) => {
     if (req.url.includes("/playlistItems?") && req.method === "GET") {
-      const existing = [{ snippet: { resourceId: { videoId: "old1" } } }, ...inserted.map((v) => ({ snippet: { resourceId: { videoId: v } } }))];
+      const existing = [
+        { snippet: { resourceId: { videoId: "old1" } } },
+        ...inserted.map((v) => ({ snippet: { resourceId: { videoId: v } } })),
+      ];
       return jsonResponse(200, { items: existing });
     }
     return http(req);
@@ -131,7 +136,10 @@ test("topUpTopicPlaylist(): a candidate already present in the playlist is skipp
       return jsonResponse(200, { items: [{ id: "PL_x", snippet: { title: "Kaya: cooking" } }] });
     }
     if (req.url.includes("/playlistItems?") && req.method === "GET") {
-      const items = [{ snippet: { resourceId: { videoId: "dup1" } } }, ...insertedIds.map((v) => ({ snippet: { resourceId: { videoId: v } } }))];
+      const items = [
+        { snippet: { resourceId: { videoId: "dup1" } } },
+        ...insertedIds.map((v) => ({ snippet: { resourceId: { videoId: v } } })),
+      ];
       return jsonResponse(200, { items });
     }
     if (req.method === "POST" && req.url.includes("/playlistItems?")) {
@@ -169,7 +177,9 @@ test("topUpTopicPlaylist(): just-created playlist — a 404 from playlistItems.l
         sawInitial404 = true;
         // Eventual-consistency 404: playlists.insert already succeeded but
         // playlistItems.list against the brand-new playlist hasn't caught up yet.
-        return jsonResponse(404, { error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] } });
+        return jsonResponse(404, {
+          error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] },
+        });
       }
       return jsonResponse(200, { items: insertedIds.map((v) => ({ snippet: { resourceId: { videoId: v } } })) });
     }
@@ -183,7 +193,14 @@ test("topUpTopicPlaylist(): just-created playlist — a 404 from playlistItems.l
 
   const result = await topUpTopicPlaylist(
     { topic: "woodworking", candidateVideoIds: ["v1"], targetCount: 1 },
-    { http, getAccessToken: STUB_TOKEN, sleepFn: async (ms) => { sleeps.push(ms); }, countUnwatched: async () => [] },
+    {
+      http,
+      getAccessToken: STUB_TOKEN,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
+      countUnwatched: async () => [],
+    },
   );
 
   expect(result.created).toBe(true);
@@ -206,7 +223,9 @@ test("topUpTopicPlaylist(): existing (NOT just-created) playlist — a 404 from 
     if (req.url.includes("/playlistItems?") && req.method === "GET") {
       listAttempts += 1;
       // Genuinely gone (deleted/renamed mid-run) — must throw immediately, never retry into a confusing slow error.
-      return jsonResponse(404, { error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] } });
+      return jsonResponse(404, {
+        error: { code: 404, message: "playlist cannot be found", errors: [{ reason: "playlistNotFound" }] },
+      });
     }
     throw new Error(`unexpected request: ${req.method} ${req.url}`);
   };
@@ -214,7 +233,14 @@ test("topUpTopicPlaylist(): existing (NOT just-created) playlist — a 404 from 
   await expect(
     topUpTopicPlaylist(
       { topic: "jazz", candidateVideoIds: ["v1"], targetCount: 1 },
-      { http, getAccessToken: STUB_TOKEN, sleepFn: async (ms) => { sleeps.push(ms); }, countUnwatched: async () => [] },
+      {
+        http,
+        getAccessToken: STUB_TOKEN,
+        sleepFn: async (ms) => {
+          sleeps.push(ms);
+        },
+        countUnwatched: async () => [],
+      },
     ),
   ).rejects.toThrow(/HTTP 404/);
 

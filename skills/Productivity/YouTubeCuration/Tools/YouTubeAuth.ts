@@ -21,48 +21,27 @@
  * needlessly rewrite secrets.json on every call.
  */
 
+import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
-// cross-skill-allowed: reuse AppUsageTracker's pure, HttpFetcher-injectable mergeSecretsFile rather than forking a second copy of the same read-json/spread-merge/write-json logic.
-import { mergeSecretsFile } from "../../AppUsageTracker/Tools/OAuthBootstrap.ts";
-// cross-skill-allowed: loadGoogleOAuthClient reads the one Desktop OAuth client Kaya already has registered (gcalcli's file) for project kaya-484418 — the same client YouTubeOAuthBootstrap.ts authorized.
-import { loadGoogleOAuthClient } from "../../AppUsageTracker/Tools/YouTubeDataPortability.ts";
+import {
+  GOOGLE_TOKEN_URL as TOKEN_URL,
+  type HttpFetcher,
+  defaultHttp,
+  loadGoogleOAuthClient,
+  mergeSecretsFile,
+} from "../../../../lib/core/GoogleOAuth.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+export type { HttpFetcher, HttpRequest, HttpResponse } from "../../../../lib/core/GoogleOAuth.ts";
+
+const HOME = process.env.HOME ?? homedir();
 const DEFAULT_SECRETS_PATH = `${HOME}/.claude/secrets.json`;
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 // Refresh this many seconds before the cached token's actual expiry, so a
 // token that's technically still valid but about to expire mid-batch
 // doesn't get used for a request that fails partway through.
 const EXPIRY_SKEW_SEC = 60;
 
-export interface HttpRequest {
-  url: string;
-  method: "GET" | "POST";
-  headers: Record<string, string>;
-  body?: string;
-}
-
-export interface HttpResponse {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
-}
-
-export type HttpFetcher = (req: HttpRequest) => Promise<HttpResponse>;
-
-const defaultHttp: HttpFetcher = async (req) => {
-  const res = await fetch(req.url, {
-    method: req.method,
-    headers: req.headers,
-    body: req.method === "GET" ? undefined : req.body,
-  });
-  const headers: Record<string, string> = {};
-  res.headers.forEach((v, k) => { headers[k] = v; });
-  return { status: res.status, headers, body: await res.text() };
-};
-
-export interface GetAccessTokenOptions {
+interface GetAccessTokenOptions {
   /** Defaults to ~/.claude/secrets.json; override in tests with an mkdtemp path. */
   secretsPath?: string;
   /** Defaults to the gcalcli client_secret.json path (loadGoogleOAuthClient's own default). */
@@ -83,7 +62,9 @@ interface StoredSecrets {
 
 function readSecrets(path: string): StoredSecrets {
   if (!existsSync(path)) {
-    throw new Error(`secrets file missing at ${path} — no YouTube playlist-write consent has ever been granted; ${RECONSENT_POINTER}`);
+    throw new Error(
+      `secrets file missing at ${path} — no YouTube playlist-write consent has ever been granted; ${RECONSENT_POINTER}`,
+    );
   }
   let parsed: unknown;
   try {
@@ -146,11 +127,15 @@ export async function getYouTubeAccessToken(opts: GetAccessTokenOptions = {}): P
   });
   if (res.status !== 200) {
     const revokedHint = res.body.includes("invalid_grant") ? " (invalid_grant — the grant was likely revoked)" : "";
-    throw new Error(`YouTube access-token refresh failed: HTTP ${res.status}${revokedHint} — ${res.body.slice(0, 300)}; ${RECONSENT_POINTER}`);
+    throw new Error(
+      `YouTube access-token refresh failed: HTTP ${res.status}${revokedHint} — ${res.body.slice(0, 300)}; ${RECONSENT_POINTER}`,
+    );
   }
   const parsed = JSON.parse(res.body) as Partial<RefreshTokenResponse>;
   if (!parsed.access_token || typeof parsed.expires_in !== "number") {
-    throw new Error(`YouTube access-token refresh: malformed response — ${res.body.slice(0, 300)}; ${RECONSENT_POINTER}`);
+    throw new Error(
+      `YouTube access-token refresh: malformed response — ${res.body.slice(0, 300)}; ${RECONSENT_POINTER}`,
+    );
   }
 
   mergeSecretsFile(secretsPath, {
