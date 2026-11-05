@@ -87,9 +87,9 @@
  * own copies will always report "fresh" and prove nothing.
  */
 
-import { join } from "path";
-import { existsSync, readFileSync, readdirSync, statSync } from "fs";
-import { execSync } from "child_process";
+import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { memPath } from "../../../../lib/core/MemoryPaths.ts";
 import { DETECTION_EXIT_CODE } from "../../../../lib/cron/FailureClassifier.ts";
@@ -180,12 +180,7 @@ export interface ClassifiedArtifactCheck {
 // ============================================================================
 
 const KAYA_HOME = getKayaHome();
-const DEFAULT_VAULT_CONTEXT = join(
-  process.env.HOME || "",
-  "Desktop",
-  "obsidian",
-  "VaultContext.md"
-);
+const DEFAULT_VAULT_CONTEXT = join(process.env.HOME || "", "Desktop", "obsidian", "VaultContext.md");
 // memPath() (not a hand-rolled join(KAYA_HOME, "MEMORY", ...)) per the
 // no-inline-memory-path rule — resolves against getKayaHome() exactly like
 // KAYA_HOME above, but through the canonical accessor so a future KAYA_HOME
@@ -195,12 +190,7 @@ const DEFAULT_VAULT_CONTEXT = join(
 const DEFAULT_DIGESTS_DIR = memPath("AUTOINFO", "digests");
 const DEFAULT_CONTEXT_ROUTING_PATH = join(KAYA_HOME, "CONTEXT-ROUTING.md");
 const DEFAULT_ARCHIVE_PATH = memPath("QUEUES", "archive", "approved-work-archive.jsonl");
-const DIGEST_NAMES = [
-  "skill-capabilities",
-  "active-projects-goals",
-  "recent-completions",
-  "vault-folder-map",
-];
+const DIGEST_NAMES = ["skill-capabilities", "active-projects-goals", "recent-completions", "vault-folder-map"];
 
 const CONTENT_LAG_THRESHOLD_DAYS = 3;
 
@@ -285,7 +275,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * instead of silently passing — see the call site below.
  */
 function awEntriesFromRecentCompletionsDigest(
-  digestPath: string
+  digestPath: string,
 ): { maxDate: string | null; awEntryCount: number } | null {
   if (!existsSync(digestPath)) return null;
   try {
@@ -298,7 +288,8 @@ function awEntriesFromRecentCompletionsDigest(
       if (entry.trimEnd().endsWith("(git)")) continue; // git-sourced landing — excluded, see doc above
       awEntryCount++;
       const m = entry.match(/^(\d{4}-\d{2}-\d{2})/);
-      if (m && (!maxDate || m[1] > maxDate)) maxDate = m[1];
+      const day = m?.[1];
+      if (day && (!maxDate || day > maxDate)) maxDate = day;
     }
     return { maxDate, awEntryCount };
   } catch {
@@ -316,7 +307,7 @@ function maxDateFromArchive(archivePath: string): string | null {
   try {
     const lines = readFileSync(archivePath, "utf8")
       .split("\n")
-      .filter(l => l.trim());
+      .filter((l) => l.trim());
     let maxDate: string | null = null;
     for (const line of lines) {
       try {
@@ -345,7 +336,7 @@ function maxDateFromArchive(archivePath: string): string | null {
  *  field lives on the source config, not on the FreshnessDeclaration itself. */
 function findMatchingSourceConfig(
   artifactKey: string,
-  sourceConfigs: ReadonlyMap<string, SourceConfigLike>
+  sourceConfigs: ReadonlyMap<string, SourceConfigLike>,
 ): SourceConfigLike | null {
   for (const config of sourceConfigs.values()) {
     if (config.output === artifactKey) return config;
@@ -373,7 +364,7 @@ function findMatchingSourceConfig(
  */
 function checkPointerReachability(
   decl: PointerFreshness,
-  matchedConfig: SourceConfigLike | null
+  matchedConfig: SourceConfigLike | null,
 ): { ok: boolean; reason: string } {
   const command = matchedConfig?.command;
   if (typeof command !== "string" || command.trim() === "") {
@@ -459,7 +450,7 @@ function evaluateArtifact(
   absolutePath: string,
   decl: FreshnessDeclaration,
   now: number,
-  matchedConfig: SourceConfigLike | null
+  matchedConfig: SourceConfigLike | null,
 ): ClassifiedArtifactCheck {
   if (!existsSync(absolutePath)) {
     return { artifact: artifactKey, absolutePath, freshnessClass: decl.class, stale: true, reason: "missing file" };
@@ -512,7 +503,7 @@ function classifyAndEvaluate(
   absolutePath: string,
   sourceConfigs: ReadonlyMap<string, SourceConfigLike>,
   registry: ReadonlyMap<string, FreshnessDeclaration>,
-  now: number
+  now: number,
 ): ClassifiedArtifactCheck {
   let decl: FreshnessDeclaration;
   try {
@@ -556,8 +547,8 @@ function collectSkillSources(skillsDir: string): Map<string, string> {
   let categories: string[];
   try {
     categories = readdirSync(skillsDir, { withFileTypes: true })
-      .filter(e => e.isDirectory())
-      .map(e => e.name);
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
     return sources;
   }
@@ -574,15 +565,15 @@ function collectSkillSources(skillsDir: string): Map<string, string> {
     let description = "";
     let name = "";
     if (fmMatch) {
-      const fm = fmMatch[1];
+      const fm = fmMatch[1] ?? "";
       const descMatch = fm.match(/^description:\s*(.+)$/m);
-      if (descMatch) description = descMatch[1].trim().replace(/^["']|["']$/g, "");
+      if (descMatch) description = (descMatch[1] ?? "").trim().replace(/^["']|["']$/g, "");
       const nameMatch = fm.match(/^name:\s*(.+)$/m);
-      if (nameMatch) name = nameMatch[1].trim().replace(/^["']|["']$/g, "");
+      if (nameMatch) name = (nameMatch[1] ?? "").trim().replace(/^["']|["']$/g, "");
     }
 
     const useWhenMatch = content.match(/USE\s+WHEN[:\s]+(.+?)(?:\n|$)/i);
-    const useWhen = useWhenMatch ? useWhenMatch[1].trim().replace(/\.$/, "") : "";
+    const useWhen = useWhenMatch ? (useWhenMatch[1] ?? "").trim().replace(/\.$/, "") : "";
     if (!description && !useWhen) return;
 
     // Reconstruct the same "content only" shape DigestBuilder.ts's join(". ")
@@ -602,8 +593,8 @@ function collectSkillSources(skillsDir: string): Map<string, string> {
     let subDirs: string[] = [];
     try {
       subDirs = readdirSync(catDir, { withFileTypes: true })
-        .filter(e => e.isDirectory())
-        .map(e => e.name);
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
     } catch {
       continue;
     }
@@ -696,9 +687,7 @@ export async function checkFreshness(opts: {
   // opts → env var → default 7 days.
   const thresholdDays =
     opts.freshnessThresholdDays ??
-    (process.env.FRESHNESS_THRESHOLD_DAYS != null
-      ? parseFloat(process.env.FRESHNESS_THRESHOLD_DAYS)
-      : 7);
+    (process.env.FRESHNESS_THRESHOLD_DAYS != null ? parseFloat(process.env.FRESHNESS_THRESHOLD_DAYS) : 7);
 
   const thresholdMs = thresholdDays * MS_PER_DAY;
   const now = Date.now();
@@ -788,15 +777,14 @@ export async function checkFreshness(opts: {
         // because genuinely older" from "broken parsing" — but never go
         // silent either.
         console.error(
-          `[FreshnessGuard] recent-completions.json: archive has completions up to ${archiveMaxDate} but none are represented in the digest (all entries are git-sourced) — content-lag check skipped`
+          `[FreshnessGuard] recent-completions.json: archive has completions up to ${archiveMaxDate} but none are represented in the digest (all entries are git-sourced) — content-lag check skipped`,
         );
       } else if (awDigestInfo.maxDate) {
-        const lagDays =
-          (Date.parse(archiveMaxDate) - Date.parse(awDigestInfo.maxDate)) / MS_PER_DAY;
+        const lagDays = (Date.parse(archiveMaxDate) - Date.parse(awDigestInfo.maxDate)) / MS_PER_DAY;
         if (lagDays > CONTENT_LAG_THRESHOLD_DAYS) {
           contentLag = { digestMaxDate: awDigestInfo.maxDate, archiveMaxDate, lagDays };
           staleFiles.push(
-            `${recentCompletionsPath} [content-lag: digest=${awDigestInfo.maxDate} archive=${archiveMaxDate}]`
+            `${recentCompletionsPath} [content-lag: digest=${awDigestInfo.maxDate} archive=${archiveMaxDate}]`,
           );
         }
       }
@@ -826,24 +814,24 @@ export async function checkFreshness(opts: {
           inferenceFn: opts.qualifierInferenceFn,
           maxChecks: opts.qualifierMaxChecks,
         });
-        const unfaithful = checks.filter(c => c.faithful === false);
-        const errored = checks.filter(c => c.error !== undefined);
+        const unfaithful = checks.filter((c) => c.faithful === false);
+        const errored = checks.filter((c) => c.error !== undefined);
 
         qualifierFaithfulness = {
-          checked: checks.filter(c => !c.skipped).length,
-          skipped: checks.filter(c => c.skipped).length,
+          checked: checks.filter((c) => !c.skipped).length,
+          skipped: checks.filter((c) => c.skipped).length,
           errored: errored.length,
           unfaithful,
         };
 
         for (const e of errored) {
           console.error(
-            `[FreshnessGuard] qualifier-faithfulness: "${e.key}" errored during check (${e.error}) — never silently treated as faithful`
+            `[FreshnessGuard] qualifier-faithfulness: "${e.key}" errored during check (${e.error}) — never silently treated as faithful`,
           );
         }
         if (unfaithful.length > 0) {
           staleFiles.push(
-            `${skillCapabilitiesPath} [qualifier-faithfulness: ${unfaithful.map(u => u.key).join(", ")}]`
+            `${skillCapabilitiesPath} [qualifier-faithfulness: ${unfaithful.map((u) => u.key).join(", ")}]`,
           );
         }
       }
@@ -852,11 +840,11 @@ export async function checkFreshness(opts: {
     // Never throw out of checkFreshness for this check — mirrors the
     // content-lag try/catch above — but never go silent either.
     console.error(
-      `[FreshnessGuard] qualifier-faithfulness check failed: ${err instanceof Error ? err.message : String(err)}`
+      `[FreshnessGuard] qualifier-faithfulness check failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  const checkedFiles = [vaultContextPath, contextRoutingPath, ...classified.map(c => c.absolutePath)];
+  const checkedFiles = [vaultContextPath, contextRoutingPath, ...classified.map((c) => c.absolutePath)];
 
   return {
     stale: staleFiles.length > 0,
@@ -876,7 +864,7 @@ export async function checkFreshness(opts: {
 
 async function sendStaleAlert(staleFiles: string[], thresholdDays: number): Promise<void> {
   const now = Date.now();
-  const lines = staleFiles.map(f => {
+  const lines = staleFiles.map((f) => {
     let staleDays = "missing";
     try {
       if (existsSync(f)) {
@@ -926,7 +914,7 @@ if (import.meta.main) {
 
   // Parse --threshold-days
   const tdIdx = args.indexOf("--threshold-days");
-  const freshnessThresholdDays = tdIdx >= 0 ? parseFloat(args[tdIdx + 1]) : undefined;
+  const freshnessThresholdDays = tdIdx >= 0 ? parseFloat(args[tdIdx + 1] ?? "") : undefined;
 
   // Parse --repo-root
   const rrIdx = args.indexOf("--repo-root");
@@ -945,9 +933,7 @@ if (import.meta.main) {
     // Always print the per-artifact classification detail — what was
     // flagged AND what was skipped, with the reason for each — regardless
     // of the overall verdict.
-    console.log(
-      `[FreshnessGuard] Per-artifact classification (${result.classified.length} checked via Slice A2):`
-    );
+    console.log(`[FreshnessGuard] Per-artifact classification (${result.classified.length} checked via Slice A2):`);
     for (const c of result.classified) {
       const verdict = c.stale ? "STALE" : "fresh";
       console.log(`  [${verdict}] ${c.freshnessClass.padEnd(14)} ${c.artifact} — ${c.reason}`);
@@ -956,9 +942,7 @@ if (import.meta.main) {
 
     // Standalone (non-artifact) reachability probes — printed pass or fail,
     // so a silently-skipped probe is visible as an absence in this section.
-    console.log(
-      `[FreshnessGuard] Standalone reachability probes (${result.standaloneProbes.length} ran):`
-    );
+    console.log(`[FreshnessGuard] Standalone reachability probes (${result.standaloneProbes.length} ran):`);
     for (const p of result.standaloneProbes) {
       console.log(`  [${p.ok ? "ok" : "UNREACHABLE"}] ${p.name} — ${p.reason}`);
     }
@@ -969,7 +953,7 @@ if (import.meta.main) {
     if (result.qualifierFaithfulness) {
       const qf = result.qualifierFaithfulness;
       console.log(
-        `[FreshnessGuard] Qualifier faithfulness (skill-capabilities.json): ${qf.checked} checked via LLM, ${qf.skipped} skipped (unchanged/no-candidate/budget), ${qf.errored} errored, ${qf.unfaithful.length} unfaithful.`
+        `[FreshnessGuard] Qualifier faithfulness (skill-capabilities.json): ${qf.checked} checked via LLM, ${qf.skipped} skipped (unchanged/no-candidate/budget), ${qf.errored} errored, ${qf.unfaithful.length} unfaithful.`,
       );
       for (const u of qf.unfaithful) {
         console.log(`  [UNFAITHFUL] ${u.key} — ${u.reason} (dropped: ${(u.droppedQualifiers ?? []).join("; ")})`);
@@ -979,7 +963,7 @@ if (import.meta.main) {
 
     if (!result.stale) {
       console.log(
-        `[FreshnessGuard] All ${result.checkedFiles.length} artifacts are fresh (legacy threshold: ${result.thresholdDays}d; classified artifacts use their own A2 rule).`
+        `[FreshnessGuard] All ${result.checkedFiles.length} artifacts are fresh (legacy threshold: ${result.thresholdDays}d; classified artifacts use their own A2 rule).`,
       );
       process.exit(0);
     }

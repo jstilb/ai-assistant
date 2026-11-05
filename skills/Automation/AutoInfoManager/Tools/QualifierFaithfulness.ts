@@ -71,7 +71,7 @@ import { z } from "zod";
  *  defaults to the real `inference`. */
 export type InferenceFn = (opts: Parameters<typeof inference>[0]) => Promise<InferenceResult>;
 
-export interface QualifierFaithfulnessJudgment {
+interface QualifierFaithfulnessJudgment {
   success: true;
   faithful: boolean;
   /** Exact load-bearing qualifier phrases from the source that are missing
@@ -80,7 +80,7 @@ export interface QualifierFaithfulnessJudgment {
   reason: string;
 }
 
-export interface QualifierFaithfulnessError {
+interface QualifierFaithfulnessError {
   success: false;
   /** Always non-empty. Fail-loud contract: an inference failure or a
    *  malformed judge response is never silently treated as "faithful" (a
@@ -89,7 +89,7 @@ export interface QualifierFaithfulnessError {
   error: string;
 }
 
-export type QualifierFaithfulnessResult = QualifierFaithfulnessJudgment | QualifierFaithfulnessError;
+type QualifierFaithfulnessResult = QualifierFaithfulnessJudgment | QualifierFaithfulnessError;
 
 export interface FaithfulnessPair {
   /** Stable identifier for reporting (e.g. skill name). */
@@ -140,12 +140,31 @@ export interface EntryFaithfulnessCheck extends FaithfulnessPair {
  */
 const QUALIFIER_CANDIDATE_MARKERS: readonly RegExp[] = [
   // negation
-  /\bnever\b/i, /\bnot\b/i, /\bno\s/i, /\bwithout\b/i, /\bdon't\b/i, /\bdo not\b/i,
+  /\bnever\b/i,
+  /\bnot\b/i,
+  /\bno\s/i,
+  /\bwithout\b/i,
+  /\bdon't\b/i,
+  /\bdo not\b/i,
   // condition / scope limiter
-  /\bonly\b/i, /\bunless\b/i, /\bexcept\b/i, /\bif\b/i, /\bwhen\b/i, /\bwhile\b/i,
-  /\bbefore\b/i, /\bafter\b/i, /\bmust\b/i, /\brequire/i, /\bshould\b/i,
+  /\bonly\b/i,
+  /\bunless\b/i,
+  /\bexcept\b/i,
+  /\bif\b/i,
+  /\bwhen\b/i,
+  /\bwhile\b/i,
+  /\bbefore\b/i,
+  /\bafter\b/i,
+  /\bmust\b/i,
+  /\brequire/i,
+  /\bshould\b/i,
   // quantifier
-  /\ball\b/i, /\bany\b/i, /\bevery\b/i, /\bat least\b/i, /\bat most\b/i, /\balways\b/i,
+  /\ball\b/i,
+  /\bany\b/i,
+  /\bevery\b/i,
+  /\bat least\b/i,
+  /\bat most\b/i,
+  /\balways\b/i,
 ];
 
 /**
@@ -161,14 +180,14 @@ export function splitSentences(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
   const matches = trimmed.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g);
-  return (matches ?? [trimmed]).map(s => s.trim()).filter(Boolean);
+  return (matches ?? [trimmed]).map((s) => s.trim()).filter(Boolean);
 }
 
 /** Deterministic extraction: which sentences in `text` are worth an LLM
  *  faithfulness check at all. See QUALIFIER_CANDIDATE_MARKERS doc for the
  *  precision/recall trade this makes. */
 export function extractQualifierCandidateSentences(text: string): string[] {
-  return splitSentences(text).filter(sentence => QUALIFIER_CANDIDATE_MARKERS.some(re => re.test(sentence)));
+  return splitSentences(text).filter((sentence) => QUALIFIER_CANDIDATE_MARKERS.some((re) => re.test(sentence)));
 }
 
 export function hasQualifierCandidate(text: string): boolean {
@@ -250,7 +269,7 @@ Respond with ONLY a JSON object, no markdown fences, no prose outside the JSON:
 export async function judgeQualifierFaithfulness(
   source: string,
   compressed: string,
-  opts: { level?: InferenceLevel; inferenceFn?: InferenceFn; timeout?: number } = {}
+  opts: { level?: InferenceLevel; inferenceFn?: InferenceFn; timeout?: number } = {},
 ): Promise<QualifierFaithfulnessResult> {
   const runInference = opts.inferenceFn ?? inference;
   const result = await runInference({
@@ -295,7 +314,7 @@ export const MAX_CHECKS_PER_RUN = 10;
  */
 export async function checkEntriesFaithfulness(
   pairs: readonly FaithfulnessPair[],
-  opts: { level?: InferenceLevel; inferenceFn?: InferenceFn; maxChecks?: number } = {}
+  opts: { level?: InferenceLevel; inferenceFn?: InferenceFn; maxChecks?: number } = {},
 ): Promise<EntryFaithfulnessCheck[]> {
   const maxChecks = opts.maxChecks ?? MAX_CHECKS_PER_RUN;
   const results: EntryFaithfulnessCheck[] = [];
@@ -303,7 +322,11 @@ export async function checkEntriesFaithfulness(
 
   for (const pair of pairs) {
     if (unchangedByCompression(pair.source, pair.compressed)) {
-      results.push({ ...pair, skipped: true, skipReason: "compressed text contains source verbatim — nothing to check" });
+      results.push({
+        ...pair,
+        skipped: true,
+        skipReason: "compressed text contains source verbatim — nothing to check",
+      });
       continue;
     }
     if (!hasQualifierCandidate(pair.source)) {
