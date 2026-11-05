@@ -15,7 +15,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 from GenerateReport import generate_html
 from ImproveDescription import improve_description
 from RunEval import find_project_root, run_eval
@@ -201,7 +201,7 @@ def run_loop(
 
         # Improve the description based on train results
         if verbose:
-            print(f"\nImproving description...", file=sys.stderr)
+            print("\nImproving description...", file=sys.stderr)
 
         t0 = time.time()
         # Strip test scores from history so improvement model can't see them
