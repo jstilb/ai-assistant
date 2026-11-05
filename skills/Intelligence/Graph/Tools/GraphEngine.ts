@@ -17,14 +17,8 @@
  * @version 1.0.0
  */
 
-import type {
-  GraphNode,
-  GraphEdge,
-  GraphEdgeType,
-  GraphNodeType,
-  GraphState,
-} from './types';
-import { ALL_NODE_TYPES, ALL_EDGE_TYPES, createEmptyGraphState } from './types';
+import type { GraphNode, GraphEdge, GraphEdgeType, GraphNodeType, GraphState } from "./types.ts";
+import { createEmptyGraphState } from "./types.ts";
 
 // ============================================
 // ADJACENCY LIST ENTRY
@@ -90,7 +84,7 @@ export class GraphEngine {
    */
   getNodes(type?: GraphNodeType): GraphNode[] {
     const all = Array.from(this.nodes.values());
-    if (type) return all.filter(n => n.type === type);
+    if (type) return all.filter((n) => n.type === type);
     return all;
   }
 
@@ -148,7 +142,7 @@ export class GraphEngine {
    */
   getEdges(type?: GraphEdgeType): GraphEdge[] {
     const all = Array.from(this.edges.values());
-    if (type) return all.filter(e => e.type === type);
+    if (type) return all.filter((e) => e.type === type);
     return all;
   }
 
@@ -175,7 +169,7 @@ export class GraphEngine {
     startId: string,
     maxDepth: number = Infinity,
     edgeTypes?: GraphEdgeType[],
-    direction: 'forward' | 'reverse' | 'both' = 'forward',
+    direction: "forward" | "reverse" | "both" = "forward",
   ): Array<{ node: GraphNode; depth: number }> {
     const result: Array<{ node: GraphNode; depth: number }> = [];
     const visited = new Set<string>();
@@ -218,7 +212,7 @@ export class GraphEngine {
     startId: string,
     maxDepth: number = Infinity,
     edgeTypes?: GraphEdgeType[],
-    direction: 'forward' | 'reverse' | 'both' = 'forward',
+    direction: "forward" | "reverse" | "both" = "forward",
   ): Array<{ node: GraphNode; depth: number }> {
     const result: Array<{ node: GraphNode; depth: number }> = [];
     const visited = new Set<string>();
@@ -238,7 +232,7 @@ export class GraphEngine {
       // Push in reverse order to maintain original DFS traversal order
       for (let i = neighbors.length - 1; i >= 0; i--) {
         const adj = neighbors[i];
-        if (!visited.has(adj.target)) {
+        if (adj && !visited.has(adj.target)) {
           stack.push({ id: adj.target, depth: depth + 1 });
         }
       }
@@ -256,11 +250,7 @@ export class GraphEngine {
    * Treats all edges as having equal weight (unweighted).
    * @returns Array of node IDs forming the path, or null if no path exists
    */
-  shortestPath(
-    fromId: string,
-    toId: string,
-    edgeTypes?: GraphEdgeType[],
-  ): string[] | null {
+  shortestPath(fromId: string, toId: string, edgeTypes?: GraphEdgeType[]): string[] | null {
     if (fromId === toId) return [fromId];
     if (!this.nodes.has(fromId) || !this.nodes.has(toId)) return null;
 
@@ -272,7 +262,7 @@ export class GraphEngine {
     while (queue.length > 0) {
       const current = queue.shift()!;
 
-      const neighbors = this.getAdjacent(current, 'both', edgeTypes);
+      const neighbors = this.getAdjacent(current, "both", edgeTypes);
       for (const adj of neighbors) {
         if (visited.has(adj.target)) continue;
         visited.add(adj.target);
@@ -312,8 +302,7 @@ export class GraphEngine {
     depth: number = 1,
     edgeTypes?: GraphEdgeType[],
   ): Array<{ node: GraphNode; depth: number }> {
-    return this.bfs(nodeId, depth, edgeTypes, 'both')
-      .filter(r => r.node.id !== nodeId); // Exclude the starting node
+    return this.bfs(nodeId, depth, edgeTypes, "both").filter((r) => r.node.id !== nodeId); // Exclude the starting node
   }
 
   // ============================================
@@ -333,8 +322,7 @@ export class GraphEngine {
     depth: number = 3,
     edgeTypes?: GraphEdgeType[],
   ): Array<{ node: GraphNode; depth: number }> {
-    return this.bfs(nodeId, depth, edgeTypes, 'reverse')
-      .filter(r => r.node.id !== nodeId);
+    return this.bfs(nodeId, depth, edgeTypes, "reverse").filter((r) => r.node.id !== nodeId);
   }
 
   /**
@@ -349,8 +337,7 @@ export class GraphEngine {
     depth: number = 3,
     edgeTypes?: GraphEdgeType[],
   ): Array<{ node: GraphNode; depth: number }> {
-    return this.bfs(nodeId, depth, edgeTypes, 'forward')
-      .filter(r => r.node.id !== nodeId);
+    return this.bfs(nodeId, depth, edgeTypes, "forward").filter((r) => r.node.id !== nodeId);
   }
 
   // ============================================
@@ -382,12 +369,9 @@ export class GraphEngine {
    * @returns Nodes sorted by total degree (desc), tie-broken by recency then id
    *          for deterministic output.
    */
-  getTopNodes(options: {
-    type?: GraphNodeType;
-    titleContains?: string;
-    minDegree?: number;
-    limit?: number;
-  } = {}): Array<{ node: GraphNode; degree: number; inDegree: number; outDegree: number }> {
+  getTopNodes(
+    options: { type?: GraphNodeType; titleContains?: string; minDegree?: number; limit?: number } = {},
+  ): Array<{ node: GraphNode; degree: number; inDegree: number; outDegree: number }> {
     const minDegree = options.minDegree ?? 1;
     const limit = options.limit ?? 20;
     const titleNeedle = options.titleContains?.toLowerCase();
@@ -443,7 +427,7 @@ export class GraphEngine {
         component.push(current);
 
         // Both directions for undirected component detection
-        const neighbors = this.getAdjacent(current, 'both');
+        const neighbors = this.getAdjacent(current, "both");
         for (const adj of neighbors) {
           if (!visited.has(adj.target)) {
             queue.push(adj.target);
@@ -476,28 +460,26 @@ export class GraphEngine {
     let results = Array.from(this.nodes.values());
 
     if (filter.type) {
-      results = results.filter(n => n.type === filter.type);
+      results = results.filter((n) => n.type === filter.type);
     }
 
     if (filter.tags && filter.tags.length > 0) {
-      results = results.filter(n =>
-        filter.tags!.some(t => n.tags.includes(t))
-      );
+      results = results.filter((n) => filter.tags!.some((t) => n.tags.includes(t)));
     }
 
     if (filter.since) {
       const since = new Date(filter.since).getTime();
-      results = results.filter(n => new Date(n.created_at).getTime() >= since);
+      results = results.filter((n) => new Date(n.created_at).getTime() >= since);
     }
 
     if (filter.until) {
       const until = new Date(filter.until).getTime();
-      results = results.filter(n => new Date(n.created_at).getTime() <= until);
+      results = results.filter((n) => new Date(n.created_at).getTime() <= until);
     }
 
     if (filter.titleContains) {
       const lower = filter.titleContains.toLowerCase();
-      results = results.filter(n => n.title.toLowerCase().includes(lower));
+      results = results.filter((n) => n.title.toLowerCase().includes(lower));
     }
 
     return results;
@@ -509,8 +491,8 @@ export class GraphEngine {
   findEdgesBetween(sourceId: string, targetId: string): GraphEdge[] {
     const fwd = this.forward.get(sourceId) || [];
     return fwd
-      .filter(adj => adj.target === targetId)
-      .map(adj => this.edges.get(adj.edgeId)!)
+      .filter((adj) => adj.target === targetId)
+      .map((adj) => this.edges.get(adj.edgeId)!)
       .filter(Boolean);
   }
 
@@ -587,21 +569,21 @@ export class GraphEngine {
    */
   private getAdjacent(
     nodeId: string,
-    direction: 'forward' | 'reverse' | 'both',
+    direction: "forward" | "reverse" | "both",
     edgeTypes?: GraphEdgeType[],
   ): AdjacencyEntry[] {
     let entries: AdjacencyEntry[] = [];
 
-    if (direction === 'forward' || direction === 'both') {
+    if (direction === "forward" || direction === "both") {
       entries = entries.concat(this.forward.get(nodeId) || []);
     }
 
-    if (direction === 'reverse' || direction === 'both') {
+    if (direction === "reverse" || direction === "both") {
       entries = entries.concat(this.reverse.get(nodeId) || []);
     }
 
     if (edgeTypes && edgeTypes.length > 0) {
-      entries = entries.filter(e => edgeTypes.includes(e.type));
+      entries = entries.filter((e) => edgeTypes.includes(e.type));
     }
 
     return entries;
@@ -613,18 +595,18 @@ export class GraphEngine {
 // ============================================
 
 if (import.meta.main) {
-  const { createNode, createEdge } = await import('./types');
+  const { createNode, createEdge } = await import("./types.ts");
 
-  console.log('GraphEngine Self-Test');
-  console.log('====================\n');
+  console.log("GraphEngine Self-Test");
+  console.log("====================\n");
 
   const engine = new GraphEngine();
 
   // Add nodes
-  const s1 = createNode('session', 'session:001', 'Build DevGraph skill');
-  const e1 = createNode('error', 'error:001', 'TypeError in types.ts');
-  const c1 = createNode('commit', 'commit:abc', 'feat: add types');
-  const f1 = createNode('file', 'file:types.ts', 'Tools/types.ts');
+  const s1 = createNode("session", "session:001", "Build DevGraph skill");
+  const e1 = createNode("error", "error:001", "TypeError in types.ts");
+  const c1 = createNode("commit", "commit:abc", "feat: add types");
+  const f1 = createNode("file", "file:types.ts", "Tools/types.ts");
 
   engine.addNode(s1);
   engine.addNode(e1);
@@ -632,38 +614,38 @@ if (import.meta.main) {
   engine.addNode(f1);
 
   // Add edges
-  engine.addEdge(createEdge('contains', s1.id, e1.id));
-  engine.addEdge(createEdge('produced', s1.id, c1.id));
-  engine.addEdge(createEdge('modifies', c1.id, f1.id));
-  engine.addEdge(createEdge('fixed_by', e1.id, c1.id));
+  engine.addEdge(createEdge("contains", s1.id, e1.id));
+  engine.addEdge(createEdge("produced", s1.id, c1.id));
+  engine.addEdge(createEdge("modifies", c1.id, f1.id));
+  engine.addEdge(createEdge("fixed_by", e1.id, c1.id));
 
   // Test traversal
-  console.log('Nodes:', engine.nodeCount);
-  console.log('Edges:', engine.edgeCount);
+  console.log("Nodes:", engine.nodeCount);
+  console.log("Edges:", engine.edgeCount);
 
-  console.log('\nBFS from session:001 (depth 2):');
-  for (const r of engine.bfs('session:001', 2)) {
+  console.log("\nBFS from session:001 (depth 2):");
+  for (const r of engine.bfs("session:001", 2)) {
     console.log(`  [depth=${r.depth}] ${r.node.type}: ${r.node.title}`);
   }
 
-  console.log('\nTrace backward from error:001:');
-  for (const r of engine.traceBackward('error:001', 2)) {
+  console.log("\nTrace backward from error:001:");
+  for (const r of engine.traceBackward("error:001", 2)) {
     console.log(`  [depth=${r.depth}] ${r.node.type}: ${r.node.title}`);
   }
 
-  console.log('\nShortest path session:001 -> file:types.ts:');
-  const path = engine.shortestPath('session:001', 'file:types.ts');
-  console.log(`  Path: ${path?.join(' -> ') || 'none'}`);
+  console.log("\nShortest path session:001 -> file:types.ts:");
+  const path = engine.shortestPath("session:001", "file:types.ts");
+  console.log(`  Path: ${path?.join(" -> ") || "none"}`);
 
-  console.log('\nNeighbors of commit:abc (depth 1):');
-  for (const r of engine.getNeighbors('commit:abc', 1)) {
+  console.log("\nNeighbors of commit:abc (depth 1):");
+  for (const r of engine.getNeighbors("commit:abc", 1)) {
     console.log(`  ${r.node.type}: ${r.node.title}`);
   }
 
-  console.log('\nConnected components:', engine.getConnectedComponents().length);
+  console.log("\nConnected components:", engine.getConnectedComponents().length);
 
   const stats = engine.getStats();
-  console.log('\nStats:', JSON.stringify(stats, null, 2));
+  console.log("\nStats:", JSON.stringify(stats, null, 2));
 
-  console.log('\n[PASS] All GraphEngine operations completed successfully');
+  console.log("\n[PASS] All GraphEngine operations completed successfully");
 }

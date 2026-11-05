@@ -9,60 +9,58 @@
  * @version 1.0.0
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { Database } from 'bun:sqlite';
-import type { GraphNode, GraphNodeType } from './types';
-import { GraphPersistence } from './GraphPersistence';
-import { GraphEngine } from './GraphEngine';
-import { EmbeddingEngine, knnSearch, buildNodeText } from './EmbeddingEngine';
-import { getSharedGraphDir } from '../../../../lib/core/KayaHome';
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { Database } from "bun:sqlite";
+import type { GraphNode, GraphNodeType } from "./types.ts";
+import { GraphPersistence } from "./GraphPersistence.ts";
+import type { GraphEngine } from "./GraphEngine.ts";
+import { EmbeddingEngine, knnSearch } from "./EmbeddingEngine.ts";
+import { getSharedGraphDir } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const GRAPH_DIR = getSharedGraphDir();
-const EMBEDDINGS_DIR = join(GRAPH_DIR, 'embeddings');
-const INDEX_DB_PATH = join(EMBEDDINGS_DIR, 'index.db');
 
 /** Default score threshold — below this, results are suppressed */
-const DEFAULT_MIN_SCORE = 0.40;
+const DEFAULT_MIN_SCORE = 0.4;
 
 /** Threshold below which intent classification falls back to Haiku */
-const INTENT_FALLBACK_THRESHOLD = 0.50;
+const INTENT_FALLBACK_THRESHOLD = 0.5;
 
 // ============================================
 // RESULT TYPES
 // ============================================
 
-export interface SemanticSearchResult {
+interface SemanticSearchResult {
   node: GraphNode;
   score: number; // cosine similarity (0–1)
-  source: 'semantic';
+  source: "semantic";
 }
 
-export interface HybridSearchResult {
+interface HybridSearchResult {
   node: GraphNode;
   score: number;
-  source: 'semantic' | 'graph-expansion';
+  source: "semantic" | "graph-expansion";
   depth?: number;
   viaNodeId?: string;
 }
 
-export interface IntentClassificationResult {
+interface IntentClassificationResult {
   intent: string;
   confidence: number;
   nodeIds: string[];
 }
 
-export interface SemanticSearchOptions {
+interface SemanticSearchOptions {
   type?: GraphNodeType;
   limit?: number;
   minScore?: number;
 }
 
-export interface HybridSearchOptions {
+interface HybridSearchOptions {
   type?: GraphNodeType;
   depth?: number;
   limit?: number;
@@ -82,8 +80,8 @@ export class EmbeddingQuerier {
 
   constructor(graphDir?: string) {
     const dir = graphDir ?? GRAPH_DIR;
-    const embDir = join(dir, 'embeddings');
-    this._dbPath = join(embDir, 'index.db');
+    const embDir = join(dir, "embeddings");
+    this._dbPath = join(embDir, "index.db");
     this.persistence = new GraphPersistence(dir);
     this.engine = new EmbeddingEngine(this._dbPath, dir);
   }
@@ -98,7 +96,7 @@ export class EmbeddingQuerier {
    */
   init(): boolean {
     if (!existsSync(this._dbPath)) {
-      console.warn('[EmbeddingQuerier] No index.db found — semantic search unavailable, falling back to lexical');
+      console.warn("[EmbeddingQuerier] No index.db found — semantic search unavailable, falling back to lexical");
       this.indexAvailable = false;
       return false;
     }
@@ -107,7 +105,7 @@ export class EmbeddingQuerier {
       this.indexAvailable = true;
       return true;
     } catch (err) {
-      console.warn('[EmbeddingQuerier] Failed to open index.db:', err);
+      console.warn("[EmbeddingQuerier] Failed to open index.db:", err);
       this.indexAvailable = false;
       return false;
     }
@@ -126,16 +124,13 @@ export class EmbeddingQuerier {
    * Semantic search: embed query, score against index, return top-K nodes.
    * Falls back to lexical titleContains search if index unavailable.
    */
-  async semanticSearch(
-    query: string,
-    options: SemanticSearchOptions = {},
-  ): Promise<SemanticSearchResult[]> {
+  async semanticSearch(query: string, options: SemanticSearchOptions = {}): Promise<SemanticSearchResult[]> {
     const limit = options.limit ?? 10;
     const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
 
     // Graceful degradation path
     if (!this.indexAvailable || !this.db) {
-      console.warn('[EmbeddingQuerier] Index unavailable — falling back to lexical search');
+      console.warn("[EmbeddingQuerier] Index unavailable — falling back to lexical search");
       return this._lexicalFallback(query, options.type, limit);
     }
 
@@ -143,7 +138,7 @@ export class EmbeddingQuerier {
     try {
       queryVec = await this.engine.embedText(query);
     } catch {
-      console.warn('[EmbeddingQuerier] Embed failed — falling back to lexical search');
+      console.warn("[EmbeddingQuerier] Embed failed — falling back to lexical search");
       return this._lexicalFallback(query, options.type, limit);
     }
 
@@ -160,7 +155,7 @@ export class EmbeddingQuerier {
     for (const c of candidates) {
       const node = nodeMap.get(c.nodeId);
       if (!node) continue;
-      results.push({ node, score: c.score, source: 'semantic' });
+      results.push({ node, score: c.score, source: "semantic" });
     }
 
     // Sort descending, apply limit
@@ -171,14 +166,10 @@ export class EmbeddingQuerier {
   /**
    * Lexical fallback using GraphEngine.findNodes({ titleContains }).
    */
-  private _lexicalFallback(
-    query: string,
-    type: GraphNodeType | undefined,
-    limit: number,
-  ): SemanticSearchResult[] {
+  private _lexicalFallback(query: string, type: GraphNodeType | undefined, limit: number): SemanticSearchResult[] {
     const graph = this.persistence.loadIntoEngine();
     const nodes = graph.findNodes({ titleContains: query, type }).slice(0, limit);
-    return nodes.map(node => ({ node, score: 0, source: 'semantic' as const }));
+    return nodes.map((node) => ({ node, score: 0, source: "semantic" as const }));
   }
 
   // ============================================
@@ -189,10 +180,7 @@ export class EmbeddingQuerier {
    * Hybrid search: semantic seeds + BFS graph expansion.
    * Returns both semantic results and relational neighbors.
    */
-  async hybridSearch(
-    query: string,
-    options: HybridSearchOptions = {},
-  ): Promise<HybridSearchResult[]> {
+  async hybridSearch(query: string, options: HybridSearchOptions = {}): Promise<HybridSearchResult[]> {
     const depth = options.depth ?? 2;
     const limit = options.limit ?? 20;
     const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
@@ -216,7 +204,7 @@ export class EmbeddingQuerier {
       results.set(seed.node.id, {
         node: seed.node,
         score: seed.score,
-        source: 'semantic',
+        source: "semantic",
       });
     }
 
@@ -228,7 +216,7 @@ export class EmbeddingQuerier {
         results.set(node.id, {
           node,
           score: seed.score * (1 / (d + 1)), // distance-discounted score
-          source: 'graph-expansion',
+          source: "graph-expansion",
           depth: d,
           viaNodeId: seed.node.id,
         });
@@ -237,12 +225,8 @@ export class EmbeddingQuerier {
 
     // Sort: seeds first (by score desc), then expansions (by score desc)
     const all = Array.from(results.values());
-    const semanticSeeds = all
-      .filter(r => r.source === 'semantic')
-      .sort((a, b) => b.score - a.score);
-    const expansions = all
-      .filter(r => r.source === 'graph-expansion')
-      .sort((a, b) => b.score - a.score);
+    const semanticSeeds = all.filter((r) => r.source === "semantic").sort((a, b) => b.score - a.score);
+    const expansions = all.filter((r) => r.source === "graph-expansion").sort((a, b) => b.score - a.score);
 
     return [...semanticSeeds, ...expansions].slice(0, limit);
   }
@@ -260,14 +244,15 @@ export class EmbeddingQuerier {
    */
   async classifyIntent(query: string): Promise<IntentClassificationResult> {
     if (!this.indexAvailable || !this.db) {
-      return { intent: 'ambiguous', confidence: 0, nodeIds: [] };
+      return { intent: "ambiguous", confidence: 0, nodeIds: [] };
     }
 
     let queryVec: Float32Array;
     try {
       queryVec = await this.engine.embedText(query);
-    } catch {
-      return { intent: 'ambiguous', confidence: 0, nodeIds: [] };
+    } catch (err) {
+      console.error(`[EmbeddingQuerier] embedText failed, intent is ambiguous: ${(err as Error).message}`);
+      return { intent: "ambiguous", confidence: 0, nodeIds: [] };
     }
 
     // Search only decision and learning types. excludeExpired (Slice C1):
@@ -280,7 +265,7 @@ export class EmbeddingQuerier {
     // Score all decision + learning nodes
     const candidates: Array<{ nodeId: string; score: number; type: GraphNodeType }> = [];
 
-    for (const type of ['decision', 'learning'] as GraphNodeType[]) {
+    for (const type of ["decision", "learning"] as GraphNodeType[]) {
       const typeCandidates = knnSearch(this.db, queryVec, 5, type, INTENT_FALLBACK_THRESHOLD);
       for (const c of typeCandidates) {
         candidates.push({ nodeId: c.nodeId, score: c.score, type });
@@ -288,24 +273,26 @@ export class EmbeddingQuerier {
     }
 
     if (candidates.length === 0) {
-      return { intent: 'ambiguous', confidence: 0, nodeIds: [] };
+      return { intent: "ambiguous", confidence: 0, nodeIds: [] };
     }
 
     candidates.sort((a, b) => b.score - a.score);
     const top3 = candidates.slice(0, 3);
-    const topScore = top3[0].score;
+    const top = top3[0];
+    if (!top) return { intent: "ambiguous", confidence: 0, nodeIds: [] }; // unreachable: candidates is non-empty
+    const topScore = top.score;
 
     if (topScore < INTENT_FALLBACK_THRESHOLD) {
-      return { intent: 'ambiguous', confidence: topScore, nodeIds: top3.map(c => c.nodeId) };
+      return { intent: "ambiguous", confidence: topScore, nodeIds: top3.map((c) => c.nodeId) };
     }
 
     // Classify by tag frequency in the neighborhood of the top node
-    const intent = this._classifyByNeighborhood(top3[0].nodeId, graph);
+    const intent = this._classifyByNeighborhood(top.nodeId, graph);
 
     return {
       intent,
       confidence: topScore,
-      nodeIds: top3.map(c => c.nodeId),
+      nodeIds: top3.map((c) => c.nodeId),
     };
   }
 
@@ -315,18 +302,26 @@ export class EmbeddingQuerier {
    */
   private _classifyByNeighborhood(nodeId: string, graph: GraphEngine): string {
     const node = graph.getNode(nodeId);
-    if (!node) return 'development';
+    if (!node) return "development";
 
     // Use the node type as primary signal
     switch (node.type) {
-      case 'decision': return 'development';
-      case 'learning': return 'knowledge-lookup';
-      case 'session': return 'development';
-      case 'error': return 'development';
-      case 'commit': return 'development';
-      case 'outcome': return 'knowledge-lookup';
-      case 'context': return 'knowledge-lookup';
-      default: return 'development';
+      case "decision":
+        return "development";
+      case "learning":
+        return "knowledge-lookup";
+      case "session":
+        return "development";
+      case "error":
+        return "development";
+      case "commit":
+        return "development";
+      case "outcome":
+        return "knowledge-lookup";
+      case "context":
+        return "knowledge-lookup";
+      default:
+        return "development";
     }
   }
 }
@@ -334,16 +329,6 @@ export class EmbeddingQuerier {
 // ============================================
 // SINGLETON
 // ============================================
-
-let _instance: EmbeddingQuerier | null = null;
-
-export function getEmbeddingQuerier(): EmbeddingQuerier {
-  if (!_instance) {
-    _instance = new EmbeddingQuerier();
-    _instance.init();
-  }
-  return _instance;
-}
 
 // ============================================
 // CLI
@@ -361,29 +346,29 @@ if (import.meta.main) {
   const querier = new EmbeddingQuerier();
   querier.init();
 
-  if (args.includes('--intent')) {
+  if (args.includes("--intent")) {
     const result = await querier.classifyIntent(query);
     console.log(JSON.stringify(result, null, 2));
-  } else if (args.includes('--hybrid')) {
+  } else if (args.includes("--hybrid")) {
     const results = await querier.hybridSearch(query, { depth: 2, limit: 20 });
     for (const r of results) {
       const scoreStr = `[${r.score.toFixed(2)}]`;
-      const depthStr = r.depth !== undefined ? ` depth=${r.depth}` : '';
-      const viaStr = r.viaNodeId ? ` via:${r.viaNodeId}` : '';
+      const depthStr = r.depth !== undefined ? ` depth=${r.depth}` : "";
+      const viaStr = r.viaNodeId ? ` via:${r.viaNodeId}` : "";
       console.log(`${scoreStr} ${r.node.type}: ${r.node.title}`);
       console.log(`       id: ${r.node.id}`);
-      console.log(`       tags: ${r.node.tags.join(', ')}`);
+      console.log(`       tags: ${r.node.tags.join(", ")}`);
       console.log(`       [source: ${r.source}${depthStr}${viaStr}]`);
-      console.log('');
+      console.log("");
     }
   } else {
     const results = await querier.semanticSearch(query, { limit: 10 });
     for (const r of results) {
       console.log(`[${r.score.toFixed(2)}] ${r.node.type}: ${r.node.title}`);
       console.log(`       id: ${r.node.id}`);
-      console.log(`       tags: ${r.node.tags.join(', ')}`);
+      console.log(`       tags: ${r.node.tags.join(", ")}`);
       console.log(`       [source: ${r.source}]`);
-      console.log('');
+      console.log("");
     }
   }
 

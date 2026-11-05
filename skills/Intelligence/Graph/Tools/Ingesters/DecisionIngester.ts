@@ -15,16 +15,16 @@
  * @version 1.0.0
  */
 
-import { GraphPersistence } from '../GraphPersistence';
-import type { GraphNode, GraphEdge, IngestionResult, Ingester } from '../types';
-import { createNode, createEdge } from '../types';
-import { EntityResolver } from '../EntityResolver';
-import { getSharedGraphDir, getKayaHome } from '../../../../../lib/core/KayaHome';
-import { join } from 'path';
-import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
+import { GraphPersistence } from "../GraphPersistence.ts";
+import type { GraphNode, GraphEdge, IngestionResult, Ingester } from "../types.ts";
+import { createNode, createEdge } from "../types.ts";
+import { EntityResolver } from "../EntityResolver.ts";
+import { getSharedGraphDir, getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { join } from "node:path";
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 
 const KAYA_HOME = getKayaHome();
-const MEMORY_DIR = join(KAYA_HOME, 'MEMORY');
+const MEMORY_DIR = join(KAYA_HOME, "MEMORY");
 
 /** Shape of the cursor file written between runs. */
 interface DecisionIngesterCursor {
@@ -33,12 +33,12 @@ interface DecisionIngesterCursor {
   _version: 1;
 }
 
-const CURSOR_FILE = 'decision-ingester-cursor.json';
+const CURSOR_FILE = "decision-ingester-cursor.json";
 
 export class DecisionIngester implements Ingester {
   constructor(
     private persistence: GraphPersistence,
-    private stateDir: string = join(getSharedGraphDir(), 'State'),
+    private stateDir: string = join(getSharedGraphDir(), "State"),
   ) {}
 
   async ingest(options?: { since?: string; sources?: string[] }): Promise<IngestionResult> {
@@ -48,7 +48,7 @@ export class DecisionIngester implements Ingester {
     const scanStartedAt = new Date().toISOString();
 
     const result: IngestionResult = {
-      source: 'decisions',
+      source: "decisions",
       nodesAdded: 0,
       edgesAdded: 0,
       nodesSkipped: 0,
@@ -120,7 +120,6 @@ export class DecisionIngester implements Ingester {
 
       // Persist cursor only after a fully successful run.
       this.saveCursor(scanStartedAt);
-
     } catch (err) {
       result.errors.push(`DecisionIngester error: ${err}`);
     }
@@ -130,12 +129,12 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromRatings(since?: string): GraphNode[] {
-    const ratingsFile = join(MEMORY_DIR, 'LEARNING', 'SIGNALS', 'ratings.jsonl');
+    const ratingsFile = join(MEMORY_DIR, "LEARNING", "SIGNALS", "ratings.jsonl");
     if (!existsSync(ratingsFile)) return [];
 
     const nodes: GraphNode[] = [];
-    const content = readFileSync(ratingsFile, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim());
+    const content = readFileSync(ratingsFile, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim());
 
     for (const line of lines) {
       try {
@@ -146,25 +145,25 @@ export class DecisionIngester implements Ingester {
 
         // Create outcome node for each rating
         const node = createNode(
-          'outcome',
+          "outcome",
           `outcome:ratings-${this.hashContent(rating.timestamp + rating.rating)}`,
-          `Rating ${rating.rating}/10: ${rating.sentiment_summary || 'Session feedback'}`,
+          `Rating ${rating.rating}/10: ${rating.sentiment_summary || "Session feedback"}`,
           {
-            content: rating.sentiment_summary || '',
+            content: rating.sentiment_summary || "",
             confidence: 0.85,
             recordedAt: rating.timestamp,
             rating: rating.rating,
             session_id: rating.session_id,
-            source: rating.source || 'ratings',
+            source: rating.source || "ratings",
           },
-          [`rating-${rating.rating}`, 'outcome'],
+          [`rating-${rating.rating}`, "outcome"],
         );
 
         // Set valid_from from event timestamp (same pattern as extractFromWorkItems line 177)
         if (rating.timestamp) node.valid_from = rating.timestamp;
 
         nodes.push(node);
-      } catch (err) {
+      } catch {
         // Skip malformed lines
       }
     }
@@ -173,7 +172,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromWorkItems(since?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const workDir = join(MEMORY_DIR, 'WORK');
+    const workDir = join(MEMORY_DIR, "WORK");
     if (!existsSync(workDir)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
@@ -182,8 +181,8 @@ export class DecisionIngester implements Ingester {
     let entries: string[];
     try {
       entries = readdirSync(workDir, { withFileTypes: true })
-        .filter(d => d.isDirectory())
-        .map(d => d.name);
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
     } catch {
       return { nodes: [], edges: [] };
     }
@@ -196,31 +195,31 @@ export class DecisionIngester implements Ingester {
 
         // Derive slug from dir name: strip timestamp prefix
         const slugMatch = dirName.match(/^\d{8}-\d{6}_(.+)$/);
-        const slug = slugMatch ? slugMatch[1] : dirName;
-        const title = slug.replace(/-/g, ' ').slice(0, 80);
+        const slug = slugMatch?.[1] ?? dirName;
+        const title = slug.replace(/-/g, " ").slice(0, 80);
 
         // Read first .md file in the directory for content
         const dirPath = join(workDir, dirName);
-        let mdContent = '';
+        let mdContent = "";
         try {
-          const files = readdirSync(dirPath).filter(f => f.endsWith('.md'));
-          if (files.length > 0) {
-            mdContent = readFileSync(join(dirPath, files[0]), 'utf-8').slice(0, 500);
+          const firstMd = readdirSync(dirPath).find((f) => f.endsWith(".md"));
+          if (firstMd !== undefined) {
+            mdContent = readFileSync(join(dirPath, firstMd), "utf-8").slice(0, 500);
           }
         } catch {
           // Directory unreadable or no .md files — proceed with empty content
         }
 
         const node = createNode(
-          'decision',
+          "decision",
           `decision:work:${dirName}`,
           title,
           {
             content: mdContent,
-            confidence: 0.70,
-            source: 'work-items',
+            confidence: 0.7,
+            source: "work-items",
           },
-          ['decision', 'work-item'],
+          ["decision", "work-item"],
         );
         node.valid_from = ts;
 
@@ -234,7 +233,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromLearnings(since?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const algoDir = join(MEMORY_DIR, 'LEARNING', 'ALGORITHM');
+    const algoDir = join(MEMORY_DIR, "LEARNING", "ALGORITHM");
     if (!existsSync(algoDir)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
@@ -245,14 +244,14 @@ export class DecisionIngester implements Ingester {
 
     for (const filePath of mdFiles) {
       try {
-        const fileName = filePath.split('/').pop() ?? '';
-        const fileBase = fileName.replace(/\.md$/, '');
+        const fileName = filePath.split("/").pop() ?? "";
+        const fileBase = fileName.replace(/\.md$/, "");
 
         // Parse date from filename: 2026-02-27-123639_LEARNING_...
         const dateMatch = fileBase.match(/^(\d{4}-\d{2}-\d{2})-(\d{6})/);
         let ts: string | null = null;
         if (dateMatch) {
-          const [, datePart, timePart] = dateMatch;
+          const [, datePart, timePart = ""] = dateMatch;
           const h = timePart.slice(0, 2);
           const m = timePart.slice(2, 4);
           const s = timePart.slice(4, 6);
@@ -263,31 +262,31 @@ export class DecisionIngester implements Ingester {
 
         // Derive title: strip date prefix and LEARNING_ marker
         const titleRaw = fileBase
-          .replace(/^\d{4}-\d{2}-\d{2}-\d{6}_LEARNING_/, '')
-          .replace(/[-_]/g, ' ')
+          .replace(/^\d{4}-\d{2}-\d{2}-\d{6}_LEARNING_/, "")
+          .replace(/[-_]/g, " ")
           .slice(0, 80);
 
         // Adjust confidence for sentiment/rating files
-        const isSentiment = fileBase.includes('sentiment-rating') || fileBase.includes('rating-5');
-        const confidence = isSentiment ? 0.80 : 0.75;
+        const isSentiment = fileBase.includes("sentiment-rating") || fileBase.includes("rating-5");
+        const confidence = isSentiment ? 0.8 : 0.75;
 
-        let fileContent = '';
+        let fileContent = "";
         try {
-          fileContent = readFileSync(filePath, 'utf-8').slice(0, 500);
+          fileContent = readFileSync(filePath, "utf-8").slice(0, 500);
         } catch {
           // Unreadable file — skip content
         }
 
         const node = createNode(
-          'learning',
+          "learning",
           `learning:${fileBase}`,
           titleRaw,
           {
             content: fileContent,
             confidence,
-            source: 'algorithm-learnings',
+            source: "algorithm-learnings",
           },
-          ['learning', 'algorithm'],
+          ["learning", "algorithm"],
         );
         if (ts) node.valid_from = ts;
 
@@ -301,7 +300,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromISC(): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const iscFile = join(MEMORY_DIR, 'WORK', 'current-isc.json');
+    const iscFile = join(MEMORY_DIR, "WORK", "current-isc.json");
     if (!existsSync(iscFile)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
@@ -309,7 +308,7 @@ export class DecisionIngester implements Ingester {
 
     let raw: unknown;
     try {
-      const iscRaw = readFileSync(iscFile, 'utf-8');
+      const iscRaw = readFileSync(iscFile, "utf-8");
       raw = JSON.parse(iscRaw);
     } catch {
       return { nodes: [], edges: [] };
@@ -320,8 +319,8 @@ export class DecisionIngester implements Ingester {
       criteria = raw;
     } else if (
       raw !== null &&
-      typeof raw === 'object' &&
-      'criteria' in (raw as Record<string, unknown>) &&
+      typeof raw === "object" &&
+      "criteria" in (raw as Record<string, unknown>) &&
       Array.isArray((raw as Record<string, unknown>).criteria)
     ) {
       criteria = (raw as Record<string, unknown>).criteria as unknown[];
@@ -333,19 +332,19 @@ export class DecisionIngester implements Ingester {
       try {
         const c = criterion as Record<string, unknown>;
         const keyForHash = (c.id ?? c.name ?? JSON.stringify(c)) as string;
-        const nameStr = (c.name ?? c.description ?? 'Criterion') as string;
+        const nameStr = (c.name ?? c.description ?? "Criterion") as string;
         const title = `ISC: ${nameStr}`.slice(0, 80);
 
         const node = createNode(
-          'decision',
+          "decision",
           `decision:isc:${this.hashContent(keyForHash)}`,
           title,
           {
             content: JSON.stringify(c).slice(0, 500),
-            confidence: 0.80,
-            source: 'isc',
+            confidence: 0.8,
+            source: "isc",
           },
-          ['decision', 'isc', 'criteria'],
+          ["decision", "isc", "criteria"],
         );
 
         nodes.push(node);
@@ -363,27 +362,21 @@ export class DecisionIngester implements Ingester {
   private createCrossSourceEdges(allNodes: GraphNode[]): GraphEdge[] {
     const edges: GraphEdge[] = [];
 
-    const outcomeNodes = allNodes.filter(n => n.type === 'outcome');
-    const decisionNodes = allNodes.filter(n => n.type === 'decision');
+    const outcomeNodes = allNodes.filter((n) => n.type === "outcome");
+    const decisionNodes = allNodes.filter((n) => n.type === "decision");
 
     // 1. outcome_of: outcome -> decision created within 5 minutes
     for (const outcome of outcomeNodes) {
       const outcomeTs = new Date(outcome.valid_from).getTime();
-      if (isNaN(outcomeTs)) continue;
+      if (Number.isNaN(outcomeTs)) continue;
 
       for (const decision of decisionNodes) {
         const decisionTs = new Date(decision.valid_from).getTime();
-        if (isNaN(decisionTs)) continue;
+        if (Number.isNaN(decisionTs)) continue;
 
         const diffMs = Math.abs(outcomeTs - decisionTs);
         if (diffMs <= 5 * 60 * 1000) {
-          const edge = createEdge(
-            'outcome_of',
-            outcome.id,
-            decision.id,
-            0.8,
-            { reason: 'temporal-proximity-5min' },
-          );
+          const edge = createEdge("outcome_of", outcome.id, decision.id, 0.8, { reason: "temporal-proximity-5min" });
           edges.push(edge);
         }
       }
@@ -393,27 +386,25 @@ export class DecisionIngester implements Ingester {
     // extractor — no 'context' nodes are produced anymore.)
 
     // 2. supersedes: high-rated outcome (>=8) -> low-rated outcome (<4) within 30 min
-    const highRated = outcomeNodes.filter(n => typeof n.metadata.rating === 'number' && (n.metadata.rating as number) >= 8);
-    const lowRated = outcomeNodes.filter(n => typeof n.metadata.rating === 'number' && (n.metadata.rating as number) < 4);
+    const highRated = outcomeNodes.filter(
+      (n) => typeof n.metadata.rating === "number" && (n.metadata.rating as number) >= 8,
+    );
+    const lowRated = outcomeNodes.filter(
+      (n) => typeof n.metadata.rating === "number" && (n.metadata.rating as number) < 4,
+    );
 
     for (const high of highRated) {
       const highTs = new Date(high.valid_from).getTime();
-      if (isNaN(highTs)) continue;
+      if (Number.isNaN(highTs)) continue;
 
       for (const low of lowRated) {
         const lowTs = new Date(low.valid_from).getTime();
-        if (isNaN(lowTs)) continue;
+        if (Number.isNaN(lowTs)) continue;
 
         // High must come after low (within 30 min)
         const diffMs = highTs - lowTs;
         if (diffMs >= 0 && diffMs <= 30 * 60 * 1000) {
-          const edge = createEdge(
-            'supersedes',
-            high.id,
-            low.id,
-            0.9,
-            { reason: 'rating-recovery-within-30min' },
-          );
+          const edge = createEdge("supersedes", high.id, low.id, 0.9, { reason: "rating-recovery-within-30min" });
           edges.push(edge);
         }
       }
@@ -435,9 +426,9 @@ export class DecisionIngester implements Ingester {
     const cursorPath = join(this.stateDir, CURSOR_FILE);
     if (!existsSync(cursorPath)) return undefined;
     try {
-      const raw = readFileSync(cursorPath, 'utf-8');
+      const raw = readFileSync(cursorPath, "utf-8");
       const parsed = JSON.parse(raw) as Partial<DecisionIngesterCursor>;
-      if (typeof parsed.scanStartedAt === 'string' && parsed.scanStartedAt.length > 0) {
+      if (typeof parsed.scanStartedAt === "string" && parsed.scanStartedAt.length > 0) {
         return parsed.scanStartedAt;
       }
     } catch {
@@ -479,7 +470,7 @@ export class DecisionIngester implements Ingester {
         const fullPath = join(dir, entry.name);
         if (entry.isDirectory()) {
           results.push(...this.collectMdFiles(fullPath));
-        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
           results.push(fullPath);
         }
       }
@@ -490,9 +481,9 @@ export class DecisionIngester implements Ingester {
   }
 
   private hashContent(content: string): string {
-    const hasher = new Bun.CryptoHasher('sha256');
+    const hasher = new Bun.CryptoHasher("sha256");
     hasher.update(content);
-    return hasher.digest('hex').slice(0, 16);
+    return hasher.digest("hex").slice(0, 16);
   }
 }
 
@@ -501,10 +492,10 @@ if (import.meta.main) {
   const persistence = new GraphPersistence();
   const ingester = new DecisionIngester(persistence);
 
-  console.log('Running DecisionIngester...');
+  console.log("Running DecisionIngester...");
   const result = await ingester.ingest();
 
-  console.log('\nDecision Ingestion Result:');
+  console.log("\nDecision Ingestion Result:");
   console.log(`  Nodes added: ${result.nodesAdded}`);
   console.log(`  Nodes skipped: ${result.nodesSkipped}`);
   console.log(`  Edges added: ${result.edgesAdded}`);
@@ -512,6 +503,6 @@ if (import.meta.main) {
 
   if (result.errors.length > 0) {
     console.log(`  Errors: ${result.errors.length}`);
-    result.errors.forEach(e => console.log(`    - ${e}`));
+    for (const e of result.errors) console.log(`    - ${e}`);
   }
 }

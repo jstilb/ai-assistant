@@ -10,19 +10,19 @@
  * @version 1.0.0
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import type { GraphNode, GraphEdge, IngestionResult } from '../types';
-import { createNode, createEdge } from '../types';
-import { GraphPersistence, getGraphPersistence } from '../GraphPersistence';
-import { getKayaHome } from '../../../../../lib/core/KayaHome';
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { GraphNode, GraphEdge, IngestionResult } from "../types.ts";
+import { createNode, createEdge } from "../types.ts";
+import { type GraphPersistence, getGraphPersistence } from "../GraphPersistence.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const KAYA_HOME = getKayaHome();
-const WORK_DIR = join(KAYA_HOME, 'MEMORY', 'WORK');
+const WORK_DIR = join(KAYA_HOME, "MEMORY", "WORK");
 
 // ============================================
 // ERROR PATTERNS
@@ -48,9 +48,9 @@ const ERROR_PATTERNS = [
 // ============================================
 
 const FILE_PATTERNS = [
-  /(?:^|\s)((?:skills|tools|MEMORY|hooks)\/[\w\-\.\/]+\.\w+)/g,
-  /(?:modified|changed|created|deleted|editing)\s+[`"]?([\w\-\.\/]+\.\w+)[`"]?/gi,
-  /(?:File|file):\s*[`"]?([\w\-\.\/]+\.\w+)[`"]?/g,
+  /(?:^|\s)((?:skills|tools|MEMORY|hooks)\/[\w\-./]+\.\w+)/g,
+  /(?:modified|changed|created|deleted|editing)\s+[`"]?([\w\-./]+\.\w+)[`"]?/gi,
+  /(?:File|file):\s*[`"]?([\w\-./]+\.\w+)[`"]?/g,
 ];
 
 // ============================================
@@ -72,7 +72,7 @@ export class SessionIngester {
   async ingest(): Promise<IngestionResult> {
     const startTime = Date.now();
     const result: IngestionResult = {
-      source: 'sessions',
+      source: "sessions",
       nodesAdded: 0,
       edgesAdded: 0,
       nodesSkipped: 0,
@@ -88,8 +88,8 @@ export class SessionIngester {
     }
 
     const sessionDirs = readdirSync(this.workDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => d.name);
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
 
     const allNodes: GraphNode[] = [];
     const allEdges: GraphEdge[] = [];
@@ -132,14 +132,14 @@ export class SessionIngester {
     // Create session node
     const sessionId = `session:${dirName}`;
     const sessionNode = createNode(
-      'session',
+      "session",
       sessionId,
       slug || dirName,
       {
         directory: dirName,
         timestamp: timestamp || new Date().toISOString(),
       },
-      ['session'],
+      ["session"],
     );
 
     if (timestamp) {
@@ -156,7 +156,7 @@ export class SessionIngester {
 
     for (const filePath of sessionFiles) {
       try {
-        const content = readFileSync(filePath, 'utf-8');
+        const content = readFileSync(filePath, "utf-8");
 
         // Extract errors
         const errors = this.extractErrors(content);
@@ -167,11 +167,11 @@ export class SessionIngester {
 
           const errorId = `error:${dirName}:${this.hashString(errorKey)}`;
           const errorNode = createNode(
-            'error',
+            "error",
             errorId,
             errorMsg.slice(0, 120),
             { fullMessage: errorMsg, session: dirName },
-            ['error'],
+            ["error"],
           );
           if (timestamp) {
             errorNode.valid_from = timestamp;
@@ -180,7 +180,7 @@ export class SessionIngester {
           nodes.push(errorNode);
 
           // session -> contains -> error
-          edges.push(createEdge('contains', sessionId, errorId, 1.0, { source: 'session-ingester' }));
+          edges.push(createEdge("contains", sessionId, errorId, 1.0, { source: "session-ingester" }));
         }
 
         // Extract file references
@@ -190,13 +190,7 @@ export class SessionIngester {
           seenFiles.add(file);
 
           const fileId = `file:${file}`;
-          const fileNode = createNode(
-            'file',
-            fileId,
-            file,
-            { path: file },
-            ['file'],
-          );
+          const fileNode = createNode("file", fileId, file, { path: file }, ["file"]);
           if (timestamp) {
             fileNode.valid_from = timestamp;
             fileNode.created_at = timestamp;
@@ -204,7 +198,7 @@ export class SessionIngester {
           nodes.push(fileNode);
 
           // session -> modifies -> file
-          edges.push(createEdge('modifies', sessionId, fileId, 0.8, { source: 'session-ingester' }));
+          edges.push(createEdge("modifies", sessionId, fileId, 0.8, { source: "session-ingester" }));
         }
       } catch {
         // Skip unreadable files
@@ -234,8 +228,8 @@ export class SessionIngester {
    */
   private parseSlug(dirName: string): string | null {
     const match = dirName.match(/^\d{8}-\d{6}_(.+)$/);
-    if (!match) return null;
-    return match[1].replace(/-/g, ' ').slice(0, 80);
+    if (!match?.[1]) return null;
+    return match[1].replace(/-/g, " ").slice(0, 80);
   }
 
   /**
@@ -246,8 +240,12 @@ export class SessionIngester {
 
     try {
       return readdirSync(dirPath, { withFileTypes: true })
-        .filter(d => d.isFile() && (d.name.endsWith('.md') || d.name.endsWith('.json') || d.name.endsWith('.txt') || d.name.endsWith('.log')))
-        .map(d => join(dirPath, d.name));
+        .filter(
+          (d) =>
+            d.isFile() &&
+            (d.name.endsWith(".md") || d.name.endsWith(".json") || d.name.endsWith(".txt") || d.name.endsWith(".log")),
+        )
+        .map((d) => join(dirPath, d.name));
     } catch {
       return [];
     }
@@ -260,9 +258,8 @@ export class SessionIngester {
     const errors: string[] = [];
 
     for (const pattern of ERROR_PATTERNS) {
-      const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(content)) !== null) {
+      const regex = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
+      for (let match = regex.exec(content); match !== null; match = regex.exec(content)) {
         const msg = match[1] || match[0];
         if (msg && msg.length > 5 && msg.length < 500) {
           errors.push(msg.trim());
@@ -281,8 +278,7 @@ export class SessionIngester {
 
     for (const pattern of FILE_PATTERNS) {
       const regex = new RegExp(pattern.source, pattern.flags);
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(content)) !== null) {
+      for (let match = regex.exec(content); match !== null; match = regex.exec(content)) {
         const filePath = match[1];
         if (filePath && filePath.length > 3 && filePath.length < 200) {
           files.add(filePath);
@@ -300,7 +296,7 @@ export class SessionIngester {
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
       const char = input.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash |= 0;
     }
     return Math.abs(hash).toString(36);
@@ -312,8 +308,8 @@ export class SessionIngester {
 // ============================================
 
 if (import.meta.main) {
-  console.log('SessionIngester');
-  console.log('===============\n');
+  console.log("SessionIngester");
+  console.log("===============\n");
 
   const ingester = new SessionIngester();
   const result = await ingester.ingest();

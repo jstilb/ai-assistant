@@ -15,36 +15,36 @@
  * @version 1.0.0
  */
 
-import { existsSync, mkdirSync, statSync, writeFileSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { Database } from 'bun:sqlite';
-import type { GraphNode, GraphNodeType } from './types';
-import { ALL_NODE_TYPES } from './types';
-import { GraphPersistence } from './GraphPersistence';
-import { getSharedGraphDir } from '../../../../lib/core/KayaHome';
+import { existsSync, mkdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { Database } from "bun:sqlite";
+import type { GraphNode, GraphNodeType } from "./types.ts";
+import { ALL_NODE_TYPES } from "./types.ts";
+import { GraphPersistence } from "./GraphPersistence.ts";
+import { getSharedGraphDir } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const GRAPH_DIR = getSharedGraphDir();
-const EMBEDDINGS_DIR = join(GRAPH_DIR, 'embeddings');
-const INDEX_DB_PATH = join(EMBEDDINGS_DIR, 'index.db');
-const META_JSON_PATH = join(EMBEDDINGS_DIR, 'meta.json');
+const EMBEDDINGS_DIR = join(GRAPH_DIR, "embeddings");
+const INDEX_DB_PATH = join(EMBEDDINGS_DIR, "index.db");
+const META_JSON_PATH = join(EMBEDDINGS_DIR, "meta.json");
 
-const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const BATCH_SIZE = 32;
 
 /** Node types excluded from the embedding index by default */
-const EXCLUDED_TYPES: Set<GraphNodeType> = new Set(['file']);
+const EXCLUDED_TYPES: Set<GraphNodeType> = new Set(["file"]);
 
 // ============================================
 // TYPES
 // ============================================
 
-export interface EmbeddingStats {
+interface EmbeddingStats {
   totalNodes: number;
   indexedNodes: number;
   coveragePct: number;
@@ -77,7 +77,7 @@ interface EmbeddingRow {
   updated_at: string;
 }
 
-export interface BuildFilter {
+interface BuildFilter {
   type?: GraphNodeType;
 }
 
@@ -105,7 +105,7 @@ export const EmbeddingQueue = {
 
 export class EmbeddingEngine {
   private db: Database | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: @xenova/transformers pipeline output is untyped (third-party boundary)
   private pipeline: ((texts: string[], opts?: Record<string, unknown>) => Promise<any>) | null = null;
   private persistence: GraphPersistence;
 
@@ -142,7 +142,7 @@ export class EmbeddingEngine {
       this.db.run(`CREATE INDEX IF NOT EXISTS idx_node_embeddings_updated ON node_embeddings(updated_at)`);
       return true;
     } catch (err) {
-      console.warn('[EmbeddingEngine] Failed to open index.db:', err);
+      console.warn("[EmbeddingEngine] Failed to open index.db:", err);
       this.db = null;
       return false;
     }
@@ -156,15 +156,15 @@ export class EmbeddingEngine {
     if (this.pipeline) return true;
     try {
       // @xenova/transformers uses env.allowLocalModels and caches to ~/.cache/
-      const { pipeline, env } = await import('@xenova/transformers');
+      const { pipeline, env } = await import("@xenova/transformers");
       env.allowRemoteModels = true;
       env.useBrowserCache = false;
-      this.pipeline = await pipeline('feature-extraction', MODEL_NAME, {
+      this.pipeline = await pipeline("feature-extraction", MODEL_NAME, {
         quantized: true,
       });
       return true;
     } catch (err) {
-      console.warn('[EmbeddingEngine] Failed to load model pipeline:', err);
+      console.warn("[EmbeddingEngine] Failed to load model pipeline:", err);
       this.pipeline = null;
       return false;
     }
@@ -181,9 +181,9 @@ export class EmbeddingEngine {
   async embedText(text: string): Promise<Float32Array> {
     const ok = await this.loadPipeline();
     if (!ok || !this.pipeline) {
-      throw new Error('[EmbeddingEngine] Model pipeline not available');
+      throw new Error("[EmbeddingEngine] Model pipeline not available");
     }
-    const output = await this.pipeline([text], { pooling: 'mean', normalize: true });
+    const output = await this.pipeline([text], { pooling: "mean", normalize: true });
     return output[0].data as Float32Array;
   }
 
@@ -203,9 +203,9 @@ export class EmbeddingEngine {
   private async embedBatch(texts: string[]): Promise<Float32Array[]> {
     const ok = await this.loadPipeline();
     if (!ok || !this.pipeline) {
-      throw new Error('[EmbeddingEngine] Model pipeline not available');
+      throw new Error("[EmbeddingEngine] Model pipeline not available");
     }
-    const output = await this.pipeline(texts, { pooling: 'mean', normalize: true });
+    const output = await this.pipeline(texts, { pooling: "mean", normalize: true });
     const results: Float32Array[] = [];
     for (let i = 0; i < texts.length; i++) {
       // output[i].data is Float32Array
@@ -223,24 +223,26 @@ export class EmbeddingEngine {
    * textHash is SHA-256 of the embedded text for change detection.
    */
   upsertEmbedding(nodeId: string, nodeType: string, vector: Float32Array, textHash: string): void {
-    if (!this.db) throw new Error('[EmbeddingEngine] Database not open');
+    if (!this.db) throw new Error("[EmbeddingEngine] Database not open");
     const now = new Date().toISOString();
     const buf = Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
 
-    const existing = this.db.query<Pick<EmbeddingRow, 'text_hash'>, [string]>(
-      'SELECT text_hash FROM node_embeddings WHERE node_id = ?'
-    ).get(nodeId);
+    const existing = this.db
+      .query<Pick<EmbeddingRow, "text_hash">, [string]>("SELECT text_hash FROM node_embeddings WHERE node_id = ?")
+      .get(nodeId);
 
     if (existing) {
       if (existing.text_hash === textHash) return; // unchanged
-      this.db.run(
-        'UPDATE node_embeddings SET embedding = ?, text_hash = ?, updated_at = ? WHERE node_id = ?',
-        [buf, textHash, now, nodeId]
-      );
+      this.db.run("UPDATE node_embeddings SET embedding = ?, text_hash = ?, updated_at = ? WHERE node_id = ?", [
+        buf,
+        textHash,
+        now,
+        nodeId,
+      ]);
     } else {
       this.db.run(
-        'INSERT INTO node_embeddings (node_id, node_type, embedding, text_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [nodeId, nodeType, buf, textHash, now, now]
+        "INSERT INTO node_embeddings (node_id, node_type, embedding, text_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [nodeId, nodeType, buf, textHash, now, now],
       );
     }
   }
@@ -250,9 +252,9 @@ export class EmbeddingEngine {
    */
   isIndexed(nodeId: string, textHash: string): boolean {
     if (!this.db) return false;
-    const row = this.db.query<Pick<EmbeddingRow, 'text_hash'>, [string]>(
-      'SELECT text_hash FROM node_embeddings WHERE node_id = ?'
-    ).get(nodeId);
+    const row = this.db
+      .query<Pick<EmbeddingRow, "text_hash">, [string]>("SELECT text_hash FROM node_embeddings WHERE node_id = ?")
+      .get(nodeId);
     return row !== null && row.text_hash === textHash;
   }
 
@@ -262,9 +264,9 @@ export class EmbeddingEngine {
    */
   getEmbedding(nodeId: string): Float32Array | null {
     if (!this.db) return null;
-    const row = this.db.query<Pick<EmbeddingRow, 'embedding'>, [string]>(
-      'SELECT embedding FROM node_embeddings WHERE node_id = ?'
-    ).get(nodeId);
+    const row = this.db
+      .query<Pick<EmbeddingRow, "embedding">, [string]>("SELECT embedding FROM node_embeddings WHERE node_id = ?")
+      .get(nodeId);
     if (!row) return null;
     return new Float32Array(row.embedding.buffer);
   }
@@ -275,14 +277,12 @@ export class EmbeddingEngine {
   indexedCount(type?: GraphNodeType): number {
     if (!this.db) return 0;
     if (type) {
-      const row = this.db.query<{ cnt: number }, [string]>(
-        'SELECT COUNT(*) AS cnt FROM node_embeddings WHERE node_type = ?'
-      ).get(type);
+      const row = this.db
+        .query<{ cnt: number }, [string]>("SELECT COUNT(*) AS cnt FROM node_embeddings WHERE node_type = ?")
+        .get(type);
       return row?.cnt ?? 0;
     }
-    const row = this.db.query<{ cnt: number }, []>(
-      'SELECT COUNT(*) AS cnt FROM node_embeddings'
-    ).get();
+    const row = this.db.query<{ cnt: number }, []>("SELECT COUNT(*) AS cnt FROM node_embeddings").get();
     return row?.cnt ?? 0;
   }
 
@@ -291,10 +291,8 @@ export class EmbeddingEngine {
    */
   indexedNodeIds(): Set<string> {
     if (!this.db) return new Set();
-    const rows = this.db.query<{ node_id: string }, []>(
-      'SELECT node_id FROM node_embeddings'
-    ).all();
-    return new Set(rows.map(r => r.node_id));
+    const rows = this.db.query<{ node_id: string }, []>("SELECT node_id FROM node_embeddings").all();
+    return new Set(rows.map((r) => r.node_id));
   }
 
   /**
@@ -306,7 +304,7 @@ export class EmbeddingEngine {
     let pruned = 0;
     for (const id of indexed) {
       if (!currentNodeIds.has(id)) {
-        this.db.run('DELETE FROM node_embeddings WHERE node_id = ?', [id]);
+        this.db.run("DELETE FROM node_embeddings WHERE node_id = ?", [id]);
         pruned++;
       }
     }
@@ -318,7 +316,7 @@ export class EmbeddingEngine {
    */
   dropIndex(): void {
     if (!this.db) return;
-    this.db.run('DELETE FROM node_embeddings');
+    this.db.run("DELETE FROM node_embeddings");
   }
 
   // ============================================
@@ -336,7 +334,7 @@ export class EmbeddingEngine {
     if (!this.db) {
       const opened = this.openDb();
       if (!opened) {
-        console.warn('[EmbeddingEngine] processQueue: DB unavailable, skipping');
+        console.warn("[EmbeddingEngine] processQueue: DB unavailable, skipping");
         return;
       }
     }
@@ -374,7 +372,7 @@ export class EmbeddingEngine {
     // facts only — an expired outcome shouldn't count toward "eligible"
     // totals or get embedded into the semantic-search index.
     const allNodes = this.persistence.loadAllNodes({ excludeExpired: true });
-    const targets = allNodes.filter(n => {
+    const targets = allNodes.filter((n) => {
       if (EXCLUDED_TYPES.has(n.type)) return false;
       if (filter?.type && n.type !== filter.type) return false;
       const text = buildNodeText(n);
@@ -400,7 +398,7 @@ export class EmbeddingEngine {
     // facts only — an expired outcome shouldn't count toward "eligible"
     // totals or get embedded into the semantic-search index.
     const allNodes = this.persistence.loadAllNodes({ excludeExpired: true });
-    const targets = allNodes.filter(n => {
+    const targets = allNodes.filter((n) => {
       if (EXCLUDED_TYPES.has(n.type)) return false;
       const text = buildNodeText(n);
       const hash = sha256(text);
@@ -436,6 +434,11 @@ export class EmbeddingEngine {
         const node = batch[j];
         const vector = vectors[j];
         const text = texts[j];
+        if (!node || !vector || text === undefined) {
+          // embedBatch returned fewer vectors than texts: count it as skipped, not as embedded.
+          skipped++;
+          continue;
+        }
         const hash = sha256(text);
         try {
           this.upsertEmbedding(node.id, node.type, vector, hash);
@@ -475,7 +478,7 @@ export class EmbeddingEngine {
     // facts only — an expired outcome shouldn't count toward "eligible"
     // totals or get embedded into the semantic-search index.
     const allNodes = this.persistence.loadAllNodes({ excludeExpired: true });
-    const eligible = allNodes.filter(n => !EXCLUDED_TYPES.has(n.type));
+    const eligible = allNodes.filter((n) => !EXCLUDED_TYPES.has(n.type));
     const totalNodes = eligible.length;
     const indexedNodes = this.indexedCount();
 
@@ -486,7 +489,7 @@ export class EmbeddingEngine {
         perTypeCoverage[type] = { total: 0, indexed: 0 };
         continue;
       }
-      const typeNodes = allNodes.filter(n => n.type === type);
+      const typeNodes = allNodes.filter((n) => n.type === type);
       const typeIndexed = this.indexedCount(type);
       perTypeCoverage[type] = { total: typeNodes.length, indexed: typeIndexed };
     }
@@ -505,7 +508,7 @@ export class EmbeddingEngine {
       indexFileSizeBytes,
       modelName: MODEL_NAME,
       dimensions: EMBEDDING_DIM,
-      lastRunTimestamp: meta?.lastBuilt ?? '',
+      lastRunTimestamp: meta?.lastBuilt ?? "",
       lastRunNodesProcessed: meta?.lastRunNodesProcessed ?? 0,
       p50EmbedMs: meta?.p50EmbedMs ?? 0,
       p95EmbedMs: meta?.p95EmbedMs ?? 0,
@@ -518,7 +521,7 @@ export class EmbeddingEngine {
     // facts only — an expired outcome shouldn't count toward "eligible"
     // totals or get embedded into the semantic-search index.
     const allNodes = this.persistence.loadAllNodes({ excludeExpired: true });
-    const eligible = allNodes.filter(n => !EXCLUDED_TYPES.has(n.type));
+    const eligible = allNodes.filter((n) => !EXCLUDED_TYPES.has(n.type));
     const total = eligible.length;
     if (total === 0) return 0;
     const indexed = this.indexedCount();
@@ -538,7 +541,7 @@ export class EmbeddingEngine {
 // KNN QUERY SUPPORT
 // ============================================
 
-export interface KnnCandidate {
+interface KnnCandidate {
   nodeId: string;
   nodeType: string;
   score: number; // cosine similarity (0-1)
@@ -557,18 +560,22 @@ export function knnSearch(
   queryVector: Float32Array,
   topK: number,
   nodeType?: GraphNodeType,
-  minScore: number = 0.40,
+  minScore: number = 0.4,
 ): KnnCandidate[] {
   let rows: Array<{ node_id: string; node_type: string; embedding: Buffer }>;
 
   if (nodeType) {
-    rows = db.query<{ node_id: string; node_type: string; embedding: Buffer }, [string]>(
-      'SELECT node_id, node_type, embedding FROM node_embeddings WHERE node_type = ?'
-    ).all(nodeType);
+    rows = db
+      .query<{ node_id: string; node_type: string; embedding: Buffer }, [string]>(
+        "SELECT node_id, node_type, embedding FROM node_embeddings WHERE node_type = ?",
+      )
+      .all(nodeType);
   } else {
-    rows = db.query<{ node_id: string; node_type: string; embedding: Buffer }, []>(
-      'SELECT node_id, node_type, embedding FROM node_embeddings'
-    ).all();
+    rows = db
+      .query<{ node_id: string; node_type: string; embedding: Buffer }, []>(
+        "SELECT node_id, node_type, embedding FROM node_embeddings",
+      )
+      .all();
   }
 
   const candidates: KnnCandidate[] = [];
@@ -595,15 +602,15 @@ export function knnSearch(
  * title [type:T] [tags:tag1 tag2] {content[:200]}
  */
 export function buildNodeText(node: GraphNode): string {
-  const tagsStr = node.tags.length > 0 ? ` [tags:${node.tags.join(' ')}]` : '';
-  const content = (node.metadata.content as string | undefined) ?? '';
+  const tagsStr = node.tags.length > 0 ? ` [tags:${node.tags.join(" ")}]` : "";
+  const content = (node.metadata.content as string | undefined) ?? "";
   const contentSnip = content.slice(0, 200);
-  return `${node.title} [type:${node.type}]${tagsStr}${contentSnip ? ' ' + contentSnip : ''}`;
+  return `${node.title} [type:${node.type}]${tagsStr}${contentSnip ? " " + contentSnip : ""}`;
 }
 
 /** SHA-256 hex digest of a string */
 export function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
+  return createHash("sha256").update(text).digest("hex");
 }
 
 /** Cosine similarity of two equal-length Float32Arrays */
@@ -612,9 +619,11 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let normA = 0;
   let normB = 0;
   for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    dot += x * y;
+    normA += x * x;
+    normB += y * y;
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB);
   return denom === 0 ? 0 : dot / denom;
@@ -625,7 +634,7 @@ function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const idx = Math.floor((p / 100) * (sorted.length - 1));
-  return sorted[idx];
+  return sorted[idx] ?? 0;
 }
 
 function ensureDir(dir: string): void {
@@ -636,15 +645,16 @@ function saveMeta(meta: EmbeddingMeta): void {
   try {
     ensureDir(EMBEDDINGS_DIR);
     writeFileSync(META_JSON_PATH, JSON.stringify(meta, null, 2));
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    // Non-fatal for the caller, but a failed meta write means stale staleness checks: say so.
+    console.error(`[EmbeddingEngine] Could not save embedding meta: ${(err as Error).message}`);
   }
 }
 
 function loadMeta(): EmbeddingMeta | null {
   try {
     if (!existsSync(META_JSON_PATH)) return null;
-    const metaRaw = readFileSync(META_JSON_PATH, 'utf-8');
+    const metaRaw = readFileSync(META_JSON_PATH, "utf-8");
     return JSON.parse(metaRaw) as EmbeddingMeta;
   } catch {
     return null;
@@ -671,24 +681,24 @@ export function getEmbeddingEngine(): EmbeddingEngine {
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
 
-  if (args.includes('--stats')) {
+  if (args.includes("--stats")) {
     const engine = getEmbeddingEngine();
     engine.openDb();
     const s = engine.stats();
-    console.log('Embedding Index Statistics');
-    console.log('==========================');
+    console.log("Embedding Index Statistics");
+    console.log("==========================");
     console.log(`Total eligible nodes:  ${s.totalNodes}`);
     console.log(`Indexed nodes:         ${s.indexedNodes}`);
     console.log(`Coverage:              ${s.coveragePct}%`);
     console.log(`Index file size:       ${(s.indexFileSizeBytes / 1024 / 1024).toFixed(2)} MB`);
     console.log(`Model:                 ${s.modelName} (${s.dimensions} dims)`);
-    console.log(`Last run:              ${s.lastRunTimestamp || 'never'}`);
+    console.log(`Last run:              ${s.lastRunTimestamp || "never"}`);
     console.log(`Last run nodes:        ${s.lastRunNodesProcessed}`);
     console.log(`P50 embed latency:     ${s.p50EmbedMs.toFixed(1)}ms`);
     console.log(`P95 embed latency:     ${s.p95EmbedMs.toFixed(1)}ms`);
-    console.log('\nPer-type coverage:');
+    console.log("\nPer-type coverage:");
     for (const [type, cov] of Object.entries(s.perTypeCoverage)) {
-      if (cov.total > 0 || type === 'file') {
+      if (cov.total > 0 || type === "file") {
         const pct = cov.total > 0 ? Math.round((cov.indexed / cov.total) * 100) : 0;
         console.log(`  ${type}: ${cov.indexed} / ${cov.total} (${pct}%)`);
       }
@@ -697,31 +707,31 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  if (args.includes('--build-all')) {
-    const typeArg = args[args.indexOf('--type') + 1];
+  if (args.includes("--build-all")) {
+    const typeArg = args[args.indexOf("--type") + 1];
     const engine = getEmbeddingEngine();
     engine.openDb();
-    console.log('Building all embeddings...');
+    console.log("Building all embeddings...");
     const result = await engine.buildAll(typeArg ? { type: typeArg as GraphNodeType } : undefined);
     console.log(`Done: ${result.embedded} embedded, ${result.skipped} skipped`);
     engine.close();
     process.exit(0);
   }
 
-  if (args.includes('--incremental')) {
+  if (args.includes("--incremental")) {
     const engine = getEmbeddingEngine();
     engine.openDb();
-    console.log('Running incremental embedding...');
+    console.log("Running incremental embedding...");
     const result = await engine.buildIncremental();
     console.log(`Done: ${result.embedded} nodes embedded`);
     engine.close();
     process.exit(0);
   }
 
-  if (args.includes('--rebuild')) {
+  if (args.includes("--rebuild")) {
     const engine = getEmbeddingEngine();
     engine.openDb();
-    console.log('Rebuilding entire index from scratch...');
+    console.log("Rebuilding entire index from scratch...");
     engine.dropIndex();
     const result = await engine.buildAll();
     console.log(`Done: ${result.embedded} embedded`);
@@ -729,8 +739,8 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  if (args.includes('--search')) {
-    const idx = args.indexOf('--search');
+  if (args.includes("--search")) {
+    const idx = args.indexOf("--search");
     const query = args[idx + 1];
     if (!query) {
       console.error('Usage: bun EmbeddingEngine.ts --search "query"');
@@ -739,67 +749,74 @@ if (import.meta.main) {
     const engine = getEmbeddingEngine();
     const opened = engine.openDb();
     if (!opened) {
-      console.warn('[EmbeddingEngine] Index not available, run --build-all first');
+      console.warn("[EmbeddingEngine] Index not available, run --build-all first");
       process.exit(1);
     }
     const vec = await engine.embedText(query);
-    const { Database: Db } = await import('bun:sqlite');
+    const { Database: Db } = await import("bun:sqlite");
     const db = new Db(INDEX_DB_PATH);
     const candidates = knnSearch(db, vec, 10);
-    const { GraphPersistence: GP } = await import('./GraphPersistence');
+    const { GraphPersistence: GP } = await import("./GraphPersistence.ts");
     const persistence = new GP();
     // excludeExpired (Slice C1): this is candidate hydration for a semantic
     // search result, same as EmbeddingQuerier.semanticSearch() — an expired
     // outcome shouldn't surface here either.
     const allNodes = persistence.loadAllNodes({ excludeExpired: true });
-    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+    const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
     for (const c of candidates) {
       const node = nodeMap.get(c.nodeId);
-      console.log(`[${c.score.toFixed(2)}] ${node?.type ?? '?'}: ${node?.title ?? c.nodeId}`);
+      console.log(`[${c.score.toFixed(2)}] ${node?.type ?? "?"}: ${node?.title ?? c.nodeId}`);
     }
     db.close();
     engine.close();
     process.exit(0);
   }
 
-  if (args.includes('--bench')) {
+  if (args.includes("--bench")) {
     // Benchmark: 50 consecutive queries, report P95
     const engine = getEmbeddingEngine();
     const opened = engine.openDb();
     if (!opened) {
-      console.error('Index not available');
+      console.error("Index not available");
       process.exit(1);
     }
-    const { Database: Db } = await import('bun:sqlite');
+    const { Database: Db } = await import("bun:sqlite");
     const db = new Db(INDEX_DB_PATH);
     const queries = [
-      'authentication error', 'deploy failed', 'null pointer', 'session storage',
-      'graph query', 'context manager', 'database migration', 'type error',
-      'commit message', 'skill update',
+      "authentication error",
+      "deploy failed",
+      "null pointer",
+      "session storage",
+      "graph query",
+      "context manager",
+      "database migration",
+      "type error",
+      "commit message",
+      "skill update",
     ];
     const times: number[] = [];
     for (let i = 0; i < 50; i++) {
-      const q = queries[i % queries.length];
+      const q = queries[i % queries.length] ?? "";
       const t0 = performance.now();
       const vec = await engine.embedText(q);
       knnSearch(db, vec, 10);
       times.push(performance.now() - t0);
     }
     times.sort((a, b) => a - b);
-    const p50 = times[Math.floor(times.length * 0.50)];
-    const p95 = times[Math.floor(times.length * 0.95)];
+    const p50 = times[Math.floor(times.length * 0.5)] ?? 0;
+    const p95 = times[Math.floor(times.length * 0.95)] ?? 0;
     console.log(`Benchmark (50 queries): P50=${p50.toFixed(1)}ms  P95=${p95.toFixed(1)}ms`);
     db.close();
     engine.close();
     process.exit(0);
   }
 
-  console.log('EmbeddingEngine CLI');
-  console.log('===================');
-  console.log('  bun EmbeddingEngine.ts --stats');
-  console.log('  bun EmbeddingEngine.ts --build-all [--type <type>]');
-  console.log('  bun EmbeddingEngine.ts --incremental');
-  console.log('  bun EmbeddingEngine.ts --rebuild');
+  console.log("EmbeddingEngine CLI");
+  console.log("===================");
+  console.log("  bun EmbeddingEngine.ts --stats");
+  console.log("  bun EmbeddingEngine.ts --build-all [--type <type>]");
+  console.log("  bun EmbeddingEngine.ts --incremental");
+  console.log("  bun EmbeddingEngine.ts --rebuild");
   console.log('  bun EmbeddingEngine.ts --search "query"');
-  console.log('  bun EmbeddingEngine.ts --bench');
+  console.log("  bun EmbeddingEngine.ts --bench");
 }

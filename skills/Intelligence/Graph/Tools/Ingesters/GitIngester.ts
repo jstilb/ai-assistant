@@ -10,11 +10,10 @@
  * @version 1.0.0
  */
 
-import { join } from 'path';
-import type { GraphNode, GraphEdge, IngestionResult } from '../types';
-import { createNode, createEdge } from '../types';
-import { GraphPersistence, getGraphPersistence } from '../GraphPersistence';
-import { getKayaHome } from '../../../../../lib/core/KayaHome';
+import type { GraphNode, GraphEdge, IngestionResult } from "../types.ts";
+import { createNode, createEdge } from "../types.ts";
+import { type GraphPersistence, getGraphPersistence } from "../GraphPersistence.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
@@ -54,7 +53,7 @@ export class GitIngester {
   async ingest(limit: number = 100): Promise<IngestionResult> {
     const startTime = Date.now();
     const result: IngestionResult = {
-      source: 'git',
+      source: "git",
       nodesAdded: 0,
       edgesAdded: 0,
       nodesSkipped: 0,
@@ -68,7 +67,7 @@ export class GitIngester {
       const commits = await this.getRecentCommits(limit);
 
       if (commits.length === 0) {
-        result.errors.push('No commits found');
+        result.errors.push("No commits found");
         result.duration = Date.now() - startTime;
         return result;
       }
@@ -81,7 +80,7 @@ export class GitIngester {
         // Create commit node
         const commitId = `commit:${commit.short}`;
         const commitNode = createNode(
-          'commit',
+          "commit",
           commitId,
           commit.subject,
           {
@@ -107,32 +106,22 @@ export class GitIngester {
             // Create file node (if not already seen in this batch)
             if (!seenFiles.has(filePath)) {
               seenFiles.add(filePath);
-              const fileNode = createNode(
-                'file',
-                fileId,
-                filePath,
-                { path: filePath },
-                ['file'],
-              );
+              const fileNode = createNode("file", fileId, filePath, { path: filePath }, ["file"]);
               fileNode.valid_from = commit.date;
               fileNode.created_at = commit.date;
               allNodes.push(fileNode);
             }
 
             // commit -> modifies -> file
-            allEdges.push(createEdge(
-              'modifies',
-              commitId,
-              fileId,
-              1.0,
-              { source: 'git-ingester', commitHash: commit.short },
-            ));
+            allEdges.push(
+              createEdge("modifies", commitId, fileId, 1.0, { source: "git-ingester", commitHash: commit.short }),
+            );
 
             // Detect skill changes
-            if (filePath.startsWith('skills/') && (filePath.endsWith('.ts') || filePath.endsWith('.md'))) {
+            if (filePath.startsWith("skills/") && (filePath.endsWith(".ts") || filePath.endsWith(".md"))) {
               const skillChangeId = `skill_change:${commit.short}:${filePath}`;
               const skillNode = createNode(
-                'skill_change',
+                "skill_change",
                 skillChangeId,
                 `${filePath} changed in ${commit.short}`,
                 {
@@ -140,20 +129,14 @@ export class GitIngester {
                   commitHash: commit.short,
                   commitSubject: commit.subject,
                 },
-                ['skill_change'],
+                ["skill_change"],
               );
               skillNode.valid_from = commit.date;
               skillNode.created_at = commit.date;
               allNodes.push(skillNode);
 
               // commit -> contains -> skill_change
-              allEdges.push(createEdge(
-                'contains',
-                commitId,
-                skillChangeId,
-                1.0,
-                { source: 'git-ingester' },
-              ));
+              allEdges.push(createEdge("contains", commitId, skillChangeId, 1.0, { source: "git-ingester" }));
             }
           }
         } catch (err) {
@@ -169,7 +152,6 @@ export class GitIngester {
       result.nodesSkipped = allNodes.length - nodesAppended;
       result.edgesAdded = edgesAppended;
       result.edgesSkipped = allEdges.length - edgesAppended;
-
     } catch (err) {
       result.errors.push(`Git ingestion failed: ${err}`);
     }
@@ -186,15 +168,14 @@ export class GitIngester {
    * Get recent commits from git log.
    */
   private async getRecentCommits(limit: number): Promise<GitCommitInfo[]> {
-    const proc = Bun.spawnSync([
-      'git', 'log',
-      `--format={"hash":"%H","short":"%h","subject":"%s","author":"%an","date":"%aI"}`,
-      `-${limit}`,
-    ], {
-      cwd: this.repoDir,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    const proc = Bun.spawnSync(
+      ["git", "log", `--format={"hash":"%H","short":"%h","subject":"%s","author":"%an","date":"%aI"}`, `-${limit}`],
+      {
+        cwd: this.repoDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
 
     if (proc.exitCode !== 0) {
       throw new Error(`git log failed: ${proc.stderr.toString()}`);
@@ -204,12 +185,12 @@ export class GitIngester {
     if (!output) return [];
 
     const commits: GitCommitInfo[] = [];
-    for (const line of output.split('\n')) {
+    for (const line of output.split("\n")) {
       if (!line.trim()) continue;
       try {
         // Escape any unescaped quotes in the subject line
-        const sanitized = line.replace(/"subject":"(.*?)","/g, (match, subject) => {
-          const escaped = subject.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const sanitized = line.replace(/"subject":"(.*?)","/g, (_match, subject) => {
+          const escaped = subject.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
           return `"subject":"${escaped}","`;
         });
         commits.push(JSON.parse(sanitized));
@@ -222,12 +203,12 @@ export class GitIngester {
           const dateMatch = line.match(/"date":"([^"]+)"/);
           const subjectMatch = line.match(/"subject":"(.+?)","author"/);
 
-          if (hashMatch && shortMatch) {
+          if (hashMatch?.[1] !== undefined && shortMatch?.[1] !== undefined) {
             commits.push({
               hash: hashMatch[1],
               short: shortMatch[1],
-              subject: subjectMatch?.[1] || 'unknown',
-              author: authorMatch?.[1] || 'unknown',
+              subject: subjectMatch?.[1] || "unknown",
+              author: authorMatch?.[1] || "unknown",
               date: dateMatch?.[1] || new Date().toISOString(),
             });
           }
@@ -244,12 +225,10 @@ export class GitIngester {
    * Get changed files for a specific commit.
    */
   private async getChangedFiles(hash: string): Promise<string[]> {
-    const proc = Bun.spawnSync([
-      'git', 'diff-tree', '--no-commit-id', '-r', '--name-only', hash,
-    ], {
+    const proc = Bun.spawnSync(["git", "diff-tree", "--no-commit-id", "-r", "--name-only", hash], {
       cwd: this.repoDir,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdout: "pipe",
+      stderr: "pipe",
     });
 
     if (proc.exitCode !== 0) {
@@ -259,18 +238,18 @@ export class GitIngester {
     const output = proc.stdout.toString().trim();
     if (!output) return [];
 
-    return output.split('\n').filter(f => f.trim().length > 0);
+    return output.split("\n").filter((f) => f.trim().length > 0);
   }
 
   /**
    * Extract tags from commit subject line.
    */
   private extractTags(subject: string): string[] {
-    const tags: string[] = ['commit'];
+    const tags: string[] = ["commit"];
 
     // Conventional commit prefixes
     const prefixMatch = subject.match(/^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(?:\(.+?\))?:/i);
-    if (prefixMatch) {
+    if (prefixMatch?.[1] !== undefined) {
       tags.push(prefixMatch[1].toLowerCase());
     }
 
@@ -289,12 +268,12 @@ export class GitIngester {
 // ============================================
 
 if (import.meta.main) {
-  console.log('GitIngester');
-  console.log('===========\n');
+  console.log("GitIngester");
+  console.log("===========\n");
 
   const args = process.argv.slice(2);
-  const limitArg = args.find(a => a.startsWith('--limit='));
-  const limit = limitArg ? parseInt(limitArg.split('=')[1]) : 100;
+  const limitArg = args.find((a) => a.startsWith("--limit="));
+  const limit = limitArg ? parseInt(limitArg.split("=")[1] ?? "") : 100;
 
   const ingester = new GitIngester();
   const result = await ingester.ingest(limit);

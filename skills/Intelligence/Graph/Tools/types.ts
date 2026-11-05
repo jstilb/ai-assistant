@@ -24,29 +24,39 @@
  */
 export type GraphNodeType =
   // From DevGraph (development artifacts)
-  | 'session'        // [BOTH] Kaya session (conversation)
-  | 'agent_trace'    // [DG] Agent workflow execution
-  | 'error'          // [DG] Error encountered during work
-  | 'commit'         // [DG] Git commit
-  | 'learning'       // [DG] Captured learning/insight
-  | 'skill_change'   // [DG] Skill file modification
-  | 'file'           // [DG] Modified file
+  | "session" // [BOTH] Kaya session (conversation)
+  | "agent_trace" // [DG] Agent workflow execution
+  | "error" // [DG] Error encountered during work
+  | "commit" // [DG] Git commit
+  | "learning" // [DG] Captured learning/insight
+  | "skill_change" // [DG] Skill file modification
+  | "file" // [DG] Modified file
   /** @deprecated — 0 nodes in production */
-  | 'issue'          // [DG] Tracked problem/bug
+  | "issue" // [DG] Tracked problem/bug
   // From ContextGraph (decision intelligence)
-  | 'decision'       // [BOTH] Architectural/design decision
-  | 'outcome'        // [CG] Result of a decision (rating, sentiment)
+  | "decision" // [BOTH] Architectural/design decision
+  | "outcome" // [CG] Result of a decision (rating, sentiment)
   /** @deprecated — producer removed 2026-07-10 (context-feedback.jsonl retired); historical nodes only */
-  | 'context'        // [CG] Background info shaping decisions
+  | "context" // [CG] Background info shaping decisions
   /** @deprecated — 0 nodes in production */
-  | 'pattern'        // [CG] Recurring pattern across decisions
+  | "pattern" // [CG] Recurring pattern across decisions
   /** @deprecated — 0 nodes in production */
-  | 'goal';          // [CG] TELOS goal linkage anchor
+  | "goal"; // [CG] TELOS goal linkage anchor
 
 export const ALL_NODE_TYPES: GraphNodeType[] = [
-  'session', 'agent_trace', 'error', 'commit', 'learning',
-  'skill_change', 'file', 'issue',
-  'decision', 'outcome', 'context', 'pattern', 'goal',
+  "session",
+  "agent_trace",
+  "error",
+  "commit",
+  "learning",
+  "skill_change",
+  "file",
+  "issue",
+  "decision",
+  "outcome",
+  "context",
+  "pattern",
+  "goal",
 ];
 
 // ============================================
@@ -64,43 +74,57 @@ export const ALL_NODE_TYPES: GraphNodeType[] = [
 export type GraphEdgeType =
   // From DevGraph (development relationships)
   /** @deprecated — 0 edges in production */
-  | 'produced'       // [DG] Session -> artifact (e.g., session -> commit)
-  | 'caused'         // [BOTH] Error origin / decision causality
+  | "produced" // [DG] Session -> artifact (e.g., session -> commit)
+  | "caused" // [BOTH] Error origin / decision causality
   /** @deprecated — 0 edges in production */
-  | 'fixed_by'       // [DG] Error -> commit resolution
-  | 'learned_from'   // [DG] Insight origin (e.g., error -> learning)
+  | "fixed_by" // [DG] Error -> commit resolution
+  | "learned_from" // [DG] Insight origin (e.g., error -> learning)
   /** @deprecated — 0 edges in production */
-  | 'references'     // [DG] General reference
+  | "references" // [DG] General reference
   /** @deprecated — 0 edges in production */
-  | 'depends_on'     // [DG] Dependency chain
+  | "depends_on" // [DG] Dependency chain
   /** @deprecated — 0 edges in production */
-  | 'blocks'         // [DG] Blocking relationship
-  | 'modifies'       // [DG] File changes (e.g., commit -> file)
-  | 'spawned'        // [DG] Agent creation (e.g., session -> agent_trace)
-  | 'contains'       // [DG] Containment (e.g., session -> error)
+  | "blocks" // [DG] Blocking relationship
+  | "modifies" // [DG] File changes (e.g., commit -> file)
+  | "spawned" // [DG] Agent creation (e.g., session -> agent_trace)
+  | "contains" // [DG] Containment (e.g., session -> error)
   /** @deprecated — 0 edges in production */
-  | 'implements'     // [DG] Implementation link (e.g., commit -> decision)
-  | 'relates_to'     // [BOTH] Inferred similarity
+  | "implements" // [DG] Implementation link (e.g., commit -> decision)
+  | "relates_to" // [BOTH] Inferred similarity
   // From ContextGraph (decision relationships)
-  | 'influenced'     // [CG] A shaped B (same-topic decisions across sessions)
+  | "influenced" // [CG] A shaped B (same-topic decisions across sessions)
   /** @deprecated — 0 edges in production */
-  | 'preceded'       // [CG] Temporal ordering (within 1hr)
+  | "preceded" // [CG] Temporal ordering (within 1hr)
   /** @deprecated — 0 edges in production */
-  | 'outcome_of'     // [CG] Links outcome to decision (rating within 5min)
+  | "outcome_of" // [CG] Links outcome to decision (rating within 5min)
   /** @deprecated — 0 edges in production */
-  | 'context_for'    // [CG] Background for decision
+  | "context_for" // [CG] Background for decision
   /** @deprecated — 0 edges in production */
-  | 'pattern_member' // [CG] Decision belongs to pattern (weekly synthesis)
+  | "pattern_member" // [CG] Decision belongs to pattern (weekly synthesis)
   /** @deprecated — 0 edges in production */
-  | 'goal_aligned'   // [CG] Decision supports a goal (tag overlap with TELOS)
-  | 'supersedes';    // [CG] Replaces earlier decision (correction follows error)
+  | "goal_aligned" // [CG] Decision supports a goal (tag overlap with TELOS)
+  | "supersedes"; // [CG] Replaces earlier decision (correction follows error)
 
 export const ALL_EDGE_TYPES: GraphEdgeType[] = [
-  'produced', 'caused', 'fixed_by', 'learned_from', 'references',
-  'depends_on', 'blocks', 'modifies', 'spawned', 'contains',
-  'implements', 'relates_to',
-  'influenced', 'preceded', 'outcome_of', 'context_for',
-  'pattern_member', 'goal_aligned', 'supersedes',
+  "produced",
+  "caused",
+  "fixed_by",
+  "learned_from",
+  "references",
+  "depends_on",
+  "blocks",
+  "modifies",
+  "spawned",
+  "contains",
+  "implements",
+  "relates_to",
+  "influenced",
+  "preceded",
+  "outcome_of",
+  "context_for",
+  "pattern_member",
+  "goal_aligned",
+  "supersedes",
 ];
 
 // ============================================
@@ -200,15 +224,15 @@ export interface GraphState {
  * Create an empty GraphState with all counters at zero.
  */
 export function createEmptyGraphState(): GraphState {
-  const nodesByType: Record<GraphNodeType, number> = {} as any;
+  const nodesByType: Record<GraphNodeType, number> = {} as Record<GraphNodeType, number>;
   for (const t of ALL_NODE_TYPES) nodesByType[t] = 0;
 
-  const edgesByType: Record<GraphEdgeType, number> = {} as any;
+  const edgesByType: Record<GraphEdgeType, number> = {} as Record<GraphEdgeType, number>;
   for (const t of ALL_EDGE_TYPES) edgesByType[t] = 0;
 
   return {
     version: 1,
-    lastIngested: '',
+    lastIngested: "",
     nodeCount: 0,
     edgeCount: 0,
     nodesByType,
@@ -287,16 +311,16 @@ export interface Ingester {
 /**
  * Sources available for ingestion.
  */
-export type IngestionSource = 'git' | 'sessions' | 'traces' | 'decisions' | 'all';
+export type IngestionSource = "git" | "sessions" | "traces" | "decisions" | "all";
 
 // ============================================
 // CLI
 // ============================================
 
 if (import.meta.main) {
-  console.log('Unified Graph Type Definitions');
-  console.log('==============================');
-  console.log(`Node types (${ALL_NODE_TYPES.length}): ${ALL_NODE_TYPES.join(', ')}`);
-  console.log(`Edge types (${ALL_EDGE_TYPES.length}): ${ALL_EDGE_TYPES.join(', ')}`);
-  console.log('\nRun with: bun skills/Intelligence/Graph/Tools/types.ts');
+  console.log("Unified Graph Type Definitions");
+  console.log("==============================");
+  console.log(`Node types (${ALL_NODE_TYPES.length}): ${ALL_NODE_TYPES.join(", ")}`);
+  console.log(`Edge types (${ALL_EDGE_TYPES.length}): ${ALL_EDGE_TYPES.join(", ")}`);
+  console.log("\nRun with: bun skills/Intelligence/Graph/Tools/types.ts");
 }

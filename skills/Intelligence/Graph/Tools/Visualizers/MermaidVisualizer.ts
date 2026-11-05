@@ -1,19 +1,19 @@
 #!/usr/bin/env bun
-import { parseArgs } from 'util';
-import { getGraphPersistence } from '../GraphPersistence';
-import type { GraphNode, GraphEdge, GraphNodeType, GraphEdgeType } from '../types';
+import { parseArgs } from "node:util";
+import { getGraphPersistence } from "../GraphPersistence.ts";
+import type { GraphNode, GraphEdge, GraphNodeType, GraphEdgeType } from "../types.ts";
 
 // ---------------------------------------------------------------------------
 // Mermaid ID / title helpers
 // ---------------------------------------------------------------------------
 
 function sanitizeId(raw: string): string {
-  return raw.replace(/[:.\/\-@#\s]/g, '_');
+  return raw.replace(/[:./\-@#\s]/g, "_");
 }
 
 function truncate(text: string, max = 40): string {
   if (text.length <= max) return text;
-  return text.slice(0, max - 1) + '…';
+  return text.slice(0, max - 1) + "…";
 }
 
 /** Wrap title in the correct Mermaid shape for the node type. */
@@ -22,20 +22,34 @@ function nodeShape(node: GraphNode): string {
   const label = truncate(node.title);
 
   switch (node.type as GraphNodeType) {
-    case 'session':      return `${id}[/"${label}"\\]`;
-    case 'agent_trace':  return `${id}[/"${label}"/]`;
-    case 'error':        return `${id}{{"${label}"}}`;
-    case 'commit':       return `${id}[("${label}")]`;
-    case 'learning':     return `${id}(["${label}"])`;
-    case 'skill_change': return `${id}[["${label}"]]`;
-    case 'file':         return `${id}["${label}"]`;
-    case 'issue':        return `${id}{"${label}"}`;
-    case 'decision':     return `${id}((("${label}")))`;
-    case 'outcome':      return `${id}(("${label}"))`;
-    case 'context':      return `${id}>"${label}"]`;
-    case 'pattern':      return `${id}[\\/"${label}"/]`;
-    case 'goal':         return `${id}{{"${label}"}}`;
-    default:             return `${id}["${label}"]`;
+    case "session":
+      return `${id}[/"${label}"\\]`;
+    case "agent_trace":
+      return `${id}[/"${label}"/]`;
+    case "error":
+      return `${id}{{"${label}"}}`;
+    case "commit":
+      return `${id}[("${label}")]`;
+    case "learning":
+      return `${id}(["${label}"])`;
+    case "skill_change":
+      return `${id}[["${label}"]]`;
+    case "file":
+      return `${id}["${label}"]`;
+    case "issue":
+      return `${id}{"${label}"}`;
+    case "decision":
+      return `${id}((("${label}")))`;
+    case "outcome":
+      return `${id}(("${label}"))`;
+    case "context":
+      return `${id}>"${label}"]`;
+    case "pattern":
+      return `${id}[\\/"${label}"/]`;
+    case "goal":
+      return `${id}{{"${label}"}}`;
+    default:
+      return `${id}["${label}"]`;
   }
 }
 
@@ -45,10 +59,10 @@ function nodeShape(node: GraphNode): string {
 
 function parseSince(duration: string): Date {
   const match = duration.match(/^(\d+)([dhm])$/);
-  if (!match) throw new Error(`Invalid duration: "${duration}". Use formats like 7d, 24h, 60m.`);
+  if (!match?.[1]) throw new Error(`Invalid duration: "${duration}". Use formats like 7d, 24h, 60m.`);
   const value = parseInt(match[1], 10);
-  const unit = match[2] as 'd' | 'h' | 'm';
-  const multipliers: Record<'d' | 'h' | 'm', number> = {
+  const unit = match[2] as "d" | "h" | "m";
+  const multipliers: Record<"d" | "h" | "m", number> = {
     d: 86_400_000,
     h: 3_600_000,
     m: 60_000,
@@ -62,9 +76,9 @@ function parseSince(duration: string): Date {
 // ---------------------------------------------------------------------------
 
 function renderTrace(nodes: Array<{ node: GraphNode; depth: number }>, edges: GraphEdge[], rootId: string): string {
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
 
-  const nodeIds = new Set(nodes.map(n => n.node.id));
+  const nodeIds = new Set(nodes.map((n) => n.node.id));
   nodeIds.add(rootId);
 
   for (const { node } of nodes) {
@@ -79,7 +93,7 @@ function renderTrace(nodes: Array<{ node: GraphNode; depth: number }>, edges: Gr
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 async function modeTrace(nodeId: string): Promise<string> {
@@ -108,14 +122,14 @@ async function modeSession(sessionId: string): Promise<string> {
   const rootNode = engine.getNode(sessionId);
   if (!rootNode) throw new Error(`Session node not found: ${sessionId}`);
 
-  const forwardEdgeTypes: GraphEdgeType[] = ['produced', 'contains', 'spawned'];
+  const forwardEdgeTypes: GraphEdgeType[] = ["produced", "contains", "spawned"];
   const traced = engine.traceForward(sessionId, 2, forwardEdgeTypes);
   const allNodes = [{ node: rootNode, depth: 0 }, ...traced];
 
-  const nodeIds = new Set(allNodes.map(n => n.node.id));
+  const nodeIds = new Set(allNodes.map((n) => n.node.id));
   const allEdges = engine.getEdges();
 
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
 
   for (const { node } of allNodes) {
     lines.push(`  ${nodeShape(node)}`);
@@ -129,7 +143,7 @@ async function modeSession(sessionId: string): Promise<string> {
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -144,28 +158,28 @@ async function modeFile(fileId: string): Promise<string> {
   const rootNode = engine.getNode(fileId);
   if (!rootNode) throw new Error(`File node not found: ${fileId}`);
 
-  const modifiesEdges: GraphEdgeType[] = ['modifies'];
+  const modifiesEdges: GraphEdgeType[] = ["modifies"];
   const traced = engine.traceBackward(fileId, 5, modifiesEdges);
   const allNodes = [{ node: rootNode, depth: 0 }, ...traced];
 
-  const nodeIds = new Set(allNodes.map(n => n.node.id));
+  const nodeIds = new Set(allNodes.map((n) => n.node.id));
   const allEdges = engine.getEdges();
 
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
 
   for (const { node } of allNodes) {
     lines.push(`  ${nodeShape(node)}`);
   }
 
   for (const edge of allEdges) {
-    if (nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.type === 'modifies') {
+    if (nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.type === "modifies") {
       const src = sanitizeId(edge.source);
       const tgt = sanitizeId(edge.target);
       lines.push(`  ${src} -->|"modifies"| ${tgt}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -178,26 +192,25 @@ async function modeErrors(since: string): Promise<string> {
   const engine = await persistence.loadIntoEngine();
 
   const sinceDate = parseSince(since);
-  const errorNodes = engine.findNodes({ type: 'session', since: sinceDate });
-  // Actually find error type nodes:
-  const errors = engine.findNodes({ type: 'error' as GraphNodeType, since: sinceDate });
+  const errors = engine.findNodes({ type: "error" as GraphNodeType, since: sinceDate.toISOString() });
 
   if (errors.length === 0) {
     return `flowchart TD\n  NO_ERRORS["No errors found since ${since}"]`;
   }
 
   const allEdges = engine.getEdges();
-  const errorIds = new Set(errors.map(n => n.id));
 
   // Map error → parent session (via 'caused' or 'produced' edge in reverse)
   const sessionToErrors = new Map<string, GraphNode[]>();
   const orphanErrors: GraphNode[] = [];
 
   for (const error of errors) {
-    const incomingEdges = allEdges.filter(e => e.target === error.id && (e.type === 'caused' || e.type === 'produced'));
+    const incomingEdges = allEdges.filter(
+      (e) => e.target === error.id && (e.type === "caused" || e.type === "produced"),
+    );
     const parentSessions = incomingEdges
-      .map(e => engine.getNode(e.source))
-      .filter((n): n is GraphNode => n !== undefined && n.type === 'session');
+      .map((e) => engine.getNode(e.source))
+      .filter((n): n is GraphNode => n !== undefined && n.type === "session");
 
     if (parentSessions.length > 0) {
       for (const sess of parentSessions) {
@@ -209,7 +222,7 @@ async function modeErrors(since: string): Promise<string> {
     }
   }
 
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
   let clusterIndex = 0;
 
   for (const [sessId, sessErrors] of sessionToErrors.entries()) {
@@ -220,7 +233,7 @@ async function modeErrors(since: string): Promise<string> {
     for (const err of sessErrors) {
       lines.push(`    ${nodeShape(err)}`);
     }
-    lines.push('  end');
+    lines.push("  end");
     const sessShape = nodeShape(session);
     lines.push(`  ${sessShape}`);
     for (const err of sessErrors) {
@@ -233,10 +246,10 @@ async function modeErrors(since: string): Promise<string> {
     for (const err of orphanErrors) {
       lines.push(`    ${nodeShape(err)}`);
     }
-    lines.push('  end');
+    lines.push("  end");
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +262,7 @@ async function modeTimeline(since: string): Promise<string> {
   const engine = await persistence.loadIntoEngine();
 
   const sinceDate = parseSince(since);
-  const allNodes = engine.findNodes({ since: sinceDate });
+  const allNodes = engine.findNodes({ since: sinceDate.toISOString() });
 
   if (allNodes.length === 0) {
     return `flowchart TD\n  NO_NODES["No nodes found since ${since}"]`;
@@ -265,19 +278,19 @@ async function modeTimeline(since: string): Promise<string> {
 
   const sortedDays = Array.from(byDay.keys()).sort();
 
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
 
   for (const day of sortedDays) {
     const dayNodes = byDay.get(day)!;
-    const subgraphId = `day_${day.replace(/-/g, '_')}`;
+    const subgraphId = `day_${day.replace(/-/g, "_")}`;
     lines.push(`  subgraph ${subgraphId}["${day}"]`);
     for (const node of dayNodes) {
       lines.push(`    ${nodeShape(node)}`);
     }
-    lines.push('  end');
+    lines.push("  end");
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -292,28 +305,28 @@ async function modeGoal(goalId: string): Promise<string> {
   const rootNode = engine.getNode(goalId);
   if (!rootNode) throw new Error(`Goal node not found: ${goalId}`);
 
-  const goalEdgeTypes: GraphEdgeType[] = ['goal_aligned'];
+  const goalEdgeTypes: GraphEdgeType[] = ["goal_aligned"];
   const traced = engine.traceForward(goalId, 3, goalEdgeTypes);
   const allNodes = [{ node: rootNode, depth: 0 }, ...traced];
 
-  const nodeIds = new Set(allNodes.map(n => n.node.id));
+  const nodeIds = new Set(allNodes.map((n) => n.node.id));
   const allEdges = engine.getEdges();
 
-  const lines: string[] = ['flowchart TD'];
+  const lines: string[] = ["flowchart TD"];
 
   for (const { node } of allNodes) {
     lines.push(`  ${nodeShape(node)}`);
   }
 
   for (const edge of allEdges) {
-    if (nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.type === 'goal_aligned') {
+    if (nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.type === "goal_aligned") {
       const src = sanitizeId(edge.source);
       const tgt = sanitizeId(edge.target);
       lines.push(`  ${src} -->|"goal_aligned"| ${tgt}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +341,7 @@ async function modeGoal(goalId: string): Promise<string> {
 // (what this produced), reverse (what produced this), or both (full neighborhood).
 // ---------------------------------------------------------------------------
 
-export type MindmapDirection = 'forward' | 'reverse' | 'both';
+export type MindmapDirection = "forward" | "reverse" | "both";
 
 export interface MindmapOptions {
   /** Maximum tree depth from the root (default: 3). */
@@ -341,34 +354,51 @@ export interface MindmapOptions {
 
 /** Strip characters that break Mermaid mindmap node text, then truncate. */
 function mindmapLabel(text: string, max = 38): string {
-  const cleaned = text.replace(/[()\[\]{}"]/g, ' ').replace(/\s+/g, ' ').trim();
-  return truncate(cleaned || '(untitled)', max);
+  const cleaned = text
+    .replace(/[()[\]{}"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return truncate(cleaned || "(untitled)", max);
 }
 
 /** Wrap a node's label in a mindmap shape chosen by node type. */
 function mindmapShape(node: GraphNode, isRoot: boolean, edgeLabel?: string): string {
   const id = sanitizeId(node.id);
-  const prefix = edgeLabel ? `${edgeLabel}: ` : '';
+  const prefix = edgeLabel ? `${edgeLabel}: ` : "";
   const label = mindmapLabel(prefix + node.title);
 
   // The root is always a circle so it reads as the centre of the map.
   if (isRoot) return `${id}((${label}))`;
 
   switch (node.type as GraphNodeType) {
-    case 'commit':       return `${id}((${label}))`;   // circle
-    case 'session':      return `${id}[${label}]`;     // square
-    case 'agent_trace':  return `${id})${label}(`;     // cloud
-    case 'error':        return `${id}{{${label}}}`;   // hexagon
-    case 'issue':        return `${id}{{${label}}}`;   // hexagon
-    case 'goal':         return `${id}{{${label}}}`;   // hexagon
-    case 'pattern':      return `${id}{{${label}}}`;   // hexagon
-    case 'learning':     return `${id}(${label})`;     // rounded
-    case 'outcome':      return `${id}(${label})`;     // rounded
-    case 'decision':     return `${id}))${label}((`;   // bang
-    case 'context':      return `${id})${label}(`;     // cloud
-    case 'skill_change': return `${id}[${label}]`;     // square
-    case 'file':         return `${id}[${label}]`;     // square
-    default:             return `${id}[${label}]`;
+    case "commit":
+      return `${id}((${label}))`; // circle
+    case "session":
+      return `${id}[${label}]`; // square
+    case "agent_trace":
+      return `${id})${label}(`; // cloud
+    case "error":
+      return `${id}{{${label}}}`; // hexagon
+    case "issue":
+      return `${id}{{${label}}}`; // hexagon
+    case "goal":
+      return `${id}{{${label}}}`; // hexagon
+    case "pattern":
+      return `${id}{{${label}}}`; // hexagon
+    case "learning":
+      return `${id}(${label})`; // rounded
+    case "outcome":
+      return `${id}(${label})`; // rounded
+    case "decision":
+      return `${id}))${label}((`; // bang
+    case "context":
+      return `${id})${label}(`; // cloud
+    case "skill_change":
+      return `${id}[${label}]`; // square
+    case "file":
+      return `${id}[${label}]`; // square
+    default:
+      return `${id}[${label}]`;
   }
 }
 
@@ -385,10 +415,10 @@ export function buildMindmap(
   options: MindmapOptions = {},
 ): string {
   const maxDepth = options.depth ?? 3;
-  const direction = options.direction ?? 'both';
+  const direction = options.direction ?? "both";
   const maxChildren = options.maxChildren ?? 8;
 
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const root = nodeMap.get(rootId);
   if (!root) throw new Error(`Node not found: ${rootId}`);
 
@@ -405,10 +435,10 @@ export function buildMindmap(
     // Gather candidate neighbours (id + the edge type that linked them), in edge order.
     const candidates: Array<{ id: string; label: GraphEdgeType }> = [];
     for (const edge of edges) {
-      if ((direction === 'forward' || direction === 'both') && edge.source === id) {
+      if ((direction === "forward" || direction === "both") && edge.source === id) {
         candidates.push({ id: edge.target, label: edge.type });
       }
-      if ((direction === 'reverse' || direction === 'both') && edge.target === id) {
+      if ((direction === "reverse" || direction === "both") && edge.target === id) {
         candidates.push({ id: edge.source, label: edge.type });
       }
     }
@@ -433,14 +463,14 @@ export function buildMindmap(
   }
 
   // Render recursively as indented mindmap text.
-  const lines: string[] = ['mindmap'];
+  const lines: string[] = ["mindmap"];
 
   const emit = (id: string, depth: number, edgeLabel?: GraphEdgeType): void => {
     const node = nodeMap.get(id)!;
-    const indent = '  '.repeat(depth + 1);
+    const indent = "  ".repeat(depth + 1);
     lines.push(`${indent}${mindmapShape(node, depth === 0, edgeLabel)}`);
 
-    const childIndent = '  '.repeat(depth + 2);
+    const childIndent = "  ".repeat(depth + 2);
     for (const child of children.get(id) ?? []) {
       emit(child.id, depth + 1, child.label);
     }
@@ -451,7 +481,7 @@ export function buildMindmap(
   };
 
   emit(rootId, 0);
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 async function modeMindmap(nodeId: string, options: MindmapOptions): Promise<string> {
@@ -469,15 +499,15 @@ async function modeMindmap(nodeId: string, options: MindmapOptions): Promise<str
 // ---------------------------------------------------------------------------
 
 async function modeOverview(period: string): Promise<string> {
-  if (period !== 'month' && period !== 'week') {
+  if (period !== "month" && period !== "week") {
     throw new Error(`Invalid period "${period}". Use "month" or "week".`);
   }
 
   const persistence = getGraphPersistence();
   const engine = await persistence.loadIntoEngine();
 
-  const since = period === 'week' ? parseSince('7d') : parseSince('30d');
-  const allNodes = engine.findNodes({ since });
+  const since = period === "week" ? parseSince("7d") : parseSince("30d");
+  const allNodes = engine.findNodes({ since: since.toISOString() });
   const allEdges = engine.getEdges();
 
   // Count by type
@@ -494,7 +524,7 @@ async function modeOverview(period: string): Promise<string> {
 
   // Edge type counts (cross-type stats)
   const edgeCounts = new Map<string, number>();
-  const nodeIdSet = new Set(allNodes.map(n => n.id));
+  const nodeIdSet = new Set(allNodes.map((n) => n.id));
   for (const edge of allEdges) {
     if (nodeIdSet.has(edge.source) || nodeIdSet.has(edge.target)) {
       edgeCounts.set(edge.type, (edgeCounts.get(edge.type) ?? 0) + 1);
@@ -502,14 +532,14 @@ async function modeOverview(period: string): Promise<string> {
   }
 
   // Second diagram: edge stats as a bar-style flowchart (node per edge type, width via label)
-  const edgeLines: string[] = ['flowchart LR', '  EDGE_STATS["Edge Type Statistics"]'];
+  const edgeLines: string[] = ["flowchart LR", '  EDGE_STATS["Edge Type Statistics"]'];
   for (const [edgeType, count] of edgeCounts.entries()) {
-    const safeId = `edge_${edgeType.replace(/-/g, '_')}`;
+    const safeId = `edge_${edgeType.replace(/-/g, "_")}`;
     edgeLines.push(`  ${safeId}["${edgeType}: ${count}"]`);
     edgeLines.push(`  EDGE_STATS --> ${safeId}`);
   }
 
-  return [pieLines.join('\n'), '', edgeLines.join('\n')].join('\n');
+  return [pieLines.join("\n"), "", edgeLines.join("\n")].join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -564,20 +594,20 @@ async function main(): Promise<void> {
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      trace:    { type: 'string' },
-      session:  { type: 'string' },
-      file:     { type: 'string' },
-      errors:   { type: 'boolean' },
-      timeline: { type: 'boolean' },
-      goal:     { type: 'string' },
-      overview: { type: 'boolean' },
-      mindmap:  { type: 'string' },
-      since:    { type: 'string' },
-      period:   { type: 'string' },
-      depth:    { type: 'string' },
-      direction: { type: 'string' },
-      'max-children': { type: 'string' },
-      help:     { type: 'boolean', short: 'h' },
+      trace: { type: "string" },
+      session: { type: "string" },
+      file: { type: "string" },
+      errors: { type: "boolean" },
+      timeline: { type: "boolean" },
+      goal: { type: "string" },
+      overview: { type: "boolean" },
+      mindmap: { type: "string" },
+      since: { type: "string" },
+      period: { type: "string" },
+      depth: { type: "string" },
+      direction: { type: "string" },
+      "max-children": { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
   });
 
@@ -595,24 +625,27 @@ async function main(): Promise<void> {
   } else if (values.file) {
     output = await modeFile(values.file);
   } else if (values.errors) {
-    if (!values.since) throw new Error('--errors requires --since <duration>');
+    if (!values.since) throw new Error("--errors requires --since <duration>");
     output = await modeErrors(values.since);
   } else if (values.timeline) {
-    if (!values.since) throw new Error('--timeline requires --since <duration>');
+    if (!values.since) throw new Error("--timeline requires --since <duration>");
     output = await modeTimeline(values.since);
   } else if (values.goal) {
     output = await modeGoal(values.goal);
   } else if (values.overview) {
-    const period = values.period ?? 'week';
+    const period = values.period ?? "week";
     output = await modeOverview(period);
   } else if (values.mindmap) {
     const directionRaw = values.direction;
     let direction: MindmapDirection | undefined;
     if (directionRaw) {
       const map: Record<string, MindmapDirection> = {
-        f: 'forward', forward: 'forward',
-        r: 'reverse', reverse: 'reverse',
-        b: 'both', both: 'both',
+        f: "forward",
+        forward: "forward",
+        r: "reverse",
+        reverse: "reverse",
+        b: "both",
+        both: "both",
       };
       direction = map[directionRaw];
       if (!direction) throw new Error(`Invalid --direction "${directionRaw}". Use forward|reverse|both (or f|r|both).`);
@@ -620,7 +653,7 @@ async function main(): Promise<void> {
     output = await modeMindmap(values.mindmap, {
       depth: values.depth ? parseInt(values.depth, 10) : undefined,
       direction,
-      maxChildren: values['max-children'] ? parseInt(values['max-children'], 10) : undefined,
+      maxChildren: values["max-children"] ? parseInt(values["max-children"], 10) : undefined,
     });
   } else {
     printHelp();

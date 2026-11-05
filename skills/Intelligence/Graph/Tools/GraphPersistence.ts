@@ -23,24 +23,21 @@
  * @version 1.0.0
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
-import { join, basename, dirname } from 'path';
-import { z } from 'zod';
-import { createStateManager } from '../../../../lib/core/StateManager';
-import { getSharedGraphDir } from '../../../../lib/core/KayaHome';
-import { createAppendLog, type AppendLog, type AppendLogOptions } from '../../../../lib/core/AppendLog.ts';
-import type { GraphNode, GraphEdge, GraphState, GraphNodeType, GraphEdgeType } from './types';
-import { ALL_NODE_TYPES, ALL_EDGE_TYPES, createEmptyGraphState } from './types';
-import { GraphEngine } from './GraphEngine';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { join, basename, dirname } from "node:path";
+import { z } from "zod";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { getSharedGraphDir } from "../../../../lib/core/KayaHome.ts";
+import { createAppendLog, type AppendLog, type AppendLogOptions } from "../../../../lib/core/AppendLog.ts";
+import type { GraphNode, GraphEdge, GraphState, GraphNodeType, GraphEdgeType } from "./types.ts";
+import { ALL_NODE_TYPES, ALL_EDGE_TYPES, createEmptyGraphState } from "./types.ts";
+import { GraphEngine } from "./GraphEngine.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const GRAPH_DIR = getSharedGraphDir();
-const NODES_DIR = join(GRAPH_DIR, 'nodes');
-const EDGES_DIR = join(GRAPH_DIR, 'edges');
-const META_PATH = join(GRAPH_DIR, 'meta.json');
 
 /**
  * Rotated-shard retention for graph logs (Slice B1 — context integrity).
@@ -89,37 +86,6 @@ export interface CompactResult {
 // GRAPH PERSISTENCE
 // ============================================
 
-// Module-level singleton — lives for the duration of the process
-// Maps filePath -> Set<id>. Eliminates O(n) file read on every appendNode call.
-// @deprecated Use GraphPersistence instance methods instead
-let _nodeIdCache: Map<string, Set<string>> | null = null;
-
-/** Get the in-memory node ID set for a given file path.
- * Initial load reads the file once; subsequent calls use the in-memory set.
- * @deprecated Use GraphPersistence instance getNodeIds() instead
- */
-function getNodeIdSet(filePath: string): Set<string> {
-  if (_nodeIdCache === null) _nodeIdCache = new Map();
-  if (!_nodeIdCache.has(filePath)) {
-    _nodeIdCache.set(filePath, loadNodeIdsFromFile(filePath));
-  }
-  return _nodeIdCache.get(filePath)!;
-}
-
-function loadNodeIdsFromFile(filePath: string): Set<string> {
-  if (!existsSync(filePath)) return new Set();
-  const ids = new Set<string>();
-  const content = readFileSync(filePath, 'utf-8');
-  for (const line of content.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      const parsed = JSON.parse(line);
-      if (parsed.id) ids.add(parsed.id);
-    } catch { /* skip malformed */ }
-  }
-  return ids;
-}
-
 // ============================================
 // ROTATED-SHARD MERGE (Slice B1 — context integrity)
 // ============================================
@@ -161,7 +127,7 @@ interface TombstoneMarker {
 /** Narrow a folded line to a tombstone marker without widening to `any`. */
 function isTombstoneMarker(value: object): value is TombstoneMarker {
   const v = value as { tombstone?: unknown; valid_to?: unknown };
-  return v.tombstone === true && typeof v.valid_to === 'string';
+  return v.tombstone === true && typeof v.valid_to === "string";
 }
 
 /**
@@ -195,8 +161,8 @@ function readShardsFolded<T extends Identifiable>(
 
   for (const filePath of orderedPaths) {
     if (!existsSync(filePath)) continue;
-    const content = readFileSync(filePath, 'utf-8');
-    for (const line of content.split('\n')) {
+    const content = readFileSync(filePath, "utf-8");
+    for (const line of content.split("\n")) {
       if (!line.trim()) continue;
       try {
         // JSON.parse is inherently `any` at the boundary; the existing
@@ -218,13 +184,6 @@ function readShardsFolded<T extends Identifiable>(
   }
 
   return { records: Array.from(folded.values()), malformedCount };
-}
-
-/** Clear the in-memory node ID cache. Call after --rebuild or in tests.
- * @deprecated Use GraphPersistence instance clearCache() instead
- */
-export function clearNodeIdCache(): void {
-  _nodeIdCache = null;
 }
 
 export class GraphPersistence {
@@ -255,9 +214,9 @@ export class GraphPersistence {
 
   constructor(baseDir?: string) {
     this.baseDir = baseDir || GRAPH_DIR;
-    this.nodesDir = join(this.baseDir, 'nodes');
-    this.edgesDir = join(this.baseDir, 'edges');
-    this.metaPath = join(this.baseDir, 'meta.json');
+    this.nodesDir = join(this.baseDir, "nodes");
+    this.edgesDir = join(this.baseDir, "edges");
+    this.metaPath = join(this.baseDir, "meta.json");
     this.archiveDir = join(dirname(this.baseDir), `${basename(this.baseDir)}-archive`);
 
     this.stateManager = createStateManager<GraphState>({
@@ -340,7 +299,7 @@ export class GraphPersistence {
   private loadNodeIdsFromFile(type: GraphNodeType): Set<string> {
     const log = this.getNodeLog(type);
     const { records } = readShardsFolded<GraphNode>(log.path, log.rotatedPaths());
-    return new Set(records.map(r => r.id));
+    return new Set(records.map((r) => r.id));
   }
 
   /**
@@ -365,7 +324,7 @@ export class GraphPersistence {
   private loadEdgeIdsFromFile(type: GraphEdgeType): Set<string> {
     const log = this.getEdgeLog(type);
     const { records } = readShardsFolded<GraphEdge>(log.path, log.rotatedPaths());
-    return new Set(records.map(r => r.id));
+    return new Set(records.map((r) => r.id));
   }
 
   /**
@@ -387,12 +346,12 @@ export class GraphPersistence {
    * @returns true if appended, false if duplicate
    */
   appendNode(node: GraphNode): boolean {
-    const ids = this.getNodeIds(node.type);  // O(1) after initial load
+    const ids = this.getNodeIds(node.type); // O(1) after initial load
 
     if (ids.has(node.id)) return false;
 
     this.getNodeLog(node.type).append(node);
-    ids.add(node.id);  // Update cache immediately
+    ids.add(node.id); // Update cache immediately
     return true;
   }
 
@@ -459,13 +418,13 @@ export class GraphPersistence {
     }
 
     for (const [type, typeNodes] of byType) {
-      const ids = this.getNodeIds(type);  // O(1) after initial load
-      let batch = '';
+      const ids = this.getNodeIds(type); // O(1) after initial load
+      let batch = "";
 
       for (const node of typeNodes) {
         if (!ids.has(node.id)) {
-          batch += JSON.stringify(node) + '\n';
-          ids.add(node.id);  // Update in-memory cache
+          batch += JSON.stringify(node) + "\n";
+          ids.add(node.id); // Update in-memory cache
           count++;
         }
       }
@@ -505,7 +464,7 @@ export class GraphPersistence {
     }
 
     if (options?.excludeExpired) {
-      return records.filter(n => !n.valid_to);
+      return records.filter((n) => !n.valid_to);
     }
     return records;
   }
@@ -521,8 +480,6 @@ export class GraphPersistence {
     return all;
   }
 
-  // loadNodeIds() replaced by module-level getNodeIdSet() / loadNodeIdsFromFile() for O(1) per-call access
-
   // ============================================
   // EDGE OPERATIONS
   // ============================================
@@ -533,12 +490,12 @@ export class GraphPersistence {
    * @returns true if appended, false if duplicate
    */
   appendEdge(edge: GraphEdge): boolean {
-    const ids = this.getEdgeIds(edge.type);  // O(1) after initial load
+    const ids = this.getEdgeIds(edge.type); // O(1) after initial load
 
     if (ids.has(edge.id)) return false;
 
     this.getEdgeLog(edge.type).append(edge);
-    ids.add(edge.id);  // Update cache immediately
+    ids.add(edge.id); // Update cache immediately
     return true;
   }
 
@@ -556,13 +513,13 @@ export class GraphPersistence {
     }
 
     for (const [type, typeEdges] of byType) {
-      const ids = this.getEdgeIds(type);  // O(1) after initial load
-      let batch = '';
+      const ids = this.getEdgeIds(type); // O(1) after initial load
+      let batch = "";
 
       for (const edge of typeEdges) {
         if (!ids.has(edge.id)) {
-          batch += JSON.stringify(edge) + '\n';
-          ids.add(edge.id);  // Update cache immediately
+          batch += JSON.stringify(edge) + "\n";
+          ids.add(edge.id); // Update cache immediately
           count++;
         }
       }
@@ -604,7 +561,6 @@ export class GraphPersistence {
     }
     return all;
   }
-
 
   // ============================================
   // GRAPH ENGINE HYDRATION
@@ -696,8 +652,8 @@ export class GraphPersistence {
     const { records, malformedCount } = readShardsFolded<T>(log.path, rotated);
 
     const tmpPath = `${log.path}.compact-tmp-${process.pid}-${Date.now()}`;
-    const body = records.map(r => JSON.stringify(r)).join('\n') + (records.length > 0 ? '\n' : '');
-    writeFileSync(tmpPath, body, 'utf-8');
+    const body = records.map((r) => JSON.stringify(r)).join("\n") + (records.length > 0 ? "\n" : "");
+    writeFileSync(tmpPath, body, "utf-8");
     renameSync(tmpPath, log.path); // atomic — same directory/filesystem
 
     mkdirSync(archiveDir, { recursive: true });
@@ -719,7 +675,7 @@ export class GraphPersistence {
   compactNodeType(type: GraphNodeType): CompactResult | null {
     const log = this.getNodeLog(type);
     if (log.rotatedPaths().length === 0) return null;
-    const archiveDir = join(this.archiveDir, 'nodes');
+    const archiveDir = join(this.archiveDir, "nodes");
     const result = this.compactShards<GraphNode>(log, archiveDir);
     return { type, ...result };
   }
@@ -732,7 +688,7 @@ export class GraphPersistence {
   compactEdgeType(type: GraphEdgeType): CompactResult | null {
     const log = this.getEdgeLog(type);
     if (log.rotatedPaths().length === 0) return null;
-    const archiveDir = join(this.archiveDir, 'edges');
+    const archiveDir = join(this.archiveDir, "edges");
     const result = this.compactShards<GraphEdge>(log, archiveDir);
     return { type, ...result };
   }
@@ -773,7 +729,7 @@ export class GraphPersistence {
    * Recalculate and save meta.json from the actual JSONL files.
    */
   async rebuildMeta(): Promise<GraphState> {
-    this.clearCache();  // Ensure fresh reads after any structural changes
+    this.clearCache(); // Ensure fresh reads after any structural changes
     const state = createEmptyGraphState();
 
     for (const type of ALL_NODE_TYPES) {
@@ -826,18 +782,18 @@ if (import.meta.main) {
 
   const args = process.argv.slice(2);
 
-  if (args.includes('--rebuild-meta')) {
-    console.log('Rebuilding meta.json from JSONL files...');
+  if (args.includes("--rebuild-meta")) {
+    console.log("Rebuilding meta.json from JSONL files...");
     const state = await persistence.rebuildMeta();
-    console.log('Graph state:', JSON.stringify(state, null, 2));
-  } else if (args.includes('--load')) {
-    console.log('Loading graph into engine...');
+    console.log("Graph state:", JSON.stringify(state, null, 2));
+  } else if (args.includes("--load")) {
+    console.log("Loading graph into engine...");
     const engine = persistence.loadIntoEngine();
     const stats = engine.getStats();
     console.log(`Loaded ${stats.nodeCount} nodes, ${stats.edgeCount} edges`);
-    console.log('Stats:', JSON.stringify(stats, null, 2));
-  } else if (args.includes('--verify')) {
-    console.log('Verifying JSONL file integrity...');
+    console.log("Stats:", JSON.stringify(stats, null, 2));
+  } else if (args.includes("--verify")) {
+    console.log("Verifying JSONL file integrity...");
     let totalFiles = 0;
     let totalValid = 0;
     let totalMalformed = 0;
@@ -845,10 +801,10 @@ if (import.meta.main) {
     const verifyFile = (filePath: string, label: string) => {
       if (!existsSync(filePath)) return;
       totalFiles++;
-      const content = readFileSync(filePath, 'utf-8');
+      const content = readFileSync(filePath, "utf-8");
       let valid = 0;
       let malformed = 0;
-      for (const line of content.split('\n')) {
+      for (const line of content.split("\n")) {
         if (!line.trim()) continue;
         try {
           JSON.parse(line);
@@ -867,8 +823,8 @@ if (import.meta.main) {
     };
 
     const baseDir = persistence.getBaseDir();
-    const nodesDir = join(baseDir, 'nodes');
-    const edgesDir = join(baseDir, 'edges');
+    const nodesDir = join(baseDir, "nodes");
+    const edgesDir = join(baseDir, "edges");
 
     for (const type of ALL_NODE_TYPES) {
       verifyFile(join(nodesDir, `${type}.jsonl`), `nodes/${type}.jsonl`);
@@ -877,20 +833,20 @@ if (import.meta.main) {
       verifyFile(join(edgesDir, `${type}.jsonl`), `edges/${type}.jsonl`);
     }
 
-    console.log('');
+    console.log("");
     console.log(`Summary: ${totalFiles} files, ${totalValid} valid lines, ${totalMalformed} malformed lines`);
 
     if (totalMalformed > 0) {
       process.exit(1);
     }
   } else {
-    console.log('GraphPersistence CLI');
-    console.log('====================');
+    console.log("GraphPersistence CLI");
+    console.log("====================");
     console.log(`Base directory: ${persistence.getBaseDir()}`);
-    console.log('');
-    console.log('Usage:');
-    console.log('  bun GraphPersistence.ts --rebuild-meta   Rebuild meta.json from JSONL');
-    console.log('  bun GraphPersistence.ts --load           Load graph and show stats');
-    console.log('  bun GraphPersistence.ts --verify         Verify JSONL file integrity');
+    console.log("");
+    console.log("Usage:");
+    console.log("  bun GraphPersistence.ts --rebuild-meta   Rebuild meta.json from JSONL");
+    console.log("  bun GraphPersistence.ts --load           Load graph and show stats");
+    console.log("  bun GraphPersistence.ts --verify         Verify JSONL file integrity");
   }
 }

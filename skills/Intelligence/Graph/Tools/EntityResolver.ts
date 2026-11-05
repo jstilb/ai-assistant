@@ -18,27 +18,25 @@
  * @version 1.0.0
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { Database } from 'bun:sqlite';
-import type { GraphNode, GraphEdge } from './types';
-import { createEdge } from './types';
-import { EmbeddingEngine, knnSearch, buildNodeText, sha256 } from './EmbeddingEngine';
-import { getSharedGraphDir } from '../../../../lib/core/KayaHome';
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { Database } from "bun:sqlite";
+import type { GraphNode, GraphEdge } from "./types.ts";
+import { createEdge } from "./types.ts";
+import { EmbeddingEngine, knnSearch, buildNodeText, sha256 } from "./EmbeddingEngine.ts";
+import { getSharedGraphDir } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const GRAPH_DIR = getSharedGraphDir();
-const EMBEDDINGS_DIR = join(GRAPH_DIR, 'embeddings');
-const INDEX_DB_PATH = join(EMBEDDINGS_DIR, 'index.db');
 
 /** Threshold for same-type dedup: above this, skip write */
 const SAME_TYPE_THRESHOLD = 0.92;
 
 /** Threshold for cross-type relation: above this, create relates_to edge */
-const CROSS_TYPE_THRESHOLD = 0.80;
+const CROSS_TYPE_THRESHOLD = 0.8;
 
 // ============================================
 // RESULT TYPES
@@ -67,8 +65,8 @@ export class EntityResolver {
 
   constructor(graphDir?: string) {
     const dir = graphDir ?? GRAPH_DIR;
-    const embDir = join(dir, 'embeddings');
-    this._dbPath = join(embDir, 'index.db');
+    const embDir = join(dir, "embeddings");
+    this._dbPath = join(embDir, "index.db");
     this.engine = new EmbeddingEngine(this._dbPath, dir);
   }
 
@@ -85,7 +83,8 @@ export class EntityResolver {
       this.db = new Database(this._dbPath);
       this.available = true;
       return true;
-    } catch {
+    } catch (err) {
+      console.error(`[EntityResolver] Cannot open embedding index ${this._dbPath}: ${(err as Error).message}`);
       this.available = false;
       return false;
     }
@@ -120,7 +119,8 @@ export class EntityResolver {
     let queryVec: Float32Array;
     try {
       queryVec = await this.engine.embedNode(candidate);
-    } catch {
+    } catch (err) {
+      console.error(`[EntityResolver] embedNode failed, treating as no match: ${(err as Error).message}`);
       return noMatch;
     }
 
@@ -130,10 +130,11 @@ export class EntityResolver {
     if (candidates.length === 0) return noMatch;
 
     // Filter out the candidate's own ID
-    const matches = candidates.filter(c => c.nodeId !== candidate.id);
+    const matches = candidates.filter((c) => c.nodeId !== candidate.id);
     if (matches.length === 0) return noMatch;
 
     const best = matches[0];
+    if (!best) return noMatch; // unreachable: matches is non-empty
 
     // Same-type dedup: cosine > 0.92
     if (best.nodeType === candidate.type && best.score > SAME_TYPE_THRESHOLD) {
@@ -148,12 +149,12 @@ export class EntityResolver {
     // Cross-type relation: cosine > 0.80
     if (best.score > CROSS_TYPE_THRESHOLD) {
       const edge = createEdge(
-        'relates_to',
+        "relates_to",
         candidate.id,
         best.nodeId,
         best.score, // weight = cosine score
         {
-          source: 'entity-resolution',
+          source: "entity-resolution",
           score: best.score,
         },
       );
@@ -194,29 +195,19 @@ export class EntityResolver {
 // SINGLETON
 // ============================================
 
-let _instance: EntityResolver | null = null;
-
-export function getEntityResolver(): EntityResolver {
-  if (!_instance) {
-    _instance = new EntityResolver();
-    _instance.init();
-  }
-  return _instance;
-}
-
 // ============================================
 // CLI (for testing)
 // ============================================
 
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
-  const title = args[0] ?? 'Fix null pointer in session handler';
-  const type = (args[1] ?? 'error') as GraphNode['type'];
+  const title = args[0] ?? "Fix null pointer in session handler";
+  const type = (args[1] ?? "error") as GraphNode["type"];
 
   const resolver = new EntityResolver();
   const available = resolver.init();
   if (!available) {
-    console.log('[EntityResolver] Index not available — run embed --build-all first');
+    console.log("[EntityResolver] Index not available — run embed --build-all first");
     process.exit(0);
   }
 
@@ -226,7 +217,7 @@ if (import.meta.main) {
     title,
     created_at: new Date().toISOString(),
     valid_from: new Date().toISOString(),
-    tags: ['test'],
+    tags: ["test"],
     metadata: {},
   };
 
@@ -236,7 +227,9 @@ if (import.meta.main) {
   console.log(`Resolved ID: ${result.resolvedId}`);
   console.log(`Match score: ${result.matchScore.toFixed(4)}`);
   if (result.relatesEdge) {
-    console.log(`Relates edge: ${result.relatesEdge.source} -> ${result.relatesEdge.target} (weight: ${result.relatesEdge.weight})`);
+    console.log(
+      `Relates edge: ${result.relatesEdge.source} -> ${result.relatesEdge.target} (weight: ${result.relatesEdge.weight})`,
+    );
     console.log(`Edge metadata:`, result.relatesEdge.metadata);
   }
 

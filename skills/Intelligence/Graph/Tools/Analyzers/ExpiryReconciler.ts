@@ -31,9 +31,9 @@
  * @version 1.0.0
  */
 
-import { GraphPersistence, getGraphPersistence } from '../GraphPersistence';
+import { type GraphPersistence, getGraphPersistence } from "../GraphPersistence.ts";
 
-export interface ExpiryReconcileResult {
+interface ExpiryReconcileResult {
   /** IDs tombstoned this run (or that WOULD be tombstoned, under --dry-run). */
   tombstonedIds: string[];
   /** supersedes edges whose target was already expired — idempotency skips. */
@@ -64,11 +64,11 @@ export class ExpiryReconciler {
 
     // supersedes edges are source(high-rated) -> target(low-rated, i.e. the
     // superseded one) per DecisionIngester.createCrossSourceEdges().
-    const edges = this.persistence.loadEdges('supersedes');
+    const edges = this.persistence.loadEdges("supersedes");
     // Default (include-expired) read — we need to see nodes ALREADY
     // tombstoned so re-runs can recognize them and skip (idempotency).
-    const outcomeNodes = this.persistence.loadNodes('outcome');
-    const nodeById = new Map(outcomeNodes.map(n => [n.id, n]));
+    const outcomeNodes = this.persistence.loadNodes("outcome");
+    const nodeById = new Map(outcomeNodes.map((n) => [n.id, n]));
 
     const tombstonedIds: string[] = [];
     let alreadyExpired = 0;
@@ -87,9 +87,7 @@ export class ExpiryReconciler {
       const target = nodeById.get(edge.target);
       if (!target) {
         missingTargets++;
-        console.error(
-          `[ExpiryReconciler] supersedes edge ${edge.id} targets unknown node ${edge.target} — skipped`,
-        );
+        console.error(`[ExpiryReconciler] supersedes edge ${edge.id} targets unknown node ${edge.target} — skipped`);
         continue;
       }
       if (target.valid_to || handledThisRun.has(target.id)) {
@@ -104,7 +102,7 @@ export class ExpiryReconciler {
       }
 
       const validTo = new Date().toISOString();
-      const ok = this.persistence.tombstoneNode('outcome', target.id, validTo, `supersedes:${edge.id}`);
+      const ok = this.persistence.tombstoneNode("outcome", target.id, validTo, `supersedes:${edge.id}`);
       if (!ok) {
         // tombstoneNode() already wrote a stderr warning explaining why.
         missingTargets++;
@@ -123,26 +121,24 @@ export class ExpiryReconciler {
 // ============================================
 
 if (import.meta.main) {
-  const dryRun = process.argv.includes('--dry-run');
+  const dryRun = process.argv.includes("--dry-run");
   const reconciler = new ExpiryReconciler();
 
-  console.log(`ExpiryReconciler${dryRun ? ' (--dry-run: no writes)' : ''}`);
-  console.log('='.repeat(40));
+  console.log(`ExpiryReconciler${dryRun ? " (--dry-run: no writes)" : ""}`);
+  console.log("=".repeat(40));
 
   const result = await reconciler.reconcile({ dryRun });
 
   console.log(
     `supersedes edges: ${result.tombstonedIds.length + result.alreadyExpired + result.missingTargets} scanned, ` +
-    `${result.alreadyExpired} already-expired, ${result.missingTargets} missing-target`,
+      `${result.alreadyExpired} already-expired, ${result.missingTargets} missing-target`,
   );
-  console.log(
-    `${dryRun ? 'Would tombstone' : 'Tombstoned'} ${result.tombstonedIds.length} outcome node(s):`,
-  );
+  console.log(`${dryRun ? "Would tombstone" : "Tombstoned"} ${result.tombstonedIds.length} outcome node(s):`);
   for (const id of result.tombstonedIds) {
     console.log(`  ${id}`);
   }
 
   if (result.tombstonedIds.length === 0) {
-    console.log('(nothing to do — every supersedes target is already expired or none exist)');
+    console.log("(nothing to do — every supersedes target is already expired or none exist)");
   }
 }

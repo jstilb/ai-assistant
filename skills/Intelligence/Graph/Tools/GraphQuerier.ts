@@ -24,21 +24,20 @@
  * @version 1.1.0
  */
 
-import { parseArgs } from 'util';
-import { mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import type { GraphNodeType, IngestionResult, IngestionSource } from './types';
-import { ALL_NODE_TYPES, ALL_EDGE_TYPES } from './types';
-import { GraphEngine } from './GraphEngine';
-import { GraphPersistence, getGraphPersistence } from './GraphPersistence';
-import { EmbeddingQuerier } from './EmbeddingQuerier';
-import { getEmbeddingEngine } from './EmbeddingEngine';
-import { SessionIngester } from './Ingesters/SessionIngester';
-import { TraceIngester } from './Ingesters/TraceIngester';
-import { GitIngester } from './Ingesters/GitIngester';
-import { DecisionIngester } from './Ingesters/DecisionIngester';
-import { RelationInferrer } from './Analyzers/RelationInferrer';
+import { parseArgs } from "node:util";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import type { GraphNodeType, IngestionResult, IngestionSource } from "./types.ts";
+import { ALL_NODE_TYPES, ALL_EDGE_TYPES } from "./types.ts";
+import { getGraphPersistence } from "./GraphPersistence.ts";
+import { EmbeddingQuerier } from "./EmbeddingQuerier.ts";
+import { getEmbeddingEngine } from "./EmbeddingEngine.ts";
+import { SessionIngester } from "./Ingesters/SessionIngester.ts";
+import { TraceIngester } from "./Ingesters/TraceIngester.ts";
+import { GitIngester } from "./Ingesters/GitIngester.ts";
+import { DecisionIngester } from "./Ingesters/DecisionIngester.ts";
+import { RelationInferrer } from "./Analyzers/RelationInferrer.ts";
 
 // ============================================
 // CLI PARSING
@@ -82,8 +81,8 @@ Query Options:
   --include-expired      search/trace only: include superseded (tombstoned)
                           nodes, which are excluded by default
 
-Node types: ${ALL_NODE_TYPES.join(', ')}
-Edge types: ${ALL_EDGE_TYPES.join(', ')}
+Node types: ${ALL_NODE_TYPES.join(", ")}
+Edge types: ${ALL_EDGE_TYPES.join(", ")}
 
 Examples:
   bun Tools/GraphQuerier.ts ingest --all
@@ -123,8 +122,8 @@ Examples:
  */
 export function writeIngestSuccessMarker(totalNodes: number, totalEdges: number): void {
   try {
-    const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-    const dir = join(getKayaHome(), 'MEMORY', 'GRAPH', 'ingest');
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const dir = join(getKayaHome(), "MEMORY", "GRAPH", "ingest");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, `${date}.md`),
@@ -136,30 +135,26 @@ export function writeIngestSuccessMarker(totalNodes: number, totalEdges: number)
   }
 }
 
-async function commandIngest(options: {
-  all?: boolean;
-  source?: string;
-  infer?: boolean;
-}): Promise<void> {
+async function commandIngest(options: { all?: boolean; source?: string; infer?: boolean }): Promise<void> {
   const persistence = getGraphPersistence();
   const results: IngestionResult[] = [];
 
   const sources: IngestionSource[] = [];
 
   if (options.all) {
-    sources.push('git', 'sessions', 'traces', 'decisions');
+    sources.push("git", "sessions", "traces", "decisions");
   } else if (options.source) {
-    const validSources = ['git', 'sessions', 'traces', 'decisions'];
+    const validSources = ["git", "sessions", "traces", "decisions"];
     if (!validSources.includes(options.source)) {
       console.error(`Invalid source: ${options.source}`);
-      console.error(`Valid sources: ${validSources.join(', ')}`);
+      console.error(`Valid sources: ${validSources.join(", ")}`);
       process.exit(1);
     }
     sources.push(options.source as IngestionSource);
   }
 
   if (sources.length === 0 && !options.infer) {
-    console.error('No source specified. Use --all, --source <name>, or --infer');
+    console.error("No source specified. Use --all, --source <name>, or --infer");
     process.exit(1);
   }
 
@@ -169,22 +164,22 @@ async function commandIngest(options: {
     let result: IngestionResult;
 
     switch (source) {
-      case 'git': {
+      case "git": {
         const ingester = new GitIngester(persistence);
         result = await ingester.ingest();
         break;
       }
-      case 'sessions': {
+      case "sessions": {
         const ingester = new SessionIngester(persistence);
         result = await ingester.ingest();
         break;
       }
-      case 'traces': {
+      case "traces": {
         const ingester = new TraceIngester(persistence);
         result = await ingester.ingest();
         break;
       }
-      case 'decisions': {
+      case "decisions": {
         const ingester = new DecisionIngester(persistence);
         result = await ingester.ingest();
         break;
@@ -204,18 +199,18 @@ async function commandIngest(options: {
         console.log(`    - ${err}`);
       }
     }
-    console.log('');
+    console.log("");
   }
 
   // Run inference if requested or if --all
   if (options.infer || options.all) {
-    console.log('Running relation inference...');
+    console.log("Running relation inference...");
     const inferrer = new RelationInferrer(persistence);
     const inferResult = await inferrer.infer();
     results.push(inferResult);
     console.log(`  Edges inferred: +${inferResult.edgesAdded} (${inferResult.edgesSkipped} skipped)`);
     console.log(`  Duration: ${inferResult.duration}ms`);
-    console.log('');
+    console.log("");
   }
 
   // Update meta
@@ -227,13 +222,13 @@ async function commandIngest(options: {
 
   // Update embedding index for newly ingested nodes
   if (totalNodes > 0 || options.all) {
-    console.log('Updating embedding index...');
+    console.log("Updating embedding index...");
     const embEngine = getEmbeddingEngine();
     embEngine.openDb();
     const embResult = await embEngine.buildIncremental();
     console.log(`  Embeddings: +${embResult.embedded} (${embResult.skipped} skipped)`);
     embEngine.close();
-    console.log('');
+    console.log("");
   }
 
   console.log(`Ingestion complete: +${totalNodes} nodes, +${totalEdges} edges`);
@@ -254,17 +249,17 @@ async function commandStats(jsonOutput: boolean): Promise<void> {
     return;
   }
 
-  console.log('Graph Statistics');
-  console.log('===================');
+  console.log("Graph Statistics");
+  console.log("===================");
   console.log(`Total nodes: ${stats.nodeCount}`);
   console.log(`Total edges: ${stats.edgeCount}`);
 
-  console.log('\nNodes by type:');
+  console.log("\nNodes by type:");
   for (const [type, count] of Object.entries(stats.nodesByType)) {
     if (count > 0) console.log(`  ${type}: ${count}`);
   }
 
-  console.log('\nEdges by type:');
+  console.log("\nEdges by type:");
   for (const [type, count] of Object.entries(stats.edgesByType)) {
     if (count > 0) console.log(`  ${type}: ${count}`);
   }
@@ -272,8 +267,8 @@ async function commandStats(jsonOutput: boolean): Promise<void> {
   const components = engine.getConnectedComponents();
   console.log(`\nConnected components: ${components.length}`);
   if (components.length > 0 && components.length <= 10) {
-    for (let i = 0; i < components.length; i++) {
-      console.log(`  Component ${i + 1}: ${components[i].length} nodes`);
+    for (const [i, component] of components.entries()) {
+      console.log(`  Component ${i + 1}: ${component.length} nodes`);
     }
   }
 }
@@ -299,11 +294,9 @@ async function commandTrace(
     console.error(`Node not found: ${fromId}`);
     // Try to suggest similar IDs
     const allNodes = engine.getNodes();
-    const suggestions = allNodes
-      .filter(n => n.id.includes(fromId.split(':').pop() || ''))
-      .slice(0, 5);
+    const suggestions = allNodes.filter((n) => n.id.includes(fromId.split(":").pop() || "")).slice(0, 5);
     if (suggestions.length > 0) {
-      console.error('Did you mean:');
+      console.error("Did you mean:");
       for (const s of suggestions) {
         console.error(`  ${s.id} (${s.title})`);
       }
@@ -314,28 +307,34 @@ async function commandTrace(
   const results = engine.traceBackward(fromId, depth);
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      depth: r.depth,
-      created_at: r.node.created_at,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          depth: r.depth,
+          created_at: r.node.created_at,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   const startNode = engine.getNode(fromId)!;
   console.log(`Tracing backward from: ${startNode.type}:${startNode.title}`);
   console.log(`Max depth: ${depth}`);
-  console.log('---');
+  console.log("---");
 
   if (results.length === 0) {
-    console.log('No predecessors found.');
+    console.log("No predecessors found.");
     return;
   }
 
   for (const r of results) {
-    const indent = '  '.repeat(r.depth);
+    const indent = "  ".repeat(r.depth);
     console.log(`${indent}[depth=${r.depth}] ${r.node.type}: ${r.node.title}`);
     console.log(`${indent}         id: ${r.node.id}`);
     console.log(`${indent}         at: ${r.node.created_at}`);
@@ -346,11 +345,7 @@ async function commandTrace(
 // COMMAND: NEIGHBORS
 // ============================================
 
-async function commandNeighbors(
-  nodeId: string,
-  depth: number,
-  jsonOutput: boolean,
-): Promise<void> {
+async function commandNeighbors(nodeId: string, depth: number, jsonOutput: boolean): Promise<void> {
   const persistence = getGraphPersistence();
   const engine = persistence.loadIntoEngine();
 
@@ -362,27 +357,33 @@ async function commandNeighbors(
   const results = engine.getNeighbors(nodeId, depth);
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      depth: r.depth,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          depth: r.depth,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   const startNode = engine.getNode(nodeId)!;
   console.log(`Neighbors of: ${startNode.type}:${startNode.title}`);
   console.log(`Depth: ${depth}`);
-  console.log('---');
+  console.log("---");
 
   if (results.length === 0) {
-    console.log('No neighbors found.');
+    console.log("No neighbors found.");
     return;
   }
 
   for (const r of results) {
-    const indent = '  '.repeat(r.depth);
+    const indent = "  ".repeat(r.depth);
     console.log(`${indent}[depth=${r.depth}] ${r.node.type}: ${r.node.title}`);
   }
 }
@@ -391,11 +392,7 @@ async function commandNeighbors(
 // COMMAND: PATH
 // ============================================
 
-async function commandPath(
-  fromId: string,
-  toId: string,
-  jsonOutput: boolean,
-): Promise<void> {
+async function commandPath(fromId: string, toId: string, jsonOutput: boolean): Promise<void> {
   const persistence = getGraphPersistence();
   const engine = persistence.loadIntoEngine();
 
@@ -421,17 +418,19 @@ async function commandPath(
   }
 
   console.log(`Shortest path (${path.length - 1} hops):`);
-  for (let i = 0; i < path.length; i++) {
-    const node = engine.getNode(path[i]);
-    const prefix = i === 0 ? 'START' : i === path.length - 1 ? 'END  ' : `     `;
-    console.log(`  ${prefix} ${node?.type || '?'}: ${node?.title || path[i]}`);
+  for (const [i, nodeId] of path.entries()) {
+    const node = engine.getNode(nodeId);
+    const prefix = i === 0 ? "START" : i === path.length - 1 ? "END  " : `     `;
+    console.log(`  ${prefix} ${node?.type || "?"}: ${node?.title || nodeId}`);
 
-    if (i < path.length - 1) {
-      const edges = engine.findEdgesBetween(path[i], path[i + 1]);
-      const reverseEdges = engine.findEdgesBetween(path[i + 1], path[i]);
+    const nextId = path[i + 1];
+    if (nextId !== undefined) {
+      const edges = engine.findEdgesBetween(nodeId, nextId);
+      const reverseEdges = engine.findEdgesBetween(nextId, nodeId);
       const allEdges = [...edges, ...reverseEdges];
-      if (allEdges.length > 0) {
-        console.log(`         --[${allEdges[0].type}]-->`);
+      const firstEdge = allEdges[0];
+      if (firstEdge) {
+        console.log(`         --[${firstEdge.type}]-->`);
       } else {
         console.log(`         --[?]-->`);
       }
@@ -456,44 +455,50 @@ async function commandList(
   let sinceDate: string | undefined;
   if (since) {
     const match = since.match(/^(\d+)([dhm])$/);
-    if (match) {
+    if (match?.[1] !== undefined) {
       const amount = parseInt(match[1]);
       const unit = match[2];
-      const ms = unit === 'd' ? amount * 86400000 :
-                 unit === 'h' ? amount * 3600000 :
-                 amount * 60000;
+      const ms = unit === "d" ? amount * 86400000 : unit === "h" ? amount * 3600000 : amount * 60000;
       sinceDate = new Date(Date.now() - ms).toISOString();
     }
   }
 
-  const tagList = tags ? tags.split(',').map(t => t.trim()) : undefined;
+  const tagList = tags ? tags.split(",").map((t) => t.trim()) : undefined;
 
-  const nodes = engine.findNodes({
-    type: type as GraphNodeType,
-    since: sinceDate,
-    tags: tagList,
-  }).slice(0, limit);
+  const nodes = engine
+    .findNodes({
+      type: type as GraphNodeType,
+      since: sinceDate,
+      tags: tagList,
+    })
+    .slice(0, limit);
 
   if (jsonOutput) {
-    console.log(JSON.stringify(nodes.map(n => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      created_at: n.created_at,
-      tags: n.tags,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          created_at: n.created_at,
+          tags: n.tags,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  console.log(`Listing ${type} nodes${since ? ` (since ${since})` : ''}: ${nodes.length} found`);
-  console.log('---');
+  console.log(`Listing ${type} nodes${since ? ` (since ${since})` : ""}: ${nodes.length} found`);
+  console.log("---");
 
   for (const node of nodes) {
     console.log(`  [${node.id}]`);
     console.log(`    ${node.title}`);
     console.log(`    Created: ${node.created_at}`);
     if (node.tags.length > 0) {
-      console.log(`    Tags: ${node.tags.join(', ')}`);
+      console.log(`    Tags: ${node.tags.join(", ")}`);
     }
   }
 }
@@ -521,26 +526,32 @@ async function commandSearchSemantic(
   querier.close();
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      score: r.score,
-      source: r.source,
-      tags: r.node.tags,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          score: r.score,
+          source: r.source,
+          tags: r.node.tags,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`Semantic search results for "${query}": ${results.length} found`);
-  console.log('---');
+  console.log("---");
 
   for (const r of results) {
     console.log(`[${r.score.toFixed(2)}] ${r.node.type}: ${r.node.title}`);
     console.log(`       id: ${r.node.id}`);
-    if (r.node.tags.length > 0) console.log(`       tags: ${r.node.tags.join(', ')}`);
+    if (r.node.tags.length > 0) console.log(`       tags: ${r.node.tags.join(", ")}`);
     console.log(`       [source: ${r.source}]`);
-    console.log('');
+    console.log("");
   }
 }
 
@@ -567,30 +578,36 @@ async function commandSearchHybrid(
   querier.close();
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      score: r.score,
-      source: r.source,
-      depth: r.depth,
-      viaNodeId: r.viaNodeId,
-      tags: r.node.tags,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          score: r.score,
+          source: r.source,
+          depth: r.depth,
+          viaNodeId: r.viaNodeId,
+          tags: r.node.tags,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`Hybrid search results for "${query}": ${results.length} found`);
-  console.log('---');
+  console.log("---");
 
   for (const r of results) {
-    const depthStr = r.depth !== undefined ? `, depth=${r.depth}` : '';
-    const viaStr = r.viaNodeId ? `, via: ${r.viaNodeId}` : '';
+    const depthStr = r.depth !== undefined ? `, depth=${r.depth}` : "";
+    const viaStr = r.viaNodeId ? `, via: ${r.viaNodeId}` : "";
     console.log(`[${r.score.toFixed(2)}] ${r.node.type}: ${r.node.title}`);
     console.log(`       id: ${r.node.id}`);
-    if (r.node.tags.length > 0) console.log(`       tags: ${r.node.tags.join(', ')}`);
+    if (r.node.tags.length > 0) console.log(`       tags: ${r.node.tags.join(", ")}`);
     console.log(`       [source: ${r.source}${depthStr}${viaStr}]`);
-    console.log('');
+    console.log("");
   }
 }
 
@@ -612,30 +629,38 @@ async function commandSearch(
   // told to use. --include-expired is the forensic opt-out.
   const engine = persistence.loadIntoEngine(undefined, { excludeExpired: !includeExpired });
 
-  const nodes = engine.findNodes({
-    titleContains: query,
-  }).slice(0, limit);
+  const nodes = engine
+    .findNodes({
+      titleContains: query,
+    })
+    .slice(0, limit);
 
   if (jsonOutput) {
-    console.log(JSON.stringify(nodes.map(n => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      created_at: n.created_at,
-      tags: n.tags,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          created_at: n.created_at,
+          tags: n.tags,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`Search results for "${query}": ${nodes.length} found`);
-  console.log('---');
+  console.log("---");
 
   for (const node of nodes) {
     console.log(`  [${node.type}] ${node.id}`);
     console.log(`    ${node.title}`);
     console.log(`    Created: ${node.created_at}`);
     if (node.tags.length > 0) {
-      console.log(`    Tags: ${node.tags.join(', ')}`);
+      console.log(`    Tags: ${node.tags.join(", ")}`);
     }
   }
 }
@@ -660,29 +685,32 @@ async function commandTop(
   });
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      degree: r.degree,
-      inDegree: r.inDegree,
-      outDegree: r.outDegree,
-      tags: r.node.tags,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          degree: r.degree,
+          inDegree: r.inDegree,
+          outDegree: r.outDegree,
+          tags: r.node.tags,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  const scope = [
-    type ? `type=${type}` : null,
-    query ? `matching "${query}"` : null,
-  ].filter(Boolean).join(', ');
+  const scope = [type ? `type=${type}` : null, query ? `matching "${query}"` : null].filter(Boolean).join(", ");
 
-  console.log(`Top entry-point nodes${scope ? ` (${scope})` : ''}: ${results.length} found`);
-  console.log('(ranked by connections — most-connected hubs are the best places to start a trace)');
-  console.log('---');
+  console.log(`Top entry-point nodes${scope ? ` (${scope})` : ""}: ${results.length} found`);
+  console.log("(ranked by connections — most-connected hubs are the best places to start a trace)");
+  console.log("---");
 
   if (results.length === 0) {
-    console.log('No connected nodes found. Try `ingest --all` to build edges, or widen the filter.');
+    console.log("No connected nodes found. Try `ingest --all` to build edges, or widen the filter.");
     return;
   }
 
@@ -690,7 +718,7 @@ async function commandTop(
     console.log(`  [deg ${r.degree}  in ${r.inDegree} / out ${r.outDegree}] ${r.node.type}: ${r.node.title}`);
     console.log(`         id: ${r.node.id}`);
     if (r.node.tags.length > 0) {
-      console.log(`         tags: ${r.node.tags.join(', ')}`);
+      console.log(`         tags: ${r.node.tags.join(", ")}`);
     }
   }
 }
@@ -699,28 +727,24 @@ async function commandTop(
 // COMMAND: BY-GOAL
 // ============================================
 
-async function commandByGoal(
-  goalQuery: string,
-  limit: number,
-  jsonOutput: boolean,
-): Promise<void> {
+async function commandByGoal(goalQuery: string, limit: number, jsonOutput: boolean): Promise<void> {
   const persistence = getGraphPersistence();
   const engine = persistence.loadIntoEngine();
 
   // Find goal nodes matching the query
   const goalNodes = engine.findNodes({
-    type: 'goal',
+    type: "goal",
     titleContains: goalQuery,
   });
 
   if (goalNodes.length === 0) {
     // Also try searching by tag
-    const byTag = engine.findNodes({ type: 'goal', tags: [goalQuery] });
+    const byTag = engine.findNodes({ type: "goal", tags: [goalQuery] });
     if (byTag.length === 0) {
       console.error(`No goal nodes found matching "${goalQuery}"`);
-      const allGoals = engine.getNodes('goal');
+      const allGoals = engine.getNodes("goal");
       if (allGoals.length > 0) {
-        console.error('Available goals:');
+        console.error("Available goals:");
         for (const g of allGoals.slice(0, 10)) {
           console.error(`  ${g.id}: ${g.title}`);
         }
@@ -731,11 +755,11 @@ async function commandByGoal(
   }
 
   // Traverse goal_aligned edges from each goal
-  const alignedNodes: Array<{ node: typeof goalNodes[0]; depth: number; goalTitle: string }> = [];
+  const alignedNodes: Array<{ node: (typeof goalNodes)[0]; depth: number; goalTitle: string }> = [];
   const seen = new Set<string>();
 
   for (const goal of goalNodes) {
-    const aligned = engine.traceBackward(goal.id, 3, ['goal_aligned']);
+    const aligned = engine.traceBackward(goal.id, 3, ["goal_aligned"]);
     for (const r of aligned) {
       if (!seen.has(r.node.id)) {
         seen.add(r.node.id);
@@ -743,7 +767,7 @@ async function commandByGoal(
       }
     }
     // Also check forward
-    const forward = engine.traceForward(goal.id, 3, ['goal_aligned']);
+    const forward = engine.traceForward(goal.id, 3, ["goal_aligned"]);
     for (const r of forward) {
       if (!seen.has(r.node.id)) {
         seen.add(r.node.id);
@@ -755,18 +779,24 @@ async function commandByGoal(
   const results = alignedNodes.slice(0, limit);
 
   if (jsonOutput) {
-    console.log(JSON.stringify(results.map(r => ({
-      id: r.node.id,
-      type: r.node.type,
-      title: r.node.title,
-      goalTitle: r.goalTitle,
-      depth: r.depth,
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        results.map((r) => ({
+          id: r.node.id,
+          type: r.node.type,
+          title: r.node.title,
+          goalTitle: r.goalTitle,
+          depth: r.depth,
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`Decisions aligned with goal "${goalQuery}": ${results.length} found`);
-  console.log('---');
+  console.log("---");
 
   for (const r of results) {
     console.log(`  [${r.node.type}] ${r.node.id}`);
@@ -786,20 +816,25 @@ async function commandComponents(jsonOutput: boolean): Promise<void> {
   const components = engine.getConnectedComponents();
 
   if (jsonOutput) {
-    console.log(JSON.stringify(components.map((c, i) => ({
-      id: i + 1,
-      size: c.length,
-      nodes: c.slice(0, 10),
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        components.map((c, i) => ({
+          id: i + 1,
+          size: c.length,
+          nodes: c.slice(0, 10),
+        })),
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`Connected Components: ${components.length}`);
-  console.log('---');
+  console.log("---");
 
   const sorted = components.sort((a, b) => b.length - a.length);
-  for (let i = 0; i < Math.min(sorted.length, 20); i++) {
-    const comp = sorted[i];
+  for (const [i, comp] of sorted.slice(0, 20).entries()) {
     console.log(`\n  Component ${i + 1} (${comp.length} nodes):`);
     for (const nodeId of comp.slice(0, 5)) {
       const node = engine.getNode(nodeId);
@@ -817,10 +852,7 @@ async function commandComponents(jsonOutput: boolean): Promise<void> {
 // COMMAND: AUDIT
 // ============================================
 
-async function commandAudit(
-  workflowId: string,
-  jsonOutput: boolean,
-): Promise<void> {
+async function commandAudit(workflowId: string, jsonOutput: boolean): Promise<void> {
   const persistence = getGraphPersistence();
   const engine = persistence.loadIntoEngine();
 
@@ -838,15 +870,15 @@ async function commandAudit(
   const backward = engine.traceBackward(traceId, 3);
 
   // Forward trace: files touched
-  const forwardFiles = engine.traceForward(traceId, 1, ['modifies']);
-  const files = forwardFiles.filter(r => r.node.type === 'file');
+  const forwardFiles = engine.traceForward(traceId, 1, ["modifies"]);
+  const files = forwardFiles.filter((r) => r.node.type === "file");
 
   // Other traces touching same files
   const relatedTraces: Array<{ traceTitle: string; file: string; score?: number }> = [];
   for (const fileResult of files) {
-    const otherTraces = engine.traceBackward(fileResult.node.id, 1, ['modifies']);
+    const otherTraces = engine.traceBackward(fileResult.node.id, 1, ["modifies"]);
     for (const ot of otherTraces) {
-      if (ot.node.type === 'agent_trace' && ot.node.id !== traceId) {
+      if (ot.node.type === "agent_trace" && ot.node.id !== traceId) {
         relatedTraces.push({
           traceTitle: ot.node.title,
           file: fileResult.node.title,
@@ -868,71 +900,85 @@ async function commandAudit(
   let audit: TraceAuditResult | null = null;
   try {
     // cross-skill-allowed: dynamic import for trace-audit queries with graceful degradation, deliberate
-    const agentMonitor = await import('../../../System/AgentMonitor/Tools/TraceAuditor.ts') as {
+    const agentMonitor = (await import("../../../System/AgentMonitor/Tools/TraceAuditor.ts")) as {
       loadAudit: (id: string) => TraceAuditResult | null;
     };
     audit = agentMonitor.loadAudit(workflowId);
-  } catch {
-    // AgentMonitor not available — audit runs without LLM analysis
+  } catch (err) {
+    // AgentMonitor missing is expected (audit runs without LLM analysis). Any other error
+    // (TypeError in loadAudit, bad audit file) is a real fault: report it, keep going.
+    const code = (err as NodeJS.ErrnoException).code;
+    const missing = code === "ERR_MODULE_NOT_FOUND" || /cannot find module/i.test((err as Error).message ?? "");
+    if (!missing) {
+      console.error(`[GraphQuerier] AgentMonitor audit load failed: ${(err as Error).message}`);
+    }
   }
 
   if (jsonOutput) {
-    console.log(JSON.stringify({
-      workflowId,
-      traceNode: {
-        id: traceNode.id,
-        title: traceNode.title,
-        metadata: traceNode.metadata,
-        tags: traceNode.tags,
-      },
-      causalChain: backward.map(r => ({
-        id: r.node.id,
-        type: r.node.type,
-        title: r.node.title,
-        depth: r.depth,
-      })),
-      filesTouched: files.map(r => r.node.title),
-      relatedTraces,
-      audit: audit || null,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          workflowId,
+          traceNode: {
+            id: traceNode.id,
+            title: traceNode.title,
+            metadata: traceNode.metadata,
+            tags: traceNode.tags,
+          },
+          causalChain: backward.map((r) => ({
+            id: r.node.id,
+            type: r.node.type,
+            title: r.node.title,
+            depth: r.depth,
+          })),
+          filesTouched: files.map((r) => r.node.title),
+          relatedTraces,
+          audit: audit || null,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  console.log('Workflow Audit Report');
-  console.log('====================\n');
+  console.log("Workflow Audit Report");
+  console.log("====================\n");
   console.log(`Workflow: ${workflowId}`);
   console.log(`Events: ${traceNode.metadata.eventCount}`);
   console.log(`Tokens: ${traceNode.metadata.totalTokens}`);
   console.log(`Has errors: ${traceNode.metadata.hasError}`);
 
   if (traceNode.metadata.evaluationScore !== undefined) {
-    console.log(`Evaluation: ${traceNode.metadata.evaluationScore}/100 (${traceNode.metadata.evaluationPassed ? 'PASS' : 'FAIL'})`);
+    console.log(
+      `Evaluation: ${traceNode.metadata.evaluationScore}/100 (${traceNode.metadata.evaluationPassed ? "PASS" : "FAIL"})`,
+    );
   }
 
   if (backward.length > 0) {
-    console.log('\nCausal Chain (backward trace):');
+    console.log("\nCausal Chain (backward trace):");
     for (const r of backward) {
-      const indent = '  '.repeat(r.depth);
+      const indent = "  ".repeat(r.depth);
       console.log(`${indent}[depth=${r.depth}] ${r.node.type}: ${r.node.title}`);
     }
   }
 
   if (files.length > 0) {
-    console.log('\nFiles Touched:');
+    console.log("\nFiles Touched:");
     for (const f of files) {
       console.log(`  ${f.node.title}`);
     }
   }
 
   if (relatedTraces.length > 0) {
-    console.log('\nRelated Traces (same files):');
+    console.log("\nRelated Traces (same files):");
     for (const rt of relatedTraces) {
-      console.log(`  ${rt.traceTitle} (via ${rt.file})${rt.score !== undefined ? ` — score: ${rt.score}/100` : ''}`);
+      console.log(`  ${rt.traceTitle} (via ${rt.file})${rt.score !== undefined ? ` — score: ${rt.score}/100` : ""}`);
     }
   }
 
   if (audit) {
-    console.log('\nLLM Audit:');
+    console.log("\nLLM Audit:");
     console.log(`  Root Cause: ${audit.rootCause}`);
     console.log(`  Category: ${audit.failureCategory}`);
     console.log(`  Confidence: ${(audit.confidence * 100).toFixed(0)}%`);
@@ -953,21 +999,21 @@ async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      all: { type: 'boolean' },
-      source: { type: 'string' },
-      infer: { type: 'boolean' },
-      from: { type: 'string' },
-      to: { type: 'string' },
-      node: { type: 'string' },
-      depth: { type: 'string' },
-      type: { type: 'string' },
-      tags: { type: 'string' },
-      since: { type: 'string' },
-      limit: { type: 'string' },
-      'min-score': { type: 'string' },
-      json: { type: 'boolean' },
-      'include-expired': { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' },
+      all: { type: "boolean" },
+      source: { type: "string" },
+      infer: { type: "boolean" },
+      from: { type: "string" },
+      to: { type: "string" },
+      node: { type: "string" },
+      depth: { type: "string" },
+      type: { type: "string" },
+      tags: { type: "string" },
+      since: { type: "string" },
+      limit: { type: "string" },
+      "min-score": { type: "string" },
+      json: { type: "boolean" },
+      "include-expired": { type: "boolean" },
+      help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
@@ -980,14 +1026,14 @@ async function main(): Promise<void> {
   const command = positionals[0];
   const depth = values.depth ? parseInt(values.depth) : 3;
   const limit = values.limit ? parseInt(values.limit) : 50;
-  const minScore = values['min-score'] ? parseFloat(values['min-score']) : 0.40;
+  const minScore = values["min-score"] ? parseFloat(values["min-score"]) : 0.4;
   const jsonOutput = values.json || false;
   // Slice C1 (context integrity): search/trace exclude expired (tombstoned)
   // nodes by default — this flag opts back into forensic include-everything.
-  const includeExpired = values['include-expired'] || false;
+  const includeExpired = values["include-expired"] || false;
 
   switch (command) {
-    case 'ingest':
+    case "ingest":
       await commandIngest({
         all: values.all,
         source: values.source,
@@ -995,11 +1041,11 @@ async function main(): Promise<void> {
       });
       break;
 
-    case 'stats':
+    case "stats":
       await commandStats(jsonOutput);
       break;
 
-    case 'search': {
+    case "search": {
       const query = positionals[1];
       if (!query) {
         console.error('Usage: search "query"');
@@ -1009,7 +1055,7 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'search-semantic': {
+    case "search-semantic": {
       const query = positionals[1];
       if (!query) {
         console.error('Usage: search-semantic "query" [--type <type>] [--limit N] [--min-score 0.65]');
@@ -1019,7 +1065,7 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'search-hybrid': {
+    case "search-hybrid": {
       const query = positionals[1];
       if (!query) {
         console.error('Usage: search-hybrid "query" [--type <type>] [--depth N] [--limit N]');
@@ -1029,63 +1075,63 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'top': {
+    case "top": {
       // Optional positional query filters the top nodes by title substring.
       await commandTop(positionals[1], values.type, limit, jsonOutput);
       break;
     }
 
-    case 'by-goal': {
+    case "by-goal": {
       const goalQuery = positionals[1];
       if (!goalQuery) {
-        console.error('Usage: by-goal <goal-id-or-title>');
+        console.error("Usage: by-goal <goal-id-or-title>");
         process.exit(1);
       }
       await commandByGoal(goalQuery, limit, jsonOutput);
       break;
     }
 
-    case 'trace':
+    case "trace":
       if (!values.from) {
-        console.error('--from <id> is required for trace');
+        console.error("--from <id> is required for trace");
         process.exit(1);
       }
       await commandTrace(values.from, depth, jsonOutput, includeExpired);
       break;
 
-    case 'neighbors':
+    case "neighbors":
       if (!values.node) {
-        console.error('--node <id> is required for neighbors');
+        console.error("--node <id> is required for neighbors");
         process.exit(1);
       }
       await commandNeighbors(values.node, depth, jsonOutput);
       break;
 
-    case 'path':
+    case "path":
       if (!values.from || !values.to) {
-        console.error('--from <id> and --to <id> are required for path');
+        console.error("--from <id> and --to <id> are required for path");
         process.exit(1);
       }
       await commandPath(values.from, values.to, jsonOutput);
       break;
 
-    case 'list':
+    case "list":
       if (!values.type) {
-        console.error('--type <type> is required for list');
-        console.error(`Valid types: ${ALL_NODE_TYPES.join(', ')}`);
+        console.error("--type <type> is required for list");
+        console.error(`Valid types: ${ALL_NODE_TYPES.join(", ")}`);
         process.exit(1);
       }
       await commandList(values.type, values.since, values.tags, limit, jsonOutput);
       break;
 
-    case 'components':
+    case "components":
       await commandComponents(jsonOutput);
       break;
 
-    case 'audit': {
+    case "audit": {
       const workflowQuery = positionals[1] || values.from;
       if (!workflowQuery) {
-        console.error('Usage: audit <workflow-id> or audit --from <workflow-id>');
+        console.error("Usage: audit <workflow-id> or audit --from <workflow-id>");
         process.exit(1);
       }
       await commandAudit(workflowQuery, jsonOutput);
@@ -1107,8 +1153,8 @@ async function main(): Promise<void> {
 // run directly) but makes writeIngestSuccessMarker() importable/testable in
 // isolation without the import itself parsing argv and calling process.exit.
 if (import.meta.main) {
-  main().catch(err => {
-    console.error('Error:', err);
+  main().catch((err) => {
+    console.error("Error:", err);
     process.exit(1);
   });
 }

@@ -9,19 +9,19 @@
  * @version 1.0.0
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import type { GraphNode, GraphEdge, IngestionResult } from '../types';
-import { createNode, createEdge } from '../types';
-import { GraphPersistence, getGraphPersistence } from '../GraphPersistence';
-import { getKayaHome } from '../../../../../lib/core/KayaHome';
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { GraphNode, GraphEdge, IngestionResult } from "../types.ts";
+import { createNode, createEdge } from "../types.ts";
+import { type GraphPersistence, getGraphPersistence } from "../GraphPersistence.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 const KAYA_HOME = getKayaHome();
-const TRACES_DIR = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'traces');
+const TRACES_DIR = join(KAYA_HOME, "MEMORY", "MONITORING", "traces");
 
 // ============================================
 // TRACE EVENT (compatible with AgentMonitor's AgentTrace)
@@ -43,20 +43,6 @@ interface TraceEvent {
   context: Record<string, unknown>;
 }
 
-// New-format records written by the live AgentMonitor (post-refactor).
-// These use `ts` instead of `timestamp` and `category`/`payload` instead of
-// `eventType`/`metadata`. They are normalized to TraceEvent before processing.
-interface RawNewFormatEvent {
-  id?: string;
-  ts: number;
-  source?: string;
-  category?: string;
-  severity?: string;
-  workflowId?: string;
-  agentId?: string;
-  payload?: Record<string, unknown>;
-}
-
 /**
  * Normalize a raw parsed line into a canonical TraceEvent.
  * Handles both the legacy format ({ timestamp, eventType, metadata, context })
@@ -64,30 +50,29 @@ interface RawNewFormatEvent {
  * Returns null if the record lacks a valid workflowId.
  */
 function normalizeTraceEvent(raw: Record<string, unknown>): TraceEvent | null {
-  const workflowId = typeof raw.workflowId === 'string' ? raw.workflowId : null;
+  const workflowId = typeof raw.workflowId === "string" ? raw.workflowId : null;
   if (!workflowId) return null;
 
-  const agentId = typeof raw.agentId === 'string' ? raw.agentId : '';
+  const agentId = typeof raw.agentId === "string" ? raw.agentId : "";
 
   // Resolve timestamp — prefer `timestamp`, fall back to `ts`
-  const rawTs = raw.timestamp !== undefined ? raw.timestamp : (raw as RawNewFormatEvent).ts;
-  const timestamp = typeof rawTs === 'number' ? rawTs : NaN;
+  const rawTs = raw.timestamp !== undefined ? raw.timestamp : raw.ts;
+  const timestamp = typeof rawTs === "number" ? rawTs : NaN;
 
   // Resolve eventType — prefer `eventType`, fall back to `category`
-  const eventType = typeof raw.eventType === 'string'
-    ? raw.eventType
-    : (typeof raw.category === 'string' ? raw.category : '');
+  const eventType =
+    typeof raw.eventType === "string" ? raw.eventType : typeof raw.category === "string" ? raw.category : "";
 
   // Resolve metadata — prefer `metadata`, fall back to `payload`
-  const rawMeta = raw.metadata !== null && typeof raw.metadata === 'object'
-    ? raw.metadata as TraceEvent['metadata']
-    : (raw.payload !== null && typeof raw.payload === 'object'
-      ? raw.payload as TraceEvent['metadata']
-      : {});
+  const rawMeta =
+    raw.metadata !== null && typeof raw.metadata === "object"
+      ? (raw.metadata as TraceEvent["metadata"])
+      : raw.payload !== null && typeof raw.payload === "object"
+        ? (raw.payload as TraceEvent["metadata"])
+        : {};
 
-  const context = raw.context !== null && typeof raw.context === 'object'
-    ? raw.context as Record<string, unknown>
-    : {};
+  const context =
+    raw.context !== null && typeof raw.context === "object" ? (raw.context as Record<string, unknown>) : {};
 
   return { workflowId, agentId, timestamp, eventType, metadata: rawMeta, context };
 }
@@ -116,7 +101,7 @@ export class TraceIngester {
   async ingest(): Promise<IngestionResult> {
     const startTime = Date.now();
     const result: IngestionResult = {
-      source: 'traces',
+      source: "traces",
       nodesAdded: 0,
       edgesAdded: 0,
       nodesSkipped: 0,
@@ -131,11 +116,10 @@ export class TraceIngester {
       return result;
     }
 
-    const traceFiles = readdirSync(this.tracesDir)
-      .filter(f => f.endsWith('.jsonl'));
+    const traceFiles = readdirSync(this.tracesDir).filter((f) => f.endsWith(".jsonl"));
 
     if (traceFiles.length === 0) {
-      result.errors.push('No trace files found');
+      result.errors.push("No trace files found");
       result.duration = Date.now() - startTime;
       return result;
     }
@@ -179,8 +163,8 @@ export class TraceIngester {
     const warnings: string[] = [];
     const filePath = join(this.tracesDir, fileName);
 
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim());
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim());
 
     // Group events by workflowId, normalizing format on ingestion
     const workflows = new Map<string, TraceEvent[]>();
@@ -213,6 +197,7 @@ export class TraceIngester {
     for (const [workflowId, events] of workflows) {
       const firstEvent = events[0];
       const lastEvent = events[events.length - 1];
+      if (!firstEvent || !lastEvent) continue; // unreachable: a workflow group always has >= 1 event
 
       // Create agent_trace node
       const traceId = `agent_trace:${workflowId}`;
@@ -220,13 +205,13 @@ export class TraceIngester {
       const startTs = new Date(firstEvent.timestamp).toISOString();
       const endTs = new Date(lastEvent.timestamp).toISOString();
 
-      const hasError = events.some(e => e.eventType === 'error');
+      const hasError = events.some((e) => e.eventType === "error");
       const totalTokens = events.reduce((sum, e) => sum + (e.metadata.tokensUsed || 0), 0);
       const totalLatency = events.reduce((sum, e) => sum + (e.metadata.latencyMs || 0), 0);
-      const toolCalls = events.filter(e => e.eventType === 'tool_call').length;
+      const toolCalls = events.filter((e) => e.eventType === "tool_call").length;
 
       const traceNode = createNode(
-        'agent_trace',
+        "agent_trace",
         traceId,
         `Workflow ${workflowId.slice(0, 8)}`,
         {
@@ -240,7 +225,7 @@ export class TraceIngester {
           startTime: startTs,
           endTime: endTs,
         },
-        hasError ? ['agent_trace', 'error'] : ['agent_trace'],
+        hasError ? ["agent_trace", "error"] : ["agent_trace"],
       );
       traceNode.valid_from = startTs;
       traceNode.created_at = startTs;
@@ -252,16 +237,16 @@ export class TraceIngester {
       if (evalData) {
         Object.assign(traceNode.metadata, evalData);
         if (evalData.evaluationPassed === false) {
-          traceNode.tags.push('failed-evaluation');
+          traceNode.tags.push("failed-evaluation");
         }
       }
 
       // Extract error nodes from error events
       for (const event of events) {
-        if (event.eventType === 'error' && event.metadata.errorMessage) {
+        if (event.eventType === "error" && event.metadata.errorMessage) {
           const errorId = `error:trace:${workflowId}:${event.timestamp}`;
           const errorNode = createNode(
-            'error',
+            "error",
             errorId,
             event.metadata.errorMessage.slice(0, 120),
             {
@@ -270,7 +255,7 @@ export class TraceIngester {
               agentId: event.agentId,
               timestamp: event.timestamp,
             },
-            ['error', 'agent_trace'],
+            ["error", "agent_trace"],
           );
           const errorTs = new Date(event.timestamp).toISOString();
           errorNode.valid_from = errorTs;
@@ -279,38 +264,40 @@ export class TraceIngester {
           nodes.push(errorNode);
 
           // agent_trace -> contains -> error
-          edges.push(createEdge('contains', traceId, errorId, 1.0, { source: 'trace-ingester' }));
+          edges.push(createEdge("contains", traceId, errorId, 1.0, { source: "trace-ingester" }));
         }
 
         // Extract file paths from tool_call events
-        if (event.eventType === 'tool_call' && event.context) {
+        if (event.eventType === "tool_call" && event.context) {
           const filePaths: string[] = [];
-          for (const key of ['file_path', 'path', 'file'] as const) {
+          for (const key of ["file_path", "path", "file"] as const) {
             const val = event.context[key];
-            if (typeof val === 'string' && val.length > 0) {
+            if (typeof val === "string" && val.length > 0) {
               filePaths.push(val);
             }
           }
 
           for (const rawPath of filePaths) {
             // Normalize to relative path
-            const relativePath = rawPath.replace(/^\/Users\/[^/]+\/\.claude\//, '');
+            const relativePath = rawPath.replace(/^\/Users\/[^/]+\/\.claude\//, "");
             const fileId = `file:${relativePath}`;
 
             // Create file node if it doesn't exist (will be deduped by persistence)
             const fileNode = createNode(
-              'file',
+              "file",
               fileId,
-              relativePath.split('/').pop() || relativePath,
+              relativePath.split("/").pop() || relativePath,
               { fullPath: relativePath },
-              ['file'],
+              ["file"],
             );
             fileNode.valid_from = new Date(event.timestamp).toISOString();
             fileNode.created_at = fileNode.valid_from;
             nodes.push(fileNode);
 
             // agent_trace -> modifies -> file
-            edges.push(createEdge('modifies', traceId, fileId, 0.7, { source: 'trace-ingester', tool: event.metadata.toolName }));
+            edges.push(
+              createEdge("modifies", traceId, fileId, 0.7, { source: "trace-ingester", tool: event.metadata.toolName }),
+            );
           }
         }
       }
@@ -322,7 +309,7 @@ export class TraceIngester {
         sessionRef = this.findClosestSession(firstEvent.timestamp);
       }
       if (sessionRef) {
-        edges.push(createEdge('spawned', sessionRef, traceId, 0.9, { source: 'trace-ingester' }));
+        edges.push(createEdge("spawned", sessionRef, traceId, 0.9, { source: "trace-ingester" }));
       }
     }
 
@@ -334,11 +321,10 @@ export class TraceIngester {
    * Falls back to this when traces lack context.sessionId.
    */
   private findClosestSession(timestamp: number): string | null {
-    const engine = this.persistence.loadIntoEngine();
     const thirtyMinMs = 30 * 60 * 1000;
 
     // Filter session nodes by valid_from proximity (±30 min)
-    const sessions = engine.getNodes('session').filter(n => {
+    const sessions = this.persistence.loadNodes("session").filter((n) => {
       const nodeTsMs = new Date(n.valid_from).getTime();
       return Math.abs(nodeTsMs - timestamp) <= thirtyMinMs;
     });
@@ -347,6 +333,7 @@ export class TraceIngester {
 
     // Find the closest session by timestamp
     let closest = sessions[0];
+    if (!closest) return null;
     let closestDist = Math.abs(new Date(closest.valid_from).getTime() - timestamp);
 
     for (const session of sessions.slice(1)) {
@@ -364,24 +351,22 @@ export class TraceIngester {
    * Load evaluation results for a workflow if available.
    */
   private loadEvaluation(workflowId: string): Record<string, unknown> | null {
-    const evalPath = join(KAYA_HOME, 'MEMORY', 'MONITORING', 'evaluations', `${workflowId}-eval.json`);
+    const evalPath = join(KAYA_HOME, "MEMORY", "MONITORING", "evaluations", `${workflowId}-eval.json`);
     if (!existsSync(evalPath)) return null;
     try {
-      const evalRaw = readFileSync(evalPath, 'utf-8');
+      const evalRaw = readFileSync(evalPath, "utf-8");
       const evalData = JSON.parse(evalRaw) as Record<string, unknown>;
       const allFindings = Array.isArray(evalData.allFindings) ? evalData.allFindings : [];
       return {
         evaluationScore: evalData.overallScore,
         evaluationPassed: evalData.overallPassed,
         topFindings: allFindings.slice(0, 3).map((f: unknown) => {
-          if (f !== null && typeof f === 'object' && 'severity' in f && 'message' in f) {
+          if (f !== null && typeof f === "object" && "severity" in f && "message" in f) {
             return `[${String((f as Record<string, unknown>).severity)}] ${String((f as Record<string, unknown>).message)}`;
           }
           return String(f);
         }),
-        evaluatedAt: typeof evalData.timestamp === 'number'
-          ? new Date(evalData.timestamp).toISOString()
-          : undefined,
+        evaluatedAt: typeof evalData.timestamp === "number" ? new Date(evalData.timestamp).toISOString() : undefined,
       };
     } catch {
       return null;
@@ -410,8 +395,8 @@ export class TraceIngester {
 // ============================================
 
 if (import.meta.main) {
-  console.log('TraceIngester');
-  console.log('=============\n');
+  console.log("TraceIngester");
+  console.log("=============\n");
 
   const ingester = new TraceIngester();
   const result = await ingester.ingest();
