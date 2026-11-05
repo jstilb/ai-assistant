@@ -5,7 +5,7 @@
  * so visits that never landed in Mac's local SQLite show up here.
  */
 
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +22,12 @@ const KAYA_HOME_TMP = mkdtempSync(join(tmpdir(), "aw-chrome-takeout-kayahome-"))
 process.env.KAYA_HOME = KAYA_HOME_TMP;
 
 import { Db } from "../Tools/Db.ts";
-import { ingestAll, ingestChromeTakeoutFile, parseChromeTakeoutHistory, type ChromeTakeoutSummary } from "../Tools/ChromeTakeoutIngest.ts";
+import {
+  ingestAll,
+  ingestChromeTakeoutFile,
+  parseChromeTakeoutHistory,
+  type ChromeTakeoutSummary,
+} from "../Tools/ChromeTakeoutIngest.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-chrome-takeout-"));
 const DB_PATH = join(TMP, "events.db");
@@ -45,28 +50,45 @@ beforeEach(async () => {
 
 function writeHistoryJson(filename: string, browserHistory: unknown[]): string {
   const path = join(TMP, filename);
-  writeFileSync(path, JSON.stringify({
-    "Browser History": browserHistory,
-    "Typed Url": [],
-    "Session": [],
-    "Shared Tab Group": [],
-  }));
+  writeFileSync(
+    path,
+    JSON.stringify({
+      "Browser History": browserHistory,
+      "Typed Url": [],
+      Session: [],
+      "Shared Tab Group": [],
+    }),
+  );
   return path;
 }
 
 test("parseChromeTakeoutHistory: extracts url, title, time_usec; computes domain; handles empty input", () => {
   const rows = parseChromeTakeoutHistory({
     "Browser History": [
-      { url: "https://www.reddit.com/r/programming/", title: "r/programming", time_usec: 1747581135935546, favicon_url: "", page_transition_qualifier: "CLIENT_REDIRECT", client_id: "X" },
-      { url: "https://github.com/anthropics/claude", title: "Claude on GitHub", time_usec: 1747600000000000, favicon_url: "", page_transition_qualifier: "LINK", client_id: "X" },
+      {
+        url: "https://www.reddit.com/r/programming/",
+        title: "r/programming",
+        time_usec: 1747581135935546,
+        favicon_url: "",
+        page_transition_qualifier: "CLIENT_REDIRECT",
+        client_id: "X",
+      },
+      {
+        url: "https://github.com/anthropics/claude",
+        title: "Claude on GitHub",
+        time_usec: 1747600000000000,
+        favicon_url: "",
+        page_transition_qualifier: "LINK",
+        client_id: "X",
+      },
     ],
   });
   expect(rows.length).toBe(2);
-  expect(rows[0].url).toBe("https://www.reddit.com/r/programming/");
-  expect(rows[0].domain).toBe("reddit.com");
-  expect(rows[0].timeUsec).toBe(1747581135935546);
-  expect(rows[0].title).toBe("r/programming");
-  expect(rows[1].domain).toBe("github.com");
+  expect(rows[0]!.url).toBe("https://www.reddit.com/r/programming/");
+  expect(rows[0]!.domain).toBe("reddit.com");
+  expect(rows[0]!.timeUsec).toBe(1747581135935546);
+  expect(rows[0]!.title).toBe("r/programming");
+  expect(rows[1]!.domain).toBe("github.com");
 });
 
 test("parseChromeTakeoutHistory: skips entries missing url or time_usec", () => {
@@ -74,22 +96,40 @@ test("parseChromeTakeoutHistory: skips entries missing url or time_usec", () => 
     "Browser History": [
       { url: "", title: "no url", time_usec: 1747581135000000, page_transition_qualifier: "X", client_id: "X" },
       { url: "https://valid.com", title: "valid", time_usec: 0, page_transition_qualifier: "X", client_id: "X" },
-      { url: "https://ok.com", title: "ok", time_usec: 1747600000000000, page_transition_qualifier: "X", client_id: "X" },
+      {
+        url: "https://ok.com",
+        title: "ok",
+        time_usec: 1747600000000000,
+        page_transition_qualifier: "X",
+        client_id: "X",
+      },
     ],
   });
   expect(rows.length).toBe(1);
-  expect(rows[0].domain).toBe("ok.com");
+  expect(rows[0]!.domain).toBe("ok.com");
 });
 
 test("parseChromeTakeoutHistory: lowercases domain, strips www, handles port and subdomain", () => {
   const rows = parseChromeTakeoutHistory({
     "Browser History": [
-      { url: "https://WWW.Reddit.COM/x", title: "x", time_usec: 1747581100000000, page_transition_qualifier: "X", client_id: "X" },
-      { url: "https://mail.google.com:443/u/0/", title: "y", time_usec: 1747581200000000, page_transition_qualifier: "X", client_id: "X" },
+      {
+        url: "https://WWW.Reddit.COM/x",
+        title: "x",
+        time_usec: 1747581100000000,
+        page_transition_qualifier: "X",
+        client_id: "X",
+      },
+      {
+        url: "https://mail.google.com:443/u/0/",
+        title: "y",
+        time_usec: 1747581200000000,
+        page_transition_qualifier: "X",
+        client_id: "X",
+      },
     ],
   });
-  expect(rows[0].domain).toBe("reddit.com");
-  expect(rows[1].domain).toBe("mail.google.com");
+  expect(rows[0]!.domain).toBe("reddit.com");
+  expect(rows[1]!.domain).toBe("mail.google.com");
 });
 
 test("parseChromeTakeoutHistory: tolerates missing 'Browser History' key", () => {
@@ -99,8 +139,20 @@ test("parseChromeTakeoutHistory: tolerates missing 'Browser History' key", () =>
 
 test("ingestChromeTakeoutFile: inserts rows with source='takeout' and id='takeout:<usec>'", async () => {
   const path = writeHistoryJson("history-1.json", [
-    { url: "https://reddit.com/", title: "Reddit", time_usec: 1747581135000000, page_transition_qualifier: "X", client_id: "X" },
-    { url: "https://news.ycombinator.com/", title: "HN", time_usec: 1747581200000000, page_transition_qualifier: "X", client_id: "X" },
+    {
+      url: "https://reddit.com/",
+      title: "Reddit",
+      time_usec: 1747581135000000,
+      page_transition_qualifier: "X",
+      client_id: "X",
+    },
+    {
+      url: "https://news.ycombinator.com/",
+      title: "HN",
+      time_usec: 1747581200000000,
+      page_transition_qualifier: "X",
+      client_id: "X",
+    },
   ]);
   const summary = await ingestChromeTakeoutFile(db, path);
   expect(summary.entries_read).toBe(2);
@@ -110,33 +162,58 @@ test("ingestChromeTakeoutFile: inserts rows with source='takeout' and id='takeou
     `SELECT id, source, domain, visit_time::VARCHAR AS visit_time FROM chrome_visits ORDER BY visit_time`,
   );
   expect(rows.length).toBe(2);
-  expect(rows[0].source).toBe("takeout");
-  expect(rows[0].id).toBe("takeout:1747581135000000");
-  expect(rows[0].domain).toBe("reddit.com");
-  expect(rows[1].id).toBe("takeout:1747581200000000");
-  expect(rows[1].domain).toBe("news.ycombinator.com");
+  expect(rows[0]!.source).toBe("takeout");
+  expect(rows[0]!.id).toBe("takeout:1747581135000000");
+  expect(rows[0]!.domain).toBe("reddit.com");
+  expect(rows[1]!.id).toBe("takeout:1747581200000000");
+  expect(rows[1]!.domain).toBe("news.ycombinator.com");
 });
 
 test("ingestChromeTakeoutFile: idempotent re-runs (INSERT OR REPLACE on PK)", async () => {
   const path = writeHistoryJson("history-2.json", [
-    { url: "https://reddit.com/", title: "Reddit v1", time_usec: 1747581135000000, page_transition_qualifier: "X", client_id: "X" },
+    {
+      url: "https://reddit.com/",
+      title: "Reddit v1",
+      time_usec: 1747581135000000,
+      page_transition_qualifier: "X",
+      client_id: "X",
+    },
   ]);
   await ingestChromeTakeoutFile(db, path);
   // Mutate the file — same time_usec, new title — must REPLACE, not duplicate.
-  writeFileSync(path, JSON.stringify({
-    "Browser History": [{ url: "https://reddit.com/", title: "Reddit v2", time_usec: 1747581135000000, page_transition_qualifier: "X", client_id: "X" }],
-  }));
+  writeFileSync(
+    path,
+    JSON.stringify({
+      "Browser History": [
+        {
+          url: "https://reddit.com/",
+          title: "Reddit v2",
+          time_usec: 1747581135000000,
+          page_transition_qualifier: "X",
+          client_id: "X",
+        },
+      ],
+    }),
+  );
   await ingestChromeTakeoutFile(db, path);
 
-  const rows = await db.queryAll<{ title: string }>(`SELECT title FROM chrome_visits WHERE id='takeout:1747581135000000'`);
+  const rows = await db.queryAll<{ title: string }>(
+    `SELECT title FROM chrome_visits WHERE id='takeout:1747581135000000'`,
+  );
   expect(rows.length).toBe(1);
-  expect(rows[0].title).toBe("Reddit v2");
+  expect(rows[0]!.title).toBe("Reddit v2");
 });
 
 test("ingestChromeTakeoutFile: time_usec → visit_time TIMESTAMP is UTC and round-trips", async () => {
   // 1747581135935546 µs since Unix epoch = 2025-05-18 15:12:15.935546 UTC
   const path = writeHistoryJson("history-3.json", [
-    { url: "https://example.com/", title: "x", time_usec: 1747581135935546, page_transition_qualifier: "X", client_id: "X" },
+    {
+      url: "https://example.com/",
+      title: "x",
+      time_usec: 1747581135935546,
+      page_transition_qualifier: "X",
+      client_id: "X",
+    },
   ]);
   await ingestChromeTakeoutFile(db, path);
   const row = await db.queryRow<{ visit_time: string }>(
@@ -147,7 +224,9 @@ test("ingestChromeTakeoutFile: time_usec → visit_time TIMESTAMP is UTC and rou
 });
 
 test("ingestChromeTakeoutFile: batches >1000 rows across multiple transactions — all rows land, none lost (L1 batching)", async () => {
-  const n = 2500;
+  // 1001 rows = two batches. Needs a long timeout: a timed-out test leaves its
+  // transaction open on the shared `db` and fails every later test.
+  const n = 1001;
   const entries = Array.from({ length: n }, (_, i) => ({
     url: `https://example.com/page-${i}`,
     title: `page ${i}`,
@@ -162,7 +241,7 @@ test("ingestChromeTakeoutFile: batches >1000 rows across multiple transactions �
 
   const count = await db.queryRow<{ c: bigint | number }>(`SELECT COUNT(*) AS c FROM chrome_visits`);
   expect(Number(count?.c)).toBe(n);
-});
+}, 60_000);
 
 test("ingestAll: injectable `paths` param processes exactly the given files (no real Takeout-inbox scan)", async () => {
   const p1 = writeHistoryJson("all-1.json", [
@@ -198,7 +277,7 @@ test("ingestAll: per-file isolation — an unparseable file in the MIDDLE does n
   expect(summary.failed_files[0]!.error).toContain("parse error");
 
   const rows = await db.queryAll<{ id: string }>(`SELECT id FROM chrome_visits ORDER BY id`);
-  expect(rows.map(r => r.id)).toEqual(["takeout:1747581135000011", "takeout:1747581135000013"]);
+  expect(rows.map((r) => r.id)).toEqual(["takeout:1747581135000011", "takeout:1747581135000013"]);
 });
 
 test("ingestAll: a file whose ingest THROWS (e.g. a DB-level error) is caught, recorded, and later files still run", async () => {

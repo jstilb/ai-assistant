@@ -42,7 +42,14 @@ beforeEach(async () => {
   await db.run("DELETE FROM sync_state");
 });
 
-async function insertEvent(row: { id: string; device: string; app: string | null; url?: string | null; ts: string; durationSec: number }) {
+async function insertEvent(row: {
+  id: string;
+  device: string;
+  app: string | null;
+  url?: string | null;
+  ts: string;
+  durationSec: number;
+}) {
   await db.run(
     `INSERT OR REPLACE INTO events (id, device, bucket, watcher, app, title, url, audible, ts_start, duration_sec, raw_json)
      VALUES ($id, $device, 'b', 'test', $app, NULL, $url, NULL, $ts::TIMESTAMP, $dur, '{}')`,
@@ -64,7 +71,7 @@ test("buildPayload: empty DB → zero today, empty trend/devices/topApps", async
   expect(p.per_device_today).toEqual([]);
   expect(p.top_apps_7d).toEqual([]);
   expect(p.devices.length).toBeGreaterThan(0); // CONFIG.devices always populated
-  expect(p.devices.every(d => d.last_sync == null)).toBe(true);
+  expect(p.devices.every((d) => d.last_sync == null)).toBe(true);
 });
 
 test("buildPayload: daily_metrics row populates 'today'", async () => {
@@ -85,9 +92,21 @@ test("buildPayload: daily_metrics row populates 'today'", async () => {
 test("buildPayload: per_device_today splits Tier-1 vs Tier-2-classified", async () => {
   const today = todayLocal();
   // 30 min Reddit on phone (Tier-1)
-  await insertEvent({ id: "phone:r:1", device: "phone", app: "com.reddit.frontpage", ts: today + "T10:00:00", durationSec: 1800 });
+  await insertEvent({
+    id: "phone:r:1",
+    device: "phone",
+    app: "com.reddit.frontpage",
+    ts: today + "T10:00:00",
+    durationSec: 1800,
+  });
   // 60 min YouTube on phone, classified low-value (Tier-2)
-  await insertEvent({ id: "phone:yt:1", device: "phone", app: "com.google.android.youtube", ts: today + "T11:00:00", durationSec: 3600 });
+  await insertEvent({
+    id: "phone:yt:1",
+    device: "phone",
+    app: "com.google.android.youtube",
+    ts: today + "T11:00:00",
+    durationSec: 3600,
+  });
   await db.run(
     `INSERT OR REPLACE INTO classifications (event_id, tier, classifier, is_low_value, reason, classified_at)
      VALUES ('phone:yt:1', 2, 'llm-sonnet', TRUE, 'drama', NOW())`,
@@ -96,8 +115,8 @@ test("buildPayload: per_device_today splits Tier-1 vs Tier-2-classified", async 
   await insertEvent({ id: "mac:r:1", device: "mac", app: "Reddit", ts: today + "T09:00:00", durationSec: 600 });
 
   const p = await buildPayload(db);
-  const phone = p.per_device_today.find(r => r.device === "phone")!;
-  const mac = p.per_device_today.find(r => r.device === "mac")!;
+  const phone = p.per_device_today.find((r) => r.device === "phone")!;
+  const mac = p.per_device_today.find((r) => r.device === "mac")!;
   expect(phone.tier1_minutes).toBe(30);
   expect(phone.tier2_lowvalue_minutes).toBe(60);
   expect(mac.tier1_minutes).toBe(10);
@@ -109,17 +128,20 @@ test("buildPayload: top_apps_7d sorts by minutes desc, limit 10", async () => {
   // Insert 12 distinct apps with varying durations
   for (let i = 0; i < 12; i++) {
     await insertEvent({
-      id: `mac:a${i}:1`, device: "mac", app: `App${i}`,
-      ts: today + "T08:00:00", durationSec: 60 * (i + 1),
+      id: `mac:a${i}:1`,
+      device: "mac",
+      app: `App${i}`,
+      ts: today + "T08:00:00",
+      durationSec: 60 * (i + 1),
     });
   }
   const p = await buildPayload(db);
   expect(p.top_apps_7d.length).toBe(10);
-  expect(p.top_apps_7d[0].app).toBe("App11");
-  expect(p.top_apps_7d[0].minutes).toBe(12); // 60*(11+1)/60
+  expect(p.top_apps_7d[0]!.app).toBe("App11");
+  expect(p.top_apps_7d[0]!.minutes).toBe(12); // 60*(11+1)/60
   // sorted descending
   for (let i = 0; i < p.top_apps_7d.length - 1; i++) {
-    expect(p.top_apps_7d[i].minutes).toBeGreaterThanOrEqual(p.top_apps_7d[i + 1].minutes);
+    expect(p.top_apps_7d[i]!.minutes).toBeGreaterThanOrEqual(p.top_apps_7d[i + 1]!.minutes);
   }
 });
 
@@ -162,24 +184,33 @@ describe("isRankableApp — filter predicate", () => {
 test("buildPayload: top_apps_7d excludes loginwindow and null app names, promotes real apps", async () => {
   const today = todayLocal();
   // Dominant loginwindow (system/idle) — must be excluded from the ranking.
-  await insertEvent({ id: "mac:login:1", device: "mac", app: "loginwindow", ts: today + "T06:00:00", durationSec: 200_000 });
+  await insertEvent({
+    id: "mac:login:1",
+    device: "mac",
+    app: "loginwindow",
+    ts: today + "T06:00:00",
+    durationSec: 200_000,
+  });
   // Unclassified null-app events (e.g. aw-watcher-android-web-chrome) — excluded.
   await insertEvent({ id: "mac:null:1", device: "mac", app: null, ts: today + "T06:05:00", durationSec: 6_000 });
   // 11 real apps so the real top-10 is unambiguous once the two above are dropped.
   for (let i = 0; i < 11; i++) {
     await insertEvent({
-      id: `mac:real${i}:1`, device: "mac", app: `RealApp${i}`,
-      ts: today + "T07:00:00", durationSec: 60 * (i + 1),
+      id: `mac:real${i}:1`,
+      device: "mac",
+      app: `RealApp${i}`,
+      ts: today + "T07:00:00",
+      durationSec: 60 * (i + 1),
     });
   }
 
   const p = await buildPayload(db);
-  const apps = p.top_apps_7d.map(r => r.app);
+  const apps = p.top_apps_7d.map((r) => r.app);
   expect(apps).not.toContain("loginwindow");
   expect(apps).not.toContain("(null)");
   expect(p.top_apps_7d.length).toBe(10);
   // Highest-duration real app (RealApp10, 660s = 11min) now ranks #1.
-  expect(p.top_apps_7d[0].app).toBe("RealApp10");
+  expect(p.top_apps_7d[0]!.app).toBe("RealApp10");
 });
 
 test("buildPayload: filtering top_apps_7d does not change today/trend totals (daily_metrics-driven, independent of events)", async () => {
@@ -191,7 +222,13 @@ test("buildPayload: filtering top_apps_7d does not change today/trend totals (da
   );
   // Large loginwindow + null-app noise in `events` — must not perturb `today`,
   // since `today` is sourced entirely from daily_metrics, not from events.
-  await insertEvent({ id: "mac:login:2", device: "mac", app: "loginwindow", ts: today + "T06:00:00", durationSec: 500_000 });
+  await insertEvent({
+    id: "mac:login:2",
+    device: "mac",
+    app: "loginwindow",
+    ts: today + "T06:00:00",
+    durationSec: 500_000,
+  });
   await insertEvent({ id: "mac:null:2", device: "mac", app: null, ts: today + "T06:05:00", durationSec: 9_000 });
 
   const p = await buildPayload(db);
@@ -254,7 +291,7 @@ describe("Chart.js is vendored locally (no runtime CDN dependency)", () => {
     const body = await res.text();
     expect(body).not.toContain("cdn.jsdelivr.net");
     expect(body).not.toMatch(/https?:\/\//); // no external script/asset URLs at all
-    expect(body).toContain('/vendor/chart.umd.min.js');
+    expect(body).toContain("/vendor/chart.umd.min.js");
   });
 
   test("GET / HTML wraps chart construction separately from table rendering (decoupled failure banner present)", async () => {

@@ -26,19 +26,20 @@
  * read-write open. State: MEMORY/AppUsage/calibration/rounds.json.
  */
 
+import { homedir } from "node:os";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG } from "../Config.ts";
 import { Db } from "./Db.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 const DEFAULT_STATE_PATH = `${HOME}/.claude/MEMORY/AppUsage/calibration/rounds.json`;
 const DEFAULT_SHEET_DIR = `${HOME}/Desktop/obsidian/POS/Reviews/YouTube Calibration`;
 
-const CONF_CONFIDENT = 0.75;   // >= → "confident" strata; < → borderline
+const CONF_CONFIDENT = 0.75; // >= → "confident" strata; < → borderline
 const DEFAULT_PER_STRATUM = 8;
 const DEFAULT_RECENT_DAYS = 90;
-const MAX_PER_CHANNEL = 2;     // per stratum — stop one binge channel dominating
+const MAX_PER_CHANNEL = 2; // per stratum — stop one binge channel dominating
 
 export type StratumKey = "confident-low" | "confident-high" | "borderline";
 
@@ -47,7 +48,7 @@ export interface SampleRow {
   title: string;
   channel: string | null;
   duration_sec: number | null;
-  last_watched: string;        // ISO timestamp
+  last_watched: string; // ISO timestamp
   is_low_value: boolean;
   confidence: number;
   reason: string | null;
@@ -61,7 +62,9 @@ export interface RoundRecord {
   video_ids: string[];
 }
 
-export interface CalibrationState { rounds: RoundRecord[] }
+export interface CalibrationState {
+  rounds: RoundRecord[];
+}
 
 export function loadState(statePath: string = DEFAULT_STATE_PATH): CalibrationState {
   if (!existsSync(statePath)) return { rounds: [] };
@@ -107,7 +110,7 @@ async function loadClassified(db: Db): Promise<SampleRow[]> {
         ON h.video_id = vd.video_id
      WHERE v.title IS NOT NULL AND length(v.title) > 0
   `);
-  return rows.map(r => ({
+  return rows.map((r) => ({
     video_id: r.video_id,
     title: r.title ?? "",
     channel: r.channel,
@@ -129,7 +132,9 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    const tmp = a[i] as T;
+    a[i] = a[j] as T;
+    a[j] = tmp;
   }
   return a;
 }
@@ -141,12 +146,15 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
  * `now`/`rng` injectable for tests.
  */
 export function pickForStratum(
-  pool: SampleRow[], n: number, recentDays: number,
-  rng: () => number = Math.random, now: Date = new Date(),
+  pool: SampleRow[],
+  n: number,
+  recentDays: number,
+  rng: () => number = Math.random,
+  now: Date = new Date(),
 ): SampleRow[] {
   const cutoff = now.getTime() - recentDays * 24 * 3600 * 1000;
-  const recent = pool.filter(r => Date.parse(r.last_watched) >= cutoff);
-  const older = pool.filter(r => Date.parse(r.last_watched) < cutoff);
+  const recent = pool.filter((r) => Date.parse(r.last_watched) >= cutoff);
+  const older = pool.filter((r) => Date.parse(r.last_watched) < cutoff);
   const picked: SampleRow[] = [];
   const perChannel = new Map<string, number>();
   for (const candidate of [...shuffle(recent, rng), ...shuffle(older, rng)]) {
@@ -169,15 +177,21 @@ export interface SamplePlan {
 }
 
 export function buildSample(
-  all: SampleRow[], previouslySampled: Set<string>, perStratum: number,
-  recentDays: number, round: number,
-  rng: () => number = Math.random, now: Date = new Date(),
+  all: SampleRow[],
+  previouslySampled: Set<string>,
+  perStratum: number,
+  recentDays: number,
+  round: number,
+  rng: () => number = Math.random,
+  now: Date = new Date(),
 ): SamplePlan {
   // Never resample a video from an earlier round, and never surface Jm's own
   // jm-calibration verdicts back to him.
-  const eligible = all.filter(r => !previouslySampled.has(r.video_id) && r.classifier !== "jm-calibration");
+  const eligible = all.filter((r) => !previouslySampled.has(r.video_id) && r.classifier !== "jm-calibration");
   const pools: Record<StratumKey, SampleRow[]> = {
-    "confident-low": [], "confident-high": [], "borderline": [],
+    "confident-low": [],
+    "confident-high": [],
+    borderline: [],
   };
   for (const row of eligible) pools[stratumOf(row)].push(row);
   return {
@@ -185,12 +199,12 @@ export function buildSample(
     strata: {
       "confident-low": pickForStratum(pools["confident-low"], perStratum, recentDays, rng, now),
       "confident-high": pickForStratum(pools["confident-high"], perStratum, recentDays, rng, now),
-      "borderline": pickForStratum(pools["borderline"], perStratum, recentDays, rng, now),
+      borderline: pickForStratum(pools["borderline"], perStratum, recentDays, rng, now),
     },
     poolSizes: {
       "confident-low": pools["confident-low"].length,
       "confident-high": pools["confident-high"].length,
-      "borderline": pools["borderline"].length,
+      borderline: pools["borderline"].length,
     },
     excluded: all.length - eligible.length,
   };
@@ -199,13 +213,15 @@ export function buildSample(
 const STRATUM_META: Record<StratumKey, { title: string; blurb: string }> = {
   "confident-low": {
     title: "Confidently LOW-value",
-    blurb: "Kaya is sure these were low-value watches (they count fully against G37). Scan for anything that was actually worthwhile.",
+    blurb:
+      "Kaya is sure these were low-value watches (they count fully against G37). Scan for anything that was actually worthwhile.",
   },
   "confident-high": {
     title: "Confidently NOT low-value",
-    blurb: "Kaya is sure these were worthwhile (they count zero against G37). Scan for entertainment that slipped through — this is where the metric under-counts.",
+    blurb:
+      "Kaya is sure these were worthwhile (they count zero against G37). Scan for entertainment that slipped through — this is where the metric under-counts.",
   },
-  "borderline": {
+  borderline: {
     title: "Borderline (low confidence)",
     blurb: "Kaya was unsure. Your calls here teach the rubric the most.",
   },
@@ -233,13 +249,19 @@ export function renderSheet(plan: SamplePlan, generatedAt: Date): string {
   lines.push("");
   lines.push(`# YouTube Media-Value Calibration — Round ${plan.round}`);
   lines.push("");
-  lines.push("These are Kaya's actual classifications of videos **you watched** — the same verdicts that produce the G37 low-value-media number and inform /youtube playlist curation. ~10 minutes: fix what's wrong, skip what's right.");
+  lines.push(
+    "These are Kaya's actual classifications of videos **you watched** — the same verdicts that produce the G37 low-value-media number and inform /youtube playlist curation. ~10 minutes: fix what's wrong, skip what's right.",
+  );
   lines.push("");
   lines.push("**How to review each row:**");
   lines.push("- Agree → leave **Your call** blank.");
-  lines.push("- Disagree → put `low` or `high` in **Your call** (`low` = counts against G37, `high` = worthwhile). Add a note if the *reason* matters (\"this channel is always junk\", \"gaming is fine in this context\", ...). Notes teach the rubric; bare overrides only fix the one video.");
+  lines.push(
+    '- Disagree → put `low` or `high` in **Your call** (`low` = counts against G37, `high` = worthwhile). Add a note if the *reason* matters ("this channel is always junk", "gaming is fine in this context", ...). Notes teach the rubric; bare overrides only fix the one video.',
+  );
   lines.push("");
-  lines.push("When done, change `status: awaiting-review` to `status: reviewed` in the frontmatter above (that's the signal the next round picks up). The weekly calibration task then writes your overrides into `youtube_verdicts` as ground truth and distills patterns into the classifier rubric.");
+  lines.push(
+    "When done, change `status: awaiting-review` to `status: reviewed` in the frontmatter above (that's the signal the next round picks up). The weekly calibration task then writes your overrides into `youtube_verdicts` as ground truth and distills patterns into the classifier rubric.",
+  );
   lines.push("");
   for (const key of ["confident-low", "confident-high", "borderline"] as StratumKey[]) {
     const meta = STRATUM_META[key];
@@ -258,13 +280,17 @@ export function renderSheet(plan: SamplePlan, generatedAt: Date): string {
     for (const r of rows) {
       const link = `[${esc(r.title)}](https://www.youtube.com/watch?v=${r.video_id})`;
       const verdict = r.is_low_value ? "low" : "high";
-      lines.push(`| ${link} | ${esc(r.channel ?? "?")} | ${fmtMin(r.duration_sec)} | ${r.last_watched.slice(0, 10)} | ${verdict} | ${r.confidence.toFixed(2)} | ${esc(r.reason ?? "")} | | |`);
+      lines.push(
+        `| ${link} | ${esc(r.channel ?? "?")} | ${fmtMin(r.duration_sec)} | ${r.last_watched.slice(0, 10)} | ${verdict} | ${r.confidence.toFixed(2)} | ${esc(r.reason ?? "")} | | |`,
+      );
     }
     lines.push("");
   }
   lines.push("## General feedback (optional, highest leverage)");
   lines.push("");
-  lines.push("Anything rubric-level: channels or genres to always/never count, how to treat Shorts, music, podcasts, rewatches, \"edutainment\", etc. Free-form — the calibration task reads this with judgment, not a parser.");
+  lines.push(
+    'Anything rubric-level: channels or genres to always/never count, how to treat Shorts, music, podcasts, rewatches, "edutainment", etc. Free-form — the calibration task reads this with judgment, not a parser.',
+  );
   lines.push("");
   lines.push("- ");
   lines.push("");
@@ -272,7 +298,7 @@ export function renderSheet(plan: SamplePlan, generatedAt: Date): string {
 }
 
 export function sheetVideoIds(plan: SamplePlan): string[] {
-  return (Object.values(plan.strata) as SampleRow[][]).flat().map(r => r.video_id);
+  return (Object.values(plan.strata) as SampleRow[][]).flat().map((r) => r.video_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -280,10 +306,14 @@ export function sheetVideoIds(plan: SamplePlan): string[] {
 // ---------------------------------------------------------------------------
 
 export async function applyJmVerdict(
-  db: Db, videoId: string, value: "low" | "high", reason: string,
+  db: Db,
+  videoId: string,
+  value: "low" | "high",
+  reason: string,
 ): Promise<{ previous: { is_low_value: boolean; classifier: string } | null }> {
   const prev = await db.queryRow<{ is_low_value: boolean; classifier: string }>(
-    `SELECT is_low_value, classifier FROM youtube_verdicts WHERE video_id = $id`, { id: videoId },
+    `SELECT is_low_value, classifier FROM youtube_verdicts WHERE video_id = $id`,
+    { id: videoId },
   );
   await db.run(
     `INSERT OR REPLACE INTO youtube_verdicts
@@ -299,7 +329,7 @@ export async function applyJmVerdict(
 // ---------------------------------------------------------------------------
 
 function flagValue(argv: string[], name: string): string | undefined {
-  return argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+  return argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 }
 
 async function mainGenerate(argv: string[]): Promise<void> {
@@ -312,25 +342,37 @@ async function mainGenerate(argv: string[]): Promise<void> {
 
   const state = loadState(statePath);
   const round = state.rounds.reduce((m, r) => Math.max(m, r.round), 0) + 1;
-  const previouslySampled = new Set(state.rounds.flatMap(r => r.video_ids));
+  const previouslySampled = new Set(state.rounds.flatMap((r) => r.video_ids));
 
   const db = await Db.openReadOnly(dbPath);
   let all: SampleRow[];
-  try { all = await loadClassified(db); } finally { db.close(); }
+  try {
+    all = await loadClassified(db);
+  } finally {
+    db.close();
+  }
 
   const now = new Date();
   const plan = buildSample(all, previouslySampled, perStratum, recentDays, round, Math.random, now);
   const total = sheetVideoIds(plan).length;
   const date = now.toISOString().slice(0, 10);
-  const outPath = flagValue(argv, "out")
-    ?? join(DEFAULT_SHEET_DIR, `Round ${String(plan.round).padStart(2, "0")} — ${date}.md`);
+  const outPath =
+    flagValue(argv, "out") ?? join(DEFAULT_SHEET_DIR, `Round ${String(plan.round).padStart(2, "0")} — ${date}.md`);
 
   if (dryRun) {
     if (json) {
-      console.log(JSON.stringify({ round, total, poolSizes: plan.poolSizes, excluded: plan.excluded, would_write: outPath }, null, 2));
+      console.log(
+        JSON.stringify(
+          { round, total, poolSizes: plan.poolSizes, excluded: plan.excluded, would_write: outPath },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`DRY-RUN round ${round}: would sample ${total} videos → ${outPath}`);
-      console.log(`  pools: low=${plan.poolSizes["confident-low"]} high=${plan.poolSizes["confident-high"]} borderline=${plan.poolSizes.borderline}  excluded(prior rounds/jm)=${plan.excluded}`);
+      console.log(
+        `  pools: low=${plan.poolSizes["confident-low"]} high=${plan.poolSizes["confident-high"]} borderline=${plan.poolSizes.borderline}  excluded(prior rounds/jm)=${plan.excluded}`,
+      );
     }
     return;
   }
@@ -344,7 +386,9 @@ async function mainGenerate(argv: string[]): Promise<void> {
     console.log(JSON.stringify({ round, total, sheet: outPath, poolSizes: plan.poolSizes, state: statePath }, null, 2));
   } else {
     console.log(`CalibrationSampler: round ${round} — ${total} videos → ${outPath}`);
-    console.log(`  pools: low=${plan.poolSizes["confident-low"]} high=${plan.poolSizes["confident-high"]} borderline=${plan.poolSizes.borderline}  excluded(prior rounds/jm)=${plan.excluded}`);
+    console.log(
+      `  pools: low=${plan.poolSizes["confident-low"]} high=${plan.poolSizes["confident-high"]} borderline=${plan.poolSizes.borderline}  excluded(prior rounds/jm)=${plan.excluded}`,
+    );
   }
 }
 
@@ -370,5 +414,8 @@ async function mainApplyVerdict(argv: string[]): Promise<void> {
 if (import.meta.main) {
   const argv = process.argv.slice(2);
   const run = argv[0] === "apply-verdict" ? mainApplyVerdict(argv.slice(1)) : mainGenerate(argv);
-  run.catch(err => { console.error(err); process.exit(1); });
+  run.catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

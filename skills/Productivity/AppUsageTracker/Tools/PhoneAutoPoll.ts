@@ -23,13 +23,13 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { join } from "path";
+import { join } from "node:path";
 import { CONFIG, type AdbDevice } from "../Config.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { logFailure } from "./Db.ts";
 import { todayLocal } from "./Util.ts";
 
-const ADB = "/opt/homebrew/bin/adb";
+const ADB = process.env.ADB ?? Bun.which("adb") ?? "adb";
 const REMOTE_PORT = 5600;
 const SKILL_DIR = join(defaultKayaHome(), "skills/Productivity/AppUsageTracker");
 
@@ -46,17 +46,16 @@ function parseLine(line: string): DeviceLine | null {
   if (/^[0-9a-f]{4}/i.test(trimmed)) trimmed = trimmed.slice(4).trim();
   if (!trimmed) return null;
   const m = trimmed.match(/^(\S+)\s+(\S+)/);
-  if (!m) return null;
-  return { serial: m[1], state: m[2] };
+  const [, serial, state] = m ?? [];
+  if (!serial || !state) return null;
+  return { serial, state };
 }
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-const knownBySerial = new Map<string, AdbDevice>(
-  CONFIG.adbDevices.map((d) => [d.serial, d]),
-);
+const knownBySerial = new Map<string, AdbDevice>(CONFIG.adbDevices.map((d) => [d.serial, d]));
 
 const lastTriggerBySerial = new Map<string, number>();
 const triggerInFlightBySerial = new Set<string>();
@@ -76,20 +75,30 @@ async function onDeviceConnected(serial: string): Promise<void> {
     log(`${dev.name} (${serial}) → forward tcp:${dev.localPort} → ${REMOTE_PORT} + poll`);
 
     // Establish the forward (idempotent — adb replaces existing forward on same port).
-    const fwd = spawnSync(ADB, ["-s", serial, "forward", `tcp:${dev.localPort}`, `tcp:${REMOTE_PORT}`], { encoding: "utf8" });
+    const fwd = spawnSync(ADB, ["-s", serial, "forward", `tcp:${dev.localPort}`, `tcp:${REMOTE_PORT}`], {
+      encoding: "utf8",
+    });
     if (fwd.status !== 0) {
       log(`forward setup failed: ${fwd.stderr || fwd.stdout}`);
-      await logFailure("PhoneAutoPoll", new Error("adb forward failed"), { serial, device: dev.name, stderr: fwd.stderr });
+      await logFailure("PhoneAutoPoll", new Error("adb forward failed"), {
+        serial,
+        device: dev.name,
+        stderr: fwd.stderr,
+      });
       return;
     }
 
     // Pull events for this specific device only.
-    const poll = spawnSync("bun", ["run", `${SKILL_DIR}/Tools/AWPoller.ts`, `--device=${dev.name}`], { encoding: "utf8" });
+    const poll = spawnSync("bun", ["run", `${SKILL_DIR}/Tools/AWPoller.ts`, `--device=${dev.name}`], {
+      encoding: "utf8",
+    });
     log(`AWPoller stdout: ${(poll.stdout || "").trim() || "(empty)"}`);
     if (poll.stderr) log(`AWPoller stderr: ${poll.stderr.trim()}`);
 
     // Recompute today's metric.
-    const metric = spawnSync("bun", ["run", `${SKILL_DIR}/Tools/MetricCalc.ts`, "--force", `--date=${todayLocal()}`], { encoding: "utf8" });
+    const metric = spawnSync("bun", ["run", `${SKILL_DIR}/Tools/MetricCalc.ts`, "--force", `--date=${todayLocal()}`], {
+      encoding: "utf8",
+    });
     log(`MetricCalc stdout: ${(metric.stdout || "").trim().slice(0, 200) || "(empty)"}`);
     if (metric.stderr) log(`MetricCalc stderr: ${metric.stderr.trim()}`);
 

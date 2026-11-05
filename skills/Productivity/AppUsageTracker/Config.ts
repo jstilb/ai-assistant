@@ -75,7 +75,8 @@ export interface AppUsageConfig {
   localTimezone: string;
 }
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+import { homedir } from "node:os";
+const HOME = process.env.HOME ?? homedir();
 
 export const CONFIG: AppUsageConfig = {
   dbPath: `${HOME}/.claude/MEMORY/AppUsage/events.db`,
@@ -165,21 +166,13 @@ export const CONFIG: AppUsageConfig = {
   // Google Takeout Chrome history or otherwise), remove the entries below AND
   // the matching tier1FloorsMinPerDay rows.
   tier1AppsByDevice: {
-    phone: [
-      "Chrome",
-      "com.android.chrome",
-    ],
+    phone: ["Chrome", "com.android.chrome"],
   },
 
   // URL substrings flagged as Tier 1 when seen by aw-watcher-web on Mac browsers.
   // Use SQL LIKE patterns ('%' = wildcard). Keep loose — false-positives in
   // browser tabs are rare for these domains.
-  tier1DomainPatterns: [
-    "%reddit.com%",
-    "%bsky.app%",
-    "%twitter.com%",
-    "%x.com%",
-  ],
+  tier1DomainPatterns: ["%reddit.com%", "%bsky.app%", "%twitter.com%", "%x.com%"],
 
   // Per-(device, app) daily floor subtracted from Tier-1 minutes.
   // - Chess phone: Jm considers up to 10 min/day cognitive/healthy.
@@ -230,10 +223,7 @@ export const CONFIG: AppUsageConfig = {
     "com.google.android.apps.messaging",
   ],
 
-  tier2DomainPatterns: [
-    "%youtube.com%",
-    "%nebula.tv%",
-  ],
+  tier2DomainPatterns: ["%youtube.com%", "%nebula.tv%"],
 
   // Heuristic low-value fractions for phone apps with no classifiable metadata
   // (Android exposes only the package name). Jm-set 2026-06-16:
@@ -242,11 +232,11 @@ export const CONFIG: AppUsageConfig = {
     // can't use the YouTube consumption path. Jm's call: assume the same
     // low-value share as YouTube's measured consumed-minute fraction (~49%,
     // from historical daily_metrics).
-    "nebula": 0.49,
+    nebula: 0.49,
     // LinkedIn mobile is overwhelmingly passive feed-scroll for Jm (not active
     // networking/job-search) → 0.80.
-    "linkedin": 0.80,
-    "com.linkedin.android": 0.80,
+    linkedin: 0.8,
+    "com.linkedin.android": 0.8,
     // WhatsApp + Messages are relational/utility (logistics, 2FA, family) →
     // 0% low-value, so they are intentionally omitted here. They are still
     // listed in tier2AltCountedApps so they don't trip the alarm.
@@ -255,9 +245,12 @@ export const CONFIG: AppUsageConfig = {
   // not-low-value) and must not trip the unclassifiable alarm. Heuristic apps
   // (Nebula/LinkedIn) are added automatically; list only the others here.
   tier2AltCountedApps: [
-    "youtube", "com.google.android.youtube",          // counted via watch history
-    "whatsapp", "com.whatsapp",                        // 0% low-value (utility)
-    "messages", "com.google.android.apps.messaging",   // 0% low-value (utility)
+    "youtube",
+    "com.google.android.youtube", // counted via watch history
+    "whatsapp",
+    "com.whatsapp", // 0% low-value (utility)
+    "messages",
+    "com.google.android.apps.messaging", // 0% low-value (utility)
   ],
 
   // Tier 3 — explicitly ignored. Never counted regardless of duration.

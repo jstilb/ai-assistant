@@ -13,12 +13,16 @@ async function main(): Promise<void> {
   try {
     await db.initSchema();
     const tables = await db.queryAll<{ table_name: string }>(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name"
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name",
     );
-    console.log(JSON.stringify({ ok: true, tables: tables.map(t => t.table_name) }, null, 2));
+    console.log(JSON.stringify({ ok: true, tables: tables.map((t) => t.table_name) }, null, 2));
   } finally {
     db.close();
   }
 }
 
-if (import.meta.main) main().catch(err => { console.error(err); process.exit(1); });
+if (import.meta.main)
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

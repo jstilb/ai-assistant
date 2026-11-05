@@ -41,24 +41,24 @@ test("parseWatchHistoryHtml: extracts video_id, title, channel, channelUrl, ts f
   expect(rows.length).toBe(3);
 
   const a = rows[0];
-  expect(a.videoId).toBe("dQw4w9WgXcQ");
-  expect(a.title).toBe("Rick Astley - Never Gonna Give You Up");
-  expect(a.channel).toBe("Rick Astley");
-  expect(a.channelUrl).toBe("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw");
+  expect(a!.videoId).toBe("dQw4w9WgXcQ");
+  expect(a!.title).toBe("Rick Astley - Never Gonna Give You Up");
+  expect(a!.channel).toBe("Rick Astley");
+  expect(a!.channelUrl).toBe("https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw");
   // May 14, 2026, 5:43:27 PM CDT = 22:43:27 UTC
-  expect(a.ts.toISOString()).toBe("2026-05-14T22:43:27.000Z");
+  expect(a!.ts.toISOString()).toBe("2026-05-14T22:43:27.000Z");
 
   const b = rows[1];
-  expect(b.videoId).toBe("abc123XYZ-_");
-  expect(b.title).toBe('Title with "quotes" & ampersand');
-  expect(b.channel).toBe("Channel 's Name");
+  expect(b!.videoId).toBe("abc123XYZ-_");
+  expect(b!.title).toBe('Title with "quotes" & ampersand');
+  expect(b!.channel).toBe("Channel 's Name");
   // Apr 1, 2024, 11:00:00 AM PDT = 18:00:00 UTC
-  expect(b.ts.toISOString()).toBe("2024-04-01T18:00:00.000Z");
+  expect(b!.ts.toISOString()).toBe("2024-04-01T18:00:00.000Z");
 
   const c = rows[2];
-  expect(c.videoId).toBe("no_channel");
-  expect(c.channel).toBeNull();
-  expect(c.channelUrl).toBeNull();
+  expect(c!.videoId).toBe("no_channel");
+  expect(c!.channel).toBeNull();
+  expect(c!.channelUrl).toBeNull();
 });
 
 test("parseWatchHistoryHtml: consumes 'Watched at HH:MM PM<br>' markers in older Google-Ads-style entries", () => {
@@ -76,11 +76,11 @@ Jul 9, 2023, 5:33:48 PM CDT<br></div></div></div>
 `;
   const rows = parseWatchHistoryHtml(ADS);
   expect(rows.length).toBe(1);
-  expect(rows[0].videoId).toBe("cAYPFqc47yI");
-  expect(rows[0].channel).toBeNull();
-  expect(rows[0].channelUrl).toBeNull();
+  expect(rows[0]!.videoId).toBe("cAYPFqc47yI");
+  expect(rows[0]!.channel).toBeNull();
+  expect(rows[0]!.channelUrl).toBeNull();
   // Jul 9, 2023, 5:33:48 PM CDT → 22:33:48 UTC
-  expect(rows[0].ts.toISOString()).toBe("2023-07-09T22:33:48.000Z");
+  expect(rows[0]!.ts.toISOString()).toBe("2023-07-09T22:33:48.000Z");
 });
 
 test("parseWatchHistoryHtml: skips Viewed (post) entries", () => {

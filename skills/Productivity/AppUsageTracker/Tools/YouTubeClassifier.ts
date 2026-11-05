@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Db, logFailure } from "./Db.ts";
-import { inference } from "~/.claude/lib/core/Inference.ts";
+import { inference } from "../../../../lib/core/Inference.ts";
 
 const LLM_CLASSIFIER_NAME = "llm-sonnet";
 const DEFAULT_LIMIT = 200;
@@ -102,12 +102,12 @@ export function readCalibrationGuidance(rubricPath: string = DEFAULT_RUBRIC_PATH
     throw new Error(`YouTubeClassifier: cannot read rubric at ${rubricPath} — ${msg}`);
   }
   const lines = markdown.split("\n");
-  const start = lines.findIndex(l => l.trim() === GUIDANCE_HEADING);
+  const start = lines.findIndex((l) => l.trim() === GUIDANCE_HEADING);
   if (start === -1) {
     throw new Error(`YouTubeClassifier: rubric at ${rubricPath} has no "${GUIDANCE_HEADING}" section`);
   }
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex(l => /^##\s/.test(l));
+  const end = rest.findIndex((l) => /^##\s/.test(l));
   const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
   if (body.length === 0) {
     throw new Error(`YouTubeClassifier: "${GUIDANCE_HEADING}" section in ${rubricPath} is empty`);
@@ -162,19 +162,21 @@ async function loadCandidates(db: Db): Promise<CandidateRow[]> {
      ORDER BY h.last_watched DESC, v.video_id
   `;
   const rows = await db.queryAll<CandidateRow>(sql);
-  return rows.map(r => ({ ...r, has_verdict: Boolean(r.has_verdict) }));
+  return rows.map((r) => ({ ...r, has_verdict: Boolean(r.has_verdict) }));
 }
 
-async function upsertVerdict(
-  db: Db, videoId: string, verdict: YouTubeVerdict, classifier: string,
-): Promise<void> {
+async function upsertVerdict(db: Db, videoId: string, verdict: YouTubeVerdict, classifier: string): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO youtube_verdicts
        (video_id, is_low_value, reason, confidence, classifier, classified_at)
      VALUES ($id, $low, $reason, $conf, $cls, $now::TIMESTAMP)`,
     {
-      id: videoId, low: verdict.is_low_value, reason: verdict.reason,
-      conf: verdict.confidence, cls: classifier, now: new Date().toISOString(),
+      id: videoId,
+      low: verdict.is_low_value,
+      reason: verdict.reason,
+      conf: verdict.confidence,
+      cls: classifier,
+      now: new Date().toISOString(),
     },
   );
 }
@@ -256,19 +258,24 @@ export async function classifyYouTubeVideos(opts: YouTubeClassifyOpts): Promise<
     }
     // Need at least a title to classify meaningfully. enrich_error rows are
     // for videos the API couldn't find (deleted/private/wrong-key) — skip them.
-    if (row.enrich_error != null || (row.title == null || row.title.length === 0)) {
+    if (row.enrich_error != null || row.title == null || row.title.length === 0) {
       summary.skipped_no_metadata++;
       continue;
     }
     if (summary.classified >= limit) continue;
-    if (dryRun) { summary.would_call_llm++; continue; }
+    if (dryRun) {
+      summary.would_call_llm++;
+      continue;
+    }
 
     let tags: string[] = [];
     if (row.tags_json) {
       try {
         const parsed: unknown = JSON.parse(row.tags_json);
         if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === "string");
-      } catch { /* ignore — empty tags */ }
+      } catch {
+        /* ignore — empty tags */
+      }
     }
     try {
       const r = await llm({
@@ -297,7 +304,7 @@ async function main(argv: string[]): Promise<void> {
   const json = argv.includes("--json");
   const force = argv.includes("--force");
   const dryRun = argv.includes("--dry-run");
-  const limitFlag = argv.find(a => a.startsWith("--limit="))?.slice("--limit=".length);
+  const limitFlag = argv.find((a) => a.startsWith("--limit="))?.slice("--limit=".length);
   const limit = limitFlag ? parseInt(limitFlag, 10) : undefined;
 
   const db = await Db.open();
@@ -309,16 +316,22 @@ async function main(argv: string[]): Promise<void> {
     } else {
       const tag = dryRun ? "DRY-RUN " : "";
       console.log(`${tag}YouTubeClassifier: ${summary.candidate_videos} candidates`);
-      console.log(`  classified=${summary.classified}  skipped_already=${summary.skipped_already}  no_metadata=${summary.skipped_no_metadata}  errors=${summary.errors}`);
+      console.log(
+        `  classified=${summary.classified}  skipped_already=${summary.skipped_already}  no_metadata=${summary.skipped_no_metadata}  errors=${summary.errors}`,
+      );
       if (dryRun) console.log(`  would_call_llm=${summary.would_call_llm}`);
-      if (!dryRun) console.log(`  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`);
+      if (!dryRun)
+        console.log(
+          `  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`,
+        );
     }
   } finally {
     db.close();
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

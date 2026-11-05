@@ -32,7 +32,7 @@
 import { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { Db, logFailure } from "./Db.ts";
 
 const CHROME_EPOCH_OFFSET_MS = 11644473600_000n;
@@ -42,8 +42,7 @@ const CHROME_EPOCH_OFFSET_MS = 11644473600_000n;
  * the `historyPath` opt for tests (and for any future support of secondary
  * profile directories).
  */
-export const DEFAULT_CHROME_HISTORY_PATH =
-  `${process.env.HOME}/Library/Application Support/Google/Chrome/Default/History`;
+export const DEFAULT_CHROME_HISTORY_PATH = `${process.env.HOME}/Library/Application Support/Google/Chrome/Default/History`;
 
 /**
  * Convert a Chrome-epoch microsecond value (microseconds since 1601-01-01 UTC)
@@ -75,15 +74,16 @@ export function extractDomain(url: string): string | null {
     }
     return host;
   } catch {
+    // invalid URL (new URL throws TypeError): treat as no host
     return null;
   }
 }
 
 interface ChromeRawVisit {
-  visit_time: bigint;            // microseconds since 1601-01-01 UTC; bigint to preserve precision
+  visit_time: bigint; // microseconds since 1601-01-01 UTC; bigint to preserve precision
   url: string;
   title: string | null;
-  visit_duration: bigint;        // microseconds
+  visit_duration: bigint; // microseconds
   transition: number;
   from_visit: number | null;
   originator_cache_guid: string | null;
@@ -173,9 +173,7 @@ export async function ingestChromeVisits(opts: IngestOpts): Promise<IngestSummar
 
   await opts.db.initSchema();
 
-  const cursorBefore = opts.sinceUnix != null
-    ? unixToChromeUs(opts.sinceUnix)
-    : await readCursor(opts.db, source);
+  const cursorBefore = opts.sinceUnix != null ? unixToChromeUs(opts.sinceUnix) : await readCursor(opts.db, source);
   baseSummary.cursor_before_chrome_us = cursorBefore.toString();
 
   // Snapshot — Chrome's History file is locked while Chrome runs. For a fixture
@@ -249,7 +247,11 @@ export async function ingestChromeVisits(opts: IngestOpts): Promise<IngestSummar
     await logFailure("ChromeIngest", err, { historyPath, source });
     throw err;
   } finally {
-    try { chrome?.close(); } catch { /* best-effort */ }
+    try {
+      chrome?.close();
+    } catch {
+      /* best-effort */
+    }
     // Snapshot is left in tmpdir for OS cleanup (small, ~MB scale; same
     // behavior as the prior Mac install scripts that leave temp files).
   }
@@ -257,8 +259,8 @@ export async function ingestChromeVisits(opts: IngestOpts): Promise<IngestSummar
 
 async function main(argv: string[]): Promise<void> {
   const json = argv.includes("--json");
-  const pathFlag = argv.find(a => a.startsWith("--history="))?.slice("--history=".length);
-  const sinceFlag = argv.find(a => a.startsWith("--since="))?.slice("--since=".length);
+  const pathFlag = argv.find((a) => a.startsWith("--history="))?.slice("--history=".length);
+  const sinceFlag = argv.find((a) => a.startsWith("--since="))?.slice("--since=".length);
   const sinceUnix = sinceFlag ? new Date(sinceFlag) : undefined;
 
   const db = await Db.open();
@@ -279,7 +281,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

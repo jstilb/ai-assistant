@@ -44,7 +44,10 @@ interface Call {
   body?: string;
 }
 
-function makeStubFetcher(handlers: Array<(call: Call) => HttpResponse | Promise<HttpResponse>>): { http: HttpFetcher; calls: Call[] } {
+function makeStubFetcher(handlers: Array<(call: Call) => HttpResponse | Promise<HttpResponse>>): {
+  http: HttpFetcher;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   let i = 0;
   const http: HttpFetcher = async (req) => {
@@ -75,11 +78,15 @@ test("happy path: refresh → initiate → poll twice → download two urls", as
     // 3. first poll — still running
     () => jsonOk({ state: "IN_PROGRESS", urls: [], name: "archiveJobs/job-123/portabilityArchiveState" }),
     // 4. second poll — complete with two signed URLs
-    () => jsonOk({
-      state: "COMPLETE",
-      urls: ["https://storage.googleapis.com/dpa/job-123/part-0001.zip", "https://storage.googleapis.com/dpa/job-123/part-0002.zip"],
-      name: "archiveJobs/job-123/portabilityArchiveState",
-    }),
+    () =>
+      jsonOk({
+        state: "COMPLETE",
+        urls: [
+          "https://storage.googleapis.com/dpa/job-123/part-0001.zip",
+          "https://storage.googleapis.com/dpa/job-123/part-0002.zip",
+        ],
+        name: "archiveJobs/job-123/portabilityArchiveState",
+      }),
     // 5. download #1
     () => bin(fakeZip),
     // 6. download #2
@@ -98,20 +105,20 @@ test("happy path: refresh → initiate → poll twice → download two urls", as
   expect(readdirSync(dest).length).toBe(2);
 
   // Verify call sequence + auth headers
-  expect(calls[0].url).toBe("https://oauth2.googleapis.com/token");
-  expect(calls[0].method).toBe("POST");
-  expect(calls[0].body).toContain("grant_type=refresh_token");
-  expect(calls[0].body).toContain("refresh_token=test-refresh");
+  expect(calls[0]!.url).toBe("https://oauth2.googleapis.com/token");
+  expect(calls[0]!.method).toBe("POST");
+  expect(calls[0]!.body).toContain("grant_type=refresh_token");
+  expect(calls[0]!.body).toContain("refresh_token=test-refresh");
 
-  expect(calls[1].url).toBe("https://dataportability.googleapis.com/v1/portabilityArchive:initiate");
-  expect(calls[1].method).toBe("POST");
-  const initBody = JSON.parse(calls[1].body ?? "{}");
+  expect(calls[1]!.url).toBe("https://dataportability.googleapis.com/v1/portabilityArchive:initiate");
+  expect(calls[1]!.method).toBe("POST");
+  const initBody = JSON.parse(calls[1]!.body ?? "{}");
   expect(initBody.resources).toEqual(["myactivity.youtube"]);
 
-  expect(calls[2].url).toBe("https://dataportability.googleapis.com/v1/archiveJobs/job-123/portabilityArchiveState");
-  expect(calls[2].method).toBe("GET");
-  expect(calls[3].url).toBe(calls[2].url);
-  expect(calls[4].url.startsWith("https://storage.googleapis.com/")).toBe(true);
+  expect(calls[2]!.url).toBe("https://dataportability.googleapis.com/v1/archiveJobs/job-123/portabilityArchiveState");
+  expect(calls[2]!.method).toBe("GET");
+  expect(calls[3]!.url).toBe(calls[2]!.url);
+  expect(calls[4]!.url.startsWith("https://storage.googleapis.com/")).toBe(true);
 });
 
 test("FAILED state surfaces typed error after poll", async () => {
@@ -132,7 +139,12 @@ test("initiate returns 429 cooldown — error includes status + body", async () 
     () => ({
       status: 429,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: { message: "Requested resources have already been exported. You can initiate another export after 2026-05-13T22:00:00Z" } }),
+      body: JSON.stringify({
+        error: {
+          message:
+            "Requested resources have already been exported. You can initiate another export after 2026-05-13T22:00:00Z",
+        },
+      }),
     }),
   ]);
 
@@ -162,14 +174,17 @@ test("poll loop times out cleanly if maxWaitMs exceeded", async () => {
 
 test("loadGoogleOAuthClient: parses gcalcli-shaped {installed: {client_id, client_secret}}", () => {
   const path = join(dest, "client_secret.json");
-  writeFileSync(path, JSON.stringify({
-    installed: {
-      client_id: "111-aaaa.apps.googleusercontent.com",
-      client_secret: "GOCSPX-abc",
-      project_id: "kaya-484418",
-      redirect_uris: ["http://localhost"],
-    },
-  }));
+  writeFileSync(
+    path,
+    JSON.stringify({
+      installed: {
+        client_id: "111-aaaa.apps.googleusercontent.com",
+        client_secret: "GOCSPX-abc",
+        project_id: "kaya-484418",
+        redirect_uris: ["http://localhost"],
+      },
+    }),
+  );
   const client = loadGoogleOAuthClient(path);
   expect(client.clientId).toBe("111-aaaa.apps.googleusercontent.com");
   expect(client.clientSecret).toBe("GOCSPX-abc");

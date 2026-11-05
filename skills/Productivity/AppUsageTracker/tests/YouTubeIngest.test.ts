@@ -9,10 +9,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
-import {
-  extractVideoId,
-  ingestTakeoutHistory,
-} from "../Tools/YouTubeIngest.ts";
+import { extractVideoId, ingestTakeoutHistory } from "../Tools/YouTubeIngest.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-yt-ingest-"));
 const DB_PATH = join(TMP, "events.db");
@@ -81,7 +78,11 @@ test("ingest: parses one entry into one history row", async () => {
   expect(summary.rows_inserted).toBe(1);
 
   const row = await db.queryRow<{
-    video_id: string; title: string; channel: string; channel_url: string; source_export: string;
+    video_id: string;
+    title: string;
+    channel: string;
+    channel_url: string;
+    source_export: string;
   }>(`SELECT video_id, title, channel, channel_url, source_export FROM youtube_history`);
   expect(row!.video_id).toBe("abc123XYZ-_");
   expect(row!.title).toBe("How to use Bun");
@@ -184,7 +185,9 @@ test("ingest: sinceUnix filters out older entries", async () => {
     },
   ]);
   const summary = await ingestTakeoutHistory({
-    db, historyPath: path, sinceUnix: new Date("2026-01-01T00:00:00Z"),
+    db,
+    historyPath: path,
+    sinceUnix: new Date("2026-01-01T00:00:00Z"),
   });
   expect(summary.rows_inserted).toBe(1);
   const row = await db.queryRow<{ video_id: string }>(`SELECT video_id FROM youtube_history`);
@@ -193,7 +196,8 @@ test("ingest: sinceUnix filters out older entries", async () => {
 
 test("ingest: missing file returns skipped summary", async () => {
   const summary = await ingestTakeoutHistory({
-    db, historyPath: `${TMP}/does-not-exist/watch-history.json`,
+    db,
+    historyPath: `${TMP}/does-not-exist/watch-history.json`,
   });
   expect(summary.entries_read).toBe(0);
   expect(summary.rows_inserted).toBe(0);

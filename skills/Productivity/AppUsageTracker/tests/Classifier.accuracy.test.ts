@@ -50,30 +50,38 @@ function buildSession(f: FixtureSession): Session {
   };
 }
 
-test.skipIf(!RUN_LLM)("Classifier accuracy ≥80% on synthetic YouTube fixture", async () => {
-  const fixturePath = join(import.meta.dir, "fixtures", "youtube-classification-fixtures.json");
-  const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
-    expected_low_value: FixtureSession[];
-    expected_not_low_value: FixtureSession[];
-  };
+test.skipIf(!RUN_LLM)(
+  "Classifier accuracy ≥80% on synthetic YouTube fixture",
+  async () => {
+    const fixturePath = join(import.meta.dir, "fixtures", "youtube-classification-fixtures.json");
+    const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+      expected_low_value: FixtureSession[];
+      expected_not_low_value: FixtureSession[];
+    };
 
-  const cases: Array<{ session: Session; want: boolean; firstTitle: string }> = [
-    ...fixture.expected_low_value.map(f => ({ session: buildSession(f), want: true, firstTitle: f.titles[0] })),
-    ...fixture.expected_not_low_value.map(f => ({ session: buildSession(f), want: false, firstTitle: f.titles[0] })),
-  ];
+    const cases: Array<{ session: Session; want: boolean; firstTitle: string }> = [
+      ...fixture.expected_low_value.map((f) => ({ session: buildSession(f), want: true, firstTitle: f.titles[0]! })),
+      ...fixture.expected_not_low_value.map((f) => ({
+        session: buildSession(f),
+        want: false,
+        firstTitle: f.titles[0]!,
+      })),
+    ];
 
-  let correct = 0;
-  const misclassified: string[] = [];
-  for (const c of cases) {
-    const result = await classifySession(c.session);
-    if (result.verdict.is_low_value === c.want) {
-      correct++;
-    } else {
-      misclassified.push(`  want=${c.want} got=${result.verdict.is_low_value} (${c.firstTitle})`);
+    let correct = 0;
+    const misclassified: string[] = [];
+    for (const c of cases) {
+      const result = await classifySession(c.session);
+      if (result.verdict.is_low_value === c.want) {
+        correct++;
+      } else {
+        misclassified.push(`  want=${c.want} got=${result.verdict.is_low_value} (${c.firstTitle})`);
+      }
     }
-  }
-  const accuracy = correct / cases.length;
-  console.log(`Classifier accuracy: ${correct}/${cases.length} = ${(accuracy * 100).toFixed(1)}%`);
-  if (misclassified.length > 0) console.log("Misclassified:\n" + misclassified.join("\n"));
-  expect(accuracy).toBeGreaterThanOrEqual(0.8);
-}, 300_000);
+    const accuracy = correct / cases.length;
+    console.log(`Classifier accuracy: ${correct}/${cases.length} = ${(accuracy * 100).toFixed(1)}%`);
+    if (misclassified.length > 0) console.log("Misclassified:\n" + misclassified.join("\n"));
+    expect(accuracy).toBeGreaterThanOrEqual(0.8);
+  },
+  300_000,
+);

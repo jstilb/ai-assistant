@@ -14,11 +14,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
-import {
-  chromeEpochToUnix,
-  extractDomain,
-  ingestChromeVisits,
-} from "../Tools/ChromeIngest.ts";
+import { chromeEpochToUnix, extractDomain, ingestChromeVisits } from "../Tools/ChromeIngest.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-chrome-ingest-"));
 const DB_PATH = join(TMP, "events.db");
@@ -44,7 +40,9 @@ interface FixtureVisit {
 
 function createFixture(visits: FixtureVisit[]): void {
   // Clean slate per fixture build
-  try { rmSync(FIXTURE_PATH, { force: true }); } catch {}
+  try {
+    rmSync(FIXTURE_PATH, { force: true });
+  } catch {}
   const f = new Database(FIXTURE_PATH);
   // Subset of the real Chromium History schema — just the columns we actually
   // SELECT from in ChromeIngest. Real Chrome adds many more (segment_id,
@@ -69,9 +67,7 @@ function createFixture(visits: FixtureVisit[]): void {
   )`);
   // Group visits by URL — Chromium has one urls row per unique URL.
   const urlIds = new Map<string, number>();
-  const insertUrl = f.prepare(
-    `INSERT INTO urls (url, title, last_visit_time) VALUES (?, ?, ?) RETURNING id`,
-  );
+  const insertUrl = f.prepare(`INSERT INTO urls (url, title, last_visit_time) VALUES (?, ?, ?) RETURNING id`);
   const insertVisit = f.prepare(
     `INSERT INTO visits (url, visit_time, from_visit, transition, visit_duration, originator_cache_guid)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -158,22 +154,28 @@ test("ingestChromeVisits: empty SQLite yields 0 rows, no errors", async () => {
 });
 
 test("ingestChromeVisits: single local visit produces 1 chrome_visits row", async () => {
-  createFixture([{
-    url: "https://www.reddit.com/r/programming",
-    title: "r/programming",
-    visitTimeIso: "2026-05-10T15:00:00.000Z",
-    visitDurationSec: 120,
-    transition: 805306368,
-    fromVisit: 0,
-    originatorCacheGuid: "", // empty string = local Mac
-  }]);
+  createFixture([
+    {
+      url: "https://www.reddit.com/r/programming",
+      title: "r/programming",
+      visitTimeIso: "2026-05-10T15:00:00.000Z",
+      visitDurationSec: 120,
+      transition: 805306368,
+      fromVisit: 0,
+      originatorCacheGuid: "", // empty string = local Mac
+    },
+  ]);
   const summary = await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
   expect(summary.visits_read).toBe(1);
   expect(summary.visits_inserted).toBe(1);
 
   const row = await db.queryRow<{
-    source: string; url: string; domain: string;
-    title: string; visit_time: string; visit_duration_sec: number | bigint;
+    source: string;
+    url: string;
+    domain: string;
+    title: string;
+    visit_time: string;
+    visit_duration_sec: number | bigint;
     originator_cache_guid: string;
   }>(`SELECT source, url, domain, title, visit_time::VARCHAR AS visit_time,
             visit_duration_sec, originator_cache_guid
@@ -186,15 +188,17 @@ test("ingestChromeVisits: single local visit produces 1 chrome_visits row", asyn
 });
 
 test("ingestChromeVisits: non-empty originator_cache_guid → source='sync'", async () => {
-  createFixture([{
-    url: "https://www.reddit.com/r/all",
-    title: "r/all",
-    visitTimeIso: "2026-05-10T15:00:00.000Z",
-    visitDurationSec: 30,
-    transition: 0,
-    fromVisit: 0,
-    originatorCacheGuid: "phone-guid-abc123",
-  }]);
+  createFixture([
+    {
+      url: "https://www.reddit.com/r/all",
+      title: "r/all",
+      visitTimeIso: "2026-05-10T15:00:00.000Z",
+      visitDurationSec: 30,
+      transition: 0,
+      fromVisit: 0,
+      originatorCacheGuid: "phone-guid-abc123",
+    },
+  ]);
   await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
   const row = await db.queryRow<{ source: string; originator_cache_guid: string }>(
     `SELECT source, originator_cache_guid FROM chrome_visits`,
@@ -204,41 +208,41 @@ test("ingestChromeVisits: non-empty originator_cache_guid → source='sync'", as
 });
 
 test("ingestChromeVisits: idempotent — re-running same fixture writes no new rows", async () => {
-  createFixture([{
-    url: "https://www.reddit.com/r/programming",
-    title: "r/programming",
-    visitTimeIso: "2026-05-10T15:00:00.000Z",
-    visitDurationSec: 60,
-    transition: 0,
-    fromVisit: 0,
-    originatorCacheGuid: "",
-  }]);
+  createFixture([
+    {
+      url: "https://www.reddit.com/r/programming",
+      title: "r/programming",
+      visitTimeIso: "2026-05-10T15:00:00.000Z",
+      visitDurationSec: 60,
+      transition: 0,
+      fromVisit: 0,
+      originatorCacheGuid: "",
+    },
+  ]);
   await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
-  const firstCount = Number(
-    (await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n,
-  );
+  const firstCount = Number((await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n);
 
   const summary2 = await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
   // Cursor advance means we don't re-read old rows
   expect(summary2.visits_read).toBe(0);
   expect(summary2.visits_inserted).toBe(0);
 
-  const secondCount = Number(
-    (await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n,
-  );
+  const secondCount = Number((await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n);
   expect(secondCount).toBe(firstCount);
 });
 
 test("ingestChromeVisits: incremental — second run picks up only new visits", async () => {
-  createFixture([{
-    url: "https://www.reddit.com/r/programming",
-    title: "r/programming",
-    visitTimeIso: "2026-05-10T15:00:00.000Z",
-    visitDurationSec: 60,
-    transition: 0,
-    fromVisit: 0,
-    originatorCacheGuid: "",
-  }]);
+  createFixture([
+    {
+      url: "https://www.reddit.com/r/programming",
+      title: "r/programming",
+      visitTimeIso: "2026-05-10T15:00:00.000Z",
+      visitDurationSec: 60,
+      transition: 0,
+      fromVisit: 0,
+      originatorCacheGuid: "",
+    },
+  ]);
   await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
 
   // Append a NEW visit and re-ingest
@@ -263,12 +267,10 @@ test("ingestChromeVisits: incremental — second run picks up only new visits", 
     },
   ]);
   const summary = await ingestChromeVisits({ db, historyPath: FIXTURE_PATH });
-  expect(summary.visits_read).toBe(1);   // only new one read
+  expect(summary.visits_read).toBe(1); // only new one read
   expect(summary.visits_inserted).toBe(1);
 
-  const total = Number(
-    (await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n,
-  );
+  const total = Number((await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM chrome_visits`))!.n);
   expect(total).toBe(2);
 });
 

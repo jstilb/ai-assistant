@@ -27,14 +27,12 @@ import { pollDevice } from "../Tools/AWPoller.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-poller-test-"));
 const DB_PATH = join(TMP, "events.db");
-const FIXTURE = JSON.parse(
-  readFileSync(join(import.meta.dir, "fixtures", "sample-aw-events.json"), "utf8"),
-) as {
+const FIXTURE = JSON.parse(readFileSync(join(import.meta.dir, "fixtures", "sample-aw-events.json"), "utf8")) as {
   buckets: Record<string, unknown>;
   events: Record<string, unknown[]>;
 };
 
-let server: Server;
+let server: Server<undefined>;
 let db: Db;
 let mockUrl: string;
 
@@ -52,7 +50,7 @@ beforeAll(async () => {
       }
       const m = u.pathname.match(/^\/api\/0\/buckets\/([^/]+)\/events$/);
       if (m) {
-        const bucketId = decodeURIComponent(m[1]);
+        const bucketId = decodeURIComponent(m[1]!);
         const events = FIXTURE.events[bucketId] ?? [];
         return Response.json(events);
       }
@@ -106,11 +104,7 @@ test("re-poll is idempotent (INSERT OR REPLACE on PK)", async () => {
 });
 
 test("placeholder Tailscale IP is skipped (not an error)", async () => {
-  const result = await pollDevice(
-    { name: "phone", baseUrl: "http://100.0.0.0:5600" },
-    db,
-    false,
-  );
+  const result = await pollDevice({ name: "phone", baseUrl: "http://100.0.0.0:5600" }, db, false);
   expect(result.ok).toBe(true);
   expect(result.skipped).toBeDefined();
   expect(result.events_inserted).toBe(0);
@@ -120,9 +114,9 @@ test("event PK encodes device:bucket:event_id (cross-device unique)", async () =
   await pollDevice({ name: "phone", baseUrl: mockUrl }, db, false);
 
   const ids = await db.queryAll<{ id: string }>(`SELECT id FROM events ORDER BY id`);
-  expect(ids[0].id.startsWith("phone:")).toBe(true);
+  expect(ids[0]!.id.startsWith("phone:")).toBe(true);
   // Spot check unique id format: "phone:<bucketId>:<eventId>"
-  const sample = ids.find(r => r.id.includes("aw-watcher-window_test-host"));
+  const sample = ids.find((r) => r.id.includes("aw-watcher-window_test-host"));
   expect(sample).toBeDefined();
 });
 
@@ -167,18 +161,24 @@ test("stale bucket skip: server-side bucket idle > 7 days is not polled", async 
       if (u.pathname === "/api/0/buckets/") {
         return Response.json({
           "aw-watcher-fresh": {
-            id: "aw-watcher-fresh", type: "currentwindow", client: "x",
-            hostname: "x", last_updated: oneHourAgo,
+            id: "aw-watcher-fresh",
+            type: "currentwindow",
+            client: "x",
+            hostname: "x",
+            last_updated: oneHourAgo,
           },
           "aw-watcher-stale": {
-            id: "aw-watcher-stale", type: "currentwindow", client: "x",
-            hostname: "x", last_updated: eightDaysAgo,
+            id: "aw-watcher-stale",
+            type: "currentwindow",
+            client: "x",
+            hostname: "x",
+            last_updated: eightDaysAgo,
           },
         });
       }
       if (u.pathname.startsWith("/api/0/buckets/")) {
         eventsEndpointHits++;
-        const bucket = decodeURIComponent(u.pathname.split("/")[4]);
+        const bucket = decodeURIComponent(u.pathname.split("/")[4]!);
         // Either bucket: return one event so we can tell what was actually polled.
         if (bucket === "aw-watcher-fresh") {
           return Response.json([{ id: 1, timestamp: oneHourAgo, duration: 60, data: { app: "x" } }]);

@@ -72,17 +72,13 @@ async function fetchJson<T>(url: string): Promise<T> {
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} on ${url}`);
-    return await res.json() as T;
+    return (await res.json()) as T;
   } finally {
     clearTimeout(t);
   }
 }
 
-export async function pollDevice(
-  dev: DeviceConfig,
-  db: Db,
-  dryRun: boolean,
-): Promise<PollSummary> {
+export async function pollDevice(dev: DeviceConfig, db: Db, dryRun: boolean): Promise<PollSummary> {
   const summary: PollSummary = {
     device: dev.name,
     buckets: 0,
@@ -234,10 +230,7 @@ export async function pollDevice(
 
   // Clear any stale '_poll_' error row from a previous failed poll —
   // a successful run means the device-level error is no longer current.
-  await db.run(
-    `DELETE FROM sync_state WHERE device = $device AND bucket = '_poll_'`,
-    { device: dev.name },
-  );
+  await db.run(`DELETE FROM sync_state WHERE device = $device AND bucket = '_poll_'`, { device: dev.name });
 
   summary.ok = true;
   return summary;
@@ -246,12 +239,12 @@ export async function pollDevice(
 async function main(argv: string[]): Promise<void> {
   const dryRun = argv.includes("--dry-run");
   const json = argv.includes("--json");
-  const deviceFlag = argv.find(a => a.startsWith("--device="))?.slice("--device=".length);
+  const deviceFlag = argv.find((a) => a.startsWith("--device="))?.slice("--device=".length);
 
   const db = await Db.open();
   try {
     await db.initSchema();
-    const targets = CONFIG.devices.filter(d => !deviceFlag || d.name === deviceFlag);
+    const targets = CONFIG.devices.filter((d) => !deviceFlag || d.name === deviceFlag);
     const results: PollSummary[] = [];
 
     for (const dev of targets) {
@@ -304,7 +297,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

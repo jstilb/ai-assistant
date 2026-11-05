@@ -135,8 +135,11 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
   const sevenAgo = shiftDate(today, -6);
 
   const todayRow = await db.queryRow<{
-    date: string | null; tier1_minutes: number | bigint; tier2_lowvalue_minutes: number | bigint;
-    total_lowvalue_minutes: number | bigint; rolling_4wk_avg: number | null;
+    date: string | null;
+    tier1_minutes: number | bigint;
+    tier2_lowvalue_minutes: number | bigint;
+    total_lowvalue_minutes: number | bigint;
+    rolling_4wk_avg: number | null;
   }>(
     `SELECT date::VARCHAR AS date, tier1_minutes, tier2_lowvalue_minutes,
             total_lowvalue_minutes, rolling_4wk_avg
@@ -150,8 +153,11 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
   const ceilingMin = readCeilingMin();
 
   const trend = await db.queryAll<{
-    date: string; tier1_minutes: number | bigint; tier2_lowvalue_minutes: number | bigint;
-    total_lowvalue_minutes: number | bigint; rolling_4wk_avg: number | null;
+    date: string;
+    tier1_minutes: number | bigint;
+    tier2_lowvalue_minutes: number | bigint;
+    total_lowvalue_minutes: number | bigint;
+    rolling_4wk_avg: number | null;
   }>(
     `SELECT date::VARCHAR AS date, tier1_minutes, tier2_lowvalue_minutes,
             total_lowvalue_minutes, rolling_4wk_avg
@@ -176,19 +182,24 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
       GROUP BY e.device`,
     { today },
   );
-  const t2Map = new Map<string, number>(t2RowsByDevice.map(r => [r.device, Number(r.t2_min)]));
+  const t2Map = new Map<string, number>(t2RowsByDevice.map((r) => [r.device, Number(r.t2_min)]));
   const devicesSeen = new Set<string>([...t1ByDevice.keys(), ...t2Map.keys()]);
   const perDevice: Array<{ device: string; t1_min: number; t2_min: number }> = [];
   for (const d of devicesSeen) {
     perDevice.push({ device: d, t1_min: t1ByDevice.get(d) ?? 0, t2_min: t2Map.get(d) ?? 0 });
   }
-  perDevice.sort((a, b) => (b.t1_min + b.t2_min) - (a.t1_min + a.t2_min));
+  perDevice.sort((a, b) => b.t1_min + b.t2_min - (a.t1_min + a.t2_min));
 
   // Ranked display only — fetch every (device, app) group (small: 7 days of
   // data), then filter out non-usage rows (loginwindow/idle, null app names)
   // in JS before taking the top 10. Underlying `events` rows are untouched;
   // this only shapes what lands in the DashboardPayload's top_apps_7d list.
-  const topAppsRaw = await db.queryAll<{ device: string; app: string | null; minutes: number | bigint; events: number | bigint }>(
+  const topAppsRaw = await db.queryAll<{
+    device: string;
+    app: string | null;
+    minutes: number | bigint;
+    events: number | bigint;
+  }>(
     `SELECT device,
             app,
             ROUND(SUM(duration_sec) / 60.0, 1) AS minutes,
@@ -199,7 +210,7 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
       ORDER BY minutes DESC`,
     { start: sevenAgo + "T00:00:00" },
   );
-  const topApps = topAppsRaw.filter(r => isRankableApp(r.app)).slice(0, 10);
+  const topApps = topAppsRaw.filter((r) => isRankableApp(r.app)).slice(0, 10);
 
   const devices = [];
   for (const dev of CONFIG.devices) {
@@ -237,19 +248,19 @@ async function buildPayload(db: Db): Promise<DashboardPayload> {
       delta_vs_ceiling: ceilingMin === null ? null : total - ceilingMin,
       rolling_4wk_avg: todayRow?.rolling_4wk_avg == null ? null : Number(todayRow.rolling_4wk_avg),
     },
-    trend_60d: trend.map(r => ({
+    trend_60d: trend.map((r) => ({
       date: r.date,
       tier1_minutes: Number(r.tier1_minutes),
       tier2_lowvalue_minutes: Number(r.tier2_lowvalue_minutes),
       total_lowvalue_minutes: Number(r.total_lowvalue_minutes),
       rolling_4wk_avg: r.rolling_4wk_avg == null ? null : Number(r.rolling_4wk_avg),
     })),
-    per_device_today: perDevice.map(r => ({
+    per_device_today: perDevice.map((r) => ({
       device: r.device,
       tier1_minutes: Number(r.t1_min ?? 0),
       tier2_lowvalue_minutes: Number(r.t2_min ?? 0),
     })),
-    top_apps_7d: topApps.map(r => ({
+    top_apps_7d: topApps.map((r) => ({
       device: r.device,
       app: r.app ?? "(null)",
       minutes: Number(r.minutes),
@@ -503,11 +514,14 @@ async function handleRequest(req: Request, dbOverride?: Db): Promise<Response> {
   if (url.pathname === "/") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
   if (url.pathname === "/vendor/chart.umd.min.js") {
     return new Response(loadVendoredChartJs(), {
-      headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=86400, immutable" },
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "public, max-age=86400, immutable",
+      },
     });
   }
   if (url.pathname === "/api/dashboard") {
-    const db = dbOverride ?? await Db.open();
+    const db = dbOverride ?? (await Db.open());
     try {
       if (!dbOverride) await db.initSchema();
       const payload = await buildPayload(db);
@@ -525,10 +539,11 @@ if (import.meta.main) {
   const server = Bun.serve({
     hostname: HOST,
     port: PORT,
-    fetch: req => handleRequest(req).catch(err => {
-      console.error("[Dashboard] handler error:", err);
-      return new Response(`internal error: ${err instanceof Error ? err.message : String(err)}`, { status: 500 });
-    }),
+    fetch: (req) =>
+      handleRequest(req).catch((err) => {
+        console.error("[Dashboard] handler error:", err);
+        return new Response(`internal error: ${err instanceof Error ? err.message : String(err)}`, { status: 500 });
+      }),
   });
   console.log(`AppUsageTracker dashboard → http://${HOST}:${server.port}`);
 }

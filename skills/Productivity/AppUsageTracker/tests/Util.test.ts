@@ -27,9 +27,7 @@ test("shiftDate: DST transition (2026-03-08 spring-forward in PDT)", () => {
 });
 
 test("daysBetween: inclusive range", () => {
-  expect(daysBetween("2026-05-10", "2026-05-12")).toEqual([
-    "2026-05-10", "2026-05-11", "2026-05-12",
-  ]);
+  expect(daysBetween("2026-05-10", "2026-05-12")).toEqual(["2026-05-10", "2026-05-11", "2026-05-12"]);
 });
 
 test("daysBetween: same day → singleton", () => {

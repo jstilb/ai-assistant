@@ -4,7 +4,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
@@ -44,7 +44,7 @@ const NOW = new Date("2026-08-25T12:00:00Z");
 function seededRng(): () => number {
   let i = 0;
   const seq = [0.11, 0.53, 0.97, 0.29, 0.71, 0.41, 0.83, 0.05, 0.61, 0.37];
-  return () => seq[i++ % seq.length];
+  return () => seq[i++ % seq.length]!;
 }
 
 function row(id: string, opts: Partial<SampleRow> = {}): SampleRow {
@@ -82,10 +82,10 @@ test("pickForStratum prefers recent videos and caps per channel", () => {
   ];
   const picked = pickForStratum(pool, 4, 90, seededRng(), NOW);
   expect(picked.length).toBe(4);
-  const bingeCount = picked.filter(r => r.channel === "Binge").length;
+  const bingeCount = picked.filter((r) => r.channel === "Binge").length;
   expect(bingeCount).toBe(2); // capped at MAX_PER_CHANNEL
   // 3 eligible recent picks (2 Binge + Other) → 4th must backfill from older.
-  expect(picked.some(r => r.video_id === "old1")).toBe(true);
+  expect(picked.some((r) => r.video_id === "old1")).toBe(true);
 });
 
 test("pickForStratum backfills from older pool when recent runs short", () => {
@@ -95,7 +95,7 @@ test("pickForStratum backfills from older pool when recent runs short", () => {
     row("old-b", { last_watched: "2025-02-01T00:00:00Z" }),
   ];
   const picked = pickForStratum(pool, 3, 90, seededRng(), NOW);
-  expect(picked.map(r => r.video_id).sort()).toEqual(["old-a", "old-b", "recent"]);
+  expect(picked.map((r) => r.video_id).sort()).toEqual(["old-a", "old-b", "recent"]);
 });
 
 // --- buildSample -----------------------------------------------------------
@@ -111,9 +111,9 @@ test("buildSample fills strata, excludes prior rounds and jm-calibration rows", 
   ];
   const plan = buildSample(all, new Set(["sampled-before"]), 8, 90, 3, seededRng(), NOW);
   expect(plan.round).toBe(3);
-  expect(plan.strata["confident-low"].map(r => r.video_id).sort()).toEqual(["low1", "low2"]);
-  expect(plan.strata["confident-high"].map(r => r.video_id)).toEqual(["high1"]);
-  expect(plan.strata.borderline.map(r => r.video_id)).toEqual(["bord1"]);
+  expect(plan.strata["confident-low"].map((r) => r.video_id).sort()).toEqual(["low1", "low2"]);
+  expect(plan.strata["confident-high"].map((r) => r.video_id)).toEqual(["high1"]);
+  expect(plan.strata.borderline.map((r) => r.video_id)).toEqual(["bord1"]);
   expect(plan.excluded).toBe(2);
   expect(sheetVideoIds(plan).sort()).toEqual(["bord1", "high1", "low1", "low2"]);
 });
@@ -127,7 +127,12 @@ test("renderSheet emits frontmatter, all three strata, rows and instructions", (
       row("highA", { confidence: 0.88, is_low_value: false }),
       row("bordA", { confidence: 0.3 }),
     ],
-    new Set(), 8, 90, 1, seededRng(), NOW,
+    new Set(),
+    8,
+    90,
+    1,
+    seededRng(),
+    NOW,
   );
   const md = renderSheet(plan, NOW);
   expect(md).toContain("round: 1");
@@ -146,10 +151,13 @@ test("renderSheet emits frontmatter, all three strata, rows and instructions", (
 test("state round-trips and missing file yields empty state", () => {
   const statePath = join(TMP, "state", "rounds.json");
   expect(loadState(statePath)).toEqual({ rounds: [] });
-  saveState({ rounds: [{ round: 1, generated_at: "2026-08-25T12:00:00Z", sheet_path: "/tmp/x.md", video_ids: ["a", "b"] }] }, statePath);
+  saveState(
+    { rounds: [{ round: 1, generated_at: "2026-08-25T12:00:00Z", sheet_path: "/tmp/x.md", video_ids: ["a", "b"] }] },
+    statePath,
+  );
   const loaded = loadState(statePath);
   expect(loaded.rounds.length).toBe(1);
-  expect(loaded.rounds[0].video_ids).toEqual(["a", "b"]);
+  expect(loaded.rounds[0]!.video_ids).toEqual(["a", "b"]);
 });
 
 test("loadState throws on malformed state", () => {
@@ -189,7 +197,10 @@ test("applyJmVerdict on an unclassified video inserts fresh and reports previous
 
 test("readCalibrationGuidance extracts the section and fails loud when absent", () => {
   const good = join(TMP, "rubric-good.md");
-  writeFileSync(good, "# T\n\n## Classification guidance\n\n- bullet one\n- bullet two\n\n## Calibration log\n\n| a |\n");
+  writeFileSync(
+    good,
+    "# T\n\n## Classification guidance\n\n- bullet one\n- bullet two\n\n## Calibration log\n\n| a |\n",
+  );
   expect(readCalibrationGuidance(good)).toBe("- bullet one\n- bullet two");
 
   const noSection = join(TMP, "rubric-nosection.md");

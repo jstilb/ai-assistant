@@ -80,11 +80,15 @@ test("transaction(): returns fn's resolved value", async () => {
 });
 
 test("runBatched(): inserts all rows across multiple batches (default batchSize=1000)", async () => {
-  const rows = Array.from({ length: 2500 }, (_, i) => visitParams(i));
-  await db.runBatched(INSERT_SQL, rows, 1000);
+  // 1001 rows = two batches (1000 + 1). Row inserts cost ~5ms each on slow
+  // disks, so the default 5s timeout is too short. A timeout does NOT cancel the
+  // running insert: it keeps its transaction open on the shared `db`, and every
+  // later test then fails with "Current transaction is aborted".
+  const rows = Array.from({ length: 1001 }, (_, i) => visitParams(i));
+  await db.runBatched(INSERT_SQL, rows);
   const count = await db.queryRow<{ n: bigint | number }>(`SELECT COUNT(*) AS n FROM chrome_visits`);
-  expect(Number(count?.n)).toBe(2500);
-});
+  expect(Number(count?.n)).toBe(1001);
+}, 60_000);
 
 test("runBatched(): a single-row batch still works (batchSize larger than row count)", async () => {
   const rows = [visitParams(1), visitParams(2), visitParams(3)];
@@ -103,12 +107,7 @@ test("runBatched(): a bad row in a LATER batch does not roll back an EARLIER alr
   // batchSize=2: batch1 = rows[0..1] (good, commits), batch2 = rows[2..3]
   // where rows[3] violates the NOT NULL url constraint — batch2 must roll
   // back as a whole, but batch1's rows must remain committed.
-  const rows = [
-    visitParams(1),
-    visitParams(2),
-    visitParams(3),
-    { ...visitParams(4), url: null },
-  ];
+  const rows = [visitParams(1), visitParams(2), visitParams(3), { ...visitParams(4), url: null }];
   let threw = false;
   try {
     await db.runBatched(INSERT_SQL, rows, 2);
@@ -116,7 +115,7 @@ test("runBatched(): a bad row in a LATER batch does not roll back an EARLIER alr
     threw = true;
   }
   expect(threw).toBe(true);
-  const ids = (await db.queryAll<{ id: string }>(`SELECT id FROM chrome_visits ORDER BY id`)).map(r => r.id);
+  const ids = (await db.queryAll<{ id: string }>(`SELECT id FROM chrome_visits ORDER BY id`)).map((r) => r.id);
   // batch1 (rows 1,2) committed; batch2 (rows 3,4) rolled back entirely.
   expect(ids).toEqual(["takeout:1", "takeout:2"]);
 });

@@ -13,7 +13,7 @@ import {
   exchangeCodeForTokens,
   mergeSecretsFile,
   type HttpFetcher,
-} from "../Tools/OAuthBootstrap.ts";
+} from "../../../../lib/core/GoogleOAuth.ts";
 
 let tmp: string;
 let secretsPath: string;
@@ -96,10 +96,7 @@ test("exchangeCodeForTokens: surfaces error from token endpoint with HTTP status
     body: JSON.stringify({ error: "invalid_grant", error_description: "Bad code" }),
   });
   await expect(
-    exchangeCodeForTokens(
-      { clientId: "x", clientSecret: "y", redirectUri: "http://127.0.0.1/cb", code: "bad" },
-      http,
-    ),
+    exchangeCodeForTokens({ clientId: "x", clientSecret: "y", redirectUri: "http://127.0.0.1/cb", code: "bad" }, http),
   ).rejects.toThrow(/invalid_grant|Bad code|400/);
 });
 

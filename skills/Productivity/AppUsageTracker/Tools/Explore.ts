@@ -27,12 +27,12 @@
  *   bun Tools/Explore.ts devices
  *   bun Tools/Explore.ts sql "SELECT device, COUNT(*) n FROM events GROUP BY 1"
  */
-import { DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBValue } from "@duckdb/node-api";
 import { CONFIG } from "../Config.ts";
 
 const argv = process.argv.slice(2);
 const JSON_OUT = argv.includes("--json");
-const args = argv.filter(a => a !== "--json");
+const args = argv.filter((a) => a !== "--json");
 const cmd = args[0] ?? "help";
 
 /** Coerce DuckDB scalar (BigInt, Date, null) to something printable. */
@@ -46,14 +46,21 @@ function fmt(v: unknown): string {
 
 /** Print an array of row objects as an aligned table (or JSON with --json). */
 function printRows(rows: Record<string, unknown>[]): void {
-  if (JSON_OUT) { console.log(JSON.stringify(rows, null, 2)); return; }
-  if (rows.length === 0) { console.log("(0 rows)"); return; }
+  if (JSON_OUT) {
+    console.log(JSON.stringify(rows, null, 2));
+    return;
+  }
+  if (rows.length === 0) {
+    console.log("(0 rows)");
+    return;
+  }
   const cols = Object.keys(rows[0]!);
-  const widths = cols.map(c => Math.max(c.length, ...rows.map(r => fmt(r[c]).length)));
-  const line = (cells: string[]) => cells.map((s, i) => s.padStart(widths[i]! >= 0 ? 0 : 0).padEnd(widths[i]!)).join("  ");
+  const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => fmt(r[c]).length)));
+  const line = (cells: string[]) =>
+    cells.map((s, i) => s.padStart(widths[i]! >= 0 ? 0 : 0).padEnd(widths[i]!)).join("  ");
   console.log(line(cols));
-  console.log(widths.map(w => "-".repeat(w)).join("  "));
-  for (const r of rows) console.log(line(cols.map(c => fmt(r[c]))));
+  console.log(widths.map((w) => "-".repeat(w)).join("  "));
+  for (const r of rows) console.log(line(cols.map((c) => fmt(r[c]))));
   console.log(`\n(${rows.length} row${rows.length === 1 ? "" : "s"})`);
 }
 
@@ -62,17 +69,25 @@ async function openRO() {
   const instance = await DuckDBInstance.create(CONFIG.dbPath, { access_mode: "READ_ONLY" });
   const conn = await instance.connect();
   const all = async (sql: string, params?: Record<string, unknown>) => {
-    const reader = params ? await conn.runAndReadAll(sql, params) : await conn.runAndReadAll(sql);
+    const reader = params
+      ? await conn.runAndReadAll(sql, params as Record<string, DuckDBValue>)
+      : await conn.runAndReadAll(sql);
     return reader.getRowObjects() as Record<string, unknown>[];
   };
-  const close = () => { conn.disconnectSync(); instance.closeSync(); };
+  const close = () => {
+    conn.disconnectSync();
+    instance.closeSync();
+  };
   return { all, close };
 }
 
 function assertReadOnlySql(sql: string): void {
   const head = sql.trimStart().slice(0, 12).toUpperCase();
-  const ok = ["SELECT", "WITH", "DESCRIBE", "SHOW", "EXPLAIN", "PRAGMA", "FROM"].some(k => head.startsWith(k));
-  if (!ok) throw new Error(`Refusing non-read query (must start with SELECT/WITH/DESCRIBE/SHOW/EXPLAIN/PRAGMA): ${sql.slice(0, 40)}…`);
+  const ok = ["SELECT", "WITH", "DESCRIBE", "SHOW", "EXPLAIN", "PRAGMA", "FROM"].some((k) => head.startsWith(k));
+  if (!ok)
+    throw new Error(
+      `Refusing non-read query (must start with SELECT/WITH/DESCRIBE/SHOW/EXPLAIN/PRAGMA): ${sql.slice(0, 40)}…`,
+    );
 }
 
 function usage(): void {
@@ -95,12 +110,17 @@ G37 reference: target 270 min/day (4.5 hr) · baseline 390 min/day (6.5 hr) · g
 const LOCAL = `AT TIME ZONE 'UTC' AT TIME ZONE '${CONFIG.localTimezone}'`;
 
 async function main(): Promise<void> {
-  if (cmd === "help" || cmd === "-h" || cmd === "--help") { usage(); return; }
+  if (cmd === "help" || cmd === "-h" || cmd === "--help") {
+    usage();
+    return;
+  }
   const db = await openRO();
   try {
     switch (cmd) {
       case "tables": {
-        const tabs = await db.all(`SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name`);
+        const tabs = await db.all(
+          `SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name`,
+        );
         const out: Record<string, unknown>[] = [];
         for (const t of tabs) {
           const name = String(t.table_name);
@@ -118,42 +138,61 @@ async function main(): Promise<void> {
       }
       case "metrics": {
         const n = Number(args[1] ?? 35);
-        printRows(await db.all(
-          `SELECT date::VARCHAR date, total_lowvalue_minutes lowval,
+        printRows(
+          await db.all(
+            `SELECT date::VARCHAR date, total_lowvalue_minutes lowval,
                   yt_watched_minutes ytW, yt_listened_minutes ytL,
                   total_youtube_minutes yt_all, total_media_minutes media, total_screen_minutes screen,
                   ROUND(rolling_4wk_avg,1) roll4wk
-             FROM daily_metrics ORDER BY date DESC LIMIT ${n}`));
+             FROM daily_metrics ORDER BY date DESC LIMIT ${n}`,
+          ),
+        );
         break;
       }
       case "day": {
         const d = args[1];
         if (!d) throw new Error("usage: day <YYYY-MM-DD>");
         console.log(`\n# Stored daily_metrics row for ${d}`);
-        printRows(await db.all(
-          `SELECT date::VARCHAR date, tier1_minutes tier1, tier2_lowvalue_minutes tier2,
+        printRows(
+          await db.all(
+            `SELECT date::VARCHAR date, tier1_minutes tier1, tier2_lowvalue_minutes tier2,
                   total_lowvalue_minutes total, yt_watched_minutes ytW, yt_listened_minutes ytL,
-                  ROUND(rolling_4wk_avg,1) roll4wk FROM daily_metrics WHERE date=$d::DATE`, { d }));
+                  ROUND(rolling_4wk_avg,1) roll4wk FROM daily_metrics WHERE date=$d::DATE`,
+            { d },
+          ),
+        );
 
         console.log(`\n# All foreground minutes by device/app (raw input to Tier-1 matching) — ${d}`);
-        printRows(await db.all(
-          `SELECT device, lower(app) app, ROUND(SUM(duration_sec)/60.0,1) mins, COUNT(*) events
+        printRows(
+          await db.all(
+            `SELECT device, lower(app) app, ROUND(SUM(duration_sec)/60.0,1) mins, COUNT(*) events
              FROM events WHERE CAST(ts_start ${LOCAL} AS DATE)=$d::DATE
-            GROUP BY 1,2 ORDER BY mins DESC LIMIT 30`, { d }));
+            GROUP BY 1,2 ORDER BY mins DESC LIMIT 30`,
+            { d },
+          ),
+        );
 
         console.log(`\n# Tier-2 LLM-classified low-value minutes (events∩classifications) — ${d}`);
-        printRows(await db.all(
-          `SELECT c.classifier, c.is_low_value, ROUND(SUM(e.duration_sec)/60.0,1) mins, COUNT(*) events
+        printRows(
+          await db.all(
+            `SELECT c.classifier, c.is_low_value, ROUND(SUM(e.duration_sec)/60.0,1) mins, COUNT(*) events
              FROM events e JOIN classifications c ON c.event_id=e.id
             WHERE CAST(e.ts_start ${LOCAL} AS DATE)=$d::DATE AND c.tier=2
-            GROUP BY 1,2 ORDER BY mins DESC`, { d }));
+            GROUP BY 1,2 ORDER BY mins DESC`,
+            { d },
+          ),
+        );
 
         console.log(`\n# Chrome low-value visits (capped 30min/visit) — ${d}`);
-        printRows(await db.all(
-          `SELECT v.classifier, ROUND(SUM(LEAST(GREATEST(cv.visit_duration_sec,60),1800))/60.0,1) mins, COUNT(*) visits
+        printRows(
+          await db.all(
+            `SELECT v.classifier, ROUND(SUM(LEAST(GREATEST(cv.visit_duration_sec,60),1800))/60.0,1) mins, COUNT(*) visits
              FROM chrome_visits cv JOIN chrome_domain_verdicts v ON v.domain=cv.domain AND v.source=cv.source
             WHERE v.is_low_value=TRUE AND CAST(cv.visit_time ${LOCAL} AS DATE)=$d::DATE
-            GROUP BY 1 ORDER BY mins DESC`, { d }));
+            GROUP BY 1 ORDER BY mins DESC`,
+            { d },
+          ),
+        );
         break;
       }
       case "rolling": {
@@ -161,44 +200,59 @@ async function main(): Promise<void> {
         if (!d) throw new Error("usage: rolling <YYYY-MM-DD>");
         const win = await db.all(
           `SELECT date::VARCHAR date, total_lowvalue_minutes total
-             FROM daily_metrics WHERE date BETWEEN ($d::DATE - 27) AND $d::DATE ORDER BY date`, { d });
+             FROM daily_metrics WHERE date BETWEEN ($d::DATE - 27) AND $d::DATE ORDER BY date`,
+          { d },
+        );
         printRows(win);
         const agg = await db.all(
           `SELECT COUNT(*) days_with_rows, SUM(total_lowvalue_minutes) sum_min,
                   ROUND(AVG(total_lowvalue_minutes),1) avg_min_per_day,
                   ROUND(AVG(total_lowvalue_minutes)/60.0,2) avg_hr_per_day
-             FROM daily_metrics WHERE date BETWEEN ($d::DATE - 27) AND $d::DATE`, { d });
+             FROM daily_metrics WHERE date BETWEEN ($d::DATE - 27) AND $d::DATE`,
+          { d },
+        );
         console.log(`\n# rolling_4wk_avg = AVG(total) over rows in [${d} - 27, ${d}]`);
         printRows(agg);
-        const zeros = win.filter(r => Number(r.total) === 0).map(r => r.date);
-        if (zeros.length && !JSON_OUT) console.log(`\n⚠ zero-total days in window (${zeros.length}): ${zeros.join(", ")}`);
+        const zeros = win.filter((r) => Number(r.total) === 0).map((r) => r.date);
+        if (zeros.length && !JSON_OUT)
+          console.log(`\n⚠ zero-total days in window (${zeros.length}): ${zeros.join(", ")}`);
         break;
       }
       case "devices": {
         console.log(`\n# sync_state (poller bookkeeping)`);
-        printRows(await db.all(
-          `SELECT device, bucket, last_event_ts::VARCHAR last_event_ts,
+        printRows(
+          await db.all(
+            `SELECT device, bucket, last_event_ts::VARCHAR last_event_ts,
                   last_sync_ok::VARCHAR last_sync_ok, last_error
-             FROM sync_state ORDER BY device, bucket`));
+             FROM sync_state ORDER BY device, bucket`,
+          ),
+        );
         console.log(`\n# newest actual event per device (from events table)`);
-        printRows(await db.all(
-          `SELECT device, MAX(ts_start)::VARCHAR newest_event, COUNT(*) total_events
-             FROM events GROUP BY device ORDER BY device`));
+        printRows(
+          await db.all(
+            `SELECT device, MAX(ts_start)::VARCHAR newest_event, COUNT(*) total_events
+             FROM events GROUP BY device ORDER BY device`,
+          ),
+        );
         break;
       }
       case "coverage": {
         const d = args[1];
         const where = d ? `WHERE CAST(e.ts_start ${LOCAL} AS DATE)=$d::DATE` : ``;
         console.log(`\n# event metadata + classification coverage${d ? ` — ${d}` : " (all time)"}`);
-        printRows(await db.all(
-          `SELECT e.device,
+        printRows(
+          await db.all(
+            `SELECT e.device,
                   COUNT(*) events,
                   SUM(CASE WHEN e.title IS NULL OR e.title='' THEN 1 ELSE 0 END) no_title,
                   SUM(CASE WHEN e.url IS NULL OR e.url='' THEN 1 ELSE 0 END) no_url,
                   SUM(CASE WHEN c.event_id IS NULL THEN 1 ELSE 0 END) unclassified
              FROM events e LEFT JOIN classifications c ON c.event_id=e.id
              ${where}
-            GROUP BY e.device ORDER BY e.device`, d ? { d } : undefined));
+            GROUP BY e.device ORDER BY e.device`,
+            d ? { d } : undefined,
+          ),
+        );
         break;
       }
       case "sql": {
@@ -209,11 +263,15 @@ async function main(): Promise<void> {
         break;
       }
       default:
-        console.log(`unknown command: ${cmd}\n`); usage();
+        console.log(`unknown command: ${cmd}\n`);
+        usage();
     }
   } finally {
     db.close();
   }
 }
 
-main().catch(err => { console.error("ERROR:", (err as Error).message); process.exit(1); });
+main().catch((err) => {
+  console.error("ERROR:", (err as Error).message);
+  process.exit(1);
+});

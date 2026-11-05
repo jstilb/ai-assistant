@@ -15,9 +15,9 @@
 # hung on a single `claude -p` call and nothing detected it.
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TIMEOUT_BIN=/opt/homebrew/bin/timeout
+# Prefer the Homebrew binary (Apple-silicon Mac), then PATH (gtimeout on a Mac with coreutils, timeout on Linux).
+TIMEOUT_BIN="${TIMEOUT_BIN:-$([ -x /opt/homebrew/bin/timeout ] && echo /opt/homebrew/bin/timeout || command -v timeout || command -v gtimeout || echo /opt/homebrew/bin/timeout)}"
 
-fail=0
 step() {
   local name="$1"
   local secs="$2"; shift 2
@@ -29,7 +29,6 @@ step() {
     else
       echo "[WARN] ${name} failed (exit ${rc}) — continuing"
     fi
-    fail=1
   fi
 }
 

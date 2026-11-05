@@ -21,7 +21,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "path";
+import { join } from "node:path";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { Db, logFailure } from "./Db.ts";
 
@@ -67,7 +67,7 @@ export function parseIsoDuration(iso: string): number | null {
   if (!m) return null;
   const [, h, mn, s] = m;
   if (h == null && mn == null && s == null) return null; // bare "PT"
-  return (parseInt(h ?? "0", 10) * 3600) + (parseInt(mn ?? "0", 10) * 60) + parseInt(s ?? "0", 10);
+  return parseInt(h ?? "0", 10) * 3600 + parseInt(mn ?? "0", 10) * 60 + parseInt(s ?? "0", 10);
 }
 
 function loadApiKey(): string | null {
@@ -79,7 +79,10 @@ function loadApiKey(): string | null {
     // style; older docs may have suggested lowercase.
     const key = parsed.YOUTUBE_API_KEY ?? parsed.youtube_api_key;
     return typeof key === "string" && key.length > 0 ? key : null;
-  } catch { return null; }
+  } catch {
+    // optional secrets file: missing or invalid JSON means no API key
+    return null;
+  }
 }
 
 interface ApiVideo {
@@ -116,10 +119,10 @@ export const defaultVideoFetcher: VideoFetcher = async (ids) => {
     const body = await res.text();
     throw new Error(`HTTP ${res.status} on videos.list: ${body.slice(0, 200)}`);
   }
-  const data = await res.json() as ApiResponse;
+  const data = (await res.json()) as ApiResponse;
   if (data.error?.message) throw new Error(`YouTube API error: ${data.error.message}`);
   const items = data.items ?? [];
-  return items.map<EnrichedVideo>(item => ({
+  return items.map<EnrichedVideo>((item) => ({
     video_id: item.id,
     title: item.snippet?.title ?? null,
     channel: item.snippet?.channelTitle ?? null,
@@ -137,7 +140,7 @@ async function loadUnenrichedIds(db: Db, force: boolean, limit: number): Promise
          WHERE NOT EXISTS (SELECT 1 FROM youtube_videos v WHERE v.video_id = h.video_id)
          ORDER BY h.video_id LIMIT $limit`;
   const rows = await db.queryAll<{ video_id: string }>(sql, { limit });
-  return rows.map(r => r.video_id);
+  return rows.map((r) => r.video_id);
 }
 
 async function upsertVideo(db: Db, v: EnrichedVideo & { error?: string | null }): Promise<void> {
@@ -185,7 +188,7 @@ export async function enrichYouTubeVideos(opts: YouTubeEnrichOpts): Promise<YouT
       await logFailure("YouTubeEnrich", err, { batch_size: batch.length });
       continue;
     }
-    const found = new Set(returned.map(v => v.video_id));
+    const found = new Set(returned.map((v) => v.video_id));
     for (const v of returned) {
       await upsertVideo(opts.db, v);
       summary.enriched++;
@@ -196,7 +199,11 @@ export async function enrichYouTubeVideos(opts: YouTubeEnrichOpts): Promise<YouT
     for (const id of batch) {
       if (found.has(id)) continue;
       await upsertVideo(opts.db, {
-        video_id: id, channel_id: null, duration_sec: null, category_id: null, tags: [],
+        video_id: id,
+        channel_id: null,
+        duration_sec: null,
+        category_id: null,
+        tags: [],
         error: "not found in API response (deleted/private/wrong-key)",
       });
       summary.not_found++;
@@ -209,7 +216,7 @@ export async function enrichYouTubeVideos(opts: YouTubeEnrichOpts): Promise<YouT
 async function main(argv: string[]): Promise<void> {
   const json = argv.includes("--json");
   const force = argv.includes("--force");
-  const limitFlag = argv.find(a => a.startsWith("--limit="))?.slice("--limit=".length);
+  const limitFlag = argv.find((a) => a.startsWith("--limit="))?.slice("--limit=".length);
   const limit = limitFlag ? parseInt(limitFlag, 10) : undefined;
 
   const db = await Db.open();
@@ -219,14 +226,17 @@ async function main(argv: string[]): Promise<void> {
     if (json) {
       console.log(JSON.stringify(summary, null, 2));
     } else {
-      console.log(`YouTubeEnrich: requested=${summary.requested} enriched=${summary.enriched} not_found=${summary.not_found} errors=${summary.errors}`);
+      console.log(
+        `YouTubeEnrich: requested=${summary.requested} enriched=${summary.enriched} not_found=${summary.not_found} errors=${summary.errors}`,
+      );
     }
   } finally {
     db.close();
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

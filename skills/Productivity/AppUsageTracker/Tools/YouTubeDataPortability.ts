@@ -43,11 +43,13 @@
  *   https://developers.google.com/data-portability/reference/rest
  */
 
+import { homedir } from "node:os";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type OAuthClient, loadGoogleOAuthClient } from "../../../../lib/core/GoogleOAuth.ts";
 import { logFailure } from "./Db.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 const SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 // Reuse the OAuth client gcalcli already registered for project kaya-484418.
 // Same project where Data Portability API is enabled. Avoids forcing Jm to
@@ -114,31 +116,8 @@ export type HttpFetcher = (req: HttpRequest) => Promise<HttpResponse>;
 // secrets.json helpers
 // ────────────────────────────────────────────────────────────────────────
 
-interface GcalcliClientFile {
-  installed?: { client_id?: string; client_secret?: string };
-  web?: { client_id?: string; client_secret?: string };
-}
-
-export interface OAuthClient {
-  clientId: string;
-  clientSecret: string;
-}
-
-/** Load the Google OAuth Desktop client (client_id + client_secret) from the
- * gcalcli-managed JSON file. This is the same Cloud project where DPA is
- * enabled, so the same client works for both. */
-export function loadGoogleOAuthClient(path: string = GCALCLI_CLIENT_SECRET_PATH): OAuthClient {
-  if (!existsSync(path)) {
-    throw new Error(`OAuth client_secret.json missing at ${path} — run gcalcli setup or place the file there`);
-  }
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as GcalcliClientFile;
-  const installed = parsed.installed ?? parsed.web ?? {};
-  const clientId = installed.client_id;
-  const clientSecret = installed.client_secret;
-  if (typeof clientId !== "string" || !clientId) throw new Error(`client_id missing from ${path}`);
-  if (typeof clientSecret !== "string" || !clientSecret) throw new Error(`client_secret missing from ${path}`);
-  return { clientId, clientSecret };
-}
+// Shared with YouTubeCuration via lib/core/GoogleOAuth.ts (ADR-006: no cross-skill import).
+export { loadGoogleOAuthClient, type OAuthClient };
 
 export function loadDPAConfig(
   secretsPath: string = SECRETS_PATH,
@@ -168,12 +147,12 @@ export const defaultHttp: HttpFetcher = async (req) => {
   });
   const ct = res.headers.get("content-type") ?? "";
   const headers: Record<string, string> = {};
-  res.headers.forEach((v, k) => { headers[k] = v; });
+  res.headers.forEach((v, k) => {
+    headers[k] = v;
+  });
   // Treat anything that isn't text/json/form as binary
   const isText = /^(application\/json|application\/x-www-form-urlencoded|text\/)/.test(ct);
-  const body: string | Uint8Array = isText
-    ? await res.text()
-    : new Uint8Array(await res.arrayBuffer());
+  const body: string | Uint8Array = isText ? await res.text() : new Uint8Array(await res.arrayBuffer());
   return { status: res.status, headers, body };
 };
 
@@ -238,7 +217,8 @@ export async function initiateArchive(
     throw new Error(`initiateArchive failed: HTTP ${res.status} — ${bodyAsString(res.body).slice(0, 500)}`);
   }
   const parsed = JSON.parse(bodyAsString(res.body)) as InitiateResult;
-  if (!parsed.archiveJobId) throw new Error(`initiateArchive: missing archiveJobId in response: ${bodyAsString(res.body).slice(0, 200)}`);
+  if (!parsed.archiveJobId)
+    throw new Error(`initiateArchive: missing archiveJobId in response: ${bodyAsString(res.body).slice(0, 200)}`);
   return parsed;
 }
 
@@ -266,7 +246,7 @@ export async function getArchiveState(
 }
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function pollUntilComplete(
@@ -341,8 +321,14 @@ export async function pullDPAArchive(
 ): Promise<PullResult> {
   const http = opts.http ?? defaultHttp;
   const accessToken = await refreshAccessToken(cfg, http);
-  const init = await initiateArchive(http, accessToken, resources, { startTime: opts.startTime, endTime: opts.endTime });
-  const state = await pollUntilComplete(http, accessToken, init.archiveJobId, { intervalMs: opts.intervalMs, maxWaitMs: opts.maxWaitMs });
+  const init = await initiateArchive(http, accessToken, resources, {
+    startTime: opts.startTime,
+    endTime: opts.endTime,
+  });
+  const state = await pollUntilComplete(http, accessToken, init.archiveJobId, {
+    intervalMs: opts.intervalMs,
+    maxWaitMs: opts.maxWaitMs,
+  });
   const files = await downloadArchive(http, state.urls, destDir, init.archiveJobId);
   return { archiveJobId: init.archiveJobId, accessType: init.accessType, files };
 }
@@ -356,9 +342,15 @@ async function main(): Promise<void> {
   const resources: string[] = [];
   let resourceFlag = false;
   for (const a of args) {
-    if (a === "--chrome") resources.push(RESOURCE_CHROME_HISTORY), (resourceFlag = true);
-    else if (a === "--youtube") resources.push(RESOURCE_YOUTUBE_ACTIVITY), (resourceFlag = true);
-    else if (a.startsWith("--")) { /* ignore unknown */ }
+    if (a === "--chrome") {
+      resources.push(RESOURCE_CHROME_HISTORY);
+      resourceFlag = true;
+    } else if (a === "--youtube") {
+      resources.push(RESOURCE_YOUTUBE_ACTIVITY);
+      resourceFlag = true;
+    } else if (a.startsWith("--")) {
+      /* ignore unknown */
+    }
   }
   if (!resourceFlag) resources.push(RESOURCE_YOUTUBE_ACTIVITY);
 
@@ -375,7 +367,7 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error(`[YouTubeDataPortability] ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   });

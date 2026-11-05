@@ -213,7 +213,7 @@ at this surface (fixed 2026-07-17, fable-audit batch2).
 ## Phone / tablet connectivity is USB-via-ADB, not Tailscale
 
 Despite the original V1 design, the live setup uses
-`/opt/homebrew/bin/adb forward tcp:<port> tcp:5600`:
+`adb forward tcp:<port> tcp:5600`:
 - phone (serial `32281JEHN11329`) → `localhost:5601`
 - tablet (serial `R52N816X3LH`) → `localhost:5602`
 

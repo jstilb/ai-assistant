@@ -28,10 +28,10 @@
  */
 
 import { CONFIG } from "../Config.ts";
-import { Db } from "./Db.ts";
+import type { Db } from "./Db.ts";
 
 /** Max gap between aw-watcher events still treated as one foreground session. */
-export const YOUTUBE_SESSION_GAP_SEC = 300;
+const YOUTUBE_SESSION_GAP_SEC = 300;
 /** Pathological-data guard (e.g. an 8-hour livestream VOD opened once and left
  *  before another open). Generous enough never to truncate a normal video. */
 export const YOUTUBE_ABSOLUTE_CAP_SEC = 4 * 3600;
@@ -42,20 +42,20 @@ export const UNKNOWN_DURATION_FALLBACK_SEC = 1800;
  *  2x; without a real-time signal, defaulting to full duration overcounts.
  *  Quantified: 13 hour-plus background listens drove most of the dur-wins
  *  overcount in 28-day analysis. */
-export const LISTENING_NO_SESSION_CAP_SEC = 60 * 60;
+const LISTENING_NO_SESSION_CAP_SEC = 60 * 60;
 /** Playback-speed factor for duration-INFERRED listening. Jm consumes YouTube at
  *  ~2x, so when we fall back to a video's nominal duration (no foreground session
  *  and no tighter inter-open gap), real time ≈ duration/2. Applied ONLY to the
  *  duration-wins listening branch — "watched" minutes are real foreground screen
  *  time (already 2x-correct) and gap-wins minutes are real elapsed wall-clock. */
-export const LISTEN_SPEED_FACTOR = 0.5;
+const LISTEN_SPEED_FACTOR = 0.5;
 
 /** Foreground watchers we trust as evidence of active watching. Phone is
  *  excluded on purpose — see file header. */
 const FOREGROUND_DEVICES = ["tablet", "mac"];
 const YT_APPS_LOWERCASE = ["youtube", "com.google.android.youtube", "nebula"];
 
-export interface YouTubeConsumption {
+interface YouTubeConsumption {
   /** Total low-value YouTube minutes — watchedMinutes + listenedMinutes. */
   minutes: number;
   /** Minutes corroborated by a tablet/Mac foreground session. */
@@ -128,8 +128,10 @@ export async function computeYouTubeConsumption(
   // (1) Every open for the local date, each carrying the timestamp of the
   // NEXT open anywhere in history (LEAD over the full table, then filtered).
   const openRows = await db.queryAll<{
-    ts: string; next_ts: string | null;
-    duration_sec: number | bigint | null; is_low_value: boolean | null;
+    ts: string;
+    next_ts: string | null;
+    duration_sec: number | bigint | null;
+    is_low_value: boolean | null;
   }>(
     `
     WITH ordered AS (
@@ -152,7 +154,7 @@ export async function computeYouTubeConsumption(
   if (openRows.length === 0) return { minutes: 0, watchedMinutes: 0, listenedMinutes: 0 };
 
   const parseTs = (s: string): Date => new Date(s.replace(" ", "T") + "Z");
-  const opens: OpenRow[] = openRows.map(r => ({
+  const opens: OpenRow[] = openRows.map((r) => ({
     ts: parseTs(r.ts),
     nextTs: r.next_ts == null ? null : parseTs(r.next_ts),
     durationSec: r.duration_sec == null ? null : Number(r.duration_sec),
@@ -166,8 +168,12 @@ export async function computeYouTubeConsumption(
   const appPh = YT_APPS_LOWERCASE.map((_, i) => `$app${i}`).join(", ");
   const devPh = FOREGROUND_DEVICES.map((_, i) => `$dev${i}`).join(", ");
   const bindings: Record<string, unknown> = { date };
-  YT_APPS_LOWERCASE.forEach((app, i) => { bindings[`app${i}`] = app; });
-  FOREGROUND_DEVICES.forEach((dev, i) => { bindings[`dev${i}`] = dev; });
+  YT_APPS_LOWERCASE.forEach((app, i) => {
+    bindings[`app${i}`] = app;
+  });
+  FOREGROUND_DEVICES.forEach((dev, i) => {
+    bindings[`dev${i}`] = dev;
+  });
   const events = await db.queryAll<{ device: string; ts_start: string; duration_sec: number | bigint }>(
     `
     SELECT e.device AS device, e.ts_start::VARCHAR AS ts_start, e.duration_sec AS duration_sec
@@ -179,11 +185,13 @@ export async function computeYouTubeConsumption(
     `,
     bindings,
   );
-  const sessions = buildSessions(events.map(e => ({
-    device: e.device,
-    ts_start: parseTs(e.ts_start),
-    duration_sec: Number(e.duration_sec),
-  })));
+  const sessions = buildSessions(
+    events.map((e) => ({
+      device: e.device,
+      ts_start: parseTs(e.ts_start),
+      duration_sec: Number(e.duration_sec),
+    })),
+  );
 
   // (3) Map every open to its containing foreground session (if any) so the
   // session's time can be split across the opens that share it.
@@ -201,9 +209,7 @@ export async function computeYouTubeConsumption(
   for (const open of opens) {
     if (!includeAllVerdicts && !open.isLowValue) continue;
 
-    const gapSec = open.nextTs == null
-      ? Infinity
-      : (open.nextTs.getTime() - open.ts.getTime()) / 1000;
+    const gapSec = open.nextTs == null ? Infinity : (open.nextTs.getTime() - open.ts.getTime()) / 1000;
 
     const hasDuration = open.durationSec != null && open.durationSec > 0;
     let estimate = hasDuration

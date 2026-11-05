@@ -41,11 +41,11 @@ afterAll(() => {
 test("migration v1: appends ts_start to id values that lack a T...Z segment", async () => {
   await db.initSchema(); // runs migrations
   const rows = await db.queryAll<{ id: string }>(`SELECT id FROM events ORDER BY id`);
-  const ids = rows.map(r => r.id);
+  const ids = rows.map((r) => r.id);
 
   // Pre-migration row "phone:b:1" → has a T and Z now
-  expect(ids.some(id => id.startsWith("phone:b:1:") && /T.*Z/.test(id))).toBe(true);
-  expect(ids.some(id => id.startsWith("phone:b:2:") && /T.*Z/.test(id))).toBe(true);
+  expect(ids.some((id) => id.startsWith("phone:b:1:") && /T.*Z/.test(id))).toBe(true);
+  expect(ids.some((id) => id.startsWith("phone:b:2:") && /T.*Z/.test(id))).toBe(true);
   // Already-migrated row stayed intact
   expect(ids).toContain("phone:b:3:2026-04-28T10:20:00.000Z");
   // schema_version row exists
@@ -54,8 +54,8 @@ test("migration v1: appends ts_start to id values that lack a T...Z segment", as
 });
 
 test("migration v1: idempotent — second initSchema doesn't double-append", async () => {
-  const beforeIds = (await db.queryAll<{ id: string }>(`SELECT id FROM events`)).map(r => r.id).sort();
+  const beforeIds = (await db.queryAll<{ id: string }>(`SELECT id FROM events`)).map((r) => r.id).sort();
   await db.initSchema();
-  const afterIds = (await db.queryAll<{ id: string }>(`SELECT id FROM events`)).map(r => r.id).sort();
+  const afterIds = (await db.queryAll<{ id: string }>(`SELECT id FROM events`)).map((r) => r.id).sort();
   expect(afterIds).toEqual(beforeIds);
 });

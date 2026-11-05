@@ -23,7 +23,7 @@
 
 import { CONFIG } from "../Config.ts";
 import { Db, logFailure } from "./Db.ts";
-import { inference } from "~/.claude/lib/core/Inference.ts";
+import { inference } from "../../../../lib/core/Inference.ts";
 
 const DEFAULT_LLM_LIMIT = 200;
 
@@ -110,7 +110,7 @@ function matchesTier1Domain(domain: string): boolean {
 
 function matchesUtility(domain: string): boolean {
   const lc = domain.toLowerCase();
-  return CONFIG.chromeUtilityDomains.some(d => d.toLowerCase() === lc);
+  return CONFIG.chromeUtilityDomains.some((d) => d.toLowerCase() === lc);
 }
 
 /** Aggregate distinct (domain, source) keys with sample titles + duration.
@@ -134,7 +134,13 @@ async function loadCandidates(db: Db): Promise<DomainRow[]> {
      GROUP BY cv.domain, cv.source
      ORDER BY visit_count DESC
   `;
-  const rows = await db.queryAll<{ domain: string; source: string; visit_count: number | bigint; total_sec: number | bigint; already_classified: boolean }>(sql);
+  const rows = await db.queryAll<{
+    domain: string;
+    source: string;
+    visit_count: number | bigint;
+    total_sec: number | bigint;
+    already_classified: boolean;
+  }>(sql);
 
   // Fetch up to 5 sample titles per (domain, source) — separate query so the
   // GROUP BY above stays cheap. Use ROW_NUMBER to take first-5 per group.
@@ -157,7 +163,7 @@ async function loadCandidates(db: Db): Promise<DomainRow[]> {
     titleMap.set(key, list);
   }
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     domain: r.domain,
     source: r.source,
     visit_count: Number(r.visit_count),
@@ -179,7 +185,8 @@ async function upsertVerdict(
        (domain, source, is_low_value, reason, confidence, classifier, classified_at)
      VALUES ($domain, $source, $low, $reason, $conf, $cls, $now::TIMESTAMP)`,
     {
-      domain, source,
+      domain,
+      source,
       low: verdict.is_low_value,
       reason: verdict.reason,
       conf: verdict.confidence,
@@ -309,7 +316,7 @@ async function main(argv: string[]): Promise<void> {
   const force = argv.includes("--force");
   const json = argv.includes("--json");
   const dryRun = argv.includes("--dry-run");
-  const limitFlag = argv.find(a => a.startsWith("--limit="))?.slice("--limit=".length);
+  const limitFlag = argv.find((a) => a.startsWith("--limit="))?.slice("--limit=".length);
   const limit = limitFlag ? parseInt(limitFlag, 10) : undefined;
 
   const db = await Db.open();
@@ -321,16 +328,22 @@ async function main(argv: string[]): Promise<void> {
     } else {
       const tag = dryRun ? "DRY-RUN " : "";
       console.log(`${tag}ChromeClassifier: ${summary.candidate_domains} candidate domains`);
-      console.log(`  tier1=${summary.classified_by_tier1}  utility=${summary.classified_by_utility}  llm=${summary.classified_by_llm}  errors=${summary.errors}`);
+      console.log(
+        `  tier1=${summary.classified_by_tier1}  utility=${summary.classified_by_utility}  llm=${summary.classified_by_llm}  errors=${summary.errors}`,
+      );
       if (dryRun) console.log(`  would_call_llm=${summary.would_call_llm}`);
-      if (!dryRun) console.log(`  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`);
+      if (!dryRun)
+        console.log(
+          `  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`,
+        );
     }
   } finally {
     db.close();
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

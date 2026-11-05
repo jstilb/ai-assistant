@@ -132,16 +132,17 @@ export function buildTier1MatchSql(
 function applyFloor(row: { device: string; app_lc: string | null; sec: number | bigint }): number {
   const sec = Number(row.sec ?? 0);
   const appLc = row.app_lc ?? "";
-  const floor = CONFIG.tier1FloorsMinPerDay.find(
-    f => f.device === row.device && f.app.toLowerCase() === appLc,
-  );
+  const floor = CONFIG.tier1FloorsMinPerDay.find((f) => f.device === row.device && f.app.toLowerCase() === appLc);
   const floorSec = floor ? floor.floorMin * 60 : 0;
   return Math.max(0, sec - floorSec);
 }
 
 /** Tier-1 candidate events for a single date, bucketed by (device, app),
  *  with floors applied. Used by both totals + Dashboard per-device panel. */
-export async function computeTier1BucketsByDeviceApp(db: Db, date: string): Promise<Array<{ device: string; app: string | null; netSec: number }>> {
+export async function computeTier1BucketsByDeviceApp(
+  db: Db,
+  date: string,
+): Promise<Array<{ device: string; app: string | null; netSec: number }>> {
   const { matchClause, bindings } = buildTier1MatchSql();
   bindings.date = date;
 
@@ -155,7 +156,7 @@ export async function computeTier1BucketsByDeviceApp(db: Db, date: string): Prom
     GROUP BY device, lower(app)
   `;
   const rows = await db.queryAll<Tier1BucketRow>(sql, bindings);
-  return rows.map(r => ({ device: r.device, app: r.app_lc, netSec: applyFloor(r) }));
+  return rows.map((r) => ({ device: r.device, app: r.app_lc, netSec: applyFloor(r) }));
 }
 
 /**
@@ -277,7 +278,11 @@ export async function computeTier2HeuristicMinutes(db: Db, date: string): Promis
   if (apps.length === 0) return 0;
   const bindings: Record<string, unknown> = { date };
   const ph: string[] = [];
-  apps.forEach((app, i) => { const k = `h${i}`; bindings[k] = app.toLowerCase(); ph.push(`$${k}`); });
+  apps.forEach((app, i) => {
+    const k = `h${i}`;
+    bindings[k] = app.toLowerCase();
+    ph.push(`$${k}`);
+  });
   const sql = `
     SELECT lower(app) AS app, COALESCE(SUM(duration_sec), 0) AS sec
       FROM events
@@ -310,7 +315,11 @@ const NOT_AFK = `device='mac' AND watcher='afkstatus' AND json_extract_string(ra
 
 function tier3NotInClause(bindings: Record<string, unknown>, prefix: string): string {
   const ph: string[] = [];
-  CONFIG.tier3Apps.forEach((app, i) => { const k = `${prefix}${i}`; bindings[k] = app.toLowerCase(); ph.push(`$${k}`); });
+  CONFIG.tier3Apps.forEach((app, i) => {
+    const k = `${prefix}${i}`;
+    bindings[k] = app.toLowerCase();
+    ph.push(`$${k}`);
+  });
   return ph.length ? `AND lower(app) NOT IN (${ph.join(", ")})` : "";
 }
 
@@ -381,9 +390,15 @@ export async function computeRolling4wk(db: Db, date: string): Promise<number | 
 const shiftDate = shiftDateUtil;
 
 export async function upsertMetric(
-  db: Db, date: string, tier1: number, tier2: number = 0,
-  ytWatched: number = 0, ytListened: number = 0,
-  totalYoutube: number = 0, totalMedia: number = 0, totalScreen: number = 0,
+  db: Db,
+  date: string,
+  tier1: number,
+  tier2: number = 0,
+  ytWatched: number = 0,
+  ytListened: number = 0,
+  totalYoutube: number = 0,
+  totalMedia: number = 0,
+  totalScreen: number = 0,
 ): Promise<void> {
   const total = tier1 + tier2;
   await db.run(
@@ -394,38 +409,42 @@ export async function upsertMetric(
       rolling_4wk_avg, computed_at)
      VALUES ($date::DATE, $tier1, $tier2, $total, $ytw, $ytl,
              $tyt, $tmed, $tscr, NULL, $now::TIMESTAMP)`,
-    { date, tier1, tier2, total, ytw: ytWatched, ytl: ytListened,
-      tyt: totalYoutube, tmed: totalMedia, tscr: totalScreen, now: new Date().toISOString() },
+    {
+      date,
+      tier1,
+      tier2,
+      total,
+      ytw: ytWatched,
+      ytl: ytListened,
+      tyt: totalYoutube,
+      tmed: totalMedia,
+      tscr: totalScreen,
+      now: new Date().toISOString(),
+    },
   );
   // Compute rolling avg in a second pass so it sees this row.
   const avg = await computeRolling4wk(db, date);
   if (avg == null) return;
-  await db.run(
-    `UPDATE daily_metrics SET rolling_4wk_avg = $avg WHERE date = $date::DATE`,
-    { avg, date },
-  );
+  await db.run(`UPDATE daily_metrics SET rolling_4wk_avg = $avg WHERE date = $date::DATE`, { avg, date });
 }
 
 async function main(argv: string[]): Promise<void> {
   const force = argv.includes("--force");
   const json = argv.includes("--json");
-  const onlyDate = argv.find(a => a.startsWith("--date="))?.slice("--date=".length);
+  const onlyDate = argv.find((a) => a.startsWith("--date="))?.slice("--date=".length);
 
   const db = await Db.open();
   try {
     await db.initSchema();
 
-    const days = onlyDate
-      ? [onlyDate]
-      : daysBetween(CONFIG.goalStartDate, todayLocal());
+    const days = onlyDate ? [onlyDate] : daysBetween(CONFIG.goalStartDate, todayLocal());
 
     const computed: DailyMetricRow[] = [];
 
     for (const date of days) {
-      const existing = await db.queryRow<{ date: Date }>(
-        `SELECT date FROM daily_metrics WHERE date = $date::DATE`,
-        { date },
-      );
+      const existing = await db.queryRow<{ date: Date }>(`SELECT date FROM daily_metrics WHERE date = $date::DATE`, {
+        date,
+      });
       if (existing && !force) continue;
 
       const tier1 = await computeTier1Minutes(db, date);
@@ -438,9 +457,15 @@ async function main(argv: string[]): Promise<void> {
       const screenMin = await computeScreenMinutes(db, date);
       const mediaMin = await computeMediaMinutes(db, date);
       await upsertMetric(
-        db, date, tier1, tier2Events + tier2Chrome + tier2Heuristic + youtube.minutes,
-        youtube.watchedMinutes, youtube.listenedMinutes,
-        youtubeTotal.minutes, mediaMin, screenMin,
+        db,
+        date,
+        tier1,
+        tier2Events + tier2Chrome + tier2Heuristic + youtube.minutes,
+        youtube.watchedMinutes,
+        youtube.listenedMinutes,
+        youtubeTotal.minutes,
+        mediaMin,
+        screenMin,
       );
 
       const row = await db.queryRow<DailyMetricRow>(
@@ -465,7 +490,9 @@ async function main(argv: string[]): Promise<void> {
       console.log(`Computed ${computed.length} day(s).`);
       if (latest) {
         const avg = latest.rolling_4wk_avg == null ? "n/a" : `${Number(latest.rolling_4wk_avg).toFixed(1)} min/day`;
-        console.log(`Latest: ${latest.date}  tier1=${latest.tier1_minutes} min  total_lowvalue=${latest.total_lowvalue_minutes} min  4wk-avg=${avg}`);
+        console.log(
+          `Latest: ${latest.date}  tier1=${latest.tier1_minutes} min  total_lowvalue=${latest.total_lowvalue_minutes} min  4wk-avg=${avg}`,
+        );
       }
     }
   } finally {
@@ -473,7 +500,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

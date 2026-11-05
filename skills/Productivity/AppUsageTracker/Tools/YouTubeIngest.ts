@@ -32,11 +32,12 @@
  * minutes by intersecting these opens with aw-watcher YouTube session times.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { type Stats, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { Db, logFailure } from "./Db.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 export const YOUTUBE_INBOX = `${HOME}/.claude/MEMORY/AppUsage/youtube-takeout-inbox`;
 export const YOUTUBE_EXTRACTED = `${HOME}/.claude/MEMORY/AppUsage/youtube-takeout-extracted`;
 
@@ -74,7 +75,7 @@ export function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
     if (u.hostname === "youtu.be") {
-      const id = u.pathname.replace(/^\//, "").split("/")[0];
+      const id = u.pathname.replace(/^\//, "").split("/")[0] ?? "";
       return id.length > 0 ? id : null;
     }
     if (u.hostname.endsWith("youtube.com")) {
@@ -88,7 +89,9 @@ export function extractVideoId(url: string): string | null {
         return u.pathname.replace("/embed/", "").split("/")[0] || null;
       }
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return null;
 }
 
@@ -124,26 +127,38 @@ export interface ParsedHtmlEntry {
 
 const TZ_OFFSET_HOURS: Record<string, number> = {
   // Continental US
-  PDT: -7, PST: -8,
-  MDT: -6, MST: -7,
-  CDT: -5, CST: -6,
-  EDT: -4, EST: -5,
+  PDT: -7,
+  PST: -8,
+  MDT: -6,
+  MST: -7,
+  CDT: -5,
+  CST: -6,
+  EDT: -4,
+  EST: -5,
   // Outside CONUS that show up commonly in Takeout
-  HDT: -9, HST: -10,
-  AKDT: -8, AKST: -9,
-  AST: -4, ADT: -3,
+  HDT: -9,
+  HST: -10,
+  AKDT: -8,
+  AKST: -9,
+  AST: -4,
+  ADT: -3,
   // Reference
-  UTC: 0, GMT: 0, Z: 0,
+  UTC: 0,
+  GMT: 0,
+  Z: 0,
 };
 
-const MONTHS_3 = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+const MONTHS_3 = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 /** Parse "May 14, 2026, 5:43:27 PM CDT" → Date. Returns null on unrecognized
  *  format or unknown tz. */
 export function parseTakeoutHtmlTimestamp(raw: string): Date | null {
-  const m = raw.trim().match(/^([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2}):(\d{2})(?:\s*(AM|PM))?\s+([A-Z]{1,5})$/i);
+  const m = raw
+    .trim()
+    .match(/^([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2}):(\d{2})(?:\s*(AM|PM))?\s+([A-Z]{1,5})$/i);
   if (!m) return null;
   const [, monRaw, dayStr, yearStr, hStr, minStr, secStr, ampm, tz] = m;
+  if (!monRaw || !dayStr || !yearStr || !hStr || !minStr || !secStr || !tz) return null;
   const month = MONTHS_3.indexOf(monRaw.slice(0, 3).toLowerCase());
   if (month < 0) return null;
   let hour = parseInt(hStr, 10);
@@ -155,25 +170,36 @@ export function parseTakeoutHtmlTimestamp(raw: string): Date | null {
   const offset = TZ_OFFSET_HOURS[tz.toUpperCase()];
   if (offset === undefined) return null;
   const localUtcMs = Date.UTC(
-    parseInt(yearStr, 10), month, parseInt(dayStr, 10),
-    hour, parseInt(minStr, 10), parseInt(secStr, 10),
+    parseInt(yearStr, 10),
+    month,
+    parseInt(dayStr, 10),
+    hour,
+    parseInt(minStr, 10),
+    parseInt(secStr, 10),
   );
   return new Date(localUtcMs - offset * 3600 * 1000);
 }
 
 const HTML_ENTITY_MAP: Record<string, string> = {
-  "&quot;": '"', "&apos;": "'", "&amp;": "&", "&lt;": "<", "&gt;": ">",
-  "&#39;": "'", "&#34;": '"', "&nbsp;": " ",
+  "&quot;": '"',
+  "&apos;": "'",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&#39;": "'",
+  "&#34;": '"',
+  "&nbsp;": " ",
 };
 
 function decodeHtmlEntities(s: string): string {
-  return s.replace(/&(?:quot|apos|amp|lt|gt|nbsp|#39|#34);/g, m => HTML_ENTITY_MAP[m] ?? m);
+  return s.replace(/&(?:quot|apos|amp|lt|gt|nbsp|#39|#34);/g, (m) => HTML_ENTITY_MAP[m] ?? m);
 }
 
 // Match a single "Watched <nbsp> <a href=...watch?v=ID>TITLE</a><br> [<a href=channel>CHANNEL</a><br>]? TS <br>"
 // block. The channel anchor is optional (older entries occasionally omit it).
 // Using \s after <br> so the parser is tolerant of intra-entry whitespace.
-const WATCH_ENTRY_RE = /Watched <a href="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]+)(?:&amp;[^"]*)?">((?:[^<]|<(?!\/a>))*?)<\/a><br>\s*(?:Watched at [^<]+<br>\s*)*(?:<a href="(https:\/\/www\.youtube\.com\/channel\/[^"]+)">([^<]*)<\/a><br>\s*)?([A-Za-z]+\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}:\d{2}(?:\s*(?:AM|PM))?\s+[A-Z]{1,5})<br>/g;
+const WATCH_ENTRY_RE =
+  /Watched <a href="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]+)(?:&amp;[^"]*)?">((?:[^<]|<(?!\/a>))*?)<\/a><br>\s*(?:Watched at [^<]+<br>\s*)*(?:<a href="(https:\/\/www\.youtube\.com\/channel\/[^"]+)">([^<]*)<\/a><br>\s*)?([A-Za-z]+\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}:\d{2}(?:\s*(?:AM|PM))?\s+[A-Z]{1,5})<br>/g;
 
 /** Parse a Takeout watch-history.html document. Returns one row per actual
  *  video watch ("Watched" entries pointing at /watch?v=...). Community-post
@@ -181,10 +207,9 @@ const WATCH_ENTRY_RE = /Watched <a href="https:\/\/www\.youtube\.com\/watch\?v=
  *  pattern). Order matches the document; Takeout writes newest-first. */
 export function parseWatchHistoryHtml(html: string): ParsedHtmlEntry[] {
   const out: ParsedHtmlEntry[] = [];
-  WATCH_ENTRY_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = WATCH_ENTRY_RE.exec(html)) !== null) {
+  for (const m of html.matchAll(WATCH_ENTRY_RE)) {
     const [, videoId, titleRaw, channelUrl, channelRaw, tsRaw] = m;
+    if (!videoId || !titleRaw || !tsRaw) continue; // groups 1, 2 and 5 always match
     const ts = parseTakeoutHtmlTimestamp(tsRaw);
     if (!ts) continue;
     out.push({
@@ -198,17 +223,28 @@ export function parseWatchHistoryHtml(html: string): ParsedHtmlEntry[] {
   return out;
 }
 
-async function insertHistoryRow(db: Db, params: {
-  ts: string; videoId: string; title: string | null; channel: string | null;
-  channelUrl: string | null; sourceExport: string;
-}): Promise<void> {
+async function insertHistoryRow(
+  db: Db,
+  params: {
+    ts: string;
+    videoId: string;
+    title: string | null;
+    channel: string | null;
+    channelUrl: string | null;
+    sourceExport: string;
+  },
+): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO youtube_history
        (ts, video_id, title, channel, channel_url, source_export)
      VALUES ($ts::TIMESTAMP, $vid, $title, $channel, $channelUrl, $src)`,
     {
-      ts: params.ts, vid: params.videoId, title: params.title,
-      channel: params.channel, channelUrl: params.channelUrl, src: params.sourceExport,
+      ts: params.ts,
+      vid: params.videoId,
+      title: params.title,
+      channel: params.channel,
+      channelUrl: params.channelUrl,
+      src: params.sourceExport,
     },
   );
 }
@@ -229,10 +265,16 @@ async function processFile(
     const rows = parseWatchHistoryHtml(raw);
     for (const r of rows) {
       summary.entries_read++;
-      if (sinceUnix && r.ts < sinceUnix) { summary.entries_skipped++; continue; }
+      if (sinceUnix && r.ts < sinceUnix) {
+        summary.entries_skipped++;
+        continue;
+      }
       await insertHistoryRow(db, {
-        ts: r.ts.toISOString(), videoId: r.videoId,
-        title: r.title, channel: r.channel, channelUrl: r.channelUrl,
+        ts: r.ts.toISOString(),
+        videoId: r.videoId,
+        title: r.title,
+        channel: r.channel,
+        channelUrl: r.channelUrl,
         sourceExport,
       });
       summary.rows_inserted++;
@@ -263,21 +305,37 @@ async function processFile(
     // to products only as a tiebreaker for ambiguous headers.
     const header = (entry.header ?? "").trim();
     const products = entry.products ?? [];
-    const isYouTubeWatch =
-      header === "YouTube" ||
-      (header === "" && products.includes("YouTube"));
-    if (!isYouTubeWatch) { summary.entries_skipped++; continue; }
+    const isYouTubeWatch = header === "YouTube" || (header === "" && products.includes("YouTube"));
+    if (!isYouTubeWatch) {
+      summary.entries_skipped++;
+      continue;
+    }
 
     const url = entry.titleUrl;
-    if (!url) { summary.entries_skipped++; continue; }
+    if (!url) {
+      summary.entries_skipped++;
+      continue;
+    }
     const videoId = extractVideoId(url);
-    if (!videoId) { summary.entries_skipped++; continue; }
+    if (!videoId) {
+      summary.entries_skipped++;
+      continue;
+    }
 
     const time = entry.time;
-    if (!time) { summary.entries_skipped++; continue; }
+    if (!time) {
+      summary.entries_skipped++;
+      continue;
+    }
     const ts = new Date(time);
-    if (Number.isNaN(ts.getTime())) { summary.entries_skipped++; continue; }
-    if (sinceUnix && ts < sinceUnix) { summary.entries_skipped++; continue; }
+    if (Number.isNaN(ts.getTime())) {
+      summary.entries_skipped++;
+      continue;
+    }
+    if (sinceUnix && ts < sinceUnix) {
+      summary.entries_skipped++;
+      continue;
+    }
 
     const sub0 = entry.subtitles?.[0];
     await insertHistoryRow(db, {
@@ -303,12 +361,20 @@ function discoverHistoryPaths(): string[] {
   const out: string[] = [];
   for (const name of readdirSync(YOUTUBE_INBOX)) {
     const full = join(YOUTUBE_INBOX, name);
-    let st;
-    try { st = statSync(full); } catch { continue; }
+    let st: Stats;
+    try {
+      st = statSync(full);
+    } catch {
+      // entry vanished or is unreadable between readdir and stat: skip it
+      continue;
+    }
     if (st.isDirectory()) {
       // Recurse through directories looking for watch-history.json.
       out.push(...findHistoryFilesUnder(full));
-    } else if ((name.toLowerCase().endsWith(".json") || name.toLowerCase().endsWith(".html")) && name.includes("history")) {
+    } else if (
+      (name.toLowerCase().endsWith(".json") || name.toLowerCase().endsWith(".html")) &&
+      name.includes("history")
+    ) {
       out.push(full);
     } else if (name.toLowerCase().endsWith(".zip")) {
       const extracted = ensureExtracted(full);
@@ -321,11 +387,20 @@ function discoverHistoryPaths(): string[] {
 function findHistoryFilesUnder(dir: string): string[] {
   const out: string[] = [];
   let entries: string[];
-  try { entries = readdirSync(dir); } catch { return out; }
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out;
+  }
   for (const name of entries) {
     const full = join(dir, name);
-    let st;
-    try { st = statSync(full); } catch { continue; }
+    let st: Stats;
+    try {
+      st = statSync(full);
+    } catch {
+      // entry vanished or is unreadable between readdir and stat: skip it
+      continue;
+    }
     if (st.isDirectory()) {
       out.push(...findHistoryFilesUnder(full));
     } else if (name === "watch-history.json" || name === "watch-history.html") {
@@ -354,7 +429,10 @@ function ensureExtracted(zipPath: string): string {
 
 export async function ingestTakeoutHistory(opts: YouTubeIngestOpts): Promise<YouTubeIngestSummary> {
   const summary: YouTubeIngestSummary = {
-    source_files: [], entries_read: 0, entries_skipped: 0, rows_inserted: 0,
+    source_files: [],
+    entries_read: 0,
+    entries_skipped: 0,
+    rows_inserted: 0,
   };
   await opts.db.initSchema();
 
@@ -371,16 +449,19 @@ export async function ingestTakeoutHistory(opts: YouTubeIngestOpts): Promise<You
     return { ...summary, skipped: `no watch-history.json under ${YOUTUBE_INBOX}` };
   }
   for (const p of paths) {
-    try { await processFile(opts.db, p, summary, opts.sinceUnix); }
-    catch (err) { await logFailure("YouTubeIngest", err, { path: p }); }
+    try {
+      await processFile(opts.db, p, summary, opts.sinceUnix);
+    } catch (err) {
+      await logFailure("YouTubeIngest", err, { path: p });
+    }
   }
   return summary;
 }
 
 async function main(argv: string[]): Promise<void> {
   const json = argv.includes("--json");
-  const pathFlag = argv.find(a => a.startsWith("--path="))?.slice("--path=".length);
-  const sinceFlag = argv.find(a => a.startsWith("--since="))?.slice("--since=".length);
+  const pathFlag = argv.find((a) => a.startsWith("--path="))?.slice("--path=".length);
+  const sinceFlag = argv.find((a) => a.startsWith("--since="))?.slice("--since=".length);
   const sinceUnix = sinceFlag ? new Date(sinceFlag) : undefined;
 
   const db = await Db.open();
@@ -401,7 +482,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

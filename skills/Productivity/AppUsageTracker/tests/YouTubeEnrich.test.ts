@@ -46,16 +46,18 @@ async function insertHistory(id: string, title: string, time: string): Promise<v
 function makeStubFetcher(responses: Record<string, Partial<EnrichedVideo>>, calls?: string[][]): VideoFetcher {
   return async (ids: string[]) => {
     if (calls) calls.push([...ids]);
-    return ids.flatMap(id => {
+    return ids.flatMap((id) => {
       const r = responses[id];
       if (r == null) return [];
-      return [{
-        video_id: id,
-        duration_sec: r.duration_sec ?? null,
-        category_id: r.category_id ?? null,
-        tags: r.tags ?? [],
-        channel_id: r.channel_id ?? null,
-      }];
+      return [
+        {
+          video_id: id,
+          duration_sec: r.duration_sec ?? null,
+          category_id: r.category_id ?? null,
+          tags: r.tags ?? [],
+          channel_id: r.channel_id ?? null,
+        },
+      ];
     });
   };
 }
@@ -85,7 +87,8 @@ test("parseIsoDuration: bogus/empty returns null", () => {
 test("enrich: empty history → no fetch, no rows", async () => {
   const calls: string[][] = [];
   const summary = await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher({}, calls),
+    db,
+    fetcher: makeStubFetcher({}, calls),
   });
   expect(summary.requested).toBe(0);
   expect(summary.enriched).toBe(0);
@@ -97,17 +100,23 @@ test("enrich: single unenriched id → 1 row in youtube_videos", async () => {
   const calls: string[][] = [];
   const summary = await enrichYouTubeVideos({
     db,
-    fetcher: makeStubFetcher({
-      "vid_A": { duration_sec: 512, category_id: 28, tags: ["bun", "javascript"], channel_id: "UC123" },
-    }, calls),
+    fetcher: makeStubFetcher(
+      {
+        vid_A: { duration_sec: 512, category_id: 28, tags: ["bun", "javascript"], channel_id: "UC123" },
+      },
+      calls,
+    ),
   });
   expect(summary.requested).toBe(1);
   expect(summary.enriched).toBe(1);
   expect(calls).toEqual([["vid_A"]]);
 
   const row = await db.queryRow<{
-    video_id: string; duration_sec: number | bigint | null;
-    category_id: number | bigint | null; tags_json: string; channel_id: string;
+    video_id: string;
+    duration_sec: number | bigint | null;
+    category_id: number | bigint | null;
+    tags_json: string;
+    channel_id: string;
   }>(`SELECT video_id, duration_sec, category_id, tags_json, channel_id FROM youtube_videos`);
   expect(row!.video_id).toBe("vid_A");
   expect(Number(row!.duration_sec)).toBe(512);
@@ -127,19 +136,21 @@ test("enrich: batches IDs in groups of 50", async () => {
   expect(summary.requested).toBe(120);
   expect(summary.enriched).toBe(120);
   expect(calls.length).toBe(3);
-  expect(calls[0].length).toBe(50);
-  expect(calls[1].length).toBe(50);
-  expect(calls[2].length).toBe(20);
+  expect(calls[0]!.length).toBe(50);
+  expect(calls[1]!.length).toBe(50);
+  expect(calls[2]!.length).toBe(20);
 });
 
 test("enrich: idempotent — second run skips already-enriched videos", async () => {
   await insertHistory("vid_A", "A", "2026-05-10T15:00:00Z");
   const calls: string[][] = [];
   await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher({ "vid_A": { duration_sec: 60 } }, calls),
+    db,
+    fetcher: makeStubFetcher({ vid_A: { duration_sec: 60 } }, calls),
   });
   await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher({ "vid_A": { duration_sec: 60 } }, calls),
+    db,
+    fetcher: makeStubFetcher({ vid_A: { duration_sec: 60 } }, calls),
   });
   expect(calls.length).toBe(1); // only first run
 });
@@ -151,7 +162,9 @@ test("enrich: limit caps requested IDs", async () => {
   const responses: Record<string, Partial<EnrichedVideo>> = {};
   for (let i = 0; i < 10; i++) responses[`vid_${i}`] = { duration_sec: 60 };
   const summary = await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher(responses), limit: 3,
+    db,
+    fetcher: makeStubFetcher(responses),
+    limit: 3,
   });
   expect(summary.requested).toBe(3);
   expect(summary.enriched).toBe(3);
@@ -172,10 +185,13 @@ test("enrich: force=true re-fetches even already-enriched", async () => {
   await insertHistory("vid_A", "A", "2026-05-10T15:00:00Z");
   const calls: string[][] = [];
   await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher({ "vid_A": { duration_sec: 60 } }, calls),
+    db,
+    fetcher: makeStubFetcher({ vid_A: { duration_sec: 60 } }, calls),
   });
   await enrichYouTubeVideos({
-    db, fetcher: makeStubFetcher({ "vid_A": { duration_sec: 60 } }, calls), force: true,
+    db,
+    fetcher: makeStubFetcher({ vid_A: { duration_sec: 60 } }, calls),
+    force: true,
   });
   expect(calls.length).toBe(2);
 });

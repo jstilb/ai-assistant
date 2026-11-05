@@ -42,8 +42,12 @@ beforeEach(async () => {
 });
 
 async function insertVisit(row: {
-  id: string; source: string; url: string; domain: string;
-  ts: string; durSec: number;
+  id: string;
+  source: string;
+  url: string;
+  domain: string;
+  ts: string;
+  durSec: number;
 }): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO chrome_visits
@@ -51,14 +55,20 @@ async function insertVisit(row: {
         transition, from_visit_id, originator_cache_guid)
      VALUES ($id, $source, $url, $domain, NULL, $ts::TIMESTAMP, $dur, 0, 0, '')`,
     {
-      id: row.id, source: row.source, url: row.url, domain: row.domain,
-      ts: row.ts, dur: row.durSec,
+      id: row.id,
+      source: row.source,
+      url: row.url,
+      domain: row.domain,
+      ts: row.ts,
+      dur: row.durSec,
     },
   );
 }
 
 async function insertVerdict(row: {
-  domain: string; source: string; isLow: boolean;
+  domain: string;
+  source: string;
+  isLow: boolean;
   /** Defaults to 'llm-sonnet' — the classifier whose verdicts count toward
    * tier2_chrome minutes. `'tier1-domain'` short-circuit verdicts are excluded
    * by computeChromeLowValueMinutes to avoid double-counting with aw-watcher
@@ -70,7 +80,9 @@ async function insertVerdict(row: {
        (domain, source, is_low_value, reason, confidence, classifier, classified_at)
      VALUES ($domain, $source, $low, 'test', 0.9, $classifier, $now::TIMESTAMP)`,
     {
-      domain: row.domain, source: row.source, low: row.isLow,
+      domain: row.domain,
+      source: row.source,
+      low: row.isLow,
       classifier: row.classifier ?? "llm-sonnet",
       now: new Date().toISOString(),
     },
@@ -79,9 +91,12 @@ async function insertVerdict(row: {
 
 test("low-value visit on its day → minutes counted", async () => {
   await insertVisit({
-    id: "c1", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 600, // 10 min
+    id: "c1",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 600, // 10 min
   });
   await insertVerdict({ domain: "reddit.com", source: "mac", isLow: true });
 
@@ -92,9 +107,12 @@ test("low-value visit on its day → minutes counted", async () => {
 
 test("not-low-value visit → 0 minutes", async () => {
   await insertVisit({
-    id: "c2", source: "mac",
-    url: "https://mail.google.com/", domain: "mail.google.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 1800,
+    id: "c2",
+    source: "mac",
+    url: "https://mail.google.com/",
+    domain: "mail.google.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 1800,
   });
   await insertVerdict({ domain: "mail.google.com", source: "mac", isLow: false });
   expect(await computeChromeLowValueMinutes(db, "2026-05-10")).toBe(0);
@@ -102,9 +120,12 @@ test("not-low-value visit → 0 minutes", async () => {
 
 test("unclassified visit → 0 minutes (cannot count without verdict)", async () => {
   await insertVisit({
-    id: "c3", source: "mac",
-    url: "https://example.weird/", domain: "example.weird",
-    ts: "2026-05-10T15:00:00Z", durSec: 600,
+    id: "c3",
+    source: "mac",
+    url: "https://example.weird/",
+    domain: "example.weird",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 600,
   });
   // No verdict row
   expect(await computeChromeLowValueMinutes(db, "2026-05-10")).toBe(0);
@@ -112,9 +133,12 @@ test("unclassified visit → 0 minutes (cannot count without verdict)", async ()
 
 test("per-visit duration capped at 30 min (prevents tab-left-open-overnight)", async () => {
   await insertVisit({
-    id: "c4", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 7200, // 2 hr raw
+    id: "c4",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 7200, // 2 hr raw
   });
   await insertVerdict({ domain: "reddit.com", source: "mac", isLow: true });
   expect(CHROME_VISIT_DURATION_CAP_SEC).toBe(1800);
@@ -123,9 +147,12 @@ test("per-visit duration capped at 30 min (prevents tab-left-open-overnight)", a
 
 test("zero-duration visit gets fallback minutes (low sentinel)", async () => {
   await insertVisit({
-    id: "c5", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 0,
+    id: "c5",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 0,
   });
   await insertVerdict({ domain: "reddit.com", source: "mac", isLow: true });
   expect(CHROME_VISIT_DURATION_FALLBACK_SEC).toBe(60);
@@ -134,9 +161,12 @@ test("zero-duration visit gets fallback minutes (low sentinel)", async () => {
 
 test("source must match — mac verdict does NOT classify sync visits", async () => {
   await insertVisit({
-    id: "c6a", source: "sync",
-    url: "https://example.weird/", domain: "example.weird",
-    ts: "2026-05-10T15:00:00Z", durSec: 600,
+    id: "c6a",
+    source: "sync",
+    url: "https://example.weird/",
+    domain: "example.weird",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 600,
   });
   // Verdict exists only for source='mac'
   await insertVerdict({ domain: "example.weird", source: "mac", isLow: true });
@@ -146,9 +176,12 @@ test("source must match — mac verdict does NOT classify sync visits", async ()
 test("local-date conversion respects CONFIG.localTimezone (UTC late-evening lands today)", async () => {
   // 06:30 UTC May 12 = 23:30 PDT May 11. Should land in 2026-05-11.
   await insertVisit({
-    id: "c7", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-12T06:30:00Z", durSec: 600,
+    id: "c7",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-12T06:30:00Z",
+    durSec: 600,
   });
   await insertVerdict({ domain: "reddit.com", source: "mac", isLow: true });
   expect(await computeChromeLowValueMinutes(db, "2026-05-11")).toBe(10);
@@ -164,24 +197,34 @@ test("tier1-domain verdicts are EXCLUDED (already counted via aw-watcher URL mat
   // for exactly this reason. LLM-classified low-value domains DO count
   // (aw-watcher URL patterns can't catch them).
   await insertVisit({
-    id: "c-t1domain", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 600,
+    id: "c-t1domain",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 600,
   });
   await insertVerdict({
-    domain: "reddit.com", source: "mac", isLow: true,
+    domain: "reddit.com",
+    source: "mac",
+    isLow: true,
     classifier: "tier1-domain",
   });
   expect(await computeChromeLowValueMinutes(db, "2026-05-10")).toBe(0);
 
   // Same domain via the LLM path → still counts.
   await insertVisit({
-    id: "c-llm", source: "mac",
-    url: "https://news.ycombinator.com/", domain: "news.ycombinator.com",
-    ts: "2026-05-10T15:00:00Z", durSec: 600,
+    id: "c-llm",
+    source: "mac",
+    url: "https://news.ycombinator.com/",
+    domain: "news.ycombinator.com",
+    ts: "2026-05-10T15:00:00Z",
+    durSec: 600,
   });
   await insertVerdict({
-    domain: "news.ycombinator.com", source: "mac", isLow: true,
+    domain: "news.ycombinator.com",
+    source: "mac",
+    isLow: true,
     classifier: "llm-sonnet",
   });
   expect(await computeChromeLowValueMinutes(db, "2026-05-10")).toBe(10);
@@ -196,9 +239,12 @@ test("upsertMetric: chrome low-value minutes fold into tier2_lowvalue_minutes", 
              '2026-05-10T15:00:00'::TIMESTAMP, 900, '{}')`,
   );
   await insertVisit({
-    id: "c8", source: "mac",
-    url: "https://www.reddit.com/r/all", domain: "reddit.com",
-    ts: "2026-05-10T16:00:00Z", durSec: 600,
+    id: "c8",
+    source: "mac",
+    url: "https://www.reddit.com/r/all",
+    domain: "reddit.com",
+    ts: "2026-05-10T16:00:00Z",
+    durSec: 600,
   });
   await insertVerdict({ domain: "reddit.com", source: "mac", isLow: true });
 

@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
-export interface MediaWigTargets {
+interface MediaWigTargets {
   goalId: string;
   /** targets.low_value.target_min_per_day — the 4-wk-avg sub-target. */
   lowValue: number;
@@ -32,9 +32,7 @@ export interface MediaWigTargets {
  *  first import's env for the whole process (see shared-process test-home
  *  pinning gotchas). */
 function defaultWigStatusPath(): string {
-  return join(
-    getKayaHome(), "skills", "Productivity", "LifeOS", "config", "wig_status.json",
-  );
+  return join(getKayaHome(), "skills", "Productivity", "LifeOS", "config", "wig_status.json");
 }
 
 /** Read the current media WIG's targets from wig_status.json. Returns null if
@@ -46,6 +44,7 @@ export function readMediaWigTargets(path?: string): MediaWigTargets | null {
   try {
     parsed = JSON.parse(readFileSync(path ?? defaultWigStatusPath(), "utf8"));
   } catch {
+    // optional file: missing or invalid JSON means no data
     return null;
   }
   if (typeof parsed !== "object" || parsed === null) return null;

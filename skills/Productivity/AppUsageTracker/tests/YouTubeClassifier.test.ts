@@ -8,10 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
-import {
-  classifyYouTubeVideos,
-  type YouTubeLlmClassifier,
-} from "../Tools/YouTubeClassifier.ts";
+import { classifyYouTubeVideos, type YouTubeLlmClassifier } from "../Tools/YouTubeClassifier.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-yt-classifier-"));
 const DB_PATH = join(TMP, "events.db");
@@ -33,10 +30,18 @@ beforeEach(async () => {
   await db.run("DELETE FROM youtube_verdicts");
 });
 
-async function insertVideo(id: string, opts: {
-  title?: string; channel?: string; duration_sec?: number; tags?: string[]; categoryId?: number; err?: string;
-  watchedAt?: string;
-}): Promise<void> {
+async function insertVideo(
+  id: string,
+  opts: {
+    title?: string;
+    channel?: string;
+    duration_sec?: number;
+    tags?: string[];
+    categoryId?: number;
+    err?: string;
+    watchedAt?: string;
+  },
+): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO youtube_videos
        (video_id, title, channel, channel_id, duration_sec, category_id, tags_json, enriched_at, enrich_error)
@@ -56,7 +61,9 @@ async function insertVideo(id: string, opts: {
     `INSERT OR REPLACE INTO youtube_history (ts, video_id, title, channel, channel_url, source_export)
      VALUES ($ts::TIMESTAMP, $id, $title, $channel, NULL, 'test')`,
     {
-      id, title: opts.title ?? "untitled", channel: opts.channel ?? "test",
+      id,
+      title: opts.title ?? "untitled",
+      channel: opts.channel ?? "test",
       ts: opts.watchedAt ?? new Date().toISOString(),
     },
   );
@@ -71,7 +78,9 @@ function stubLlm(verdicts: Record<string, boolean>, calls?: string[]): YouTubeLl
         reason: `stub:${input.video_id}`,
         confidence: 0.85,
       },
-      tokensIn: 100, tokensOut: 30, estCostUSD: 0.0005,
+      tokensIn: 100,
+      tokensOut: 30,
+      estCostUSD: 0.0005,
     };
   };
 }
@@ -80,7 +89,8 @@ test("classifies single unenriched-then-verdict-missing video", async () => {
   await insertVideo("vid_A", { title: "drama", duration_sec: 600 });
   const calls: string[] = [];
   const summary = await classifyYouTubeVideos({
-    db, llm: stubLlm({ "vid_A": true }, calls),
+    db,
+    llm: stubLlm({ vid_A: true }, calls),
   });
   expect(summary.classified).toBe(1);
   expect(calls).toEqual(["vid_A"]);
@@ -94,16 +104,16 @@ test("classifies single unenriched-then-verdict-missing video", async () => {
 test("skips videos that already have a verdict", async () => {
   await insertVideo("vid_A", { duration_sec: 60 });
   const calls: string[] = [];
-  await classifyYouTubeVideos({ db, llm: stubLlm({ "vid_A": true }, calls) });
-  await classifyYouTubeVideos({ db, llm: stubLlm({ "vid_A": true }, calls) });
+  await classifyYouTubeVideos({ db, llm: stubLlm({ vid_A: true }, calls) });
+  await classifyYouTubeVideos({ db, llm: stubLlm({ vid_A: true }, calls) });
   expect(calls).toEqual(["vid_A"]); // only first run
 });
 
 test("force=true re-classifies all videos", async () => {
   await insertVideo("vid_A", { duration_sec: 60 });
   const calls: string[] = [];
-  await classifyYouTubeVideos({ db, llm: stubLlm({ "vid_A": true }, calls) });
-  await classifyYouTubeVideos({ db, llm: stubLlm({ "vid_A": false }, calls), force: true });
+  await classifyYouTubeVideos({ db, llm: stubLlm({ vid_A: true }, calls) });
+  await classifyYouTubeVideos({ db, llm: stubLlm({ vid_A: false }, calls), force: true });
   expect(calls).toEqual(["vid_A", "vid_A"]);
 });
 
@@ -111,7 +121,8 @@ test("skips videos with enrich_error (no data to classify on)", async () => {
   await insertVideo("vid_gone", { title: null as unknown as string, err: "not found" });
   const calls: string[] = [];
   const summary = await classifyYouTubeVideos({
-    db, llm: stubLlm({}, calls),
+    db,
+    llm: stubLlm({}, calls),
   });
   expect(summary.classified).toBe(0);
   expect(summary.skipped_no_metadata).toBe(1);
@@ -122,7 +133,9 @@ test("limit caps LLM calls per run", async () => {
   for (let i = 0; i < 5; i++) await insertVideo(`vid_${i}`, { duration_sec: 60 });
   const calls: string[] = [];
   const summary = await classifyYouTubeVideos({
-    db, llm: stubLlm({}, calls), limit: 2,
+    db,
+    llm: stubLlm({}, calls),
+    limit: 2,
   });
   expect(summary.classified).toBe(2);
   expect(calls.length).toBe(2);
@@ -137,7 +150,9 @@ test("classifies most-recently-watched videos first when limited", async () => {
   await insertVideo("vid_m", { duration_sec: 60, watchedAt: "2024-06-01T00:00:00Z" });
   const calls: string[] = [];
   const summary = await classifyYouTubeVideos({
-    db, llm: stubLlm({}, calls), limit: 2,
+    db,
+    llm: stubLlm({}, calls),
+    limit: 2,
   });
   expect(summary.classified).toBe(2);
   // Newest first: vid_z (2026), then vid_m (2024); vid_a (2021) skipped.

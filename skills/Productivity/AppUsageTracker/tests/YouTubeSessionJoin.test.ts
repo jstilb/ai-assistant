@@ -36,9 +36,7 @@ beforeEach(async () => {
   await db.run("DELETE FROM youtube_verdicts");
 });
 
-async function insertEvent(p: {
-  id: string; device: string; app: string; ts: string; durSec: number;
-}): Promise<void> {
+async function insertEvent(p: { id: string; device: string; app: string; ts: string; durSec: number }): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO events
        (id, device, bucket, watcher, app, title, url, audible, ts_start, duration_sec, raw_json)
@@ -85,7 +83,9 @@ async function lowValueOpen(vid: string, ts: string, durSec: number): Promise<vo
 
 test("no youtube_history → zero consumption", async () => {
   expect(await computeYouTubeConsumption(db, "2026-05-10")).toEqual({
-    minutes: 0, watchedMinutes: 0, listenedMinutes: 0,
+    minutes: 0,
+    watchedMinutes: 0,
+    listenedMinutes: 0,
   });
 });
 
@@ -119,7 +119,9 @@ test("last open (no next) → half video duration (2x speed), tagged listened", 
   // 600s video, no session, duration wins → 2x playback ⇒ 300s = 5 min.
   await lowValueOpen("v1", "2026-05-10T22:00:00Z", 600);
   expect(await computeYouTubeConsumption(db, "2026-05-10")).toEqual({
-    minutes: 5, watchedMinutes: 0, listenedMinutes: 5,
+    minutes: 5,
+    watchedMinutes: 0,
+    listenedMinutes: 5,
   });
 });
 
@@ -128,8 +130,9 @@ test("unknown video duration → bounded fallback estimate", async () => {
   await insertVideo("v_nodur", 0); // 0 = no duration metadata
   await insertVerdict("v_nodur", true);
   // gap = ∞ → min(∞, UNKNOWN_DURATION_FALLBACK_SEC)
-  expect((await computeYouTubeConsumption(db, "2026-05-10")).minutes)
-    .toBe(Math.round(UNKNOWN_DURATION_FALLBACK_SEC / 60));
+  expect((await computeYouTubeConsumption(db, "2026-05-10")).minutes).toBe(
+    Math.round(UNKNOWN_DURATION_FALLBACK_SEC / 60),
+  );
 });
 
 test("absolute cap guards against a pathologically long watched session", async () => {
@@ -137,11 +140,13 @@ test("absolute cap guards against a pathologically long watched session", async 
   // 1h listening cap and the 2x factor don't apply; the 4h absolute cap binds.
   await lowValueOpen("v_huge", "2026-05-10T22:00:00Z", 8 * 3600);
   await insertEvent({
-    id: "s_huge", device: "tablet", app: "com.google.android.youtube",
-    ts: "2026-05-10T22:00:00", durSec: 8 * 3600,
+    id: "s_huge",
+    device: "tablet",
+    app: "com.google.android.youtube",
+    ts: "2026-05-10T22:00:00",
+    durSec: 8 * 3600,
   });
-  expect((await computeYouTubeConsumption(db, "2026-05-10")).minutes)
-    .toBe(Math.round(YOUTUBE_ABSOLUTE_CAP_SEC / 60));
+  expect((await computeYouTubeConsumption(db, "2026-05-10")).minutes).toBe(Math.round(YOUTUBE_ABSOLUTE_CAP_SEC / 60));
 });
 
 // ---- foreground-session refinement ----
@@ -152,8 +157,11 @@ test("tablet foreground session refines consumed time DOWN", async () => {
   await lowValueOpen("v1", "2026-05-10T22:00:00Z", 1800);
   await insertHistory({ vid: "v2", ts: "2026-05-10T23:00:00Z" }); // next open, no verdict
   await insertEvent({
-    id: "s1", device: "tablet", app: "com.google.android.youtube",
-    ts: "2026-05-10T22:00:00", durSec: 300,
+    id: "s1",
+    device: "tablet",
+    app: "com.google.android.youtube",
+    ts: "2026-05-10T22:00:00",
+    durSec: 300,
   });
   const c = await computeYouTubeConsumption(db, "2026-05-10");
   expect(c).toEqual({ minutes: 5, watchedMinutes: 5, listenedMinutes: 0 });
@@ -166,8 +174,11 @@ test("phone foreground fragments do NOT crush background-listening time", async 
   await lowValueOpen("v1", "2026-05-10T22:00:00Z", 1800);
   await insertHistory({ vid: "v2", ts: "2026-05-10T23:00:00Z" });
   await insertEvent({
-    id: "p1", device: "phone", app: "com.google.android.youtube",
-    ts: "2026-05-10T22:00:00", durSec: 9,
+    id: "p1",
+    device: "phone",
+    app: "com.google.android.youtube",
+    ts: "2026-05-10T22:00:00",
+    durSec: 9,
   });
   const c = await computeYouTubeConsumption(db, "2026-05-10");
   expect(c).toEqual({ minutes: 15, watchedMinutes: 0, listenedMinutes: 15 });
@@ -179,8 +190,11 @@ test("watched vs listened split is reported separately", async () => {
   await lowValueOpen("v_watch", "2026-05-10T22:00:00Z", 1800);
   await lowValueOpen("v_listen", "2026-05-10T22:30:00Z", 1200);
   await insertEvent({
-    id: "s1", device: "mac", app: "YouTube",
-    ts: "2026-05-10T22:00:00", durSec: 600,
+    id: "s1",
+    device: "mac",
+    app: "YouTube",
+    ts: "2026-05-10T22:00:00",
+    durSec: 600,
   });
   const c = await computeYouTubeConsumption(db, "2026-05-10");
   // v_watch: gap 1800s, session share 600s → min = 600s = 10 min watched
@@ -191,8 +205,11 @@ test("watched vs listened split is reported separately", async () => {
 test("session time is split across all opens it contains", async () => {
   // 30-min tablet session containing 3 opens (2 low-value) → 600s share each.
   await insertEvent({
-    id: "s1", device: "tablet", app: "com.google.android.youtube",
-    ts: "2026-05-10T22:00:00", durSec: 1800,
+    id: "s1",
+    device: "tablet",
+    app: "com.google.android.youtube",
+    ts: "2026-05-10T22:00:00",
+    durSec: 1800,
   });
   await lowValueOpen("v1", "2026-05-10T22:00:00Z", 1500); // 25-min video
   await lowValueOpen("v2", "2026-05-10T22:10:00Z", 1500);

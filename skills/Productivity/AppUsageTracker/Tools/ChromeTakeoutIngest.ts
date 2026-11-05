@@ -22,11 +22,12 @@
  * extracting zips on demand (same youtube-takeout-extracted/ scratch dir).
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { type Stats, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { Db, logFailure } from "./Db.ts";
 
-const HOME = process.env.HOME ?? "/Users/[user]";
+const HOME = process.env.HOME ?? homedir();
 export const TAKEOUT_INBOX = `${HOME}/.claude/MEMORY/AppUsage/youtube-takeout-inbox`;
 export const TAKEOUT_EXTRACTED = `${HOME}/.claude/MEMORY/AppUsage/youtube-takeout-extracted`;
 
@@ -78,6 +79,7 @@ function extractDomain(url: string): string | null {
     if (host.startsWith("www.")) host = host.slice(4);
     return host;
   } catch {
+    // invalid URL (new URL throws TypeError): treat as no host
     return null;
   }
 }
@@ -95,8 +97,8 @@ export function parseChromeTakeoutHistory(parsed: unknown): ParsedTakeoutVisit[]
     if (!e || typeof e !== "object") continue;
     const url = typeof e.url === "string" ? e.url : "";
     if (!url) continue;
-    const timeUsec = typeof e.time_usec === "number" ? e.time_usec
-      : typeof e.time_usec === "string" ? Number(e.time_usec) : 0;
+    const timeUsec =
+      typeof e.time_usec === "number" ? e.time_usec : typeof e.time_usec === "string" ? Number(e.time_usec) : 0;
     if (!Number.isFinite(timeUsec) || timeUsec <= 0) continue;
     const domain = extractDomain(url);
     if (!domain) continue;
@@ -115,7 +117,11 @@ const INSERT_VISIT_SQL = `INSERT OR REPLACE INTO chrome_visits
 
 export async function ingestChromeTakeoutFile(db: Db, path: string): Promise<ChromeTakeoutSummary> {
   const summary: ChromeTakeoutSummary = {
-    source_files: [path], entries_read: 0, entries_skipped: 0, rows_inserted: 0, failed_files: [],
+    source_files: [path],
+    entries_read: 0,
+    entries_skipped: 0,
+    rows_inserted: 0,
+    failed_files: [],
   };
   await db.initSchema();
   let raw: unknown;
@@ -135,7 +141,7 @@ export async function ingestChromeTakeoutFile(db: Db, path: string): Promise<Chr
   // the commit granularity changes. If a batch throws, this whole function
   // throws (summary.rows_inserted is never set to a partial/inflated value)
   // and the caller (ingestAll) records + continues to the next file.
-  const params = rows.map(r => ({
+  const params = rows.map((r) => ({
     // DuckDB TIMESTAMP from microseconds. to_timestamp returns TIMESTAMPTZ;
     // cast via "AT TIME ZONE 'UTC'" so the stored TIMESTAMP holds UTC clock
     // components (the rest of the system reads visit_time as UTC).
@@ -165,11 +171,20 @@ function ensureExtracted(zipPath: string): string {
 function findHistoryJsonUnder(dir: string): string[] {
   const out: string[] = [];
   let entries: string[];
-  try { entries = readdirSync(dir); } catch { return out; }
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out;
+  }
   for (const name of entries) {
     const full = join(dir, name);
-    let st;
-    try { st = statSync(full); } catch { continue; }
+    let st: Stats;
+    try {
+      st = statSync(full);
+    } catch {
+      // entry vanished or is unreadable between readdir and stat: skip it
+      continue;
+    }
     if (st.isDirectory()) {
       out.push(...findHistoryJsonUnder(full));
     } else if (name === "History.json") {
@@ -184,8 +199,13 @@ function discoverHistoryPaths(): string[] {
   const out: string[] = [];
   for (const name of readdirSync(TAKEOUT_INBOX)) {
     const full = join(TAKEOUT_INBOX, name);
-    let st;
-    try { st = statSync(full); } catch { continue; }
+    let st: Stats;
+    try {
+      st = statSync(full);
+    } catch {
+      // entry vanished or is unreadable between readdir and stat: skip it
+      continue;
+    }
     if (st.isDirectory()) {
       out.push(...findHistoryJsonUnder(full));
     } else if (name.toLowerCase().endsWith(".zip")) {
@@ -216,7 +236,11 @@ export async function ingestAll(
   ingestFileFn: (db: Db, path: string) => Promise<ChromeTakeoutSummary> = ingestChromeTakeoutFile,
 ): Promise<ChromeTakeoutSummary> {
   const summary: ChromeTakeoutSummary = {
-    source_files: [], entries_read: 0, entries_skipped: 0, rows_inserted: 0, failed_files: [],
+    source_files: [],
+    entries_read: 0,
+    entries_skipped: 0,
+    rows_inserted: 0,
+    failed_files: [],
   };
   await db.initSchema();
   if (paths.length === 0) {
@@ -248,12 +272,14 @@ async function main(): Promise<void> {
     if (summary.skipped) {
       console.log(`[SKIP] ChromeTakeoutIngest: ${summary.skipped}`);
     } else {
-      console.log(`ChromeTakeoutIngest: ${summary.rows_inserted}/${summary.entries_read} visits from ${summary.source_files.length} file(s)`);
+      console.log(
+        `ChromeTakeoutIngest: ${summary.rows_inserted}/${summary.entries_read} visits from ${summary.source_files.length} file(s)`,
+      );
     }
     if (summary.failed_files.length > 0) {
       console.error(
         `[DEGRADED] ChromeTakeoutIngest: ${summary.failed_files.length} file(s) failed: ` +
-          summary.failed_files.map(f => `${f.path} (${f.error})`).join("; "),
+          summary.failed_files.map((f) => `${f.path} (${f.error})`).join("; "),
       );
       // Mark the run degraded without cutting the finally block short —
       // process.exitCode lets the event loop drain (db.close() below still
@@ -266,7 +292,7 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error(`[ChromeTakeoutIngest] ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   });

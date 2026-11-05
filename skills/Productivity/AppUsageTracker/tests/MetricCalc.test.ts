@@ -24,17 +24,26 @@ afterAll(() => {
 });
 
 async function insertEvent(params: {
-  id: string; device: string; bucket: string; app?: string | null; url?: string | null;
-  ts: string; durationSec: number;
+  id: string;
+  device: string;
+  bucket: string;
+  app?: string | null;
+  url?: string | null;
+  ts: string;
+  durationSec: number;
 }): Promise<void> {
   await db.run(
     `INSERT OR REPLACE INTO events
      (id, device, bucket, watcher, app, title, url, audible, ts_start, duration_sec, raw_json)
      VALUES ($id, $device, $bucket, 'test', $app, NULL, $url, NULL, $ts::TIMESTAMP, $dur, '{"_test_":true}')`,
     {
-      id: params.id, device: params.device, bucket: params.bucket,
-      app: params.app ?? null, url: params.url ?? null,
-      ts: params.ts, dur: params.durationSec,
+      id: params.id,
+      device: params.device,
+      bucket: params.bucket,
+      app: params.app ?? null,
+      url: params.url ?? null,
+      ts: params.ts,
+      dur: params.durationSec,
     },
   );
 }
@@ -50,8 +59,12 @@ beforeEach(async () => {
 
 test("Tier-1 minutes: app-name match counts (95 min Reddit)", async () => {
   await insertEvent({
-    id: "test:reddit:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.reddit.frontpage", ts: "2026-04-28T10:00:00", durationSec: 5700, // 95 min
+    id: "test:reddit:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.reddit.frontpage",
+    ts: "2026-04-28T10:00:00",
+    durationSec: 5700, // 95 min
   });
 
   let minutes = await computeTier1Minutes(db, "2026-04-28");
@@ -64,9 +77,13 @@ test("Tier-1 minutes: app-name match counts (95 min Reddit)", async () => {
 
 test("Tier-1 minutes: URL-pattern match counts (reddit.com browser)", async () => {
   await insertEvent({
-    id: "test:web:1", device: "mac", bucket: "aw-watcher-web-chrome",
-    app: "Google Chrome", url: "https://www.reddit.com/r/programming",
-    ts: "2026-04-28T11:00:00", durationSec: 600, // 10 min
+    id: "test:web:1",
+    device: "mac",
+    bucket: "aw-watcher-web-chrome",
+    app: "Google Chrome",
+    url: "https://www.reddit.com/r/programming",
+    ts: "2026-04-28T11:00:00",
+    durationSec: 600, // 10 min
   });
 
   const minutes = await computeTier1Minutes(db, "2026-04-28");
@@ -76,13 +93,21 @@ test("Tier-1 minutes: URL-pattern match counts (reddit.com browser)", async () =
 test("Tier-3 events are excluded (Maps does not count)", async () => {
   // Maps: 1 hour — must NOT count
   await insertEvent({
-    id: "test:maps:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.google.android.apps.maps", ts: "2026-04-28T12:00:00", durationSec: 3600,
+    id: "test:maps:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.google.android.apps.maps",
+    ts: "2026-04-28T12:00:00",
+    durationSec: 3600,
   });
   // Reddit: 5 min — must count
   await insertEvent({
-    id: "test:reddit:2", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.reddit.frontpage", ts: "2026-04-28T13:00:00", durationSec: 300,
+    id: "test:reddit:2",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.reddit.frontpage",
+    ts: "2026-04-28T13:00:00",
+    durationSec: 300,
   });
 
   const minutes = await computeTier1Minutes(db, "2026-04-28");
@@ -91,8 +116,12 @@ test("Tier-3 events are excluded (Maps does not count)", async () => {
 
 test("upsertMetric: idempotent re-run yields same row", async () => {
   await insertEvent({
-    id: "test:reddit:a", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.reddit.frontpage", ts: "2026-04-28T10:00:00", durationSec: 5700, // 95 min
+    id: "test:reddit:a",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.reddit.frontpage",
+    ts: "2026-04-28T10:00:00",
+    durationSec: 5700, // 95 min
   });
   const m1 = await computeTier1Minutes(db, "2026-04-28");
   await upsertMetric(db, "2026-04-28", m1);
@@ -110,8 +139,12 @@ test("upsertMetric: idempotent re-run yields same row", async () => {
 
   // Adding 30 min Twitter and re-running → 125
   await insertEvent({
-    id: "test:twitter:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.twitter.android", ts: "2026-04-28T14:00:00", durationSec: 1800,
+    id: "test:twitter:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.twitter.android",
+    ts: "2026-04-28T14:00:00",
+    durationSec: 1800,
   });
   const m3 = await computeTier1Minutes(db, "2026-04-28");
   await upsertMetric(db, "2026-04-28", m3);
@@ -124,8 +157,12 @@ test("upsertMetric: idempotent re-run yields same row", async () => {
 
 test("Tier-1 case-insensitive match (Reddit, REDDIT, reddit)", async () => {
   await insertEvent({
-    id: "test:case:1", device: "mac", bucket: "aw-watcher-window_test",
-    app: "REDDIT", ts: "2026-04-28T10:00:00", durationSec: 600,
+    id: "test:case:1",
+    device: "mac",
+    bucket: "aw-watcher-window_test",
+    app: "REDDIT",
+    ts: "2026-04-28T10:00:00",
+    durationSec: 600,
   });
   const minutes = await computeTier1Minutes(db, "2026-04-28");
   expect(minutes).toBe(10);
@@ -155,48 +192,76 @@ test("Db.close() fully releases the file lock (regression: instance.closeSync ne
 
 test("Tier-2 heuristic: LinkedIn counts at its 0.80 fraction (100 min → 80)", async () => {
   await insertEvent({
-    id: "h:li:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.linkedin.android", ts: "2026-04-28T18:00:00", durationSec: 6000, // 100 min
+    id: "h:li:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.linkedin.android",
+    ts: "2026-04-28T18:00:00",
+    durationSec: 6000, // 100 min
   });
   expect(await computeTier2HeuristicMinutes(db, "2026-04-28")).toBe(80);
 });
 
 test("Tier-2 heuristic: Nebula counts at the YouTube-equivalent 0.49 fraction (100 min → 49)", async () => {
   await insertEvent({
-    id: "h:neb:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "Nebula", ts: "2026-04-28T18:00:00", durationSec: 6000,
+    id: "h:neb:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "Nebula",
+    ts: "2026-04-28T18:00:00",
+    durationSec: 6000,
   });
   expect(await computeTier2HeuristicMinutes(db, "2026-04-28")).toBe(49);
 });
 
 test("Tier-2 heuristic: WhatsApp/Messages (0% — not in map) contribute nothing", async () => {
   await insertEvent({
-    id: "h:wa:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.whatsapp", ts: "2026-04-28T18:00:00", durationSec: 6000,
+    id: "h:wa:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.whatsapp",
+    ts: "2026-04-28T18:00:00",
+    durationSec: 6000,
   });
   await insertEvent({
-    id: "h:msg:1", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.google.android.apps.messaging", ts: "2026-04-28T18:30:00", durationSec: 6000,
+    id: "h:msg:1",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.google.android.apps.messaging",
+    ts: "2026-04-28T18:30:00",
+    durationSec: 6000,
   });
   expect(await computeTier2HeuristicMinutes(db, "2026-04-28")).toBe(0);
 });
 
 test("Tier-2 heuristic: only phone/tablet count (Mac LinkedIn ignored — idle inflation risk)", async () => {
   await insertEvent({
-    id: "h:li:mac", device: "mac", bucket: "aw-watcher-window_test",
-    app: "LinkedIn", ts: "2026-04-28T18:00:00", durationSec: 6000,
+    id: "h:li:mac",
+    device: "mac",
+    bucket: "aw-watcher-window_test",
+    app: "LinkedIn",
+    ts: "2026-04-28T18:00:00",
+    durationSec: 6000,
   });
   expect(await computeTier2HeuristicMinutes(db, "2026-04-28")).toBe(0);
 });
 
 test("Tier-2 heuristic: sums multiple apps and rounds once (LinkedIn 100m + Nebula 10m → 80+5)", async () => {
   await insertEvent({
-    id: "h:li:2", device: "phone", bucket: "aw-watcher-android-usage_test",
-    app: "com.linkedin.android", ts: "2026-04-28T18:00:00", durationSec: 6000, // 100m × .80 = 80
+    id: "h:li:2",
+    device: "phone",
+    bucket: "aw-watcher-android-usage_test",
+    app: "com.linkedin.android",
+    ts: "2026-04-28T18:00:00",
+    durationSec: 6000, // 100m × .80 = 80
   });
   await insertEvent({
-    id: "h:neb:2", device: "tablet", bucket: "aw-watcher-android-usage_test",
-    app: "Nebula", ts: "2026-04-28T19:00:00", durationSec: 600, // 10m × .49 = 4.9 → 5
+    id: "h:neb:2",
+    device: "tablet",
+    bucket: "aw-watcher-android-usage_test",
+    app: "Nebula",
+    ts: "2026-04-28T19:00:00",
+    durationSec: 600, // 10m × .49 = 4.9 → 5
   });
   expect(await computeTier2HeuristicMinutes(db, "2026-04-28")).toBe(85);
 });

@@ -24,7 +24,7 @@
 import { CONFIG } from "../Config.ts";
 import { Db, logFailure } from "./Db.ts";
 import { shiftDate, todayLocal } from "./Util.ts";
-import { inference } from "~/.claude/lib/core/Inference.ts";
+import { inference } from "../../../../lib/core/Inference.ts";
 
 /** Threshold below which "100% unclassifiable" stops being noise. Saves a
  *  spurious alert when there are simply no Tier-2 events in the window. */
@@ -110,11 +110,7 @@ function buildTier2Predicate(prefix: string): { clause: string; bindings: Record
  * Load Tier-2 candidate events on or after `sinceDate`. If `excludeClassified`
  * is true, skip events that already have a classifications row.
  */
-export async function loadTier2Events(
-  db: Db,
-  sinceDate: string,
-  excludeClassified: boolean,
-): Promise<Tier2Event[]> {
+export async function loadTier2Events(db: Db, sinceDate: string, excludeClassified: boolean): Promise<Tier2Event[]> {
   const { clause, bindings } = buildTier2Predicate("e.");
   const allBindings: Record<string, unknown> = { ...bindings, since: sinceDate };
   const excludeJoin = excludeClassified
@@ -145,7 +141,7 @@ export function groupIntoSessions(events: Tier2Event[]): Session[] {
 
   // Defensive sort — caller may have sorted, but groupIntoSessions is a pure helper.
   const sorted = [...events]
-    .filter(e => e.app != null)
+    .filter((e) => e.app != null)
     .sort((a, b) => {
       if (a.device !== b.device) return a.device < b.device ? -1 : 1;
       const aa = a.app ?? "";
@@ -183,9 +179,10 @@ export function groupIntoSessions(events: Tier2Event[]): Session[] {
 
 /** A session is classifiable if at least one event has a non-empty title or url. */
 export function isClassifiable(session: Session): boolean {
-  return session.events.some(e =>
-    (typeof e.title === "string" && e.title.trim().length > 0) ||
-    (typeof e.url === "string" && e.url.trim().length > 0),
+  return session.events.some(
+    (e) =>
+      (typeof e.title === "string" && e.title.trim().length > 0) ||
+      (typeof e.url === "string" && e.url.trim().length > 0),
   );
 }
 
@@ -203,8 +200,12 @@ Respond ONLY with a single JSON object, no prose, no markdown fence, exactly thi
 { "is_low_value": <bool>, "reason": "<one short sentence>", "confidence": <number 0-1> }`;
 
 function summarizeSession(session: Session): string {
-  const titles = Array.from(new Set(session.events.map(e => e.title).filter((t): t is string => !!t && t.trim().length > 0)));
-  const urls = Array.from(new Set(session.events.map(e => e.url).filter((u): u is string => !!u && u.trim().length > 0)));
+  const titles = Array.from(
+    new Set(session.events.map((e) => e.title).filter((t): t is string => !!t && t.trim().length > 0)),
+  );
+  const urls = Array.from(
+    new Set(session.events.map((e) => e.url).filter((u): u is string => !!u && u.trim().length > 0)),
+  );
   const minutes = (session.totalDurationSec / 60).toFixed(1);
   const lines: string[] = [
     `device: ${session.device}`,
@@ -212,8 +213,8 @@ function summarizeSession(session: Session): string {
     `duration_min: ${minutes}`,
     `event_count: ${session.events.length}`,
   ];
-  if (titles.length > 0) lines.push(`titles:`, ...titles.slice(0, 12).map(t => `  - ${t.slice(0, 200)}`));
-  if (urls.length > 0) lines.push(`urls:`, ...urls.slice(0, 12).map(u => `  - ${u.slice(0, 200)}`));
+  if (titles.length > 0) lines.push(`titles:`, ...titles.slice(0, 12).map((t) => `  - ${t.slice(0, 200)}`));
+  if (urls.length > 0) lines.push(`urls:`, ...urls.slice(0, 12).map((u) => `  - ${u.slice(0, 200)}`));
   return lines.join("\n");
 }
 
@@ -232,7 +233,9 @@ function parseVerdict(raw: unknown): ClassificationVerdict {
   return { is_low_value: obj.is_low_value, reason, confidence };
 }
 
-export async function classifySession(session: Session): Promise<{ verdict: ClassificationVerdict; tokensIn: number; tokensOut: number; estCostUSD: number }> {
+export async function classifySession(
+  session: Session,
+): Promise<{ verdict: ClassificationVerdict; tokensIn: number; tokensOut: number; estCostUSD: number }> {
   const result = await inference({
     systemPrompt: SYSTEM_PROMPT,
     userPrompt: summarizeSession(session),
@@ -251,11 +254,7 @@ export async function classifySession(session: Session): Promise<{ verdict: Clas
   };
 }
 
-export async function upsertClassification(
-  db: Db,
-  session: Session,
-  verdict: ClassificationVerdict,
-): Promise<void> {
+export async function upsertClassification(db: Db, session: Session, verdict: ClassificationVerdict): Promise<void> {
   const now = new Date().toISOString();
   for (const ev of session.events) {
     await db.run(
@@ -307,8 +306,8 @@ export async function classifyAll(db: Db, opts: ClassifyAllOpts = {}): Promise<C
   // not-low-value) and therefore must not trip the unclassifiable alarm.
   // Heuristic-fraction apps are folded in so adding one auto-suppresses it.
   const altCounted = new Set<string>([
-    ...CONFIG.tier2AltCountedApps.map(a => a.toLowerCase()),
-    ...Object.keys(CONFIG.tier2HeuristicFractions).map(a => a.toLowerCase()),
+    ...CONFIG.tier2AltCountedApps.map((a) => a.toLowerCase()),
+    ...Object.keys(CONFIG.tier2HeuristicFractions).map((a) => a.toLowerCase()),
   ]);
 
   for (const session of sessions) {
@@ -349,8 +348,8 @@ async function main(argv: string[]): Promise<void> {
   const force = argv.includes("--force");
   const json = argv.includes("--json");
   const dryRun = argv.includes("--dry-run");
-  const sinceFlag = argv.find(a => a.startsWith("--since="))?.slice("--since=".length);
-  const limitFlag = argv.find(a => a.startsWith("--limit="))?.slice("--limit=".length);
+  const sinceFlag = argv.find((a) => a.startsWith("--since="))?.slice("--since=".length);
+  const limitFlag = argv.find((a) => a.startsWith("--limit="))?.slice("--limit=".length);
   const limit = limitFlag ? parseInt(limitFlag, 10) : undefined;
 
   const db = await Db.open();
@@ -364,13 +363,21 @@ async function main(argv: string[]): Promise<void> {
     // otherwise metadata-less phone apps (YouTube/WhatsApp/Messages/LinkedIn/
     // Nebula), which are counted via watch-history or the heuristic fraction,
     // would false-fire this every single night.
-    if (!dryRun
-        && summary.classified === 0
-        && summary.skipped_unclassifiable_unexpected >= UNCLASSIFIABLE_ALARM_MIN_SESSIONS) {
+    if (
+      !dryRun &&
+      summary.classified === 0 &&
+      summary.skipped_unclassifiable_unexpected >= UNCLASSIFIABLE_ALARM_MIN_SESSIONS
+    ) {
       await logFailure(
         "Classifier",
-        new Error(`${summary.skipped_unclassifiable_unexpected} sessions expected to be classifiable had no title/url — a title-bearing watcher may have regressed (install aw-watcher-web or check the desktop pipeline)`),
-        { sessions: summary.sessions, candidates: summary.candidate_events, unexpected: summary.skipped_unclassifiable_unexpected },
+        new Error(
+          `${summary.skipped_unclassifiable_unexpected} sessions expected to be classifiable had no title/url — a title-bearing watcher may have regressed (install aw-watcher-web or check the desktop pipeline)`,
+        ),
+        {
+          sessions: summary.sessions,
+          candidates: summary.candidate_events,
+          unexpected: summary.skipped_unclassifiable_unexpected,
+        },
       );
     }
     if (json) {
@@ -378,9 +385,13 @@ async function main(argv: string[]): Promise<void> {
     } else {
       const tag = dryRun ? "DRY-RUN " : "";
       console.log(`${tag}Classifier run: ${summary.candidate_events} candidate events → ${summary.sessions} sessions`);
-      console.log(`  classified=${summary.classified}  unclassifiable=${summary.skipped_unclassifiable}  errors=${summary.errors}`);
+      console.log(
+        `  classified=${summary.classified}  unclassifiable=${summary.skipped_unclassifiable}  errors=${summary.errors}`,
+      );
       if (!dryRun) {
-        console.log(`  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`);
+        console.log(
+          `  tokens in=${summary.tokens_in} out=${summary.tokens_out}  est_cost=$${summary.est_cost_usd.toFixed(4)}`,
+        );
       }
     }
   } finally {
@@ -388,7 +399,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

@@ -15,7 +15,7 @@
  * Then open the printed URL. Write SQL, ⌘/Ctrl+Enter to run. Click a table to
  * browse it; click "schema" for its columns.
  */
-import { DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBValue } from "@duckdb/node-api";
 import { CONFIG } from "../Config.ts";
 
 const argv = process.argv.slice(2);
@@ -28,12 +28,16 @@ const PORT = Number(flag("--port", "4555"));
 const MAX_ROWS = 2000;
 
 /** Open READ_ONLY, run one fn, always close (releases the lock immediately). */
-async function withDb<T>(fn: (all: (sql: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>[]>) => Promise<T>): Promise<T> {
+async function withDb<T>(
+  fn: (all: (sql: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>[]>) => Promise<T>,
+): Promise<T> {
   const instance = await DuckDBInstance.create(DB_PATH, { access_mode: "READ_ONLY" });
   const conn = await instance.connect();
   try {
     const all = async (sql: string, params?: Record<string, unknown>) => {
-      const reader = params ? await conn.runAndReadAll(sql, params) : await conn.runAndReadAll(sql);
+      const reader = params
+        ? await conn.runAndReadAll(sql, params as Record<string, DuckDBValue>)
+        : await conn.runAndReadAll(sql);
       return reader.getRowObjects() as Record<string, unknown>[];
     };
     return await fn(all);
@@ -43,7 +47,8 @@ async function withDb<T>(fn: (all: (sql: string, params?: Record<string, unknown
   }
 }
 
-const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER), MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER),
+  MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
 
 /**
  * Make any DuckDB scalar JSON-safe. DuckDB's node-api returns TIMESTAMP/DATE/
@@ -59,14 +64,17 @@ function toScalar(v: unknown): unknown {
     // plain objects/arrays (LIST/STRUCT) fall back to bigint-safe JSON.
     const o = v as { toString?: () => string };
     if (o.toString && o.toString !== Object.prototype.toString) return String(v);
-    try { return JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x)); }
-    catch { return String(v); }
+    try {
+      return JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x));
+    } catch {
+      return String(v);
+    }
   }
   return v; // string | number | boolean
 }
 
 function sanitize(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  return rows.map(r => {
+  return rows.map((r) => {
     const o: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(r)) o[k] = toScalar(v);
     return o;
@@ -76,7 +84,7 @@ function sanitize(rows: Record<string, unknown>[]): Record<string, unknown>[] {
 const READ_HEADS = ["SELECT", "WITH", "DESCRIBE", "SHOW", "EXPLAIN", "PRAGMA", "TABLE", "FROM", "VALUES", "SUMMARIZE"];
 function classifyQuery(sqlRaw: string): { ok: boolean; head: string } {
   const head = sqlRaw.trimStart().slice(0, 12).toUpperCase();
-  return { ok: READ_HEADS.some(k => head.startsWith(k)), head };
+  return { ok: READ_HEADS.some((k) => head.startsWith(k)), head };
 }
 
 /** Wrap SELECT/WITH in a row-cap subquery so `SELECT * FROM events` can't dump 144k rows. */
@@ -93,11 +101,14 @@ async function handleQuery(sqlRaw: string): Promise<Response> {
   const t0 = Bun.nanoseconds();
   const { ok } = classifyQuery(sqlRaw);
   if (!ok) {
-    return Response.json({ error: `Read-only: query must start with one of ${READ_HEADS.join(", ")}.` }, { status: 400 });
+    return Response.json(
+      { error: `Read-only: query must start with one of ${READ_HEADS.join(", ")}.` },
+      { status: 400 },
+    );
   }
   try {
     const { sql, wrapped } = capped(sqlRaw);
-    const rows = await withDb(all => all(sql));
+    const rows = await withDb((all) => all(sql));
     const clean = sanitize(rows);
     const truncated = wrapped && clean.length > MAX_ROWS;
     const out = truncated ? clean.slice(0, MAX_ROWS) : clean;
@@ -111,8 +122,10 @@ async function handleQuery(sqlRaw: string): Promise<Response> {
 
 async function handleTables(): Promise<Response> {
   try {
-    const out = await withDb(async all => {
-      const tabs = await all(`SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name`);
+    const out = await withDb(async (all) => {
+      const tabs = await all(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name`,
+      );
       const res: { table: string; rows: number | string }[] = [];
       for (const t of tabs) {
         const name = String(t.table_name);

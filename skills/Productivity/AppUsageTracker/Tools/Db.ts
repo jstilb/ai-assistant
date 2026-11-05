@@ -5,7 +5,12 @@
  * patterns we actually use (run, queryRow, queryAll, insertReplace).
  */
 
-import { DuckDBInstance, type DuckDBConnection, type DuckDBInstance as DuckDBInstanceT } from "@duckdb/node-api";
+import {
+  DuckDBInstance,
+  type DuckDBConnection,
+  type DuckDBValue,
+  type DuckDBInstance as DuckDBInstanceT,
+} from "@duckdb/node-api";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG } from "../Config.ts";
@@ -46,7 +51,10 @@ export class Db {
 
   async initSchema(): Promise<void> {
     const sql = readFileSync(SCHEMA_PATH, "utf8");
-    for (const stmt of sql.split(/;\s*\n/).map(s => s.trim()).filter(Boolean)) {
+    for (const stmt of sql
+      .split(/;\s*\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)) {
       await this.conn.run(stmt);
     }
     await this.runMigrations();
@@ -59,9 +67,7 @@ export class Db {
    * drift, since AWPoller can't safely continue against the old PK shape.
    */
   private async runMigrations(): Promise<void> {
-    const row = await this.queryRow<{ v: number | bigint | null }>(
-      `SELECT MAX(version) AS v FROM schema_version`,
-    );
+    const row = await this.queryRow<{ v: number | bigint | null }>(`SELECT MAX(version) AS v FROM schema_version`);
     const current = row?.v == null ? 0 : Number(row.v);
 
     if (current < 1) {
@@ -77,9 +83,7 @@ export class Db {
          WHERE position('T' in id) = 0
             OR position('Z' in id) = 0
       `);
-      await this.conn.run(
-        `INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (1, NOW())`,
-      );
+      await this.conn.run(`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (1, NOW())`);
     }
 
     if (current < 2) {
@@ -89,21 +93,11 @@ export class Db {
       // in ALTER TABLE ADD COLUMN, so the columns land nullable and an
       // explicit UPDATE backfills 0 for pre-existing rows. upsertMetric always
       // writes concrete values, so the missing NOT NULL is never exercised.
-      await this.conn.run(
-        `ALTER TABLE daily_metrics ADD COLUMN IF NOT EXISTS yt_watched_minutes INTEGER`,
-      );
-      await this.conn.run(
-        `ALTER TABLE daily_metrics ADD COLUMN IF NOT EXISTS yt_listened_minutes INTEGER`,
-      );
-      await this.conn.run(
-        `UPDATE daily_metrics SET yt_watched_minutes = 0 WHERE yt_watched_minutes IS NULL`,
-      );
-      await this.conn.run(
-        `UPDATE daily_metrics SET yt_listened_minutes = 0 WHERE yt_listened_minutes IS NULL`,
-      );
-      await this.conn.run(
-        `INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (2, NOW())`,
-      );
+      await this.conn.run(`ALTER TABLE daily_metrics ADD COLUMN IF NOT EXISTS yt_watched_minutes INTEGER`);
+      await this.conn.run(`ALTER TABLE daily_metrics ADD COLUMN IF NOT EXISTS yt_listened_minutes INTEGER`);
+      await this.conn.run(`UPDATE daily_metrics SET yt_watched_minutes = 0 WHERE yt_watched_minutes IS NULL`);
+      await this.conn.run(`UPDATE daily_metrics SET yt_listened_minutes = 0 WHERE yt_listened_minutes IS NULL`);
+      await this.conn.run(`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (2, NOW())`);
     }
 
     if (current < 3) {
@@ -118,14 +112,12 @@ export class Db {
         await this.conn.run(`ALTER TABLE daily_metrics ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
         await this.conn.run(`UPDATE daily_metrics SET ${col} = 0 WHERE ${col} IS NULL`);
       }
-      await this.conn.run(
-        `INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (3, NOW())`,
-      );
+      await this.conn.run(`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (3, NOW())`);
     }
   }
 
   async run(sql: string, params?: Record<string, unknown>): Promise<void> {
-    if (params) await this.conn.run(sql, params);
+    if (params) await this.conn.run(sql, params as Record<string, DuckDBValue>);
     else await this.conn.run(sql);
   }
 
@@ -170,35 +162,25 @@ export class Db {
    * whole batch rolls back and the error propagates; earlier, already-
    * committed batches are unaffected (see Db.test.ts).
    */
-  async runBatched(
-    sql: string,
-    rows: Record<string, unknown>[],
-    batchSize = 1000,
-  ): Promise<void> {
+  async runBatched(sql: string, rows: Record<string, unknown>[], batchSize = 1000): Promise<void> {
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
       await this.transaction(async () => {
         for (const params of batch) {
-          await this.conn.run(sql, params);
+          await this.conn.run(sql, params as Record<string, DuckDBValue>);
         }
       });
     }
   }
 
-  async queryAll<T = Record<string, unknown>>(
-    sql: string,
-    params?: Record<string, unknown>,
-  ): Promise<T[]> {
+  async queryAll<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T[]> {
     const reader = params
-      ? await this.conn.runAndReadAll(sql, params)
+      ? await this.conn.runAndReadAll(sql, params as Record<string, DuckDBValue>)
       : await this.conn.runAndReadAll(sql);
     return reader.getRowObjects() as T[];
   }
 
-  async queryRow<T = Record<string, unknown>>(
-    sql: string,
-    params?: Record<string, unknown>,
-  ): Promise<T | null> {
+  async queryRow<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T | null> {
     const rows = await this.queryAll<T>(sql, params);
     return rows[0] ?? null;
   }

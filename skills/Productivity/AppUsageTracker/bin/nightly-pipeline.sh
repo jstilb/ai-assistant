@@ -20,8 +20,9 @@
 
 set -uo pipefail
 
-BUN=/opt/homebrew/bin/bun
-TIMEOUT_BIN=/opt/homebrew/bin/timeout
+# Prefer the Homebrew binaries (Apple-silicon Mac), then PATH (gtimeout on a Mac with coreutils, timeout on Linux).
+BUN="${BUN:-$([ -x /opt/homebrew/bin/bun ] && echo /opt/homebrew/bin/bun || command -v bun || echo /opt/homebrew/bin/bun)}"
+TIMEOUT_BIN="${TIMEOUT_BIN:-$([ -x /opt/homebrew/bin/timeout ] && echo /opt/homebrew/bin/timeout || command -v timeout || command -v gtimeout || echo /opt/homebrew/bin/timeout)}"
 TOOLS="$HOME/.claude/skills/Productivity/AppUsageTracker/Tools"
 
 # Run from /tmp: the inference helper spawns `claude -p`, which detects Claude

@@ -12,7 +12,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "path";
+import { join } from "node:path";
 import { CONFIG } from "../Config.ts";
 import { defaultKayaHome, getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { Db } from "./Db.ts";
@@ -72,17 +72,19 @@ function latestComponentFailure(): { ts: string; message: string } | null {
     const cutoffMs = Date.now() - ALARM_FRESHNESS_HOURS * 3600_000;
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
-        const entry = JSON.parse(lines[i]) as FailureLogEntry;
+        const entry = JSON.parse(lines[i] ?? "") as FailureLogEntry;
         if (!entry.source?.startsWith("AppUsageTracker:")) continue;
         const tsMs = Date.parse(entry.ts);
         if (!Number.isFinite(tsMs) || tsMs < cutoffMs) return null;
-        const message = typeof entry.error === "string"
-          ? entry.error
-          : entry.error?.message ?? "unknown failure";
+        const message = typeof entry.error === "string" ? entry.error : (entry.error?.message ?? "unknown failure");
         return { ts: entry.ts, message: `${entry.source}: ${message}` };
-      } catch { /* skip malformed line */ }
+      } catch {
+        /* skip malformed line */
+      }
     }
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
   return null;
 }
 
@@ -121,9 +123,8 @@ function statusGlyph(d: Date | null, err: string | null): string {
 /** Devices whose newest successful sync is older than DEVICE_STALE_ALARM_HOURS
  *  (or which have never synced). Their absence undercounts the metric. */
 function findStaleDevices(devices: FreshnessRow[]): FreshnessRow[] {
-  return devices.filter(d =>
-    !d.newest_sync
-    || (Date.now() - d.newest_sync.getTime()) / 3600_000 > DEVICE_STALE_ALARM_HOURS,
+  return devices.filter(
+    (d) => !d.newest_sync || (Date.now() - d.newest_sync.getTime()) / 3600_000 > DEVICE_STALE_ALARM_HOURS,
   );
 }
 
@@ -192,29 +193,37 @@ async function main(argv: string[]): Promise<void> {
 
     // 28-day averages of the "all-value" totals (tracking companions to the
     // low-value goal metric) over the same window as rolling_4wk_avg.
-    const totals = metric ? await db.queryRow<TotalsRow>(
-      `SELECT ROUND(AVG(total_media_minutes))   AS media_avg,
+    const totals = metric
+      ? await db.queryRow<TotalsRow>(
+          `SELECT ROUND(AVG(total_media_minutes))   AS media_avg,
               ROUND(AVG(total_screen_minutes))  AS screen_avg,
               ROUND(AVG(total_youtube_minutes)) AS youtube_avg
          FROM daily_metrics
         WHERE date BETWEEN ($end::DATE - 27) AND $end::DATE`,
-      { end: metric.date },
-    ) : null;
+          { end: metric.date },
+        )
+      : null;
 
     const stale = findStaleDevices(devices);
     const wig = readMediaWigTargets();
 
     if (json) {
-      console.log(JSON.stringify({
-        devices,
-        metric,
-        totals,
-        wigTargets: wig,
-        staleDevices: stale.map(d => d.device),
-        // false → today's metric / 4-wk avg undercount; do not treat as a
-        // pass/fail verdict against the WIG target.
-        metricReliable: stale.length === 0,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            devices,
+            metric,
+            totals,
+            wigTargets: wig,
+            staleDevices: stale.map((d) => d.device),
+            // false → today's metric / 4-wk avg undercount; do not treat as a
+            // pass/fail verdict against the WIG target.
+            metricReliable: stale.length === 0,
+          },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
@@ -227,13 +236,15 @@ async function main(argv: string[]): Promise<void> {
       // Watcher-silent: poll OK recently but newest event is stale. Indicates
       // the AW server is up but no watcher is producing events on this device.
       if (
-        !d.last_error
-        && d.newest_sync
-        && (Date.now() - d.newest_sync.getTime()) / 60_000 <= RECENT_SYNC_THRESHOLD_MIN
-        && d.last_event
-        && (Date.now() - d.last_event.getTime()) / 3600_000 > WATCHER_SILENT_THRESHOLD_HOURS
+        !d.last_error &&
+        d.newest_sync &&
+        (Date.now() - d.newest_sync.getTime()) / 60_000 <= RECENT_SYNC_THRESHOLD_MIN &&
+        d.last_event &&
+        (Date.now() - d.last_event.getTime()) / 3600_000 > WATCHER_SILENT_THRESHOLD_HOURS
       ) {
-        console.log(`           ⚠ watcher silent: newest event ${humanAge(d.last_event)} — open ActivityWatch on this device`);
+        console.log(
+          `           ⚠ watcher silent: newest event ${humanAge(d.last_event)} — open ActivityWatch on this device`,
+        );
       }
     }
     const alarm = latestComponentFailure();
@@ -244,18 +255,22 @@ async function main(argv: string[]): Promise<void> {
     // undercounts. Surfaced loudly so a silent outage can't read as a clean
     // "under target" (see the 2026-05 phone/tablet outage).
     if (stale.length > 0) {
-      const list = stale.map(d => `${d.device} (${humanAge(d.newest_sync)})`).join(", ");
-      console.log(`  🚨 STALE-DATA ALARM — ${stale.length} device(s) not synced in >${DEVICE_STALE_ALARM_HOURS}h: ${list}`);
+      const list = stale.map((d) => `${d.device} (${humanAge(d.newest_sync)})`).join(", ");
+      console.log(
+        `  🚨 STALE-DATA ALARM — ${stale.length} device(s) not synced in >${DEVICE_STALE_ALARM_HOURS}h: ${list}`,
+      );
       console.log(`     → today's metric and the 4-wk avg UNDERCOUNT real usage; do NOT read this as "under target".`);
     }
     console.log("");
     if (metric) {
-      const avg = metric.rolling_4wk_avg == null ? "n/a" : `${Number(metric.rolling_4wk_avg).toFixed(1)} min/logged-day`;
-      const avgNote = stale.length > 0
-        ? `🚨 UNRELIABLE — ${stale.length} stale device(s); undercounts actual usage`
-        : wig
-          ? `(${wig.goalId} low-value target ≤ ${wig.lowValue} min/day)`
-          : `(⚠ no media WIG low_value target in wig_status.json)`;
+      const avg =
+        metric.rolling_4wk_avg == null ? "n/a" : `${Number(metric.rolling_4wk_avg).toFixed(1)} min/logged-day`;
+      const avgNote =
+        stale.length > 0
+          ? `🚨 UNRELIABLE — ${stale.length} stale device(s); undercounts actual usage`
+          : wig
+            ? `(${wig.goalId} low-value target ≤ ${wig.lowValue} min/day)`
+            : `(⚠ no media WIG low_value target in wig_status.json)`;
       console.log(`Today's metric (${metric.date}):`);
       console.log(`  Tier-1 (always-low-value) : ${metric.tier1_minutes} min`);
       console.log(`  Total low-value           : ${metric.total_lowvalue_minutes} min`);
@@ -264,10 +279,11 @@ async function main(argv: string[]): Promise<void> {
         // All-value tracking companions (total media is also a WIG headline
         // target). Distinct labels so the goal-surface parsers never mistake
         // these for the low-value avg.
-        const t = (v: number | bigint | null) => v == null ? "n/a" : `${Number(v).toFixed(0)} min/day`;
-        const totalNote = stale.length === 0 && wig?.totalMedia != null
-          ? `  (${wig.goalId} total target ≤ ${wig.totalMedia} min/day)`
-          : "";
+        const t = (v: number | bigint | null) => (v == null ? "n/a" : `${Number(v).toFixed(0)} min/day`);
+        const totalNote =
+          stale.length === 0 && wig?.totalMedia != null
+            ? `  (${wig.goalId} total target ≤ ${wig.totalMedia} min/day)`
+            : "";
         console.log(`  Total media (28d avg)     : ${t(totals.media_avg)}${totalNote}`);
         console.log(`  Total screen (28d avg)    : ${t(totals.screen_avg)}`);
         console.log(`  Total YouTube (28d avg)   : ${t(totals.youtube_avg)}`);
@@ -280,7 +296,8 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) main(process.argv.slice(2)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main)
+  main(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
