@@ -17,10 +17,10 @@
  *   - Voice notification on addCard success
  */
 
-import { join } from "path";
-import { existsSync, readFileSync } from "fs";
-import { execFileSync, execSync } from "child_process";
-import { notifySync } from "../../../../lib/core/NotificationService";
+import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
+import { notifySync } from "../../../../lib/core/NotificationService.ts";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -176,8 +176,9 @@ function appendAuditEntry(kayaHome: string, entry: AuditEntry): void {
   const auditPath = join(auditDir, "anki-runs.jsonl");
   try {
     getAuditLog(auditPath).append(entry);
-  } catch {
-    // Audit failures must not break operations
+  } catch (err) {
+    // Audit failures must not break operations, but they are logged.
+    console.error(`[AnkiClient] Audit log write failed (${auditPath}): ${err instanceof Error ? err.message : err}`);
   }
 }
 
@@ -220,7 +221,7 @@ export function parseListNotesOutput(output: string): ListedNote[] {
       // A new note header always closes out whatever front section (if any)
       // belonged to the PREVIOUS note.
       flush();
-      currentNid = noteMatch[1];
+      currentNid = noteMatch[1] ?? null;
       inFront = false;
       continue;
     }
@@ -309,7 +310,8 @@ export class AnkiClient {
       const firstLine = readFileSync(this.apyBin, "utf-8").split("\n", 1)[0] ?? "";
       if (firstLine.startsWith("#!")) {
         const parts = firstLine.slice(2).trim().split(/\s+/);
-        const bin = parts[0].endsWith("/env") && parts[1] ? parts[1] : parts[0];
+        const first = parts[0] ?? "";
+        const bin = first.endsWith("/env") && parts[1] ? parts[1] : first;
         if (bin) return bin;
       }
     } catch {
@@ -413,10 +415,10 @@ export class AnkiClient {
     const lines = output.split("\n");
     for (const line of lines) {
       const match = line.match(/^\s*(.+?)[\s:]+(\d+)\s*$/);
-      if (match) {
+      if (match?.[1] !== undefined && match[2] !== undefined) {
         const name = match[1].trim();
         const count = parseInt(match[2], 10);
-        if (name && !isNaN(count) && name !== "Total") {
+        if (name && !Number.isNaN(count) && name !== "Total") {
           decks.push({ name, count });
         }
       }
@@ -720,8 +722,9 @@ export class AnkiClient {
     // Best-effort voice notification
     try {
       notifySync(`Card added to ${deck}`);
-    } catch {
-      // Notification failure must not break card addition
+    } catch (err) {
+      // Notification failure must not break card addition, but it is logged.
+      console.error(`[AnkiClient] Notification failed: ${err instanceof Error ? err.message : err}`);
     }
   }
 }

@@ -64,10 +64,7 @@ function reconcile(verdict: Verdict, ease: number): AnkiEase {
   return ease === 4 ? 4 : 3;
 }
 
-export async function assessAnswer(
-  input: AssessInput,
-  inferenceFn: InferenceFn = inference,
-): Promise<Assessment> {
+export async function assessAnswer(input: AssessInput, inferenceFn: InferenceFn = inference): Promise<Assessment> {
   const spoken = input.spokenAnswer.trim();
 
   // Empty / no-speech → unambiguously "Again"; skip the LLM round-trip.
@@ -125,9 +122,7 @@ interface RawAssessment {
 }
 
 function parseAssessment(result: InferenceResult): RawAssessment | null {
-  const candidate = (result.parsed ?? tryParse(result.output)) as
-    | Partial<RawAssessment>
-    | undefined;
+  const candidate = (result.parsed ?? tryParse(result.output)) as Partial<RawAssessment> | undefined;
   if (!candidate || typeof candidate !== "object") return null;
 
   const verdict = candidate.verdict;
@@ -136,9 +131,7 @@ function parseAssessment(result: InferenceResult): RawAssessment | null {
   }
   const ease = typeof candidate.ease === "number" ? candidate.ease : 3;
   const feedback =
-    typeof candidate.feedback === "string" && candidate.feedback.trim().length > 0
-      ? candidate.feedback.trim()
-      : "";
+    typeof candidate.feedback === "string" && candidate.feedback.trim().length > 0 ? candidate.feedback.trim() : "";
   return { verdict, ease, feedback };
 }
 
@@ -175,9 +168,7 @@ function degradedAssessment(referenceAnswer: string, reason: string): Assessment
 if (import.meta.main) {
   const [question, referenceAnswer, spokenAnswer] = process.argv.slice(2);
   if (!question || !referenceAnswer || spokenAnswer === undefined) {
-    console.error(
-      'Usage: bun AnkiAnswerAssessor.ts "<question>" "<reference answer>" "<spoken answer>"',
-    );
+    console.error('Usage: bun AnkiAnswerAssessor.ts "<question>" "<reference answer>" "<spoken answer>"');
     process.exit(1);
   }
   const assessment = await assessAnswer({ question, referenceAnswer, spokenAnswer });

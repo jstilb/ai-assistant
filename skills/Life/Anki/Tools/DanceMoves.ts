@@ -16,9 +16,9 @@
  * --quit-anki to quit it and reopen it afterwards.
  */
 
-import { join } from "path";
-import { readFileSync } from "fs";
-import { execFileSync, spawnSync } from "child_process";
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { AnkiClient } from "./AnkiClient.ts";
 
 // ============================================
@@ -79,7 +79,8 @@ export function loadCatalogue(path: string = CATALOGUE_PATH): DanceMove[] {
 export function validateCatalogue(moves: DanceMove[]): void {
   const seen = new Set<string>();
   for (const m of moves) {
-    if (!m.key || !m.move || !m.breakdown) throw new Error(`Catalogue entry missing key/move/breakdown: ${JSON.stringify(m)}`);
+    if (!m.key || !m.move || !m.breakdown)
+      throw new Error(`Catalogue entry missing key/move/breakdown: ${JSON.stringify(m)}`);
     if (seen.has(m.key)) throw new Error(`Duplicate catalogue key: ${m.key}`);
     seen.add(m.key);
     if (m.subject !== "Hip Hop Dance" && m.subject !== "Salsa & Bachata") {
@@ -90,7 +91,10 @@ export function validateCatalogue(moves: DanceMove[]): void {
 }
 
 export function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**
@@ -132,6 +136,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const flags: Record<string, string | true> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === undefined) continue;
     if (!a.startsWith("--")) {
       positional.push(a);
       continue;
@@ -139,8 +144,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const eq = a.indexOf("=");
     if (eq > 0) {
       flags[a.slice(2, eq)] = a.slice(eq + 1);
-    } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
-      flags[a.slice(2)] = argv[++i];
+    } else if (i + 1 < argv.length && !argv[i + 1]?.startsWith("--")) {
+      flags[a.slice(2)] = argv[++i] ?? true;
     } else {
       flags[a.slice(2)] = true;
     }
@@ -303,8 +308,7 @@ async function main(): Promise<number> {
         if (result.ok) {
           const subject = parseSubject(positional[0]);
           const notes = (result.notes as Array<Record<string, string | boolean>>).filter(
-            (n) =>
-              (!subject || String(n.deck).includes(subject)) && (!flags.learned || Boolean(n.learned)),
+            (n) => (!subject || String(n.deck).includes(subject)) && (!flags.learned || Boolean(n.learned)),
           );
           for (const n of notes) {
             const status = n.learned ? `learned ${n.learned}` : "not yet (suspended)";

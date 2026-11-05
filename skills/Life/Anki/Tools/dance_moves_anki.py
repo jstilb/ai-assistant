@@ -55,8 +55,9 @@ def video_id(url):
 
 
 def default_collection_path():
-    from apyanki.config import cfg
     import os
+
+    from apyanki.config import cfg
     base = cfg["base_path"]
     profile = cfg.get("profile_name") or "User 1"
     return os.path.join(base, profile, "collection.anki2")

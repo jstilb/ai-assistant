@@ -22,14 +22,9 @@
  * default factories wire up the real desktop stack.
  */
 
-import { spawnSync } from "child_process";
-import { join } from "path";
-import {
-  AnkiConnectClient,
-  EASE_LABEL,
-  type AnkiEase,
-  type ReviewCard,
-} from "./AnkiConnectClient.ts";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
+import { AnkiConnectClient, EASE_LABEL, type AnkiEase, type ReviewCard } from "./AnkiConnectClient.ts";
 import { assessAnswer, type Assessment } from "./AnkiAnswerAssessor.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -97,7 +92,10 @@ type Command = "repeat" | "skip" | "stop" | "answer";
 
 /** Classify a transcript as a control word or a real answer. */
 export function classifyUtterance(raw: string): Command {
-  const t = raw.trim().toLowerCase().replace(/[.!?,]+$/g, "");
+  const t = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?,]+$/g, "");
   if (t === "repeat" || t === "say again" || t === "again please" || t === "repeat that") {
     return "repeat";
   }
@@ -132,10 +130,7 @@ export function classifyUtterance(raw: string): Command {
  * consistent with how STT is driven below.
  */
 function defaultSpeaker(): Speaker {
-  const vrg = join(
-    getKayaHome(),
-    "skills/Communication/VoiceInteraction/Tools/VoiceResponseGenerator.ts",
-  );
+  const vrg = join(getKayaHome(), "skills/Communication/VoiceInteraction/Tools/VoiceResponseGenerator.ts");
   return async (text: string) => {
     const proc = spawnSync("bun", [vrg, "speak", text], {
       encoding: "utf-8",
@@ -151,11 +146,10 @@ function defaultSpeaker(): Speaker {
 function defaultListener(whisperModel: string): Listener {
   const voiceInput = join(getKayaHome(), "lib/core/VoiceInput.ts");
   return async () => {
-    const proc = spawnSync(
-      "bun",
-      [voiceInput, "once", "--json", `--model=${whisperModel}`],
-      { encoding: "utf-8", timeout: 130_000 },
-    );
+    const proc = spawnSync("bun", [voiceInput, "once", "--json", `--model=${whisperModel}`], {
+      encoding: "utf-8",
+      timeout: 130_000,
+    });
     if (proc.status !== 0) return "";
     const line = (proc.stdout ?? "")
       .trim()
@@ -166,7 +160,10 @@ function defaultListener(whisperModel: string): Listener {
     try {
       const parsed = JSON.parse(line) as { transcript?: string };
       return (parsed.transcript ?? "").trim();
-    } catch {
+    } catch (err) {
+      console.error(
+        `[VoiceReviewSession] Transcript line is not valid JSON: ${err instanceof Error ? err.message : err}`,
+      );
       return "";
     }
   };
@@ -184,15 +181,12 @@ function auditPath(kayaHome: string): string {
 // SESSION
 // ============================================
 
-export async function runVoiceReview(
-  options: VoiceReviewOptions = {},
-): Promise<VoiceReviewResult> {
+export async function runVoiceReview(options: VoiceReviewOptions = {}): Promise<VoiceReviewResult> {
   const limit = options.limit ?? 20;
   const kayaHome = options.kayaHome ?? getKayaHome();
   const backend: ReviewBackend = options.backend ?? new AnkiConnectClient();
   const speak: Speaker = options.speak ?? defaultSpeaker();
-  const listen: Listener =
-    options.listen ?? defaultListener(options.whisperModel ?? "base.en");
+  const listen: Listener = options.listen ?? defaultListener(options.whisperModel ?? "base.en");
   const assess: Assessor = options.assess ?? ((i) => assessAnswer(i));
 
   const result: VoiceReviewResult = {
@@ -237,8 +231,7 @@ export async function runVoiceReview(
   const startedAt = new Date().toISOString();
 
   // 3. Review loop.
-  for (let i = 0; i < cards.length; i++) {
-    const card = cards[i];
+  for (const [i, card] of cards.entries()) {
     await safeSpeak(speak, `Question ${i + 1}. ${card.question}`);
 
     let spoken = "";
@@ -353,15 +346,17 @@ export async function runVoiceReview(
 async function safeSpeak(speak: Speaker, text: string): Promise<void> {
   try {
     await speak(text);
-  } catch {
-    // TTS failure is non-fatal — the loop continues silently.
+  } catch (err) {
+    // TTS failure is non-fatal: the loop continues, but the failure is logged.
+    console.error(`[VoiceReviewSession] TTS failed: ${err instanceof Error ? err.message : err}`);
   }
 }
 
 function safeLog(path: string): ReturnType<typeof createAppendLog> | null {
   try {
     return createAppendLog(path);
-  } catch {
+  } catch (err) {
+    console.error(`[VoiceReviewSession] Audit log disabled (${path}): ${err instanceof Error ? err.message : err}`);
     return null;
   }
 }
@@ -375,9 +370,7 @@ if (import.meta.main) {
   const command = args[0];
 
   if (command !== "start") {
-    console.error(
-      'Usage: bun VoiceReviewSession.ts start [deck] [--limit=N] [--model=base.en]',
-    );
+    console.error("Usage: bun VoiceReviewSession.ts start [deck] [--limit=N] [--model=base.en]");
     process.exit(1);
   }
 
@@ -385,7 +378,7 @@ if (import.meta.main) {
   const deck = positional[0];
   const limitArg = args.find((a) => a.startsWith("--limit="));
   const modelArg = args.find((a) => a.startsWith("--model="));
-  const limit = limitArg ? parseInt(limitArg.split("=")[1], 10) : undefined;
+  const limit = limitArg ? parseInt(limitArg.split("=")[1] ?? "", 10) : undefined;
   const whisperModel = modelArg ? modelArg.split("=")[1] : undefined;
 
   const result = await runVoiceReview({

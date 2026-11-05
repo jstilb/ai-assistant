@@ -171,8 +171,9 @@ The 14 subject decks, one per Discipline (ontology D9 — what Jm learns is a Di
 **Rules when adding decks:**
 - **New subject** → create it as a *direct* child `Learning::<Subject>` and assign the **"Learning subject"** preset. Otherwise it gets `Default` (5 new/day) and skews the balance. `ensure-deck` creates the deck but does **not** set the preset. Set it with Anki closed:
   ```python
+  import os
   from anki.collection import Collection
-  c = Collection('/Users/[user]/Library/Application Support/Anki2/User 1/collection.anki2')
+  c = Collection(os.path.expanduser('~/Library/Application Support/Anki2/User 1/collection.anki2'))
   did = c.decks.id("Learning::<Subject>")
   conf = next(x for x in c.decks.all_config() if x["name"] == "Learning subject")
   deck = c.decks.get(did); deck["conf"] = conf["id"]; c.decks.save(deck); c.close()

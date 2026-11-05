@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { AnkiClient, parseListNotesOutput } from "./AnkiClient";
+import { AnkiClient, parseListNotesOutput } from "./AnkiClient.ts";
 
 describe("AnkiClient — ISC 601: prerequisite validation", () => {
   describe("apy not installed scenario (explicit nonexistent binary)", () => {
@@ -195,8 +195,8 @@ describe("AnkiClient — ISC 601: prerequisite validation", () => {
       ].join("\n");
       const notes = parseListNotesOutput(output);
       expect(notes.length).toBe(1);
-      expect(notes[0].nid).toBe("444");
-      expect(notes[0].front).toBe("Line one of the front  \nLine two");
+      expect(notes[0]?.nid).toBe("444");
+      expect(notes[0]?.front).toBe("Line one of the front  \nLine two");
     });
 
     it("returns an empty array for empty or note-less output", () => {
@@ -205,13 +205,7 @@ describe("AnkiClient — ISC 601: prerequisite validation", () => {
     });
 
     it("skips a note whose Front section never appears", () => {
-      const output = [
-        "# Note (nid: 555)",
-        "",
-        "## Back",
-        "Back only, no front heading",
-        "",
-      ].join("\n");
+      const output = ["# Note (nid: 555)", "", "## Back", "Back only, no front heading", ""].join("\n");
       expect(parseListNotesOutput(output)).toEqual([]);
     });
   });

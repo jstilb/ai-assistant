@@ -82,20 +82,18 @@ describe("AnkiConnectClient.isAvailable", () => {
 
 describe("AnkiConnectClient.findDueCards", () => {
   it("scopes the query to a deck when given", async () => {
-    const { fetchFn, calls } = fakeFetch((action) =>
-      action === "findCards" ? [1, 2, 3] : null,
-    );
+    const { fetchFn, calls } = fakeFetch((action) => (action === "findCards" ? [1, 2, 3] : null));
     const client = new AnkiConnectClient({ fetchFn });
     const ids = await client.findDueCards("Japanese::N5");
     expect(ids).toEqual([1, 2, 3]);
-    expect(calls[0].params.query).toBe('deck:"Japanese::N5" is:due');
+    expect(calls[0]?.params?.query).toBe('deck:"Japanese::N5" is:due');
   });
 
   it("uses a global due query with no deck", async () => {
     const { fetchFn, calls } = fakeFetch(() => [7]);
     const client = new AnkiConnectClient({ fetchFn });
     await client.findDueCards();
-    expect(calls[0].params.query).toBe("is:due");
+    expect(calls[0]?.params?.query).toBe("is:due");
   });
 });
 
@@ -127,23 +125,21 @@ describe("AnkiConnectClient.getReviewCards", () => {
     const client = new AnkiConnectClient({ fetchFn });
     const cards = await client.getReviewCards([42]);
     expect(cards).toHaveLength(1);
-    expect(cards[0].cardId).toBe(42);
-    expect(cards[0].question).toBe("Capital of France?");
-    expect(cards[0].answer).toBe("Paris");
-    expect(cards[0].fields.Back).toBe("Paris");
+    expect(cards[0]?.cardId).toBe(42);
+    expect(cards[0]?.question).toBe("Capital of France?");
+    expect(cards[0]?.answer).toBe("Paris");
+    expect(cards[0]?.fields?.Back).toBe("Paris");
   });
 });
 
 describe("AnkiConnectClient.answerCard", () => {
   it("sends a single {cardId, ease} answer and reports success", async () => {
-    const { fetchFn, calls } = fakeFetch((action) =>
-      action === "answerCards" ? [true] : null,
-    );
+    const { fetchFn, calls } = fakeFetch((action) => (action === "answerCards" ? [true] : null));
     const client = new AnkiConnectClient({ fetchFn });
     const ok = await client.answerCard(42, 3);
     expect(ok).toBe(true);
-    expect(calls[0].action).toBe("answerCards");
-    expect(calls[0].params.answers).toEqual([{ cardId: 42, ease: 3 }]);
+    expect(calls[0]?.action).toBe("answerCards");
+    expect(calls[0]?.params?.answers).toEqual([{ cardId: 42, ease: 3 }]);
   });
 
   it("reports failure when the server returns [false]", async () => {

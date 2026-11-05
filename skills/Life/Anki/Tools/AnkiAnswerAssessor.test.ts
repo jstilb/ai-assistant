@@ -112,10 +112,7 @@ describe("assessAnswer — parsing tolerance", () => {
   });
 
   it("degrades safely on unparseable output", async () => {
-    const a = await assessAnswer(
-      { ...CARD, spokenAnswer: "mitochondria" },
-      fakeInference("not json at all"),
-    );
+    const a = await assessAnswer({ ...CARD, spokenAnswer: "mitochondria" }, fakeInference("not json at all"));
     expect(a.degraded).toBe(true);
     expect(a.ease).toBe(1);
   });

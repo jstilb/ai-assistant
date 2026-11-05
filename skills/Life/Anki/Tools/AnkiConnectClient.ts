@@ -67,27 +67,29 @@ interface RawCardInfo {
  * we drop tags/entities and collapse whitespace so TTS reads it cleanly.
  */
 export function htmlToPlainText(html: string): string {
-  return html
-    // Anki's answer separator — keep the answer side only when present.
-    .replace(/[\s\S]*<hr id=answer>/i, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{2,}/g, "\n")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .join("\n")
-    .trim();
+  return (
+    html
+      // Anki's answer separator — keep the answer side only when present.
+      .replace(/[\s\S]*<hr id=answer>/i, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{2,}/g, "\n")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+      .join("\n")
+      .trim()
+  );
 }
 
 export class AnkiConnectClient {
@@ -176,9 +178,7 @@ export class AnkiConnectClient {
       deckName: c.deckName,
       question: htmlToPlainText(c.question),
       answer: htmlToPlainText(c.answer),
-      fields: Object.fromEntries(
-        Object.entries(c.fields ?? {}).map(([k, v]) => [k, v.value]),
-      ),
+      fields: Object.fromEntries(Object.entries(c.fields ?? {}).map(([k, v]) => [k, v.value])),
     }));
   }
 
@@ -211,9 +211,7 @@ if (import.meta.main) {
         JSON.stringify(
           {
             available: ok,
-            hint: ok
-              ? undefined
-              : "Start Anki and install the AnkiConnect add-on (code 2055492159).",
+            hint: ok ? undefined : "Start Anki and install the AnkiConnect add-on (code 2055492159).",
           },
           null,
           2,

@@ -3,12 +3,12 @@
  * Anki AnkiClient — prerequisite validation: `which apy` check
  */
 
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect } from "bun:test";
 
 describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   it("throws a clear error when apy is not installed (not in PATH)", async () => {
     // When `which apy` returns empty or fails, AnkiClient must surface a clear error
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     // Mock execFileSync to simulate apy not found
     const client = new AnkiClient({ apyBin: "/nonexistent/path/to/apy" });
     let threwError = false;
@@ -24,7 +24,7 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   });
 
   it("error message contains 'pip install apy' hint", async () => {
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     const client = new AnkiClient({ apyBin: "/nonexistent/path/to/apy" });
     let errorMessage = "";
     try {
@@ -36,7 +36,7 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   });
 
   it("validatePrerequisites returns a typed result with prerequisitesMet boolean", async () => {
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     // Use a real which lookup — if apy is installed, it should pass validation
     // If apy is not installed, we verify the error is well-formed
     const client = new AnkiClient();
@@ -52,7 +52,7 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   });
 
   it("listDecks() throws prerequisite error before running if apy not available", async () => {
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     const client = new AnkiClient({ apyBin: "/nonexistent/path/to/apy" });
     let errorMessage = "";
     try {
@@ -65,7 +65,7 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   });
 
   it("addCard() returns typed result with success boolean", async () => {
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     // We can't assume apy is installed in CI, so test the type contract via error path
     const client = new AnkiClient({ apyBin: "/nonexistent/path/to/apy" });
     // When apy not available, addCard should return { success: false, ... } OR throw
@@ -84,11 +84,11 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
   });
 
   it("writes audit log entry to anki-runs.jsonl after any operation attempt", async () => {
-    const { existsSync, readFileSync } = await import("fs");
-    const { homedir } = await import("os");
-    const { join } = await import("path");
+    const { existsSync, readFileSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
 
-    const { AnkiClient } = await import("./AnkiClient");
+    const { AnkiClient } = await import("./AnkiClient.ts");
     const client = new AnkiClient({ apyBin: "/nonexistent/path/to/apy" });
 
     try {
@@ -102,7 +102,7 @@ describe("AnkiClient — ISC 601: prerequisite validation (which apy)", () => {
     // it must have the right shape
     if (existsSync(auditPath)) {
       const lines = readFileSync(auditPath, "utf-8").trim().split("\n");
-      const lastEntry = JSON.parse(lines[lines.length - 1]);
+      const lastEntry = JSON.parse(lines.at(-1) ?? "");
       expect(typeof lastEntry.timestamp).toBe("string");
       expect(typeof lastEntry.operation).toBe("string");
       expect(typeof lastEntry.success).toBe("boolean");

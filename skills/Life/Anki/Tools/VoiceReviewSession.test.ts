@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { rmSync, existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { rmSync, existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   runVoiceReview,
   classifyUtterance,
@@ -231,7 +231,7 @@ describe("runVoiceReview — grading and marking", () => {
       kayaHome: tmpHome(),
     });
     expect(r.reviewed).toBe(1);
-    expect(r.outcomes[0].marked).toBe(false);
+    expect(r.outcomes[0]?.marked).toBe(false);
     expect(lines.some((l) => l.includes("couldn't record"))).toBe(true);
   });
 });
