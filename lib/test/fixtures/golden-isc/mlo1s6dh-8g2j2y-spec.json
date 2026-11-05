@@ -1,0 +1,100 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlo1s6dh-8g2j2y-spec.md",
+  "layoutNote": "3-col (120 rows large)",
+  "rowCount": 15,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Vite + React 18 + TypeScript 5 project scaffolded with `strict: true`, `noImplicitAny: true`, `strictNullChecks: true`, `noUncheckedIndexedAccess: true` in tsconfig.json — `npx tsc --noEmit` produces zero errors",
+      "verifyMethod": "Run `npx tsc --noEmit` and `npm run build`; verify zero errors, zero warnings in CI output",
+      "embeddedCommand": "npx tsc --noEmit",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "Zustand store uses `persist` middleware writing to localStorage key `kaya-canvas-v1` and `immer` middleware for immutable updates; store state includes `stateVersion: number` field for future migration support",
+      "verifyMethod": "Unit test: mutate store → verify localStorage key exists with correct JSON schema including `stateVersion`; verify immer prevents direct mutation via `Object.freeze` test",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "Store exposes typed actions: `addContainer`, `removeContainer`, `moveContainer`, `resizeContainer`, `clearAll` — each validates input via Zod schema before mutating state; invalid input is rejected without state change",
+      "verifyMethod": "Unit tests per action: valid input → state changes; invalid input (bad type, negative position, below-min size) → state unchanged, error returned",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "@dnd-kit integration provides snap-to-grid drag with visual ghost preview at target position; drag maintains ≥30fps (P95 frame time ≤33ms); containers snap to nearest valid grid cell on drop",
+      "verifyMethod": "Integration test: programmatic drag → verify final position is grid-aligned; Chrome DevTools Performance tab recording during 10-second drag session → verify P95 frame ≤33ms",
+      "source": "INFERRED"
+    },
+    {
+      "number": 5,
+      "description": "Full CRUD lifecycle works end-to-end for all 5 container types: create via toolbar button → renders on grid; move via drag → new position; resize via handles → new size (min 2×2 cells); delete via hover button → removed from grid and store; all mutations persisted to localStorage within 100ms",
+      "verifyMethod": "Integration test per type: create → move → resize → delete → verify localStorage updated after each step; timing assertion on persist latency",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "5 container types (`notes`, `media`, `data`, `embed`, `custom`) registered in a component registry map (`ContainerType → React.ComponentType`); each renders with a distinct header color, icon placeholder, and type label; registry is the single extension point — adding/renaming a type requires only a registry entry and renderer component, zero changes to grid/store/shell",
+      "verifyMethod": "Unit test: registry maps all 5 types to components; snapshot tests verify distinct visual output per type; architecture test: grep codebase for hardcoded type references outside registry and types.ts — must find zero",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "Collision detection prevents container overlap: AABB intersection test runs on every move/resize; overlapping placement is rejected and container returns to original position with visual feedback (red ghost); boundary clamping prevents containers from exceeding grid bounds on all 4 edges",
+      "verifyMethod": "Unit tests for `canPlace()`: overlapping positions → false; boundary-exceeding positions → false; valid positions → true; integration test: attempt invalid drag → verify container returns to original position",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "Resize handles visible on container hover (corners + edges); resize operates in grid-cell increments; minimum container size enforced at 2×2 grid cells — resize below minimum is visually prevented (handles stop responding)",
+      "verifyMethod": "Integration test: resize to 1×1 → verify size stays at 2×2; resize to valid size → verify grid-aligned result; visual test: hover → handles appear",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "Corrupted localStorage (invalid JSON, schema mismatch, missing fields) detected on hydration via Zod `safeParse`; on failure: corrupted data cleared, app starts with empty canvas, non-blocking toast notification displayed, error logged to console with details; no crash, no white screen",
+      "verifyMethod": "Integration test: inject `\"{invalid\"` into localStorage key → load app → verify empty canvas rendered, toast shown, console.error logged, localStorage key cleared",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "Responsive grid adapts at 3 breakpoints: mobile (<768px) hides grid with \"use desktop\" message; tablet (768–1279px) renders 8-column grid; desktop (≥1280px) renders 12-column grid; viewport resize triggers re-layout without state loss",
+      "verifyMethod": "Manual test at 375px, 768px, 1280px viewports; automated test: mock `window.innerWidth` → verify column count output from `useGridDimensions` hook",
+      "source": "INFERRED"
+    },
+    {
+      "number": 11,
+      "description": "Production bundle ≤200KB gzipped; no `any` types in codebase (enforced by ESLint `@typescript-eslint/no-explicit-any: error`); zero console errors or warnings in production build",
+      "verifyMethod": "CI gate: `npm run build` → check `dist/` gzipped size; `npx eslint . --max-warnings 0`; run production build in browser → verify clean console",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 12,
+      "description": "Test coverage ≥80% line coverage on `store/` and `utils/` directories; all critical path tests from §2.2 passing (container creation, state persistence, container deletion, grid constraints); zero skipped tests",
+      "verifyMethod": "`npx vitest run --coverage` → verify `store/` ≥80%, `utils/` ≥80%; verify no `.skip` or `.todo` in test files",
+      "embeddedCommand": "npx vitest run --coverage",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 13,
+      "description": "Error boundary wraps `GridCanvas` component; render errors within the grid are caught and display a fallback UI (\"Something went wrong — click to reset\") instead of crashing the entire app; fallback includes a reset button that calls `clearAll()`",
+      "verifyMethod": "Integration test: force render error inside a container → verify fallback UI renders; click reset → verify empty canvas restored",
+      "source": "INFERRED"
+    },
+    {
+      "number": 14,
+      "description": "File structure follows specified architecture: `src/components/`, `src/store/`, `src/hooks/`, `src/utils/`, `src/constants/`; max file length 300 lines; named exports preferred; no prop drilling beyond 2 levels — all shared state accessed via `useGridStore` hook",
+      "verifyMethod": "Automated lint: custom ESLint rule or script to check file lengths; code review checklist for prop drilling; `find` command to verify directory structure matches spec",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 15,
+      "description": "README.md documents: architecture diagram (component tree), development setup (`npm install`, `npm run dev`, `npm run build`, `npm test`), technology choices with rationale, environment requirements (Node 18+), and contribution guidelines for Phase 2 developers",
+      "verifyMethod": "Manual review: README contains all 5 sections; `npm run dev` succeeds following only README instructions on a clean clone",
+      "source": "IMPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.232Z"
+}

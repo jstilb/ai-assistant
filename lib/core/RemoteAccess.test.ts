@@ -13,16 +13,20 @@ const opts = { secretPrefix: "svc", bindEnv: "SVC_BIND", tokenEnv: "SVC_TOKEN" }
 
 describe("resolveRemoteAccess", () => {
   test("defaults to loopback with auth off", () => {
-    expect(resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_token: "t" }) }))
-      .toEqual({ bind: "127.0.0.1", token: null });
+    expect(resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_token: "t" }) })).toEqual({
+      bind: "127.0.0.1",
+      token: null,
+    });
   });
   test("secrets bind activates secrets token", () => {
-    expect(resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_bind: "0.0.0.0", svc_token: "t" }) }))
-      .toEqual({ bind: "0.0.0.0", token: "t" });
+    expect(
+      resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_bind: "0.0.0.0", svc_token: "t" }) }),
+    ).toEqual({ bind: "0.0.0.0", token: "t" });
   });
   test("non-loopback bind without a token throws", () => {
-    expect(() => resolveRemoteAccess({ ...opts, env: { SVC_BIND: "0.0.0.0" }, secretsPath: secrets({}) }))
-      .toThrow(/requires a token/);
+    expect(() => resolveRemoteAccess({ ...opts, env: { SVC_BIND: "0.0.0.0" }, secretsPath: secrets({}) })).toThrow(
+      /requires a token/,
+    );
   });
   test("env token enforces auth on loopback", () => {
     expect(resolveRemoteAccess({ ...opts, env: { SVC_TOKEN: "e" }, secretsPath: secrets({}) }).token).toBe("e");

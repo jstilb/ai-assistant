@@ -16,8 +16,8 @@
  * how to spawn one process, enforce one timeout, and classify one result.
  */
 
-import { classifyFailure, type FailureClass } from './FailureClassifier';
-import { sleptDuringWindow } from '../core/SleepWindow';
+import { classifyFailure, type FailureClass } from "./FailureClassifier.ts";
+import { sleptDuringWindow } from "../core/SleepWindow.ts";
 
 export interface SpawnJobOptions {
   /** Full argv, e.g. [claudeBin, '-p', prompt, ...] or [command, ...args]. */
@@ -132,8 +132,8 @@ export async function spawnJob(options: SpawnJobOptions): Promise<SpawnJobResult
   const startMs = Date.now();
   const proc = Bun.spawn(spawnArgs, {
     cwd,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    stdout: "pipe",
+    stderr: "pipe",
     detached: true,
     env,
   });
@@ -144,10 +144,18 @@ export async function spawnJob(options: SpawnJobOptions): Promise<SpawnJobResult
     timedOut = true;
     onTimeout?.();
     // Kill entire process group (PGID == proc.pid because detached: true)
-    try { process.kill(-proc.pid!, 'SIGTERM') } catch (_e) { /* ESRCH = already gone */ }
+    try {
+      process.kill(-proc.pid!, "SIGTERM");
+    } catch (_e) {
+      /* ESRCH = already gone */
+    }
     // Grace period, then SIGKILL the group
-    await new Promise(r => setTimeout(r, 5000));
-    try { process.kill(-proc.pid!, 'SIGKILL') } catch (_e) { /* ESRCH = already gone */ }
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      process.kill(-proc.pid!, "SIGKILL");
+    } catch (_e) {
+      /* ESRCH = already gone */
+    }
   }, timeout);
 
   const exitCode = await proc.exited;

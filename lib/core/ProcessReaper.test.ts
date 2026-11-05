@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, afterEach } from "bun:test";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "fs";
-import { spawnSync } from "child_process";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   AGENT_RUN_ENV_KEY,
@@ -36,6 +36,21 @@ function sleepPids(secs: number): number[] {
   return res.stdout.split("\n").filter(Boolean).map(Number);
 }
 
+/**
+ * The backgrounded subshell forks `sleep` after the parent shell has already
+ * exited, so a single pgrep right after spawnSync can run before the fork
+ * (seen on Linux). Poll until the process shows up, up to 3 s.
+ */
+function waitForSleepPids(secs: number): number[] {
+  const deadline = Date.now() + 3000;
+  let pids = sleepPids(secs);
+  while (pids.length === 0 && Date.now() < deadline) {
+    Bun.sleepSync(25);
+    pids = sleepPids(secs);
+  }
+  return pids;
+}
+
 const cleanup: Array<() => void> = [];
 afterEach(() => {
   while (cleanup.length) cleanup.pop()!();
@@ -58,9 +73,17 @@ function startOrphanBun(tag: string, opts: { env: Record<string, string>; cwd: s
   Bun.sleepSync(200);
   const res = spawnSync("pgrep", ["-f", tag], { encoding: "utf-8" });
   const pids = res.stdout.split("\n").filter(Boolean).map(Number);
-  cleanup.push(() => pids.forEach(p => { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } }));
+  cleanup.push(() =>
+    pids.forEach((p) => {
+      try {
+        process.kill(p, "SIGKILL");
+      } catch {
+        /* gone */
+      }
+    }),
+  );
   expect(pids.length).toBe(1);
-  return pids[0];
+  return pids[0]!;
 }
 
 describe("findAgentRunPids", () => {
@@ -105,7 +128,10 @@ describe("terminatePids", () => {
 
   it("never signals protected pids or pid 1", () => {
     const sent: number[] = [];
-    const killFn = (pid: number) => { sent.push(pid); throw Object.assign(new Error("ESRCH"), { code: "ESRCH" }); };
+    const killFn = (pid: number) => {
+      sent.push(pid);
+      throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
+    };
     terminatePids([1, 42, 43], { killFn, sleepFn: () => {}, protectedPids: [42] });
     expect(sent).toEqual([43]);
   });
@@ -115,19 +141,36 @@ describe("real processes", () => {
   it("the incident pattern: `cd … && cmd &` + kill $! misses the real process", () => {
     const dir = tempDir();
     const pidFile = join(dir, "srv.pid");
-    spawnSync("bash", ["-c", `cd ${dir} && sleep 7301 > /dev/null 2>&1 &\necho $! > ${pidFile}`]);
-    const pids = sleepPids(7301);
-    cleanup.push(() => pids.forEach(p => { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } }));
+    spawnSync("bash", ["-c", `cd ${dir} && sleep 7301 > /dev/null 2>&1 &\necho $! > ${pidFile}`], {
+      // stdio "ignore": on Linux, Bun's spawnSync waits for pipe EOF, and the
+      // backgrounded subshell holds the inherited pipes until `sleep` ends,
+      // so piped stdio would block until the test timeout.
+      stdio: "ignore",
+    });
+    const pids = waitForSleepPids(7301);
+    cleanup.push(() =>
+      pids.forEach((p) => {
+        try {
+          process.kill(p, "SIGKILL");
+        } catch {
+          /* gone */
+        }
+      }),
+    );
     const bang = Number(readFileSync(pidFile, "utf-8").trim());
-    try { process.kill(bang, "SIGTERM"); } catch { /* subshell may be gone */ }
+    try {
+      process.kill(bang, "SIGTERM");
+    } catch {
+      /* subshell may be gone */
+    }
     expect(pids.length).toBe(1);
     expect(pids[0]).not.toBe(bang); // $! named the subshell, not sleep
     Bun.sleepSync(200);
-    expect(alive(pids[0])).toBe(true); // so the "kill" left the real process running
+    expect(alive(pids[0]!)).toBe(true); // so the "kill" left the real process running
 
     // The cwd sweep the executor runs before removing a worktree ends it.
-    expect(reapProcessesInDir(dir, { graceMs: 2000 })).toEqual([pids[0]]);
-    expect(alive(pids[0])).toBe(false);
+    expect(reapProcessesInDir(dir, { graceMs: 2000 })).toEqual([pids[0]!]);
+    expect(alive(pids[0]!)).toBe(false);
   });
 
   it("reapAgentRun ends an orphan that inherited the run marker, and only that one", () => {
@@ -135,7 +178,10 @@ describe("real processes", () => {
     const runId = crypto.randomUUID();
     const PATH = process.env.PATH ?? "/bin:/usr/bin";
     const marked = startOrphanBun(`reaper-marked-${runId}`, { env: { PATH, [AGENT_RUN_ENV_KEY]: runId }, cwd: dir });
-    const other = startOrphanBun(`reaper-other-${runId}`, { env: { PATH, [AGENT_RUN_ENV_KEY]: "someone-else" }, cwd: dir });
+    const other = startOrphanBun(`reaper-other-${runId}`, {
+      env: { PATH, [AGENT_RUN_ENV_KEY]: "someone-else" },
+      cwd: dir,
+    });
 
     expect(reapAgentRun(runId)).toEqual([marked]);
     expect(alive(marked)).toBe(false);

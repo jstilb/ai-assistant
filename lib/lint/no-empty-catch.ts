@@ -50,14 +50,14 @@
  * Used by pre-commit (bin/lint-empty-catch-staged.sh).
  */
 
-import { execSync } from 'child_process';
+import { execSync } from "node:child_process";
 
 export interface LintResult {
   errors: string[];
   warnings: string[];
 }
 
-const TEST_PATTERN = /\.(test|spec)\.(ts|tsx)$|__tests__\//;
+const TEST_PATTERN = /\.(test|spec|e2e)\.(ts|tsx)$|__tests__\//;
 const SCOPE_PATTERN = /^(hooks|lib)\//;
 const SILENT_MARKER = /intentionally silent/i;
 
@@ -69,16 +69,19 @@ function isExempt(relativePath: string): boolean {
   // Only TypeScript sources can contain a real catch block — prose/docs files
   // with catch-shaped example text must never be flagged (verifier-found
   // false positive: a .md staged alongside a real .ts change was scanned).
-  if (!relativePath.endsWith('.ts')) return true;
+  if (!relativePath.endsWith(".ts")) return true;
   if (!SCOPE_PATTERN.test(relativePath)) return true;
   if (TEST_PATTERN.test(relativePath)) return true;
-  if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) return true;
-  if (relativePath.includes('lib/lint/')) return true; // this rule's own source
+  if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) return true;
+  if (relativePath.includes("lib/lint/")) return true; // this rule's own source
   return false;
 }
 
 function isEmptyOrCommentOnlyBody(body: string): boolean {
-  const stripped = body.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+  const stripped = body
+    .replace(/\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
   return stripped.length === 0;
 }
 
@@ -90,15 +93,15 @@ function isEmptyOrCommentOnlyBody(body: string): boolean {
  */
 function findViolatingCatchOffsets(addedText: string): number[] {
   const offsets: number[] = [];
-  let match: RegExpExecArray | null;
   CATCH_OPEN.lastIndex = 0;
-  while ((match = CATCH_OPEN.exec(addedText))) {
-    const braceStart = match.index + match[0].length - 1;
+  for (const match of addedText.matchAll(CATCH_OPEN)) {
+    const matchIndex = match.index ?? 0;
+    const braceStart = matchIndex + match[0].length - 1;
     let depth = 1;
     let i = braceStart + 1;
     while (i < addedText.length && depth > 0) {
-      if (addedText[i] === '{') depth++;
-      else if (addedText[i] === '}') depth--;
+      if (addedText[i] === "{") depth++;
+      else if (addedText[i] === "}") depth--;
       i++;
     }
     if (depth !== 0) {
@@ -109,7 +112,7 @@ function findViolatingCatchOffsets(addedText: string): number[] {
     }
     const body = addedText.slice(braceStart + 1, i - 1);
     if (isEmptyOrCommentOnlyBody(body) && !SILENT_MARKER.test(body)) {
-      const lineOffset = addedText.slice(0, match.index).split('\n').length - 1;
+      const lineOffset = addedText.slice(0, matchIndex).split("\n").length - 1;
       offsets.push(lineOffset);
     }
   }
@@ -138,11 +141,14 @@ export async function checkNoEmptyCatchStaged(rootDir: string = process.cwd()): 
 
   let diffOutput: string;
   try {
-    diffOutput = execSync(
-      'git diff --cached -U0 --diff-filter=ACMR --no-color -- "hooks" "lib"',
-      { encoding: 'utf-8', cwd: rootDir, maxBuffer: 32 * 1024 * 1024 },
-    );
-  } catch {
+    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "hooks" "lib"', {
+      encoding: "utf-8",
+      cwd: rootDir,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (err) {
+    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
+    warnings.push(`no-empty-catch: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`);
     return { errors, warnings };
   }
 
@@ -159,43 +165,43 @@ export async function checkNoEmptyCatchStaged(rootDir: string = process.cwd()): 
       hunkLineNums = [];
       return;
     }
-    const addedText = hunkLines.join('\n');
+    const addedText = hunkLines.join("\n");
     const offsets = findViolatingCatchOffsets(addedText);
     for (const offset of offsets) {
       const lineNum = hunkLineNums[offset] ?? hunkLineNums[hunkLineNums.length - 1];
-      errors.push(violationMessage(currentFile, lineNum));
+      errors.push(violationMessage(currentFile, lineNum ?? 0));
     }
     hunkLines = [];
     hunkLineNums = [];
   };
 
-  for (const rawLine of diffOutput.split('\n')) {
-    if (rawLine.startsWith('+++ b/')) {
+  for (const rawLine of diffOutput.split("\n")) {
+    if (rawLine.startsWith("+++ b/")) {
       flushHunk();
       currentFile = rawLine.slice(6);
       currentFileExempt = isExempt(currentFile);
       continue;
     }
-    if (rawLine.startsWith('--- ')) continue;
-    if (rawLine.startsWith('diff ') || rawLine.startsWith('index ')) {
+    if (rawLine.startsWith("--- ")) continue;
+    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
       flushHunk();
       currentFile = null;
       currentFileExempt = false;
       continue;
     }
-    if (rawLine.startsWith('@@')) {
+    if (rawLine.startsWith("@@")) {
       flushHunk();
       const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      newLineNum = match ? parseInt(match[1], 10) : 0;
+      newLineNum = parseInt(match?.[1] ?? "0", 10);
       continue;
     }
     if (!currentFile || currentFileExempt) continue;
 
-    if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
       hunkLines.push(rawLine.slice(1));
       hunkLineNums.push(newLineNum);
       newLineNum++;
-    } else if (!rawLine.startsWith('-')) {
+    } else if (!rawLine.startsWith("-")) {
       // Context line inside a -U0 diff shouldn't normally occur, but handle
       // defensively: it breaks contiguity of the added-lines run for THIS
       // hunk's brace matching, so flush what we have so far.

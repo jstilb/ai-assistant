@@ -29,29 +29,21 @@
  *   bun lib/agents/ChromeBackupAgent.ts restore
  */
 
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
-import { z } from 'zod';
-import { kayaHomePath } from '../core/KayaHome.ts';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { z } from "zod";
+import { kayaHomePath } from "../core/KayaHome.ts";
 
 const MAX_CHROME_BACKUPS = 3;
 const CHROME_KILL_PATTERN = /pkill.*Chrome|kill.*Chrome|killall.*Chrome/i;
 
 function defaultChromeProfileDir(): string {
-  return join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Default');
+  return join(homedir(), "Library", "Application Support", "Google", "Chrome", "Default");
 }
 
 function chromeBackupDir(): string {
-  return kayaHomePath('backups', 'chrome');
+  return kayaHomePath("backups", "chrome");
 }
 
 /** Schema for the subset of Chrome's Secure Preferences we read on restore. */
@@ -89,28 +81,30 @@ export function isChromeKillCommand(command: string): boolean {
   return CHROME_KILL_PATTERN.test(command);
 }
 
-export function backupChromeState(
-  profileDir: string = defaultChromeProfileDir(),
-): { success: boolean; path?: string; error?: string } {
+export function backupChromeState(profileDir: string = defaultChromeProfileDir()): {
+  success: boolean;
+  path?: string;
+  error?: string;
+} {
   try {
-    const prefsPath = join(profileDir, 'Preferences');
-    const securePrefsPath = join(profileDir, 'Secure Preferences');
+    const prefsPath = join(profileDir, "Preferences");
+    const securePrefsPath = join(profileDir, "Secure Preferences");
 
     if (!existsSync(prefsPath) || !existsSync(securePrefsPath)) {
-      return { success: false, error: 'Chrome profile files not found' };
+      return { success: false, error: "Chrome profile files not found" };
     }
 
     const backupRoot = chromeBackupDir();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupDir = join(backupRoot, timestamp);
     mkdirSync(backupDir, { recursive: true });
 
-    copyFileSync(prefsPath, join(backupDir, 'Preferences'));
-    copyFileSync(securePrefsPath, join(backupDir, 'Secure Preferences'));
+    copyFileSync(prefsPath, join(backupDir, "Preferences"));
+    copyFileSync(securePrefsPath, join(backupDir, "Secure Preferences"));
 
     if (existsSync(backupRoot)) {
       const backups = readdirSync(backupRoot)
-        .filter((d) => d !== '.DS_Store')
+        .filter((d) => d !== ".DS_Store")
         .sort();
       while (backups.length > MAX_CHROME_BACKUPS) {
         const oldest = backups.shift()!;
@@ -127,48 +121,46 @@ export function backupChromeState(
   }
 }
 
-export function restoreChromeState(
-  profileDir: string = defaultChromeProfileDir(),
-): void {
+export function restoreChromeState(profileDir: string = defaultChromeProfileDir()): void {
   const backupRoot = chromeBackupDir();
   if (!existsSync(backupRoot)) {
-    console.log('No Chrome backups found.');
+    console.log("No Chrome backups found.");
     return;
   }
 
   const backups = readdirSync(backupRoot)
-    .filter((d) => d !== '.DS_Store')
+    .filter((d) => d !== ".DS_Store")
     .sort();
 
   if (backups.length === 0) {
-    console.log('No Chrome backups found.');
+    console.log("No Chrome backups found.");
     return;
   }
 
   const latest = backups[backups.length - 1];
+  if (!latest) {
+    console.log("No Chrome backups found.");
+    return;
+  }
   const backupDir = join(backupRoot, latest);
-  const backupSecurePrefsPath = join(backupDir, 'Secure Preferences');
-  const currentPrefsPath = join(profileDir, 'Preferences');
+  const backupSecurePrefsPath = join(backupDir, "Secure Preferences");
+  const currentPrefsPath = join(profileDir, "Preferences");
 
   if (!existsSync(backupSecurePrefsPath) || !existsSync(currentPrefsPath)) {
-    console.log('Backup or current Preferences file missing.');
+    console.log("Backup or current Preferences file missing.");
     return;
   }
 
   try {
-    const backupSecure = SecurePreferencesShape.parse(
-      JSON.parse(readFileSync(backupSecurePrefsPath, 'utf-8')),
-    );
+    const backupSecure = SecurePreferencesShape.parse(JSON.parse(readFileSync(backupSecurePrefsPath, "utf-8")));
     const extensionsSettings = backupSecure.extensions?.settings;
 
     if (!extensionsSettings || Object.keys(extensionsSettings).length === 0) {
-      console.log('No extensions.settings found in backup Secure Preferences.');
+      console.log("No extensions.settings found in backup Secure Preferences.");
       return;
     }
 
-    const currentPrefs: Preferences = PreferencesShape.parse(
-      JSON.parse(readFileSync(currentPrefsPath, 'utf-8')),
-    );
+    const currentPrefs: Preferences = PreferencesShape.parse(JSON.parse(readFileSync(currentPrefsPath, "utf-8")));
 
     if (!currentPrefs.extensions) {
       currentPrefs.extensions = {};
@@ -176,7 +168,7 @@ export function restoreChromeState(
     currentPrefs.extensions.settings = extensionsSettings;
 
     if (currentPrefs.profile) {
-      currentPrefs.profile.exit_type = 'Normal';
+      currentPrefs.profile.exit_type = "Normal";
       currentPrefs.profile.exited_cleanly = true;
     }
 
@@ -195,16 +187,16 @@ export function restoreChromeState(
 if (import.meta.main) {
   const cmd = process.argv[2];
   switch (cmd) {
-    case 'backup': {
+    case "backup": {
       const result = backupChromeState();
       process.exit(result.success ? 0 : 1);
       break;
     }
-    case 'restore':
+    case "restore":
       restoreChromeState();
       break;
     default:
-      console.error('Usage: bun lib/agents/ChromeBackupAgent.ts <backup|restore>');
+      console.error("Usage: bun lib/agents/ChromeBackupAgent.ts <backup|restore>");
       process.exit(2);
   }
 }

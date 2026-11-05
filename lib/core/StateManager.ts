@@ -55,8 +55,19 @@
  */
 
 import { z } from "zod";
-import { join, dirname, basename } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch as fsWatch, unlinkSync, openSync, writeSync, closeSync } from "fs";
+import { join, dirname, basename } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  openSync,
+  writeSync,
+  closeSync,
+} from "node:fs";
 
 // ============================================
 // TYPES
@@ -167,12 +178,12 @@ class FileLock {
       let acquired = false;
       try {
         // openSync with 'wx' flag = O_WRONLY|O_CREAT|O_EXCL — fails atomically if exists
-        const fd = openSync(this.lockPath, 'wx');
+        const fd = openSync(this.lockPath, "wx");
         writeSync(fd, String(Date.now()));
         closeSync(fd);
         acquired = true;
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
           // Unexpected error (e.g., EACCES, ENOENT for parent dir) — rethrow
           throw new Error(`Lock file error: ${(err as Error).message}`);
         }
@@ -186,12 +197,16 @@ class FileLock {
 
       // Lock exists: check if stale
       try {
-        const lockContent = readFileSync(this.lockPath, 'utf-8');
+        const lockContent = readFileSync(this.lockPath, "utf-8");
         const lockTime = parseInt(lockContent, 10);
-        if (!isNaN(lockTime) && Date.now() - lockTime > this.timeout * 2) {
+        if (!Number.isNaN(lockTime) && Date.now() - lockTime > this.timeout * 2) {
           // Stale lock — attempt removal. Another process may race us here;
           // if unlink succeeds, we loop back and try to acquire atomically.
-          try { unlinkSync(this.lockPath); } catch { /* another process removed it */ }
+          try {
+            unlinkSync(this.lockPath);
+          } catch {
+            /* another process removed it */
+          }
         }
       } catch {
         // Lock file disappeared between our EEXIST error and this read — loop
@@ -274,9 +289,7 @@ class StateManagerImpl<T> implements StateManager<T> {
   }
 
   private getDefaults(): T {
-    return typeof this.defaults === "function"
-      ? (this.defaults as () => T)()
-      : deepClone(this.defaults);
+    return typeof this.defaults === "function" ? (this.defaults as () => T)() : deepClone(this.defaults);
   }
 
   async load(): Promise<T> {
@@ -358,12 +371,8 @@ class StateManagerImpl<T> implements StateManager<T> {
       const current = await this.loadUnlocked();
 
       // Transform
-      let newState: T;
-      try {
-        newState = await fn(current);
-      } catch (e) {
-        throw e; // Don't save if transform fails
-      }
+      // If the transform throws, nothing is saved (the error propagates).
+      const newState = await fn(current);
 
       // Validate and save
       const result = this.schema.safeParse(newState);
@@ -408,20 +417,16 @@ class StateManagerImpl<T> implements StateManager<T> {
       const original = await this.loadUnlocked();
       const workingCopy = deepClone(original);
 
-      let result: R;
-      try {
-        result = await fn(workingCopy);
-      } catch (e) {
-        // Transaction failed - don't save (rollback)
-        throw e;
-      }
+      // If fn throws, the transaction is rolled back: nothing below runs, nothing is saved.
+      const result = await fn(workingCopy);
 
       // Save if result is an object that could be state
       if (result !== null && result !== undefined && typeof result === "object" && !Array.isArray(result)) {
         const resultValidation = this.schema.safeParse(result);
         if (resultValidation.success) {
           // Result is valid state — save it
-          const stateToSave = { ...result } as T & { _version?: number; lastUpdated?: string };
+          // safeParse above confirmed `result` matches the state schema T.
+          const stateToSave = { ...result } as unknown as T & { _version?: number; lastUpdated?: string };
           if (this.version !== undefined) {
             stateToSave._version = this.version;
           }
@@ -441,9 +446,9 @@ class StateManagerImpl<T> implements StateManager<T> {
           // Throw explicitly so callers know the write did not happen.
           throw new Error(
             `transaction() result failed schema validation and was not saved. ` +
-            `Validation error: ${resultValidation.error.message}. ` +
-            `If your transaction intentionally returns a non-state value, ensure it is a primitive, ` +
-            `array, or null rather than an object with the same shape as state.`
+              `Validation error: ${resultValidation.error.message}. ` +
+              `If your transaction intentionally returns a non-state value, ensure it is a primitive, ` +
+              `array, or null rather than an object with the same shape as state.`,
           );
         }
       }
@@ -502,18 +507,26 @@ class StateManagerImpl<T> implements StateManager<T> {
     }
 
     const backupFiles = allFiles
-      .filter(f => backupPattern.test(f))
-      .map(f => {
+      .filter((f) => backupPattern.test(f))
+      .map((f) => {
         const fullPath = join(this.backupDir, f);
         let mtime = 0;
-        try { mtime = statSync(fullPath).mtime.getTime(); } catch { /* ignore */ }
+        try {
+          mtime = statSync(fullPath).mtime.getTime();
+        } catch {
+          /* intentionally silent: file vanished; mtime 0 sorts it oldest */
+        }
         return { name: f, path: fullPath, mtime };
       })
       .sort((a, b) => b.mtime - a.mtime); // newest first
 
     const toDelete = backupFiles.slice(this.maxBackups);
     for (const file of toDelete) {
-      try { unlinkSync(file.path); } catch { /* ignore race — another process may have removed it */ }
+      try {
+        unlinkSync(file.path);
+      } catch {
+        /* ignore race — another process may have removed it */
+      }
     }
   }
 
@@ -532,7 +545,11 @@ class StateManagerImpl<T> implements StateManager<T> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
-    } catch {
+    } catch (err) {
+      // Corrupt JSON falls back to defaults (the next save replaces it), but say so on stderr.
+      console.error(
+        `StateManager: ${this.path} is not valid JSON, using defaults: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return this.getDefaults();
     }
 
@@ -616,7 +633,7 @@ async function runSelfTest(): Promise<void> {
 
   // Setup
   if (existsSync(TEST_DIR)) {
-    const fs = await import("fs");
+    const fs = await import("node:fs");
     fs.rmSync(TEST_DIR, { recursive: true });
   }
   mkdirSync(TEST_DIR, { recursive: true });
@@ -714,7 +731,7 @@ async function runSelfTest(): Promise<void> {
   });
 
   // Cleanup
-  const fs = await import("fs");
+  const fs = await import("node:fs");
   fs.rmSync(TEST_DIR, { recursive: true });
 
   // Summary

@@ -35,7 +35,7 @@
  * a production prompt as a worked example).
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ export const LearningItemSchema = z.object({
   /** One-sentence-to-short-paragraph description of what was learned/resolved. */
   summary: z.string().min(1),
   /** SYSTEM = tooling/infra/hook/build/deploy/config/environment. ALGORITHM = task-execution approach/reasoning/methodology. */
-  category: z.enum(['SYSTEM', 'ALGORITHM']),
+  category: z.enum(["SYSTEM", "ALGORITHM"]),
   /** The concrete evidence/quote/detail from the source text that grounds the judgment. */
   evidence: z.string(),
 });
@@ -54,8 +54,7 @@ export type LearningItem = z.infer<typeof LearningItemSchema>;
  * (see "(c)" in the file docblock above). Shared here so the value itself
  * — not just the shape — stays identical across writers that use it.
  */
-export const UNCATEGORIZED = 'UNCATEGORIZED' as const;
-export type LearningCategoryOrUncategorized = LearningItem['category'] | typeof UNCATEGORIZED;
+export const UNCATEGORIZED = "UNCATEGORIZED" as const;
 
 // ── Shared judgment criteria (embed into any prompt that extracts learnings) ──
 

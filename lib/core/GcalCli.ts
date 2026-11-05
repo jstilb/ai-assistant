@@ -41,8 +41,8 @@
  * it defaults to "unknown" but new call sites should always set it.
  */
 
-import { execFileSync } from "child_process";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 import { logCalendarWrite } from "./CalendarWriteLog.ts";
 
@@ -172,7 +172,7 @@ export function addEvent(opts: AddEventOptions): void {
     runGcal(buildAddEventArgs(opts), opts);
     logCalendarWrite(
       { target: opts.calendar, caller: opts.caller ?? "unknown", title: opts.title, outcome: "success" },
-      { logPath: opts.logPath }
+      { logPath: opts.logPath },
     );
   } catch (err) {
     logCalendarWrite(
@@ -182,7 +182,7 @@ export function addEvent(opts: AddEventOptions): void {
         title: opts.title,
         outcome: `error:${err instanceof Error ? err.message.slice(0, 200) : String(err)}`,
       },
-      { logPath: opts.logPath }
+      { logPath: opts.logPath },
     );
     throw err;
   }
@@ -229,7 +229,7 @@ export function deleteEvent(opts: DeleteEventOptions): void {
     runGcal(buildDeleteEventArgs(opts), opts);
     logCalendarWrite(
       { target: opts.calendar, caller: opts.caller ?? "unknown", title: opts.text, outcome: "success" },
-      { logPath: opts.logPath }
+      { logPath: opts.logPath },
     );
   } catch (err) {
     logCalendarWrite(
@@ -239,7 +239,7 @@ export function deleteEvent(opts: DeleteEventOptions): void {
         title: opts.text,
         outcome: `error:${err instanceof Error ? err.message.slice(0, 200) : String(err)}`,
       },
-      { logPath: opts.logPath }
+      { logPath: opts.logPath },
     );
     throw err;
   }

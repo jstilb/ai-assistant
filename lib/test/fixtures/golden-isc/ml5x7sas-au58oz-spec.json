@@ -1,0 +1,56 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/ml5x7sas-au58oz-spec.md",
+  "layoutNote": "4-col Layout A (21 rows)",
+  "rowCount": 12,
+  "rows": [
+    {
+      "number": 100,
+      "description": "`GraphBuilder.ts --rebuild` parses all 520 notes and constructs valid node/edge graph in under 60 seconds"
+    },
+    {
+      "number": 101,
+      "description": "`GraphBuilder.ts --stats` reports accurate node count, edge count, orphan count, most/least connected notes"
+    },
+    {
+      "number": 102,
+      "description": "Semantic search for \"machine learning optimization\" returns relevant notes from multiple folders (Data Science, Applied ML, ML at Scale)"
+    },
+    {
+      "number": 103,
+      "description": "Concept clustering identifies at least 5 distinct knowledge domains matching the vault's topic structure"
+    },
+    {
+      "number": 104,
+      "description": "Gap detector correctly identifies broken links, orphan notes, and stub notes"
+    },
+    {
+      "number": 105,
+      "description": "\"What do I know about transformers?\" returns a structured response with relevant notes, their connections, and a concept summary"
+    },
+    {
+      "number": 106,
+      "description": "\"How does NLP connect to my Writing notes?\" traces paths through the graph and explains bridge concepts"
+    },
+    {
+      "number": 107,
+      "description": "\"Where are my knowledge gaps?\" produces a prioritized list with TELOS-aligned suggestions"
+    },
+    {
+      "number": 108,
+      "description": "Tag navigation shows all tags with counts and co-occurrence patterns"
+    },
+    {
+      "number": 109,
+      "description": "Graph insights persist in PAI memory and are available in subsequent sessions"
+    },
+    {
+      "number": 110,
+      "description": "All outputs are text-based, concept-first, and structured (no reliance on visual graph rendering)"
+    },
+    {
+      "number": 111,
+      "description": "Skill integrates cleanly with InformationManager (uses existing `_Context.md` files, respects `config/obsidian.json`)"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.234Z"
+}

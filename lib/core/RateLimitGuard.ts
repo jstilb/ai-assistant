@@ -23,7 +23,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { parseArgs } from "util";
+import { parseArgs } from "node:util";
 import { MEMORY, type RateLimits, type RateLimitWindow } from "./MemoryPaths.ts";
 
 // ============================================================================
@@ -31,9 +31,6 @@ import { MEMORY, type RateLimits, type RateLimitWindow } from "./MemoryPaths.ts"
 // ============================================================================
 
 type ModelTier = "sonnet" | "opus" | "haiku" | "fable";
-
-/** @deprecated Use `RateLimits` from lib/core/MemoryPaths.ts. Re-exported for back-compat. */
-type RateLimitState = RateLimits;
 
 interface ModelFallbackResult {
   model: ModelTier;
@@ -80,7 +77,8 @@ const FALLBACK_CHAIN: Record<ModelTier, ModelTier[]> = {
  */
 // "reached your <Model> limit" is the per-model-pool banner (2026-08-29:
 // "You've reached your Fable 5 limit. Switch to another model, ...").
-const RATE_LIMIT_PATTERN = /hit your (?:[a-z0-9-]+ )?limit|reached your (?:[a-z0-9.-]+ ){0,3}limit|limit\b[^.\n]{0,40}resets/i;
+const RATE_LIMIT_PATTERN =
+  /hit your (?:[a-z0-9-]+ )?limit|reached your (?:[a-z0-9.-]+ ){0,3}limit|limit\b[^.\n]{0,40}resets/i;
 
 // ============================================================================
 // Core Functions
@@ -91,7 +89,7 @@ const RATE_LIMIT_PATTERN = /hit your (?:[a-z0-9-]+ )?limit|reached your (?:[a-z0
  * Returns null if the file is missing, unreadable, or fails validation.
  * Whether a reading is current is decided per window by assessUsage().
  */
-function getRateLimitState(): RateLimitState | null {
+function getRateLimitState(): RateLimits | null {
   return MEMORY.state.rateLimits.read();
 }
 
@@ -135,14 +133,14 @@ function humanAge(ms: number): string {
  * else the file's `lastReal` (a null render never erases it). A missing reading is UNKNOWN, never 0%.
  * An old-format file (no observedAt) borrows the file's updatedAt as the observation time.
  */
-function assessUsage(state: RateLimitState | null, nowMs: number = Date.now()): UsageAssessment {
+function assessUsage(state: RateLimits | null, nowMs: number = Date.now()): UsageAssessment {
   const readings: WindowReading[] = [];
   if (state) {
     for (const window of ["fiveHour", "sevenDay"] as const) {
       const current = state[window];
       const w = current ?? state.lastReal?.[window] ?? null;
       if (!w) continue;
-      const observedAt = w.observedAt ?? (current ? state.updatedAt ?? null : null);
+      const observedAt = w.observedAt ?? (current ? (state.updatedAt ?? null) : null);
       const obsMs = observedAt ? Date.parse(observedAt) : Number.NaN;
       const ageMs = Number.isNaN(obsMs) ? null : nowMs - obsMs;
       const resetMs = Date.parse(w.resetsAt);
@@ -150,11 +148,21 @@ function assessUsage(state: RateLimitState | null, nowMs: number = Date.now()): 
       if (ageMs === null) staleWhy = "no usable observation time";
       else if (ageMs > MAX_STALE_MS) staleWhy = `observed ${humanAge(ageMs)} ago`;
       else if (!Number.isNaN(resetMs) && resetMs <= nowMs) staleWhy = `its window reset at ${w.resetsAt}`;
-      readings.push({ window, usedPercentage: w.usedPercentage, resetsAt: w.resetsAt, observedAt, ageMs, fresh: staleWhy === null, staleWhy });
+      readings.push({
+        window,
+        usedPercentage: w.usedPercentage,
+        resetsAt: w.resetsAt,
+        observedAt,
+        ageMs,
+        fresh: staleWhy === null,
+        staleWhy,
+      });
     }
   }
   const fresh = readings.filter((r) => r.fresh);
-  const times = readings.map((r) => (r.observedAt ? Date.parse(r.observedAt) : Number.NaN)).filter((t) => !Number.isNaN(t));
+  const times = readings
+    .map((r) => (r.observedAt ? Date.parse(r.observedAt) : Number.NaN))
+    .filter((t) => !Number.isNaN(t));
   return {
     known: fresh.length > 0,
     peak: fresh.length > 0 ? Math.max(...fresh.map((r) => r.usedPercentage)) : null,
@@ -171,7 +179,8 @@ function describeGaps(a: UsageAssessment): string {
   if (a.readings.length === 0) {
     // The accessor returns null for a missing file AND for a corrupt/invalid one; say which. Both stay "unknown" (fail-safe).
     const path = MEMORY.state.rateLimits.path();
-    if (existsSync(path) && MEMORY.state.rateLimits.read() === null) return `rate-limits.json could not be read or parsed (${path})`;
+    if (existsSync(path) && MEMORY.state.rateLimits.read() === null)
+      return `rate-limits.json could not be read or parsed (${path})`;
     return "no statusline reading has ever been recorded";
   }
   const parts = stale.map((r) => `${WINDOW_LABEL[r.window]} ${r.usedPercentage}% is stale (${r.staleWhy})`);
@@ -183,7 +192,7 @@ function describeGaps(a: UsageAssessment): string {
  * Returns 0 if usage is unknown. That 0 means UNKNOWN, not "0% used" — callers that must tell the two apart
  * use assessUsage().known / .peak. Kept for back-compat.
  */
-function getPeakUsage(state: RateLimitState | null): number {
+function getPeakUsage(state: RateLimits | null): number {
   return assessUsage(state).peak ?? 0;
 }
 
@@ -202,7 +211,7 @@ function isRateLimited(threshold: number = DEFAULT_THRESHOLD): boolean {
  */
 function getFallbackModel(current: ModelTier): ModelTier | null {
   const chain = FALLBACK_CHAIN[current];
-  return chain.length > 0 ? chain[0] : null;
+  return chain[0] ?? null;
 }
 
 /**
@@ -213,10 +222,7 @@ function getFallbackModel(current: ModelTier): ModelTier | null {
  * not per-model, so this is best-effort — the real safety net is
  * post-spawn detection via isRateLimitError().
  */
-function resolveModel(
-  preferred: ModelTier,
-  threshold: number = DEFAULT_THRESHOLD,
-): ModelFallbackResult {
+function resolveModel(preferred: ModelTier, threshold: number = DEFAULT_THRESHOLD): ModelFallbackResult {
   const usage = assessUsage(getRateLimitState());
   const peak = usage.peak;
 
@@ -279,7 +285,7 @@ function isRateLimitError(output: string): boolean {
  */
 function extractResetInfo(output: string): string | null {
   const match = output.match(/resets\s+(.+?)(?:\s*\(|$)/i);
-  return match ? match[1].trim() : null;
+  return match?.[1]?.trim() ?? null;
 }
 
 // ============================================================================
@@ -324,16 +330,22 @@ OPTIONS:
       console.log(JSON.stringify({ available: false, reason: "No rate limit file, or it failed validation" }));
     } else {
       const usage = assessUsage(state);
-      console.log(JSON.stringify({
-        available: usage.known,
-        known: usage.known,
-        peakUsage: getPeakUsage(state),
-        peak: usage.peak,
-        isLimited: isRateLimited(),
-        ...(usage.known ? {} : { reason: `usage unknown: ${describeGaps(usage)}` }),
-        readings: usage.readings,
-        ...state,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            available: usage.known,
+            known: usage.known,
+            peakUsage: getPeakUsage(state),
+            peak: usage.peak,
+            isLimited: isRateLimited(),
+            ...(usage.known ? {} : { reason: `usage unknown: ${describeGaps(usage)}` }),
+            readings: usage.readings,
+            ...state,
+          },
+          null,
+          2,
+        ),
+      );
     }
     return;
   }
@@ -384,7 +396,6 @@ export {
   FALLBACK_CHAIN,
   DEFAULT_THRESHOLD,
   type ModelTier,
-  type RateLimitState,
   type RateLimitWindow,
   type ModelFallbackResult,
   type UsageAssessment,

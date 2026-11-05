@@ -40,7 +40,7 @@
  *   - email: Gmail MCP (future)
  *
  * NOTE: the 'voice' channel (local ElevenLabs voice server, localhost:8888,
- * launchd com.pai.voice-server) was REMOVED on 2026-09-29 at Jm's decision.
+ * launchd com.kaya.voice-server) was REMOVED on 2026-09-29 at Jm's decision.
  * It used to be the default, so a notify() with no channel was spoken aloud
  * in the terminal. That default is now 'log': ambient progress chatter
  * ("Task added: ...", "Running content pipeline...") is recorded, not pushed
@@ -56,12 +56,12 @@
  * ============================================================================
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { kayaHomePath, assertNotLiveHomeUnderTest } from './KayaHome';
-import { loadSettings as loadCanonicalSettings } from './ConfigLoader';
-import { createAppendLog } from './AppendLog.ts';
-import { recordOutboundFromTelegramResponse, isTelegramPushEnabled } from './TelegramOutboundLedger.ts';
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { kayaHomePath, assertNotLiveHomeUnderTest } from "./KayaHome.ts";
+import { loadSettings as loadCanonicalSettings } from "./ConfigLoader.ts";
+import { createAppendLog } from "./AppendLog.ts";
+import { recordOutboundFromTelegramResponse, isTelegramPushEnabled } from "./TelegramOutboundLedger.ts";
 
 // ============================================================================
 // Types
@@ -70,12 +70,12 @@ import { recordOutboundFromTelegramResponse, isTelegramPushEnabled } from './Tel
 /**
  * Notification channel types
  */
-export type NotificationChannel = 'log' | 'discord' | 'email' | 'telegram';
+export type NotificationChannel = "log" | "discord" | "email" | "telegram";
 
 /**
  * Priority levels affecting routing and display
  */
-export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
+export type NotificationPriority = "low" | "normal" | "high" | "critical";
 
 /**
  * Options for individual notifications
@@ -171,11 +171,13 @@ interface QueueItem {
  * silently (e.g. call-guard or discord webhook quietly reverting to
  * defaults), so it's logged loudly rather than swallowed.
  */
+// biome-ignore lint/suspicious/noExplicitAny: settings.json is untyped user JSON; call sites read nested keys defensively
 function loadSettings(): Record<string, any> {
   try {
+    // biome-ignore lint/suspicious/noExplicitAny: same untyped settings boundary as the return type
     return loadCanonicalSettings() as Record<string, any>;
   } catch (err) {
-    console.error('[NotificationService] settings load failed — notifications may be misconfigured:', err);
+    console.error("[NotificationService] settings load failed — notifications may be misconfigured:", err);
     return {};
   }
 }
@@ -189,11 +191,11 @@ function getDefaultConfig(): NotificationConfig {
   const notifications = settings.notifications || {};
 
   return {
-    discordWebhook: notifications.discord?.webhook || '',
-    defaultChannel: 'log',
+    discordWebhook: notifications.discord?.webhook || "",
+    defaultChannel: "log",
     batchWindowMs: 50,
     maxRetries: 3,
-    defaultAgentName: daidentity.name || 'Kaya',
+    defaultAgentName: daidentity.name || "Kaya",
   };
 }
 
@@ -201,17 +203,17 @@ function getDefaultConfig(): NotificationConfig {
  * Log notification event
  */
 function logNotification(
-  event: 'sent' | 'failed' | 'queued' | 'retried' | 'suppressed',
+  event: "sent" | "failed" | "queued" | "retried" | "suppressed",
   channel: string,
   message: string,
-  error?: string
+  error?: string,
 ): void {
   // Hermetic guard BEFORE the try — the catch below silently swallows, so a
   // call inside the try would defeat the tripwire. Under NODE_ENV=test with an
   // unpinned (live) KAYA_HOME this throws loudly instead of polluting live state.
-  assertNotLiveHomeUnderTest('NotificationService.logNotification');
+  assertNotLiveHomeUnderTest("NotificationService.logNotification");
   try {
-    const logDir = kayaHomePath('MEMORY', 'NOTIFICATIONS');
+    const logDir = kayaHomePath("MEMORY", "NOTIFICATIONS");
     const logEntry = {
       timestamp: new Date().toISOString(),
       event,
@@ -220,13 +222,17 @@ function logNotification(
       error,
     };
 
-    const logPath = join(logDir, 'notifications.jsonl');
+    const logPath = join(logDir, "notifications.jsonl");
     // logPath is resolved via kayaHomePath() at call time, never cached (see
     // the module-level NOTE above) — the AppendLog handle is constructed per
     // call too, so it always targets whichever KAYA_HOME is active right now.
     createAppendLog(logPath).append(logEntry);
-  } catch {
-    // Silent fail - logging should never break notifications
+  } catch (err) {
+    // Logging must never break notifications, but a broken log (full disk, bad path) is
+    // reported on stderr so it is not silently lost.
+    console.error(
+      `NotificationService: cannot write notifications log: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -241,7 +247,7 @@ function sleep(ms: number): Promise<void> {
  * Calculate exponential backoff delay
  */
 function getBackoffDelay(attempt: number, baseMs = 100): number {
-  return Math.min(baseMs * Math.pow(2, attempt), 5000); // Cap at 5 seconds
+  return Math.min(baseMs * 2 ** attempt, 5000); // Cap at 5 seconds
 }
 
 // ============================================================================
@@ -252,23 +258,15 @@ function getBackoffDelay(attempt: number, baseMs = 100): number {
  * Record-only channel (the default): the notifications.jsonl entry IS the
  * delivery. Always succeeds, so it never retries, falls back, or dead-letters.
  */
-async function sendLog(
-  message: string,
-  _config: NotificationConfig,
-  _options: NotifyOptions
-): Promise<boolean> {
-  logNotification('sent', 'log', message);
+async function sendLog(message: string, _config: NotificationConfig, _options: NotifyOptions): Promise<boolean> {
+  logNotification("sent", "log", message);
   return true;
 }
 
 /**
  * Send to Discord webhook
  */
-async function sendDiscord(
-  message: string,
-  config: NotificationConfig,
-  options: NotifyOptions
-): Promise<boolean> {
+async function sendDiscord(message: string, config: NotificationConfig, options: NotifyOptions): Promise<boolean> {
   if (!config.discordWebhook) {
     return false;
   }
@@ -283,9 +281,9 @@ async function sendDiscord(
   const payload = {
     embeds: [
       {
-        title: options.agentName || config.defaultAgentName || 'Kaya',
+        title: options.agentName || config.defaultAgentName || "Kaya",
         description: message,
-        color: colorMap[options.priority || 'normal'],
+        color: colorMap[options.priority || "normal"],
         timestamp: new Date().toISOString(),
       },
     ],
@@ -297,8 +295,8 @@ async function sendDiscord(
 
   try {
     const response = await fetch(config.discordWebhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -306,16 +304,16 @@ async function sendDiscord(
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      logNotification('sent', 'discord', message);
+      logNotification("sent", "discord", message);
       return true;
     } else {
-      logNotification('failed', 'discord', message, `HTTP ${response.status}`);
+      logNotification("failed", "discord", message, `HTTP ${response.status}`);
       return false;
     }
   } catch (error) {
     clearTimeout(timeoutId);
     const errMsg = error instanceof Error ? error.message : String(error);
-    logNotification('failed', 'discord', message, errMsg);
+    logNotification("failed", "discord", message, errMsg);
     return false;
   }
 }
@@ -323,14 +321,10 @@ async function sendDiscord(
 /**
  * Send to email (placeholder - uses Gmail MCP)
  */
-async function sendEmail(
-  message: string,
-  config: NotificationConfig,
-  options: NotifyOptions
-): Promise<boolean> {
+async function sendEmail(message: string, _config: NotificationConfig, _options: NotifyOptions): Promise<boolean> {
   // Email channel requires Gmail MCP integration
   // For now, log and return false
-  logNotification('failed', 'email', message, 'Email channel not implemented');
+  logNotification("failed", "email", message, "Email channel not implemented");
   return false;
 }
 
@@ -352,9 +346,7 @@ async function sendEmail(
  * (e.g. mangles literal `.`/`-`) for legacy mode.
  */
 export function escapeLegacyMarkdown(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/[_*`[]/g, '\\$&');
+  return text.replace(/\\/g, "\\\\").replace(/[_*`[]/g, "\\$&");
 }
 
 /**
@@ -378,13 +370,13 @@ export const TELEGRAM_CHUNK_UNITS = 4000;
 export function chunkTelegramText(text: string, maxUnits: number = TELEGRAM_CHUNK_UNITS): string[] {
   if (text.length <= maxUnits) return [text];
   const chunks: string[] = [];
-  let current = '';
-  for (const line of text.split('\n')) {
+  let current = "";
+  for (const line of text.split("\n")) {
     let rest = line;
     while (rest.length > maxUnits) {
       if (current) {
         chunks.push(current);
-        current = '';
+        current = "";
       }
       let cut = maxUnits;
       const code = rest.charCodeAt(cut - 1);
@@ -392,7 +384,7 @@ export function chunkTelegramText(text: string, maxUnits: number = TELEGRAM_CHUN
       chunks.push(rest.slice(0, cut));
       rest = rest.slice(cut);
     }
-    const sep = current ? '\n' : '';
+    const sep = current ? "\n" : "";
     if (current.length + sep.length + rest.length > maxUnits) {
       chunks.push(current);
       current = rest;
@@ -411,37 +403,38 @@ async function readBodySnippet(response: Response): Promise<string> {
   try {
     return (await response.text()).slice(0, 200);
   } catch {
-    return 'body unreadable';
+    return "body unreadable";
   }
 }
 
 /**
  * Send via Telegram Bot API
  */
-async function sendTelegram(
-  message: string,
-  config: NotificationConfig,
-  options: NotifyOptions
-): Promise<boolean> {
+async function sendTelegram(message: string, config: NotificationConfig, options: NotifyOptions): Promise<boolean> {
   // Push switch off (settings.json notifications.telegramPush.enabled=false):
   // record the message and report it handled, so it does not retry, fall
   // back, dead-letter or replay later.
   if (!isTelegramPushEnabled()) {
-    logNotification('suppressed', 'telegram', message, 'notifications.telegramPush.enabled=false');
+    logNotification("suppressed", "telegram", message, "notifications.telegramPush.enabled=false");
     return true;
   }
 
-  const secretsPath = kayaHomePath('secrets.json');
+  const secretsPath = kayaHomePath("secrets.json");
   if (!existsSync(secretsPath)) {
-    logNotification('failed', 'telegram', message, 'secrets.json not found');
+    logNotification("failed", "telegram", message, "secrets.json not found");
     return false;
   }
 
   let secrets: Record<string, unknown>;
   try {
-    secrets = JSON.parse(readFileSync(secretsPath, 'utf-8'));
-  } catch {
-    logNotification('failed', 'telegram', message, 'Failed to parse secrets.json');
+    secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
+  } catch (err) {
+    logNotification(
+      "failed",
+      "telegram",
+      message,
+      `Failed to parse secrets.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return false;
   }
 
@@ -453,11 +446,11 @@ async function sendTelegram(
   const botToken = nested.bot_token || (secrets.TELEGRAM_BOT_TOKEN as string | undefined);
   const chatId = nested.chat_id || (secrets.TELEGRAM_CHAT_ID as string | undefined);
   if (!botToken || !chatId) {
-    logNotification('failed', 'telegram', message, 'telegram.bot_token/chat_id (or TELEGRAM_* fallback) missing');
+    logNotification("failed", "telegram", message, "telegram.bot_token/chat_id (or TELEGRAM_* fallback) missing");
     return false;
   }
 
-  const title = options.agentName || config.defaultAgentName || 'Kaya';
+  const title = options.agentName || config.defaultAgentName || "Kaya";
   // Plain-text variant — used only for the (now rare, defense-in-depth)
   // no-parse_mode fallback below, where nothing needs escaping.
   const text = `*${title}*\n\n${message}`;
@@ -486,7 +479,7 @@ async function sendTelegram(
         // reply to any chunk resolves its referent. Consumes the success
         // body, which nothing else reads. The ORIGINAL message (pre-escape,
         // pre-title-wrap) is what the reply-context reader should see.
-        await recordOutboundFromTelegramResponse(response, 'notification-service', message);
+        await recordOutboundFromTelegramResponse(response, "notification-service", message);
         if (i < mdChunks.length - 1) await Bun.sleep(200);
         continue;
       }
@@ -497,16 +490,31 @@ async function sendTelegram(
         // (parse_mode off: nothing to balance). Whole-message, not per-chunk:
         // plain chunk boundaries differ from escaped ones, so pairing chunk i
         // across variants would garble the reassembled message.
-        logNotification('retried', 'telegram', message, `HTTP 400 with parse_mode on chunk ${i + 1}/${mdChunks.length} (${body}) — retrying without parse_mode`);
+        logNotification(
+          "retried",
+          "telegram",
+          message,
+          `HTTP 400 with parse_mode on chunk ${i + 1}/${mdChunks.length} (${body}) — retrying without parse_mode`,
+        );
         needPlainResend = true;
         break;
       }
-      logNotification('failed', 'telegram', message, `HTTP ${response.status} on chunk ${i + 1}/${mdChunks.length} (${body})`);
+      logNotification(
+        "failed",
+        "telegram",
+        message,
+        `HTTP ${response.status} on chunk ${i + 1}/${mdChunks.length} (${body})`,
+      );
       return false;
     }
 
     if (!needPlainResend) {
-      logNotification('sent', 'telegram', message, mdChunks.length > 1 ? `Delivered in ${mdChunks.length} chunks` : undefined);
+      logNotification(
+        "sent",
+        "telegram",
+        message,
+        mdChunks.length > 1 ? `Delivered in ${mdChunks.length} chunks` : undefined,
+      );
       return true;
     }
 
@@ -514,17 +522,22 @@ async function sendTelegram(
       const response = await postTelegramMessage(botToken, chatId, plainChunks[i]!, timeout, false);
       if (!response.ok) {
         const body = await readBodySnippet(response);
-        logNotification('failed', 'telegram', message, `HTTP ${response.status} (no-parse_mode fallback, chunk ${i + 1}/${plainChunks.length}) (${body})`);
+        logNotification(
+          "failed",
+          "telegram",
+          message,
+          `HTTP ${response.status} (no-parse_mode fallback, chunk ${i + 1}/${plainChunks.length}) (${body})`,
+        );
         return false;
       }
-      await recordOutboundFromTelegramResponse(response, 'notification-service', message);
+      await recordOutboundFromTelegramResponse(response, "notification-service", message);
       if (i < plainChunks.length - 1) await Bun.sleep(200);
     }
-    logNotification('sent', 'telegram', message, 'Delivered without parse_mode after HTTP 400');
+    logNotification("sent", "telegram", message, "Delivered without parse_mode after HTTP 400");
     return true;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    logNotification('failed', 'telegram', message, errMsg);
+    logNotification("failed", "telegram", message, errMsg);
     return false;
   }
 }
@@ -550,18 +563,18 @@ async function postTelegramMessage(
   chatId: string,
   text: string,
   timeoutMs: number,
-  useParseMode: boolean
+  useParseMode: boolean,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        ...(useParseMode ? { parse_mode: 'Markdown' } : {}),
+        ...(useParseMode ? { parse_mode: "Markdown" } : {}),
       }),
       signal: controller.signal,
     });
@@ -584,6 +597,7 @@ export function createNotificationService(customConfig?: NotificationConfig): No
   // Internal state
   const queue: QueueItem[] = [];
   let batchBuffer: string[] = [];
+  let batchOptions: NotifyOptions = {};
   let batchTimeout: ReturnType<typeof setTimeout> | null = null;
   let batchResolve: (() => void) | null = null;
 
@@ -605,18 +619,14 @@ export function createNotificationService(customConfig?: NotificationConfig): No
   const fallbackChain: Record<NotificationChannel, NotificationChannel[]> = {
     log: [],
     discord: [],
-    email: ['discord'],
-    telegram: ['discord'],
+    email: ["discord"],
+    telegram: ["discord"],
   };
 
   /**
    * Send notification with retry and fallback logic
    */
-  async function sendWithRetry(
-    message: string,
-    options: NotifyOptions,
-    retryCount = 0
-  ): Promise<boolean> {
+  async function sendWithRetry(message: string, options: NotifyOptions, retryCount = 0): Promise<boolean> {
     // Hermetic guard BEFORE the channel sender is invoked — sendWithRetry is
     // the ONE choke point every send path (notify/notifySync/batch/flush)
     // funnels through before a channel sender does a real fetch() (Telegram,
@@ -626,15 +636,15 @@ export function createNotificationService(customConfig?: NotificationConfig): No
     // test fixture from actually paging Jm's phone (the alert-storm incident
     // this slice fixes). Under NODE_ENV=test with an unpinned (live) KAYA_HOME
     // this throws loudly here, before any network call, instead of after.
-    assertNotLiveHomeUnderTest('NotificationService.sendWithRetry');
+    assertNotLiveHomeUnderTest("NotificationService.sendWithRetry");
 
-    const channel = options.channel || config.defaultChannel || 'log';
+    const channel = options.channel || config.defaultChannel || "log";
 
     const maxRetries = options.retry ?? config.maxRetries ?? 3;
     const sender = senders[channel];
 
     if (!sender) {
-      logNotification('failed', channel, message, `Unknown channel: ${channel}`);
+      logNotification("failed", channel, message, `Unknown channel: ${channel}`);
       return false;
     }
 
@@ -648,7 +658,7 @@ export function createNotificationService(customConfig?: NotificationConfig): No
     // Retry logic
     if (retryCount < maxRetries) {
       const delay = getBackoffDelay(retryCount);
-      logNotification('retried', channel, message, `Attempt ${retryCount + 1}, delay ${delay}ms`);
+      logNotification("retried", channel, message, `Attempt ${retryCount + 1}, delay ${delay}ms`);
       await sleep(delay);
       return sendWithRetry(message, options, retryCount + 1);
     }
@@ -674,7 +684,7 @@ export function createNotificationService(customConfig?: NotificationConfig): No
       timestamp: Date.now(),
       retries: retryCount,
     });
-    logNotification('queued', channel, message, 'All attempts failed');
+    logNotification("queued", channel, message, "All attempts failed");
 
     // Durable dead-letter (B6, S4c/d): a forensic, on-disk record of every
     // notification that exhausted every channel/retry/fallback attempt. NOT
@@ -689,17 +699,17 @@ export function createNotificationService(customConfig?: NotificationConfig): No
     // failure." The hermetic guard at the top of this function already
     // fired for this call, so this is not a silent hermeticity bypass.
     try {
-      const deadLetterPath = kayaHomePath('MEMORY', 'NOTIFICATIONS', 'dead-letter.jsonl');
+      const deadLetterPath = kayaHomePath("MEMORY", "NOTIFICATIONS", "dead-letter.jsonl");
       createAppendLog(deadLetterPath).append({
         timestamp: new Date().toISOString(),
         channel,
         message,
         priority: options.priority,
         retries: retryCount,
-        reason: 'all channels/retries/fallback exhausted',
+        reason: "all channels/retries/fallback exhausted",
       });
     } catch (err) {
-      console.error('[NotificationService] dead-letter write failed:', err);
+      console.error("[NotificationService] dead-letter write failed:", err);
     }
 
     return false;
@@ -711,16 +721,18 @@ export function createNotificationService(customConfig?: NotificationConfig): No
   function flushBatch(): void {
     if (batchBuffer.length === 0) return;
 
-    const combined = batchBuffer.join('\n- ');
-    const message = batchBuffer.length > 1 ? `- ${combined}` : batchBuffer[0];
+    const combined = batchBuffer.join("\n- ");
+    const message = batchBuffer.length > 1 ? `- ${combined}` : (batchBuffer[0] ?? "");
 
+    const options = batchOptions;
     batchBuffer = [];
+    batchOptions = {};
     if (batchTimeout) {
       clearTimeout(batchTimeout);
       batchTimeout = null;
     }
 
-    sendWithRetry(message, {}).finally(() => {
+    sendWithRetry(message, options).finally(() => {
       if (batchResolve) {
         batchResolve();
         batchResolve = null;
@@ -752,7 +764,7 @@ export function createNotificationService(customConfig?: NotificationConfig): No
         // flakiness, channel failures) keep the existing silent-fail
         // behavior — notifySync callers must not be broken by delivery
         // failures.
-        if (err instanceof Error && err.message.startsWith('[hermetic-guard]')) {
+        if (err instanceof Error && err.message.startsWith("[hermetic-guard]")) {
           console.error(err.message);
         }
       });
@@ -764,6 +776,8 @@ export function createNotificationService(customConfig?: NotificationConfig): No
     async batch(messages: string[], options: NotifyOptions = {}): Promise<void> {
       return new Promise((resolve) => {
         batchBuffer.push(...messages);
+        // Options passed to batch() were dropped before; later calls override earlier keys.
+        batchOptions = { ...batchOptions, ...options };
         batchResolve = resolve;
 
         if (batchTimeout) {
@@ -784,12 +798,12 @@ export function createNotificationService(customConfig?: NotificationConfig): No
     /**
      * Check service health
      */
-    async isServiceHealthy(channel: NotificationChannel = 'log'): Promise<boolean> {
-      if (channel === 'log') {
+    async isServiceHealthy(channel: NotificationChannel = "log"): Promise<boolean> {
+      if (channel === "log") {
         return true;
       }
 
-      if (channel === 'discord') {
+      if (channel === "discord") {
         return !!config.discordWebhook;
       }
 
@@ -845,7 +859,7 @@ export async function notify(message: string, options?: NotifyOptions): Promise<
  * Fire-and-forget notification using default service
  */
 export function notifySync(message: string, options?: NotifyOptions): void {
-  return getDefaultService().notifySync(message, options);
+  getDefaultService().notifySync(message, options);
 }
 
 // ============================================================================
@@ -855,7 +869,7 @@ export function notifySync(message: string, options?: NotifyOptions): void {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     console.log(`
 NotificationService - Unified notification service for Kaya
 
@@ -878,40 +892,40 @@ Options:
   const service = createNotificationService();
 
   // Health check
-  if (args.includes('--health')) {
-    const discordHealthy = await service.isServiceHealthy('discord');
-    console.log(`Discord: ${discordHealthy ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
+  if (args.includes("--health")) {
+    const discordHealthy = await service.isServiceHealthy("discord");
+    console.log(`Discord: ${discordHealthy ? "CONFIGURED" : "NOT CONFIGURED"}`);
     process.exit(0);
   }
 
   // Parse options
-  let channel: NotificationChannel = 'log';
+  let channel: NotificationChannel = "log";
   let agentName: string | undefined;
-  let priority: NotificationPriority = 'normal';
-  let message = '';
+  let priority: NotificationPriority = "normal";
+  let message = "";
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+    const arg = args[i] ?? "";
 
-    if (arg === '--test' && args[i + 1]) {
-      message = args[i + 1];
+    if (arg === "--test" && args[i + 1]) {
+      message = args[i + 1] ?? "";
       i++;
-    } else if (arg === '--channel' && args[i + 1]) {
+    } else if (arg === "--channel" && args[i + 1]) {
       channel = args[i + 1] as NotificationChannel;
       i++;
-    } else if (arg === '--agent' && args[i + 1]) {
+    } else if (arg === "--agent" && args[i + 1]) {
       agentName = args[i + 1];
       i++;
-    } else if (arg === '--priority' && args[i + 1]) {
+    } else if (arg === "--priority" && args[i + 1]) {
       priority = args[i + 1] as NotificationPriority;
       i++;
-    } else if (!arg.startsWith('--')) {
+    } else if (!arg.startsWith("--")) {
       message = arg;
     }
   }
 
   if (!message) {
-    console.error('Error: No message provided');
+    console.error("Error: No message provided");
     process.exit(1);
   }
 
@@ -924,7 +938,7 @@ Options:
     console.log(`Notification sent to ${channel}: "${message}"`);
     process.exit(0);
   } catch (error) {
-    console.error('Failed to send notification:', error);
+    console.error("Failed to send notification:", error);
     process.exit(1);
   }
 }

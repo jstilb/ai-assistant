@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 import { logCalendarWrite, defaultCalendarWriteLogPath } from "./CalendarWriteLog.ts";
 
@@ -22,14 +22,14 @@ describe("defaultCalendarWriteLogPath", () => {
 
   it("resolves under <KAYA_HOME>/skills/Productivity/CalendarAssistant/Data/calendar-writes.jsonl", () => {
     expect(defaultCalendarWriteLogPath()).toBe(
-      join(getKayaHome(), "skills/Productivity/CalendarAssistant/Data/calendar-writes.jsonl")
+      join(getKayaHome(), "skills/Productivity/CalendarAssistant/Data/calendar-writes.jsonl"),
     );
   });
 
   it("honors a KAYA_HOME override — never hardcodes the live tree", () => {
     process.env.KAYA_HOME = "/tmp/alt-kaya-home-for-calendar-log-test";
     expect(defaultCalendarWriteLogPath()).toBe(
-      "/tmp/alt-kaya-home-for-calendar-log-test/skills/Productivity/CalendarAssistant/Data/calendar-writes.jsonl"
+      "/tmp/alt-kaya-home-for-calendar-log-test/skills/Productivity/CalendarAssistant/Data/calendar-writes.jsonl",
     );
   });
 });
@@ -55,7 +55,7 @@ describe("logCalendarWrite", () => {
     expect(existsSync(logPath)).toBe(false);
     logCalendarWrite(
       { target: "primary", caller: "test.caller", title: "Test event", outcome: "success" },
-      { logPath }
+      { logPath },
     );
     expect(existsSync(logPath)).toBe(true);
   });
@@ -63,11 +63,11 @@ describe("logCalendarWrite", () => {
   it("writes one JSON line containing timestamp, target, caller, title, outcome", () => {
     logCalendarWrite(
       { target: "Kaya Schedule", caller: "test.caller", title: "Test event", outcome: "success" },
-      { logPath }
+      { logPath },
     );
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
     expect(lines).toHaveLength(1);
-    const entry = JSON.parse(lines[0]);
+    const entry = JSON.parse(lines[0]!);
     expect(entry.target).toBe("Kaya Schedule");
     expect(entry.caller).toBe("test.caller");
     expect(entry.title).toBe("Test event");
@@ -81,15 +81,15 @@ describe("logCalendarWrite", () => {
     logCalendarWrite({ target: "primary", caller: "b", title: "two", outcome: "error:AUTH_EXPIRED" }, { logPath });
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0]).title).toBe("one");
-    expect(JSON.parse(lines[1]).title).toBe("two");
-    expect(JSON.parse(lines[1]).outcome).toBe("error:AUTH_EXPIRED");
+    expect(JSON.parse(lines[0]!).title).toBe("one");
+    expect(JSON.parse(lines[1]!).title).toBe("two");
+    expect(JSON.parse(lines[1]!).outcome).toBe("error:AUTH_EXPIRED");
   });
 
   it("records failed writes too — the seam is auditable regardless of outcome", () => {
     logCalendarWrite(
       { target: "primary", caller: "test.caller", title: "Failed event", outcome: "error:API_UNAVAILABLE" },
-      { logPath }
+      { logPath },
     );
     const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
     expect(entry.outcome).toBe("error:API_UNAVAILABLE");
@@ -98,7 +98,7 @@ describe("logCalendarWrite", () => {
   it("never throws when the path is unwritable (logging must not break the calendar write it records)", () => {
     const badPath = "/nonexistent-root-that-cannot-be-created-xyz/calendar-writes.jsonl";
     expect(() =>
-      logCalendarWrite({ target: "primary", caller: "c", title: "t", outcome: "success" }, { logPath: badPath })
+      logCalendarWrite({ target: "primary", caller: "c", title: "t", outcome: "success" }, { logPath: badPath }),
     ).not.toThrow();
   });
 });

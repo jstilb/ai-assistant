@@ -10,8 +10,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { readNormalizedSource } from "../test/sourceText.ts";
 
 // kaya.ts doesn't export functions directly - it's a CLI tool.
 // We test by verifying the tool compiles and runs correctly.
@@ -44,37 +45,16 @@ describe("kaya.ts - MCP configuration", () => {
     expect(existsSync(join(TEST_MCP_DIR, "test2-MCP.json"))).toBe(true);
   });
 
-  test("kaya.ts compiles without type errors", async () => {
-    // Verify the file can be loaded (import check)
-    const kayaPath = join(import.meta.dir, "kaya.ts");
-    expect(existsSync(kayaPath)).toBe(true);
+  test("no raw JSON.parse(readFileSync()) in kaya.ts (migration verification)", () => {
+    // Structural check on comment-free, whitespace/quote-normalized source (a formatter cannot break it).
+    const source = readNormalizedSource(join(import.meta.dir, "kaya.ts"));
+    expect(source).not.toMatch(/JSON\.parse\(readFileSync\(/);
   });
 
-  test("no raw JSON.parse(readFileSync()) in kaya.ts (migration verification)", async () => {
-    // Read the source and verify no raw patterns in code (comments excluded)
-    const kayaPath = join(import.meta.dir, "kaya.ts");
-    const source = await Bun.file(kayaPath).text();
-
-    // Strip comments before checking for violations
-    const codeLines = source.split("\n").filter(line => {
-      const trimmed = line.trim();
-      return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
-    }).join("\n");
-
-    // Count occurrences of the violation pattern in code only
-    const violationPattern = /JSON\.parse\s*\(\s*readFileSync\s*\(/g;
-    const violations = codeLines.match(violationPattern);
-
-    // Should be zero after migration
-    expect(violations).toBeNull();
-  });
-
-  test("StateManager import exists in kaya.ts", async () => {
-    const kayaPath = join(import.meta.dir, "kaya.ts");
-    const source = await Bun.file(kayaPath).text();
-
+  test("kaya.ts persists MCP config through StateManager", () => {
+    const source = readNormalizedSource(join(import.meta.dir, "kaya.ts"));
     expect(source).toContain("createStateManager");
-    expect(source).toContain('from "./StateManager"');
+    expect(source).toMatch(/from "\.\/StateManager\.ts"/);
   });
 });
 
@@ -84,8 +64,8 @@ describe("kaya.ts - version comparison", () => {
     const partsA = a.split(".").map(Number);
     const partsB = b.split(".").map(Number);
     for (let i = 0; i < 3; i++) {
-      if (partsA[i] > partsB[i]) return 1;
-      if (partsA[i] < partsB[i]) return -1;
+      if (partsA[i]! > partsB[i]!) return 1;
+      if (partsA[i]! < partsB[i]!) return -1;
     }
     return 0;
   }

@@ -9,6 +9,7 @@
  * - voice-events.jsonl: 90 days (REQUIRES synthesis first)
  * - ratings.jsonl: 90 days (REQUIRES synthesis first)
  * - security/*.jsonl: 90 days (audit trail, no synthesis needed)
+ * - dated report folders (FOLDER_RETENTION_POLICIES): archived, then purged after 365 days
  *
  * CRITICAL: Run synthesis tools BEFORE cleanup for history, voice-events, ratings.
  *
@@ -19,9 +20,9 @@
  *   bun run MemoryCleanup.ts logs [--dry-run]
  */
 
-import { parseArgs } from "util";
-import * as fs from "fs";
-import * as path from "path";
+import { parseArgs } from "node:util";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { getPipelineRepository } from "../../skills/Automation/QueueRouter/Tools/PipelineRepository.ts";
 import { getKayaHome, defaultKayaHome } from "./KayaHome.ts";
 
@@ -74,34 +75,56 @@ interface JsonlRegistryEntry {
 
 const JSONL_REGISTRY: JsonlRegistryEntry[] = [
   // ── Previously covered ─────────────────────────────────────────────────────
-  { path: "history.jsonl",                                          retentionDays: 30,  requiresSynthesis: true,  synthesisType: "sessions", category: "learning"       },
-  { path: "MEMORY/VOICE/voice-events.jsonl",                        retentionDays: 90,  requiresSynthesis: true,  synthesisType: "voice",    category: "voice"          },
+  {
+    path: "history.jsonl",
+    retentionDays: 30,
+    requiresSynthesis: true,
+    synthesisType: "sessions",
+    category: "learning",
+  },
+  {
+    path: "MEMORY/VOICE/voice-events.jsonl",
+    retentionDays: 90,
+    requiresSynthesis: true,
+    synthesisType: "voice",
+    category: "voice",
+  },
   // ratings.jsonl: synthesis gate removed 2026-07-10 — the wisdom-frame synthesis
   // pipeline that produced MEMORY/LEARNING/SYNTHESIS/<YYYY-MM>/ artifacts was
   // deleted 2026-07-09, so the gate could never pass again. Rows are ingested
   // into the graph daily (DecisionIngester) long before the 90-day cutoff.
-  { path: "MEMORY/LEARNING/SIGNALS/ratings.jsonl",                  retentionDays: 90,  requiresSynthesis: false, category: "learning"       },
+  { path: "MEMORY/LEARNING/SIGNALS/ratings.jsonl", retentionDays: 90, requiresSynthesis: false, category: "learning" },
   // Security handled separately via glob (cleanSecurityLogs)
 
   // ── Monitoring ─────────────────────────────────────────────────────────────
-  { path: "MEMORY/MONITORING/audit/monitor-audit.jsonl",            retentionDays: 60,  requiresSynthesis: false, category: "monitoring"     },
-  { path: "MEMORY/MONITORING/audit/alerts.jsonl",                   retentionDays: 90,  requiresSynthesis: false, category: "monitoring"     },
-  { path: "MEMORY/MONITORING/traces/a.jsonl",                       retentionDays: 30,  requiresSynthesis: false, category: "monitoring"     },
-  { path: "MEMORY/MONITORING/traces/p1.jsonl",                      retentionDays: 30,  requiresSynthesis: false, category: "monitoring"     },
+  {
+    path: "MEMORY/MONITORING/audit/monitor-audit.jsonl",
+    retentionDays: 60,
+    requiresSynthesis: false,
+    category: "monitoring",
+  },
+  { path: "MEMORY/MONITORING/audit/alerts.jsonl", retentionDays: 90, requiresSynthesis: false, category: "monitoring" },
+  { path: "MEMORY/MONITORING/traces/a.jsonl", retentionDays: 30, requiresSynthesis: false, category: "monitoring" },
+  { path: "MEMORY/MONITORING/traces/p1.jsonl", retentionDays: 30, requiresSynthesis: false, category: "monitoring" },
   // Other MEMORY/MONITORING/traces/*.jsonl handled by glob in cleanAll()
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  { path: "MEMORY/NOTIFICATIONS/notifications.jsonl",               retentionDays: 30,  requiresSynthesis: false, category: "notifications"  },
+  {
+    path: "MEMORY/NOTIFICATIONS/notifications.jsonl",
+    retentionDays: 30,
+    requiresSynthesis: false,
+    category: "notifications",
+  },
 
   // ── Learning signals ──────────────────────────────────────────────────────
   // estimation-accuracy.jsonl: small (≤ a few hundred rows), kept whole — it is
   // the full reference class for the estimation-calibration wisdom frame.
 
   // ── Eval signals ──────────────────────────────────────────────────────────
-  { path: "MEMORY/EVAL_SIGNALS/signals.jsonl",                      retentionDays: 90,  requiresSynthesis: false, category: "eval"           },
+  { path: "MEMORY/EVAL_SIGNALS/signals.jsonl", retentionDays: 90, requiresSynthesis: false, category: "eval" },
 
   // ── Work audit ─────────────────────────────────────────────────────────────
-  { path: "MEMORY/WORK/audit.jsonl",                                retentionDays: 90,  requiresSynthesis: false, category: "work"           },
+  { path: "MEMORY/WORK/audit.jsonl", retentionDays: 90, requiresSynthesis: false, category: "work" },
 
   // NOTE: MEMORY/QUEUES queue JSONL files (approvals, approved-work, spec-pipeline)
   // were removed from this registry (2026-06-24). pipeline.db is now the source of
@@ -112,7 +135,12 @@ const JSONL_REGISTRY: JsonlRegistryEntry[] = [
   // T7-06 — it had been registered once under Monitoring above.)
 
   // ── BrightData scrape audit (BrightData skill — P2 arch review) ────────────
-  { path: "MEMORY/MONITORING/audit/brightdata-scrapes.jsonl",       retentionDays: 90,  requiresSynthesis: false, category: "monitoring"     },
+  {
+    path: "MEMORY/MONITORING/audit/brightdata-scrapes.jsonl",
+    retentionDays: 90,
+    requiresSynthesis: false,
+    category: "monitoring",
+  },
 ];
 
 /** Resolve a registry entry path to an absolute path */
@@ -190,7 +218,7 @@ function getDirectorySize(dirpath: string): number {
       }
     }
   } catch {
-    // Ignore errors
+    // intentionally silent: unreadable path gives a smaller size estimate; this is a report-only number
   }
   return size;
 }
@@ -202,7 +230,7 @@ function deleteDirectory(dirpath: string): void {
 }
 
 function synthesisExists(type: "voice" | "sessions"): boolean {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().slice(0, 10);
 
   // Voice and sessions use direct subdirectories. (The "ratings" variant that
   // checked MEMORY/LEARNING/SYNTHESIS/<YYYY-MM>/ was removed 2026-07-10 — its
@@ -214,7 +242,7 @@ function synthesisExists(type: "voice" | "sessions"): boolean {
   // Check for today's synthesis or any recent pattern file
   try {
     const files = fs.readdirSync(synthDir);
-    return files.some(f => f.includes(today) || f.includes("-patterns.md"));
+    return files.some((f) => f.includes(today) || f.includes("-patterns.md"));
   } catch {
     return false;
   }
@@ -312,7 +340,7 @@ async function rotateJsonl(
   retentionDays: number,
   dryRun: boolean,
   requiresSynthesis: boolean,
-  synthesisType?: "voice" | "sessions"
+  synthesisType?: "voice" | "sessions",
 ): Promise<CleanupResult> {
   const filename = path.basename(filepath);
   const result: CleanupResult = {
@@ -336,7 +364,7 @@ async function rotateJsonl(
 
   try {
     const content = fs.readFileSync(filepath, "utf-8");
-    const lines = content.split("\n").filter(l => l.trim());
+    const lines = content.split("\n").filter((l) => l.trim());
     const originalSize = fs.statSync(filepath).size;
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
@@ -347,9 +375,7 @@ async function rotateJsonl(
     for (const line of lines) {
       try {
         const entry = JSON.parse(line);
-        const timestamp = entry.timestamp
-          ? new Date(entry.timestamp)
-          : new Date(entry.timestamp_ms || 0);
+        const timestamp = entry.timestamp ? new Date(entry.timestamp) : new Date(entry.timestamp_ms || 0);
 
         if (timestamp >= cutoffDate) {
           keptLines.push(line);
@@ -392,7 +418,7 @@ async function cleanSecurityLogs(dryRun: boolean): Promise<CleanupResult> {
   }
 
   try {
-    const files = fs.readdirSync(securityDir).filter(f => f.endsWith(".jsonl"));
+    const files = fs.readdirSync(securityDir).filter((f) => f.endsWith(".jsonl"));
 
     for (const file of files) {
       const filepath = path.join(securityDir, file);
@@ -423,7 +449,7 @@ export async function cleanAllJsonlFromRegistry(dryRun: boolean): Promise<Cleanu
 }
 
 // ── ISC row 3: scan for JSONL files not in registry ───────────────────────
-export interface UnregisteredScanResult {
+interface UnregisteredScanResult {
   unregistered: string[];
   registered: number;
   warnings: string[];
@@ -462,47 +488,48 @@ export function scanUnregistered(): UnregisteredScanResult {
         if (!registered.has(fullPath)) unregistered.push(fullPath);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* intentionally silent: claude dir missing or unreadable means no unregistered files to report */
+  }
 
   if (fs.existsSync(memoryDir)) walk(memoryDir);
 
   return {
     unregistered,
     registered: registered.size,
-    warnings: unregistered.map(p => `WARN: unregistered JSONL: ${p}`),
+    warnings: unregistered.map((p) => `WARN: unregistered JSONL: ${p}`),
   };
 }
 
 // ── ISC row 4: clean WORK/ directories by TTL ─────────────────────────────
-export interface WorkDirCleanupResult extends CleanupResult {
+interface WorkDirCleanupResult extends CleanupResult {
   dirsRemoved: number;
   dirsSkipped: number;
 }
 
-/** Read active in-progress work item directory names from pipeline.db */
+/**
+ * Read active in-progress work item directory names from pipeline.db.
+ * Throws if the pipeline cannot be read: an empty "protected" set would let the
+ * caller delete the work directories of items that are still in progress.
+ */
 function getActiveWorkItemDirs(): Set<string> {
-  try {
-    const repo = getPipelineRepository();
-    const items = repo.list({ stage: "in-progress" });
-    const dirs = new Set<string>();
-    for (const item of items) {
-      // Protect by item id
-      dirs.add(item.id);
-      // Protect by worktree path basename
-      if (item.worktree_path) dirs.add(path.basename(item.worktree_path));
-      // Protect by sessionDir from rawQueueItem metadata (legacy items stored in metadata)
-      const raw = item.metadata?.rawQueueItem as Record<string, unknown> | undefined;
-      const sessionDir = (raw?.sessionDir ?? raw?.session_dir) as string | undefined;
-      if (sessionDir) dirs.add(path.basename(sessionDir));
-    }
-    return dirs;
-  } catch {
-    return new Set();
+  const repo = getPipelineRepository();
+  const items = repo.list({ stage: "in-progress" });
+  const dirs = new Set<string>();
+  for (const item of items) {
+    // Protect by item id
+    dirs.add(item.id);
+    // Protect by worktree path basename
+    if (item.worktree_path) dirs.add(path.basename(item.worktree_path));
+    // Protect by sessionDir from rawQueueItem metadata (legacy items stored in metadata)
+    const raw = item.metadata?.rawQueueItem as Record<string, unknown> | undefined;
+    const sessionDir = (raw?.sessionDir ?? raw?.session_dir) as string | undefined;
+    if (sessionDir) dirs.add(path.basename(sessionDir));
   }
+  return dirs;
 }
 
 export async function cleanWorkDirs(dryRun: boolean): Promise<WorkDirCleanupResult> {
-  const activeItems = getActiveWorkItemDirs();
   const claudeDir = getClaudeDir();
   const targets = [
     { dir: path.join(claudeDir, "MEMORY", "WORK"), ttlDays: 30 },
@@ -518,6 +545,15 @@ export async function cleanWorkDirs(dryRun: boolean): Promise<WorkDirCleanupResu
     dirsRemoved: 0,
     dirsSkipped: 0,
   };
+
+  let activeItems: Set<string>;
+  try {
+    activeItems = getActiveWorkItemDirs();
+  } catch (e) {
+    // Fail closed: without the in-progress list nothing under WORK/ is safe to delete.
+    result.errors.push(`Cannot read active work items, skipping WORK/ cleanup: ${e instanceof Error ? e.message : e}`);
+    return result;
+  }
 
   for (const { dir, ttlDays } of targets) {
     if (!fs.existsSync(dir)) continue;
@@ -540,7 +576,12 @@ export async function cleanWorkDirs(dryRun: boolean): Promise<WorkDirCleanupResu
       if (ageDays > ttlDays) {
         const size = getDirectorySize(fullPath);
         if (!dryRun) {
-          try { deleteDirectory(fullPath); } catch (e) { result.errors.push(`Failed to delete ${fullPath}: ${e}`); continue; }
+          try {
+            deleteDirectory(fullPath);
+          } catch (e) {
+            result.errors.push(`Failed to delete ${fullPath}: ${e}`);
+            continue;
+          }
         }
         result.dirsRemoved++;
         result.filesRemoved++;
@@ -570,7 +611,7 @@ export async function cleanOrphanedCurrentWork(dryRun: boolean): Promise<Cleanup
 
   let entries: string[];
   try {
-    entries = fs.readdirSync(stateDir).filter(f => uuidPattern.test(f));
+    entries = fs.readdirSync(stateDir).filter((f) => uuidPattern.test(f));
   } catch (e) {
     result.errors.push(`Failed to read ${stateDir}: ${e}`);
     return result;
@@ -582,7 +623,12 @@ export async function cleanOrphanedCurrentWork(dryRun: boolean): Promise<Cleanup
     if (ageHours > TTL_HOURS) {
       const size = fs.statSync(fullPath).size;
       if (!dryRun) {
-        try { fs.unlinkSync(fullPath); } catch (e) { result.errors.push(`Failed to delete ${fullPath}: ${e}`); continue; }
+        try {
+          fs.unlinkSync(fullPath);
+        } catch (e) {
+          result.errors.push(`Failed to delete ${fullPath}: ${e}`);
+          continue;
+        }
       }
       result.filesRemoved++;
       result.bytesFreed += size;
@@ -603,10 +649,7 @@ export async function cleanOrphanedCurrentWork(dryRun: boolean): Promise<Cleanup
 export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupResult> {
   const stateDir = path.join(getClaudeDir(), "MEMORY", "State");
   const TTL_DAYS = 14;
-  const patterns = [
-    /^prompt-context-[0-9a-f-]{36}\.json$/,
-    /^context-session-[0-9a-f-]{36}\.json$/,
-  ];
+  const patterns = [/^prompt-context-[0-9a-f-]{36}\.json$/, /^context-session-[0-9a-f-]{36}\.json$/];
 
   const result: CleanupResult = {
     target: "stale context files",
@@ -620,7 +663,7 @@ export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupRe
 
   let entries: string[];
   try {
-    entries = fs.readdirSync(stateDir).filter(f => patterns.some(p => p.test(f)));
+    entries = fs.readdirSync(stateDir).filter((f) => patterns.some((p) => p.test(f)));
   } catch (e) {
     result.errors.push(`Failed to read ${stateDir}: ${e}`);
     return result;
@@ -632,7 +675,12 @@ export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupRe
     if (ageDays > TTL_DAYS) {
       const size = fs.statSync(fullPath).size;
       if (!dryRun) {
-        try { fs.unlinkSync(fullPath); } catch (e) { result.errors.push(`Failed to delete ${fullPath}: ${e}`); continue; }
+        try {
+          fs.unlinkSync(fullPath);
+        } catch (e) {
+          result.errors.push(`Failed to delete ${fullPath}: ${e}`);
+          continue;
+        }
       }
       result.filesRemoved++;
       result.bytesFreed += size;
@@ -640,6 +688,154 @@ export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupRe
   }
 
   return result;
+}
+
+// ── Folder retention: dated report/learning files, archived not deleted ────
+/**
+ * Retention for MEMORY folders that grow without limit (ADR 023). Files older
+ * than `archiveAfterDays` MOVE to MEMORY/archive/retention/<same relative path>.
+ * Files in that archive tree older than ARCHIVE_PURGE_DAYS are deleted.
+ * Age comes from the first YYYY-MM-DD in the path under the folder (file or
+ * date directory name); if there is none, from mtime. Names starting with "_"
+ * or "." (e.g. _Analysis.md) are indexes, never aged out.
+ */
+interface FolderRetentionPolicy {
+  /** Folder relative to MEMORY/ */
+  dir: string;
+  archiveAfterDays: number;
+}
+
+export const FOLDER_RETENTION_POLICIES: readonly FolderRetentionPolicy[] = [
+  { dir: "LEARNING/ALGORITHM", archiveAfterDays: 180 },
+  { dir: "LEARNING/SYSTEM", archiveAfterDays: 180 },
+  { dir: "LEARNING/FAILURES", archiveAfterDays: 365 },
+  { dir: "BRIEFINGS", archiveAfterDays: 90 },
+  { dir: "DIGESTS", archiveAfterDays: 180 },
+  { dir: "SkillAudits", archiveAfterDays: 180 },
+  { dir: "TASKS/daily", archiveAfterDays: 90 },
+];
+
+/** Subfolder of MEMORY/archive that holds files moved by folder retention */
+const RETENTION_ARCHIVE_SUBDIR = "retention";
+const ARCHIVE_PURGE_DAYS = 365;
+
+const DATE_IN_PATH = /(\d{4})-(\d{2})-(\d{2})/;
+const MONTH_IN_PATH = /(?:^|[/\\])(\d{4})-(\d{2})(?=$|[/\\])/;
+
+function listFilesRecursive(dir: string, errors: string[]): string[] {
+  const out: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    errors.push(`Failed to read ${dir}: ${e}`);
+    return out;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listFilesRecursive(full, errors));
+    else if (entry.isFile()) out.push(full);
+  }
+  return out;
+}
+
+function fileAgeDays(root: string, file: string, now: number): number {
+  const rel = path.relative(root, file);
+  const m = DATE_IN_PATH.exec(rel);
+  if (m) {
+    const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (!Number.isNaN(t)) return (now - t) / 86_400_000;
+  }
+  // A "YYYY-MM" directory with no day: use the last day of that month (the newer, safer age).
+  const mm = MONTH_IN_PATH.exec(rel);
+  if (mm) {
+    const t = Date.UTC(Number(mm[1]), Number(mm[2]), 0);
+    if (!Number.isNaN(t)) return (now - t) / 86_400_000;
+  }
+  return (now - fs.statSync(file).mtimeMs) / 86_400_000;
+}
+
+function removeEmptyDirs(dir: string, keepRoot: boolean): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return; // intentionally silent: housekeeping only, a leftover empty dir is harmless
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) removeEmptyDirs(path.join(dir, entry.name), false);
+  }
+  if (!keepRoot && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+}
+
+export async function cleanFolderRetention(
+  dryRun: boolean,
+  now: number = Date.now(),
+  policies: readonly FolderRetentionPolicy[] = FOLDER_RETENTION_POLICIES,
+): Promise<CleanupResult[]> {
+  const memoryDir = path.join(getClaudeDir(), "MEMORY");
+  const archiveRoot = path.join(memoryDir, "archive", RETENTION_ARCHIVE_SUBDIR);
+  const results: CleanupResult[] = [];
+
+  for (const policy of policies) {
+    const result: CleanupResult = {
+      target: `${policy.dir} (archive >${policy.archiveAfterDays}d)`,
+      filesRemoved: 0,
+      linesRemoved: 0,
+      bytesFreed: 0,
+      errors: [],
+    };
+    results.push(result);
+    const root = path.join(memoryDir, policy.dir);
+    if (!fs.existsSync(root)) continue;
+    for (const file of listFilesRecursive(root, result.errors)) {
+      try {
+        if (fileAgeDays(root, file, now) <= policy.archiveAfterDays) continue;
+        const size = fs.statSync(file).size;
+        if (!dryRun) {
+          const dest = path.join(archiveRoot, policy.dir, path.relative(root, file));
+          if (fs.existsSync(dest)) {
+            result.errors.push(`Archive target exists, left in place: ${dest}`);
+            continue;
+          }
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.renameSync(file, dest);
+        }
+        result.filesRemoved++;
+        result.bytesFreed += size;
+      } catch (e) {
+        result.errors.push(`Failed to archive ${file}: ${e}`);
+      }
+    }
+    if (!dryRun) removeEmptyDirs(root, true);
+  }
+
+  // Purge: archived files older than ARCHIVE_PURGE_DAYS are deleted.
+  const purge: CleanupResult = {
+    target: `archive/${RETENTION_ARCHIVE_SUBDIR} (delete >${ARCHIVE_PURGE_DAYS}d)`,
+    filesRemoved: 0,
+    linesRemoved: 0,
+    bytesFreed: 0,
+    errors: [],
+  };
+  results.push(purge);
+  if (fs.existsSync(archiveRoot)) {
+    for (const file of listFilesRecursive(archiveRoot, purge.errors)) {
+      try {
+        // The archive keeps the original relative path, so the date in it still gives the age.
+        if (fileAgeDays(archiveRoot, file, now) <= ARCHIVE_PURGE_DAYS) continue;
+        const size = fs.statSync(file).size;
+        if (!dryRun) fs.unlinkSync(file);
+        purge.filesRemoved++;
+        purge.bytesFreed += size;
+      } catch (e) {
+        purge.errors.push(`Failed to delete ${file}: ${e}`);
+      }
+    }
+    if (!dryRun) removeEmptyDirs(archiveRoot, true);
+  }
+  return results;
 }
 
 async function cleanAll(dryRun: boolean): Promise<OverallResult> {
@@ -665,12 +861,15 @@ async function cleanAll(dryRun: boolean): Promise<OverallResult> {
   // Stale prompt-context-*.json / context-session-*.json files
   results.push(await cleanStaleContextFiles(dryRun));
 
+  // Growing report/learning folders: archive by age (ADR 023)
+  results.push(...(await cleanFolderRetention(dryRun)));
+
   const totalBytesFreed = results.reduce((sum, r) => sum + r.bytesFreed, 0);
   const totalFilesRemoved = results.reduce((sum, r) => sum + r.filesRemoved, 0);
   const totalLinesRemoved = results.reduce((sum, r) => sum + r.linesRemoved, 0);
 
   return {
-    success: results.every(r => r.errors.length === 0 && !r.skipped),
+    success: results.every((r) => r.errors.length === 0 && !r.skipped),
     timestamp: new Date().toISOString(),
     dryRun,
     results,
@@ -686,20 +885,19 @@ async function cleanAll(dryRun: boolean): Promise<OverallResult> {
 
 // Guard: only run CLI when this file is executed directly (not imported as a module)
 if (import.meta.main) {
+  const { values, positionals } = parseArgs({
+    args: Bun.argv.slice(2),
+    options: {
+      "dry-run": { type: "boolean" },
+      "scan-unregistered": { type: "boolean" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+  });
 
-const { values, positionals } = parseArgs({
-  args: Bun.argv.slice(2),
-  options: {
-    "dry-run": { type: "boolean" },
-    "scan-unregistered": { type: "boolean" },
-    json: { type: "boolean" },
-    help: { type: "boolean", short: "h" },
-  },
-  allowPositionals: true,
-});
-
-if (values.help) {
-  console.log(`
+  if (values.help) {
+    console.log(`
 Kaya Memory Cleanup Utility
 
 Usage:
@@ -713,6 +911,7 @@ Targets:
   debug         Clean debug/ directory (14-day retention)
   file-history  Clean file-history/ directory (30-day retention)
   logs          Rotate JSONL log files (30-90 day retention)
+  folders       Archive old files from growing MEMORY folders (see MEMORY_MANIFEST.md)
 
 Options:
   --dry-run     Preview changes without executing
@@ -728,119 +927,131 @@ Retention Policies:
 
 IMPORTANT: Run synthesis tools BEFORE cleanup for history and voice-events.
 `);
-  process.exit(0);
-}
+    process.exit(0);
+  }
 
-const command = positionals[0] || "all";
-const dryRun = values["dry-run"] ?? false;
-const jsonOutput = values.json ?? false;
-const scanUnregisteredFlag = values["scan-unregistered"] ?? false;
+  const command = positionals[0] || "all";
+  const dryRun = values["dry-run"] ?? false;
+  const jsonOutput = values.json ?? false;
+  const scanUnregisteredFlag = values["scan-unregistered"] ?? false;
 
-async function main() {
-  // --scan-unregistered can be combined with any command
-  if (scanUnregisteredFlag) {
-    const scanResult = scanUnregistered();
-    if (jsonOutput) {
-      console.log(JSON.stringify(scanResult, null, 2));
-    } else {
-      console.log(`Registered JSONL paths: ${scanResult.registered}`);
-      if (scanResult.unregistered.length === 0) {
-        console.log("✓ No unregistered JSONL files found.");
+  async function main() {
+    // --scan-unregistered can be combined with any command
+    if (scanUnregisteredFlag) {
+      const scanResult = scanUnregistered();
+      if (jsonOutput) {
+        console.log(JSON.stringify(scanResult, null, 2));
       } else {
-        for (const w of scanResult.warnings) console.warn(w);
-      }
-    }
-    if (command === "scan-unregistered") process.exit(0);
-  }
-
-  let result: OverallResult | CleanupResult;
-
-  switch (command) {
-    case "scan-unregistered":
-      process.exit(0); // already handled above
-      break;
-    case "all":
-      result = await cleanAll(dryRun);
-      break;
-    case "debug":
-      result = await cleanDebug(dryRun);
-      break;
-    case "file-history":
-      result = await cleanFileHistory(dryRun);
-      break;
-    case "logs": {
-      const results: CleanupResult[] = [];
-      const historyFile = path.join(CLAUDE_DIR, "history.jsonl");
-      results.push(await rotateJsonl(historyFile, RETENTION.history, dryRun, true, "sessions"));
-
-      const voiceEventsFile = path.join(CLAUDE_DIR, "MEMORY", "VOICE", "voice-events.jsonl");
-      results.push(await rotateJsonl(voiceEventsFile, RETENTION.voiceEvents, dryRun, true, "voice"));
-
-      const ratingsFile = path.join(CLAUDE_DIR, "MEMORY", "LEARNING", "SIGNALS", "ratings.jsonl");
-      results.push(await rotateJsonl(ratingsFile, RETENTION.ratings, dryRun, false));
-
-      result = {
-        success: results.every(r => r.errors.length === 0 && !r.skipped),
-        timestamp: new Date().toISOString(),
-        dryRun,
-        results,
-        totalBytesFreed: results.reduce((sum, r) => sum + r.bytesFreed, 0),
-        totalFilesRemoved: 0,
-        totalLinesRemoved: results.reduce((sum, r) => sum + r.linesRemoved, 0),
-      };
-      break;
-    }
-    case "work-dirs":
-      result = await cleanWorkDirs(dryRun);
-      break;
-    case "orphaned-current-work":
-      result = await cleanOrphanedCurrentWork(dryRun);
-      break;
-    case "context-files":
-      result = await cleanStaleContextFiles(dryRun);
-      break;
-    default:
-      console.error(`Unknown command: ${command}`);
-      process.exit(1);
-  }
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    if ("results" in result) {
-      // Overall result
-      console.log(`Memory Cleanup ${dryRun ? "[DRY RUN]" : ""}`);
-      console.log(`═══════════════════════════════════════`);
-
-      for (const r of result.results) {
-        const status = r.skipped ? `SKIPPED: ${r.skipReason}` : "OK";
-        console.log(`\n${r.target}: ${status}`);
-        if (!r.skipped) {
-          if (r.filesRemoved > 0) console.log(`  Files removed: ${r.filesRemoved}`);
-          if (r.linesRemoved > 0) console.log(`  Lines removed: ${r.linesRemoved}`);
-          if (r.bytesFreed > 0) console.log(`  Bytes freed: ${(r.bytesFreed / 1024).toFixed(1)} KB`);
-        }
-        if (r.errors.length > 0) {
-          console.log(`  Errors: ${r.errors.join(", ")}`);
+        console.log(`Registered JSONL paths: ${scanResult.registered}`);
+        if (scanResult.unregistered.length === 0) {
+          console.log("✓ No unregistered JSONL files found.");
+        } else {
+          for (const w of scanResult.warnings) console.warn(w);
         }
       }
+      if (command === "scan-unregistered") process.exit(0);
+    }
 
-      console.log(`\n═══════════════════════════════════════`);
-      console.log(`Total bytes freed: ${(result.totalBytesFreed / 1024).toFixed(1)} KB`);
-      console.log(`Total files removed: ${result.totalFilesRemoved}`);
-      console.log(`Total lines removed: ${result.totalLinesRemoved}`);
+    let result: OverallResult | CleanupResult;
+
+    switch (command) {
+      case "scan-unregistered":
+        process.exit(0); // already handled above
+        break;
+      case "all":
+        result = await cleanAll(dryRun);
+        break;
+      case "debug":
+        result = await cleanDebug(dryRun);
+        break;
+      case "file-history":
+        result = await cleanFileHistory(dryRun);
+        break;
+      case "logs": {
+        const results: CleanupResult[] = [];
+        const historyFile = path.join(CLAUDE_DIR, "history.jsonl");
+        results.push(await rotateJsonl(historyFile, RETENTION.history, dryRun, true, "sessions"));
+
+        const voiceEventsFile = path.join(CLAUDE_DIR, "MEMORY", "VOICE", "voice-events.jsonl");
+        results.push(await rotateJsonl(voiceEventsFile, RETENTION.voiceEvents, dryRun, true, "voice"));
+
+        const ratingsFile = path.join(CLAUDE_DIR, "MEMORY", "LEARNING", "SIGNALS", "ratings.jsonl");
+        results.push(await rotateJsonl(ratingsFile, RETENTION.ratings, dryRun, false));
+
+        result = {
+          success: results.every((r) => r.errors.length === 0 && !r.skipped),
+          timestamp: new Date().toISOString(),
+          dryRun,
+          results,
+          totalBytesFreed: results.reduce((sum, r) => sum + r.bytesFreed, 0),
+          totalFilesRemoved: 0,
+          totalLinesRemoved: results.reduce((sum, r) => sum + r.linesRemoved, 0),
+        };
+        break;
+      }
+      case "work-dirs":
+        result = await cleanWorkDirs(dryRun);
+        break;
+      case "orphaned-current-work":
+        result = await cleanOrphanedCurrentWork(dryRun);
+        break;
+      case "context-files":
+        result = await cleanStaleContextFiles(dryRun);
+        break;
+      case "folders": {
+        const results = await cleanFolderRetention(dryRun);
+        result = {
+          success: results.every((r) => r.errors.length === 0),
+          timestamp: new Date().toISOString(),
+          dryRun,
+          results,
+          totalBytesFreed: results.reduce((sum, r) => sum + r.bytesFreed, 0),
+          totalFilesRemoved: results.reduce((sum, r) => sum + r.filesRemoved, 0),
+          totalLinesRemoved: 0,
+        };
+        break;
+      }
+      default:
+        console.error(`Unknown command: ${command}`);
+        process.exit(1);
+    }
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2));
     } else {
-      // Single result
-      console.log(`${result.target}: ${dryRun ? "[DRY RUN] " : ""}${result.skipped ? "SKIPPED" : "OK"}`);
-      if (result.skipped) console.log(`  Reason: ${result.skipReason}`);
-      if (result.filesRemoved > 0) console.log(`  Files removed: ${result.filesRemoved}`);
-      if (result.linesRemoved > 0) console.log(`  Lines removed: ${result.linesRemoved}`);
-      if (result.bytesFreed > 0) console.log(`  Bytes freed: ${(result.bytesFreed / 1024).toFixed(1)} KB`);
-      if (result.errors.length > 0) console.log(`  Errors: ${result.errors.join(", ")}`);
+      if ("results" in result) {
+        // Overall result
+        console.log(`Memory Cleanup ${dryRun ? "[DRY RUN]" : ""}`);
+        console.log(`═══════════════════════════════════════`);
+
+        for (const r of result.results) {
+          const status = r.skipped ? `SKIPPED: ${r.skipReason}` : "OK";
+          console.log(`\n${r.target}: ${status}`);
+          if (!r.skipped) {
+            if (r.filesRemoved > 0) console.log(`  Files removed: ${r.filesRemoved}`);
+            if (r.linesRemoved > 0) console.log(`  Lines removed: ${r.linesRemoved}`);
+            if (r.bytesFreed > 0) console.log(`  Bytes freed: ${(r.bytesFreed / 1024).toFixed(1)} KB`);
+          }
+          if (r.errors.length > 0) {
+            console.log(`  Errors: ${r.errors.join(", ")}`);
+          }
+        }
+
+        console.log(`\n═══════════════════════════════════════`);
+        console.log(`Total bytes freed: ${(result.totalBytesFreed / 1024).toFixed(1)} KB`);
+        console.log(`Total files removed: ${result.totalFilesRemoved}`);
+        console.log(`Total lines removed: ${result.totalLinesRemoved}`);
+      } else {
+        // Single result
+        console.log(`${result.target}: ${dryRun ? "[DRY RUN] " : ""}${result.skipped ? "SKIPPED" : "OK"}`);
+        if (result.skipped) console.log(`  Reason: ${result.skipReason}`);
+        if (result.filesRemoved > 0) console.log(`  Files removed: ${result.filesRemoved}`);
+        if (result.linesRemoved > 0) console.log(`  Lines removed: ${result.linesRemoved}`);
+        if (result.bytesFreed > 0) console.log(`  Bytes freed: ${(result.bytesFreed / 1024).toFixed(1)} KB`);
+        if (result.errors.length > 0) console.log(`  Errors: ${result.errors.join(", ")}`);
+      }
     }
   }
-}
 
-main().catch(console.error);
-
+  main().catch(console.error);
 } // end if (import.meta.main)

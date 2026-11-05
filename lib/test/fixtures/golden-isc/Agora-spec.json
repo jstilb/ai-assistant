@@ -1,0 +1,32 @@
+{
+  "specPath": "~/.claude/plans/Specs/Agora-spec.md",
+  "layoutNote": "checkbox-style Success Criteria",
+  "rowCount": 4,
+  "rows": [
+    {
+      "number": 400,
+      "description": "Tree Rendering — target: 100%",
+      "verifyMethod": "manual",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 401,
+      "description": "Status Updates — target: <100ms",
+      "verifyMethod": "manual",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 402,
+      "description": "History Accuracy — target: 100%",
+      "verifyMethod": "manual",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 403,
+      "description": "Navigation — target: 100%",
+      "verifyMethod": "manual",
+      "source": "EXPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.242Z"
+}

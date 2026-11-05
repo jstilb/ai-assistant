@@ -16,30 +16,34 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "fs";
-import { join } from "path";
-import { execSync } from "child_process";
+import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { execSync } from "node:child_process";
 
-const CLI_TMP_DIR = join('/tmp', 'test-cli-migratetomemorystore-' + Math.random().toString(36).slice(2));
+const CLI_TMP_DIR = join("/tmp", "test-cli-migratetomemorystore-" + Math.random().toString(36).slice(2));
 
 function runMigrateCli(args: string[]): { stdout: string; stderr: string; exitCode: number } {
   mkdirSync(CLI_TMP_DIR, { recursive: true });
-  const stdoutFile = join(CLI_TMP_DIR, 'stdout.txt');
-  const stderrFile = join(CLI_TMP_DIR, 'stderr.txt');
-  const scriptPath = join(import.meta.dir, 'MigrateToMemoryStore.ts');
-  const cmdArgs = ['bun', scriptPath, ...args].map(a => `"${a}"`).join(' ');
+  const stdoutFile = join(CLI_TMP_DIR, "stdout.txt");
+  const stderrFile = join(CLI_TMP_DIR, "stderr.txt");
+  const scriptPath = join(import.meta.dir, "MigrateToMemoryStore.ts");
+  const cmdArgs = ["bun", scriptPath, ...args].map((a) => `"${a}"`).join(" ");
   let exitCode = 0;
   try {
     execSync(`${cmdArgs} 1>"${stdoutFile}" 2>"${stderrFile}"`, { timeout: 10000 });
   } catch (e: unknown) {
     exitCode = (e as { status?: number }).status ?? 1;
   }
-  const stdout = readFileSync(stdoutFile, 'utf-8');
-  const stderr = readFileSync(stderrFile, 'utf-8');
+  const stdout = readFileSync(stdoutFile, "utf-8");
+  const stderr = readFileSync(stderrFile, "utf-8");
   return { stdout, stderr, exitCode };
 }
 
-afterAll(() => { try { rmSync(CLI_TMP_DIR, { recursive: true }); } catch {} });
+afterAll(() => {
+  try {
+    rmSync(CLI_TMP_DIR, { recursive: true });
+  } catch {}
+});
 
 // Test fixtures directory
 const TEST_DIR = join(import.meta.dir, "test-fixtures", "migration");
@@ -108,19 +112,19 @@ beforeEach(() => {
   // Write sample files
   writeFileSync(
     join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "2026-01-23-084250_LEARNING_test.md"),
-    LEARNING_FILE
+    LEARNING_FILE,
   );
   writeFileSync(
     join(TEST_MEMORY_DIR, "LEARNING", "SYSTEM", "2026-01", "2026-01-23-084251_LEARNING_test2.md"),
-    LEARNING_FILE.replace("ALGORITHM", "SYSTEM")
+    LEARNING_FILE.replace("ALGORITHM", "SYSTEM"),
   );
   writeFileSync(
     join(TEST_MEMORY_DIR, "research", "2026-01", "2026-01-24-082823_AGENT-kaya_RESEARCH_test.md"),
-    RESEARCH_FILE
+    RESEARCH_FILE,
   );
   writeFileSync(
     join(TEST_MEMORY_DIR, "KAYASYSTEMUPDATES", "2026-01", "2026-01-20-132858_SYSTEM_test.md"),
-    PAISYSTEM_FILE
+    PAISYSTEM_FILE,
   );
 });
 
@@ -134,7 +138,7 @@ afterEach(() => {
 describe("MigrateToMemoryStore", () => {
   describe("Frontmatter Parsing", () => {
     test("should parse YAML frontmatter from markdown", async () => {
-      const { parseFrontmatter } = await import("./MigrateToMemoryStore");
+      const { parseFrontmatter } = await import("./MigrateToMemoryStore.ts");
 
       const result = parseFrontmatter(LEARNING_FILE);
 
@@ -142,16 +146,12 @@ describe("MigrateToMemoryStore", () => {
       expect(result.frontmatter.capture_type).toBe("LEARNING");
       expect(result.frontmatter.timestamp).toBe("2026-01-23 08:42:50 PST");
       expect(result.frontmatter.rating).toBe(5);
-      expect(result.frontmatter.tags).toEqual([
-        "sentiment-detected",
-        "implicit-rating",
-        "improvement-opportunity",
-      ]);
+      expect(result.frontmatter.tags).toEqual(["sentiment-detected", "implicit-rating", "improvement-opportunity"]);
       expect(result.content).toContain("# Implicit Low Rating Detected");
     });
 
     test("should handle missing frontmatter", async () => {
-      const { parseFrontmatter } = await import("./MigrateToMemoryStore");
+      const { parseFrontmatter } = await import("./MigrateToMemoryStore.ts");
 
       const content = "# No Frontmatter\n\nJust content.";
       const result = parseFrontmatter(content);
@@ -161,7 +161,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should handle malformed frontmatter gracefully", async () => {
-      const { parseFrontmatter } = await import("./MigrateToMemoryStore");
+      const { parseFrontmatter } = await import("./MigrateToMemoryStore.ts");
 
       const content = "---\ninvalid: yaml: content: here\n---\n\nContent";
       const result = parseFrontmatter(content);
@@ -175,7 +175,7 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Category Extraction", () => {
     test("should extract category from LEARNING/ALGORITHM path", async () => {
-      const { extractCategory } = await import("./MigrateToMemoryStore");
+      const { extractCategory } = await import("./MigrateToMemoryStore.ts");
 
       const path = "/path/to/MEMORY/LEARNING/ALGORITHM/2026-01/file.md";
       const category = extractCategory(path);
@@ -184,7 +184,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should extract category from LEARNING/SYSTEM path", async () => {
-      const { extractCategory } = await import("./MigrateToMemoryStore");
+      const { extractCategory } = await import("./MigrateToMemoryStore.ts");
 
       const path = "/path/to/MEMORY/LEARNING/SYSTEM/2026-01/file.md";
       const category = extractCategory(path);
@@ -193,7 +193,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should return undefined for research files (no subcategory)", async () => {
-      const { extractCategory } = await import("./MigrateToMemoryStore");
+      const { extractCategory } = await import("./MigrateToMemoryStore.ts");
 
       const path = "/path/to/MEMORY/research/2026-01/file.md";
       const category = extractCategory(path);
@@ -202,7 +202,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should return undefined for KayaSYSTEMUPDATES (no subcategory)", async () => {
-      const { extractCategory } = await import("./MigrateToMemoryStore");
+      const { extractCategory } = await import("./MigrateToMemoryStore.ts");
 
       const path = "/path/to/MEMORY/KAYASYSTEMUPDATES/2026-01/file.md";
       const category = extractCategory(path);
@@ -213,28 +213,28 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Type Mapping", () => {
     test("should map LEARNING to learning type", async () => {
-      const { mapToMemoryType } = await import("./MigrateToMemoryStore");
+      const { mapToMemoryType } = await import("./MigrateToMemoryStore.ts");
 
       const type = mapToMemoryType("LEARNING");
       expect(type).toBe("learning");
     });
 
     test("should map research to research type", async () => {
-      const { mapToMemoryType } = await import("./MigrateToMemoryStore");
+      const { mapToMemoryType } = await import("./MigrateToMemoryStore.ts");
 
       const type = mapToMemoryType("research");
       expect(type).toBe("research");
     });
 
     test("should map KAYASYSTEMUPDATES to artifact type", async () => {
-      const { mapToMemoryType } = await import("./MigrateToMemoryStore");
+      const { mapToMemoryType } = await import("./MigrateToMemoryStore.ts");
 
       const type = mapToMemoryType("KAYASYSTEMUPDATES");
       expect(type).toBe("artifact");
     });
 
     test("should default to insight for unknown types", async () => {
-      const { mapToMemoryType } = await import("./MigrateToMemoryStore");
+      const { mapToMemoryType } = await import("./MigrateToMemoryStore.ts");
 
       const type = mapToMemoryType("UNKNOWN");
       expect(type).toBe("insight");
@@ -243,17 +243,17 @@ describe("MigrateToMemoryStore", () => {
 
   describe("File Scanning", () => {
     test("should find all markdown files in LEARNING directory", async () => {
-      const { scanDirectory } = await import("./MigrateToMemoryStore");
+      const { scanDirectory } = await import("./MigrateToMemoryStore.ts");
 
       const files = await scanDirectory(join(TEST_MEMORY_DIR, "LEARNING"));
 
       expect(files.length).toBe(2);
-      expect(files.some(f => f.includes("ALGORITHM"))).toBe(true);
-      expect(files.some(f => f.includes("SYSTEM"))).toBe(true);
+      expect(files.some((f) => f.includes("ALGORITHM"))).toBe(true);
+      expect(files.some((f) => f.includes("SYSTEM"))).toBe(true);
     });
 
     test("should find markdown files in research directory", async () => {
-      const { scanDirectory } = await import("./MigrateToMemoryStore");
+      const { scanDirectory } = await import("./MigrateToMemoryStore.ts");
 
       const files = await scanDirectory(join(TEST_MEMORY_DIR, "research"));
 
@@ -262,23 +262,20 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should skip non-markdown files", async () => {
-      const { scanDirectory } = await import("./MigrateToMemoryStore");
+      const { scanDirectory } = await import("./MigrateToMemoryStore.ts");
 
       // Add a non-markdown file
-      writeFileSync(
-        join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "test.txt"),
-        "Not markdown"
-      );
+      writeFileSync(join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "test.txt"), "Not markdown");
 
       const files = await scanDirectory(join(TEST_MEMORY_DIR, "LEARNING"));
 
-      expect(files.every(f => f.endsWith(".md"))).toBe(true);
+      expect(files.every((f) => f.endsWith(".md"))).toBe(true);
     });
   });
 
   describe("Entry Transformation", () => {
     test("should transform LEARNING file to MemoryStore entry", async () => {
-      const { transformToEntry } = await import("./MigrateToMemoryStore");
+      const { transformToEntry } = await import("./MigrateToMemoryStore.ts");
 
       const filePath = join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "2026-01-23-084250_LEARNING_test.md");
       const entry = await transformToEntry(filePath);
@@ -293,7 +290,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should transform research file to MemoryStore entry", async () => {
-      const { transformToEntry } = await import("./MigrateToMemoryStore");
+      const { transformToEntry } = await import("./MigrateToMemoryStore.ts");
 
       const filePath = join(TEST_MEMORY_DIR, "research", "2026-01", "2026-01-24-082823_AGENT-kaya_RESEARCH_test.md");
       const entry = await transformToEntry(filePath);
@@ -306,7 +303,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should preserve file timestamps in metadata", async () => {
-      const { transformToEntry } = await import("./MigrateToMemoryStore");
+      const { transformToEntry } = await import("./MigrateToMemoryStore.ts");
 
       const filePath = join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "2026-01-23-084250_LEARNING_test.md");
       const entry = await transformToEntry(filePath);
@@ -318,13 +315,13 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Dry Run Mode", () => {
     test("should not import entries in dry-run mode", async () => {
-      const { migrateDirectory, createMemoryStore } = await import("./MigrateToMemoryStore");
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
 
       const stats = await migrateDirectory(
         join(TEST_MEMORY_DIR, "LEARNING"),
         "learning",
         TEST_MEMORY_STORE_DIR,
-        true // dryRun
+        true, // dryRun
       );
 
       expect(stats.scanned).toBe(2);
@@ -336,14 +333,9 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should report what would be migrated in dry-run", async () => {
-      const { migrateDirectory } = await import("./MigrateToMemoryStore");
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
 
-      const stats = await migrateDirectory(
-        join(TEST_MEMORY_DIR, "LEARNING"),
-        "learning",
-        TEST_MEMORY_STORE_DIR,
-        true
-      );
+      const stats = await migrateDirectory(join(TEST_MEMORY_DIR, "LEARNING"), "learning", TEST_MEMORY_STORE_DIR, true);
 
       expect(stats.scanned).toBeGreaterThan(0);
       expect(stats.wouldImport).toBe(stats.scanned);
@@ -352,14 +344,14 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Deduplication", () => {
     test("should detect duplicate content via MemoryStore", async () => {
-      const { migrateDirectory, createMemoryStore } = await import("./MigrateToMemoryStore");
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
 
       // First migration
       const stats1 = await migrateDirectory(
         join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM"),
         "learning",
         TEST_MEMORY_STORE_DIR,
-        false
+        false,
       );
 
       expect(stats1.imported).toBe(1);
@@ -370,7 +362,7 @@ describe("MigrateToMemoryStore", () => {
         join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM"),
         "learning",
         TEST_MEMORY_STORE_DIR,
-        false
+        false,
       );
 
       // MemoryStore returns the existing entry, so this counts as "imported"
@@ -381,14 +373,9 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Statistics Reporting", () => {
     test("should report accurate statistics", async () => {
-      const { migrateDirectory } = await import("./MigrateToMemoryStore");
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
 
-      const stats = await migrateDirectory(
-        join(TEST_MEMORY_DIR, "LEARNING"),
-        "learning",
-        TEST_MEMORY_STORE_DIR,
-        false
-      );
+      const stats = await migrateDirectory(join(TEST_MEMORY_DIR, "LEARNING"), "learning", TEST_MEMORY_STORE_DIR, false);
 
       expect(stats.scanned).toBe(2);
       // At least one should be imported (second might be deduplicated)
@@ -396,21 +383,27 @@ describe("MigrateToMemoryStore", () => {
       expect(stats.failed).toBe(0);
     });
 
+    test("the type given by the caller wins over the type guessed from the path", async () => {
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
+
+      const stats = await migrateDirectory(join(TEST_MEMORY_DIR, "LEARNING"), "research", TEST_MEMORY_STORE_DIR, false);
+      expect(stats.imported).toBeGreaterThan(0);
+
+      // The files live under LEARNING/ (path guess = "learning"); --type research must be honored.
+      const store = createMemoryStore(TEST_MEMORY_STORE_DIR);
+      const research = await store.search({ type: "research" });
+      expect(research.length).toBeGreaterThan(0);
+      expect((await store.search({ type: "learning" })).length).toBe(0);
+    });
+
     test("should track failed imports", async () => {
-      const { migrateDirectory } = await import("./MigrateToMemoryStore");
+      const { migrateDirectory } = await import("./MigrateToMemoryStore.ts");
 
       // Create a malformed file
-      writeFileSync(
-        join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "broken.md"),
-        "No proper structure"
-      );
+      writeFileSync(join(TEST_MEMORY_DIR, "LEARNING", "ALGORITHM", "2026-01", "broken.md"), "No proper structure");
 
-      const stats = await migrateDirectory(
-        join(TEST_MEMORY_DIR, "LEARNING"),
-        "learning",
-        TEST_MEMORY_STORE_DIR,
-        false
-      );
+      const stats = await migrateDirectory(join(TEST_MEMORY_DIR, "LEARNING"), "learning", TEST_MEMORY_STORE_DIR, false);
 
       // Our migration tool is robust - it extracts title from content
       // So this will actually succeed, not fail
@@ -436,11 +429,7 @@ describe("MigrateToMemoryStore", () => {
     });
 
     test("should execute dry-run successfully", () => {
-      const result = runMigrateCli([
-        "--source", join(TEST_MEMORY_DIR, "LEARNING"),
-        "--type", "learning",
-        "--dry-run",
-      ]);
+      const result = runMigrateCli(["--source", join(TEST_MEMORY_DIR, "LEARNING"), "--type", "learning", "--dry-run"]);
       const output = result.stdout + result.stderr;
 
       expect(output).toContain("DRY RUN");
@@ -451,7 +440,7 @@ describe("MigrateToMemoryStore", () => {
 
   describe("Batch Migration", () => {
     test("should migrate all directories with --all flag", async () => {
-      const { migrateAll } = await import("./MigrateToMemoryStore");
+      const { migrateAll } = await import("./MigrateToMemoryStore.ts");
 
       const stats = await migrateAll(TEST_MEMORY_DIR, TEST_MEMORY_STORE_DIR, true);
 

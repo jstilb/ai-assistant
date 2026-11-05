@@ -1,0 +1,93 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlakuu2q-hri5gg-spec.md",
+  "layoutNote": "4-col 106 rows large",
+  "rowCount": 14,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Progress Dashboard renders ProgressOverview (streak count, total exercises, accuracy), StreakChart, DomainBreakdown donut, RecentActivity timeline, and CompletionHeatmap — all populated from `/api/progress/:userId` data — in under 1.5 seconds with 100 data points, with zero axe-core accessibility violations",
+      "verifyMethod": "Playwright E2E: load dashboard with 100-item MSW fixture → assert all 5 sub-components visible → performance.measure < 1500ms → `axe-core` scan returns 0 critical/serious violations",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 2,
+      "description": "CodeRenderer integrates Monaco Editor via `@monaco-editor/react` with syntax highlighting for Python, JavaScript, TypeScript, and Java; supports configurable read-only regions; includes an OutputPanel for execution feedback; is lazy-loaded via `next/dynamic` (not in main bundle); and loads in under 2 seconds",
+      "verifyMethod": "Unit test: CodeRenderer renders with Python fixture → assert Monaco mount + syntax tokens present. Bundle analysis: Monaco chunk isolated, not in main bundle. Playwright E2E: load code exercise → edit code → submit → see OutputPanel feedback → user timing mark < 2000ms",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 3,
+      "description": "MathRenderer renders inline and display LaTeX via KaTeX, provides an EquationToolbar for common symbol insertion with live preview, and handles malformed LaTeX gracefully by displaying the raw LaTeX string with an error message (not crashing)",
+      "verifyMethod": "Unit test: render nested fractions + matrices → assert KaTeX DOM output. Unit test: pass malformed LaTeX → assert fallback text rendered + error boundary triggered. Integration test: toolbar insert symbol → assert KaTeX re-renders with symbol. Render time for complex expression < 100ms via performance mark",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 4,
+      "description": "LanguageRenderer supports multi-script input (hiragana, kanji, romaji verified), provides character-by-character validation with visual feedback (green/red per character), displays pronunciation guides via HTML `<ruby>` annotations, and includes a ScriptToggle for switching input modes — functional on Chrome, Firefox, and Safari",
+      "verifyMethod": "Unit test: CharacterInput validates correct/incorrect characters → assert green/red CSS classes. Unit test: PronunciationGuide renders `<ruby>` tags. Playwright E2E: type hiragana input via IME simulation → verify character validation → toggle to romaji → verify mode switch. Cross-browser Playwright matrix: Chrome, Firefox, WebKit",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 5,
+      "description": "Achievement Engine evaluates triggers on every exercise submission event, supports configurable milestone thresholds (default: streaks at 3/7/14/30/100 days, completions at 10/50/100/500), grants achievements idempotently (same event processed twice yields same result), persists to store, and displays AchievementToast notification on unlock",
+      "verifyMethod": "Unit test: engine.evaluate with streak=7 → returns \"7-Day Streak\" unlock. Unit test: call engine.evaluate twice with same event → assert single grant (idempotency). Integration test: exerciseStore submit → engine evaluates → achievementStore updated → AchievementToast rendered. E2E: complete 7th consecutive day exercise → toast appears with correct achievement",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 6,
+      "description": "\"Why this lesson?\" is an expandable panel (not modal) showing prerequisite chain as a mini-graph, learning objective, difficulty justification, and estimated time — sourced from `/api/content/metadata`. When metadata is absent or partial, it gracefully degrades to \"Based on your progress in [domain]\" text instead of erroring",
+      "verifyMethod": "Unit test: WhyThisLesson renders full metadata fixture → assert all 4 fields present. Unit test: pass `null` metadata → assert degraded message \"Based on your progress…\" displayed, no error thrown. Integration test: API returns partial metadata (missing prerequisites) → assert available fields render + missing fields show fallback. E2E: click \"Why this lesson?\" → panel expands → content visible → click again → collapses",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 7,
+      "description": "PWA passes Lighthouse PWA audit with score ≥ 90, is installable (manifest + service worker + HTTPS), uses cache-first for app shell and static assets, stale-while-revalidate for API data, and network-first with background sync fallback for exercise submissions",
+      "verifyMethod": "`npx lhci autorun` → PWA score ≥ 90 in CI. Manual verify: Chrome shows install prompt. Integration test: service worker registers, caches app shell. E2E (offline mode): disconnect network → dashboard loads from cache → navigate to cached exercise → content displays",
+      "embeddedCommand": "npx lhci autorun",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 8,
+      "description": "Offline exercise completion (Milestone 2): user completes exercise while offline → answer saved to IndexedDB `pending_ops` table → UI shows \"Pending sync\" indicator → on reconnection, Workbox Background Sync submits to `/api/sessions/:id/submit` → sync indicator updates to \"Synced\" → server progress matches local state",
+      "verifyMethod": "Unit test: syncManager.queue() writes to IndexedDB pending_ops → assert record created. Unit test: syncManager.flush() POSTs pending ops → assert queue cleared on success. E2E: go offline → complete exercise → assert \"Pending sync\" indicator → go online → assert sync indicator changes → verify server received submission via API check",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 9,
+      "description": "IndexedDB quota management implements LRU eviction of cached exercises when storage exceeds 80% capacity, warns user at 80%, and handles `QuotaExceededError` gracefully without data loss to in-progress work",
+      "verifyMethod": "Unit test: quotaManager with fake 80% usage → assert eviction of oldest exercises, not in-progress ones. Unit test: simulate QuotaExceededError → assert error caught, warning UI displayed, no crash. Integration test: fill storage → attempt cache new exercise → assert LRU eviction occurred + new exercise cached",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 10,
+      "description": "All 297 Phase 3 tests continue passing after Phase 4 changes with zero regressions; Phase 4 adds ≥ 150 new tests (unit + integration + E2E); combined new code coverage ≥ 85% measured by Vitest coverage reporter",
+      "verifyMethod": "CI pipeline: `npm test -- --filter=\"phase3\"` → 297/297 pass. `npm test -- --filter=\"phase4\" --coverage` → ≥ 150 tests pass, coverage report shows ≥ 85% on `src/` files added in Phase 4. Total test count verified in CI output",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 11,
+      "description": "Main bundle (gzipped) is < 300KB; Monaco Editor chunk is isolated and lazy-loaded (< 500KB gzip); KaTeX bundle included only in math exercise route; no render-blocking third-party scripts in critical path",
+      "verifyMethod": "`npm run build` output → assert main chunk < 300KB gzip. Webpack/Next.js bundle analyzer report → assert Monaco in separate chunk, KaTeX in math route chunk. Lighthouse Performance score ≥ 85. CI check: fail if main > 350KB, warn if > 300KB",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 12,
+      "description": "All UI components meet WCAG 2.1 AA: keyboard navigable (Tab/Enter/Escape), screen reader compatible (ARIA labels on interactive elements), color contrast ≥ 4.5:1, animations respect `prefers-reduced-motion`",
+      "verifyMethod": "`eslint-plugin-jsx-a11y` → zero errors in CI. Playwright + axe-core scan on every page → zero critical/serious violations. Manual test: Tab through dashboard, exercise, achievements → all interactive elements reachable. CSS audit: all animations wrapped in `@media (prefers-reduced-motion: no-preference)`",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 13,
+      "description": "RendererRegistry implements strategy pattern: maps domain string → React component; returns GenericRenderer for unregistered domains; GenericRenderer renders markdown content via `react-markdown` + text input for answers — is production-quality, not a stub",
+      "verifyMethod": "Unit test: `registry.get(\"code\")` → CodeRenderer; `registry.get(\"unknown_domain\")` → GenericRenderer. Unit test: GenericRenderer renders markdown fixture with headings, lists, code blocks → assert correct HTML output. Integration test: ExerciseShell with domain=\"music\" → dispatches to GenericRenderer → user can input text answer → submit works",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 14,
+      "description": "CI/CD pipeline runs on every PR with these sequential gates: lint → type-check → Phase 3 regression tests → Phase 4 tests with coverage → E2E tests → Lighthouse CI → bundle analysis → security audit (`npm audit --audit-level=high`). Any gate failure blocks merge. Pre-commit hooks run lint + format + type-check + unit tests",
+      "verifyMethod": "`.github/workflows/ci.yml` (or equivalent) contains all 8 stages. PR opened → all checks run → green status required for merge button. Test: introduce lint error → assert CI fails at lint stage. Test: drop coverage below 85% → assert CI fails at coverage gate. `npm audit` → zero high/critical vulnerabilities",
+      "source": "GROUNDED"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.235Z"
+}

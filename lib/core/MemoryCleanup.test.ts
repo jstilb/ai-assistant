@@ -1,17 +1,17 @@
 /**
  * MemoryCleanup.test.ts - Tests for MemoryCleanup
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { spawnSync } from 'child_process';
-import { join } from 'path';
-import { existsSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'fs';
-import { tmpdir } from 'os';
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   getPipelineRepository,
   resetPipelineRepository,
-} from '../../skills/Automation/QueueRouter/Tools/PipelineRepository.ts';
+} from "../../skills/Automation/QueueRouter/Tools/PipelineRepository.ts";
 
-const MEMORY_CLEANUP_PATH = join(import.meta.dir, 'MemoryCleanup.ts');
+const MEMORY_CLEANUP_PATH = join(import.meta.dir, "MemoryCleanup.ts");
 
 /** Build an env for subprocess tests that doesn't propagate KAYA_HOME test overrides */
 function cleanEnv(): NodeJS.ProcessEnv {
@@ -20,65 +20,65 @@ function cleanEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-describe('MemoryCleanup', () => {
-  it('file exists', () => {
+describe("MemoryCleanup", () => {
+  it("file exists", () => {
     expect(existsSync(MEMORY_CLEANUP_PATH)).toBe(true);
   });
 
-  it('all --dry-run exits cleanly without crashing', () => {
-    const result = spawnSync('bun', [MEMORY_CLEANUP_PATH, 'all', '--dry-run'], {
-      encoding: 'utf-8',
+  it("all --dry-run exits cleanly without crashing", () => {
+    const result = spawnSync("bun", [MEMORY_CLEANUP_PATH, "all", "--dry-run"], {
+      encoding: "utf-8",
       timeout: 20000,
       env: cleanEnv(),
     });
     expect(result.signal).toBeNull();
-    const combined = (result.stdout || '') + (result.stderr || '');
-    expect(combined).not.toContain('SyntaxError');
-    expect(combined).not.toContain('Uncaught');
-    expect(combined).not.toContain('Cannot find module');
+    const combined = (result.stdout || "") + (result.stderr || "");
+    expect(combined).not.toContain("SyntaxError");
+    expect(combined).not.toContain("Uncaught");
+    expect(combined).not.toContain("Cannot find module");
   });
 
-  it('all --dry-run --json produces JSON output', () => {
-    const result = spawnSync('bun', [MEMORY_CLEANUP_PATH, 'all', '--dry-run', '--json'], {
-      encoding: 'utf-8',
+  it("all --dry-run --json produces JSON output", () => {
+    const result = spawnSync("bun", [MEMORY_CLEANUP_PATH, "all", "--dry-run", "--json"], {
+      encoding: "utf-8",
       timeout: 20000,
       env: cleanEnv(),
     });
     expect(result.signal).toBeNull();
-    const output = result.stdout || '';
+    const output = result.stdout || "";
     if (output.trim()) {
       // Should be valid JSON
       expect(() => JSON.parse(output)).not.toThrow();
       const parsed = JSON.parse(output);
-      expect(typeof parsed.dryRun).toBe('boolean');
+      expect(typeof parsed.dryRun).toBe("boolean");
       expect(parsed.dryRun).toBe(true);
     }
   });
 
-  it('debug --dry-run exits cleanly', () => {
-    const result = spawnSync('bun', [MEMORY_CLEANUP_PATH, 'debug', '--dry-run'], {
-      encoding: 'utf-8',
+  it("debug --dry-run exits cleanly", () => {
+    const result = spawnSync("bun", [MEMORY_CLEANUP_PATH, "debug", "--dry-run"], {
+      encoding: "utf-8",
       timeout: 15000,
       env: cleanEnv(),
     });
     expect(result.signal).toBeNull();
-    const combined = (result.stdout || '') + (result.stderr || '');
-    expect(combined).not.toContain('SyntaxError');
+    const combined = (result.stdout || "") + (result.stderr || "");
+    expect(combined).not.toContain("SyntaxError");
   });
 
-  it('--scan-unregistered: scanUnregistered() function exists and returns structured result', async () => {
+  it("--scan-unregistered: scanUnregistered() function exists and returns structured result", async () => {
     // Test the function directly rather than via subprocess (avoids Bun cwd/spawn issues)
-    const { scanUnregistered } = await import('./MemoryCleanup.ts');
+    const { scanUnregistered } = await import("./MemoryCleanup.ts");
     const result = scanUnregistered();
     // Must return structured object
-    expect(typeof result).toBe('object');
-    expect(typeof result.registered).toBe('number');
+    expect(typeof result).toBe("object");
+    expect(typeof result.registered).toBe("number");
     expect(result.registered).toBeGreaterThanOrEqual(10); // registry has 10+ entries
     expect(Array.isArray(result.unregistered)).toBe(true);
     expect(Array.isArray(result.warnings)).toBe(true);
     // Warnings should reference "unregistered" word
     if (result.warnings.length > 0) {
-      expect(result.warnings[0]).toContain('unregistered');
+      expect(result.warnings[0]).toContain("unregistered");
     }
   });
 });
@@ -87,21 +87,21 @@ describe('MemoryCleanup', () => {
 // JSONL_REGISTRY unit tests (ISC row 2)
 // ============================================================================
 
-describe('JSONL_REGISTRY', () => {
-  it('has at least 10 entries with retentionDays field', async () => {
-    const { getRegisteredJsonlPaths } = await import('./MemoryCleanup.ts');
+describe("JSONL_REGISTRY", () => {
+  it("has at least 10 entries with retentionDays field", async () => {
+    const { getRegisteredJsonlPaths } = await import("./MemoryCleanup.ts");
     const paths = getRegisteredJsonlPaths();
     // Registry has 14 entries (count from implementation)
     expect(paths.size).toBeGreaterThanOrEqual(10);
   });
 
-  it('registry covers notifications, monitoring, learning categories', async () => {
-    const { getRegisteredJsonlPaths } = await import('./MemoryCleanup.ts');
+  it("registry covers notifications, monitoring, learning categories", async () => {
+    const { getRegisteredJsonlPaths } = await import("./MemoryCleanup.ts");
     const paths = getRegisteredJsonlPaths();
     const pathList = [...paths];
-    const hasNotifications = pathList.some(p => p.includes('notifications'));
-    const hasMonitoring = pathList.some(p => p.includes('monitor-audit'));
-    const hasRatings = pathList.some(p => p.includes('ratings'));
+    const hasNotifications = pathList.some((p) => p.includes("notifications"));
+    const hasMonitoring = pathList.some((p) => p.includes("monitor-audit"));
+    const hasRatings = pathList.some((p) => p.includes("ratings"));
     expect(hasNotifications).toBe(true);
     expect(hasMonitoring).toBe(true);
     expect(hasRatings).toBe(true);
@@ -112,12 +112,12 @@ describe('JSONL_REGISTRY', () => {
 // scanUnregistered unit tests (ISC row 3)
 // ============================================================================
 
-describe('scanUnregistered', () => {
+describe("scanUnregistered", () => {
   let testHome: string;
 
   beforeEach(() => {
     testHome = join(tmpdir(), `mc-test-${Date.now()}`);
-    mkdirSync(join(testHome, 'MEMORY', 'NOTIFICATIONS'), { recursive: true });
+    mkdirSync(join(testHome, "MEMORY", "NOTIFICATIONS"), { recursive: true });
     process.env.KAYA_HOME = testHome;
   });
 
@@ -126,24 +126,24 @@ describe('scanUnregistered', () => {
     if (existsSync(testHome)) rmSync(testHome, { recursive: true });
   });
 
-  it('returns unregistered JSONL files as warnings', async () => {
+  it("returns unregistered JSONL files as warnings", async () => {
     // Put a JSONL file in a location not in the registry
-    const unknownFile = join(testHome, 'MEMORY', 'NOTIFICATIONS', 'unknown-custom.jsonl');
-    writeFileSync(unknownFile, '{}');
+    const unknownFile = join(testHome, "MEMORY", "NOTIFICATIONS", "unknown-custom.jsonl");
+    writeFileSync(unknownFile, "{}");
 
-    const { scanUnregistered } = await import('./MemoryCleanup.ts');
+    const { scanUnregistered } = await import("./MemoryCleanup.ts");
     const result = scanUnregistered();
 
     expect(result.unregistered.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThanOrEqual(1);
-    expect(result.warnings.some((w: string) => w.includes('unregistered'))).toBe(true);
+    expect(result.warnings.some((w: string) => w.includes("unregistered"))).toBe(true);
   });
 
-  it('returns empty unregistered for empty MEMORY dir', async () => {
-    const { scanUnregistered } = await import('./MemoryCleanup.ts');
+  it("returns empty unregistered for empty MEMORY dir", async () => {
+    const { scanUnregistered } = await import("./MemoryCleanup.ts");
     const result = scanUnregistered();
     expect(result.unregistered).toBeInstanceOf(Array);
-    expect(result.warnings.every((w: string) => w.includes('WARN'))).toBe(true);
+    expect(result.warnings.every((w: string) => w.includes("WARN"))).toBe(true);
   });
 });
 
@@ -151,12 +151,12 @@ describe('scanUnregistered', () => {
 // cleanWorkDirs unit tests (ISC rows 4 & 11)
 // ============================================================================
 
-describe('cleanWorkDirs', () => {
+describe("cleanWorkDirs", () => {
   let testHome: string;
 
   beforeEach(() => {
     testHome = join(tmpdir(), `mc-work-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-    mkdirSync(join(testHome, 'MEMORY', 'WORK'), { recursive: true });
+    mkdirSync(join(testHome, "MEMORY", "WORK"), { recursive: true });
     process.env.KAYA_HOME = testHome;
   });
 
@@ -166,25 +166,25 @@ describe('cleanWorkDirs', () => {
     if (existsSync(testHome)) rmSync(testHome, { recursive: true });
   });
 
-  it('removes WORK/ dirs older than TTL', async () => {
-    const workDir = join(testHome, 'MEMORY', 'WORK');
-    const oldDir = join(workDir, 'old-session-dir');
+  it("removes WORK/ dirs older than TTL", async () => {
+    const workDir = join(testHome, "MEMORY", "WORK");
+    const oldDir = join(workDir, "old-session-dir");
     mkdirSync(oldDir);
 
     // Backdate mtime to 35 days ago
     const oldTime = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000);
     utimesSync(oldDir, oldTime, oldTime);
 
-    const { cleanWorkDirs } = await import('./MemoryCleanup.ts');
+    const { cleanWorkDirs } = await import("./MemoryCleanup.ts");
     const result = await cleanWorkDirs(false);
 
     expect(result.dirsRemoved).toBe(1);
     expect(existsSync(oldDir)).toBe(false);
   });
 
-  it('skips in-progress work items even when old (reads pipeline.db, not work-queue.json)', async () => {
-    const workDir = join(testHome, 'MEMORY', 'WORK');
-    const activeDir = join(workDir, 'active-session-dir');
+  it("skips in-progress work items even when old (reads pipeline.db, not work-queue.json)", async () => {
+    const workDir = join(testHome, "MEMORY", "WORK");
+    const activeDir = join(workDir, "active-session-dir");
     mkdirSync(activeDir);
 
     // Backdate mtime to 40 days ago
@@ -193,41 +193,41 @@ describe('cleanWorkDirs', () => {
 
     // Seed pipeline.db with an in-progress item whose worktree_path resolves to
     // the dir name "active-session-dir" — NO work-queue.json written.
-    mkdirSync(join(testHome, '.kaya', 'runtime'), { recursive: true });
+    mkdirSync(join(testHome, ".kaya", "runtime"), { recursive: true });
     const repo = getPipelineRepository();
     repo.upsert({
-      id: 'test-active-item',
-      stage: 'in-progress',
+      id: "test-active-item",
+      stage: "in-progress",
       priority: 2,
-      title: 'Active work',
-      description: '',
+      title: "Active work",
+      description: "",
       worktree_path: `/path/to/worktrees/active-session-dir`,
       dependencies: [],
       attempts: [],
       isc_rows: [],
       metadata: {},
       context: {},
-      progress: { totalPhases: 0, completedPhases: 0, currentPhase: 0, phaseHistory: [], iscRows: [] },
+      progress: { totalPhases: 0, phasesCompleted: [], currentPhase: 0 },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
 
-    const { cleanWorkDirs } = await import('./MemoryCleanup.ts');
+    const { cleanWorkDirs } = await import("./MemoryCleanup.ts");
     const result = await cleanWorkDirs(false);
 
     expect(existsSync(activeDir)).toBe(true);
     expect(result.dirsSkipped).toBe(1);
   });
 
-  it('dry-run does not delete dirs', async () => {
-    const workDir = join(testHome, 'MEMORY', 'WORK');
-    const oldDir = join(workDir, 'dry-run-dir');
+  it("dry-run does not delete dirs", async () => {
+    const workDir = join(testHome, "MEMORY", "WORK");
+    const oldDir = join(workDir, "dry-run-dir");
     mkdirSync(oldDir);
 
     const oldTime = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000);
     utimesSync(oldDir, oldTime, oldTime);
 
-    const { cleanWorkDirs } = await import('./MemoryCleanup.ts');
+    const { cleanWorkDirs } = await import("./MemoryCleanup.ts");
     const result = await cleanWorkDirs(true); // dry-run
 
     expect(result.dirsRemoved).toBe(1); // counted but not deleted
@@ -239,12 +239,12 @@ describe('cleanWorkDirs', () => {
 // cleanOrphanedCurrentWork unit tests (ISC row 11)
 // ============================================================================
 
-describe('cleanOrphanedCurrentWork', () => {
+describe("cleanOrphanedCurrentWork", () => {
   let testHome: string;
 
   beforeEach(() => {
     testHome = join(tmpdir(), `mc-orphan-${Date.now()}`);
-    mkdirSync(join(testHome, 'MEMORY', 'State'), { recursive: true });
+    mkdirSync(join(testHome, "MEMORY", "State"), { recursive: true });
     process.env.KAYA_HOME = testHome;
   });
 
@@ -253,32 +253,32 @@ describe('cleanOrphanedCurrentWork', () => {
     if (existsSync(testHome)) rmSync(testHome, { recursive: true });
   });
 
-  it('removes UUID current-work files older than 24h', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const oldFile = join(stateDir, 'current-work-12345678-1234-1234-1234-123456789012.json');
-    writeFileSync(oldFile, '{}');
+  it("removes UUID current-work files older than 24h", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const oldFile = join(stateDir, "current-work-12345678-1234-1234-1234-123456789012.json");
+    writeFileSync(oldFile, "{}");
 
     // Backdate to 25 hours ago
     const oldTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
     utimesSync(oldFile, oldTime, oldTime);
 
-    const { cleanOrphanedCurrentWork } = await import('./MemoryCleanup.ts');
+    const { cleanOrphanedCurrentWork } = await import("./MemoryCleanup.ts");
     const result = await cleanOrphanedCurrentWork(false);
 
     expect(result.filesRemoved).toBe(1);
     expect(existsSync(oldFile)).toBe(false);
   });
 
-  it('keeps current-work.json (canonical file) untouched', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const canonicalFile = join(stateDir, 'current-work.json');
-    writeFileSync(canonicalFile, '{}');
+  it("keeps current-work.json (canonical file) untouched", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const canonicalFile = join(stateDir, "current-work.json");
+    writeFileSync(canonicalFile, "{}");
 
     // Backdate to 48 hours ago
     const oldTime = new Date(Date.now() - 48 * 60 * 60 * 1000);
     utimesSync(canonicalFile, oldTime, oldTime);
 
-    const { cleanOrphanedCurrentWork } = await import('./MemoryCleanup.ts');
+    const { cleanOrphanedCurrentWork } = await import("./MemoryCleanup.ts");
     const result = await cleanOrphanedCurrentWork(false);
 
     // canonical file should NOT be removed (pattern requires UUID)
@@ -286,13 +286,13 @@ describe('cleanOrphanedCurrentWork', () => {
     expect(result.filesRemoved).toBe(0);
   });
 
-  it('keeps UUID files newer than 24h', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const newFile = join(stateDir, 'current-work-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json');
-    writeFileSync(newFile, '{}');
+  it("keeps UUID files newer than 24h", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const newFile = join(stateDir, "current-work-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json");
+    writeFileSync(newFile, "{}");
     // No backdate — file is freshly created (< 24h)
 
-    const { cleanOrphanedCurrentWork } = await import('./MemoryCleanup.ts');
+    const { cleanOrphanedCurrentWork } = await import("./MemoryCleanup.ts");
     const result = await cleanOrphanedCurrentWork(false);
 
     expect(existsSync(newFile)).toBe(true);
@@ -305,15 +305,15 @@ describe('cleanOrphanedCurrentWork', () => {
   // before (unlike cleanWorkDirs' own "dry-run does not delete dirs" test
   // above) — added here to prove the threading is safe before it reaches a
   // scheduled, non-test-gated tier.
-  it('dry-run does not delete orphaned files (counts but preserves)', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const oldFile = join(stateDir, 'current-work-deadbeef-dead-beef-dead-beefdeadbeef.json');
-    writeFileSync(oldFile, '{}');
+  it("dry-run does not delete orphaned files (counts but preserves)", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const oldFile = join(stateDir, "current-work-deadbeef-dead-beef-dead-beefdeadbeef.json");
+    writeFileSync(oldFile, "{}");
 
     const oldTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
     utimesSync(oldFile, oldTime, oldTime);
 
-    const { cleanOrphanedCurrentWork } = await import('./MemoryCleanup.ts');
+    const { cleanOrphanedCurrentWork } = await import("./MemoryCleanup.ts");
     const result = await cleanOrphanedCurrentWork(true); // dry-run
 
     expect(result.filesRemoved).toBe(1); // counted but not deleted
@@ -332,12 +332,12 @@ describe('cleanOrphanedCurrentWork', () => {
 // describe block immediately above (same KAYA_HOME-pinning beforeEach/afterEach).
 // ============================================================================
 
-describe('cleanStaleContextFiles', () => {
+describe("cleanStaleContextFiles", () => {
   let testHome: string;
 
   beforeEach(() => {
     testHome = join(tmpdir(), `mc-context-${Date.now()}`);
-    mkdirSync(join(testHome, 'MEMORY', 'State'), { recursive: true });
+    mkdirSync(join(testHome, "MEMORY", "State"), { recursive: true });
     process.env.KAYA_HOME = testHome;
   });
 
@@ -346,61 +346,150 @@ describe('cleanStaleContextFiles', () => {
     if (existsSync(testHome)) rmSync(testHome, { recursive: true });
   });
 
-  it('removes prompt-context-{uuid}.json files older than 14 days', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const oldFile = join(stateDir, 'prompt-context-12345678-1234-1234-1234-123456789012.json');
-    writeFileSync(oldFile, '{}');
+  it("removes prompt-context-{uuid}.json files older than 14 days", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const oldFile = join(stateDir, "prompt-context-12345678-1234-1234-1234-123456789012.json");
+    writeFileSync(oldFile, "{}");
 
     const oldTime = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
     utimesSync(oldFile, oldTime, oldTime);
 
-    const { cleanStaleContextFiles } = await import('./MemoryCleanup.ts');
+    const { cleanStaleContextFiles } = await import("./MemoryCleanup.ts");
     const result = await cleanStaleContextFiles(false);
 
     expect(result.filesRemoved).toBe(1);
     expect(existsSync(oldFile)).toBe(false);
   });
 
-  it('removes context-session-{uuid}.json files older than 14 days', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const oldFile = join(stateDir, 'context-session-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json');
-    writeFileSync(oldFile, '{}');
+  it("removes context-session-{uuid}.json files older than 14 days", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const oldFile = join(stateDir, "context-session-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json");
+    writeFileSync(oldFile, "{}");
 
     const oldTime = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
     utimesSync(oldFile, oldTime, oldTime);
 
-    const { cleanStaleContextFiles } = await import('./MemoryCleanup.ts');
+    const { cleanStaleContextFiles } = await import("./MemoryCleanup.ts");
     const result = await cleanStaleContextFiles(false);
 
     expect(result.filesRemoved).toBe(1);
     expect(existsSync(oldFile)).toBe(false);
   });
 
-  it('keeps files newer than 14 days', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const newFile = join(stateDir, 'prompt-context-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.json');
-    writeFileSync(newFile, '{}');
+  it("keeps files newer than 14 days", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const newFile = join(stateDir, "prompt-context-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.json");
+    writeFileSync(newFile, "{}");
     // No backdate — freshly created (< 14 days)
 
-    const { cleanStaleContextFiles } = await import('./MemoryCleanup.ts');
+    const { cleanStaleContextFiles } = await import("./MemoryCleanup.ts");
     const result = await cleanStaleContextFiles(false);
 
     expect(existsSync(newFile)).toBe(true);
     expect(result.filesRemoved).toBe(0);
   });
 
-  it('dry-run does not delete files (counts but preserves)', async () => {
-    const stateDir = join(testHome, 'MEMORY', 'State');
-    const oldFile = join(stateDir, 'context-session-cccccccc-cccc-cccc-cccc-cccccccccccc.json');
-    writeFileSync(oldFile, '{}');
+  it("dry-run does not delete files (counts but preserves)", async () => {
+    const stateDir = join(testHome, "MEMORY", "State");
+    const oldFile = join(stateDir, "context-session-cccccccc-cccc-cccc-cccc-cccccccccccc.json");
+    writeFileSync(oldFile, "{}");
 
     const oldTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     utimesSync(oldFile, oldTime, oldTime);
 
-    const { cleanStaleContextFiles } = await import('./MemoryCleanup.ts');
+    const { cleanStaleContextFiles } = await import("./MemoryCleanup.ts");
     const result = await cleanStaleContextFiles(true); // dry-run
 
     expect(result.filesRemoved).toBe(1); // counted but not deleted
     expect(existsSync(oldFile)).toBe(true); // still exists
+  });
+});
+
+describe("cleanFolderRetention", () => {
+  let testHome: string;
+  const NOW = Date.UTC(2026, 10, 5); // 2026-11-05
+  const put = (rel: string, body = "x") => {
+    const full = join(testHome, "MEMORY", rel);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, body);
+    return full;
+  };
+
+  beforeEach(() => {
+    testHome = join(tmpdir(), `mc-folders-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    mkdirSync(join(testHome, "MEMORY"), { recursive: true });
+    process.env.KAYA_HOME = testHome;
+  });
+
+  afterEach(() => {
+    delete process.env.KAYA_HOME;
+    if (existsSync(testHome)) rmSync(testHome, { recursive: true });
+  });
+
+  it("dry run counts old files but moves nothing", async () => {
+    const old = put("BRIEFINGS/2026-01-01.md");
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    const results = await cleanFolderRetention(true, NOW);
+    const r = results.find((x) => x.target.startsWith("BRIEFINGS"));
+    expect(r?.filesRemoved).toBe(1);
+    expect(existsSync(old)).toBe(true);
+    expect(existsSync(join(testHome, "MEMORY", "archive", "retention"))).toBe(false);
+  });
+
+  it("archives files older than the policy age and keeps newer ones", async () => {
+    const old = put("BRIEFINGS/2026-01-01.md", "old");
+    const fresh = put("BRIEFINGS/2026-10-20.md", "fresh");
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    await cleanFolderRetention(false, NOW);
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+    const moved = join(testHome, "MEMORY", "archive", "retention", "BRIEFINGS", "2026-01-01.md");
+    expect(readFileSync(moved, "utf-8")).toBe("old");
+  });
+
+  it("takes the age from a date directory and keeps the relative path", async () => {
+    put("LEARNING/ALGORITHM/2026-02/note.md", "n");
+    put("LEARNING/ALGORITHM/_Analysis.md", "index");
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    await cleanFolderRetention(false, NOW);
+    expect(
+      existsSync(join(testHome, "MEMORY", "archive", "retention", "LEARNING", "ALGORITHM", "2026-02", "note.md")),
+    ).toBe(true);
+    // index files that start with "_" are never aged out
+    expect(existsSync(join(testHome, "MEMORY", "LEARNING", "ALGORITHM", "_Analysis.md"))).toBe(true);
+  });
+
+  it("uses mtime when the path has no date", async () => {
+    const f = put("SkillAudits/undated.md");
+    const t = new Date(NOW - 200 * 86_400_000);
+    utimesSync(f, t, t);
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    await cleanFolderRetention(false, NOW);
+    expect(existsSync(f)).toBe(false);
+  });
+
+  it("deletes archived files older than the purge age", async () => {
+    const stale = put("archive/retention/BRIEFINGS/2025-01-01.md");
+    const recent = put("archive/retention/BRIEFINGS/2026-02-01.md");
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    await cleanFolderRetention(false, NOW);
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(recent)).toBe(true);
+  });
+
+  it("leaves a file in place and reports an error when the archive target exists", async () => {
+    const old = put("BRIEFINGS/2026-01-01.md", "new");
+    put("archive/retention/BRIEFINGS/2026-01-01.md", "kept");
+    const { cleanFolderRetention } = await import("./MemoryCleanup.ts");
+    const results = await cleanFolderRetention(false, NOW);
+    const r = results.find((x) => x.target.startsWith("BRIEFINGS"));
+    expect(r?.errors.length).toBe(1);
+    expect(existsSync(old)).toBe(true);
+  });
+
+  it("every policy folder is listed in MEMORY_MANIFEST.md", async () => {
+    const { FOLDER_RETENTION_POLICIES } = await import("./MemoryCleanup.ts");
+    const manifest = readFileSync(join(import.meta.dir, "..", "..", "MEMORY", "MEMORY_MANIFEST.md"), "utf-8");
+    for (const p of FOLDER_RETENTION_POLICIES) expect(manifest).toContain(`\`${p.dir}\``);
   });
 });

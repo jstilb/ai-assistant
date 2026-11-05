@@ -33,9 +33,9 @@
  * with no KAYA_HOME fallback — pinning only one leaks live-tree writes.
  */
 
-import { mkdtempSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 interface ActivePin {
   dir: string;
@@ -57,7 +57,7 @@ let _active: ActivePin | null = null;
 export function pinKayaHome(prefix = "kaya-test-"): string {
   if (_active) {
     throw new Error(
-      `pinKayaHome: a pin is already active (${_active.dir}) — a previous suite is missing restoreKayaHome() in afterAll`
+      `pinKayaHome: a pin is already active (${_active.dir}) — a previous suite is missing restoreKayaHome() in afterAll`,
     );
   }
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -93,9 +93,7 @@ export async function restoreKayaHome(): Promise<void> {
     // TaskDB-singleton pollution class is real for every suite that touched
     // LucidTasks. resetTaskDB({forgetPath:true}) makes the next file
     // re-resolve its DB path from the restored env.
-    const { resetTaskDB } = await import(
-      "../../skills/Productivity/LucidTasks/Tools/TaskDB.ts"
-    );
+    const { resetTaskDB } = await import("../../skills/Productivity/LucidTasks/Tools/TaskDB.ts");
     resetTaskDB({ forgetPath: true });
   } catch {
     // intentionally silent: probing for an optional skill module — LucidTasks

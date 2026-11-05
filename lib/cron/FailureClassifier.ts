@@ -10,7 +10,7 @@
  * unit-testable without spawning real processes.
  */
 
-export type FailureClass = 'environment' | 'transient' | 'timeout' | 'auth' | 'bug' | 'detection';
+export type FailureClass = "environment" | "transient" | "timeout" | "auth" | "bug" | "detection";
 
 /**
  * Exit-code contract for self-alerting sentinel jobs (2026-08-07): a job
@@ -136,14 +136,14 @@ const AUTH_PATTERNS: RegExp[] = [
  *   7. else (clean non-zero exit, no pattern)      -> 'bug'
  */
 export function classifyFailure(input: FailureInput): FailureClass {
-  if (input.timedOut === true) return 'timeout';
-  if (input.wasOffline === true) return 'environment';
-  if (input.exitCode === DETECTION_EXIT_CODE) return 'detection';
+  if (input.timedOut === true) return "timeout";
+  if (input.wasOffline === true) return "environment";
+  if (input.exitCode === DETECTION_EXIT_CODE) return "detection";
 
-  const text = `${input.stderr ?? ''}\n${input.stdout ?? ''}`;
-  if (TRANSIENT_PATTERNS.some((re) => re.test(text))) return 'transient';
-  if (USAGE_LIMIT_PATTERNS.some((re) => re.test(text))) return 'transient';
-  if (AUTH_PATTERNS.some((re) => re.test(text))) return 'auth';
+  const text = `${input.stderr ?? ""}\n${input.stdout ?? ""}`;
+  if (TRANSIENT_PATTERNS.some((re) => re.test(text))) return "transient";
+  if (USAGE_LIMIT_PATTERNS.some((re) => re.test(text))) return "transient";
+  if (AUTH_PATTERNS.some((re) => re.test(text))) return "auth";
 
-  return 'bug';
+  return "bug";
 }

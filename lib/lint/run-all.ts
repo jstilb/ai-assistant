@@ -14,22 +14,24 @@
  *   2. no-inline-kaya-home — ban inline Kaya home path construction
  *   3. no-raw-stdin     — ban manual stdin reading outside hook-utils.ts (warning)
  *   4. no-unguarded-hook-main — require import.meta.main guard on hooks/*.hook.ts
+ *   +  no-live-write-in-test — full-tree mode (warnings); the staged mode runs in pre-commit
  *   5. lifeos-label-table-drift — SKILL.md's classification-rules table must
  *      cover every Router.ts Label union member (audit finding F5)
  */
 
-import { checkNoRawAppend } from './no-raw-append.ts';
-import { checkNoInlineKayaHome } from './no-inline-kaya-home.ts';
-import { checkNoRawStdin } from './no-raw-stdin.ts';
-import { checkNoUnguardedHookMain } from './no-unguarded-hook-main.ts';
-import { checkNoCrossSkillImport } from './no-cross-skill-import.ts';
-import { checkLifeOSLabelTableDrift } from './lifeos-label-table-drift.ts';
+import { checkNoRawAppend } from "./no-raw-append.ts";
+import { checkNoInlineKayaHome } from "./no-inline-kaya-home.ts";
+import { checkNoRawStdin } from "./no-raw-stdin.ts";
+import { checkNoUnguardedHookMain } from "./no-unguarded-hook-main.ts";
+import { checkNoCrossSkillImport } from "./no-cross-skill-import.ts";
+import { checkLifeOSLabelTableDrift } from "./lifeos-label-table-drift.ts";
+import { checkNoLiveWriteInTest } from "./no-live-write-in-test.ts";
 
 const rootDir = process.cwd();
 
-console.log('[lint:architecture] Running architecture checks...');
+console.log("[lint:architecture] Running architecture checks...");
 console.log(`[lint:architecture] Root: ${rootDir}`);
-console.log('');
+console.log("");
 
 const results = await Promise.all([
   checkNoRawAppend(rootDir),
@@ -38,26 +40,37 @@ const results = await Promise.all([
   checkNoUnguardedHookMain(rootDir),
   checkNoCrossSkillImport(rootDir),
   checkLifeOSLabelTableDrift(rootDir),
+  checkNoLiveWriteInTest(rootDir),
 ]);
 
-const [rawAppend, inlineKayaHome, rawStdin, unguardedHookMain, crossSkillImport, lifeosLabelTableDrift] = results;
+const [
+  rawAppend,
+  inlineKayaHome,
+  rawStdin,
+  unguardedHookMain,
+  crossSkillImport,
+  lifeosLabelTableDrift,
+  liveWriteInTest,
+] = results;
 
 const allErrors = [
-  ...rawAppend.errors.map(e => `[no-raw-append] ${e}`),
-  ...inlineKayaHome.errors.map(e => `[no-inline-kaya-home] ${e}`),
-  ...rawStdin.errors.map(e => `[no-raw-stdin] ${e}`),
-  ...unguardedHookMain.errors.map(e => `[no-unguarded-hook-main] ${e}`),
-  ...crossSkillImport.errors.map(e => `[no-cross-skill-import] ${e}`),
-  ...lifeosLabelTableDrift.errors.map(e => `[lifeos-label-table-drift] ${e}`),
+  ...rawAppend.errors.map((e) => `[no-raw-append] ${e}`),
+  ...inlineKayaHome.errors.map((e) => `[no-inline-kaya-home] ${e}`),
+  ...rawStdin.errors.map((e) => `[no-raw-stdin] ${e}`),
+  ...unguardedHookMain.errors.map((e) => `[no-unguarded-hook-main] ${e}`),
+  ...crossSkillImport.errors.map((e) => `[no-cross-skill-import] ${e}`),
+  ...lifeosLabelTableDrift.errors.map((e) => `[lifeos-label-table-drift] ${e}`),
+  ...liveWriteInTest.errors.map((e) => `[no-live-write-in-test] ${e}`),
 ];
 
 const allWarnings = [
-  ...rawAppend.warnings.map(w => `[no-raw-append] ${w}`),
-  ...inlineKayaHome.warnings.map(w => `[no-inline-kaya-home] ${w}`),
-  ...rawStdin.warnings.map(w => `[no-raw-stdin] ${w}`),
-  ...unguardedHookMain.warnings.map(w => `[no-unguarded-hook-main] ${w}`),
-  ...crossSkillImport.warnings.map(w => `[no-cross-skill-import] ${w}`),
-  ...lifeosLabelTableDrift.warnings.map(w => `[lifeos-label-table-drift] ${w}`),
+  ...rawAppend.warnings.map((w) => `[no-raw-append] ${w}`),
+  ...inlineKayaHome.warnings.map((w) => `[no-inline-kaya-home] ${w}`),
+  ...rawStdin.warnings.map((w) => `[no-raw-stdin] ${w}`),
+  ...unguardedHookMain.warnings.map((w) => `[no-unguarded-hook-main] ${w}`),
+  ...crossSkillImport.warnings.map((w) => `[no-cross-skill-import] ${w}`),
+  ...lifeosLabelTableDrift.warnings.map((w) => `[lifeos-label-table-drift] ${w}`),
+  ...liveWriteInTest.warnings.map((w) => `[no-live-write-in-test] ${w}`),
 ];
 
 if (allWarnings.length > 0) {
@@ -65,7 +78,7 @@ if (allWarnings.length > 0) {
   for (const w of allWarnings) {
     console.warn(`  WARN: ${w}`);
   }
-  console.log('');
+  console.log("");
 }
 
 if (allErrors.length > 0) {
@@ -73,10 +86,10 @@ if (allErrors.length > 0) {
   for (const e of allErrors) {
     console.error(`  ERROR: ${e}`);
   }
-  console.log('');
-  console.error('[lint:architecture] FAILED — fix the errors above before committing.');
+  console.log("");
+  console.error("[lint:architecture] FAILED — fix the errors above before committing.");
   process.exit(1);
 }
 
-console.log('[lint:architecture] All checks passed ✓');
+console.log("[lint:architecture] All checks passed ✓");
 process.exit(0);

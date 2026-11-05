@@ -1,0 +1,50 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mmtbfozr-taw5e4-spec.md",
+  "layoutNote": "6-col Layout B (18 rows)",
+  "rowCount": 8,
+  "rows": [
+    {
+      "number": 1,
+      "description": "A `skill-inventory.yaml` file exists mapping all 54 skills to exactly one category; no skill is unassigned; no category has fewer than 3 or more than 12 skills",
+      "verifyMethod": "`yq '.skills | length' skill-inventory.yaml` returns 54; `yq '.categories[].skills | length' skill-inventory.yaml` shows all values in range [3,12]"
+    },
+    {
+      "number": 2,
+      "description": "All category directories exist under `skills/<category>/` and each contains a `CATEGORY.md` with valid YAML frontmatter (`name`, `description`, `USE WHEN`, `skills` list); Kaya skill validation checklist passes for each manifest",
+      "verifyMethod": "`find skills/ -name CATEGORY.md | wc -l` equals category count (target 7–9); lint script exits 0 on all manifests"
+    },
+    {
+      "number": 3,
+      "description": "All 54 skills are moved to `skills/<category>/<skill-name>/` using `git mv`; old flat paths have symlinks pointing to new locations; no existing import or reference is broken",
+      "verifyMethod": "`git log --follow skills/<category>/<skill>/SKILL.md` shows pre-migration commits; `find skills/ -maxdepth 1 -type l | wc -l` equals number of moved skills; `kaya validate --all` exits 0",
+      "embeddedCommand": "git log --follow skills/<category>/<skill>/SKILL.md"
+    },
+    {
+      "number": 4,
+      "description": "LaunchD plists and any config files referencing old skill paths are updated to new paths and reloaded; no plist references a stale path",
+      "verifyMethod": "`grep -r \"skills/<old-flat-path>\" ~/Library/LaunchAgents/` returns empty; `launchctl list | grep kaya` shows all agents with exit code 0",
+      "embeddedCommand": "grep -r \"skills/<old-flat-path>\" /Users/[user]/Library/LaunchAgents/"
+    },
+    {
+      "number": 5,
+      "description": "A `packs/` directory contains ≥5 named `.pack.yaml` files; each pack has `name`, `description`, `USE WHEN`, and `skills` list referencing valid category-relative paths; packs span at least 2 different categories",
+      "verifyMethod": "`find packs/ -name \"*.pack.yaml\" | wc -l` ≥ 5; validation script confirms all referenced skill paths resolve; `yq '.skills | map(split(\"/\")[0]) | unique | length' <pack>` ≥ 2 for each pack"
+    },
+    {
+      "number": 6,
+      "description": "The skill router performs two-tier resolution: on a representative test query set, it matches category manifest first, then loads only matching-category skill manifests (not all 54)",
+      "verifyMethod": "Integration test log shows `loaded_skills_count < 54` for non-universal queries; token count measurement script confirms ≥40% reduction vs. baseline"
+    },
+    {
+      "number": 7,
+      "description": "A before/after context token comparison document exists at `docs/pack-migration-token-audit.md` showing baseline and post-migration token counts for ≥3 representative query types",
+      "verifyMethod": "File exists; each query row shows baseline tokens, post-migration tokens, and percentage reduction; all rows show ≥40% reduction"
+    },
+    {
+      "number": 8,
+      "description": "`CLAUDE.md` and/or skill contribution guide is updated with: new directory layout conventions, instructions for assigning a skill to a category, instructions for creating or updating a pack, and a note on the symlink backward-compatibility window",
+      "verifyMethod": "Guide contains sections on category assignment and pack creation; a new contributor can follow the guide to add a skill without ambiguity (manual review by Jm)"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.240Z"
+}

@@ -1,0 +1,104 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/ml8y7axh-9jrnm5-spec.md",
+  "layoutNote": "5-col TC-style IDs (35 rows)",
+  "rowCount": 24,
+  "rows": [
+    {
+      "number": 100,
+      "description": "Monitor agent successfully ingests traces from 10+ completed workflows"
+    },
+    {
+      "number": 101,
+      "description": "All 5 built-in evaluators (Resource, Latency, Error, Decision, Compliance) execute without errors"
+    },
+    {
+      "number": 102,
+      "description": "Evaluation reports contain scores, findings, and recommendations in both Markdown and JSON format"
+    },
+    {
+      "number": 103,
+      "description": "Trace storage handles 100K+ events with query response time < 1s for single workflow JSONL file"
+    },
+    {
+      "number": 104,
+      "description": "Generated reports correctly identify known performance issues in test workflows"
+    },
+    {
+      "number": 105,
+      "description": "Evaluation results are deterministic and reproducible (rule-based evaluators; LLM evaluator within acceptable variance)"
+    },
+    {
+      "number": 106,
+      "description": "Configuration changes (thresholds, enabled evaluators) apply without code changes via monitoring-config.json"
+    },
+    {
+      "number": 107,
+      "description": "System overhead measured at < 3% of monitored workflow execution time"
+    },
+    {
+      "number": 108,
+      "description": "Retrospective analysis works on existing MEMORY/WORK/ session logs"
+    },
+    {
+      "number": 109,
+      "description": "Baselines established from first 50 monitored workflows"
+    },
+    {
+      "number": 110,
+      "description": "Self-monitoring audit log captures all monitor executions"
+    },
+    {
+      "number": 111,
+      "description": "Monitor agent receives trace events within 500ms of emission during live workflows"
+    },
+    {
+      "number": 112,
+      "description": "Live dashboard displays real-time metrics for 10+ concurrent agents"
+    },
+    {
+      "number": 113,
+      "description": "Anomaly detection triggers voice notification + JSONL alert within 2s of threshold breach"
+    },
+    {
+      "number": 114,
+      "description": "System handles 100 events/second without dropped traces"
+    },
+    {
+      "number": 115,
+      "description": "Historical and live data queryable through unified CLI interface"
+    },
+    {
+      "number": 116,
+      "description": "Monitor agent successfully pauses workflow when critical error detected"
+    },
+    {
+      "number": 117,
+      "description": "Intervention events logged with full audit trail (who, what, when, why)"
+    },
+    {
+      "number": 118,
+      "description": "False positive rate for interventions < 5%"
+    },
+    {
+      "number": 119,
+      "description": "Workflow resume after intervention completes successfully"
+    },
+    {
+      "number": 120,
+      "description": "Documentation includes: architecture diagram, configuration guide, evaluator API, example custom evaluator"
+    },
+    {
+      "number": 121,
+      "description": "Integration tests cover all evaluation scenarios with fixture traces"
+    },
+    {
+      "number": 122,
+      "description": "CLI provides programmatic access to evaluation results and metrics"
+    },
+    {
+      "number": 123,
+      "description": "System runs continuously for 7 days without manual intervention"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.239Z"
+}

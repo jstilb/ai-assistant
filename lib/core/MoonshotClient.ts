@@ -24,7 +24,7 @@
  * hide that the tier Jm asked for is not actually running.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync } from "node:fs";
 import { kayaHomePath } from "./KayaHome.ts";
 
 /** Moonshot's OpenAI-compatible base URL. */
@@ -55,7 +55,7 @@ export type FetchLike = (
   },
 ) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 
-export interface MoonshotRequest {
+interface MoonshotRequest {
   systemPrompt: string;
   userPrompt: string;
   /** Defaults to KIMI_K3_MODEL. */
@@ -66,13 +66,13 @@ export interface MoonshotRequest {
   maxTokens?: number;
 }
 
-export interface MoonshotUsage {
+interface MoonshotUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
 }
 
-export interface MoonshotResponse {
+interface MoonshotResponse {
   success: boolean;
   /** Assistant text on success, empty string on failure. */
   output: string;
@@ -98,9 +98,11 @@ export function loadMoonshotApiKey(): string | null {
     if (typeof key !== "string") return null;
     const trimmed = key.trim();
     return trimmed.length > 0 ? trimmed : null;
-  } catch {
-    // Malformed secrets.json is indistinguishable from "no key" for our purpose,
-    // and the caller's error message names the file either way.
+  } catch (err) {
+    // A malformed or unreadable secrets.json still means "no usable key" (the caller's
+    // error message names the file), but say why on stderr so it is not mistaken for a
+    // missing key.
+    console.error(`MoonshotClient: cannot read ${secretsPath}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -144,7 +146,7 @@ export async function moonshotChat(
     };
   }
 
-  const fetchFn = (deps.fetchFn ?? (globalThis.fetch as unknown as FetchLike));
+  const fetchFn = deps.fetchFn ?? (globalThis.fetch as unknown as FetchLike);
   const model = req.model ?? KIMI_K3_MODEL;
 
   const body: Record<string, unknown> = {
@@ -160,8 +162,7 @@ export async function moonshotChat(
   // AbortController drives the timeout; unlike the spawn-based levels there is
   // no subprocess to SIGTERM.
   const controller = new AbortController();
-  const timeoutId =
-    req.timeoutMs !== undefined ? setTimeout(() => controller.abort(), req.timeoutMs) : undefined;
+  const timeoutId = req.timeoutMs !== undefined ? setTimeout(() => controller.abort(), req.timeoutMs) : undefined;
 
   try {
     const res = await fetchFn(`${MOONSHOT_BASE_URL}/chat/completions`, {

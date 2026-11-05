@@ -19,15 +19,15 @@
  */
 
 const DEFAULT_PROBE_TIMEOUT_MS = 5000;
-const DEFAULT_PROBE_URL = 'https://www.google.com/generate_204';
+const DEFAULT_PROBE_URL = "https://www.google.com/generate_204";
 
-export type ProbeFn = () => Promise<boolean>;
+type ProbeFn = () => Promise<boolean>;
 
 const defaultProbe: ProbeFn = async () => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEFAULT_PROBE_TIMEOUT_MS);
   try {
-    const res = await fetch(DEFAULT_PROBE_URL, { method: 'HEAD', signal: controller.signal });
+    const res = await fetch(DEFAULT_PROBE_URL, { method: "HEAD", signal: controller.signal });
     return res.ok || (res.status >= 200 && res.status < 500);
   } finally {
     clearTimeout(timer);

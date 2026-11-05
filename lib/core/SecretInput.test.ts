@@ -19,10 +19,16 @@ class Terminal extends PassThrough {
 function fixture(raw = false, flowing = false) {
   const input = new Terminal();
   input.isRaw = raw;
-  if (flowing) input.resume(); else input.pause();
+  if (flowing) input.resume();
+  else input.pause();
   let output = "";
   const signals = [process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")];
-  const promise = readSecretInput("Credential: ", { input, write: (text) => { output += text; } });
+  const promise = readSecretInput("Credential: ", {
+    input,
+    write: (text) => {
+      output += text;
+    },
+  });
   const clean = () => {
     expect(input.isRaw).toBe(raw);
     expect(input.readableFlowing).toBe(flowing);
@@ -36,9 +42,14 @@ function fixture(raw = false, flowing = false) {
 
 describe("credential input", () => {
   test("pipe trims a nonempty value without prompting", async () => {
-    const input = new Terminal(); input.isTTY = false;
+    const input = new Terminal();
+    input.isTTY = false;
     const value = await readSecretInput("unused", {
-      input, readPipe: async () => `  ${synthetic}\n`, write: () => { throw new Error("prompted"); },
+      input,
+      readPipe: async () => `  ${synthetic}\n`,
+      write: () => {
+        throw new Error("prompted");
+      },
     });
     expect(value).toBe(synthetic);
     expect(input.isRaw).toBe(false);
@@ -46,9 +57,14 @@ describe("credential input", () => {
 
   for (const kind of ["empty", "read"] as const) {
     test(`pipe ${kind} becomes a sanitized typed error`, async () => {
-      const input = new Terminal(); input.isTTY = false;
+      const input = new Terminal();
+      input.isTTY = false;
       const promise = readSecretInput("unused", {
-        input, readPipe: async () => { if (kind === "read") throw new Error(synthetic); return " \n"; },
+        input,
+        readPipe: async () => {
+          if (kind === "read") throw new Error(synthetic);
+          return " \n";
+        },
       });
       await expect(promise).rejects.toMatchObject({ name: "SecretInputError", code: kind, exitCode: 1 });
       await expect(promise).rejects.not.toThrow(synthetic);
@@ -74,8 +90,11 @@ describe("credential input", () => {
   });
 
   for (const [event, chunk, code] of [
-    ["data", "\x03", "cancelled"], ["data", "\x04", "eof"],
-    ["end", "", "eof"], ["close", "", "eof"], ["error", "", "read"],
+    ["data", "\x03", "cancelled"],
+    ["data", "\x04", "eof"],
+    ["end", "", "eof"],
+    ["close", "", "eof"],
+    ["error", "", "read"],
     ["data", "\n", "empty"],
   ] as const) {
     test(`TTY ${event}/${code} removes listeners and restores terminal`, async () => {
@@ -88,7 +107,10 @@ describe("credential input", () => {
     });
   }
 
-  for (const [signal, code, exitCode] of [["SIGINT", "cancelled", 130], ["SIGTERM", "terminated", 143]] as const) {
+  for (const [signal, code, exitCode] of [
+    ["SIGINT", "cancelled", 130],
+    ["SIGTERM", "terminated", 143],
+  ] as const) {
     test(`TTY ${signal} restores before rejecting`, async () => {
       const f = fixture();
       f.input.emit("data", synthetic);
@@ -99,7 +121,9 @@ describe("credential input", () => {
   }
 
   test("TTY setup failure is sanitized and does not leave listeners", async () => {
-    const input = new Terminal(); input.pause(); input.failEnable = true;
+    const input = new Terminal();
+    input.pause();
+    input.failEnable = true;
     const events = input.eventNames();
     await expect(readSecretInput("unused", { input, write: () => {} })).rejects.toMatchObject({ code: "read" });
     expect(input.isRaw).toBe(false);
@@ -114,14 +138,22 @@ describe("credential input", () => {
     await expect(f.promise).rejects.toMatchObject({ code: "restore" });
     await expect(f.promise).rejects.not.toThrow(synthetic);
     expect(f.input.listenerCount("data")).toBe(0);
-    f.input.failRestore = false; f.input.setRawMode(false);
+    f.input.failRestore = false;
+    f.input.setRawMode(false);
     f.clean();
   });
 
   test("already closed TTY rejects before prompting", async () => {
-    const input = new Terminal(); input.destroy();
-    await expect(readSecretInput("unused", { input, write: () => { throw new Error("prompted"); } }))
-      .rejects.toBeInstanceOf(SecretInputError);
+    const input = new Terminal();
+    input.destroy();
+    await expect(
+      readSecretInput("unused", {
+        input,
+        write: () => {
+          throw new Error("prompted");
+        },
+      }),
+    ).rejects.toBeInstanceOf(SecretInputError);
     expect(input.isRaw).toBe(false);
   });
 
@@ -132,7 +164,11 @@ describe("credential input", () => {
         try { const value = await readSecretInput('unused'); console.log(value.length); }
         catch (error) { if (!(error instanceof SecretInputError)) throw error; console.error(error.code); process.exit(error.exitCode); }
       `;
-      const result = Bun.spawnSync([process.execPath, "-e", script], { stdin: Buffer.from(value), stdout: "pipe", stderr: "pipe" });
+      const result = Bun.spawnSync([process.execPath, "-e", script], {
+        stdin: Buffer.from(value),
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       expect(result.exitCode).toBe(value.trim() ? 0 : 1);
       expect(result.stdout.toString() + result.stderr.toString()).not.toContain(synthetic);
       expect(result.stdout.toString()).toBe(value.trim() ? `${synthetic.length}\n` : "");

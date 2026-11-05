@@ -38,20 +38,15 @@
  * ============================================================================
  */
 
-import {
-  sendAlert,
-  type SendAlertOptions,
-  type AlertResult,
-  type AlertTier,
-} from '../core/AlertGate.ts';
-import type { JobSpec } from './JobSpec';
+import { sendAlert, type SendAlertOptions, type AlertResult, type AlertTier } from "../core/AlertGate.ts";
+import type { JobSpec } from "./JobSpec.ts";
 
 // ============================================================================
 // OutputMode → tier mapping
 // ============================================================================
 
 /** Every `JobSpec['output']` value except `'silent'` (handled separately — no AlertGate call at all, matching the old `if (outputMode === 'silent') return` short-circuit). */
-export type NonSilentOutputMode = Exclude<JobSpec['output'], 'silent'>;
+export type NonSilentOutputMode = Exclude<JobSpec["output"], "silent">;
 
 /**
  * OutputMode → AlertGate tier.
@@ -71,12 +66,12 @@ export type NonSilentOutputMode = Exclude<JobSpec['output'], 'silent'>;
  * MessageRouter/MessageQueue middle layer is gone.
  */
 export const OUTPUT_MODE_TIER: Record<NonSilentOutputMode, AlertTier> = {
-  voice: 'digest',
-  both: 'digest',
-  text: 'digest',
-  push: 'digest',
-  telegram: 'digest',
-  discord: 'digest',
+  voice: "digest",
+  both: "digest",
+  text: "digest",
+  push: "digest",
+  telegram: "digest",
+  discord: "digest",
 };
 
 /**
@@ -92,19 +87,19 @@ export const OUTPUT_MODE_TIER: Record<NonSilentOutputMode, AlertTier> = {
  * channel) was dropped rather than kept alongside this table.
  */
 export const OUTPUT_MODE_CHANNEL: Record<NonSilentOutputMode, string> = {
-  voice: 'voice',
-  both: 'voice',
-  text: 'push', // old: "Text-only goes to push notification"
-  push: 'push',
-  telegram: 'push', // old: "Telegram routes through push for now"
-  discord: 'discord',
+  voice: "voice",
+  both: "voice",
+  text: "push", // old: "Text-only goes to push notification"
+  push: "push",
+  telegram: "push", // old: "Telegram routes through push for now"
+  discord: "discord",
 };
 
 // ============================================================================
 // routeJobOutput()
 // ============================================================================
 
-export interface RouteJobOutputDeps {
+interface RouteJobOutputDeps {
   /** Injectable AlertGate sender. Defaults to the real singleton `sendAlert()`. Tests inject a stub (or a fully-isolated `AlertGate` instance's bound `.send`) to stay hermetic. */
   sendAlertFn?: (message: string, options: SendAlertOptions) => AlertResult;
 }
@@ -169,10 +164,10 @@ export interface RouteJobOutputDeps {
 export async function routeJobOutput(
   jobId: string,
   output: string,
-  mode: JobSpec['output'],
+  mode: JobSpec["output"],
   deps: RouteJobOutputDeps = {},
 ): Promise<AlertResult | null> {
-  if (mode === 'silent' || !output) return null;
+  if (mode === "silent" || !output) return null;
 
   const sendAlertFn = deps.sendAlertFn ?? sendAlert;
 

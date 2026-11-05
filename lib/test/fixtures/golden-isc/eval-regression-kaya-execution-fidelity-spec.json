@@ -1,0 +1,53 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/eval-regression-kaya-execution-fidelity-spec.md",
+  "layoutNote": "4-col 3-way header",
+  "rowCount": 9,
+  "rows": [
+    {
+      "number": 1,
+      "description": "CLAUDE.md steering rules expanded with BAD/GOOD examples for all 7 regressed behaviors",
+      "verifyMethod": "Inspect CLAUDE.md"
+    },
+    {
+      "number": 2,
+      "description": "`kaya_exec_scope_adherence` score ≥ 0.80",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 3,
+      "description": "`kaya_exec_no_content_modification` score ≥ 0.60",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 4,
+      "description": "`kaya_exec_one_change_at_a_time` score ≥ 0.60",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 5,
+      "description": "`kaya_exec_no_unsolicited_refactor` score ≥ 0.45",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 6,
+      "description": "`kaya_exec_plan_means_stop` score ≥ 0.60",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 7,
+      "description": "`kaya_exec_ask_before_destructive` score ≥ 0.50",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 8,
+      "description": "`kaya_exec_read_before_modify` score ≥ 0.20",
+      "verifyMethod": "Eval run"
+    },
+    {
+      "number": 9,
+      "description": "Overall suite mean ≥ 0.50 (baseline: 0.57)",
+      "verifyMethod": "Eval comparison"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.233Z"
+}

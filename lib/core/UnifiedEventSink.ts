@@ -9,28 +9,28 @@
  * Auto-reads process.env.KAYA_CORRELATION_ID if correlationId not provided.
  */
 
-import { createAppendLog } from './AppendLog';
-import { join } from 'path';
-import { nanoid } from 'nanoid';
-import { getKayaHome } from './KayaHome.ts';
+import { createAppendLog } from "./AppendLog.ts";
+import { join } from "node:path";
+import { nanoid } from "nanoid";
+import { getKayaHome } from "./KayaHome.ts";
 
 export interface KayaEvent {
   id: string; // nanoid(10)
   ts: number; // Date.now()
   correlationId?: string;
   sessionId?: string;
-  source: 'hook' | 'trace' | 'security' | 'routing' | 'cost' | 'pipeline';
+  source: "hook" | "trace" | "security" | "routing" | "cost" | "pipeline";
   category: string;
-  severity: 'debug' | 'info' | 'warn' | 'error' | 'critical';
+  severity: "debug" | "info" | "warn" | "error" | "critical";
   workflowId?: string;
   agentId?: string;
   payload: Record<string, unknown>;
 }
 
-export interface EmitInput {
-  source: KayaEvent['source'];
+interface EmitInput {
+  source: KayaEvent["source"];
   category: string;
-  severity: KayaEvent['severity'];
+  severity: KayaEvent["severity"];
   correlationId?: string;
   sessionId?: string;
   workflowId?: string;
@@ -38,18 +38,18 @@ export interface EmitInput {
   payload: Record<string, unknown>;
 }
 
-const DASHBOARD_URL = 'http://localhost:4000/events';
+const DASHBOARD_URL = "http://localhost:4000/events";
 
 function getMemoryRoot(): string {
-  return process.env.KAYA_MEMORY_ROOT ?? join(getKayaHome(), 'MEMORY');
+  return process.env.KAYA_MEMORY_ROOT ?? join(getKayaHome(), "MEMORY");
 }
 
 function getEventsDir(): string {
-  return join(getMemoryRoot(), 'MONITORING/events');
+  return join(getMemoryRoot(), "MONITORING/events");
 }
 
 function getTracesDir(): string {
-  return join(getMemoryRoot(), 'MONITORING/traces');
+  return join(getMemoryRoot(), "MONITORING/traces");
 }
 
 /**
@@ -83,8 +83,8 @@ export function emit(input: EmitInput): void {
   // 2. Dashboard POST — fire and forget, best-effort
   try {
     fetch(DASHBOARD_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(event),
     }).catch(() => {
       // Swallow fetch errors — dashboard is optional
@@ -94,7 +94,7 @@ export function emit(input: EmitInput): void {
   }
 
   // 3. Trace file write — if workflowId && source === 'trace'
-  if (event.workflowId && event.source === 'trace') {
+  if (event.workflowId && event.source === "trace") {
     try {
       const traceFile = join(getTracesDir(), `${event.workflowId}.jsonl`);
       const traceLog = createAppendLog(traceFile, {
@@ -105,7 +105,7 @@ export function emit(input: EmitInput): void {
       traceLog.append(event);
     } catch (err) {
       // Trace write is best-effort — log to stderr but don't fail
-      console.error('[UnifiedEventSink] Trace write failed:', err);
+      console.error("[UnifiedEventSink] Trace write failed:", err);
     }
   }
 }

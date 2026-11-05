@@ -10,9 +10,7 @@ import { isRateLimitError, extractResetInfo } from "./RateLimitGuard.ts";
 
 describe("isRateLimitError", () => {
   it("matches the 5-hour session-limit notice (the 2026-06-22 regression)", () => {
-    expect(
-      isRateLimitError("You've hit your session limit · resets 11:50pm (America/Los_Angeles)")
-    ).toBe(true);
+    expect(isRateLimitError("You've hit your session limit · resets 11:50pm (America/Los_Angeles)")).toBe(true);
   });
 
   it("matches the original bare 'hit your limit · resets' wording", () => {
@@ -26,13 +24,13 @@ describe("isRateLimitError", () => {
   it("matches a weekly-limit notice", () => {
     expect(isRateLimitError("You've hit your weekly limit · resets Monday")).toBe(true);
     // Per-model pool banner (2026-08-29 Fable outage) says "reached", not "hit".
-    expect(isRateLimitError("You've reached your Fable 5 limit. Switch to another model, or manage usage credits")).toBe(true);
+    expect(
+      isRateLimitError("You've reached your Fable 5 limit. Switch to another model, or manage usage credits"),
+    ).toBe(true);
   });
 
   it("does NOT false-positive on prose that merely mentions rate limiting", () => {
-    expect(
-      isRateLimitError("The API documentation explains how rate limiting works in general.")
-    ).toBe(false);
+    expect(isRateLimitError("The API documentation explains how rate limiting works in general.")).toBe(false);
   });
 
   it("does NOT match ordinary research output", () => {
@@ -42,9 +40,7 @@ describe("isRateLimitError", () => {
 
 describe("extractResetInfo", () => {
   it("pulls the reset time out of a session-limit notice", () => {
-    expect(
-      extractResetInfo("You've hit your session limit · resets 11:50pm (America/Los_Angeles)")
-    ).toBe("11:50pm");
+    expect(extractResetInfo("You've hit your session limit · resets 11:50pm (America/Los_Angeles)")).toBe("11:50pm");
   });
 
   it("returns null when there is no reset clause", () => {
@@ -58,26 +54,37 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach } from "bun:test";
-import { assessUsage, resolveModel, isRateLimited, type RateLimitState } from "./RateLimitGuard.ts";
+import { assessUsage, resolveModel, isRateLimited } from "./RateLimitGuard.ts";
+import type { RateLimits } from "./MemoryPaths.ts";
 
 const NOW = Date.parse("2026-10-18T12:00:00Z");
-const win = (pct: number, observedAt: string | undefined, resetsAt = "2026-10-18T16:00:00Z") => ({ usedPercentage: pct, resetsAt, ...(observedAt ? { observedAt } : {}) });
+const win = (pct: number, observedAt: string | undefined, resetsAt = "2026-10-18T16:00:00Z") => ({
+  usedPercentage: pct,
+  resetsAt,
+  ...(observedAt ? { observedAt } : {}),
+});
 
 describe("assessUsage", () => {
   it("null state and an all-null file are UNKNOWN, with peak null (not 0)", () => {
     expect(assessUsage(null, NOW)).toMatchObject({ known: false, peak: null, readings: [], lastObservedAt: null });
-    const nulls: RateLimitState = { fiveHour: null, sevenDay: null, updatedAt: "2026-10-18T11:59:00Z" };
+    const nulls: RateLimits = { fiveHour: null, sevenDay: null, updatedAt: "2026-10-18T11:59:00Z" };
     expect(assessUsage(nulls, NOW)).toMatchObject({ known: false, peak: null });
   });
 
   it("a fresh current reading counts", () => {
-    const s: RateLimitState = { fiveHour: win(42, "2026-10-18T11:58:00Z"), sevenDay: null, updatedAt: "2026-10-18T11:58:00Z" };
+    const s: RateLimits = {
+      fiveHour: win(42, "2026-10-18T11:58:00Z"),
+      sevenDay: null,
+      updatedAt: "2026-10-18T11:58:00Z",
+    };
     expect(assessUsage(s, NOW)).toMatchObject({ known: true, peak: 42 });
   });
 
   it("lastReal survives a null render, but a 3-hour-old reading is stale, reported with its age, and not counted", () => {
-    const s: RateLimitState = {
-      fiveHour: null, sevenDay: null, updatedAt: "2026-10-18T11:59:00Z",
+    const s: RateLimits = {
+      fiveHour: null,
+      sevenDay: null,
+      updatedAt: "2026-10-18T11:59:00Z",
       lastReal: { fiveHour: win(95, "2026-10-18T09:00:00Z", "2026-10-18T14:00:00Z"), sevenDay: null },
     };
     const a = assessUsage(s, NOW);
@@ -89,19 +96,27 @@ describe("assessUsage", () => {
   });
 
   it("a recent reading whose window has already reset is stale", () => {
-    const s: RateLimitState = { fiveHour: win(95, "2026-10-18T11:58:00Z", "2026-10-18T11:59:00Z"), sevenDay: null, updatedAt: "2026-10-18T11:58:00Z" };
+    const s: RateLimits = {
+      fiveHour: win(95, "2026-10-18T11:58:00Z", "2026-10-18T11:59:00Z"),
+      sevenDay: null,
+      updatedAt: "2026-10-18T11:58:00Z",
+    };
     const a = assessUsage(s, NOW);
     expect(a.known).toBe(false);
     expect(a.readings[0]?.staleWhy).toContain("reset");
   });
 
   it("an old-format current window (no observedAt) borrows updatedAt", () => {
-    const s: RateLimitState = { fiveHour: win(60, undefined), sevenDay: null, updatedAt: "2026-10-18T11:57:00Z" };
+    const s: RateLimits = { fiveHour: win(60, undefined), sevenDay: null, updatedAt: "2026-10-18T11:57:00Z" };
     expect(assessUsage(s, NOW)).toMatchObject({ known: true, peak: 60 });
   });
 
   it("peak is the max over fresh readings only", () => {
-    const s: RateLimitState = { fiveHour: win(30, "2026-10-18T11:58:00Z"), sevenDay: win(97, "2026-10-17T00:00:00Z", "2026-10-22T00:00:00Z"), updatedAt: "2026-10-18T11:58:00Z" };
+    const s: RateLimits = {
+      fiveHour: win(30, "2026-10-18T11:58:00Z"),
+      sevenDay: win(97, "2026-10-17T00:00:00Z", "2026-10-22T00:00:00Z"),
+      updatedAt: "2026-10-18T11:58:00Z",
+    };
     expect(assessUsage(s, NOW).peak).toBe(30);
   });
 });
@@ -116,7 +131,8 @@ describe("resolveModel / isRateLimited with a state file (temp KAYA_HOME)", () =
     mkdirSync(join(home, "MEMORY", "State"), { recursive: true });
   });
   afterEach(() => {
-    if (prev === undefined) delete process.env.KAYA_HOME; else process.env.KAYA_HOME = prev;
+    if (prev === undefined) delete process.env.KAYA_HOME;
+    else process.env.KAYA_HOME = prev;
   });
   const write = (o: unknown) => writeFileSync(join(home, "MEMORY", "State", "rate-limits.json"), JSON.stringify(o));
   const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -145,7 +161,12 @@ describe("resolveModel / isRateLimited with a state file (temp KAYA_HOME)", () =
   });
 
   it("a stale 95% is not treated as current: no fallback, reason names the age", () => {
-    write({ fiveHour: null, sevenDay: null, updatedAt: ago(60_000), lastReal: { fiveHour: win(95, ago(3 * 3_600_000), ahead(3_600_000)), sevenDay: null } });
+    write({
+      fiveHour: null,
+      sevenDay: null,
+      updatedAt: ago(60_000),
+      lastReal: { fiveHour: win(95, ago(3 * 3_600_000), ahead(3_600_000)), sevenDay: null },
+    });
     const r = resolveModel("sonnet");
     expect(r).toMatchObject({ model: "sonnet", wasFallback: false, known: false });
     expect(r.reason).toContain("5h 95% is stale (observed 3.0h ago)");

@@ -41,8 +41,8 @@
  *     on ANY malformity — never a default, never a partial result.
  */
 
-import { spawnSync } from "child_process";
-import { randomUUID } from "crypto";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import type { ZodType } from "zod";
 import { CLAUDE_PATH, buildHardenedClaudeEnv, stripDangerousClaudeEnvKeys } from "./Inference.ts";
 import { isRateLimited, isRateLimitError, DEFAULT_THRESHOLD } from "./RateLimitGuard.ts";
@@ -84,7 +84,8 @@ const NETWORK_ERROR_CODES = new Set(["ENOTFOUND", "ECONNREFUSED", "ENETUNREACH",
  * generic task failure, mislabeling a DNS/network outage as a task bug.
  * `.` (not a literal apostrophe) tolerates straight/curly-quote variants.
  */
-const NETWORK_UNAVAILABLE_TEXT_PATTERN = /\b(ENOTFOUND|ECONNREFUSED|ENETUNREACH|EAI_AGAIN)\b|can.t reach the api server/i;
+const NETWORK_UNAVAILABLE_TEXT_PATTERN =
+  /\b(ENOTFOUND|ECONNREFUSED|ENETUNREACH|EAI_AGAIN)\b|can.t reach the api server/i;
 
 // ============================================================================
 // Types
@@ -247,19 +248,27 @@ export function buildGuardHookSettings(kayaDir: string): string {
       PostToolUse: [
         {
           matcher: "Bash",
-          hooks: [{ type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 }],
+          hooks: [
+            { type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 },
+          ],
         },
         {
           matcher: "Read",
-          hooks: [{ type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 }],
+          hooks: [
+            { type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 },
+          ],
         },
         {
           matcher: "WebFetch",
-          hooks: [{ type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 }],
+          hooks: [
+            { type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 },
+          ],
         },
         {
           matcher: "WebSearch",
-          hooks: [{ type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 }],
+          hooks: [
+            { type: "command", command: `bun run ${kayaDir}/hooks/PromptInjectionDefender.hook.ts`, timeout: 10 },
+          ],
         },
       ],
     },
@@ -475,10 +484,12 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
   // (see `resolveEnforceTools` doc comment) — default OFF.
   const args: string[] = [
     "-p",
-    "--model", opts.model,
+    "--model",
+    opts.model,
     ...(opts.effort ? ["--effort", opts.effort] : []),
     "--dangerously-skip-permissions",
-    "--allowedTools", opts.allowedTools,
+    "--allowedTools",
+    opts.allowedTools,
   ];
 
   if (resolveEnforceTools(opts.enforceTools, process.env)) {
@@ -486,8 +497,10 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
   }
 
   args.push(
-    "--setting-sources", "", // disable hooks to prevent recursion
-    "--output-format", "text",
+    "--setting-sources",
+    "", // disable hooks to prevent recursion
+    "--output-format",
+    "text",
   );
 
   if (resolveGuardHooks(opts.guardHooks, process.env)) {
@@ -537,10 +550,7 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
  * `cwd` (or neither) and can ignore this — it exists only for the callers that
  * want spawn-time worktree isolation.
  */
-export async function spawnAgent(
-  opts: AgentSpawnOptions,
-  deps: AgentSpawnDeps = {},
-): Promise<AgentSpawnResult> {
+export async function spawnAgent(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {}): Promise<AgentSpawnResult> {
   let cwd = opts.cwd;
   if (!cwd && opts.worktree) {
     const resolveWorktree = deps.getOrCreateWorktreeFn ?? getOrCreateWorktree;
@@ -580,11 +590,7 @@ export interface VerdictTags {
  * a bare `null` body via safeParse) rather than relying on a raw, schema-less
  * `T` and truthiness of the return value.
  */
-export function parseVerdictBlock<T = unknown>(
-  output: string,
-  tags: VerdictTags,
-  schema?: ZodType<T>,
-): T | null {
+export function parseVerdictBlock<T = unknown>(output: string, tags: VerdictTags, schema?: ZodType<T>): T | null {
   if (!output || output.trim().length === 0) return null;
 
   const startIdx = output.indexOf(tags.start);

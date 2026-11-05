@@ -46,7 +46,7 @@
  * mutually exclusive matches.
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ── Shared base fields (every ratings.jsonl variant has these three) ────────
 
@@ -82,7 +82,7 @@ export type ExplicitHookRating = z.infer<typeof ExplicitHookRatingSchema>;
 export const SessionImplicitRatingSchema = z
   .object({
     ...RatingsBaseShape,
-    source: z.literal('implicit'),
+    source: z.literal("implicit"),
     sentiment_summary: z.string(),
     // Not range-clamped by the writer (only a `typeof === "number"` check
     // guards the LLM's output before write) — modeled unconstrained rather
@@ -101,10 +101,10 @@ export type SessionImplicitRating = z.infer<typeof SessionImplicitRatingSchema>;
 export const TelegramRatingSignalSchema = z
   .object({
     ...RatingsBaseShape,
-    source: z.enum(['telegram', 'implicit']),
+    source: z.enum(["telegram", "implicit"]),
     sentiment_summary: z.string(),
     confidence: z.number(),
-    platform: z.literal('telegram'),
+    platform: z.literal("telegram"),
     message_type: z.string(),
     profile: z.string().optional(),
   })
@@ -120,7 +120,6 @@ export const RatingsLineSchema = z.union([
   SessionImplicitRatingSchema,
   ExplicitHookRatingSchema,
 ]);
-export type RatingsLine = z.infer<typeof RatingsLineSchema>;
 
 /**
  * The real union of everything written by all 3 MEMORY/LEARNING writers.
@@ -130,11 +129,9 @@ export const LearningEntrySchema = z.union([
   SessionImplicitRatingSchema,
   ExplicitHookRatingSchema,
 ]);
-export type LearningEntry = z.infer<typeof LearningEntrySchema>;
+type LearningEntry = z.infer<typeof LearningEntrySchema>;
 
-export type LearningEntryValidationResult =
-  | { success: true; data: LearningEntry }
-  | { success: false; error: z.ZodError };
+type LearningEntryValidationResult = { success: true; data: LearningEntry } | { success: false; error: z.ZodError };
 
 /**
  * Validate a raw parsed-JSON value against the full real union of

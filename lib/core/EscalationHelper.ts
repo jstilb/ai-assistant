@@ -38,11 +38,7 @@ export const NEEDS_JM_PROJECT_NAME = "Kaya — Needs Jm";
  * KayaTaskClassifier imports and re-exports this — any drift between stamper
  * and validator silently breaks the triage skip, so there is exactly one copy.
  */
-export function computeTriageHash(
-  projectName: string | undefined,
-  title: string,
-  description: string
-): string {
+export function computeTriageHash(projectName: string | undefined, title: string, description: string): string {
   const input = `${projectName ?? ""}\n${title}\n${description}`;
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
@@ -59,12 +55,7 @@ export function computeTriageHash(
  */
 export interface EscalationTaskStore {
   getProjectByName(name: string): { id: string } | null;
-  createProject(input: {
-    name: string;
-    description?: string;
-    status?: "active";
-    sort_order?: number;
-  }): { id: string };
+  createProject(input: { name: string; description?: string; status?: "active"; sort_order?: number }): { id: string };
   getTask(id: string): { title: string; description?: string | null; status: string } | null;
   createTask(input: {
     id?: string;
@@ -83,7 +74,7 @@ export interface EscalationTaskStore {
       description?: string;
       kaya_triage?: string;
     },
-    actor?: string
+    actor?: string,
   ): unknown;
 }
 
@@ -132,7 +123,7 @@ export function createOrReopenEscalationTask(
   title: string,
   description: string,
   projectId: string,
-  opts?: { priority?: number }
+  opts?: { priority?: number },
 ): string {
   const id = `manual-${itemId}`;
   const existing = db.getTask(id);
@@ -152,9 +143,7 @@ export function createOrReopenEscalationTask(
     return id;
   }
 
-  const appended = existing.description
-    ? `${existing.description}\n\n---\n\n${description}`
-    : description;
+  const appended = existing.description ? `${existing.description}\n\n---\n\n${description}` : description;
   const reopen = existing.status === "done" || existing.status === "cancelled";
   db.updateTask(
     id,
@@ -164,7 +153,7 @@ export function createOrReopenEscalationTask(
       description: appended,
       kaya_triage: buildEscalationStamp(NEEDS_JM_PROJECT_NAME, existing.title, appended),
     },
-    "system"
+    "system",
   );
   return id;
 }

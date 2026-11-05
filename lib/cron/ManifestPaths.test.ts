@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { listManifestFiles, readManifest, type ManifestIO } from "./ManifestPaths.ts";
 
 function missing(): Error & { code: string } {
@@ -39,13 +39,17 @@ describe("manifest paths", () => {
     const current = "/sandbox/manifests";
     const vanishing: ManifestIO = {
       readDirectory: () => ["job.yaml"],
-      readFile: () => { throw missing(); },
+      readFile: () => {
+        throw missing();
+      },
     };
     expect(() => listManifestFiles(current, vanishing)).toThrow("Cron manifest disappeared during scan: job.yaml");
 
     const denied: ManifestIO = {
       readDirectory: () => ["job.yaml"],
-      readFile: () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); },
+      readFile: () => {
+        throw Object.assign(new Error("denied"), { code: "EACCES" });
+      },
     };
     expect(() => readManifest(current, "job.yaml", denied)).toThrow("denied");
   });

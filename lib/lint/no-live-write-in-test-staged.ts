@@ -20,21 +20,16 @@
  * Used by pre-commit via bin/lint-live-write-staged.sh.
  */
 
-import { execSync } from 'child_process';
-import {
-  importsLiveWriter,
-  hasNoKayaHomePin,
-  violationMessage,
-  type LintResult,
-} from './no-live-write-in-test.ts';
+import { execSync } from "node:child_process";
+import { importsLiveWriter, hasNoKayaHomePin, violationMessage, type LintResult } from "./no-live-write-in-test.ts";
 
 export type { LintResult };
 
-const TEST_FILE_PATTERN = /(\.test\.ts$)|(__tests__\/.*\.ts$)/;
+const TEST_FILE_PATTERN = /(\.(test|e2e)\.ts$)|(__tests__\/.*\.ts$)/;
 
 function isExempt(relativePath: string): boolean {
-  if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) return true;
-  if (relativePath.includes('lib/lint/')) return true;
+  if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) return true;
+  if (relativePath.includes("lib/lint/")) return true;
   return false;
 }
 
@@ -44,25 +39,27 @@ function isExempt(relativePath: string): boolean {
  * (index) content via `git show :<path>` — not the working tree — so the
  * check reflects exactly what is about to be committed.
  */
-export async function checkNoLiveWriteInTestStaged(
-  rootDir: string = process.cwd(),
-): Promise<LintResult> {
+export async function checkNoLiveWriteInTestStaged(rootDir: string = process.cwd()): Promise<LintResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   let stagedOutput: string;
   try {
     stagedOutput = execSync(`git diff --cached --name-only --diff-filter=ACMR -- '*.ts'`, {
-      encoding: 'utf-8',
+      encoding: "utf-8",
       cwd: rootDir,
       maxBuffer: 32 * 1024 * 1024,
     });
-  } catch {
+  } catch (err) {
+    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
+    warnings.push(
+      `no-live-write-in-test-staged: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { errors, warnings };
   }
 
   const stagedFiles = stagedOutput
-    .split('\n')
+    .split("\n")
     .map((f) => f.trim())
     .filter((f) => f.length > 0 && TEST_FILE_PATTERN.test(f) && !isExempt(f));
 
@@ -70,7 +67,7 @@ export async function checkNoLiveWriteInTestStaged(
     let content: string;
     try {
       content = execSync(`git show ":${relativePath}"`, {
-        encoding: 'utf-8',
+        encoding: "utf-8",
         cwd: rootDir,
         maxBuffer: 32 * 1024 * 1024,
       });

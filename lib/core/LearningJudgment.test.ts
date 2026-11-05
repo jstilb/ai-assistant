@@ -13,7 +13,11 @@ describe("ISC-1: valid learnings array parses through", () => {
   it("returns all items when every item is well-formed", () => {
     const raw = [
       { summary: "Cron silently stopped emitting output", category: "SYSTEM", evidence: "needed a keep-alive signal" },
-      { summary: "Assumed the wrong scope and cost time", category: "ALGORITHM", evidence: "checking in first would have saved a rewrite" },
+      {
+        summary: "Assumed the wrong scope and cost time",
+        category: "ALGORITHM",
+        evidence: "checking in first would have saved a rewrite",
+      },
     ];
     const result = parseLearningsArray(raw);
     expect(result).toHaveLength(2);
@@ -31,7 +35,7 @@ describe("ISC-2: per-item fail-open — bad item dropped, good siblings survive"
     ];
     const result = parseLearningsArray(raw);
     expect(result).toHaveLength(2);
-    expect(result.map(r => r.summary)).toEqual(["Valid item", "Another valid item"]);
+    expect(result.map((r) => r.summary)).toEqual(["Valid item", "Another valid item"]);
   });
 
   it("drops an item with an empty summary string", () => {

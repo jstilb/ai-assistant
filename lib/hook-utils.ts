@@ -17,6 +17,8 @@
  * This module replaces all per-hook readStdinWithTimeout and readStdin implementations.
  */
 
+import { readFileSync } from "node:fs";
+
 export interface HookInputOptions {
   /** Timeout in milliseconds. Default: 5000 */
   timeoutMs?: number;
@@ -36,9 +38,12 @@ export const OBSERVABILITY_HOOK_INPUT_TIMEOUT_MS = 2000;
  * uncaught so the hook process exits non-zero (fail-closed).
  */
 export class SecurityHookInputError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  constructor(
+    message: string,
+    public override readonly cause?: unknown,
+  ) {
     super(message);
-    this.name = 'SecurityHookInputError';
+    this.name = "SecurityHookInputError";
   }
 }
 
@@ -54,18 +59,19 @@ export class SecurityHookInputError extends Error {
 export async function readHookInput<T>(options: HookInputOptions = {}): Promise<T | null> {
   const { timeoutMs = 5000 } = options;
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const stdinPromise = new Promise<string>((resolve) => {
-      let data = '';
-      process.stdin.setEncoding('utf-8');
-      process.stdin.on('data', (chunk: string) => {
+      let data = "";
+      process.stdin.setEncoding("utf-8");
+      process.stdin.on("data", (chunk: string) => {
         data += chunk;
       });
-      process.stdin.on('end', () => {
+      process.stdin.on("end", () => {
         resolve(data);
       });
-      process.stdin.on('error', () => {
-        resolve('');
+      process.stdin.on("error", () => {
+        resolve("");
       });
       // Resume stdin in case it's paused
       if (process.stdin.isPaused()) {
@@ -74,19 +80,22 @@ export async function readHookInput<T>(options: HookInputOptions = {}): Promise<
     });
 
     const timeoutPromise = new Promise<string>((resolve) => {
-      setTimeout(() => resolve(''), timeoutMs);
+      timer = setTimeout(() => resolve(""), timeoutMs);
     });
 
     const raw = await Promise.race([stdinPromise, timeoutPromise]);
 
-    if (!raw || !raw.trim()) {
+    if (!raw?.trim()) {
       return null;
     }
 
     return JSON.parse(raw) as T;
   } catch (err) {
-    console.error('[hook-utils] readHookInput error:', err);
+    console.error("[hook-utils] readHookInput error:", err);
     return null;
+  } finally {
+    // Always clear: a pending timer keeps the hook process alive until it fires.
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
@@ -98,14 +107,13 @@ export async function readHookInput<T>(options: HookInputOptions = {}): Promise<
  */
 export function readHookInputSync<T>(): T | null {
   try {
-    const { readFileSync } = require('fs') as typeof import('fs');
-    const raw = readFileSync(0, 'utf-8');
-    if (!raw || !raw.trim()) {
+    const raw = readFileSync(0, "utf-8");
+    if (!raw?.trim()) {
       return null;
     }
     return JSON.parse(raw) as T;
   } catch (err) {
-    console.error('[hook-utils] readHookInputSync error:', err);
+    console.error("[hook-utils] readHookInputSync error:", err);
     return null;
   }
 }
@@ -162,9 +170,7 @@ export async function readObservabilityHookInput<T>(options: HookInputOptions = 
 export function readSecurityHookInputSync<T>(): T {
   const result = readHookInputSync<T>();
   if (result === null) {
-    throw new SecurityHookInputError(
-      'Security hook input unavailable (empty stdin or JSON parse failure)',
-    );
+    throw new SecurityHookInputError("Security hook input unavailable (empty stdin or JSON parse failure)");
   }
   return result;
 }

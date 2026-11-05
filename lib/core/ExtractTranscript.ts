@@ -16,22 +16,12 @@
  */
 
 import OpenAI from "openai";
-import { existsSync, statSync, readdirSync, mkdirSync, createReadStream } from "fs";
-import { join, basename, extname, dirname } from "path";
-import { writeFile } from "fs/promises";
+import { existsSync, statSync, readdirSync, mkdirSync, createReadStream } from "node:fs";
+import { join, basename, extname, dirname } from "node:path";
+import { writeFile } from "node:fs/promises";
 
 // Supported audio/video formats
-const SUPPORTED_FORMATS = [
-  ".m4a",
-  ".mp3",
-  ".wav",
-  ".flac",
-  ".ogg",
-  ".mp4",
-  ".mpeg",
-  ".mpga",
-  ".webm",
-];
+const SUPPORTED_FORMATS = [".m4a", ".mp3", ".wav", ".flac", ".ogg", ".mp4", ".mpeg", ".mpga", ".webm"];
 
 // Output formats
 const OUTPUT_FORMATS = ["txt", "json", "srt", "vtt"];
@@ -50,17 +40,11 @@ function parseArgs(): { path: string; options: Options } {
 
   if (args.length === 0) {
     console.error("Error: No file or folder path provided");
-    console.log(
-      "\nUsage: bun ExtractTranscript.ts <file-or-folder> [options]"
-    );
+    console.log("\nUsage: bun ExtractTranscript.ts <file-or-folder> [options]");
     console.log("\nOptions:");
-    console.log(
-      "  --format <format>    Output format (txt, json, srt, vtt) [default: txt]"
-    );
+    console.log("  --format <format>    Output format (txt, json, srt, vtt) [default: txt]");
     console.log("  --batch              Process all files in folder");
-    console.log(
-      "  --output <dir>       Output directory [default: same as input]"
-    );
+    console.log("  --output <dir>       Output directory [default: same as input]");
     console.log("\nExamples:");
     console.log("  bun ExtractTranscript.ts audio.m4a");
     console.log("  bun ExtractTranscript.ts video.mp4 --format srt");
@@ -71,6 +55,10 @@ function parseArgs(): { path: string; options: Options } {
   }
 
   const path = args[0];
+  if (!path) {
+    console.error("Error: no input path given");
+    process.exit(1);
+  }
   const options: Options = {
     format: "txt",
     batch: false,
@@ -80,11 +68,9 @@ function parseArgs(): { path: string; options: Options } {
     const arg = args[i];
 
     if (arg === "--format" && i + 1 < args.length) {
-      const format = args[i + 1];
+      const format = args[i + 1] ?? "";
       if (!OUTPUT_FORMATS.includes(format)) {
-        console.error(
-          `Error: Invalid format "${format}". Must be one of: ${OUTPUT_FORMATS.join(", ")}`
-        );
+        console.error(`Error: Invalid format "${format}". Must be one of: ${OUTPUT_FORMATS.join(", ")}`);
         process.exit(1);
       }
       options.format = format;
@@ -145,11 +131,7 @@ function getFileSizeMB(filePath: string): number {
  * Transcribe audio file using OpenAI Whisper API
  * Automatically splits large files if needed
  */
-async function transcribeFile(
-  filePath: string,
-  options: Options,
-  openai: OpenAI
-): Promise<string> {
+async function transcribeFile(filePath: string, options: Options, openai: OpenAI): Promise<string> {
   console.log(`\nTranscribing: ${basename(filePath)}`);
 
   const fileSizeMB = getFileSizeMB(filePath);
@@ -160,7 +142,7 @@ async function transcribeFile(
     console.log("File exceeds 25MB limit - using faster local alternative...");
     console.log("Note: For large files, consider using faster-whisper locally");
     throw new Error(
-      `File size (${fileSizeMB.toFixed(2)} MB) exceeds OpenAI's 25MB limit. Please use a local transcription tool or split the file manually.`
+      `File size (${fileSizeMB.toFixed(2)} MB) exceeds OpenAI's 25MB limit. Please use a local transcription tool or split the file manually.`,
     );
   }
 
@@ -169,33 +151,29 @@ async function transcribeFile(
 
   try {
     // Create file stream
-    const fileStream = createReadStream(filePath) as any;
+    const fileStream = createReadStream(filePath);
 
     // Call OpenAI Whisper API
     const transcription = await openai.audio.transcriptions.create({
       file: fileStream,
       model: "whisper-1",
-      response_format: options.format === "txt" ? "text" : options.format as any,
+      response_format: options.format === "txt" ? "text" : (options.format as "json" | "srt" | "vtt"),
       language: "en",
     });
 
     console.log(`✓ Transcription complete`);
 
     // Return as string (API returns string for all formats)
-    return typeof transcription === 'string' ? transcription : JSON.stringify(transcription, null, 2);
-  } catch (error: any) {
-    throw new Error(`Transcription failed: ${error.message || error}`);
+    return typeof transcription === "string" ? transcription : JSON.stringify(transcription, null, 2);
+  } catch (error: unknown) {
+    throw new Error(`Transcription failed: ${error instanceof Error ? error.message || error : error}`);
   }
 }
 
 /**
  * Save transcript to file
  */
-async function saveTranscript(
-  filePath: string,
-  transcript: string,
-  options: Options
-): Promise<string> {
+async function saveTranscript(filePath: string, transcript: string, options: Options): Promise<string> {
   // Determine output directory
   const outputDir = options.outputDir || dirname(filePath);
 
@@ -235,7 +213,7 @@ async function main() {
     console.log("\nSet your API key:");
     console.log('  export OPENAI_API_KEY="sk-..."');
     console.log("\nOr add to ~/.zshrc for persistence:");
-    console.log('  echo \'export OPENAI_API_KEY="sk-..."\' >> ~/.zshrc');
+    console.log("  echo 'export OPENAI_API_KEY=\"sk-...\"' >> ~/.zshrc");
     process.exit(1);
   }
 
@@ -258,9 +236,7 @@ async function main() {
 
   if (stat.isDirectory()) {
     if (!options.batch) {
-      console.error(
-        "Error: Path is a directory. Use --batch flag to process all files in folder."
-      );
+      console.error("Error: Path is a directory. Use --batch flag to process all files in folder.");
       process.exit(1);
     }
 
@@ -314,9 +290,7 @@ async function main() {
   // Summary
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Transcription complete!`);
-  console.log(
-    `Successfully processed: ${results.length}/${files.length} files`
-  );
+  console.log(`Successfully processed: ${results.length}/${files.length} files`);
   if (errors.length > 0) {
     console.log(`Failed: ${errors.length} files`);
   }
@@ -324,14 +298,12 @@ async function main() {
 
   if (results.length > 0) {
     console.log("\nOutput files:");
-    results.forEach(({ output }) => console.log(`  - ${output}`));
+    for (const { output } of results) console.log(`  - ${output}`);
   }
 
   if (errors.length > 0) {
     console.log("\nErrors:");
-    errors.forEach(({ file, error }) =>
-      console.log(`  - ${file}: ${error}`)
-    );
+    for (const { file, error } of errors) console.log(`  - ${file}: ${error}`);
   }
 }
 

@@ -2,6 +2,8 @@
  * no-raw-stdin.ts — Architecture lint rule.
  *
  * Rule: Ban raw stdin reading outside the hook and credential input providers.
+ * Hooks use lib/hook-utils.ts. CLIs (lib, bin, skills) that read piped input
+ * use readStdinText() from lib/core/CliStdin.ts.
  *
  * Two modes:
  *   - checkNoRawStdin(rootDir)        — full-tree scan; surfaces all hits as
@@ -24,34 +26,51 @@
  * stdin reads in that file or any hook.
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from "node:child_process";
+
+/** grep -rnE without a shell: patterns may contain quotes. Exit 1 (no match) → "". */
+function grepTree(pattern: string, rootDir: string): string {
+  try {
+    return execFileSync("grep", ["-rn", "-E", pattern, rootDir, "--include=*.ts", "--include=*.tsx"], {
+      encoding: "utf-8",
+      cwd: rootDir,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch (err) {
+    if ((err as { status?: number }).status === 1) return "";
+    throw err;
+  }
+}
 
 export interface LintResult {
   errors: string[];
   warnings: string[];
 }
 
-const EXEMPT_FILE = 'lib/hook-utils.ts';
-const CREDENTIAL_INPUT_PROVIDER = 'lib/core/SecretInput.ts';
-const TEST_PATTERN = /\.(test|spec)\.(ts|tsx)$|__tests__\//;
+const EXEMPT_FILE = "lib/hook-utils.ts";
+const CREDENTIAL_INPUT_PROVIDER = "lib/core/SecretInput.ts";
+const CLI_STDIN_HELPER = "lib/core/CliStdin.ts";
+const TEST_PATTERN = /\.(test|spec|e2e)\.(ts|tsx)$|__tests__\//;
 
 const BANNED_PATTERNS = [
-  'function readStdin[^a-zA-Z]',
-  'function readStdinWithTimeout[^a-zA-Z]',
-  'Bun\\.stdin\\.text\\(\\)',
-  'Bun\\.stdin\\.stream\\(\\)',
+  "function readStdin[^a-zA-Z]",
+  "function readStdinWithTimeout[^a-zA-Z]",
+  "Bun\\.stdin\\.text\\(\\)",
+  "Bun\\.stdin\\.stream\\(\\)",
   "readFileSync\\('/dev/stdin'",
-  'readFileSync\\(0',
+  "readFileSync\\(0",
 ];
 
-const COMPILED_PATTERNS = BANNED_PATTERNS.map(p => new RegExp(p));
+const COMPILED_PATTERNS = BANNED_PATTERNS.map((p) => new RegExp(p));
 
 function isExempt(relativePath: string): boolean {
   if (relativePath === CREDENTIAL_INPUT_PROVIDER) return true;
+  if (relativePath === CLI_STDIN_HELPER) return true;
   if (relativePath === EXEMPT_FILE || relativePath.endsWith(EXEMPT_FILE)) return true;
   if (TEST_PATTERN.test(relativePath)) return true;
-  if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) return true;
-  if (relativePath.includes('lib/lint/')) return true;
+  if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) return true;
+  if (relativePath.includes("lib/lint/")) return true;
   return false;
 }
 
@@ -61,28 +80,29 @@ export async function checkNoRawStdin(rootDir: string = process.cwd()): Promise<
 
   for (const pattern of BANNED_PATTERNS) {
     try {
-      const output = execSync(
-        `grep -rn -E "${pattern}" "${rootDir}" --include="*.ts" --include="*.tsx" 2>/dev/null || true`,
-        { encoding: 'utf-8', cwd: rootDir }
-      );
+      const output = grepTree(pattern, rootDir);
 
-      const lines = output.split('\n').filter(l => l.trim());
+      const lines = output.split("\n").filter((l) => l.trim());
 
       for (const line of lines) {
-        const [filePart] = line.split(':');
+        const [filePart] = line.split(":");
         if (!filePart) continue;
 
-        const relativePath = filePart.replace(rootDir + '/', '');
+        const relativePath = filePart.replace(rootDir + "/", "");
         if (isExempt(relativePath)) continue;
 
         warnings.push(
           `${line}: Raw stdin reading. ` +
-          `Use the hook readers from lib/hook-utils.ts or readSecretInput from lib/core/SecretInput.ts for credentials. ` +
-          `Inline stdin reading causes inconsistent timeout and error handling across hooks.`
+            `Use the hook readers from lib/hook-utils.ts, readStdinText from lib/core/CliStdin.ts for CLIs, or readSecretInput from lib/core/SecretInput.ts for credentials. ` +
+            `Inline stdin reading causes inconsistent timeout and error handling across hooks.`,
         );
       }
-    } catch {
-      // grep exits non-zero on no match — fine
+    } catch (err) {
+      // grep exits 1 on no match — expected. Any other status (2 = grep error) means the scan did
+      // not run, which must not look like a clean pass.
+      if ((err as { status?: number }).status !== 1) {
+        warnings.push(`no-raw-stdin: grep failed, scan skipped: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 
@@ -104,47 +124,50 @@ export async function checkNoRawStdinStaged(rootDir: string = process.cwd()): Pr
   let diffOutput: string;
   try {
     // -U0 trims context, --diff-filter=ACMR limits to added/changed/copied/renamed
-    diffOutput = execSync(
-      'git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"',
-      { encoding: 'utf-8', cwd: rootDir, maxBuffer: 32 * 1024 * 1024 },
-    );
-  } catch {
+    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"', {
+      encoding: "utf-8",
+      cwd: rootDir,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (err) {
+    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
+    warnings.push(`no-raw-stdin: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`);
     return { errors, warnings };
   }
 
   let currentFile: string | null = null;
   let currentLineNum = 0;
 
-  for (const rawLine of diffOutput.split('\n')) {
-    if (rawLine.startsWith('+++ b/')) {
+  for (const rawLine of diffOutput.split("\n")) {
+    if (rawLine.startsWith("+++ b/")) {
       currentFile = rawLine.slice(6);
       continue;
     }
-    if (rawLine.startsWith('--- ')) continue;
-    if (rawLine.startsWith('diff ') || rawLine.startsWith('index ')) {
+    if (rawLine.startsWith("--- ")) continue;
+    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
       currentFile = null;
       continue;
     }
-    if (rawLine.startsWith('@@')) {
+    if (rawLine.startsWith("@@")) {
       // @@ -a,b +c,d @@  — c is the starting new-file line number
       const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      currentLineNum = match ? parseInt(match[1], 10) : 0;
+      currentLineNum = parseInt(match?.[1] ?? "0", 10);
       continue;
     }
     if (!currentFile || isExempt(currentFile)) continue;
 
-    if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
       const added = rawLine.slice(1);
-      for (let i = 0; i < COMPILED_PATTERNS.length; i++) {
-        if (COMPILED_PATTERNS[i].test(added)) {
+      for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
+        if (pattern.test(added)) {
           errors.push(
             `${currentFile}:${currentLineNum}: Raw stdin pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
-            `Use the hook readers from lib/hook-utils.ts or readSecretInput from lib/core/SecretInput.ts for credentials.`,
+              `Use the hook readers from lib/hook-utils.ts or readSecretInput from lib/core/SecretInput.ts for credentials.`,
           );
         }
       }
       currentLineNum++;
-    } else if (!rawLine.startsWith('-')) {
+    } else if (!rawLine.startsWith("-")) {
       // context line — advances the new-file counter
       currentLineNum++;
     }

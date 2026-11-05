@@ -19,7 +19,7 @@
  * try/catch-swallow style).
  */
 
-export type PowerSource = 'AC Power' | 'Battery Power' | 'unknown';
+type PowerSource = "AC Power" | "Battery Power" | "unknown";
 
 export interface PowerState {
   /** true = on AC, false = on battery, null = undetermined (no battery / pmset failed). */
@@ -29,12 +29,12 @@ export interface PowerState {
   percentage: number | null;
 }
 
-export type ExecPmset = () => string;
+type ExecPmset = () => string;
 
-const UNKNOWN_STATE: PowerState = { onAC: null, source: 'unknown', percentage: null };
+const UNKNOWN_STATE: PowerState = { onAC: null, source: "unknown", percentage: null };
 
 const defaultExec: ExecPmset = () => {
-  return Bun.spawnSync(['pmset', '-g', 'batt']).stdout.toString();
+  return Bun.spawnSync(["pmset", "-g", "batt"]).stdout.toString();
 };
 
 /**
@@ -54,10 +54,10 @@ export function getPowerState(execFn: ExecPmset = defaultExec): PowerState {
   if (!sourceMatch) return { ...UNKNOWN_STATE };
 
   const rawSource = sourceMatch[1];
-  const source: PowerSource = rawSource === 'AC Power' || rawSource === 'Battery Power' ? rawSource : 'unknown';
-  if (source === 'unknown') return { ...UNKNOWN_STATE };
+  const source: PowerSource = rawSource === "AC Power" || rawSource === "Battery Power" ? rawSource : "unknown";
+  if (source === "unknown") return { ...UNKNOWN_STATE };
 
-  const onAC = source === 'AC Power';
+  const onAC = source === "AC Power";
 
   const pctMatch = raw.match(/(\d+)%/);
   const percentage = pctMatch ? parseInt(pctMatch[1]!, 10) : null;

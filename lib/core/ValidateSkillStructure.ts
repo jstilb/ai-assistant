@@ -16,23 +16,23 @@
  * Exit code: 0 if valid (zero ERRORs), 1 if any ERRORs.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { join, basename } from 'path';
-import { parseArgs } from 'util';
-import { getKayaHome } from './KayaHome.ts';
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, basename } from "node:path";
+import { parseArgs } from "node:util";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type ValidationSeverity = 'ERROR' | 'WARN';
+export type ValidationSeverity = "ERROR" | "WARN";
 
 export type ValidationRule =
-  | 'BROKEN_ROUTING_REF'
-  | 'MISSING_FROM_TABLE'
-  | 'ORPHANED_ROOT_DIR'
-  | 'EXCESSIVE_DEPTH'
-  | 'NAME_MISMATCH';
+  | "BROKEN_ROUTING_REF"
+  | "MISSING_FROM_TABLE"
+  | "ORPHANED_ROOT_DIR"
+  | "EXCESSIVE_DEPTH"
+  | "NAME_MISMATCH";
 
 export interface ValidationIssue {
   rule: ValidationRule;
@@ -59,7 +59,7 @@ export interface ValidationResult {
 // ---------------------------------------------------------------------------
 
 // frozen at import (getKayaHome cached); no test re-pins this module
-const DEFAULT_SKILLS_DIR = join(getKayaHome(), 'skills');
+const DEFAULT_SKILLS_DIR = join(getKayaHome(), "skills");
 
 /** Return names of immediate child directories inside `dir`. */
 function childDirs(dir: string): string[] {
@@ -75,7 +75,7 @@ function childDirs(dir: string): string[] {
 
 /** True if `dir` contains a SKILL.md directly inside it. */
 function hasSkillMd(dir: string): boolean {
-  return existsSync(join(dir, 'SKILL.md'));
+  return existsSync(join(dir, "SKILL.md"));
 }
 
 /**
@@ -98,14 +98,11 @@ function isCategory(dir: string): boolean {
  * Expected row format:
  *   | **Name** | triggers | `path/to/SKILL.md` |
  */
-export function parseRoutingTableEntries(
-  content: string,
-): Array<{ name: string; path: string }> {
+export function parseRoutingTableEntries(content: string): Array<{ name: string; path: string }> {
   const results: Array<{ name: string; path: string }> = [];
   const rowRegex = /\|\s*\*\*(.+?)\*\*\s*\|[^|]*\|\s*`([^`]+)`\s*\|/g;
-  let match: RegExpExecArray | null;
-  while ((match = rowRegex.exec(content)) !== null) {
-    results.push({ name: match[1].trim(), path: match[2].trim() });
+  for (const match of content.matchAll(rowRegex)) {
+    results.push({ name: (match[1] ?? "").trim(), path: (match[2] ?? "").trim() });
   }
   return results;
 }
@@ -121,16 +118,16 @@ export function checkBrokenRoutingRefs(skillsDir: string): ValidationIssue[] {
     const catDir = join(skillsDir, catName);
     if (!isCategory(catDir)) continue;
 
-    const skillMdPath = join(catDir, 'SKILL.md');
-    const content = readFileSync(skillMdPath, 'utf-8');
+    const skillMdPath = join(catDir, "SKILL.md");
+    const content = readFileSync(skillMdPath, "utf-8");
     const entries = parseRoutingTableEntries(content);
 
     for (const entry of entries) {
       const resolved = join(skillsDir, entry.path);
       if (!existsSync(resolved)) {
         issues.push({
-          rule: 'BROKEN_ROUTING_REF',
-          severity: 'ERROR',
+          rule: "BROKEN_ROUTING_REF",
+          severity: "ERROR",
           message: `${catName}/SKILL.md routes to "${entry.path}" but path does not exist`,
           category: catName,
           path: entry.path,
@@ -153,16 +150,16 @@ export function checkMissingFromTable(skillsDir: string): ValidationIssue[] {
     const catDir = join(skillsDir, catName);
     if (!isCategory(catDir)) continue;
 
-    const skillMdPath = join(catDir, 'SKILL.md');
-    const content = readFileSync(skillMdPath, 'utf-8');
+    const skillMdPath = join(catDir, "SKILL.md");
+    const content = readFileSync(skillMdPath, "utf-8");
     const entries = parseRoutingTableEntries(content);
 
     // Sub-skills referenced in the table (by their path's basename)
-    const tabled = new Set(entries.map((e) => basename(e.path, '/SKILL.md').replace(/\/SKILL\.md$/, '')));
+    const tabled = new Set(entries.map((e) => basename(e.path, "/SKILL.md").replace(/\/SKILL\.md$/, "")));
     // Also collect the raw directory name component just before SKILL.md
     const tabledDirs = new Set(
       entries.map((e) => {
-        const parts = e.path.split('/');
+        const parts = e.path.split("/");
         // path like "Category/SubSkill/SKILL.md" → parts[1] (or parts[-2])
         return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
       }),
@@ -175,12 +172,12 @@ export function checkMissingFromTable(skillsDir: string): ValidationIssue[] {
 
       if (!tabledDirs.has(subName) && !tabled.has(subName)) {
         issues.push({
-          rule: 'MISSING_FROM_TABLE',
-          severity: 'ERROR',
+          rule: "MISSING_FROM_TABLE",
+          severity: "ERROR",
           message: `${catName}/${subName} exists on disk but is not in ${catName}/SKILL.md routing table`,
           category: catName,
           subSkill: subName,
-          path: join(catDir, subName, 'SKILL.md'),
+          path: join(catDir, subName, "SKILL.md"),
         });
       }
     }
@@ -215,8 +212,8 @@ export function checkOrphanedRootDirs(skillsDir: string): ValidationIssue[] {
     const shadowedCat = subSkillIndex.get(rootName);
     if (shadowedCat !== undefined) {
       issues.push({
-        rule: 'ORPHANED_ROOT_DIR',
-        severity: 'WARN',
+        rule: "ORPHANED_ROOT_DIR",
+        severity: "WARN",
         message: `skills/${rootName}/ has no SKILL.md and shadows ${shadowedCat}/${rootName}`,
         path: rootDir,
       });
@@ -243,14 +240,14 @@ export function checkExcessiveDepth(skillsDir: string): ValidationIssue[] {
   function walk(dir: string, depth: number): void {
     if (depth >= 3) {
       // Check if SKILL.md exists at this depth (violation)
-      if (existsSync(join(dir, 'SKILL.md'))) {
+      if (existsSync(join(dir, "SKILL.md"))) {
         // Build relative path for message
-        const rel = dir.replace(skillsDir + '/', '');
+        const rel = dir.replace(skillsDir + "/", "");
         issues.push({
-          rule: 'EXCESSIVE_DEPTH',
-          severity: 'ERROR',
+          rule: "EXCESSIVE_DEPTH",
+          severity: "ERROR",
           message: `${rel}/SKILL.md is at depth ${depth} (max 2)`,
-          path: join(dir, 'SKILL.md'),
+          path: join(dir, "SKILL.md"),
         });
       }
       // Don't recurse further — stop at depth 3 to avoid reporting deeper nesting
@@ -274,21 +271,21 @@ export function checkNameMismatch(skillsDir: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   function checkDir(dir: string): void {
-    const skillMdPath = join(dir, 'SKILL.md');
+    const skillMdPath = join(dir, "SKILL.md");
     if (!existsSync(skillMdPath)) return;
 
-    const content = readFileSync(skillMdPath, 'utf-8');
+    const content = readFileSync(skillMdPath, "utf-8");
     const match = content.match(/^name:\s*(.+?)$/m);
     if (!match) return; // no name field — skip silently
 
-    const nameInFile = match[1].trim();
+    const nameInFile = (match[1] ?? "").trim();
     const dirName = basename(dir);
 
     if (nameInFile !== dirName) {
-      const rel = dir.replace(skillsDir + '/', '');
+      const rel = dir.replace(skillsDir + "/", "");
       issues.push({
-        rule: 'NAME_MISMATCH',
-        severity: 'WARN',
+        rule: "NAME_MISMATCH",
+        severity: "WARN",
         message: `${rel}/SKILL.md has name: "${nameInFile}" but directory is "${dirName}"`,
         path: skillMdPath,
       });
@@ -324,7 +321,7 @@ export function validateSkillStructure(skillsDir: string = DEFAULT_SKILLS_DIR): 
   let errors = 0;
   let warnings = 0;
   for (const issue of issues) {
-    if (issue.severity === 'ERROR') errors++;
+    if (issue.severity === "ERROR") errors++;
     else warnings++;
   }
 
@@ -357,37 +354,34 @@ export function validateSkillStructure(skillsDir: string = DEFAULT_SKILLS_DIR): 
 // ---------------------------------------------------------------------------
 
 function severityLabel(s: ValidationSeverity): string {
-  return s === 'ERROR' ? '[ERROR]' : '[WARN] ';
+  return s === "ERROR" ? "[ERROR]" : "[WARN] ";
 }
 
 function main(): void {
   const { values } = parseArgs({
     options: {
-      json: { type: 'boolean', default: false },
-      'errors-only': { type: 'boolean', default: false },
-      'skills-dir': { type: 'string' },
+      json: { type: "boolean", default: false },
+      "errors-only": { type: "boolean", default: false },
+      "skills-dir": { type: "string" },
     },
     strict: false,
   });
 
-  const skillsDir = (values['skills-dir'] as string | undefined) ?? DEFAULT_SKILLS_DIR;
+  const skillsDir = (values["skills-dir"] as string | undefined) ?? DEFAULT_SKILLS_DIR;
   const result = validateSkillStructure(skillsDir);
 
-  if (values['json']) {
-    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  if (values["json"]) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   } else {
-    const filtered =
-      values['errors-only']
-        ? result.issues.filter((i) => i.severity === 'ERROR')
-        : result.issues;
+    const filtered = values["errors-only"] ? result.issues.filter((i) => i.severity === "ERROR") : result.issues;
 
-    console.log('Skill Structure Validation');
-    console.log('==========================');
+    console.log("Skill Structure Validation");
+    console.log("==========================");
 
     if (filtered.length === 0) {
-      console.log('\nNo issues found.');
+      console.log("\nNo issues found.");
     } else {
-      console.log('');
+      console.log("");
       for (const issue of filtered) {
         console.log(`${severityLabel(issue.severity)} ${issue.rule}: ${issue.message}`);
       }
@@ -395,7 +389,7 @@ function main(): void {
 
     const { errors, warnings, categoriesChecked, subSkillsChecked } = result.summary;
     console.log(
-      `\nSummary: ${errors} error${errors !== 1 ? 's' : ''}, ${warnings} warning${warnings !== 1 ? 's' : ''} (${categoriesChecked} categories, ${subSkillsChecked} sub-skills checked)`,
+      `\nSummary: ${errors} error${errors !== 1 ? "s" : ""}, ${warnings} warning${warnings !== 1 ? "s" : ""} (${categoriesChecked} categories, ${subSkillsChecked} sub-skills checked)`,
     );
   }
 

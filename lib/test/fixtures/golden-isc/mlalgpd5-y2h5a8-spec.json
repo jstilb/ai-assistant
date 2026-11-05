@@ -1,0 +1,98 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlalgpd5-y2h5a8-spec.md",
+  "layoutNote": "4-col 100 rows large",
+  "rowCount": 14,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Zero instances of `JSON.parse(readFileSync())` remain in any tool file under `skills/voice-interaction/tools/` — all settings access uses StateManager via the shared `VoiceConfig` class",
+      "verifyMethod": "`grep -rn 'JSON\\.parse.*readFileSync' skills/voice-interaction/tools/` returns 0 results",
+      "embeddedCommand": "grep -rn 'JSON\\.parse.*readFileSync' skills/voice-interaction/tools/",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "Zero instances of raw `fetch()` remain in any tool file — all HTTP calls to ElevenLabs and Gemini APIs use CachedHTTPClient with retry policy (3 attempts, exponential backoff)",
+      "verifyMethod": "`grep -rn '[^a-zA-Z]fetch(' skills/voice-interaction/tools/ | grep -v CachedHTTPClient` returns 0 results",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "Shared utility module `utils/config.ts` exists, exports `VoiceConfig` class wrapping StateManager with typed `VoiceSettings` interface and defaults — used by all tools that access settings",
+      "verifyMethod": "File exists; all tools import from `utils/config.ts`; `VoiceConfig.get()` and `VoiceConfig.update()` are the only settings access paths",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "Shared utility module `utils/commands.ts` exists, exports `EXIT_COMMANDS` array and `isExitCommand()` function — no tool has its own copy of exit command definitions",
+      "verifyMethod": "File exists; `grep -rn \"exit.*quit.*bye\" skills/voice-interaction/tools/` returns 0 inline definitions; all tools import from `utils/commands.ts`",
+      "embeddedCommand": "grep -rn \"exit.*quit.*bye\" skills/voice-interaction/tools/",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Shared utility module `utils/audio.ts` exists, exports `stopAudioPlayback()` function — no tool has its own `pkill afplay` logic",
+      "verifyMethod": "File exists; `grep -rn 'pkill.*afplay' skills/voice-interaction/tools/` returns 0 results; all process kill logic delegates to `utils/audio.ts`",
+      "embeddedCommand": "grep -rn 'pkill.*afplay' skills/voice-interaction/tools/",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "Zero instances of `require()` remain in any tool file — 100% ES6 `import/export` syntax throughout all tools and utilities",
+      "verifyMethod": "`grep -rn 'require(' skills/voice-interaction/tools/` returns 0 results",
+      "embeddedCommand": "grep -rn 'require(' skills/voice-interaction/tools/",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "TypeScript compilation passes cleanly with zero errors across all refactored files",
+      "verifyMethod": "`tsc --noEmit` exits with code 0 and produces no error output",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "SKILL.md accurately reflects only implemented capabilities — real-time interruption documented as \"between-turn\" (actual behavior), transcribe-telegram removed or marked as unimplemented",
+      "verifyMethod": "Manual diff between SKILL.md feature list and grep of actual tool exports/capabilities shows 100% alignment",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "PAI Skill Validation Checklist passes at 100%: SKILL.md has required sections (Customization, Voice Notification, Workflow Routing, Examples, Integration), no raw `fetch()`, no raw `JSON.parse(readFileSync())`, YAML frontmatter description includes `USE WHEN`",
+      "verifyMethod": "Run full PAI checklist; all items pass",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "Every commit is on the correct feature branch (`refactor/voice-interaction-antipatterns`) with branch assertion verified — no cross-contamination per MEMORY.md guidance",
+      "verifyMethod": "Pre-commit script asserts `git rev-parse --abbrev-ref HEAD` matches expected branch; every commit log shows correct branch",
+      "embeddedCommand": "git rev-parse --abbrev-ref HEAD",
+      "source": "GROUNDED"
+    },
+    {
+      "number": 11,
+      "description": "Git tag `pre-refactor-voice-interaction` exists on the commit immediately before refactoring begins, enabling full rollback if needed",
+      "verifyMethod": "`git tag -l 'pre-refactor-voice-interaction'` returns the tag; `git log --oneline pre-refactor-voice-interaction..HEAD` shows only refactor commits",
+      "source": "INFERRED"
+    },
+    {
+      "number": 12,
+      "description": "Zero test regressions — all existing voice interaction tests pass after refactoring with identical behavior",
+      "verifyMethod": "Full test suite run exits with 0 failures; if no test suite exists, manual smoke tests documented and passing for: settings read/write, TTS generation, transcription, exit command detection, audio stop",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 13,
+      "description": "VoiceServer dependency audited — if zero import references found across codebase, dependency removed from `package.json`; if references found, dependency retained with documentation",
+      "verifyMethod": "`grep -rn 'voice-server|VoiceServer' skills/voice-interaction/` confirms usage status; `package.json` reflects decision",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 14,
+      "description": "Each refactor category has exactly one atomic commit with structured message format: `refactor(voice-interaction): [area] - [specific change]` — maximum 6 commits total",
+      "verifyMethod": "`git log --oneline pre-refactor-voice-interaction..HEAD` shows ≤6 commits; each follows the format convention",
+      "embeddedCommand": "git log --oneline pre-refactor-voice-interaction..HEAD",
+      "source": "INFERRED"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.235Z"
+}

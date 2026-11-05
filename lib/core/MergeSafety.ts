@@ -29,7 +29,7 @@
  * pattern) — this module itself stays a thin, dependency-free git wrapper.
  */
 
-import { execFileSync } from "child_process";
+import { execFileSync } from "node:child_process";
 
 // ============================================================================
 // Types
@@ -77,7 +77,15 @@ export function isBranchAncestor(repoRoot: string, branch: string, base = "main"
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", branch, base], { cwd: repoRoot, encoding: "utf-8" });
     return true;
-  } catch {
+  } catch (err) {
+    // Exit 1 is the normal "not an ancestor" answer. Anything else (bad ref = 128, git missing)
+    // is not an answer about ancestry, so report it; false stays the conservative result.
+    const status = (err as { status?: number }).status;
+    if (status !== 1) {
+      console.error(
+        `MergeSafety: git merge-base --is-ancestor ${branch} ${base} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return false;
   }
 }
@@ -93,7 +101,12 @@ export function isBranchAncestor(repoRoot: string, branch: string, base = "main"
  * `base` to diff against, e.g. a GitHub-side PR merge) — in that case the disk-diff half is
  * trivially clean and `clean` reduces to the ancestor check alone.
  */
-export function verifyMergeOnDisk(repoRoot: string, changedFiles: string[], branch: string, base = "main"): DiskVerifyResult {
+export function verifyMergeOnDisk(
+  repoRoot: string,
+  changedFiles: string[],
+  branch: string,
+  base = "main",
+): DiskVerifyResult {
   const diffOutput = changedFiles.length > 0 ? gitOut(["diff", "--stat", "HEAD", "--", ...changedFiles], repoRoot) : "";
   const isAncestor = isBranchAncestor(repoRoot, branch, base);
   return { clean: diffOutput.trim() === "" && isAncestor, diffOutput, isAncestor };

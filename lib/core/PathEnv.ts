@@ -13,19 +13,20 @@
  *   setupPath();
  */
 
-import * as os from "os";
-import * as path from "path";
-import * as fs from "fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import { getKayaHome } from "./KayaHome.ts";
 
 const HOME = os.homedir();
 
 const PATH_COMPONENTS = [
-  path.join(HOME, ".claude", "bin"),          // kaya-cli and local scripts
-  path.join(HOME, ".local", "bin"),           // Claude binary location
-  path.join(HOME, ".bun", "bin"),             // bun
-  "/opt/homebrew/bin",                        // Homebrew (Apple Silicon)
+  path.join(getKayaHome(), "bin"), // kaya-cli and local scripts
+  path.join(HOME, ".local", "bin"), // Claude binary location
+  path.join(HOME, ".bun", "bin"), // bun
+  "/opt/homebrew/bin", // Homebrew (Apple Silicon)
   "/opt/homebrew/sbin",
-  "/usr/local/bin",                           // Homebrew (Intel)
+  "/usr/local/bin", // Homebrew (Intel)
   "/usr/bin",
   "/bin",
   "/usr/sbin",

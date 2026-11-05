@@ -1,0 +1,108 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlzhsdw8-g0p8il-spec.md",
+  "layoutNote": "6-col with disposition (16 rows)",
+  "rowCount": 16,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`timeseries-forecasting` repo contains a notebook or script that loads either TimesFM or Moirai as a zero-shot/fine-tuned baseline and reports its metrics alongside classical models",
+      "verifyMethod": "`grep -r \"timesfm|moirai\" timeseries-forecasting/ --include=\"*.py\" --include=\"*.ipynb\"` returns ≥1 match",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "A public Weights & Biases project URL is linked in `timeseries-forecasting/README.md` and the linked workspace shows ≥1 completed run with logged loss curves",
+      "verifyMethod": "Open URL from README; confirm runs are publicly visible without login and contain training metrics",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "`timeseries-forecasting` contains a `app.py` or `dashboard.py` Streamlit file that accepts a dataset/model selection and renders an interactive forecast plot",
+      "verifyMethod": "`cd timeseries-forecasting && streamlit run app.py` launches without error and displays forecast chart in browser",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "A walk-forward validation diagram (image file) and a results table (markdown or CSV) exist in `timeseries-forecasting/` showing per-fold metrics across ≥3 models",
+      "verifyMethod": "`ls timeseries-forecasting/assets/ | grep -i \"walk_forward|rolling\"` and `ls timeseries-forecasting/ | grep -i \"results\"` both return files",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Monte Carlo Dropout is implemented in at least one model in `timeseries-forecasting`, producing prediction intervals (upper/lower bounds) visible in output or plots",
+      "verifyMethod": "`grep -r \"mc_dropout|monte_carlo|enable_dropout\" timeseries-forecasting/ --include=\"*.py\" --include=\"*.ipynb\"` returns ≥1 match; output contains confidence interval columns",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "`mlops-serving/README.md` contains ≥2 embedded Grafana screenshot images showing live metrics panels (latency, throughput, or error rate)",
+      "verifyMethod": "`grep -i \"grafana\" mlops-serving/README.md` returns ≥2 image references; image files exist at referenced paths",
+      "embeddedCommand": "grep -i \"grafana\" mlops-serving/README.md",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "`mlops-serving/` contains an architecture diagram file (PNG/SVG) referenced in README depicting request flow from client through model server to monitoring stack",
+      "verifyMethod": "`ls mlops-serving/assets/ | grep -i \"arch|diagram\"` returns a file; README contains an `![` image tag pointing to it",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "`mlops-serving/docker-compose.yml` exists and `docker compose up` brings up the full serving stack (model server + monitoring) with a single command, no manual configuration required",
+      "verifyMethod": "`cd mlops-serving && docker compose up --wait` exits 0 and `curl localhost:<port>/health` returns HTTP 200 within 60 s",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "`mlops-serving/` contains an A/B test results notebook or script that computes statistical significance (p-value or confidence interval) between two model variants and displays a visualization",
+      "verifyMethod": "`grep -r \"p_value|scipy.stats|statsmodels|confidence_interval\" mlops-serving/ --include=\"*.py\" --include=\"*.ipynb\"` returns ≥1 match",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "Evidently AI drift detection is integrated in `mlops-serving/` with a report or dashboard showing data/model drift for at least one feature set",
+      "verifyMethod": "`grep -r \"evidently\" mlops-serving/ --include=\"*.py\" --include=\"*.ipynb\" --include=\"requirements*.txt\"` returns ≥1 match; a generated HTML or JSON report file exists",
+      "embeddedCommand": "grep -r \"evidently\" mlops-serving/ --include=\"*.py\" --include=\"*.ipynb\" --include=\"requirements*.txt\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 11,
+      "description": "`mlops-serving/` contains a vLLM or Ollama serving module/config (e.g., `llm_server.py`, `ollama-compose.yml`) with README section describing LLM serving usage",
+      "verifyMethod": "`grep -r \"vllm|ollama\" mlops-serving/ --include=\"*.py\" --include=\"*.yml\" --include=\"*.md\"` returns ≥1 match in both a code/config file and README",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 12,
+      "description": "`deep-learning-cv` training data references a non-CIFAR-10 real-world dataset (e.g., iNaturalist, Food-101, or similar) with no remaining CIFAR-10 data loading code in active scripts",
+      "verifyMethod": "`grep -r \"cifar\" deep-learning-cv/ --include=\"*.py\" --include=\"*.ipynb\"` returns 0 matches in non-archived files",
+      "embeddedCommand": "grep -r \"cifar\" deep-learning-cv/ --include=\"*.py\" --include=\"*.ipynb\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 13,
+      "description": "`deep-learning-cv/` contains a CLIP zero-shot evaluation script/notebook listed as \"Model 4\" in the comparison table, with accuracy reported on the same test split as other three models",
+      "verifyMethod": "Results table in README shows ≥4 model rows including a CLIP row; `grep -i \"clip\" deep-learning-cv/ -r --include=\"*.py\" --include=\"*.ipynb\"` returns ≥1 match",
+      "embeddedCommand": "grep -i \"clip\" deep-learning-cv/ -r --include=\"*.py\" --include=\"*.ipynb\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 14,
+      "description": "A Grad-CAM visualization gallery (≥6 images across ≥2 classes) is present in `deep-learning-cv/assets/` or a linked notebook with cells showing Grad-CAM overlays on real-world dataset images",
+      "verifyMethod": "`ls deep-learning-cv/assets/ | grep -i \"gradcam|grad_cam\"` returns ≥6 files, or notebook contains ≥6 rendered Grad-CAM output cells",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 15,
+      "description": "A live Gradio demo for `deep-learning-cv` is deployed (HuggingFace Spaces or equivalent) with its public URL in README, accepting image upload and returning top-3 predicted classes",
+      "verifyMethod": "Open URL from README; upload a test image; confirm prediction response renders within 30 s without error",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 16,
+      "description": "`timeseries-forecasting` and `mlops-serving` READMEs each contain a section explicitly positioning the project as a bridge to LLM/AI Engineer work (e.g., foundation models, LLM serving)",
+      "verifyMethod": "`grep -i \"llm|foundation model|ai engineer\" timeseries-forecasting/README.md mlops-serving/README.md` returns ≥1 match per file",
+      "source": "INFERRED"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.240Z"
+}

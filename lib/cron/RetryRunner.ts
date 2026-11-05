@@ -12,8 +12,8 @@
  * module's doc for the "why").
  */
 
-import { isRetryableFailure } from './RetryPolicy';
-import type { FailureClass } from './FailureClassifier';
+import { isRetryableFailure } from "./RetryPolicy.ts";
+import type { FailureClass } from "./FailureClassifier.ts";
 
 export interface AttemptResult<T> {
   success: boolean;
@@ -29,19 +29,19 @@ export interface AttemptResult<T> {
   value: T;
 }
 
-export interface RetryPolicyConfig {
+interface RetryPolicyConfig {
   /** Max number of retries AFTER the initial attempt (max:2 => 3 tries total). */
   max: number;
   backoffMs: number;
 }
 
-export interface RetryInfo {
+interface RetryInfo {
   attempt: number;
   nextAttempt: number;
   backoffMs: number;
 }
 
-export interface RunWithRetryOptions<T> {
+interface RunWithRetryOptions<T> {
   attemptFn: (attempt: number) => Promise<AttemptResult<T>>;
   retry: RetryPolicyConfig;
   /** Called right before sleeping ahead of each retry. */
@@ -50,7 +50,7 @@ export interface RunWithRetryOptions<T> {
   sleepFn?: (ms: number) => Promise<void>;
 }
 
-export interface RunWithRetryResult<T> {
+interface RunWithRetryResult<T> {
   result: AttemptResult<T>;
   /** The 1-indexed attempt number the final result came from. */
   attempt: number;

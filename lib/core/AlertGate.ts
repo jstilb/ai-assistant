@@ -27,14 +27,14 @@
  * the gate-only API: shouldPage(key, opts) + recordPaged(key, fingerprint?).
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { getKayaHome, defaultKayaHome, assertNotLiveHomeUnderTest } from './KayaHome.ts';
-import { createAppendLog } from './AppendLog.ts';
-import { loadSettings } from './ConfigLoader.ts';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { getKayaHome, defaultKayaHome, assertNotLiveHomeUnderTest } from "./KayaHome.ts";
+import { createAppendLog } from "./AppendLog.ts";
+import { loadSettings } from "./ConfigLoader.ts";
 
-export type AlertTier = 'page' | 'digest' | 'log';
-export type AlertResult = 'paged' | 'spooled' | 'logged' | 'suppressed' | 'dry-run';
+export type AlertTier = "page" | "digest" | "log";
+export type AlertResult = "paged" | "spooled" | "logged" | "suppressed" | "dry-run";
 
 // ============================================================================
 // Test/tmp-path leak guard
@@ -59,12 +59,12 @@ export type AlertResult = 'paged' | 'spooled' | 'logged' | 'suppressed' | 'dry-r
 // they forget.
 
 const SUSPECT_PATH_MARKERS: readonly string[] = [
-  '/var/folders/',   // macOS os.tmpdir()/mkdtempSync default root
-  '/private/tmp/',   // Claude agent session scratchpad root (see scratchpad convention)
-  '/tmp/',           // POSIX tmpdir root (Linux os.tmpdir(), and macOS's /tmp symlink)
-  'oauth-fixtures',  // TokenHealth/OAuthHealthCheck.test.ts mkdtemp fixture prefix
-  'scratchpad',      // agent session scratchpad convention (any OS)
-  'mktemp',          // literal mktemp invocations/paths some scripts embed in messages
+  "/var/folders/", // macOS os.tmpdir()/mkdtempSync default root
+  "/private/tmp/", // Claude agent session scratchpad root (see scratchpad convention)
+  "/tmp/", // POSIX tmpdir root (Linux os.tmpdir(), and macOS's /tmp symlink)
+  "oauth-fixtures", // TokenHealth/OAuthHealthCheck.test.ts mkdtemp fixture prefix
+  "scratchpad", // agent session scratchpad convention (any OS)
+  "mktemp", // literal mktemp invocations/paths some scripts embed in messages
 ];
 
 /**
@@ -246,7 +246,7 @@ export const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
   enabled: true,
   startHour: 22,
   endHour: 7,
-  timeZone: 'America/Los_Angeles',
+  timeZone: "America/Los_Angeles",
   // Mirrors settings.notifications.callGuard.allowCriticalOverride's vocabulary.
   allowCriticalOverride: true,
 };
@@ -258,9 +258,9 @@ export const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
  * months of the year.
  */
 export function localHourIn(nowMs: number, timeZone: string): number {
-  const hour = new Intl.DateTimeFormat('en-US', {
+  const hour = new Intl.DateTimeFormat("en-US", {
     timeZone,
-    hour: 'numeric',
+    hour: "numeric",
     hour12: false,
   }).format(new Date(nowMs));
   // 'en-US' hour12:false renders midnight as '24' on some ICU versions.
@@ -287,18 +287,18 @@ export function isWithinQuietHours(nowMs: number, cfg: QuietHoursConfig): boolea
  * block degrades to the defaults rather than throwing on the alert path.
  */
 export function resolveQuietHours(settings: unknown): QuietHoursConfig {
-  const raw = (settings as { notifications?: { quietHours?: Partial<QuietHoursConfig> } } | null)
-    ?.notifications?.quietHours;
-  if (!raw || typeof raw !== 'object') return DEFAULT_QUIET_HOURS;
+  const raw = (settings as { notifications?: { quietHours?: Partial<QuietHoursConfig> } } | null)?.notifications
+    ?.quietHours;
+  if (!raw || typeof raw !== "object") return DEFAULT_QUIET_HOURS;
   const num = (v: unknown, fallback: number): number =>
-    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : fallback;
+    typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23 ? v : fallback;
   return {
-    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_QUIET_HOURS.enabled,
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : DEFAULT_QUIET_HOURS.enabled,
     startHour: num(raw.startHour, DEFAULT_QUIET_HOURS.startHour),
     endHour: num(raw.endHour, DEFAULT_QUIET_HOURS.endHour),
-    timeZone: typeof raw.timeZone === 'string' && raw.timeZone ? raw.timeZone : DEFAULT_QUIET_HOURS.timeZone,
+    timeZone: typeof raw.timeZone === "string" && raw.timeZone ? raw.timeZone : DEFAULT_QUIET_HOURS.timeZone,
     allowCriticalOverride:
-      typeof raw.allowCriticalOverride === 'boolean'
+      typeof raw.allowCriticalOverride === "boolean"
         ? raw.allowCriticalOverride
         : DEFAULT_QUIET_HOURS.allowCriticalOverride,
   };
@@ -347,7 +347,7 @@ async function defaultSend(message: string, channel: string): Promise<boolean> {
   // Lazy import keeps AlertGate loadable in contexts where NotificationService
   // (and its CallDetector dependency tree) is unwanted, e.g. lightweight tests.
   try {
-    const { notify } = await import('./NotificationService.ts');
+    const { notify } = await import("./NotificationService.ts");
     return await notify(message, { channel: channel as never });
   } catch {
     return false; // never throw past this boundary — send()'s own contract
@@ -421,21 +421,24 @@ export class AlertGate {
     if (this.quietHoursOverride) return this.quietHoursOverride;
     try {
       return resolveQuietHours(loadSettings());
-    } catch {
+    } catch (err) {
+      console.error(
+        `AlertGate: quiet-hours settings unreadable, using defaults: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return DEFAULT_QUIET_HOURS;
     }
   }
 
   private get statePath(): string {
-    return this.statePathOverride ?? join(getKayaHome(), 'MEMORY/State/alert-gate.json');
+    return this.statePathOverride ?? join(getKayaHome(), "MEMORY/State/alert-gate.json");
   }
 
   private get spoolPath(): string {
-    return this.spoolPathOverride ?? join(getKayaHome(), 'MEMORY/NOTIFICATIONS/digest-spool.jsonl');
+    return this.spoolPathOverride ?? join(getKayaHome(), "MEMORY/NOTIFICATIONS/digest-spool.jsonl");
   }
 
   private get archivePath(): string {
-    return this.archivePathOverride ?? join(getKayaHome(), 'MEMORY/NOTIFICATIONS/digest-spool-archive.jsonl');
+    return this.archivePathOverride ?? join(getKayaHome(), "MEMORY/NOTIFICATIONS/digest-spool-archive.jsonl");
   }
 
   /**
@@ -452,31 +455,28 @@ export class AlertGate {
    */
   async send(message: string, options: SendAlertOptions): Promise<AlertResult> {
     try {
-      if (process.env.KAYA_ALERT_DRY_RUN === '1') return 'dry-run';
+      if (process.env.KAYA_ALERT_DRY_RUN === "1") return "dry-run";
 
       if (!options.allowSuspectContext) {
         const marker = findSuspectPath(message);
         if (marker) {
-          this.logSuspectSuppression(
-            options.key,
-            `message references a test/tmp path ("${marker}")`,
-          );
+          this.logSuspectSuppression(options.key, `message references a test/tmp path ("${marker}")`);
           // Demoted to 'log' tier (not dropped) — recoverable in the raw
           // spool for forensics, but doesn't pollute the digest a human reads
           // or trigger a real page.
-          this.spool(message, options.key, 'log');
-          return 'suppressed';
+          this.spool(message, options.key, "log");
+          return "suppressed";
         }
       }
 
-      const tier = options.tier ?? 'digest';
-      if (tier === 'digest') {
-        this.spool(message, options.key, 'digest');
-        return 'spooled';
+      const tier = options.tier ?? "digest";
+      if (tier === "digest") {
+        this.spool(message, options.key, "digest");
+        return "spooled";
       }
-      if (tier === 'log') {
-        this.spool(message, options.key, 'log');
-        return 'logged';
+      if (tier === "log") {
+        this.spool(message, options.key, "log");
+        return "logged";
       }
 
       // page tier
@@ -486,18 +486,15 @@ export class AlertGate {
       // still live at 07:00 can page then, instead of having silently spent
       // its 24h cooldown on a 03:00 send nobody saw.
       const quiet = this.quietHours;
-      if (
-        isWithinQuietHours(this.now(), quiet) &&
-        !(options.critical && quiet.allowCriticalOverride)
-      ) {
-        this.spool(message, options.key, 'digest');
-        return 'suppressed';
+      if (isWithinQuietHours(this.now(), quiet) && !(options.critical && quiet.allowCriticalOverride)) {
+        this.spool(message, options.key, "digest");
+        return "suppressed";
       }
 
       if (!this.shouldPage(options.key, options)) {
         // Demote to digest so the alert is still visible tomorrow morning.
-        this.spool(message, options.key, 'digest');
-        return 'suppressed';
+        this.spool(message, options.key, "digest");
+        return "suppressed";
       }
       if (!options.allowSuspectContext && isSandboxedSendContext(this.usesDefaultSend)) {
         // A REAL page (network send) is about to fire while KAYA_HOME points
@@ -515,10 +512,10 @@ export class AlertGate {
           options.key,
           `KAYA_HOME ("${getKayaHome()}") differs from the production default ("${defaultKayaHome()}") at page-send time`,
         );
-        this.spool(message, options.key, 'log');
-        return 'suppressed';
+        this.spool(message, options.key, "log");
+        return "suppressed";
       }
-      const delivered = await this.sendFn(message, options.channel ?? 'telegram');
+      const delivered = await this.sendFn(message, options.channel ?? "telegram");
       if (!delivered) {
         // Delivery NOT confirmed — do NOT stamp the cooldown (recordPaged()
         // is skipped entirely), so the next invocation of this same key can
@@ -532,13 +529,9 @@ export class AlertGate {
           `[AlertGate] DELIVERY FAILED for key="${options.key}" — page NOT confirmed, cooldown NOT ` +
             `stamped so the next attempt can retry. Re-spooling to digest so it's not lost.`,
         );
-        this.spool(message, options.key, 'digest');
+        this.spool(message, options.key, "digest");
         try {
-          this.spool(
-            `[AlertGate delivery failure] key="${options.key}"`,
-            'alert-gate-delivery-failure',
-            'log',
-          );
+          this.spool(`[AlertGate delivery failure] key="${options.key}"`, "alert-gate-delivery-failure", "log");
         } catch {
           // intentionally silent: this durable trace is best-effort only —
           // the console.error above already fired, so a second failure here
@@ -547,10 +540,10 @@ export class AlertGate {
           // without risking infinite recursion. Mirrors the identical
           // best-effort nested-trace pattern in this file's outer catch below.
         }
-        return 'suppressed';
+        return "suppressed";
       }
       this.recordPaged(options.key, options.fingerprint);
-      return 'paged';
+      return "paged";
     } catch (err) {
       // fable-audit batch2, Finding A: this used to be `catch { return
       // 'suppressed'; }` — a genuine unexpected exception here (e.g.
@@ -563,7 +556,7 @@ export class AlertGate {
       // treat 'suppressed' as "not delivered this time" see no behavior
       // change. Do NOT call sendAlert()/AlertGate.send() from here — that
       // would just re-enter this same try/catch.
-      const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+      const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
       console.error(
         `[AlertGate] INTERNAL ERROR in send() (key="${options.key}") — an alert was just ` +
           `silently dropped by an unexpected exception, not an ordinary cooldown/suppression: ${detail}`,
@@ -577,18 +570,14 @@ export class AlertGate {
       // the very failure we're tracing could be the spool/state write
       // itself, and this trace attempt must never throw past this catch.
       try {
-        this.spool(
-          `[AlertGate internal error] key="${options.key}": ${detail}`,
-          'alert-gate-internal-error',
-          'log',
-        );
+        this.spool(`[AlertGate internal error] key="${options.key}": ${detail}`, "alert-gate-internal-error", "log");
       } catch {
         // intentionally silent: this durable trace is best-effort only —
         // the console.error above already fired, so a second failure here
         // (e.g. the same disk error that triggered the outer catch) has
         // nowhere further to escalate to without risking infinite recursion.
       }
-      return 'suppressed';
+      return "suppressed";
     }
   }
 
@@ -642,13 +631,13 @@ export class AlertGate {
   }
 
   /** Append an entry to the digest spool. */
-  spool(message: string, key: string, tier: AlertTier = 'digest'): void {
+  spool(message: string, key: string, tier: AlertTier = "digest"): void {
     // Only guard the REAL default-derived path — a spoolPath override (the
     // norm across this repo's hermetic test suite, e.g. makeGate() in
     // AlertGate.test.ts) already targets a caller-controlled sandbox path
     // regardless of KAYA_HOME, so guarding it too would only produce
     // false-positive throws in otherwise-correct hermetic tests.
-    if (!this.spoolPathOverride) assertNotLiveHomeUnderTest('AlertGate.spool');
+    if (!this.spoolPathOverride) assertNotLiveHomeUnderTest("AlertGate.spool");
     const entry: SpoolEntry = {
       timestamp: new Date(this.now()).toISOString(),
       key,
@@ -666,7 +655,7 @@ export class AlertGate {
   readSpool(): SpoolEntry[] {
     if (!existsSync(this.spoolPath)) return [];
     const entries: SpoolEntry[] = [];
-    for (const line of readFileSync(this.spoolPath, 'utf-8').split('\n')) {
+    for (const line of readFileSync(this.spoolPath, "utf-8").split("\n")) {
       if (!line.trim()) continue;
       try {
         entries.push(JSON.parse(line) as SpoolEntry);
@@ -694,14 +683,14 @@ export class AlertGate {
       // in spool()/saveState() above; an archivePath override (the norm
       // across this repo's hermetic test suite) already targets a
       // caller-controlled sandbox regardless of KAYA_HOME.
-      if (!this.archivePathOverride) assertNotLiveHomeUnderTest('AlertGate.consumeSpool');
+      if (!this.archivePathOverride) assertNotLiveHomeUnderTest("AlertGate.consumeSpool");
       const archiveLog = createAppendLog(this.archivePath);
       for (const entry of entries) {
         archiveLog.append(entry);
       }
     }
     if (existsSync(this.spoolPath)) {
-      writeFileSync(this.spoolPath, '');
+      writeFileSync(this.spoolPath, "");
     }
     return entries;
   }
@@ -711,10 +700,13 @@ export class AlertGate {
   private loadState(): GateState {
     if (!existsSync(this.statePath)) return { version: 1, keys: {} };
     try {
-      const parsed = JSON.parse(readFileSync(this.statePath, 'utf-8')) as GateState;
-      if (parsed && typeof parsed === 'object' && parsed.keys) return parsed;
-    } catch {
-      // Corrupt state — reset rather than wedge every sender.
+      const parsed = JSON.parse(readFileSync(this.statePath, "utf-8")) as GateState;
+      if (parsed && typeof parsed === "object" && parsed.keys) return parsed;
+    } catch (err) {
+      // Corrupt state — reset rather than wedge every sender, but report it.
+      console.error(
+        `AlertGate: state file ${this.statePath} is unreadable, resetting: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     return { version: 1, keys: {} };
   }
@@ -723,7 +715,7 @@ export class AlertGate {
     // Only guard the REAL default-derived path — see the matching comment in
     // spool() above; a statePath override already targets a caller-controlled
     // sandbox regardless of KAYA_HOME.
-    if (!this.statePathOverride) assertNotLiveHomeUnderTest('AlertGate.saveState');
+    if (!this.statePathOverride) assertNotLiveHomeUnderTest("AlertGate.saveState");
     pruneStaleKeys(state, this.now());
     this.ensureDir(this.statePath);
     writeFileSync(this.statePath, JSON.stringify(state, null, 2));

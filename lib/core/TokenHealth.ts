@@ -35,18 +35,19 @@
  * See classifyExpiry() for the pure decision table.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { execSync } from 'child_process';
-import { homedir } from 'os';
-import { join } from 'path';
-import { recordFailure } from './FailureLog.ts';
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { recordFailure } from "./FailureLog.ts";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type GoogleService = 'sheets' | 'calendar' | 'youtube' | 'gmail';
-export type TokenStatus = 'healthy' | 'expiring_soon' | 'expired' | 'missing' | 'unknown';
+export type GoogleService = "sheets" | "calendar" | "youtube" | "gmail";
+export type TokenStatus = "healthy" | "expiring_soon" | "expired" | "missing" | "unknown";
 
 export interface TokenHealthResult {
   service: GoogleService;
@@ -89,10 +90,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // for by default, so its ABSENCE there is expected, not a failure. See
 // checkTokenHealth(): those two surfaces short-circuit to `unknown` when no
 // explicit tokenPath override is supplied, instead of `missing`.
-const SERVICES_WITH_FILE_TOKEN: ReadonlySet<GoogleService> = new Set(['sheets', 'youtube']);
+const SERVICES_WITH_FILE_TOKEN: ReadonlySet<GoogleService> = new Set(["sheets", "youtube"]);
 
 function defaultTokenPath(service: GoogleService): string {
-  return join(homedir(), '.config', 'google', `${service}-token.json`);
+  return join(homedir(), ".config", "google", `${service}-token.json`);
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +101,7 @@ function defaultTokenPath(service: GoogleService): string {
 // ---------------------------------------------------------------------------
 
 export interface ClassifyExpiryResult {
-  status: Exclude<TokenStatus, 'missing'>;
+  status: Exclude<TokenStatus, "missing">;
   expiresInHrs?: number;
 }
 
@@ -129,7 +130,7 @@ export function classifyExpiry(
   nowMs: number,
 ): ClassifyExpiryResult {
   if (expiryDateMs === undefined || Number.isNaN(expiryDateMs)) {
-    return { status: 'unknown' };
+    return { status: "unknown" };
   }
 
   const msRemaining = expiryDateMs - nowMs;
@@ -137,18 +138,18 @@ export function classifyExpiry(
 
   if (hasRefreshToken) {
     // Auto-refresh handles it — access-token expiry is not a health signal.
-    return { status: 'healthy', expiresInHrs: hrsRemaining };
+    return { status: "healthy", expiresInHrs: hrsRemaining };
   }
 
   if (msRemaining <= 0) {
-    return { status: 'expired', expiresInHrs: hrsRemaining };
+    return { status: "expired", expiresInHrs: hrsRemaining };
   }
 
   if (msRemaining <= DAY_MS) {
-    return { status: 'expiring_soon', expiresInHrs: hrsRemaining };
+    return { status: "expiring_soon", expiresInHrs: hrsRemaining };
   }
 
-  return { status: 'healthy', expiresInHrs: hrsRemaining };
+  return { status: "healthy", expiresInHrs: hrsRemaining };
 }
 
 // ---------------------------------------------------------------------------
@@ -167,11 +168,11 @@ export function classifyReactiveFailure(text: string | undefined): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();
   return (
-    text.includes('Invalid Credentials') ||
-    lower.includes('invalid_grant') ||
-    lower.includes('token has been expired') ||
-    lower.includes('401') ||
-    lower.includes('403')
+    text.includes("Invalid Credentials") ||
+    lower.includes("invalid_grant") ||
+    lower.includes("token has been expired") ||
+    lower.includes("401") ||
+    lower.includes("403")
   );
 }
 
@@ -180,18 +181,16 @@ export function classifyReactiveFailure(text: string | undefined): boolean {
 // no probe is injected; tests always inject).
 // ---------------------------------------------------------------------------
 
-const KAYA_CLI = '~/.claude/bin/kaya-cli';
-
 async function defaultReactiveProbe(service: GoogleService): Promise<ReactiveProbeResult> {
-  if (service !== 'sheets') {
+  if (service !== "sheets") {
     // Only Sheets has a wired live probe today (kaya-cli sheets list).
     // Calendar/YouTube/Gmail proactive-only until their own CLIs are wired.
     return { ok: true };
   }
   try {
-    execSync(`${KAYA_CLI} sheets list --limit 1`, {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
+    execFileSync(join(getKayaHome(), "bin", "kaya-cli"), ["sheets", "list", "--limit", "1"], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
       timeout: 30_000,
     });
     return { ok: true };
@@ -206,8 +205,8 @@ async function defaultReactiveProbe(service: GoogleService): Promise<ReactivePro
 // ---------------------------------------------------------------------------
 
 const REMEDIATION_POINTER =
-  'Re-auth with: bun ~/.claude/skills/Development/UnixCLI/Tools/reauth-sheets.ts (Sheets) ' +
-  'or bun ~/.claude/lib/core/youtube-auth.ts (YouTube).';
+  "Re-auth with: bun ~/.claude/skills/Development/UnixCLI/Tools/reauth-sheets.ts (Sheets) " +
+  "or bun ~/.claude/lib/core/youtube-auth.ts (YouTube).";
 
 export async function checkTokenHealth(
   service: GoogleService,
@@ -228,26 +227,26 @@ export async function checkTokenHealth(
       // chance to catch a genuine credential failure.
       result = {
         service,
-        status: 'unknown',
+        status: "unknown",
         detail: `${service} does not persist a token at ${tokenPath} (uses its own credential store) — proactive check is not applicable for this surface.`,
       };
     } else {
-      result = { service, status: 'missing', detail: `Token file not found at ${tokenPath}. ${REMEDIATION_POINTER}` };
+      result = { service, status: "missing", detail: `Token file not found at ${tokenPath}. ${REMEDIATION_POINTER}` };
     }
   } else {
     let parsed: { access_token?: string; refresh_token?: string; expiry_date?: number };
     try {
-      parsed = JSON.parse(readFileSync(tokenPath, 'utf-8'));
+      parsed = JSON.parse(readFileSync(tokenPath, "utf-8"));
     } catch (err) {
       result = {
         service,
-        status: 'unknown',
+        status: "unknown",
         detail: `Token file at ${tokenPath} is not valid JSON: ${(err as Error).message}`,
       };
       return finalize(result, deps);
     }
 
-    const hasRefreshToken = typeof parsed.refresh_token === 'string' && parsed.refresh_token.length > 0;
+    const hasRefreshToken = typeof parsed.refresh_token === "string" && parsed.refresh_token.length > 0;
     const classified = classifyExpiry(parsed.expiry_date, hasRefreshToken, now());
 
     result = {
@@ -266,8 +265,8 @@ export async function checkTokenHealth(
       // missed (e.g. refresh_token present but actually revoked server-side).
       result = {
         service,
-        status: 'expired',
-        detail: `Live probe failed with a credential error: ${(probeResult.stderr ?? '').slice(0, 200)}. ${REMEDIATION_POINTER}`,
+        status: "expired",
+        detail: `Live probe failed with a credential error: ${(probeResult.stderr ?? "").slice(0, 200)}. ${REMEDIATION_POINTER}`,
       };
     }
   }
@@ -277,13 +276,13 @@ export async function checkTokenHealth(
 
 function describeStatus(status: TokenStatus, tokenPath: string, expiresInHrs?: number): string {
   switch (status) {
-    case 'healthy':
+    case "healthy":
       return `Token at ${tokenPath} is healthy (expires in ${expiresInHrs?.toFixed(1)}h).`;
-    case 'expiring_soon':
+    case "expiring_soon":
       return `Token at ${tokenPath} expires soon (${expiresInHrs?.toFixed(1)}h remaining). ${REMEDIATION_POINTER}`;
-    case 'expired':
+    case "expired":
       return `Token at ${tokenPath} is expired with no live refresh_token. ${REMEDIATION_POINTER}`;
-    case 'unknown':
+    case "unknown":
       return `Token at ${tokenPath} has no readable expiry_date — status unknown.`;
     default:
       return `Token at ${tokenPath}: ${status}.`;
@@ -300,22 +299,22 @@ function finalize(result: TokenHealthResult, deps: CheckTokenHealthDeps): TokenH
 // ---------------------------------------------------------------------------
 
 function bridgeToAlertGate(result: TokenHealthResult): void {
-  if (result.status === 'expired') {
+  if (result.status === "expired") {
     recordFailure({
       source: `TokenHealth:${result.service}`,
       error: result.detail,
       context: { service: result.service, status: result.status },
-      tier: 'page',
+      tier: "page",
       alertKey: `token-health-${result.service}`,
       alertMessage: `🔑 ${result.service} OAuth token expired — ${REMEDIATION_POINTER}`,
       fingerprint: `token-health-${result.service}:expired`,
     });
-  } else if (result.status === 'expiring_soon') {
+  } else if (result.status === "expiring_soon") {
     recordFailure({
       source: `TokenHealth:${result.service}`,
       error: result.detail,
       context: { service: result.service, status: result.status, expiresInHrs: result.expiresInHrs },
-      tier: 'digest',
+      tier: "digest",
       alertKey: `token-health-${result.service}`,
       alertMessage: `⚠️ ${result.service} OAuth token expiring soon (${result.expiresInHrs?.toFixed(1)}h) — ${REMEDIATION_POINTER}`,
       fingerprint: `token-health-${result.service}:expiring_soon`,
@@ -347,7 +346,7 @@ export interface SweepAllTokensSummary {
   anyExpiringSoon: boolean;
 }
 
-const ALL_SERVICES: GoogleService[] = ['sheets', 'calendar', 'youtube', 'gmail'];
+const ALL_SERVICES: GoogleService[] = ["sheets", "calendar", "youtube", "gmail"];
 
 export async function sweepAllTokens(deps: SweepAllTokensDeps = {}): Promise<SweepAllTokensSummary> {
   const results: TokenHealthResult[] = [];
@@ -362,9 +361,9 @@ export async function sweepAllTokens(deps: SweepAllTokensDeps = {}): Promise<Swe
     results.push(result);
   }
 
-  const anyExpired = results.some((r) => r.status === 'expired');
-  const anyExpiringSoon = results.some((r) => r.status === 'expiring_soon');
-  const overallOk = results.every((r) => r.status === 'healthy' || r.status === 'missing' || r.status === 'unknown');
+  const anyExpired = results.some((r) => r.status === "expired");
+  const anyExpiringSoon = results.some((r) => r.status === "expiring_soon");
+  const overallOk = results.every((r) => r.status === "healthy" || r.status === "missing" || r.status === "unknown");
 
   return {
     ts: new Date((deps.now ?? Date.now)()).toISOString(),
@@ -380,11 +379,13 @@ export async function sweepAllTokens(deps: SweepAllTokensDeps = {}): Promise<Swe
 // ---------------------------------------------------------------------------
 
 if (import.meta.main) {
-  sweepAllTokens({ runReactive: true, bridgeToAlertGate: true }).then((summary) => {
-    console.log(JSON.stringify(summary, null, 2));
-    process.exit(summary.anyExpired ? 1 : 0);
-  }).catch((err) => {
-    console.error(`[TokenHealth] sweep failed: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  });
+  sweepAllTokens({ runReactive: true, bridgeToAlertGate: true })
+    .then((summary) => {
+      console.log(JSON.stringify(summary, null, 2));
+      process.exit(summary.anyExpired ? 1 : 0);
+    })
+    .catch((err) => {
+      console.error(`[TokenHealth] sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    });
 }

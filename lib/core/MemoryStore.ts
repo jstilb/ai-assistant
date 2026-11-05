@@ -34,10 +34,10 @@
  * @version 1.0.0
  */
 
-import { parseArgs } from "util";
-import { join, dirname } from "path";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { kayaHomePath } from "./KayaHome";
+import { parseArgs } from "node:util";
+import { join, dirname } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { kayaHomePath } from "./KayaHome.ts";
 
 // ============================================================================
 // Types
@@ -46,7 +46,7 @@ import { kayaHomePath } from "./KayaHome";
 /**
  * Memory entry type - categorizes the nature of the memory
  */
-export type MemoryType = 'learning' | 'decision' | 'artifact' | 'insight' | 'signal' | 'research';
+export type MemoryType = "learning" | "decision" | "artifact" | "insight" | "signal" | "research";
 
 /**
  * Memory tier - determines storage lifecycle
@@ -54,7 +54,7 @@ export type MemoryType = 'learning' | 'decision' | 'artifact' | 'insight' | 'sig
  * - warm: Persistent, indexed (indefinite)
  * - cold: Archived, compressed (queryable but slower)
  */
-export type MemoryTier = 'hot' | 'warm' | 'cold';
+export type MemoryTier = "hot" | "warm" | "cold";
 
 /**
  * A single memory entry with full metadata
@@ -246,9 +246,9 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
   // Generate a short unique ID
   const generateId = (): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     const timestamp = Date.now().toString(36);
-    let random = '';
+    let random = "";
     for (let i = 0; i < 6; i++) {
       random += chars[Math.floor(Math.random() * chars.length)];
     }
@@ -263,7 +263,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
   // Hashing the full content means a hash match now means true full-content
   // (mod tag order) equality — exact dedup is actually exact.
   const hashContent = (content: string, tags: string[]): string => {
-    const input = content + '|' + [...tags].sort().join(',');
+    const input = content + "|" + [...tags].sort().join(",");
     // Full (untruncated) SHA-256 hex digest: this hash is now the SOLE
     // signal capture() uses to decide "is this the same memory" — no
     // truncation, no fuzzy fallback, so collision probability is
@@ -291,13 +291,19 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
   // intent and merge/supersede with a rationale, not just a token-overlap
   // score. See docs/decisions/016.
   const jaccardSimilarity = (a: string, b: string): number => {
-    const tokenize = (s: string) => new Set(s.toLowerCase().split(/\W+/).filter(t => t.length > 2));
+    const tokenize = (s: string) =>
+      new Set(
+        s
+          .toLowerCase()
+          .split(/\W+/)
+          .filter((t) => t.length > 2),
+      );
     const setA = tokenize(a);
     const setB = tokenize(b);
 
     if (setA.size === 0 || setB.size === 0) return 0;
 
-    const intersection = new Set([...setA].filter(x => setB.has(x)));
+    const intersection = new Set([...setA].filter((x) => setB.has(x)));
     const union = new Set([...setA, ...setB]);
 
     return intersection.size / union.size;
@@ -307,7 +313,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
   const getMonthDir = (timestamp: string): string => {
     const date = new Date(timestamp);
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
     return join(getEntriesDir(), `${year}-${month}`);
   };
 
@@ -325,7 +331,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
         byCategory: {},
       };
     }
-    return JSON.parse(readFileSync(indexFile, 'utf-8'));
+    return JSON.parse(readFileSync(indexFile, "utf-8"));
   };
 
   // Save index
@@ -357,25 +363,25 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
     let parsed: Partial<DedupHashes> | undefined;
     try {
-      parsed = JSON.parse(readFileSync(dedupFile, 'utf-8'));
+      parsed = JSON.parse(readFileSync(dedupFile, "utf-8"));
     } catch (e) {
       console.error(
         `[MemoryStore] dedup-hashes.json at ${dedupFile} is corrupt/unreadable ` +
-        `(${e instanceof Error ? e.message : String(e)}) — discarding it and starting a ` +
-        `fresh v${CURRENT_DEDUP_VERSION} dedup table. This opens a one-time exact-duplicate ` +
-        `detection window; it is logged, not silent.`
+          `(${e instanceof Error ? e.message : String(e)}) — discarding it and starting a ` +
+          `fresh v${CURRENT_DEDUP_VERSION} dedup table. This opens a one-time exact-duplicate ` +
+          `detection window; it is logged, not silent.`,
       );
       return { version: CURRENT_DEDUP_VERSION, hashes: {} };
     }
 
     if (!parsed || parsed.version !== CURRENT_DEDUP_VERSION) {
       console.error(
-        `[MemoryStore] dedup-hashes.json at ${dedupFile} is version ${parsed?.version ?? 'unversioned (pre-S9)'} ` +
-        `— its hashes were computed from a truncated 500-char content prefix, not the full content, and are ` +
-        `not valid under v${CURRENT_DEDUP_VERSION} full-content hashing. Discarding this stale table and ` +
-        `starting a fresh v${CURRENT_DEDUP_VERSION} one. This opens a ONE-TIME window where an exact ` +
-        `duplicate of pre-migration content may be recaptured once before its new hash is recorded — an ` +
-        `explicit, logged tradeoff (docs/decisions/016), not silent data loss.`
+        `[MemoryStore] dedup-hashes.json at ${dedupFile} is version ${parsed?.version ?? "unversioned (pre-S9)"} ` +
+          `— its hashes were computed from a truncated 500-char content prefix, not the full content, and are ` +
+          `not valid under v${CURRENT_DEDUP_VERSION} full-content hashing. Discarding this stale table and ` +
+          `starting a fresh v${CURRENT_DEDUP_VERSION} one. This opens a ONE-TIME window where an exact ` +
+          `duplicate of pre-migration content may be recaptured once before its new hash is recorded — an ` +
+          `explicit, logged tradeoff (docs/decisions/016), not silent data loss.`,
       );
       return { version: CURRENT_DEDUP_VERSION, hashes: {} };
     }
@@ -391,7 +397,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
   // Get entry file path
   const getEntryPath = (id: string, timestamp: string, tier: MemoryTier): string => {
-    if (tier === 'cold') {
+    if (tier === "cold") {
       const date = new Date(timestamp);
       const quarter = Math.floor(date.getMonth() / 3) + 1;
       return join(getArchiveDir(), `${date.getFullYear()}-Q${quarter}.jsonl`);
@@ -410,12 +416,12 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
   // Load one entry given its ALREADY-RESOLVED index record.
   const readEntryFile = (
     id: string,
-    indexEntry: MemoryIndex['entries'][string],
+    indexEntry: MemoryIndex["entries"][string],
     archiveCache?: ArchiveCache,
   ): MemoryEntry | null => {
     const entryPath = getEntryPath(id, indexEntry.timestamp, indexEntry.tier);
 
-    if (indexEntry.tier === 'cold') {
+    if (indexEntry.tier === "cold") {
       // Cold entries live one-per-line in a quarterly .jsonl, so finding one
       // means parsing the whole file. Without the cache, a loop over N cold
       // ids re-parsed the same archive N times.
@@ -424,7 +430,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
         if (!byId) {
           byId = new Map<string, MemoryEntry>();
           if (existsSync(entryPath)) {
-            for (const line of readFileSync(entryPath, 'utf-8').split('\n')) {
+            for (const line of readFileSync(entryPath, "utf-8").split("\n")) {
               if (!line.trim()) continue;
               const entry = JSON.parse(line) as MemoryEntry;
               byId.set(entry.id, entry);
@@ -436,7 +442,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       }
 
       if (!existsSync(entryPath)) return null;
-      for (const line of readFileSync(entryPath, 'utf-8').split('\n')) {
+      for (const line of readFileSync(entryPath, "utf-8").split("\n")) {
         if (!line.trim()) continue;
         const entry = JSON.parse(line) as MemoryEntry;
         if (entry.id === id) return entry;
@@ -445,7 +451,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
     }
 
     if (!existsSync(entryPath)) return null;
-    return JSON.parse(readFileSync(entryPath, 'utf-8'));
+    return JSON.parse(readFileSync(entryPath, "utf-8"));
   };
 
   /**
@@ -490,16 +496,16 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    if (entry.tier === 'cold') {
+    if (entry.tier === "cold") {
       // Append to archive file
-      const line = JSON.stringify(entry) + '\n';
+      const line = JSON.stringify(entry) + "\n";
       if (existsSync(entryPath)) {
-        const existing = readFileSync(entryPath, 'utf-8');
+        const existing = readFileSync(entryPath, "utf-8");
         // Guarantee a newline boundary before appending. An archive whose last
         // record lacks a trailing newline (older deleteEntryFile() wrote
         // `filtered.join('\n')`) would otherwise glue two JSON objects onto one
         // line and break every strict reader (2026-09-21 weekly-cleanup crash).
-        const sep = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
+        const sep = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
         writeFileSync(entryPath, existing + sep + line);
       } else {
         writeFileSync(entryPath, line);
@@ -513,11 +519,11 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
   const deleteEntryFile = (id: string, timestamp: string, tier: MemoryTier): void => {
     const entryPath = getEntryPath(id, timestamp, tier);
 
-    if (tier === 'cold') {
+    if (tier === "cold") {
       // Remove from archive file
       if (!existsSync(entryPath)) return;
-      const lines = readFileSync(entryPath, 'utf-8').split('\n');
-      const filtered = lines.filter(line => {
+      const lines = readFileSync(entryPath, "utf-8").split("\n");
+      const filtered = lines.filter((line) => {
         if (!line.trim()) return false;
         try {
           const entry = JSON.parse(line);
@@ -527,7 +533,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
         }
       });
       // Always end with a newline so the next append starts on its own line.
-      writeFileSync(entryPath, filtered.length > 0 ? filtered.join('\n') + '\n' : '');
+      writeFileSync(entryPath, filtered.length > 0 ? filtered.join("\n") + "\n" : "");
     } else {
       if (existsSync(entryPath)) unlinkSync(entryPath);
     }
@@ -542,19 +548,19 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       delete index.entries[id];
 
       for (const type of Object.keys(index.byType) as MemoryType[]) {
-        index.byType[type] = index.byType[type].filter(i => i !== id);
+        index.byType[type] = index.byType[type].filter((i) => i !== id);
       }
 
       for (const tier of Object.keys(index.byTier) as MemoryTier[]) {
-        index.byTier[tier] = index.byTier[tier].filter(i => i !== id);
+        index.byTier[tier] = index.byTier[tier].filter((i) => i !== id);
       }
 
       for (const tag of Object.keys(index.byTag)) {
-        index.byTag[tag] = index.byTag[tag].filter(i => i !== id);
+        index.byTag[tag] = (index.byTag[tag] ?? []).filter((i) => i !== id);
       }
 
       for (const cat of Object.keys(index.byCategory)) {
-        index.byCategory[cat] = index.byCategory[cat].filter(i => i !== id);
+        index.byCategory[cat] = (index.byCategory[cat] ?? []).filter((i) => i !== id);
       }
     } else {
       // Add/update entry
@@ -566,7 +572,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
         tags: entry.tags,
         tier: entry.tier,
         timestamp: entry.timestamp,
-        hash: entry._hash || '',
+        hash: entry._hash || "",
         ttl: entry.ttl,
       };
 
@@ -584,7 +590,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
       // Update tier index
       for (const tier of Object.keys(index.byTier) as MemoryTier[]) {
-        index.byTier[tier] = index.byTier[tier].filter(i => i !== id);
+        index.byTier[tier] = index.byTier[tier].filter((i) => i !== id);
       }
       if (!index.byTier[entry.tier].includes(id)) {
         index.byTier[entry.tier].push(id);
@@ -598,9 +604,10 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
       // Update category index
       if (entry.category) {
-        if (!index.byCategory[entry.category]) index.byCategory[entry.category] = [];
-        if (!index.byCategory[entry.category].includes(id)) {
-          index.byCategory[entry.category].push(id);
+        const catIds = index.byCategory[entry.category] ?? [];
+        index.byCategory[entry.category] = catIds;
+        if (!catIds.includes(id)) {
+          catIds.push(id);
         }
       }
     }
@@ -635,7 +642,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
           if (existing) {
             console.log(
               `[MemoryStore] capture(): deduped against existing entry ${existing.id} ` +
-              `(exact full-content+tags hash match ${hash.slice(0, 12)}...)`
+                `(exact full-content+tags hash match ${hash.slice(0, 12)}...)`,
             );
             // Return a NEW object (existing entry's fields + deduped: true)
             // rather than mutating/persisting `existing` — `deduped` is a
@@ -648,8 +655,8 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
           // silent phantom dedup: fall through and capture a fresh entry.
           console.error(
             `[MemoryStore] capture(): dedup-hashes.json referenced entry ${existingId} for a ` +
-            `matching hash, but that entry could not be loaded — capturing a new entry instead ` +
-            `of silently returning a phantom dedup.`
+              `matching hash, but that entry could not be loaded — capturing a new entry instead ` +
+              `of silently returning a phantom dedup.`,
           );
         }
       }
@@ -660,10 +667,10 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
         category: options.category,
         title: options.title,
         content: options.content,
-        source: options.source || 'MemoryStore',
+        source: options.source || "MemoryStore",
         timestamp: new Date().toISOString(),
         tags,
-        tier: options.tier || 'hot',
+        tier: options.tier || "hot",
         ttl: options.ttl,
         references: options.references,
         metadata: options.metadata,
@@ -709,7 +716,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       if (options.tier) {
         const tierIds = new Set(index.byTier[options.tier] || []);
         if (candidateIds) {
-          candidateIds = new Set([...candidateIds].filter(id => tierIds.has(id)));
+          candidateIds = new Set([...candidateIds].filter((id) => tierIds.has(id)));
         } else {
           candidateIds = tierIds;
         }
@@ -717,17 +724,18 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
       // Filter by tags (must have ALL specified tags)
       if (options.tags && options.tags.length > 0) {
-        let tagIds: Set<string> | null = null;
+        // Asserted, not annotated: an annotated `= null` narrows to null and the loop back-edge is lost.
+        let tagIds = null as Set<string> | null;
         for (const tag of options.tags) {
           const idsForTag = new Set(index.byTag[tag] || []);
           if (tagIds === null) {
             tagIds = idsForTag;
           } else {
-            tagIds = new Set([...tagIds].filter(id => idsForTag.has(id)));
+            tagIds = new Set([...tagIds].filter((id) => idsForTag.has(id)));
           }
         }
         if (candidateIds && tagIds) {
-          candidateIds = new Set([...candidateIds].filter(id => tagIds!.has(id)));
+          candidateIds = new Set([...candidateIds].filter((id) => tagIds!.has(id)));
         } else if (tagIds) {
           candidateIds = tagIds;
         }
@@ -737,7 +745,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       if (options.category) {
         const catIds = new Set(index.byCategory[options.category] || []);
         if (candidateIds) {
-          candidateIds = new Set([...candidateIds].filter(id => catIds.has(id)));
+          candidateIds = new Set([...candidateIds].filter((id) => catIds.has(id)));
         } else {
           candidateIds = catIds;
         }
@@ -760,12 +768,12 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
 
         // Filter by date range
         if (options.since) {
-          const since = typeof options.since === 'string' ? new Date(options.since) : options.since;
+          const since = typeof options.since === "string" ? new Date(options.since) : options.since;
           if (new Date(indexEntry.timestamp) < since) continue;
         }
 
         if (options.until) {
-          const until = typeof options.until === 'string' ? new Date(options.until) : options.until;
+          const until = typeof options.until === "string" ? new Date(options.until) : options.until;
           if (new Date(indexEntry.timestamp) > until) continue;
         }
 
@@ -818,7 +826,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       // Sort by similarity descending
       similar.sort((a, b) => b.similarity - a.similarity);
 
-      return similar.map(s => s.entry);
+      return similar.map((s) => s.entry);
     },
 
     async update(id: string, updates: Partial<CaptureOptions>): Promise<MemoryEntry> {
@@ -867,7 +875,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       }
 
       const oldTier = entry.tier;
-      entry.tier = 'cold';
+      entry.tier = "cold";
 
       // Delete from old location
       deleteEntryFile(id, entry.timestamp, oldTier);
@@ -965,8 +973,13 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
           try {
             await this.archive(dup.id);
             deduplicated++;
-          } catch {
-            // Entry may have already been archived above — skip silently
+          } catch (err) {
+            // "Entry not found" = already archived/removed earlier in this pass: expected, skip.
+            // Anything else is a real archive failure: report it and go on with the next entry.
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!msg.startsWith("Entry not found")) {
+              console.error(`[MemoryStore] consolidate: failed to archive duplicate ${dup.id}: ${msg}`);
+            }
           }
         }
       }
@@ -975,7 +988,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       const finalIndex = loadIndex();
       const dedupHashes = loadDedupHashes();
       for (const [hash, id] of Object.entries(dedupHashes.hashes)) {
-        if (!finalIndex.entries[id] || finalIndex.entries[id].tier === 'cold') {
+        if (!finalIndex.entries[id] || finalIndex.entries[id].tier === "cold") {
           delete dedupHashes.hashes[hash];
         }
       }
@@ -1006,7 +1019,9 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       };
 
       // Find oldest and newest
-      const timestamps = Object.values(index.entries).map(e => e.timestamp).sort();
+      const timestamps = Object.values(index.entries)
+        .map((e) => e.timestamp)
+        .sort();
       if (timestamps.length > 0) {
         stats.oldestEntry = timestamps[0];
         stats.newestEntry = timestamps[timestamps.length - 1];
@@ -1015,20 +1030,24 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       return stats;
     },
 
-    async repairArchives(): Promise<{ files: number; gluedLines: number; recordsRecovered: number; unparseable: number }> {
+    async repairArchives(): Promise<{
+      files: number;
+      gluedLines: number;
+      recordsRecovered: number;
+      unparseable: number;
+    }> {
       const archiveDir = getArchiveDir();
       const result = { files: 0, gluedLines: 0, recordsRecovered: 0, unparseable: 0 };
       if (!existsSync(archiveDir)) return result;
-      for (const file of readdirSync(archiveDir).filter(f => f.endsWith('.jsonl'))) {
+      for (const file of readdirSync(archiveDir).filter((f) => f.endsWith(".jsonl"))) {
         const archivePath = join(archiveDir, file);
         const out: string[] = [];
         let changed = false;
-        for (const line of readFileSync(archivePath, 'utf-8').split('\n')) {
+        for (const line of readFileSync(archivePath, "utf-8").split("\n")) {
           if (!line.trim()) continue;
           try {
             JSON.parse(line);
             out.push(line);
-            continue;
           } catch {
             result.gluedLines++;
             // Glued line: greedily peel off the longest parseable prefix at each
@@ -1037,7 +1056,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
             let recovered = 0;
             while (rest.length > 0) {
               let split = -1;
-              let idx = rest.indexOf('}{');
+              let idx = rest.indexOf("}{");
               while (idx !== -1) {
                 const candidate = rest.slice(0, idx + 1);
                 try {
@@ -1047,22 +1066,34 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
                 } catch {
                   // intentionally silent: probing each `}{` boundary for the longest parseable prefix; a miss is the normal path
                 }
-                idx = rest.indexOf('}{', idx + 1);
+                idx = rest.indexOf("}{", idx + 1);
               }
               if (split === -1) {
-                try { JSON.parse(rest); out.push(rest); recovered++; }
-                catch { out.push(rest); result.unparseable++; console.error(`[MemoryStore] repairArchives: unparseable fragment kept in ${archivePath}: ${rest.slice(0, 80)}...`); }
+                try {
+                  JSON.parse(rest);
+                  out.push(rest);
+                  recovered++;
+                } catch {
+                  out.push(rest);
+                  result.unparseable++;
+                  console.error(
+                    `[MemoryStore] repairArchives: unparseable fragment kept in ${archivePath}: ${rest.slice(0, 80)}...`,
+                  );
+                }
                 break;
               }
               out.push(rest.slice(0, split));
               recovered++;
               rest = rest.slice(split);
             }
-            if (recovered > 1) { result.recordsRecovered += recovered; changed = true; }
+            if (recovered > 1) {
+              result.recordsRecovered += recovered;
+              changed = true;
+            }
           }
         }
         if (changed) {
-          writeFileSync(archivePath, out.join('\n') + '\n');
+          writeFileSync(archivePath, out.join("\n") + "\n");
           result.files++;
         }
       }
@@ -1084,16 +1115,16 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       const entriesDir = getEntriesDir();
       if (existsSync(entriesDir)) {
         const monthDirs = readdirSync(entriesDir, { withFileTypes: true })
-          .filter(d => d.isDirectory())
-          .map(d => d.name);
+          .filter((d) => d.isDirectory())
+          .map((d) => d.name);
 
         for (const monthDir of monthDirs) {
           const monthPath = join(entriesDir, monthDir);
-          const files = readdirSync(monthPath).filter(f => f.endsWith('.json'));
+          const files = readdirSync(monthPath).filter((f) => f.endsWith(".json"));
 
           for (const file of files) {
             try {
-              const content = readFileSync(join(monthPath, file), 'utf-8');
+              const content = readFileSync(join(monthPath, file), "utf-8");
               const entry = JSON.parse(content) as MemoryEntry;
               updateIndex(entry, newIndex);
             } catch (e) {
@@ -1106,18 +1137,18 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       // Scan archive directory
       const archiveDir = getArchiveDir();
       if (existsSync(archiveDir)) {
-        const archiveFiles = readdirSync(archiveDir).filter(f => f.endsWith('.jsonl'));
+        const archiveFiles = readdirSync(archiveDir).filter((f) => f.endsWith(".jsonl"));
 
         for (const file of archiveFiles) {
-          const content = readFileSync(join(archiveDir, file), 'utf-8');
-          const lines = content.split('\n').filter(l => l.trim());
+          const content = readFileSync(join(archiveDir, file), "utf-8");
+          const lines = content.split("\n").filter((l) => l.trim());
 
           for (const line of lines) {
             try {
               const entry = JSON.parse(line) as MemoryEntry;
-              entry.tier = 'cold'; // Ensure tier is cold
+              entry.tier = "cold"; // Ensure tier is cold
               updateIndex(entry, newIndex);
-            } catch (e) {
+            } catch {
               // Skip malformed lines
             }
           }
@@ -1138,7 +1169,7 @@ export function createMemoryStore(baseDir?: string): MemoryStore {
       const newHashes: DedupHashes = { version: CURRENT_DEDUP_VERSION, hashes: {} };
       for (const id of Object.keys(newIndex.entries)) {
         const entry = newIndex.entries[id];
-        if (entry.hash) {
+        if (entry?.hash) {
           newHashes.hashes[entry.hash] = id;
         }
       }
@@ -1228,9 +1259,9 @@ Examples:
 
   try {
     switch (command) {
-      case 'capture': {
+      case "capture": {
         if (!values.type || !values.title || !values.content) {
-          console.error('Error: --type, --title, and --content are required');
+          console.error("Error: --type, --title, and --content are required");
           process.exit(1);
         }
         const entry = await store.capture({
@@ -1238,7 +1269,7 @@ Examples:
           category: values.category,
           title: values.title,
           content: values.content,
-          tags: values.tags?.split(',').map(t => t.trim()),
+          tags: values.tags?.split(",").map((t) => t.trim()),
           tier: values.tier as MemoryTier | undefined,
           ttl: values.ttl ? parseInt(values.ttl) : undefined,
         });
@@ -1253,10 +1284,10 @@ Examples:
         break;
       }
 
-      case 'get': {
+      case "get": {
         const id = positionals[1];
         if (!id) {
-          console.error('Error: Entry ID required');
+          console.error("Error: Entry ID required");
           process.exit(1);
         }
         const entry = await store.get(id);
@@ -1268,21 +1299,21 @@ Examples:
           console.log(JSON.stringify(entry, null, 2));
         } else {
           console.log(`ID: ${entry.id}`);
-          console.log(`Type: ${entry.type}${entry.category ? `/${entry.category}` : ''}`);
+          console.log(`Type: ${entry.type}${entry.category ? `/${entry.category}` : ""}`);
           console.log(`Title: ${entry.title}`);
           console.log(`Tier: ${entry.tier}`);
-          console.log(`Tags: ${entry.tags.join(', ') || 'none'}`);
+          console.log(`Tags: ${entry.tags.join(", ") || "none"}`);
           console.log(`Created: ${entry.timestamp}`);
           console.log(`\nContent:\n${entry.content}`);
         }
         break;
       }
 
-      case 'search': {
+      case "search": {
         const results = await store.search({
           type: values.type as MemoryType | undefined,
           category: values.category,
-          tags: values.tags?.split(',').map(t => t.trim()),
+          tags: values.tags?.split(",").map((t) => t.trim()),
           tier: values.tier as MemoryTier | undefined,
           since: values.since,
           until: values.until,
@@ -1294,16 +1325,16 @@ Examples:
         } else {
           console.log(`Found ${results.length} entries:\n`);
           for (const entry of results) {
-            console.log(`[${entry.id}] ${entry.type}${entry.category ? `/${entry.category}` : ''}: ${entry.title}`);
-            console.log(`  Tags: ${entry.tags.join(', ') || 'none'} | Tier: ${entry.tier}`);
+            console.log(`[${entry.id}] ${entry.type}${entry.category ? `/${entry.category}` : ""}: ${entry.title}`);
+            console.log(`  Tags: ${entry.tags.join(", ") || "none"} | Tier: ${entry.tier}`);
           }
         }
         break;
       }
 
-      case 'similar': {
+      case "similar": {
         if (!values.content && !values.query) {
-          console.error('Error: --content or --query required');
+          console.error("Error: --content or --query required");
           process.exit(1);
         }
         const threshold = values.threshold ? parseFloat(values.threshold) : 0.5;
@@ -1319,17 +1350,17 @@ Examples:
         break;
       }
 
-      case 'update': {
+      case "update": {
         const id = positionals[1];
         if (!id) {
-          console.error('Error: Entry ID required');
+          console.error("Error: Entry ID required");
           process.exit(1);
         }
         const updates: Partial<CaptureOptions> = {};
         if (values.title) updates.title = values.title;
         if (values.content) updates.content = values.content;
         if (values.category) updates.category = values.category;
-        if (values.tags) updates.tags = values.tags.split(',').map(t => t.trim());
+        if (values.tags) updates.tags = values.tags.split(",").map((t) => t.trim());
         if (values.tier) updates.tier = values.tier as MemoryTier;
         if (values.ttl) updates.ttl = parseInt(values.ttl);
 
@@ -1342,10 +1373,10 @@ Examples:
         break;
       }
 
-      case 'archive': {
+      case "archive": {
         const id = positionals[1];
         if (!id) {
-          console.error('Error: Entry ID required');
+          console.error("Error: Entry ID required");
           process.exit(1);
         }
         await store.archive(id);
@@ -1353,10 +1384,10 @@ Examples:
         break;
       }
 
-      case 'delete': {
+      case "delete": {
         const id = positionals[1];
         if (!id) {
-          console.error('Error: Entry ID required');
+          console.error("Error: Entry ID required");
           process.exit(1);
         }
         await store.delete(id);
@@ -1364,7 +1395,7 @@ Examples:
         break;
       }
 
-      case 'consolidate': {
+      case "consolidate": {
         const result = await store.consolidate();
         if (values.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -1376,7 +1407,7 @@ Examples:
         break;
       }
 
-      case 'stats': {
+      case "stats": {
         const stats = await store.getStats();
         if (values.json) {
           console.log(JSON.stringify(stats, null, 2));
@@ -1398,17 +1429,20 @@ Examples:
         break;
       }
 
-      case 'repair-archives': {
+      case "repair-archives": {
         const result = await store.repairArchives();
         if (values.json) console.log(JSON.stringify(result, null, 2));
-        else console.log(`Archive repair: ${result.files} files rewritten, ${result.gluedLines} glued lines split into ${result.recordsRecovered} records, ${result.unparseable} fragments still unparseable`);
+        else
+          console.log(
+            `Archive repair: ${result.files} files rewritten, ${result.gluedLines} glued lines split into ${result.recordsRecovered} records, ${result.unparseable} fragments still unparseable`,
+          );
         break;
       }
 
-      case 'rebuild': {
-        console.log('Rebuilding index...');
+      case "rebuild": {
+        console.log("Rebuilding index...");
         await store.rebuildIndex();
-        console.log('Index rebuilt successfully');
+        console.log("Index rebuilt successfully");
         break;
       }
 

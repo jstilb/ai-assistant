@@ -7,9 +7,12 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+// biome-ignore lint/suspicious/noExplicitAny: parsed JSON of mocked calls is asserted structurally in these tests
+type AnyJson = any;
 
 /**
  * Mirrors MemoryStore.ts's private `jaccardSimilarity()` exactly (tokenize:
@@ -22,7 +25,13 @@ import { tmpdir } from "os";
  * own behavior is asserted against the real module.
  */
 function testOnlyJaccard(a: string, b: string): number {
-  const tokenize = (s: string) => new Set(s.toLowerCase().split(/\W+/).filter((t) => t.length > 2));
+  const tokenize = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((t) => t.length > 2),
+    );
   const setA = tokenize(a);
   const setB = tokenize(b);
   if (setA.size === 0 || setB.size === 0) return 0;
@@ -38,7 +47,7 @@ const TEST_DIR = join(import.meta.dir, "__test_memory__");
 // import { createMemoryStore, type MemoryEntry, type MemoryStore } from "./MemoryStore";
 
 describe("MemoryStore", () => {
-  let store: any; // Will be MemoryStore type
+  let store: AnyJson; // MemoryStore (kept loose: the tests reassign it per case)
 
   beforeEach(() => {
     // Clean test directory
@@ -60,7 +69,7 @@ describe("MemoryStore", () => {
 
   describe("capture()", () => {
     test("should capture a basic memory entry", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -82,7 +91,7 @@ describe("MemoryStore", () => {
     });
 
     test("should capture entry with category", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -97,7 +106,7 @@ describe("MemoryStore", () => {
     });
 
     test("should capture entry with custom tier", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -111,7 +120,7 @@ describe("MemoryStore", () => {
     });
 
     test("should capture entry with TTL", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -125,7 +134,7 @@ describe("MemoryStore", () => {
     });
 
     test("should capture entry with metadata", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -141,7 +150,7 @@ describe("MemoryStore", () => {
     });
 
     test("should set source automatically", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -156,7 +165,7 @@ describe("MemoryStore", () => {
 
   describe("get()", () => {
     test("should retrieve entry by ID", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const created = await store.capture({
@@ -173,7 +182,7 @@ describe("MemoryStore", () => {
     });
 
     test("should return null for non-existent ID", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const result = await store.get("non-existent-id");
@@ -183,7 +192,7 @@ describe("MemoryStore", () => {
 
   describe("search()", () => {
     test("should search by type", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "Learning 1", content: "c1" });
@@ -193,11 +202,11 @@ describe("MemoryStore", () => {
       const results = await store.search({ type: "learning" });
 
       expect(results.length).toBe(2);
-      expect(results.every((r: any) => r.type === "learning")).toBe(true);
+      expect(results.every((r: AnyJson) => r.type === "learning")).toBe(true);
     });
 
     test("should search by multiple types", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "L1", content: "c1" });
@@ -210,7 +219,7 @@ describe("MemoryStore", () => {
     });
 
     test("should search by tags", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "T1", content: "c1", tags: ["typescript", "testing"] });
@@ -223,7 +232,7 @@ describe("MemoryStore", () => {
     });
 
     test("should search by tier", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "Hot", content: "c1", tier: "hot" });
@@ -236,7 +245,7 @@ describe("MemoryStore", () => {
     });
 
     test("should search by date range", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       // Create entries (they'll have current timestamps)
@@ -251,7 +260,7 @@ describe("MemoryStore", () => {
     });
 
     test("should search with full text", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "Pattern matching", content: "ISC convergence tracking" });
@@ -264,7 +273,7 @@ describe("MemoryStore", () => {
     });
 
     test("should limit results", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       for (let i = 0; i < 10; i++) {
@@ -277,7 +286,7 @@ describe("MemoryStore", () => {
     });
 
     test("should search by category", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", category: "ALGORITHM", title: "Algo", content: "c1" });
@@ -292,7 +301,7 @@ describe("MemoryStore", () => {
 
   describe("findSimilar()", () => {
     test("should find similar content", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({
@@ -315,7 +324,7 @@ describe("MemoryStore", () => {
     });
 
     test("should respect similarity threshold", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({
@@ -333,7 +342,7 @@ describe("MemoryStore", () => {
 
   describe("update()", () => {
     test("should update entry fields", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -353,7 +362,7 @@ describe("MemoryStore", () => {
     });
 
     test("should update tier", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -371,7 +380,7 @@ describe("MemoryStore", () => {
 
   describe("archive()", () => {
     test("should move entry to cold tier", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -390,7 +399,7 @@ describe("MemoryStore", () => {
 
   describe("cold-tier archive integrity", () => {
     test("delete of a cold entry followed by another archive keeps one record per line", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
       const a = await store.capture({ type: "learning", title: "A", content: "content a", tier: "hot" });
       const b = await store.capture({ type: "learning", title: "B", content: "content b", tier: "hot" });
@@ -400,11 +409,11 @@ describe("MemoryStore", () => {
       await store.delete(a.id); // cold-path delete rewrites the archive file
       await store.archive(c.id); // append after rewrite must start on a new line
 
-      const { readdirSync } = await import("fs");
+      const { readdirSync } = await import("node:fs");
       const archiveDir = join(TEST_DIR, "archive");
       const files = readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"));
       expect(files.length).toBe(1);
-      const raw = readFileSync(join(archiveDir, files[0]), "utf-8");
+      const raw = readFileSync(join(archiveDir, files[0]!), "utf-8");
       expect(raw.endsWith("\n")).toBe(true);
       const lines = raw.split("\n").filter((l: string) => l.trim());
       expect(lines.length).toBe(2);
@@ -413,17 +422,19 @@ describe("MemoryStore", () => {
     });
 
     test("repairArchives() splits glued records and leaves the store readable", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
       const a = await store.capture({ type: "learning", title: "A", content: "content a", tier: "hot" });
       const b = await store.capture({ type: "learning", title: "B", content: "content b", tier: "hot" });
       await store.archive(a.id);
       await store.archive(b.id);
-      const { readdirSync } = await import("fs");
+      const { readdirSync } = await import("node:fs");
       const archiveDir = join(TEST_DIR, "archive");
-      const file = join(archiveDir, readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"))[0]);
+      const file = join(archiveDir, readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"))[0]!);
       // Reproduce the historical corruption: two records glued onto one line.
-      const records = readFileSync(file, "utf-8").split("\n").filter((l: string) => l.trim());
+      const records = readFileSync(file, "utf-8")
+        .split("\n")
+        .filter((l: string) => l.trim());
       writeFileSync(file, records.join("") + "\n");
       await expect(store.get(a.id)).rejects.toThrow();
 
@@ -432,7 +443,9 @@ describe("MemoryStore", () => {
       expect(result.gluedLines).toBe(1);
       expect(result.recordsRecovered).toBe(2);
       expect(result.unparseable).toBe(0);
-      const lines = readFileSync(file, "utf-8").split("\n").filter((l: string) => l.trim());
+      const lines = readFileSync(file, "utf-8")
+        .split("\n")
+        .filter((l: string) => l.trim());
       expect(lines.length).toBe(2);
       expect((await store.get(a.id))?.title).toBe("A");
       expect((await store.get(b.id))?.title).toBe("B");
@@ -441,7 +454,7 @@ describe("MemoryStore", () => {
 
   describe("delete()", () => {
     test("should remove entry completely", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const entry = await store.capture({
@@ -459,7 +472,7 @@ describe("MemoryStore", () => {
 
   describe("consolidate()", () => {
     test("should archive old entries", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       // Create entries
@@ -478,7 +491,7 @@ describe("MemoryStore", () => {
     });
 
     test("should actually archive duplicate entries (non-zero deduplicated count)", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       // Force-create two entries with same content by bypassing normal dedup
@@ -514,7 +527,7 @@ describe("MemoryStore", () => {
     // back" versus "a fresh entry was created" other than comparing IDs by
     // hand. Additive field, does not change any other behavior.
     test("should detect duplicate content", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const first = await store.capture({
@@ -542,7 +555,7 @@ describe("MemoryStore", () => {
     });
 
     test("should not deduplicate when disabled", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({
@@ -580,7 +593,7 @@ describe("MemoryStore", () => {
   // judges similarity, not a silent write-path decision).
   describe("S9 — exact dedup (fuzzy Jaccard removed from capture path)", () => {
     test("(1) exact duplicate (identical full content + tags, order-independent) is deduped, logs, single entry survives", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       const content =
@@ -608,7 +621,7 @@ describe("MemoryStore", () => {
 
         // Loud, not silent: capture() must log every dedup event.
         const loggedDedup = logSpy.mock.calls.some((call) =>
-          call.some((arg) => typeof arg === "string" && /dedup/i.test(arg) && arg.includes(first.id))
+          call.some((arg) => typeof arg === "string" && /dedup/i.test(arg) && arg.includes(first.id)),
         );
         expect(loggedDedup).toBe(true);
       } finally {
@@ -620,7 +633,7 @@ describe("MemoryStore", () => {
     });
 
     test("(2) HEADLINE — two entries sharing a 500+-char identical prefix but differing after it are BOTH stored", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       // Shared prefix alone is ~700 chars — well past the OLD hashContent's
@@ -661,12 +674,12 @@ describe("MemoryStore", () => {
 
       const found = await store.search({ type: "learning", tags: ["headline"] });
       expect(found.length).toBe(2);
-      const contents = found.map((e: any) => e.content).sort();
+      const contents = found.map((e: AnyJson) => e.content).sort();
       expect(contents).toEqual([contentA, contentB].sort());
     });
 
     test("(3) near-duplicate content (Jaccard >= 0.85) that is NOT byte-identical is BOTH stored, at any content length", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       // Unlike test (2), this pair is short (well under the old 500-char
@@ -686,8 +699,18 @@ describe("MemoryStore", () => {
       const similarity = testOnlyJaccard(contentC, contentD);
       expect(similarity).toBeGreaterThanOrEqual(0.85);
 
-      const e1 = await store.capture({ type: "learning", title: "Near-dup C", content: contentC, tags: ["s9", "near-dup"] });
-      const e2 = await store.capture({ type: "learning", title: "Near-dup D", content: contentD, tags: ["s9", "near-dup"] });
+      const e1 = await store.capture({
+        type: "learning",
+        title: "Near-dup C",
+        content: contentC,
+        tags: ["s9", "near-dup"],
+      });
+      const e2 = await store.capture({
+        type: "learning",
+        title: "Near-dup D",
+        content: contentD,
+        tags: ["s9", "near-dup"],
+      });
 
       expect(e1.id).not.toBe(e2.id);
       expect(e1.deduped).toBe(false);
@@ -698,7 +721,7 @@ describe("MemoryStore", () => {
     });
 
     test("(4) old-format (pre-S9, unversioned/prefix-hash) dedup-hashes.json is discarded loudly, without crashing capture()", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
 
       // Write a pre-S9 dedup-hashes.json directly, bypassing the store: no
       // `version` field (the real pre-S9 shape), pointing at an entry ID
@@ -707,11 +730,11 @@ describe("MemoryStore", () => {
       mkdirSync(TEST_DIR, { recursive: true });
       writeFileSync(
         join(TEST_DIR, "dedup-hashes.json"),
-        JSON.stringify({ hashes: { "0123456789abcdef": "stale-pre-s9-entry-id" } })
+        JSON.stringify({ hashes: { "0123456789abcdef": "stale-pre-s9-entry-id" } }),
       );
 
       const errorSpy = spyOn(console, "error");
-      let entry: any;
+      let entry: AnyJson;
       try {
         store = createMemoryStore(TEST_DIR);
         entry = await store.capture({
@@ -726,8 +749,8 @@ describe("MemoryStore", () => {
             (arg) =>
               typeof arg === "string" &&
               /dedup-hashes\.json/i.test(arg) &&
-              /(discard|stale|migrat|pre-s9|unversioned)/i.test(arg)
-          )
+              /(discard|stale|migrat|pre-s9|unversioned)/i.test(arg),
+          ),
         );
         expect(migrationLogged).toBe(true);
       } finally {
@@ -750,7 +773,7 @@ describe("MemoryStore", () => {
 
   describe("getStats()", () => {
     test("should return accurate statistics", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "L1", content: "c1", tier: "hot" });
@@ -769,7 +792,7 @@ describe("MemoryStore", () => {
 
   describe("rebuildIndex()", () => {
     test("should rebuild index from entries", async () => {
-      const { createMemoryStore } = await import("./MemoryStore");
+      const { createMemoryStore } = await import("./MemoryStore.ts");
       store = createMemoryStore(TEST_DIR);
 
       await store.capture({ type: "learning", title: "Entry", content: "Content" });
@@ -806,7 +829,7 @@ describe("MemoryStore", () => {
 // process.env.HOME.
 describe("laziness — path resolution is call-time via KayaHome (E5 regression)", () => {
   test("capture() after a post-import KAYA_HOME repoint writes under KAYA_HOME, not process.env.HOME", async () => {
-    const { memoryStore } = await import("./MemoryStore");
+    const { memoryStore } = await import("./MemoryStore.ts");
 
     const freshDir = mkdtempSync(join(tmpdir(), "memorystore-laziness-"));
     const originalKayaHome = process.env.KAYA_HOME;
@@ -847,7 +870,7 @@ describe("laziness — path resolution is call-time via KayaHome (E5 regression)
         "MEMORY",
         "entries",
         monthDir,
-        `${entry.id}.json`
+        `${entry.id}.json`,
       );
       expect(existsSync(staleHomeEntryPath)).toBe(false);
     } finally {

@@ -36,11 +36,11 @@
  * @version 1.0.0
  */
 
-import { parseArgs } from "util";
-import { join, basename, dirname } from "path";
+import { parseArgs } from "node:util";
+import { join, basename } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { createMemoryStore, type MemoryType, type CaptureOptions } from "./MemoryStore";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createMemoryStore, type MemoryType, type CaptureOptions } from "./MemoryStore.ts";
 
 // ============================================================================
 // Types
@@ -56,7 +56,7 @@ interface MigrationStats {
 }
 
 interface FrontmatterResult {
-  frontmatter: Record<string, any>;
+  frontmatter: Record<string, unknown>;
   content: string;
 }
 
@@ -65,7 +65,7 @@ interface MemoryEntry extends CaptureOptions {
     originalPath: string;
     originalTimestamp: string;
     migratedAt: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -86,44 +86,45 @@ export function parseFrontmatter(content: string): FrontmatterResult {
     return { frontmatter: {}, content };
   }
 
-  const [, yamlContent, remainingContent] = match;
+  const [, yamlContent = "", remainingContent = ""] = match;
 
   try {
     // Simple YAML parser (handles common cases)
-    const frontmatter: Record<string, any> = {};
-    const lines = yamlContent.split('\n');
+    const frontmatter: Record<string, unknown> = {};
+    const lines = yamlContent.split("\n");
 
     for (const line of lines) {
       // Skip empty lines and comments
-      if (!line.trim() || line.trim().startsWith('#')) continue;
+      if (!line.trim() || line.trim().startsWith("#")) continue;
 
       // Handle key: value pairs
-      const colonIndex = line.indexOf(':');
+      const colonIndex = line.indexOf(":");
       if (colonIndex === -1) continue;
 
       const key = line.slice(0, colonIndex).trim();
-      let value: any = line.slice(colonIndex + 1).trim();
+      const rawValue = line.slice(colonIndex + 1).trim();
+      let value: unknown;
 
       // Parse arrays [item1, item2]
-      if (value.startsWith('[') && value.endsWith(']')) {
-        value = value
+      if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+        value = rawValue
           .slice(1, -1)
-          .split(',')
-          .map(v => v.trim().replace(/^["']|["']$/g, ''));
+          .split(",")
+          .map((v: string) => v.trim().replace(/^["']|["']$/g, ""));
       }
       // Parse numbers
-      else if (/^\d+$/.test(value)) {
-        value = parseInt(value, 10);
+      else if (/^\d+$/.test(rawValue)) {
+        value = parseInt(rawValue, 10);
       }
       // Parse booleans
-      else if (value === 'true') {
+      else if (rawValue === "true") {
         value = true;
-      } else if (value === 'false') {
+      } else if (rawValue === "false") {
         value = false;
       }
       // Remove quotes from strings
       else {
-        value = value.replace(/^["']|["']$/g, '');
+        value = rawValue.replace(/^["']|["']$/g, "");
       }
 
       frontmatter[key] = value;
@@ -131,7 +132,7 @@ export function parseFrontmatter(content: string): FrontmatterResult {
 
     return { frontmatter, content: remainingContent };
   } catch (error) {
-    console.warn('Failed to parse frontmatter:', error);
+    console.warn("Failed to parse frontmatter:", error);
     return { frontmatter: {}, content };
   }
 }
@@ -148,14 +149,14 @@ export function parseFrontmatter(content: string): FrontmatterResult {
  * - /path/research/2026-01/file.md → undefined
  */
 export function extractCategory(filePath: string): string | undefined {
-  const parts = filePath.split('/');
+  const parts = filePath.split("/");
 
   // Find LEARNING index
-  const learningIdx = parts.indexOf('LEARNING');
+  const learningIdx = parts.indexOf("LEARNING");
   if (learningIdx !== -1 && learningIdx + 1 < parts.length) {
     const category = parts[learningIdx + 1];
     // Category should not be a year-month directory
-    if (!/^\d{4}-\d{2}$/.test(category)) {
+    if (category !== undefined && !/^\d{4}-\d{2}$/.test(category)) {
       return category;
     }
   }
@@ -168,14 +169,14 @@ export function extractCategory(filePath: string): string | undefined {
  */
 export function mapToMemoryType(dirName: string): MemoryType {
   const mapping: Record<string, MemoryType> = {
-    LEARNING: 'learning',
-    research: 'research',
-    KAYASYSTEMUPDATES: 'artifact',
-    decisions: 'decision',
-    learnings: 'learning',
+    LEARNING: "learning",
+    research: "research",
+    KAYASYSTEMUPDATES: "artifact",
+    decisions: "decision",
+    learnings: "learning",
   };
 
-  return mapping[dirName] || 'insight';
+  return mapping[dirName] || "insight";
 }
 
 /**
@@ -183,10 +184,10 @@ export function mapToMemoryType(dirName: string): MemoryType {
  * Looks for first # heading
  */
 function extractTitle(content: string): string {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('# ')) {
+    if (trimmed.startsWith("# ")) {
       return trimmed.slice(2).trim();
     }
   }
@@ -194,12 +195,12 @@ function extractTitle(content: string): string {
   // Fallback to first non-empty line
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
+    if (trimmed && !trimmed.startsWith("#")) {
       return trimmed.slice(0, 100);
     }
   }
 
-  return 'Untitled';
+  return "Untitled";
 }
 
 // ============================================================================
@@ -224,7 +225,7 @@ export async function scanDirectory(dirPath: string): Promise<string[]> {
     if (entry.isDirectory()) {
       const subFiles = await scanDirectory(fullPath);
       files.push(...subFiles);
-    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
       files.push(fullPath);
     }
   }
@@ -240,15 +241,15 @@ export async function scanDirectory(dirPath: string): Promise<string[]> {
  * Transform legacy markdown file to MemoryStore entry
  */
 export async function transformToEntry(filePath: string): Promise<MemoryEntry> {
-  const content = readFileSync(filePath, 'utf-8');
+  const content = readFileSync(filePath, "utf-8");
   const { frontmatter, content: bodyContent } = parseFrontmatter(content);
   const stats = statSync(filePath);
 
   // Determine type from path
-  const pathParts = filePath.split('/');
-  let dirType = 'insight';
+  const pathParts = filePath.split("/");
+  let dirType = "insight";
   for (const part of pathParts) {
-    if (['LEARNING', 'research', 'KAYASYSTEMUPDATES', 'decisions', 'learnings'].includes(part)) {
+    if (["LEARNING", "research", "KAYASYSTEMUPDATES", "decisions", "learnings"].includes(part)) {
       dirType = part;
       break;
     }
@@ -256,23 +257,23 @@ export async function transformToEntry(filePath: string): Promise<MemoryEntry> {
 
   const type = mapToMemoryType(dirType);
   const category = extractCategory(filePath);
-  const title = extractTitle(bodyContent) || basename(filePath, '.md');
+  const title = extractTitle(bodyContent) || basename(filePath, ".md");
 
   // Extract tags from frontmatter
   let tags: string[] = [];
   if (Array.isArray(frontmatter.tags)) {
     tags = frontmatter.tags;
-  } else if (typeof frontmatter.tags === 'string') {
-    tags = frontmatter.tags.split(',').map(t => t.trim());
+  } else if (typeof frontmatter.tags === "string") {
+    tags = frontmatter.tags.split(",").map((t) => t.trim());
   }
 
   // Add migration tag
-  tags.push('migrated-from-legacy');
+  tags.push("migrated-from-legacy");
 
   // Build metadata
-  const metadata: Record<string, any> = {
+  const metadata: MemoryEntry["metadata"] = {
     originalPath: filePath,
-    originalTimestamp: frontmatter.timestamp || stats.mtime.toISOString(),
+    originalTimestamp: String(frontmatter.timestamp || stats.mtime.toISOString()),
     migratedAt: new Date().toISOString(),
     ...frontmatter,
   };
@@ -283,9 +284,9 @@ export async function transformToEntry(filePath: string): Promise<MemoryEntry> {
     title,
     content: bodyContent.trim(),
     tags,
-    tier: 'warm',
+    tier: "warm",
     deduplicate: true,
-    source: 'MigrationTool',
+    source: "MigrationTool",
     metadata,
   };
 }
@@ -301,7 +302,7 @@ export async function migrateDirectory(
   sourcePath: string,
   type: MemoryType,
   memoryStoreDir?: string,
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): Promise<MigrationStats> {
   const stats: MigrationStats = {
     scanned: 0,
@@ -321,7 +322,7 @@ export async function migrateDirectory(
   stats.scanned = files.length;
 
   if (files.length === 0) {
-    console.log('  No markdown files found');
+    console.log("  No markdown files found");
     return stats;
   }
 
@@ -330,7 +331,8 @@ export async function migrateDirectory(
   // Process each file
   for (const file of files) {
     try {
-      const entry = await transformToEntry(file);
+      // The caller's `type` wins over the type guessed from the path (--type was ignored before).
+      const entry = { ...(await transformToEntry(file)), type };
 
       if (dryRun) {
         stats.wouldImport++;
@@ -367,26 +369,26 @@ export async function migrateDirectory(
 export async function migrateAll(
   memoryDir: string,
   memoryStoreDir?: string,
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): Promise<Record<string, MigrationStats>> {
   const results: Record<string, MigrationStats> = {};
 
   const migrations = [
-    { source: join(memoryDir, 'LEARNING'), type: 'learning' as MemoryType },
-    { source: join(memoryDir, 'research'), type: 'research' as MemoryType },
-    { source: join(memoryDir, 'KAYASYSTEMUPDATES'), type: 'artifact' as MemoryType },
-    { source: join(memoryDir, 'decisions'), type: 'decision' as MemoryType },
-    { source: join(memoryDir, 'learnings'), type: 'learning' as MemoryType },
+    { source: join(memoryDir, "LEARNING"), type: "learning" as MemoryType },
+    { source: join(memoryDir, "research"), type: "research" as MemoryType },
+    { source: join(memoryDir, "KAYASYSTEMUPDATES"), type: "artifact" as MemoryType },
+    { source: join(memoryDir, "decisions"), type: "decision" as MemoryType },
+    { source: join(memoryDir, "learnings"), type: "learning" as MemoryType },
   ];
 
-  console.log(`${dryRun ? '[DRY RUN] ' : ''}Migrating all legacy MEMORY directories...\n`);
+  console.log(`${dryRun ? "[DRY RUN] " : ""}Migrating all legacy MEMORY directories...\n`);
 
   for (const { source, type } of migrations) {
     if (existsSync(source)) {
       const dirName = basename(source);
-      console.log(`\n${'='.repeat(60)}`);
+      console.log(`\n${"=".repeat(60)}`);
       console.log(`Migrating: ${dirName} → type: ${type}`);
-      console.log('='.repeat(60));
+      console.log("=".repeat(60));
 
       results[dirName] = await migrateDirectory(source, type, memoryStoreDir, dryRun);
     }
@@ -402,12 +404,16 @@ export async function migrateAll(
 /**
  * Print migration statistics
  */
-function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryRun: boolean): void {
-  console.log('\n' + '='.repeat(60));
-  console.log(dryRun ? 'DRY RUN SUMMARY' : 'MIGRATION SUMMARY');
-  console.log('='.repeat(60));
+function isSingleStats(stats: MigrationStats | Record<string, MigrationStats>): stats is MigrationStats {
+  return "scanned" in stats;
+}
 
-  if ('scanned' in stats) {
+function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryRun: boolean): void {
+  console.log("\n" + "=".repeat(60));
+  console.log(dryRun ? "DRY RUN SUMMARY" : "MIGRATION SUMMARY");
+  console.log("=".repeat(60));
+
+  if (isSingleStats(stats)) {
     // Single directory stats
     console.log(`Scanned:      ${stats.scanned}`);
     if (dryRun) {
@@ -419,7 +425,7 @@ function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryR
     }
 
     if (stats.errors.length > 0) {
-      console.log('\nErrors:');
+      console.log("\nErrors:");
       for (const { file, error } of stats.errors) {
         console.log(`  ${file}`);
         console.log(`    ${error}`);
@@ -451,7 +457,7 @@ function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryR
       totalWouldImport += dirStats.wouldImport;
     }
 
-    console.log('\nTOTAL:');
+    console.log("\nTOTAL:");
     console.log(`  Scanned:      ${totalScanned}`);
     if (dryRun) {
       console.log(`  Would import: ${totalWouldImport}`);
@@ -462,7 +468,7 @@ function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryR
     }
   }
 
-  console.log('='.repeat(60) + '\n');
+  console.log("=".repeat(60) + "\n");
 }
 
 // ============================================================================
@@ -470,7 +476,7 @@ function printStats(stats: MigrationStats | Record<string, MigrationStats>, dryR
 // ============================================================================
 
 async function runCli(): Promise<void> {
-  const { values, positionals } = parseArgs({
+  const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
       source: { type: "string", short: "s" },
@@ -536,9 +542,9 @@ Features:
     return;
   }
 
-  const dryRun = values['dry-run'] || false;
-  const memoryDir = values['memory-dir'] || join(getKayaHome(), 'MEMORY');
-  const storeDir = values['store-dir'];
+  const dryRun = values["dry-run"] || false;
+  const memoryDir = values["memory-dir"] || join(getKayaHome(), "MEMORY");
+  const storeDir = values["store-dir"];
 
   if (values.all) {
     // Migrate all directories
@@ -549,8 +555,8 @@ Features:
     let sourcePath = values.source;
 
     // If relative path, prepend memoryDir unless it already starts with MEMORY/
-    if (!sourcePath.startsWith('/')) {
-      if (sourcePath.startsWith('MEMORY/')) {
+    if (!sourcePath.startsWith("/")) {
+      if (sourcePath.startsWith("MEMORY/")) {
         // User provided full path from Kaya root
         sourcePath = join(getKayaHome(), sourcePath);
       } else {
@@ -568,8 +574,8 @@ Features:
     const stats = await migrateDirectory(sourcePath, type, storeDir, dryRun);
     printStats(stats, dryRun);
   } else {
-    console.error('Error: Must specify either --all or both --source and --type');
-    console.error('Run with --help for usage information');
+    console.error("Error: Must specify either --all or both --source and --type");
+    console.error("Run with --help for usage information");
     process.exit(1);
   }
 }
@@ -577,7 +583,7 @@ Features:
 // Run CLI if executed directly
 if (import.meta.main) {
   runCli().catch((error) => {
-    console.error('Fatal error:', error);
+    console.error("Fatal error:", error);
     process.exit(1);
   });
 }

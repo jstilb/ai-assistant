@@ -19,15 +19,15 @@
  */
 
 import { spawn, spawnSync } from "bun";
-import { getDAName, getVoiceId } from "../../hooks/lib/identity";
-import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync } from "fs";
-import { homedir } from "os";
-import { join, basename } from "path";
+import { getDAName } from "../../hooks/lib/identity.ts";
+import { existsSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, basename } from "node:path";
 import { z } from "zod";
-import { createStateManager } from "./StateManager";
-import { notifySync } from './NotificationService';
-import { buildHardenedClaudeEnv } from './Inference';
-import { getKayaHome } from './KayaHome.ts';
+import { createStateManager } from "./StateManager.ts";
+import { notifySync } from "./NotificationService.ts";
+import { buildHardenedClaudeEnv } from "./Inference.ts";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
 // Configuration
@@ -80,8 +80,7 @@ function log(message: string, emoji = "") {
   console.log(emoji ? `${emoji} ${message}` : message);
 }
 
-
-function error(message: string) {
+function error(message: string): never {
   console.error(`❌ ${message}`);
   process.exit(1);
 }
@@ -100,15 +99,17 @@ function getCurrentVersion(): string | null {
   const result = spawnSync(["claude", "--version"]);
   const output = result.stdout.toString();
   const match = output.match(/([0-9]+\.[0-9]+\.[0-9]+)/);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 function compareVersions(a: string, b: string): number {
   const partsA = a.split(".").map(Number);
   const partsB = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) {
-    if (partsA[i] > partsB[i]) return 1;
-    if (partsA[i] < partsB[i]) return -1;
+    const a = partsA[i] ?? 0;
+    const b = partsB[i] ?? 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
   }
   return 0;
 }
@@ -116,7 +117,7 @@ function compareVersions(a: string, b: string): number {
 async function getLatestVersion(): Promise<string | null> {
   try {
     const response = await fetch(
-      "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest"
+      "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
     );
     const version = (await response.text()).trim();
     if (/^[0-9]+\.[0-9]+\.[0-9]+/.test(version)) {
@@ -151,7 +152,6 @@ function getCurrentProfile(): string | null {
   try {
     const stats = lstatSync(ACTIVE_MCP);
     if (stats.isSymbolicLink()) {
-      const target = readFileSync(ACTIVE_MCP, "utf-8");
       // For symlink, we need the real target name
       const realpath = Bun.spawnSync(["readlink", ACTIVE_MCP]).stdout.toString().trim();
       return basename(realpath).replace(".mcp.json", "");
@@ -165,8 +165,8 @@ function getCurrentProfile(): string | null {
 /** Schema for MCP config files loaded via StateManager */
 const McpConfigSchema = z.record(z.string(), z.unknown());
 
-async function mergeMcpConfigs(mcpFiles: string[]): Promise<object> {
-  const merged: Record<string, any> = { mcpServers: {} };
+async function mergeMcpConfigs(mcpFiles: string[]): Promise<{ mcpServers: Record<string, unknown> }> {
+  const merged: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
 
   for (const file of mcpFiles) {
     const filepath = join(MCP_DIR, file);
@@ -181,12 +181,12 @@ async function mergeMcpConfigs(mcpFiles: string[]): Promise<object> {
         schema: McpConfigSchema,
         defaults: {},
       });
-      const config = await manager.load() as Record<string, any>;
+      const config = (await manager.load()) as { mcpServers?: Record<string, unknown> };
       if (config.mcpServers) {
         Object.assign(merged.mcpServers, config.mcpServers);
       }
     } catch (e) {
-      log(`Warning: Failed to parse ${file}`, "⚠️");
+      log(`Warning: Failed to parse ${file}: ${e instanceof Error ? e.message : String(e)}`, "⚠️");
     }
   }
 
@@ -239,7 +239,7 @@ async function setMcpCustom(mcpNames: string[]) {
   }
   writeFileSync(ACTIVE_MCP, JSON.stringify(merged, null, 2));
 
-  const serverCount = Object.keys((merged as any).mcpServers || {}).length;
+  const serverCount = Object.keys(merged.mcpServers || {}).length;
   if (serverCount > 0) {
     log(`Configured ${serverCount} MCP server(s): ${mcpNames.join(", ")}`, "✅");
   }
@@ -347,7 +347,7 @@ function cmdWallpaper(args: string[]) {
   if (!match) {
     log(`No wallpaper matching "${query}"`, "❌");
     console.log("\nAvailable wallpapers:");
-    wallpapers.forEach((w) => console.log(`  - ${getWallpaperName(w)}`));
+    for (const w of wallpapers) console.log(`  - ${getWallpaperName(w)}`);
     process.exit(1);
   }
 
@@ -362,7 +362,6 @@ function cmdWallpaper(args: string[]) {
     error("Failed to set wallpaper");
   }
 }
-
 
 // ============================================================================
 // Commands
@@ -616,7 +615,7 @@ async function main() {
 
     switch (arg) {
       case "-m":
-      case "--mcp":
+      case "--mcp": {
         const nextArg = args[i + 1];
         // -m with no arg, or -m 0, or -m "" means no MCPs
         if (!nextArg || nextArg.startsWith("-") || nextArg === "0" || nextArg === "") {
@@ -626,6 +625,7 @@ async function main() {
           mcp = args[++i];
         }
         break;
+      }
       case "-r":
       case "--resume":
         resume = true;
@@ -671,7 +671,7 @@ async function main() {
         i = args.length; // Exit loop
         break;
       default:
-        if (!arg.startsWith("-")) {
+        if (arg !== undefined && !arg.startsWith("-")) {
           // Might be an unknown command
           error(`Unknown command: ${arg}. Use 'k help' for usage.`);
         }
@@ -703,7 +703,7 @@ async function main() {
       break;
     case "prompt":
       if (!promptText) {
-        error("Usage: k prompt \"your prompt here\"");
+        error('Usage: k prompt "your prompt here"');
       }
       await cmdPrompt(promptText);
       break;

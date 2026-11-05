@@ -13,13 +13,13 @@
  * violations already in the tree must NOT trip this rule; only lines newly
  * ADDED in the staged diff should.
  *
- * Run: bun test ~/.claude/lib/lint/no-inline-kaya-home-staged.test.ts
+ * Run: bun test ./lib/lint/no-inline-kaya-home-staged.test.ts
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { execSync } from "child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { execSync } from "node:child_process";
 import { checkNoInlineKayaHomeStaged } from "./no-inline-kaya-home-staged.ts";
 
 function git(cwd: string, cmd: string): string {
@@ -48,11 +48,7 @@ describe("checkNoInlineKayaHomeStaged", () => {
 
     // Stage a newly added line matching a BANNED_PATTERNS entry
     // (process.env.KAYA_DIR || <fallback path>).
-    writeFileSync(
-      file,
-      "export const x = 1;\n" +
-        "const home = process.env.KAYA_DIR || '/tmp/fallback';\n",
-    );
+    writeFileSync(file, "export const x = 1;\n" + "const home = process.env.KAYA_DIR || '/tmp/fallback';\n");
     git(repo, "add example.ts");
 
     const result = await checkNoInlineKayaHomeStaged(repo);
@@ -64,21 +60,13 @@ describe("checkNoInlineKayaHomeStaged", () => {
     const file = join(repo, "legacy.ts");
     // Baseline commit already contains a violation on line 1 — this is one
     // of the ~155 existing violations being grandfathered.
-    writeFileSync(
-      file,
-      "const home = process.env.KAYA_DIR || '/tmp/legacy';\n" +
-        "export const legacyValue = 1;\n",
-    );
+    writeFileSync(file, "const home = process.env.KAYA_DIR || '/tmp/legacy';\n" + "export const legacyValue = 1;\n");
     git(repo, "add legacy.ts");
     git(repo, 'commit -q -m "baseline with existing violation"');
 
     // Stage an edit to the adjacent line only — the existing violation line
     // is untouched by this diff (it's neither added nor removed).
-    writeFileSync(
-      file,
-      "const home = process.env.KAYA_DIR || '/tmp/legacy';\n" +
-        "export const legacyValue = 2;\n",
-    );
+    writeFileSync(file, "const home = process.env.KAYA_DIR || '/tmp/legacy';\n" + "export const legacyValue = 2;\n");
     git(repo, "add legacy.ts");
 
     const result = await checkNoInlineKayaHomeStaged(repo);

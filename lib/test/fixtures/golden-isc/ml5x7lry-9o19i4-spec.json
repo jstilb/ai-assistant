@@ -1,0 +1,48 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/ml5x7lry-9o19i4-spec.md",
+  "layoutNote": "4-col Layout A (16 rows)",
+  "rowCount": 10,
+  "rows": [
+    {
+      "number": 100,
+      "description": "Weather message delivered to Telegram by 7:30 AM with current conditions, today's forecast, and recommendations"
+    },
+    {
+      "number": 101,
+      "description": "Voice summary plays through VoiceServer with Kaya's voice, under 30 seconds"
+    },
+    {
+      "number": 102,
+      "description": "Clothing recommendation is contextually appropriate for San Diego weather patterns"
+    },
+    {
+      "number": 103,
+      "description": "Activity recommendation reflects actual conditions (rain awareness, UV, temperature)"
+    },
+    {
+      "number": 104,
+      "description": "3-day forecast included in Telegram message with notable changes highlighted"
+    },
+    {
+      "number": 105,
+      "description": "Severe weather alerts surface when NWS has active warnings for San Diego"
+    },
+    {
+      "number": 106,
+      "description": "Enhanced WeatherBlock works within DailyBriefing without breaking existing block system"
+    },
+    {
+      "number": 107,
+      "description": "Standalone mode works via `bun WeatherMessenger.ts` with `--dry-run` for testing"
+    },
+    {
+      "number": 108,
+      "description": "Configuration is fully controllable via BriefingConfig.yaml"
+    },
+    {
+      "number": 109,
+      "description": "Graceful degradation: message still delivers even if recommendations or alerts fail"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.234Z"
+}

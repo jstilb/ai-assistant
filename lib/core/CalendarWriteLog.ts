@@ -51,10 +51,7 @@ export function defaultCalendarWriteLogPath(): string {
  * regardless of outcome. Never throws: a broken log path must not fail the
  * calendar write it's describing (logged loudly to console.error instead).
  */
-export function logCalendarWrite(
-  entry: CalendarWriteLogInput,
-  opts: { logPath?: string } = {}
-): void {
+export function logCalendarWrite(entry: CalendarWriteLogInput, opts: { logPath?: string } = {}): void {
   const logPath = opts.logPath ?? defaultCalendarWriteLogPath();
   const line: CalendarWriteLogEntry = { timestamp: new Date().toISOString(), ...entry };
   try {
@@ -66,7 +63,7 @@ export function logCalendarWrite(
     createAppendLog(logPath).append(line);
   } catch (err) {
     console.error(
-      `logCalendarWrite: failed to append audit log at ${logPath}: ${err instanceof Error ? err.message : String(err)}`
+      `logCalendarWrite: failed to append audit log at ${logPath}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

@@ -1,0 +1,95 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlam0ecj-0p2bbj-spec.md",
+  "layoutNote": "4-col 79 rows",
+  "rowCount": 14,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Zero raw `readFileSync` or `writeFileSync` calls exist in `SpecValidator.ts` and `IntentVerifier.ts` — all file operations use `StateManager.read()` and `StateManager.write()` with atomic write guarantees",
+      "verifyMethod": "`grep -rn \"readFileSync|writeFileSync\" src/SpecValidator.ts src/IntentVerifier.ts` returns 0 results; CI static analysis gate blocks merge if found",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "`IntentVerifier.ts` successfully imports inference logic from `src/inference/index.ts` and the LLM-as-judge pathway executes end-to-end without import errors or runtime failures",
+      "verifyMethod": "`tsc --noEmit` passes with zero errors; `IntentVerifier.verify()` unit test with `requiresLLMJudge=true` passes; mocked LLM response returns valid `ValidationResult`",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "`loop.sh` does NOT contain `--dangerously-skip-permissions` in any default argument, variable assignment, or non-flag-gated code path — permission checks are enforced by default",
+      "verifyMethod": "`grep -n \"dangerously-skip-permissions\" loop.sh` returns 0 results in default paths; only appears inside `if [ \"$RALPHLOOP_TRUST_MODE\" = \"1\" ]` guard; `shellcheck loop.sh` passes clean",
+      "embeddedCommand": "grep -n \"dangerously-skip-permissions\" loop.sh",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "Test coverage on statistical calculation code is ≥80% with explicit edge case tests for empty arrays, NaN, Infinity, single-element arrays, and negative values",
+      "verifyMethod": "Jest coverage report shows ≥80% line + branch coverage on statistical code files; `__tests__/statistical.test.ts` contains ≥10 test cases covering each named edge case",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Test coverage on LLM-as-judge pathway code is ≥80% with mock fixtures for 5+ response scenarios: valid approval, valid rejection, malformed response, timeout, and empty/null response",
+      "verifyMethod": "Jest coverage report shows ≥80% on `src/inference/` files; `__tests__/fixtures/llm-responses/` contains ≥5 fixture files; `__tests__/llm-judge.test.ts` tests each scenario",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "Test coverage on all modified files (`SpecValidator.ts`, `IntentVerifier.ts`, `src/inference/*`) is ≥90% — no modified code ships without proportional test coverage",
+      "verifyMethod": "Jest `--coverageThreshold` configured per-file; CI blocks merge if any modified file falls below 90% line coverage",
+      "source": "INFERRED"
+    },
+    {
+      "number": 7,
+      "description": "When the LLM-judge is unavailable (network error, timeout, API failure), `IntentVerifier` gracefully degrades to rule-based validation via `fallback.ts`, logs a warning with diagnostic info, and returns a valid `ValidationResult`",
+      "verifyMethod": "Unit test mocks inference module to throw/timeout; verify fallback activates, warning logged, `ValidationResult` returned with `method: 'rule-based'` field",
+      "source": "INFERRED"
+    },
+    {
+      "number": 8,
+      "description": "Zero `fetch()` calls exist outside of `CachedHTTPClient` usage anywhere in the _RALPHLOOP codebase — all HTTP operations go through the cached client",
+      "verifyMethod": "`grep -rn \"fetch(\" src/` returns 0 results outside `CachedHTTPClient` wrapper calls; CI static analysis gate enforces",
+      "embeddedCommand": "grep -rn \"fetch(\" src/",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "`MIGRATION.md` exists and contains ≥1 before/after code example for every breaking change, a rollback procedure, and step-by-step upgrade instructions for downstream consumers",
+      "verifyMethod": "Manual PR review checklist; file exists at project root; contains sections: \"Breaking Changes\", \"Migration Steps\", \"Before/After Examples\", \"Rollback Procedure\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "`BREAKING_CHANGES.md` exhaustively lists every changed public API surface with severity classification (critical/major/minor), affected consumers, and recommended migration action",
+      "verifyMethod": "Manual PR review checklist; every changed export/function signature is documented; cross-referenced against `git diff` of public exports",
+      "embeddedCommand": "git diff",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 11,
+      "description": "Backward compatibility wrappers exist for all changed public APIs — wrappers delegate to new implementations, log deprecation warnings pointing to `MIGRATION.md`, and are scheduled for removal after 2-week deprecation window",
+      "verifyMethod": "Unit tests verify deprecated wrappers call new implementations and produce console warnings matching pattern `DEPRECATED:.*see MIGRATION.md`; wrappers have `@deprecated` JSDoc tags",
+      "source": "INFERRED"
+    },
+    {
+      "number": 12,
+      "description": "`StateManager.write()` operations are atomic — no partial file state is possible even on process interruption; schema validation occurs on `StateManager.read()` to reject corrupted data",
+      "verifyMethod": "Unit test simulates write interruption (mock `StateManager.write()` to throw mid-operation); verify file retains previous valid state; unit test feeds malformed JSON to `StateManager.read()` and verifies rejection with diagnostic error",
+      "source": "INFERRED"
+    },
+    {
+      "number": 13,
+      "description": "All git operations during the refactor occur on a single `refactor/ralphloop-hardening` branch with atomic commit scripts that assert current branch before every operation — preventing the cross-contamination pattern documented in project memory",
+      "verifyMethod": "Commit wrapper script contains `[[ \"$(git branch --show-current)\" == \"refactor/ralphloop-hardening\" ]] || exit 1`; no parallel feature branches created for this work",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 14,
+      "description": "The full test suite (excluding `@integration` tagged tests) executes in <30 seconds; `@integration` tests execute in <30 seconds per test case and are excluded from the default `npm test` command",
+      "verifyMethod": "`time npm test` completes in <30s; `npm run test:integration` runs separately; Jest config excludes `@integration` tag from default run",
+      "source": "INFERRED"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.236Z"
+}

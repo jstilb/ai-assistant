@@ -13,13 +13,13 @@
  * carrying the `// intentionally silent:` marker does not; and pre-existing
  * (grandfathered) violations left untouched by a diff are not flagged.
  *
- * Run: bun test ~/.claude/.claude/worktrees/agent-a1800a26e7c0813f4/lib/lint/no-empty-catch-staged.test.ts
+ * Run: bun test ./lib/lint/no-empty-catch-staged.test.ts
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { execSync } from "child_process";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { execSync } from "node:child_process";
 import { checkNoEmptyCatchStaged } from "./no-empty-catch.ts";
 
 function git(cwd: string, cmd: string): string {

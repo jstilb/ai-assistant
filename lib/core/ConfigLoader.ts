@@ -63,12 +63,11 @@
  * ============================================================================
  */
 
-import { existsSync, readFileSync, writeFileSync, renameSync, watch as fsWatch, statSync } from 'fs';
-import { join, dirname } from 'path';
-import { parse as parseYaml } from 'yaml';
-import { z, type ZodType } from 'zod';
-import { tmpdir } from 'os';
-import { getKayaHome } from './KayaHome.ts';
+import { existsSync, readFileSync, writeFileSync, renameSync, watch as fsWatch, statSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { parse as parseYaml } from "yaml";
+import { z, type ZodType } from "zod";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
 // TYPES
@@ -142,7 +141,7 @@ export interface Settings {
     language?: string;
     browser?: string;
   };
-  pai?: {
+  kaya?: {
     repoUrl?: string;
     version?: string;
   };
@@ -171,7 +170,7 @@ export interface TieredConfigOptions {
 // ============================================================================
 
 // Test mode path override
-let testPaiDir: string | null = null;
+let testKayaDir: string | null = null;
 
 // Cache for settings.json (raw, unmerged)
 let settingsCache: Settings | null = null;
@@ -195,12 +194,12 @@ const configCache = new Map<string, { data: unknown; time: number; path: string 
  * are immutable and can only live in settings.json.
  */
 export const ALLOWED_RUNTIME_KEYS = new Set([
-  'rateLimits',
-  'learnerCache',
-  'toon',
-  'failures',
-  'notifications',
-  'model',
+  "rateLimits",
+  "learnerCache",
+  "toon",
+  "failures",
+  "notifications",
+  "model",
 ]);
 
 // Default cache TTL (5 minutes)
@@ -214,7 +213,7 @@ const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
  * Get the Kaya directory
  */
 function getKayaDir(): string {
-  if (testPaiDir) return testPaiDir;
+  if (testKayaDir) return testKayaDir;
   return getKayaHome();
 }
 
@@ -222,7 +221,7 @@ function getKayaDir(): string {
  * Get the settings.json path
  */
 function getSettingsPath(): string {
-  return join(getKayaDir(), 'settings.json');
+  return join(getKayaDir(), "settings.json");
 }
 
 /**
@@ -230,21 +229,21 @@ function getSettingsPath(): string {
  * Located in MEMORY/State/ which is outside SecurityValidator restricted patterns.
  */
 export function getRuntimeConfigPath(): string {
-  return join(getKayaDir(), 'MEMORY', 'State', 'runtime-config.json');
+  return join(getKayaDir(), "MEMORY", "State", "runtime-config.json");
 }
 
 /**
  * Get the SYSTEM config directory
  */
 function getSystemConfigDir(): string {
-  return join(getKayaDir(), 'docs', 'system', 'config');
+  return join(getKayaDir(), "docs", "system", "config");
 }
 
 /**
  * Get the USER config directory
  */
 function getUserConfigDir(): string {
-  return join(getKayaDir(), 'USER', 'config');
+  return join(getKayaDir(), "USER", "config");
 }
 
 // ============================================================================
@@ -255,7 +254,7 @@ function getUserConfigDir(): string {
  * Try to find a config file with various extensions
  */
 function findConfigFile(dir: string, key: string): string | null {
-  const extensions = ['.json', '.yaml', '.yml'];
+  const extensions = [".json", ".yaml", ".yml"];
 
   for (const ext of extensions) {
     const path = join(dir, `${key}${ext}`);
@@ -271,9 +270,9 @@ function findConfigFile(dir: string, key: string): string | null {
  * Read and parse a config file (JSON or YAML)
  */
 function readConfigFile(path: string): unknown {
-  const content = readFileSync(path, 'utf-8');
+  const content = readFileSync(path, "utf-8");
 
-  if (path.endsWith('.yaml') || path.endsWith('.yml')) {
+  if (path.endsWith(".yaml") || path.endsWith(".yml")) {
     return parseYaml(content);
   }
 
@@ -300,8 +299,8 @@ function getFileModTime(path: string): number {
  */
 function toScreamingSnake(str: string): string {
   return str
-    .replace(/([a-z])([A-Z])/g, '$1_$2')
-    .replace(/[.-]/g, '_')
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/[.-]/g, "_")
     .toUpperCase();
 }
 
@@ -316,10 +315,7 @@ function getEnvValue(key: string, prefix: string): string | undefined {
 /**
  * Apply environment variable overrides to config
  */
-function applyEnvOverrides<T extends Record<string, unknown>>(
-  config: T,
-  prefix: string
-): T {
+function applyEnvOverrides<T extends Record<string, unknown>>(config: T, prefix: string): T {
   const result = { ...config };
 
   for (const key of Object.keys(config)) {
@@ -328,11 +324,11 @@ function applyEnvOverrides<T extends Record<string, unknown>>(
       // Parse the value based on the current type
       const currentValue = config[key];
 
-      if (typeof currentValue === 'boolean') {
-        (result as Record<string, unknown>)[key] = envValue.toLowerCase() === 'true';
-      } else if (typeof currentValue === 'number') {
+      if (typeof currentValue === "boolean") {
+        (result as Record<string, unknown>)[key] = envValue.toLowerCase() === "true";
+      } else if (typeof currentValue === "number") {
         const parsed = parseFloat(envValue);
-        if (!isNaN(parsed)) {
+        if (!Number.isNaN(parsed)) {
           (result as Record<string, unknown>)[key] = parsed;
         }
       } else if (Array.isArray(currentValue)) {
@@ -340,7 +336,7 @@ function applyEnvOverrides<T extends Record<string, unknown>>(
         try {
           (result as Record<string, unknown>)[key] = JSON.parse(envValue);
         } catch {
-          (result as Record<string, unknown>)[key] = envValue.split(',').map(s => s.trim());
+          (result as Record<string, unknown>)[key] = envValue.split(",").map((s) => s.trim());
         }
       } else {
         (result as Record<string, unknown>)[key] = envValue;
@@ -377,12 +373,12 @@ export function loadRawSettings(): Settings {
       return settingsCache;
     }
 
-    const content = readFileSync(settingsPath, 'utf-8');
+    const content = readFileSync(settingsPath, "utf-8");
     settingsCache = JSON.parse(content);
     settingsCacheTime = Date.now();
     return settingsCache!;
   } catch (error) {
-    console.error('ConfigLoader: Failed to load settings.json:', error);
+    console.error("ConfigLoader: Failed to load settings.json:", error);
     settingsCache = {};
     settingsCacheTime = Date.now();
     return settingsCache;
@@ -411,12 +407,15 @@ function loadRuntimeConfig(): Partial<Settings> {
       return runtimeCache;
     }
 
-    const content = readFileSync(runtimePath, 'utf-8');
+    const content = readFileSync(runtimePath, "utf-8");
     runtimeCache = JSON.parse(content) as Partial<Settings>;
     runtimeCacheTime = Date.now();
     return runtimeCache;
-  } catch {
-    // Malformed file — treat as empty, don't corrupt settings
+  } catch (err) {
+    // Malformed file — treat as empty, don't corrupt settings (but report it)
+    console.error(
+      `ConfigLoader: runtime config ${runtimePath} is unreadable, ignoring it: ${err instanceof Error ? err.message : String(err)}`,
+    );
     runtimeCache = {};
     runtimeCacheTime = Date.now();
     return runtimeCache;
@@ -464,8 +463,8 @@ export function writeRuntimeConfig(key: string, value: unknown): void {
   if (!ALLOWED_RUNTIME_KEYS.has(key)) {
     throw new Error(
       `ConfigLoader: "${key}" is not a mutable runtime key. ` +
-      `Allowed keys: ${[...ALLOWED_RUNTIME_KEYS].join(', ')}. ` +
-      `Immutable keys (permissions, hooks, daidentity, etc.) can only be changed in settings.json by a human.`
+        `Allowed keys: ${[...ALLOWED_RUNTIME_KEYS].join(", ")}. ` +
+        `Immutable keys (permissions, hooks, daidentity, etc.) can only be changed in settings.json by a human.`,
     );
   }
 
@@ -475,10 +474,13 @@ export function writeRuntimeConfig(key: string, value: unknown): void {
   let current: Record<string, unknown> = {};
   try {
     if (existsSync(runtimePath)) {
-      current = JSON.parse(readFileSync(runtimePath, 'utf-8'));
+      current = JSON.parse(readFileSync(runtimePath, "utf-8"));
     }
-  } catch {
-    // Malformed file — start fresh
+  } catch (err) {
+    // Only a malformed (SyntaxError) file may be replaced. Any other failure (permissions, I/O)
+    // would make the write below overwrite a file we could not read, so surface it.
+    if (!(err instanceof SyntaxError)) throw err;
+    console.error(`ConfigLoader: runtime config ${runtimePath} is malformed, starting fresh: ${err.message}`);
     current = {};
   }
 
@@ -487,7 +489,7 @@ export function writeRuntimeConfig(key: string, value: unknown): void {
   // Atomic write: write to tmp file in same directory, then rename
   const dir = dirname(runtimePath);
   const tmpPath = join(dir, `.runtime-config.${process.pid}.tmp`);
-  writeFileSync(tmpPath, JSON.stringify(current, null, 2), 'utf-8');
+  writeFileSync(tmpPath, JSON.stringify(current, null, 2), "utf-8");
   renameSync(tmpPath, runtimePath);
 
   // Invalidate caches so next loadSettings() picks up the change
@@ -505,7 +507,7 @@ export function loadTieredConfig<T>(
   key: string,
   schema: ZodType<T, unknown>,
   defaults: T,
-  options?: TieredConfigOptions
+  options?: TieredConfigOptions,
 ): T {
   const cacheKey = `tiered:${key}`;
   const cached = configCache.get(cacheKey);
@@ -513,12 +515,10 @@ export function loadTieredConfig<T>(
   // Check USER config
   const userDir = getUserConfigDir();
   const userPath = findConfigFile(userDir, key);
-  const userModTime = userPath ? getFileModTime(userPath) : 0;
 
   // Check SYSTEM config
   const systemDir = getSystemConfigDir();
   const systemPath = findConfigFile(systemDir, key);
-  const systemModTime = systemPath ? getFileModTime(systemPath) : 0;
 
   // Check cache validity
   if (cached) {
@@ -588,9 +588,7 @@ export function loadTieredConfig<T>(
 /**
  * Create a reusable config loader factory
  */
-export function createConfigLoader<T>(
-  options: ConfigLoaderOptions<T>
-): ConfigLoader<T> {
+export function createConfigLoader<T>(options: ConfigLoaderOptions<T>): ConfigLoader<T> {
   const { key, schema, defaults, envPrefix, cacheTtlMs = DEFAULT_CACHE_TTL_MS, watchChanges } = options;
 
   let cachedConfig: T | null = null;
@@ -643,7 +641,7 @@ export function createConfigLoader<T>(
           try {
             callback(config, changedKeys);
           } catch (error) {
-            console.error('ConfigLoader: Watcher callback error:', error);
+            console.error("ConfigLoader: Watcher callback error:", error);
           }
         }
       }
@@ -659,10 +657,7 @@ export function createConfigLoader<T>(
    * Find keys that changed between two configs
    */
   function findChangedKeys(oldConfig: T, newConfig: T): (keyof T)[] {
-    const keys = new Set([
-      ...Object.keys(oldConfig as object),
-      ...Object.keys(newConfig as object),
-    ]) as Set<keyof T>;
+    const keys = new Set([...Object.keys(oldConfig as object), ...Object.keys(newConfig as object)]) as Set<keyof T>;
 
     const changed: (keyof T)[] = [];
     for (const key of keys) {
@@ -690,18 +685,18 @@ export function createConfigLoader<T>(
     if (watchChanges && !fsWatcher && loadedPath) {
       try {
         fsWatcher = fsWatch(loadedPath, (eventType) => {
-          if (eventType === 'change') {
+          if (eventType === "change") {
             reload();
           }
         });
       } catch (error) {
-        console.warn('ConfigLoader: Failed to set up file watcher:', error);
+        console.warn("ConfigLoader: Failed to set up file watcher:", error);
       }
     }
 
     // Return unsubscribe function
     return () => {
-      watchers = watchers.filter(w => w !== callback);
+      watchers = watchers.filter((w) => w !== callback);
       if (watchers.length === 0 && fsWatcher) {
         fsWatcher.close();
         fsWatcher = null;
@@ -736,10 +731,7 @@ export function createConfigLoader<T>(
 /**
  * Validate a config file against a schema
  */
-export function validateConfigFile<T>(
-  path: string,
-  schema: ZodType<T, unknown>
-): ValidationResult {
+export function validateConfigFile<T>(path: string, schema: ZodType<T, unknown>): ValidationResult {
   try {
     if (!existsSync(path)) {
       return { valid: false, errors: undefined };
@@ -758,7 +750,7 @@ export function validateConfigFile<T>(
       valid: false,
       errors: new z.ZodError([
         {
-          code: 'custom',
+          code: "custom",
           path: [],
           message: `Failed to read file: ${error}`,
         },
@@ -785,7 +777,7 @@ export function clearAllCaches(): void {
  * @internal
  */
 export function _setTestPaths(kayaDir: string | null): void {
-  testPaiDir = kayaDir;
+  testKayaDir = kayaDir;
   clearAllCaches();
 }
 
@@ -796,7 +788,7 @@ export function _setTestPaths(kayaDir: string | null): void {
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     console.log(`
 ConfigLoader - Unified configuration loader with SYSTEM/USER tiering
 
@@ -826,58 +818,59 @@ Examples:
   }
 
   // --settings mode
-  if (args.includes('--settings')) {
+  if (args.includes("--settings")) {
     const settings = loadSettings();
     console.log(JSON.stringify(settings, null, 2));
     process.exit(0);
   }
 
   // --paths mode
-  if (args.includes('--paths')) {
-    console.log('Kaya Directory:', getKayaDir());
-    console.log('Settings Path:', getSettingsPath());
-    console.log('SYSTEM Config:', getSystemConfigDir());
-    console.log('USER Config:  ', getUserConfigDir());
+  if (args.includes("--paths")) {
+    console.log("Kaya Directory:", getKayaDir());
+    console.log("Settings Path:", getSettingsPath());
+    console.log("SYSTEM Config:", getSystemConfigDir());
+    console.log("USER Config:  ", getUserConfigDir());
     process.exit(0);
   }
 
   // --list mode
-  if (args.includes('--list')) {
+  if (args.includes("--list")) {
     const systemDir = getSystemConfigDir();
     const userDir = getUserConfigDir();
 
-    console.log('Available configurations:\n');
+    console.log("Available configurations:\n");
 
-    console.log('SYSTEM configs:');
+    console.log("SYSTEM configs:");
     if (existsSync(systemDir)) {
-      const { readdirSync } = await import('fs');
+      const { readdirSync } = await import("node:fs");
       const files = readdirSync(systemDir);
       for (const file of files) {
         console.log(`  - ${file}`);
       }
     } else {
-      console.log('  (none)');
+      console.log("  (none)");
     }
 
-    console.log('\nUSER configs:');
+    console.log("\nUSER configs:");
     if (existsSync(userDir)) {
-      const { readdirSync } = await import('fs');
+      const { readdirSync } = await import("node:fs");
       const files = readdirSync(userDir);
       for (const file of files) {
         console.log(`  - ${file}`);
       }
     } else {
-      console.log('  (none)');
+      console.log("  (none)");
     }
 
     process.exit(0);
   }
 
   // --key mode
-  const keyIndex = args.indexOf('--key');
-  if (keyIndex !== -1 && args[keyIndex + 1]) {
-    const key = args[keyIndex + 1];
-    const shouldValidate = args.includes('--validate');
+  const keyIndex = args.indexOf("--key");
+  const keyArg = args[keyIndex + 1];
+  if (keyIndex !== -1 && keyArg) {
+    const key = keyArg;
+    const shouldValidate = args.includes("--validate");
 
     // For generic loading without a specific schema, use passthrough
     const genericSchema = z.any();
@@ -896,8 +889,8 @@ Examples:
       const result = validateConfigFile(configPath, genericSchema);
       if (result.valid) {
         console.log(`Config '${key}' is valid`);
-        console.log('\nLoaded from:', configPath);
-        console.log('\nContent:');
+        console.log("\nLoaded from:", configPath);
+        console.log("\nContent:");
         console.log(JSON.stringify(result.data, null, 2));
       } else {
         console.error(`Config '${key}' is invalid:`);
@@ -909,15 +902,15 @@ Examples:
       const cacheEntry = configCache.get(`tiered:${key}`);
 
       console.log(`Config: ${key}`);
-      console.log('Loaded from:', cacheEntry?.path || '(defaults)');
-      console.log('\nContent:');
+      console.log("Loaded from:", cacheEntry?.path || "(defaults)");
+      console.log("\nContent:");
       console.log(JSON.stringify(config, null, 2));
     }
 
     process.exit(0);
   }
 
-  console.error('No valid command specified. Use --help for usage.');
+  console.error("No valid command specified. Use --help for usage.");
   process.exit(1);
 }
 

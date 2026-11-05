@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // Types & Schema
@@ -28,7 +28,7 @@ export const CallDetectorConfigSchema = z.object({
   /** Enable call detection guard */
   enabled: z.boolean().default(true),
   /** Apps to check via process detection */
-  detectApps: z.array(z.enum(['zoom', 'teams', 'discord', 'slack'])).default(['zoom', 'teams', 'discord', 'slack']),
+  detectApps: z.array(z.enum(["zoom", "teams", "discord", "slack"])).default(["zoom", "teams", "discord", "slack"]),
   /** Use CoreAudio mic detection as catch-all */
   useMicDetection: z.boolean().default(true),
   /** Per-command timeout in ms */
@@ -37,7 +37,7 @@ export const CallDetectorConfigSchema = z.object({
   allowCriticalOverride: z.boolean().default(true),
 });
 
-export type CallDetectorConfig = z.infer<typeof CallDetectorConfigSchema>;
+type CallDetectorConfig = z.infer<typeof CallDetectorConfigSchema>;
 
 export interface CallDetectionResult {
   onCall: boolean;
@@ -54,13 +54,13 @@ export interface CallDetectionResult {
  */
 const APP_PROCESS_SIGNALS: Record<string, { args: string[]; label: string }[]> = {
   zoom: [
-    { args: ['-x', 'caphost'], label: 'zoom:caphost' },
-    { args: ['-x', 'zoom.us'], label: 'zoom:zoom.us' },
+    { args: ["-x", "caphost"], label: "zoom:caphost" },
+    { args: ["-x", "zoom.us"], label: "zoom:zoom.us" },
   ],
   teams: [
-    { args: ['-f', 'Microsoft Teams'], label: 'teams:Microsoft Teams' },
-    { args: ['-x', 'MSTeams'], label: 'teams:MSTeams' },
-    { args: ['-x', 'Teams'], label: 'teams:Teams' },
+    { args: ["-f", "Microsoft Teams"], label: "teams:Microsoft Teams" },
+    { args: ["-x", "MSTeams"], label: "teams:MSTeams" },
+    { args: ["-x", "Teams"], label: "teams:Teams" },
   ],
 };
 
@@ -77,9 +77,9 @@ const APP_PROCESS_SIGNALS: Record<string, { args: string[]; label: string }[]> =
 async function runCheck(cmd: string[], timeoutMs: number): Promise<boolean> {
   try {
     const proc = Bun.spawn(cmd, {
-      stdout: 'pipe',
-      stderr: 'pipe',
-      stdin: 'ignore',
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "ignore",
     });
 
     const timeout = setTimeout(() => proc.kill(), timeoutMs);
@@ -100,7 +100,7 @@ async function checkAppProcess(app: string, timeoutMs: number): Promise<string |
   if (!signals) return null;
 
   for (const signal of signals) {
-    const detected = await runCheck(['pgrep', ...signal.args], timeoutMs);
+    const detected = await runCheck(["pgrep", ...signal.args], timeoutMs);
     if (detected) return signal.label;
   }
   return null;
@@ -131,7 +131,7 @@ guard AudioObjectGetPropertyData(devID, &addr, 0, nil, &size, &running) == noErr
 exit(running != 0 ? 0 : 1)
 `.trim();
 
-  return runCheck(['swift', '-e', swiftCode], timeoutMs);
+  return runCheck(["swift", "-e", swiftCode], timeoutMs);
 }
 
 // ============================================================================
@@ -157,14 +157,12 @@ export async function detectActiveCall(config: CallDetectorConfig): Promise<Call
 
   // Microphone detection as catch-all
   if (config.useMicDetection) {
-    checks.push(
-      checkMicInUse(config.timeoutMs).then(inUse => inUse ? 'mic:CoreAudio' : null)
-    );
+    checks.push(checkMicInUse(config.timeoutMs).then((inUse) => (inUse ? "mic:CoreAudio" : null)));
   }
 
   try {
     const results = await Promise.all(checks);
-    const detected = results.find(r => r !== null);
+    const detected = results.find((r) => r !== null);
     return {
       onCall: detected !== undefined,
       detectedVia: detected ?? null,

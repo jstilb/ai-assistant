@@ -64,11 +64,13 @@
  * actually closed. Report it.
  */
 
-import { randomBytes } from "crypto";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "./KayaHome.ts";
 
-const WORKTREE_ROOT = "~/.claude/.claude/worktrees/security-audit-exec-20260908";
+// Run with KAYA_HOME (or KAYA_DIR) pointing at the checkout under test.
+const WORKTREE_ROOT = getKayaHome();
 process.env.KAYA_DIR = WORKTREE_ROOT;
 
 /** Reads the "Bash" field out of an allow-tally JSON file; 0 if missing/absent/malformed. */

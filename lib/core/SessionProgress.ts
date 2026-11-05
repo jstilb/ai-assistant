@@ -9,11 +9,11 @@
  *   bun run ~/.claude/lib/core/SessionProgress.ts <command> [options]
  */
 
-import { existsSync, readdirSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import { createStateManager, type StateManager } from './StateManager';
-import { getKayaHome } from './KayaHome.ts';
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { createStateManager, type StateManager } from "./StateManager.ts";
+import { getKayaHome } from "./KayaHome.ts";
 
 // Zod schemas for validation
 const DecisionSchema = z.object({
@@ -38,7 +38,7 @@ const SessionProgressSchema = z.object({
   project: z.string(),
   created: z.string(),
   updated: z.string(),
-  status: z.enum(['active', 'completed', 'blocked']),
+  status: z.enum(["active", "completed", "blocked"]),
   objectives: z.array(z.string()),
   decisions: z.array(DecisionSchema),
   work_completed: z.array(WorkItemSchema),
@@ -51,7 +51,7 @@ type SessionProgress = z.infer<typeof SessionProgressSchema>;
 
 // Progress files are now in State/progress/ (consolidated from MEMORY/PROGRESS/)
 // frozen at import (getKayaHome cached); no test re-pins this module
-const PROGRESS_DIR = join(getKayaHome(), 'MEMORY', 'State', 'progress');
+const PROGRESS_DIR = join(getKayaHome(), "MEMORY", "State", "progress");
 
 function getProgressPath(project: string): string {
   return join(PROGRESS_DIR, `${project}-progress.json`);
@@ -62,22 +62,25 @@ const managers = new Map<string, StateManager<SessionProgress>>();
 
 function getManager(project: string): StateManager<SessionProgress> {
   if (!managers.has(project)) {
-    managers.set(project, createStateManager<SessionProgress>({
-      path: getProgressPath(project),
-      schema: SessionProgressSchema,
-      defaults: {
-        project,
-        created: new Date().toISOString(),
-        updated: new Date().toISOString(),
-        status: 'active',
-        objectives: [],
-        decisions: [],
-        work_completed: [],
-        blockers: [],
-        handoff_notes: '',
-        next_steps: [],
-      },
-    }));
+    managers.set(
+      project,
+      createStateManager<SessionProgress>({
+        path: getProgressPath(project),
+        schema: SessionProgressSchema,
+        defaults: {
+          project,
+          created: new Date().toISOString(),
+          updated: new Date().toISOString(),
+          status: "active",
+          objectives: [],
+          decisions: [],
+          work_completed: [],
+          blockers: [],
+          handoff_notes: "",
+          next_steps: [],
+        },
+      }),
+    );
   }
   return managers.get(project)!;
 }
@@ -108,18 +111,18 @@ async function createProgress(project: string, objectives: string[]): Promise<vo
     project,
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
-    status: 'active',
+    status: "active",
     objectives,
     decisions: [],
     work_completed: [],
     blockers: [],
-    handoff_notes: '',
-    next_steps: []
+    handoff_notes: "",
+    next_steps: [],
   };
 
   await saveProgress(progress);
   console.log(`Created progress file: ${manager.getPath()}`);
-  console.log(`Objectives: ${objectives.join(', ')}`);
+  console.log(`Objectives: ${objectives.join(", ")}`);
 }
 
 async function addDecision(project: string, decision: string, rationale: string): Promise<void> {
@@ -132,7 +135,7 @@ async function addDecision(project: string, decision: string, rationale: string)
   progress.decisions.push({
     timestamp: new Date().toISOString(),
     decision,
-    rationale
+    rationale,
   });
 
   await saveProgress(progress);
@@ -149,7 +152,7 @@ async function addWork(project: string, description: string, artifacts: string[]
   progress.work_completed.push({
     timestamp: new Date().toISOString(),
     description,
-    artifacts
+    artifacts,
   });
 
   await saveProgress(progress);
@@ -166,10 +169,10 @@ async function addBlocker(project: string, blocker: string, resolution?: string)
   progress.blockers.push({
     timestamp: new Date().toISOString(),
     blocker,
-    resolution: resolution || null
+    resolution: resolution || null,
   });
 
-  progress.status = 'blocked';
+  progress.status = "blocked";
   await saveProgress(progress);
   console.log(`Added blocker: ${blocker}`);
 }
@@ -205,19 +208,19 @@ async function resumeProgress(project: string): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`\n${'='.repeat(60)}`);
+  console.log(`\n${"=".repeat(60)}`);
   console.log(`SESSION RESUME: ${project}`);
-  console.log(`${'='.repeat(60)}\n`);
+  console.log(`${"=".repeat(60)}\n`);
 
   console.log(`Status: ${progress.status}`);
   console.log(`Last Updated: ${progress.updated}\n`);
 
   console.log(`OBJECTIVES:`);
-  progress.objectives.forEach((o, i) => console.log(`  ${i + 1}. ${o}`));
+  for (const [i, o] of progress.objectives.entries()) console.log(`  ${i + 1}. ${o}`);
 
   if (progress.decisions.length > 0) {
     console.log(`\nKEY DECISIONS:`);
-    progress.decisions.slice(-3).forEach(d => {
+    progress.decisions.slice(-3).forEach((d) => {
       console.log(`  - ${d.decision}`);
       console.log(`    Rationale: ${d.rationale}`);
     });
@@ -225,19 +228,19 @@ async function resumeProgress(project: string): Promise<void> {
 
   if (progress.work_completed.length > 0) {
     console.log(`\nRECENT WORK:`);
-    progress.work_completed.slice(-5).forEach(w => {
+    progress.work_completed.slice(-5).forEach((w) => {
       console.log(`  - ${w.description}`);
       if (w.artifacts.length > 0) {
-        console.log(`    Artifacts: ${w.artifacts.join(', ')}`);
+        console.log(`    Artifacts: ${w.artifacts.join(", ")}`);
       }
     });
   }
 
   if (progress.blockers.length > 0) {
-    const unresolvedBlockers = progress.blockers.filter(b => !b.resolution);
+    const unresolvedBlockers = progress.blockers.filter((b) => !b.resolution);
     if (unresolvedBlockers.length > 0) {
       console.log(`\nACTIVE BLOCKERS:`);
-      unresolvedBlockers.forEach(b => {
+      unresolvedBlockers.forEach((b) => {
         console.log(`  - ${b.blocker}`);
       });
     }
@@ -250,23 +253,22 @@ async function resumeProgress(project: string): Promise<void> {
 
   if (progress.next_steps.length > 0) {
     console.log(`\nNEXT STEPS:`);
-    progress.next_steps.forEach((s, i) => console.log(`  ${i + 1}. ${s}`));
+    for (const [i, s] of progress.next_steps.entries()) console.log(`  ${i + 1}. ${s}`);
   }
 
-  console.log(`\n${'='.repeat(60)}\n`);
+  console.log(`\n${"=".repeat(60)}\n`);
 }
 
 async function listActive(): Promise<void> {
   if (!existsSync(PROGRESS_DIR)) {
-    console.log('No progress files found');
+    console.log("No progress files found");
     return;
   }
 
-  const files = readdirSync(PROGRESS_DIR)
-    .filter(f => f.endsWith('-progress.json'));
+  const files = readdirSync(PROGRESS_DIR).filter((f) => f.endsWith("-progress.json"));
 
   if (files.length === 0) {
-    console.log('No active progress files');
+    console.log("No active progress files");
     return;
   }
 
@@ -274,13 +276,13 @@ async function listActive(): Promise<void> {
 
   for (const file of files) {
     // Extract project name from filename and use StateManager via getManager
-    const projectName = file.replace('-progress.json', '');
+    const projectName = file.replace("-progress.json", "");
     try {
       const progress = await getManager(projectName).load();
       const statusIcon = {
-        active: 'ACTIVE',
-        completed: 'DONE',
-        blocked: 'BLOCKED'
+        active: "ACTIVE",
+        completed: "DONE",
+        blocked: "BLOCKED",
       }[progress.status];
 
       console.log(`[${statusIcon}] ${progress.project} (${progress.status})`);
@@ -289,10 +291,13 @@ async function listActive(): Promise<void> {
       if (progress.next_steps.length > 0) {
         console.log(`   Next: ${progress.next_steps[0]}`);
       }
-      console.log('');
-    } catch {
+      console.log("");
+    } catch (err) {
       console.log(`[ERROR] ${projectName} - failed to load`);
-      console.log('');
+      console.error(
+        `session-progress: cannot load ${projectName}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.log("");
     }
   }
 }
@@ -304,7 +309,7 @@ async function completeProgress(project: string): Promise<void> {
     process.exit(1);
   }
 
-  progress.status = 'completed';
+  progress.status = "completed";
   progress.handoff_notes = `Completed at ${new Date().toISOString()}`;
   await saveProgress(progress);
   console.log(`Marked ${project} as completed`);
@@ -317,23 +322,23 @@ async function main(): Promise<void> {
   const command = args[0];
 
   switch (command) {
-    case 'create':
+    case "create":
       if (!args[1]) {
-        console.error('Usage: session-progress create <project> [objective1] [objective2] ...');
+        console.error("Usage: session-progress create <project> [objective1] [objective2] ...");
         process.exit(1);
       }
       await createProgress(args[1], args.slice(2));
       break;
 
-    case 'decision':
+    case "decision":
       if (!args[1] || !args[2]) {
         console.error('Usage: session-progress decision <project> "<decision>" "<rationale>"');
         process.exit(1);
       }
-      await addDecision(args[1], args[2], args[3] || '');
+      await addDecision(args[1], args[2], args[3] || "");
       break;
 
-    case 'work':
+    case "work":
       if (!args[1] || !args[2]) {
         console.error('Usage: session-progress work <project> "<description>" [artifact1] [artifact2] ...');
         process.exit(1);
@@ -341,7 +346,7 @@ async function main(): Promise<void> {
       await addWork(args[1], args[2], args.slice(3));
       break;
 
-    case 'blocker':
+    case "blocker":
       if (!args[1] || !args[2]) {
         console.error('Usage: session-progress blocker <project> "<blocker>" ["resolution"]');
         process.exit(1);
@@ -349,15 +354,15 @@ async function main(): Promise<void> {
       await addBlocker(args[1], args[2], args[3]);
       break;
 
-    case 'next':
+    case "next":
       if (!args[1]) {
-        console.error('Usage: session-progress next <project> <step1> <step2> ...');
+        console.error("Usage: session-progress next <project> <step1> <step2> ...");
         process.exit(1);
       }
       await setNextSteps(args[1], args.slice(2));
       break;
 
-    case 'handoff':
+    case "handoff":
       if (!args[1] || !args[2]) {
         console.error('Usage: session-progress handoff <project> "<notes>"');
         process.exit(1);
@@ -365,21 +370,21 @@ async function main(): Promise<void> {
       await setHandoff(args[1], args[2]);
       break;
 
-    case 'resume':
+    case "resume":
       if (!args[1]) {
-        console.error('Usage: session-progress resume <project>');
+        console.error("Usage: session-progress resume <project>");
         process.exit(1);
       }
       await resumeProgress(args[1]);
       break;
 
-    case 'list':
+    case "list":
       await listActive();
       break;
 
-    case 'complete':
+    case "complete":
       if (!args[1]) {
-        console.error('Usage: session-progress complete <project>');
+        console.error("Usage: session-progress complete <project>");
         process.exit(1);
       }
       await completeProgress(args[1]);

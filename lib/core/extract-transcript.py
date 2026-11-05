@@ -20,12 +20,12 @@ Examples:
     uv run extract-transcript.py ~/Podcasts/ --batch
 """
 
-import sys
-import os
 import argparse
-from pathlib import Path
-from faster_whisper import WhisperModel
 import json
+import sys
+from pathlib import Path
+
+from faster_whisper import WhisperModel
 
 # Supported audio/video formats
 SUPPORTED_FORMATS = [
@@ -34,7 +34,10 @@ SUPPORTED_FORMATS = [
 ]
 
 # Available models
-MODELS = ["tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en", "large-v1", "large-v2", "large-v3"]
+MODELS = [
+    "tiny", "tiny.en", "base", "base.en", "small", "small.en",
+    "medium", "medium.en", "large-v1", "large-v2", "large-v3",
+]
 
 # Output formats
 OUTPUT_FORMATS = ["txt", "json", "srt", "vtt"]
@@ -100,7 +103,7 @@ def transcribe_file(file_path, model, output_format, initial_prompt=None):
         return segment_list
 
     except Exception as e:
-        raise Exception(f"Transcription failed: {str(e)}")
+        raise Exception(f"Transcription failed: {str(e)}") from e
 
 
 def format_transcript(segments, output_format):
@@ -199,7 +202,7 @@ def main():
         files = get_files_from_directory(input_path)
 
         if not files:
-            print(f"Error: No supported audio/video files found")
+            print("Error: No supported audio/video files found")
             print(f"Supported formats: {', '.join(SUPPORTED_FORMATS)}")
             sys.exit(1)
 

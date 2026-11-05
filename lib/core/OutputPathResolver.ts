@@ -9,10 +9,10 @@
  * - Custom paths for special needs
  */
 
-import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { parseArgs } from 'util';
-import { defaultKayaHome } from './KayaHome.ts';
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { parseArgs } from "node:util";
+import { defaultKayaHome } from "./KayaHome.ts";
 
 /**
  * Resolve the Kaya home directory at call time so that tests (and other
@@ -22,18 +22,14 @@ import { defaultKayaHome } from './KayaHome.ts';
  * Precedence: KAYA_HOME > KAYA_DIR > $HOME/.claude  (mirrors KayaHome.ts)
  */
 function getKayaHome(): string {
-  return (
-    process.env.KAYA_HOME ??
-    process.env.KAYA_DIR ??
-    defaultKayaHome()
-  );
+  return process.env.KAYA_HOME ?? process.env.KAYA_DIR ?? defaultKayaHome();
 }
 
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
 
-export type OutputType = 'memory' | 'work' | 'downloads' | 'custom';
+export type OutputType = "memory" | "work" | "downloads" | "custom";
 
 export interface OutputPathOptions {
   /** Skill name (TitleCase) */
@@ -73,8 +69,8 @@ export interface ResolvedPath {
 function slugify(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .substring(0, 64);
 }
 
@@ -82,7 +78,7 @@ function slugify(title: string): string {
  * Get current date in YYYY-MM-DD format
  */
 function getDateString(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().slice(0, 10);
 }
 
 /**
@@ -90,8 +86,8 @@ function getDateString(): string {
  */
 function getTimestampPrefix(): string {
   const now = new Date();
-  const date = now.toISOString().split('T')[0].replace(/-/g, '');
-  const time = now.toTimeString().split(' ')[0].replace(/:/g, '');
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
   return `${date}-${time}`;
 }
 
@@ -99,13 +95,13 @@ function getTimestampPrefix(): string {
  * Find current work session ID from MEMORY/WORK/
  */
 async function findCurrentWorkSession(): Promise<string | null> {
-  const workDir = join(getKayaHome(), 'MEMORY/WORK');
+  const workDir = join(getKayaHome(), "MEMORY/WORK");
 
   if (!existsSync(workDir)) {
     return null;
   }
 
-  const { readdir, stat } = await import('fs/promises');
+  const { readdir, stat } = await import("node:fs/promises");
   const entries = await readdir(workDir);
 
   // Find most recent work directory
@@ -149,53 +145,49 @@ async function findCurrentWorkSession(): Promise<string | null> {
  * });
  * // → ~/.claude/MEMORY/WORK/{session}/scratch/20260201-143052_intermediate-data.json
  */
-export async function resolveOutputPath(
-  options: OutputPathOptions
-): Promise<ResolvedPath> {
+export async function resolveOutputPath(options: OutputPathOptions): Promise<ResolvedPath> {
   const {
     skill,
     title,
-    type = 'memory',
+    type = "memory",
     customPath,
-    extension = 'md',
+    extension = "md",
     includeTimestamp = true,
     workSessionId,
   } = options;
 
   const slug = slugify(title);
-  const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  const prefix = includeTimestamp ? `${getTimestampPrefix()}_` : '';
+  const ext = extension.startsWith(".") ? extension : `.${extension}`;
+  const prefix = includeTimestamp ? `${getTimestampPrefix()}_` : "";
   const filename = `${prefix}${slug}${ext}`;
 
   let directory: string;
 
   switch (type) {
-    case 'memory':
-      directory = join(getKayaHome(), 'MEMORY', skill, getDateString());
+    case "memory":
+      directory = join(getKayaHome(), "MEMORY", skill, getDateString());
       break;
 
-    case 'work': {
+    case "work": {
       const sessionId = workSessionId || (await findCurrentWorkSession());
       if (!sessionId) {
         // Fall back to memory if no work session
-        directory = join(getKayaHome(), 'MEMORY', skill, getDateString());
+        directory = join(getKayaHome(), "MEMORY", skill, getDateString());
       } else {
-        directory = join(getKayaHome(), 'MEMORY/WORK', sessionId, 'scratch');
+        directory = join(getKayaHome(), "MEMORY/WORK", sessionId, "scratch");
       }
       break;
     }
 
-    case 'downloads':
-      directory = join(process.env.HOME!, 'Downloads');
+    case "downloads":
+      directory = join(process.env.HOME!, "Downloads");
       break;
 
-    case 'custom':
+    case "custom":
       if (!customPath) {
         throw new Error("customPath is required when type is 'custom'");
       }
-      directory = customPath.startsWith('~')
-        ? customPath.replace('~', process.env.HOME!)
-        : customPath;
+      directory = customPath.startsWith("~") ? customPath.replace("~", process.env.HOME!) : customPath;
       break;
 
     default:
@@ -217,7 +209,7 @@ export async function resolveOutputPath(
  * Ensure output directory exists
  */
 export function ensureOutputDir(path: string): void {
-  const dir = path.endsWith('/') ? path : dirname(path);
+  const dir = path.endsWith("/") ? path : dirname(path);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -226,9 +218,7 @@ export function ensureOutputDir(path: string): void {
 /**
  * Convenience function: resolve path and ensure directory exists
  */
-export async function prepareOutputPath(
-  options: OutputPathOptions
-): Promise<ResolvedPath> {
+export async function prepareOutputPath(options: OutputPathOptions): Promise<ResolvedPath> {
   const resolved = await resolveOutputPath(options);
   ensureOutputDir(resolved.path);
   return resolved;
@@ -242,15 +232,15 @@ async function main() {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      skill: { type: 'string', short: 's' },
-      title: { type: 'string', short: 't' },
-      type: { type: 'string', default: 'memory' },
-      'custom-path': { type: 'string' },
-      extension: { type: 'string', short: 'e', default: 'md' },
-      'no-timestamp': { type: 'boolean', default: false },
-      'create-dir': { type: 'boolean', short: 'c', default: false },
-      json: { type: 'boolean', short: 'j', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
+      skill: { type: "string", short: "s" },
+      title: { type: "string", short: "t" },
+      type: { type: "string", default: "memory" },
+      "custom-path": { type: "string" },
+      extension: { type: "string", short: "e", default: "md" },
+      "no-timestamp": { type: "boolean", default: false },
+      "create-dir": { type: "boolean", short: "c", default: false },
+      json: { type: "boolean", short: "j", default: false },
+      help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
   });
@@ -303,8 +293,8 @@ EXAMPLES:
   const title = values.title || positionals[1];
 
   if (!skill || !title) {
-    console.error('Error: --skill and --title are required');
-    console.error('Run with --help for usage');
+    console.error("Error: --skill and --title are required");
+    console.error("Run with --help for usage");
     process.exit(1);
   }
 
@@ -313,12 +303,12 @@ EXAMPLES:
       skill,
       title,
       type: values.type as OutputType,
-      customPath: values['custom-path'],
+      customPath: values["custom-path"],
       extension: values.extension,
-      includeTimestamp: !values['no-timestamp'],
+      includeTimestamp: !values["no-timestamp"],
     });
 
-    if (values['create-dir']) {
+    if (values["create-dir"]) {
       ensureOutputDir(resolved.path);
     }
 

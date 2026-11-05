@@ -30,16 +30,16 @@
  * future integrator can add a Stage N block once this rule lands on main).
  */
 
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 export interface LintResult {
   errors: string[];
   warnings: string[];
 }
 
-const DEFAULT_ROUTER_REL = 'skills/Productivity/LifeOS/Capture/Router.ts';
-const DEFAULT_SKILL_REL = 'skills/Productivity/LifeOS/SKILL.md';
+const DEFAULT_ROUTER_REL = "skills/Productivity/LifeOS/Capture/Router.ts";
+const DEFAULT_SKILL_REL = "skills/Productivity/LifeOS/SKILL.md";
 
 const LABEL_UNION_RE = /export type Label\s*=([\s\S]*?);/;
 const LABEL_MEMBER_RE = /"([A-Z][A-Z0-9_]*)"/g;
@@ -57,11 +57,10 @@ const HEADING_COUNT_RE = /## Classification rules \((\d+)\s+labels?\b/;
 export function parseLabelUnion(routerSource: string): string[] {
   const match = LABEL_UNION_RE.exec(routerSource);
   if (!match) return [];
-  const block = match[1];
+  const block = match[1] ?? "";
   const labels: string[] = [];
-  let m: RegExpExecArray | null;
   LABEL_MEMBER_RE.lastIndex = 0;
-  while ((m = LABEL_MEMBER_RE.exec(block))) labels.push(m[1]);
+  for (const m of block.matchAll(LABEL_MEMBER_RE)) labels.push(m[1] ?? "");
   return labels;
 }
 
@@ -78,9 +77,8 @@ export function parseClassificationTableLabels(skillSource: string): string[] {
   const nextHeadingMatch = NEXT_HEADING_RE.exec(rest);
   const section = nextHeadingMatch ? rest.slice(0, nextHeadingMatch.index) : rest;
   const labels: string[] = [];
-  let m: RegExpExecArray | null;
   TABLE_ROW_LABEL_RE.lastIndex = 0;
-  while ((m = TABLE_ROW_LABEL_RE.exec(section))) labels.push(m[1]);
+  for (const m of section.matchAll(TABLE_ROW_LABEL_RE)) labels.push(m[1] ?? "");
   return labels;
 }
 
@@ -96,9 +94,9 @@ export function diffLabelsAgainstTable(routerSource: string, skillSource: string
   const unionLabels = parseLabelUnion(routerSource);
   if (unionLabels.length === 0) {
     errors.push(
-      'lifeos-label-table-drift: could not parse `export type Label = ...;` union from Router.ts ' +
-        '(0 members found). Has the union\'s shape changed? Update the parser in ' +
-        'lib/lint/lifeos-label-table-drift.ts if so.',
+      "lifeos-label-table-drift: could not parse `export type Label = ...;` union from Router.ts " +
+        "(0 members found). Has the union's shape changed? Update the parser in " +
+        "lib/lint/lifeos-label-table-drift.ts if so.",
     );
     return { errors, warnings };
   }
@@ -107,8 +105,8 @@ export function diffLabelsAgainstTable(routerSource: string, skillSource: string
   if (tableLabels.length === 0) {
     errors.push(
       'lifeos-label-table-drift: found no label rows under SKILL.md\'s "## Classification rules" ' +
-        'table (0 rows found). Has the heading text or table shape changed? Update the parser in ' +
-        'lib/lint/lifeos-label-table-drift.ts if so.',
+        "table (0 rows found). Has the heading text or table shape changed? Update the parser in " +
+        "lib/lint/lifeos-label-table-drift.ts if so.",
     );
     return { errors, warnings };
   }
@@ -122,21 +120,21 @@ export function diffLabelsAgainstTable(routerSource: string, skillSource: string
   if (missing.length > 0) {
     errors.push(
       `lifeos-label-table-drift: Router.ts's Label union has member(s) with no row in SKILL.md's ` +
-        `classification-rules table: ${missing.join(', ')}. Add a row (Label | Destination | ` +
+        `classification-rules table: ${missing.join(", ")}. Add a row (Label | Destination | ` +
         `Confirmation) for each to skills/Productivity/LifeOS/SKILL.md.`,
     );
   }
   if (extra.length > 0) {
     errors.push(
       `lifeos-label-table-drift: SKILL.md's classification-rules table has row(s) for label(s) not ` +
-        `present in Router.ts's Label union: ${extra.join(', ')}. Remove the stale row(s), or the ` +
+        `present in Router.ts's Label union: ${extra.join(", ")}. Remove the stale row(s), or the ` +
         `label was renamed/typo'd — check both sides.`,
     );
   }
 
   const headingCountMatch = HEADING_COUNT_RE.exec(skillSource);
   if (headingCountMatch) {
-    const declared = parseInt(headingCountMatch[1], 10);
+    const declared = parseInt(headingCountMatch[1] ?? "", 10);
     if (declared !== unionLabels.length) {
       errors.push(
         `lifeos-label-table-drift: SKILL.md's "## Classification rules" heading declares ` +
@@ -172,7 +170,7 @@ export async function checkLifeOSLabelTableDrift(
 
   let routerSource: string;
   try {
-    routerSource = readFileSync(routerPath, 'utf-8');
+    routerSource = readFileSync(routerPath, "utf-8");
   } catch (err) {
     return {
       errors: [`lifeos-label-table-drift: could not read ${routerPath}: ${(err as Error).message}`],
@@ -182,7 +180,7 @@ export async function checkLifeOSLabelTableDrift(
 
   let skillSource: string;
   try {
-    skillSource = readFileSync(skillPath, 'utf-8');
+    skillSource = readFileSync(skillPath, "utf-8");
   } catch (err) {
     return {
       errors: [`lifeos-label-table-drift: could not read ${skillPath}: ${(err as Error).message}`],
@@ -198,6 +196,7 @@ if (import.meta.main) {
   const result = await checkLifeOSLabelTableDrift();
   for (const w of result.warnings) console.warn(`WARN: ${w}`);
   for (const e of result.errors) console.error(`ERROR: ${e}`);
-  if (result.errors.length === 0) console.log('lifeos-label-table-drift: OK — Label union and SKILL.md table are in sync.');
+  if (result.errors.length === 0)
+    console.log("lifeos-label-table-drift: OK — Label union and SKILL.md table are in sync.");
   process.exit(result.errors.length > 0 ? 1 : 0);
 }

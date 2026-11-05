@@ -10,7 +10,7 @@
  * done separately by running FreshnessClassifier.ts's main() and
  * GatheringOrchestrator's own test suite.
  *
- * Run: bun test ~/.claude/.claude/worktrees/context-integrity-20260729/skills/Productivity/InformationManager/Tools/__tests__/FreshnessClassifier.test.ts
+ * Run: bun test ./skills/Productivity/InformationManager/Tools/__tests__/FreshnessClassifier.test.ts
  */
 import { describe, test, expect } from "bun:test";
 import {
@@ -80,9 +80,9 @@ describe("parseFreshnessDeclaration", () => {
   });
 
   test("unrecognised class fails loud instead of silently defaulting", () => {
-    expect(() =>
-      parseFreshnessDeclaration({ class: "sometimes-stale", reason: "made up class" }, "x"),
-    ).toThrow(FreshnessClassificationError);
+    expect(() => parseFreshnessDeclaration({ class: "sometimes-stale", reason: "made up class" }, "x")).toThrow(
+      FreshnessClassificationError,
+    );
   });
 
   test("dated-snapshot missing maxAgeMs throws", () => {
@@ -92,18 +92,18 @@ describe("parseFreshnessDeclaration", () => {
   });
 
   test("dated-snapshot with non-positive maxAgeMs throws", () => {
-    expect(() =>
-      parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: 0, reason: "x" }, "x"),
-    ).toThrow(FreshnessClassificationError);
-    expect(() =>
-      parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: -5, reason: "x" }, "x"),
-    ).toThrow(FreshnessClassificationError);
+    expect(() => parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: 0, reason: "x" }, "x")).toThrow(
+      FreshnessClassificationError,
+    );
+    expect(() => parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: -5, reason: "x" }, "x")).toThrow(
+      FreshnessClassificationError,
+    );
   });
 
   test("dated-snapshot with non-finite maxAgeMs throws", () => {
-    expect(() =>
-      parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: Infinity, reason: "x" }, "x"),
-    ).toThrow(FreshnessClassificationError);
+    expect(() => parseFreshnessDeclaration({ class: "dated-snapshot", maxAgeMs: Infinity, reason: "x" }, "x")).toThrow(
+      FreshnessClassificationError,
+    );
   });
 
   test("pointer missing pointsTo throws", () => {
@@ -113,9 +113,9 @@ describe("parseFreshnessDeclaration", () => {
   });
 
   test("pointer with empty pointsTo throws", () => {
-    expect(() =>
-      parseFreshnessDeclaration({ class: "pointer", pointsTo: "", reason: "x" }, "x"),
-    ).toThrow(FreshnessClassificationError);
+    expect(() => parseFreshnessDeclaration({ class: "pointer", pointsTo: "", reason: "x" }, "x")).toThrow(
+      FreshnessClassificationError,
+    );
   });
 });
 
@@ -193,15 +193,15 @@ describe("classifyArtifact", () => {
     const badConfigs = new Map<string, SourceConfigLike>([
       ["broken", { source: "broken", output: "context/Broken.md", freshness: { class: "not-real" } }],
     ]);
-    expect(() => classifyArtifact("context/Broken.md", badConfigs, new Map())).toThrow(
-      FreshnessClassificationError,
-    );
+    expect(() => classifyArtifact("context/Broken.md", badConfigs, new Map())).toThrow(FreshnessClassificationError);
   });
 });
 
 describe("analyzeArtifactContent — content beats mtime (audit 2026-09-11, FG-02 / FG-03)", () => {
   test("entries_count: 0 in frontmatter is an empty snapshot", () => {
-    const a = analyzeArtifactContent("---\ntags: [x]\nentries_count: 0\n---\n\n# Calendar\n\n*Calendar data unavailable*\n");
+    const a = analyzeArtifactContent(
+      "---\ntags: [x]\nentries_count: 0\n---\n\n# Calendar\n\n*Calendar data unavailable*\n",
+    );
     expect(a.emptySnapshot).toBe(true);
     expect(a.emptyTemplate).toBe(false);
   });
@@ -209,13 +209,15 @@ describe("analyzeArtifactContent — content beats mtime (audit 2026-09-11, FG-0
     expect(analyzeArtifactContent("---\nentries_count: 12\n---\n- event\n").emptySnapshot).toBe(false);
   });
   test("an unfilled scaffold is an empty template", () => {
-    const text = "# Mission\n\n### M0: [Primary Mission]\n[Your primary life mission]\n\n**Why:** [Why this matters]\n**How:** [How you pursue this]\n**Timeline:** [Ongoing / By X year]\n";
+    const text =
+      "# Mission\n\n### M0: [Primary Mission]\n[Your primary life mission]\n\n**Why:** [Why this matters]\n**How:** [How you pursue this]\n**Timeline:** [Ongoing / By X year]\n";
     const a = analyzeArtifactContent(text);
     expect(a.placeholderLines).toBe(4); // the "### M0: [Primary Mission]" heading is not a body line
     expect(a.emptyTemplate).toBe(true);
   });
   test("a filled file with markdown links, wikilinks, checkboxes and short tokens is not a template", () => {
-    const text = "# Goals\n\nSee the [Live Snapshot](#live) and [[Wordsmith]].\n- [ ] todo\n- [x] done\nRated [D] by the review.\n**Status:** Active — period begins 2026-07-06\n";
+    const text =
+      "# Goals\n\nSee the [Live Snapshot](#live) and [[Wordsmith]].\n- [ ] todo\n- [x] done\nRated [D] by the review.\n**Status:** Active — period begins 2026-07-06\n";
     const a = analyzeArtifactContent(text);
     expect(a.placeholderLines).toBe(0);
     expect(a.emptyTemplate).toBe(false);

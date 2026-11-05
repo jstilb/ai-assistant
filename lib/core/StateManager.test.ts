@@ -10,11 +10,11 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { z } from "zod";
-import { join } from "path";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 
 // Import will fail until implementation exists - that's expected in RED phase
-import { createStateManager, StateManager } from "./StateManager";
+import { createStateManager } from "./StateManager.ts";
 
 // Test schemas
 const SimpleSchema = z.object({
@@ -26,11 +26,13 @@ type SimpleState = z.infer<typeof SimpleSchema>;
 
 const ComplexSchema = z.object({
   version: z.number(),
-  items: z.array(z.object({
-    id: z.string(),
-    value: z.number(),
-    active: z.boolean(),
-  })),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      value: z.number(),
+      active: z.boolean(),
+    }),
+  ),
   metadata: z.object({
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -204,14 +206,8 @@ describe("StateManager", () => {
       await manager.save({ count: 2, name: "v2" });
 
       // Check backup exists
-      const backups = (await Bun.file(TEST_BACKUP_DIR).exists())
-        ? []
-        : [];
-
       // Backup file should exist with timestamp in name
-      const files = existsSync(TEST_BACKUP_DIR)
-        ? require("fs").readdirSync(TEST_BACKUP_DIR)
-        : [];
+      const files = existsSync(TEST_BACKUP_DIR) ? require("node:fs").readdirSync(TEST_BACKUP_DIR) : [];
       expect(files.length).toBeGreaterThan(0);
     });
 
@@ -281,7 +277,7 @@ describe("StateManager", () => {
       await expect(
         manager.update(() => {
           throw new Error("Transform failed");
-        })
+        }),
       ).rejects.toThrow("Transform failed");
 
       const state = await manager.load();
@@ -322,7 +318,7 @@ describe("StateManager", () => {
 
       const saved = await manager.load();
       expect(saved.items.length).toBe(1);
-      expect(saved.items[0].id).toBe("1");
+      expect(saved.items[0]!.id).toBe("1");
     });
 
     it("should rollback on error", async () => {
@@ -346,12 +342,12 @@ describe("StateManager", () => {
         manager.transaction((state) => {
           state.items.push({ id: "new", value: 999, active: true });
           throw new Error("Rollback me");
-        })
+        }),
       ).rejects.toThrow("Rollback me");
 
       const saved = await manager.load();
       expect(saved.items.length).toBe(1);
-      expect(saved.items[0].id).toBe("original");
+      expect(saved.items[0]!.id).toBe("original");
     });
   });
 
@@ -447,7 +443,8 @@ describe("StateManager", () => {
       });
 
       let callCount = 0;
-      let lastState: SimpleState | null = null;
+      // Widened explicitly: TS does not track the assignment inside the watch callback.
+      let lastState = null as SimpleState | null;
 
       const unsubscribe = manager.watch((state) => {
         callCount++;
@@ -520,7 +517,7 @@ describe("StateManager", () => {
       const loaded = await manager.load();
 
       expect(loaded.items.length).toBe(2);
-      expect(loaded.items[0].id).toBe("a");
+      expect(loaded.items[0]!.id).toBe("a");
       expect(loaded.metadata.createdAt).toBe("2024-01-01T00:00:00Z");
     });
 
@@ -569,7 +566,7 @@ describe("StateManager", () => {
         await manager.save({ count: i, name: `write-${i}` });
       }
 
-      const { readdirSync: rd } = await import("fs");
+      const { readdirSync: rd } = await import("node:fs");
       const backupFiles = rd(TEST_BACKUP_DIR).filter((f: string) => f.endsWith(".backup.json"));
       expect(backupFiles.length).toBe(3);
     });
@@ -591,7 +588,7 @@ describe("StateManager", () => {
         await manager.save({ count: i, name: `write-${i}` });
       }
 
-      const { readdirSync: rd } = await import("fs");
+      const { readdirSync: rd } = await import("node:fs");
       const backupFiles = rd(TEST_BACKUP_DIR).filter((f: string) => f.endsWith(".backup.json"));
       // All 5 backups should be retained (no pruning). Exactly 5 writes after the file exists.
       expect(backupFiles.length).toBe(5);
@@ -611,7 +608,7 @@ describe("StateManager", () => {
 
       expect(backupPath).toContain(".backup.json");
       expect(backupPath).toContain(TEST_BACKUP_DIR);
-      const { existsSync: exSync } = await import("fs");
+      const { existsSync: exSync } = await import("node:fs");
       expect(exSync(backupPath)).toBe(true);
     });
   });
@@ -639,11 +636,11 @@ describe("StateManager", () => {
       });
 
       // Run multiple updates concurrently
-      const updates = Array.from({ length: 10 }, (_, i) =>
+      const updates = Array.from({ length: 10 }, (_, _i) =>
         manager.update((state) => ({
           ...state,
           count: state.count + 1,
-        }))
+        })),
       );
 
       await Promise.all(updates);

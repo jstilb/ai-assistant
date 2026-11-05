@@ -7,10 +7,13 @@
  * Run: bun test NotificationService.test.ts
  */
 
-import { describe, it, expect, beforeEach, afterEach, afterAll, mock, spyOn } from 'bun:test';
-import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { describe, it, expect, afterAll, mock } from "bun:test";
+import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+// biome-ignore lint/suspicious/noExplicitAny: parsed JSON of mocked calls is asserted structurally in these tests
+type AnyJson = any;
 
 // We'll import these after creating the implementation
 // import {
@@ -40,13 +43,18 @@ import { tmpdir } from 'os';
 // one in the same invocation (observed breaking DomainVocabulary.test.ts /
 // PipelineUpsertGuard.test.ts when this suite ran ahead of them in a
 // full-directory `bun test` run).
-const scratchDir = mkdtempSync(join(tmpdir(), 'notification-service-test-'));
+const scratchDir = mkdtempSync(join(tmpdir(), "notification-service-test-"));
 const ORIGINAL_KAYA_DIR = process.env.KAYA_DIR;
 const ORIGINAL_KAYA_HOME = process.env.KAYA_HOME;
 process.env.KAYA_DIR = scratchDir;
 process.env.KAYA_HOME = scratchDir;
+// Many tests below assign globalThis.fetch = mock(...) and only some restore it.
+// A leaked mock broke CachedHTTPClient.test.ts (it binds globalThis.fetch when it
+// builds a client) in a combined run, so restore the original after this file.
+const ORIGINAL_FETCH = globalThis.fetch;
 
 afterAll(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
   if (ORIGINAL_KAYA_DIR === undefined) delete process.env.KAYA_DIR;
   else process.env.KAYA_DIR = ORIGINAL_KAYA_DIR;
   if (ORIGINAL_KAYA_HOME === undefined) delete process.env.KAYA_HOME;
@@ -56,27 +64,27 @@ afterAll(() => {
 // The default channel is 'log' (record-only, never fetches), so tests of the
 // network send path (retry, fallback, queue, batch, dead-letter) route through
 // the Discord channel against a mocked fetch instead.
-const DISCORD_WEBHOOK = 'https://discord.test/webhook';
-const DISCORD = { discordWebhook: DISCORD_WEBHOOK, defaultChannel: 'discord' as const };
+const DISCORD_WEBHOOK = "https://discord.test/webhook";
+const DISCORD = { discordWebhook: DISCORD_WEBHOOK, defaultChannel: "discord" as const };
 
-describe('NotificationService', () => {
-  describe('createNotificationService()', () => {
-    it('should create a service instance with default config', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+describe("NotificationService", () => {
+  describe("createNotificationService()", () => {
+    it("should create a service instance with default config", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
       const service = createNotificationService();
       expect(service).toBeDefined();
-      expect(typeof service.notify).toBe('function');
-      expect(typeof service.notifySync).toBe('function');
-      expect(typeof service.batch).toBe('function');
-      expect(typeof service.isServiceHealthy).toBe('function');
-      expect(typeof service.getQueuedCount).toBe('function');
-      expect(typeof service.flush).toBe('function');
+      expect(typeof service.notify).toBe("function");
+      expect(typeof service.notifySync).toBe("function");
+      expect(typeof service.batch).toBe("function");
+      expect(typeof service.isServiceHealthy).toBe("function");
+      expect(typeof service.getQueuedCount).toBe("function");
+      expect(typeof service.flush).toBe("function");
     });
 
-    it('should accept custom configuration', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should accept custom configuration", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
       const service = createNotificationService({
-        defaultChannel: 'telegram',
+        defaultChannel: "telegram",
         batchWindowMs: 100,
         maxRetries: 5,
       });
@@ -84,9 +92,9 @@ describe('NotificationService', () => {
     });
   });
 
-  describe('notify()', () => {
-    it('should record to the log channel by default, with no network call', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("notify()", () => {
+    it("should record to the log channel by default, with no network call", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       const mockFetch = mock(async () => ({ ok: true, status: 200 }));
       globalThis.fetch = mockFetch as unknown as typeof fetch;
@@ -98,19 +106,19 @@ describe('NotificationService', () => {
       expect(delivered).toBe(true);
       expect(mockFetch).not.toHaveBeenCalled();
 
-      const logPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
-      const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+      const logPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
       const entry = JSON.parse(lines[lines.length - 1]!);
       expect(entry.message).toBe(uniqueMessage);
-      expect(entry.channel).toBe('log');
-      expect(entry.event).toBe('sent');
+      expect(entry.channel).toBe("log");
+      expect(entry.event).toBe("sent");
     });
 
-    it('should support priority levels', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should support priority levels", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      let capturedBody: any;
-      globalThis.fetch = mock(async (url, opts) => {
+      let capturedBody: AnyJson;
+      globalThis.fetch = mock(async (_url, opts) => {
         if (opts?.body) {
           capturedBody = JSON.parse(opts.body as string);
         }
@@ -119,16 +127,16 @@ describe('NotificationService', () => {
 
       const service = createNotificationService(DISCORD);
 
-      await service.notify('Critical alert', { priority: 'critical' });
+      await service.notify("Critical alert", { priority: "critical" });
 
       expect(capturedBody?.embeds?.[0]?.color).toBe(0xef4444);
     });
 
-    it('should use agentName in notification title', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should use agentName in notification title", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      let capturedBody: any;
-      globalThis.fetch = mock(async (url, opts) => {
+      let capturedBody: AnyJson;
+      globalThis.fetch = mock(async (_url, opts) => {
         if (opts?.body) {
           capturedBody = JSON.parse(opts.body as string);
         }
@@ -136,96 +144,96 @@ describe('NotificationService', () => {
       }) as unknown as typeof fetch;
 
       const service = createNotificationService(DISCORD);
-      await service.notify('Task complete', { agentName: 'Engineer' });
+      await service.notify("Task complete", { agentName: "Engineer" });
 
-      expect(capturedBody?.embeds?.[0]?.title).toBe('Engineer');
+      expect(capturedBody?.embeds?.[0]?.title).toBe("Engineer");
     });
   });
 
-  describe('notify() delivery-result reporting', () => {
-    it('should report delivered:false when all channel attempts fail (module-level 400 caused dead-letter never surfaces to caller today)', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("notify() delivery-result reporting", () => {
+    it("should report delivered:false when all channel attempts fail (module-level 400 caused dead-letter never surfaces to caller today)", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: false, status: 500 })) as unknown as typeof fetch;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-      const delivered = await service.notify('All channels down');
+      const delivered = await service.notify("All channels down");
 
       expect(delivered).toBe(false);
     });
 
-    it('should report a truthy delivered result when the send succeeds', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should report a truthy delivered result when the send succeeds", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: true, status: 200 })) as unknown as typeof fetch;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-      const delivered = await service.notify('Delivered fine');
+      const delivered = await service.notify("Delivered fine");
 
       expect(delivered).toBe(true);
     });
   });
 
-  describe('durable dead-letter (B6, S4c) — forensics for exhausted deliveries', () => {
-    it('appends a row to MEMORY/NOTIFICATIONS/dead-letter.jsonl when every channel/retry/fallback attempt fails', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("durable dead-letter (B6, S4c) — forensics for exhausted deliveries", () => {
+    it("appends a row to MEMORY/NOTIFICATIONS/dead-letter.jsonl when every channel/retry/fallback attempt fails", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: false, status: 500 })) as unknown as typeof fetch;
 
-      const deadLetterPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'dead-letter.jsonl');
+      const deadLetterPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "dead-letter.jsonl");
       const preExisting = existsSync(deadLetterPath)
-        ? readFileSync(deadLetterPath, 'utf-8').trim().split('\n').filter(Boolean).length
+        ? readFileSync(deadLetterPath, "utf-8").trim().split("\n").filter(Boolean).length
         : 0;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
       const uniqueMessage = `Dead-letter probe ${Date.now()}`;
-      const delivered = await service.notify(uniqueMessage, { channel: 'discord' });
+      const delivered = await service.notify(uniqueMessage, { channel: "discord" });
 
       expect(delivered).toBe(false);
       expect(existsSync(deadLetterPath)).toBe(true);
 
-      const lines = readFileSync(deadLetterPath, 'utf-8').trim().split('\n').filter(Boolean);
+      const lines = readFileSync(deadLetterPath, "utf-8").trim().split("\n").filter(Boolean);
       expect(lines.length).toBe(preExisting + 1);
 
       const entry = JSON.parse(lines[lines.length - 1]!);
       expect(entry.message).toBe(uniqueMessage);
-      expect(entry.channel).toBe('discord');
-      expect(entry.reason).toBe('all channels/retries/fallback exhausted');
-      expect(typeof entry.timestamp).toBe('string');
+      expect(entry.channel).toBe("discord");
+      expect(entry.reason).toBe("all channels/retries/fallback exhausted");
+      expect(typeof entry.timestamp).toBe("string");
     });
 
-    it('does NOT append a dead-letter row when delivery succeeds', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("does NOT append a dead-letter row when delivery succeeds", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: true, status: 200 })) as unknown as typeof fetch;
 
-      const deadLetterPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'dead-letter.jsonl');
+      const deadLetterPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "dead-letter.jsonl");
       const preExisting = existsSync(deadLetterPath)
-        ? readFileSync(deadLetterPath, 'utf-8').trim().split('\n').filter(Boolean).length
+        ? readFileSync(deadLetterPath, "utf-8").trim().split("\n").filter(Boolean).length
         : 0;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-      const delivered = await service.notify('Delivered fine, no dead-letter', { channel: 'discord' });
+      const delivered = await service.notify("Delivered fine, no dead-letter", { channel: "discord" });
 
       expect(delivered).toBe(true);
       const postCount = existsSync(deadLetterPath)
-        ? readFileSync(deadLetterPath, 'utf-8').trim().split('\n').filter(Boolean).length
+        ? readFileSync(deadLetterPath, "utf-8").trim().split("\n").filter(Boolean).length
         : 0;
       expect(postCount).toBe(preExisting);
     });
   });
 
-  describe('sendTelegram — HTTP 400 parse_mode fallback', () => {
-    it('retries once WITHOUT parse_mode when Telegram returns HTTP 400, and reports delivered:true on that fallback success', async () => {
+  describe("sendTelegram — HTTP 400 parse_mode fallback", () => {
+    it("retries once WITHOUT parse_mode when Telegram returns HTTP 400, and reports delivered:true on that fallback success", async () => {
       writeFileSync(
-        join(scratchDir, 'secrets.json'),
-        JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+        join(scratchDir, "secrets.json"),
+        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
       );
 
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      const bodies: any[] = [];
-      globalThis.fetch = mock(async (_url: unknown, opts: any) => {
+      const bodies: AnyJson[] = [];
+      globalThis.fetch = mock(async (_url: unknown, opts: AnyJson) => {
         bodies.push(opts?.body ? JSON.parse(opts.body as string) : {});
         if (bodies.length === 1) {
           return { ok: false, status: 400 };
@@ -234,65 +242,65 @@ describe('NotificationService', () => {
       }) as unknown as typeof fetch;
 
       const service = createNotificationService({ maxRetries: 0 });
-      const delivered = await service.notify('Digest with [unclosed bracket', { channel: 'telegram' });
+      const delivered = await service.notify("Digest with [unclosed bracket", { channel: "telegram" });
 
       expect(delivered).toBe(true);
       expect(bodies).toHaveLength(2);
-      expect(bodies[0].parse_mode).toBe('Markdown');
+      expect(bodies[0].parse_mode).toBe("Markdown");
       expect(bodies[1].parse_mode).toBeUndefined();
     });
 
-    it('reports delivered:false when both the parse_mode attempt AND the fallback attempt fail', async () => {
+    it("reports delivered:false when both the parse_mode attempt AND the fallback attempt fail", async () => {
       writeFileSync(
-        join(scratchDir, 'secrets.json'),
-        JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+        join(scratchDir, "secrets.json"),
+        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
       );
 
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: false, status: 400 })) as unknown as typeof fetch;
 
       const service = createNotificationService({ maxRetries: 0 });
-      const delivered = await service.notify('Still broken', { channel: 'telegram' });
+      const delivered = await service.notify("Still broken", { channel: "telegram" });
 
       expect(delivered).toBe(false);
     });
 
-    it('applies escaping exactly ONCE in the send path (single backslash, not double-escaped) and preserves the *title* wrapper NotificationService itself adds (C1)', async () => {
+    it("applies escaping exactly ONCE in the send path (single backslash, not double-escaped) and preserves the *title* wrapper NotificationService itself adds (C1)", async () => {
       writeFileSync(
-        join(scratchDir, 'secrets.json'),
-        JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+        join(scratchDir, "secrets.json"),
+        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
       );
 
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      const bodies: any[] = [];
-      globalThis.fetch = mock(async (_url: unknown, opts: any) => {
+      const bodies: AnyJson[] = [];
+      globalThis.fetch = mock(async (_url: unknown, opts: AnyJson) => {
         bodies.push(opts?.body ? JSON.parse(opts.body as string) : {});
         return { ok: true, status: 200 }; // succeeds on the FIRST (parse_mode) attempt now that it's escaped
       }) as unknown as typeof fetch;
 
       const service = createNotificationService({ maxRetries: 0 });
       const delivered = await service.notify('[STALE] "digest-job" (job-42) — no run in 3d', {
-        channel: 'telegram',
-        agentName: 'Kaya',
+        channel: "telegram",
+        agentName: "Kaya",
       });
 
       expect(delivered).toBe(true);
       expect(bodies).toHaveLength(1); // no 400 → no fallback retry needed
-      expect(bodies[0].parse_mode).toBe('Markdown');
+      expect(bodies[0].parse_mode).toBe("Markdown");
       // Message body escaped exactly once: one backslash before '[', not two.
-      expect(bodies[0].text).toContain('\\[STALE]');
-      expect(bodies[0].text).not.toContain('\\\\[STALE]');
+      expect(bodies[0].text).toContain("\\[STALE]");
+      expect(bodies[0].text).not.toContain("\\\\[STALE]");
       // NotificationService's own bold-title wrapper survives UNESCAPED —
       // only caller-supplied message content is escaped.
-      expect(bodies[0].text.startsWith('*Kaya*\n\n')).toBe(true);
+      expect(bodies[0].text.startsWith("*Kaya*\n\n")).toBe(true);
     });
   });
 
-  describe('escapeLegacyMarkdown() — legacy-Markdown escaping at the send choke point (C1)', () => {
-    it('escapes the legacy-Markdown set (_, *, `, [) but leaves other punctuation (), ], ., -, quotes untouched', async () => {
-      const { escapeLegacyMarkdown } = await import('./NotificationService');
+  describe("escapeLegacyMarkdown() — legacy-Markdown escaping at the send choke point (C1)", () => {
+    it("escapes the legacy-Markdown set (_, *, `, [) but leaves other punctuation (), ], ., -, quotes untouched", async () => {
+      const { escapeLegacyMarkdown } = await import("./NotificationService.ts");
 
       const input = '[STALE] "digest-job" (job-42) - no run in 3d';
       const output = escapeLegacyMarkdown(input);
@@ -300,33 +308,33 @@ describe('NotificationService', () => {
       expect(output).toBe('\\[STALE] "digest-job" (job-42) - no run in 3d');
     });
 
-    it('escapes every bracket in a realistic multi-line digest fixture with repeated [jobId]-shaped brackets', async () => {
-      const { escapeLegacyMarkdown } = await import('./NotificationService');
+    it("escapes every bracket in a realistic multi-line digest fixture with repeated [jobId]-shaped brackets", async () => {
+      const { escapeLegacyMarkdown } = await import("./NotificationService.ts");
 
       const input = [
-        'Digest:',
-        '- [STALE] job-abc (job-1) - no run in 3d',
-        '- [jobId] evals-nightly failed 3x',
-        '- normal line with *no* brackets here',
-      ].join('\n');
+        "Digest:",
+        "- [STALE] job-abc (job-1) - no run in 3d",
+        "- [jobId] evals-nightly failed 3x",
+        "- normal line with *no* brackets here",
+      ].join("\n");
 
       const output = escapeLegacyMarkdown(input);
 
       expect(output).toBe(
         [
-          'Digest:',
-          '- \\[STALE] job-abc (job-1) - no run in 3d',
-          '- \\[jobId] evals-nightly failed 3x',
-          '- normal line with \\*no\\* brackets here',
-        ].join('\n')
+          "Digest:",
+          "- \\[STALE] job-abc (job-1) - no run in 3d",
+          "- \\[jobId] evals-nightly failed 3x",
+          "- normal line with \\*no\\* brackets here",
+        ].join("\n"),
       );
       // Structural check: every literal '[' in the output is immediately
       // preceded by a backslash (accepted-shaped for legacy Markdown).
       expect(/(?<!\\)\[/.test(output)).toBe(false);
     });
 
-    it('escapes backslashes FIRST — a payload with backslashes AND specials is not double- or mis-escaped', async () => {
-      const { escapeLegacyMarkdown } = await import('./NotificationService');
+    it("escapes backslashes FIRST — a payload with backslashes AND specials is not double- or mis-escaped", async () => {
+      const { escapeLegacyMarkdown } = await import("./NotificationService.ts");
 
       // Independent reference oracle: a single left-to-right pass over the
       // ORIGINAL characters, escaping backslash and the legacy-Markdown set
@@ -335,20 +343,20 @@ describe('NotificationService', () => {
       // implementation's two-pass (backslash-first) approach produces the
       // same result without double-escaping the backslashes it just added.
       function referenceEscape(text: string): string {
-        let out = '';
+        let out = "";
         for (const ch of text) {
-          if (ch === '\\') out += '\\\\';
-          else if (ch === '_' || ch === '*' || ch === '`' || ch === '[') out += '\\' + ch;
+          if (ch === "\\") out += "\\\\";
+          else if (ch === "_" || ch === "*" || ch === "`" || ch === "[") out += "\\" + ch;
           else out += ch;
         }
         return out;
       }
 
       const fixtures = [
-        'C:\\path\\[oops]',
-        'back\\slash then [bracket] and *star* and _underscore_ and `tick`',
-        '\\\\already\\doubled\\[x]',
-        'no specials or backslashes here',
+        "C:\\path\\[oops]",
+        "back\\slash then [bracket] and *star* and _underscore_ and `tick`",
+        "\\\\already\\doubled\\[x]",
+        "no specials or backslashes here",
       ];
 
       for (const input of fixtures) {
@@ -359,28 +367,44 @@ describe('NotificationService', () => {
       // doesn't rely on the oracle alone: input has 2 backslashes + 1 '[';
       // backslash-first means each backslash doubles, THEN '[' gets its
       // own escaping backslash prepended.
-      const input = 'C:\\path\\[oops]';
+      const input = "C:\\path\\[oops]";
       const output = escapeLegacyMarkdown(input);
       expect([...output]).toEqual([
-        'C', ':', '\\', '\\', 'p', 'a', 't', 'h', '\\', '\\', '\\', '[', 'o', 'o', 'p', 's', ']',
+        "C",
+        ":",
+        "\\",
+        "\\",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\\",
+        "\\",
+        "\\",
+        "[",
+        "o",
+        "o",
+        "p",
+        "s",
+        "]",
       ]);
     });
 
-    it('is a pure function with no side effects on repeated calls (safe to be the single call site in the send path)', async () => {
-      const { escapeLegacyMarkdown } = await import('./NotificationService');
+    it("is a pure function with no side effects on repeated calls (safe to be the single call site in the send path)", async () => {
+      const { escapeLegacyMarkdown } = await import("./NotificationService.ts");
 
-      const input = '[repeat] *me*';
+      const input = "[repeat] *me*";
       const first = escapeLegacyMarkdown(input);
       const second = escapeLegacyMarkdown(input);
 
       expect(first).toBe(second);
-      expect(input).toBe('[repeat] *me*'); // input itself never mutated
+      expect(input).toBe("[repeat] *me*"); // input itself never mutated
     });
   });
 
-  describe('notifySync()', () => {
-    it('should be fire-and-forget (non-blocking)', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("notifySync()", () => {
+    it("should be fire-and-forget (non-blocking)", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let fetchCalled = false;
       globalThis.fetch = mock(async () => {
@@ -392,7 +416,7 @@ describe('NotificationService', () => {
 
       const service = createNotificationService(DISCORD);
       const start = Date.now();
-      service.notifySync('Fire and forget');
+      service.notifySync("Fire and forget");
       const elapsed = Date.now() - start;
 
       // Should return immediately (not wait for fetch)
@@ -404,13 +428,13 @@ describe('NotificationService', () => {
     });
   });
 
-  describe('batch()', () => {
-    it('should batch multiple messages into one notification', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("batch()", () => {
+    it("should batch multiple messages into one notification", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let callCount = 0;
-      let lastBody: any;
-      globalThis.fetch = mock(async (url, opts) => {
+      let lastBody: AnyJson;
+      globalThis.fetch = mock(async (_url, opts) => {
         callCount++;
         if (opts?.body) {
           lastBody = JSON.parse(opts.body as string);
@@ -420,74 +444,90 @@ describe('NotificationService', () => {
 
       const service = createNotificationService({ ...DISCORD, batchWindowMs: 50 });
 
-      await service.batch(['Step 1 complete', 'Step 2 complete', 'Step 3 complete']);
+      await service.batch(["Step 1 complete", "Step 2 complete", "Step 3 complete"]);
 
       // Should have combined messages into one embed
       expect(callCount).toBe(1);
       const description = lastBody?.embeds?.[0]?.description;
-      expect(description).toContain('Step 1');
-      expect(description).toContain('Step 2');
-      expect(description).toContain('Step 3');
+      expect(description).toContain("Step 1");
+      expect(description).toContain("Step 2");
+      expect(description).toContain("Step 3");
+    });
+
+    it("passes the options given to batch() on to the send", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+
+      let lastBody: AnyJson;
+      globalThis.fetch = mock(async (_url, opts) => {
+        if (opts?.body) lastBody = JSON.parse(opts.body as string);
+        return { ok: true, status: 200 };
+      }) as unknown as typeof fetch;
+
+      const service = createNotificationService({ ...DISCORD, batchWindowMs: 50 });
+      await service.batch(["one", "two"], { agentName: "BatchAgentX" });
+
+      // agentName was silently dropped before (batch() ignored its options argument).
+      expect(JSON.stringify(lastBody)).toContain("BatchAgentX");
     });
   });
 
-  describe('isServiceHealthy()', () => {
-    it('should report the log channel as always healthy', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("isServiceHealthy()", () => {
+    it("should report the log channel as always healthy", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       const service = createNotificationService();
 
       expect(await service.isServiceHealthy()).toBe(true);
-      expect(await service.isServiceHealthy('log')).toBe(true);
+      expect(await service.isServiceHealthy("log")).toBe(true);
     });
 
-    it('should report discord healthy only when a webhook is configured', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should report discord healthy only when a webhook is configured", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      expect(await createNotificationService(DISCORD).isServiceHealthy('discord')).toBe(true);
-      expect(await createNotificationService({ discordWebhook: '' }).isServiceHealthy('discord')).toBe(false);
+      expect(await createNotificationService(DISCORD).isServiceHealthy("discord")).toBe(true);
+      expect(await createNotificationService({ discordWebhook: "" }).isServiceHealthy("discord")).toBe(false);
     });
   });
 
-  describe('retry with backoff', () => {
-    it('should retry on failure with exponential backoff', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("retry with backoff", () => {
+    it("should retry on failure with exponential backoff", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let attempts = 0;
       globalThis.fetch = mock(async () => {
         attempts++;
         if (attempts < 3) {
-          throw new Error('Network error');
+          throw new Error("Network error");
         }
         return { ok: true, status: 200 };
       }) as unknown as typeof fetch;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 3 });
-      await service.notify('Retry test', { retry: 3 });
+      await service.notify("Retry test", { retry: 3 });
 
       expect(attempts).toBe(3);
     });
   });
 
-  describe('queue for offline', () => {
-    it('should queue notifications when service is down', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("queue for offline", () => {
+    it("should queue notifications when service is down", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => {
-        throw new Error('Service unavailable');
+        throw new Error("Service unavailable");
       }) as unknown as typeof fetch;
 
       const service = createNotificationService({ ...DISCORD, maxRetries: 1 });
 
       // This should not throw but queue the message
-      await service.notify('Queued message');
+      await service.notify("Queued message");
 
       const queuedCount = service.getQueuedCount();
       expect(queuedCount).toBeGreaterThanOrEqual(0); // May be 0 if retry exhausted
     });
 
-    it('should flush queued notifications when service recovers', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("should flush queued notifications when service recovers", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let failCount = 0;
       let successCount = 0;
@@ -495,7 +535,7 @@ describe('NotificationService', () => {
       globalThis.fetch = mock(async () => {
         if (failCount < 2) {
           failCount++;
-          throw new Error('Service unavailable');
+          throw new Error("Service unavailable");
         }
         successCount++;
         return { ok: true, status: 200 };
@@ -504,8 +544,8 @@ describe('NotificationService', () => {
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
 
       // Queue some messages while "offline"
-      await service.notify('Message 1');
-      await service.notify('Message 2');
+      await service.notify("Message 1");
+      await service.notify("Message 2");
 
       // Now service is "online" - flush
       failCount = 99; // Make fetch succeed
@@ -515,58 +555,58 @@ describe('NotificationService', () => {
     });
   });
 
-  describe('fallback channels', () => {
-    it('should fallback to discord if telegram fails', async () => {
+  describe("fallback channels", () => {
+    it("should fallback to discord if telegram fails", async () => {
       writeFileSync(
-        join(scratchDir, 'secrets.json'),
-        JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+        join(scratchDir, "secrets.json"),
+        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
       );
 
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       const calledUrls: string[] = [];
       globalThis.fetch = mock(async (url) => {
         calledUrls.push(url as string);
-        if ((url as string).includes('api.telegram.org')) {
-          throw new Error('Telegram down');
+        if ((url as string).includes("api.telegram.org")) {
+          throw new Error("Telegram down");
         }
         return { ok: true, status: 200 };
       }) as unknown as typeof fetch;
 
       const service = createNotificationService({
-        discordWebhook: 'https://discord.com/api/webhooks/test-fallback',
+        discordWebhook: "https://discord.com/api/webhooks/test-fallback",
         maxRetries: 0,
       });
 
-      const delivered = await service.notify('Fallback test', { fallback: true, channel: 'telegram' });
+      const delivered = await service.notify("Fallback test", { fallback: true, channel: "telegram" });
 
       // telegram's fallback chain is ['discord'] (push/ntfy.sh removed in B6,
       // voice removed 2026-09-29).
       expect(delivered).toBe(true);
-      expect(calledUrls.some((u) => u.includes('api.telegram.org'))).toBe(true);
-      expect(calledUrls.some((u) => u.includes('discord.com'))).toBe(true);
+      expect(calledUrls.some((u) => u.includes("api.telegram.org"))).toBe(true);
+      expect(calledUrls.some((u) => u.includes("discord.com"))).toBe(true);
     });
   });
 
-  describe('channel-specific behavior', () => {
-    it('should send to discord channel when specified', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("channel-specific behavior", () => {
+    it("should send to discord channel when specified", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      let calledUrl = '';
+      let calledUrl = "";
       globalThis.fetch = mock(async (url) => {
         calledUrl = url as string;
         return { ok: true, status: 200 };
       }) as unknown as typeof fetch;
 
-      const service = createNotificationService({ discordWebhook: 'https://discord.com/api/webhooks/my-hook' });
-      await service.notify('Discord message', { channel: 'discord' });
+      const service = createNotificationService({ discordWebhook: "https://discord.com/api/webhooks/my-hook" });
+      await service.notify("Discord message", { channel: "discord" });
 
-      expect(calledUrl).toBe('https://discord.com/api/webhooks/my-hook');
+      expect(calledUrl).toBe("https://discord.com/api/webhooks/my-hook");
     });
   });
 
-  describe('CLI interface', () => {
-    it('should support --test flag for testing', async () => {
+  describe("CLI interface", () => {
+    it("should support --test flag for testing", async () => {
       // End-to-end via a real subprocess (`bun run ./NotificationService.ts
       // --test ...`). With no --channel the CLI uses the default 'log'
       // channel, so the only effect is a notifications.jsonl line under the
@@ -591,27 +631,27 @@ describe('NotificationService', () => {
       //     empirically: a spawned child printed `undefined` for a
       //     just-assigned process.env var until `env: process.env` was added.
       const uniqueMessage = `Hello CLI ${Date.now()}`;
-      const proc = Bun.spawn(['bun', 'run', './NotificationService.ts', '--test', uniqueMessage], {
+      const proc = Bun.spawn(["bun", "run", "./NotificationService.ts", "--test", uniqueMessage], {
         cwd: import.meta.dir,
         env: { ...process.env },
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdout: "pipe",
+        stderr: "pipe",
       });
 
       const exitCode = await proc.exited;
       expect(exitCode).toBe(0);
 
       // Hermeticity proof: the line landed in THIS suite's sandbox log.
-      const logPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
-      const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+      const logPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
       const entry = lines.map((l) => JSON.parse(l)).find((e) => e.message === uniqueMessage);
-      expect(entry?.channel).toBe('log');
-      expect(entry?.event).toBe('sent');
+      expect(entry?.channel).toBe("log");
+      expect(entry?.event).toBe("sent");
     }, 30000);
   });
 
-  describe('laziness — path resolution is call-time, not import-time (E2 regression)', () => {
-    it('writes the notification log under a KAYA_HOME repointed AFTER the module was already imported', async () => {
+  describe("laziness — path resolution is call-time, not import-time (E2 regression)", () => {
+    it("writes the notification log under a KAYA_HOME repointed AFTER the module was already imported", async () => {
       // NotificationService was already imported (and thus module-initialized)
       // via the scratchDir pin at the top of this file, and again by every
       // `it()` above via `await import('./NotificationService')` — Bun caches
@@ -619,9 +659,9 @@ describe('NotificationService', () => {
       // real-world failure mode: a long-lived process (or a test runner that
       // ran an unrelated suite first) imports NotificationService once before
       // the "real" KAYA_HOME for this run is known.
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
 
-      const freshDir = mkdtempSync(join(tmpdir(), 'notification-service-laziness-'));
+      const freshDir = mkdtempSync(join(tmpdir(), "notification-service-laziness-"));
       const uniqueMessage = `Laziness regression probe ${Date.now()}`;
 
       // Repoint AFTER the module was already imported — this is exactly the
@@ -641,21 +681,21 @@ describe('NotificationService', () => {
         globalThis.fetch = mock(async () => ({ ok: false, status: 500 })) as unknown as typeof fetch;
 
         const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-        await service.notify(uniqueMessage, { channel: 'discord' });
+        await service.notify(uniqueMessage, { channel: "discord" });
 
         // On the OLD frozen-const code, this write would have landed under
         // scratchDir (the home pinned at first import) instead of freshDir.
-        const newLogPath = join(freshDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
+        const newLogPath = join(freshDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
         expect(existsSync(newLogPath)).toBe(true);
-        const newLines = readFileSync(newLogPath, 'utf-8').trim().split('\n').filter(Boolean);
+        const newLines = readFileSync(newLogPath, "utf-8").trim().split("\n").filter(Boolean);
         expect(newLines.some((l) => JSON.parse(l).message === uniqueMessage)).toBe(true);
 
         // Guard against a false pass: confirm the probe did NOT also (or
         // instead) land in the pre-repoint scratchDir — that's the exact
         // symptom of the frozen-path bug.
-        const staleLogPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
+        const staleLogPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
         if (existsSync(staleLogPath)) {
-          const staleLines = readFileSync(staleLogPath, 'utf-8').trim().split('\n').filter(Boolean);
+          const staleLines = readFileSync(staleLogPath, "utf-8").trim().split("\n").filter(Boolean);
           expect(staleLines.some((l) => JSON.parse(l).message === uniqueMessage)).toBe(false);
         }
       } finally {
@@ -667,9 +707,9 @@ describe('NotificationService', () => {
     });
   });
 
-  describe('hermetic guard fires BEFORE the channel sender (slice 3.3)', () => {
-    it('rejects before any fetch when NODE_ENV=test and KAYA_HOME is unpinned (live default)', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+  describe("hermetic guard fires BEFORE the channel sender (slice 3.3)", () => {
+    it("rejects before any fetch when NODE_ENV=test and KAYA_HOME is unpinned (live default)", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let fetchCalled = false;
       const originalFetch = globalThis.fetch;
@@ -688,9 +728,7 @@ describe('NotificationService', () => {
       delete process.env.KAYA_DIR;
       try {
         const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-        await expect(service.notify('should never reach the network')).rejects.toThrow(
-          '[hermetic-guard]'
-        );
+        await expect(service.notify("should never reach the network")).rejects.toThrow("[hermetic-guard]");
         expect(fetchCalled).toBe(false);
       } finally {
         globalThis.fetch = originalFetch;
@@ -701,8 +739,8 @@ describe('NotificationService', () => {
       }
     });
 
-    it('proceeds to the channel sender when KAYA_HOME is pinned to a sandbox', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("proceeds to the channel sender when KAYA_HOME is pinned to a sandbox", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       let fetchCalled = false;
       globalThis.fetch = mock(async () => {
@@ -713,14 +751,14 @@ describe('NotificationService', () => {
       // scratchDir is pinned at the top of this file for the whole suite —
       // KAYA_HOME here is a real mkdtemp sandbox, never the live default.
       const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-      const delivered = await service.notify('fine to send in the sandbox');
+      const delivered = await service.notify("fine to send in the sandbox");
 
       expect(delivered).toBe(true);
       expect(fetchCalled).toBe(true);
     });
 
-    it('notifySync logs a [hermetic-guard]-prefixed error to console instead of swallowing it silently', async () => {
-      const { createNotificationService } = await import('./NotificationService');
+    it("notifySync logs a [hermetic-guard]-prefixed error to console instead of swallowing it silently", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
 
       globalThis.fetch = mock(async () => ({ ok: true, status: 200 })) as unknown as typeof fetch;
 
@@ -736,14 +774,12 @@ describe('NotificationService', () => {
       delete process.env.KAYA_DIR;
       try {
         const service = createNotificationService({ ...DISCORD, maxRetries: 0 });
-        service.notifySync('fire and forget while unpinned');
+        service.notifySync("fire and forget while unpinned");
 
         // Let the fire-and-forget promise chain settle.
         await new Promise((r) => setTimeout(r, 20));
 
-        expect(
-          errors.some((e) => typeof e === 'string' && e.startsWith('[hermetic-guard]'))
-        ).toBe(true);
+        expect(errors.some((e) => typeof e === "string" && e.startsWith("[hermetic-guard]"))).toBe(true);
       } finally {
         console.error = originalConsoleError;
         if (savedHome === undefined) delete process.env.KAYA_HOME;
@@ -755,55 +791,55 @@ describe('NotificationService', () => {
   });
 });
 
-describe('Module exports', () => {
-  it('should export notify function', async () => {
-    const module = await import('./NotificationService');
-    expect(typeof module.notify).toBe('function');
+describe("Module exports", () => {
+  it("should export notify function", async () => {
+    const module = await import("./NotificationService.ts");
+    expect(typeof module.notify).toBe("function");
   });
 
-  it('should export notifySync function', async () => {
-    const module = await import('./NotificationService');
-    expect(typeof module.notifySync).toBe('function');
+  it("should export notifySync function", async () => {
+    const module = await import("./NotificationService.ts");
+    expect(typeof module.notifySync).toBe("function");
   });
 
-  it('should export createNotificationService function', async () => {
-    const module = await import('./NotificationService');
-    expect(typeof module.createNotificationService).toBe('function');
+  it("should export createNotificationService function", async () => {
+    const module = await import("./NotificationService.ts");
+    expect(typeof module.createNotificationService).toBe("function");
   });
 
-  it('should export escapeLegacyMarkdown function (C1)', async () => {
-    const module = await import('./NotificationService');
-    expect(typeof module.escapeLegacyMarkdown).toBe('function');
+  it("should export escapeLegacyMarkdown function (C1)", async () => {
+    const module = await import("./NotificationService.ts");
+    expect(typeof module.escapeLegacyMarkdown).toBe("function");
   });
 });
 
-describe('Telegram push switch (notifications.telegramPush.enabled)', () => {
-  it('suppresses the send, logs it, and reports handled when the switch is off', async () => {
-    const { clearAllCaches } = await import('./ConfigLoader');
-    const settingsPath = join(scratchDir, 'settings.json');
+describe("Telegram push switch (notifications.telegramPush.enabled)", () => {
+  it("suppresses the send, logs it, and reports handled when the switch is off", async () => {
+    const { clearAllCaches } = await import("./ConfigLoader.ts");
+    const settingsPath = join(scratchDir, "settings.json");
     writeFileSync(settingsPath, JSON.stringify({ notifications: { telegramPush: { enabled: false } } }));
     writeFileSync(
-      join(scratchDir, 'secrets.json'),
-      JSON.stringify({ telegram: { bot_token: 'test-bot-token', chat_id: '12345' } })
+      join(scratchDir, "secrets.json"),
+      JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
     );
     clearAllCaches();
 
     try {
-      const { createNotificationService } = await import('./NotificationService');
+      const { createNotificationService } = await import("./NotificationService.ts");
       const mockFetch = mock(async () => ({ ok: true, status: 200 }));
       globalThis.fetch = mockFetch as unknown as typeof fetch;
 
       const message = `Push-off probe ${Date.now()}`;
-      const delivered = await createNotificationService().notify(message, { channel: 'telegram', fallback: true });
+      const delivered = await createNotificationService().notify(message, { channel: "telegram", fallback: true });
 
       expect(delivered).toBe(true);
       expect(mockFetch).not.toHaveBeenCalled();
-      const logPath = join(scratchDir, 'MEMORY', 'NOTIFICATIONS', 'notifications.jsonl');
-      const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+      const logPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
       const entry = JSON.parse(lines[lines.length - 1]!);
       expect(entry.message).toBe(message);
-      expect(entry.channel).toBe('telegram');
-      expect(entry.event).toBe('suppressed');
+      expect(entry.channel).toBe("telegram");
+      expect(entry.event).toBe("suppressed");
     } finally {
       rmSync(settingsPath, { force: true });
       clearAllCaches();

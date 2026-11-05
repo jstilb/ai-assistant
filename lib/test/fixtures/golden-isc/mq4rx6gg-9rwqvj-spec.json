@@ -1,0 +1,48 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mq4rx6gg-9rwqvj-spec.md",
+  "layoutNote": "3-col (canvas spec)",
+  "rowCount": 8,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Report file exists at agreed path (`~/Desktop/obsidian/Research/mexican-dual-citizenship.md` or `MEMORY/research/mexican-dual-citizenship.md`) with a frontmatter `as_of` date of 2026-06-11",
+      "verifyMethod": "File present at path; `as_of` field or equivalent date header visible at top of file"
+    },
+    {
+      "number": 2,
+      "description": "Eligibility-route matrix covers ≥4 routes (descent, 5-yr ordinary, 2-yr reduced categories, \"distinguished services\") with columns: route name, eligibility criteria, residency years required, key documents, estimated cost, timeline",
+      "verifyMethod": "Matrix table present with ≥4 rows and ≥5 columns; \"citizenship by investment\" explicitly addressed and corrected in a note"
+    },
+    {
+      "number": 3,
+      "description": "Every factual legal claim cites a primary official source; ≥5 distinct official URLs cited (from sre.gob.mx, gob.mx, inm.gob.mx, consulmex.sre.gob.mx, travel.state.gov, mx.usembassy.gov, irs.gov, or dof.gob.mx family)",
+      "verifyMethod": "Spot-check: randomly select 5 cited URLs and confirm each (a) resolves without 404 and (b) the page content supports the stated claim"
+    },
+    {
+      "number": 4,
+      "description": "Both gating [NEEDS_INPUT] questions appear verbatim in a clearly labelled \"Personalization Gating\" section: (Q1) \"Do you have a Mexican-born parent or grandparent?\" and (Q2) \"Are you married to, or do you plan to marry, a Mexican citizen?\" with explicit route implications for each answer",
+      "verifyMethod": "Section exists; both questions present with a ≥1-sentence explanation of how each answer changes the eligible routes"
+    },
+    {
+      "number": 5,
+      "description": "A \"US Dual-Nationality & Tax\" section covers: (a) US permits dual nationality for voluntary naturalization, (b) must use US passport entering/exiting the US, (c) Mexico taxes by residency not citizenship, (d) US citizen abroad still files US returns, (e) US–Mexico treaty mention, (f) ≥1 attorney/CPA flag statement",
+      "verifyMethod": "Section present; all six sub-items findable by keyword scan; no specific legal or tax advice given"
+    },
+    {
+      "number": 6,
+      "description": "A \"Practical Assessment for Jm\" section frames the residency-commitment cost honestly (years living in Mexico is the dominant requirement) and includes a \"worth it?\" paragraph acknowledging his San Diego base and LatAm interest cluster",
+      "verifyMethod": "Section present; residency years explicitly quantified; \"worth it?\" language present; cross-reference to sibling Spanish citizenship task included"
+    },
+    {
+      "number": 7,
+      "description": "\"First Steps\" checklist contains ≥5 concrete, sequenced actions with the San Diego consulate contact info (`consulmex.sre.gob.mx/sandiego/`, appointment booking via `citas.sre.gob.mx`)",
+      "verifyMethod": "Checklist present with ≥5 numbered items; consulate URL and appointment URL both cited and verified resolving"
+    },
+    {
+      "number": 8,
+      "description": "All attorney/CPA-required touch-points are explicitly flagged with a consistent marker (e.g., ⚠️ **Requires licensed professional**) at least for: DNN naturalization process, cross-border tax planning, and the \"distinguished services\" route",
+      "verifyMethod": "At least 3 flagged instances found; no passages contain specific legal or tax advice disguised as \"information\""
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.230Z"
+}

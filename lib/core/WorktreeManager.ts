@@ -39,11 +39,11 @@
  */
 
 import { z } from "zod";
-import { execFileSync } from "child_process";
-import { existsSync, mkdirSync, rmdirSync, statSync, unlinkSync, writeFileSync, readFileSync } from "fs";
-import { join, basename } from "path";
-import { createHash } from "crypto";
-import { parseArgs } from "util";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, rmdirSync, statSync, unlinkSync, writeFileSync, readFileSync } from "node:fs";
+import { join, basename } from "node:path";
+import { createHash } from "node:crypto";
+import { parseArgs } from "node:util";
 import { createStateManager, type StateManager } from "./StateManager.ts";
 import { runtimeDir, getKayaHome } from "./KayaHome.ts";
 import { recordFailure } from "./FailureLog.ts";
@@ -53,7 +53,7 @@ import { recordFailure } from "./FailureLog.ts";
 // ============================================================================
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ============================================================================
@@ -98,7 +98,8 @@ function gitExec(args: string[], cwd: string): Buffer {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const isLockError = msg.includes("index.lock") || msg.includes("Unable to create") || msg.includes("another git process");
+      const isLockError =
+        msg.includes("index.lock") || msg.includes("Unable to create") || msg.includes("another git process");
 
       if (!isLockError || attempt === GIT_LOCK_MAX_RETRIES) {
         throw err;
@@ -108,7 +109,7 @@ function gitExec(args: string[], cwd: string): Buffer {
       removeStaleGitLock(cwd);
 
       // Exponential backoff with jitter: 200ms, 400ms, 800ms, 1600ms, 3200ms
-      const delay = GIT_LOCK_BASE_DELAY_MS * Math.pow(2, attempt) + Math.random() * 100;
+      const delay = GIT_LOCK_BASE_DELAY_MS * 2 ** attempt + Math.random() * 100;
       Bun.sleepSync(delay);
     }
   }
@@ -359,8 +360,11 @@ async function createWorktree(opts: CreateWorktreeOptions): Promise<WorktreeEntr
         stdio: ["ignore", "pipe", "pipe"],
         timeout: 60000,
       });
-    } catch {
-      // Non-fatal: dependency install failure doesn't block worktree creation
+    } catch (err) {
+      // Non-fatal: dependency install failure doesn't block worktree creation, but report it.
+      console.error(
+        `WorktreeManager: bun install failed in ${wtPath}: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+      );
     }
   }
 
@@ -376,7 +380,7 @@ async function createWorktree(opts: CreateWorktreeOptions): Promise<WorktreeEntr
 
   // Record in state
   const sm = getStateManager();
-  await sm.update(state => ({
+  await sm.update((state) => ({
     ...state,
     entries: [...state.entries, entry],
   }));
@@ -430,19 +434,31 @@ export async function getOrCreateWorktree(opts: CreateWorktreeOptions): Promise<
     }
   }
 
+  // The non-recursive mkdir below needs its parent. On a fresh KAYA_HOME the worktrees dir does
+  // not exist yet, and every attempt failed with ENOENT until the 10s timeout (the cause of the
+  // baseline getOrCreateWorktree/gcWorktrees test failures).
+  mkdirSync(worktreesDir(), { recursive: true });
+
   // mkdir is atomic — acts as mutex
   let acquired = false;
   for (let i = 0; i < 20; i++) {
-    try { mkdirSync(lockDir, { recursive: false }); acquired = true; break; } catch { await sleep(500); }
+    try {
+      mkdirSync(lockDir, { recursive: false });
+      acquired = true;
+      break;
+    } catch (e) {
+      // Only EEXIST means "another holder has the lock". Anything else (ENOENT, EACCES) will not
+      // clear by waiting: fail now with the real error instead of a misleading 10s timeout.
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      await sleep(500);
+    }
   }
   if (!acquired) throw new Error(`Could not acquire worktree lock for ${opts.repoRoot} after 10s`);
   try {
     const sm = getStateManager();
     const state = await sm.load();
 
-    const existing = state.entries.find(
-      e => e.repoRoot === opts.repoRoot && e.branch === opts.branch
-    );
+    const existing = state.entries.find((e) => e.repoRoot === opts.repoRoot && e.branch === opts.branch);
 
     if (existing && existsSync(existing.path)) {
       if (existing.createdBy === opts.createdBy) {
@@ -455,17 +471,15 @@ export async function getOrCreateWorktree(opts: CreateWorktreeOptions): Promise<
       if (isHeartbeatFresh(existing.path, GC_STALE_AFTER_MS)) {
         throw new Error(
           `Worktree ${existing.path} (branch: ${opts.branch}) is currently owned by ` +
-          `"${existing.createdBy}" which has a live heartbeat. Cannot reuse for "${opts.createdBy}".`
+            `"${existing.createdBy}" which has a live heartbeat. Cannot reuse for "${opts.createdBy}".`,
         );
       }
 
       // Previous owner's heartbeat is stale — adopt the worktree
-      await sm.update(s => ({
+      await sm.update((s) => ({
         ...s,
-        entries: s.entries.map(e =>
-          e.path === existing.path
-            ? { ...e, locked: true, createdBy: opts.createdBy }
-            : e
+        entries: s.entries.map((e) =>
+          e.path === existing.path ? { ...e, locked: true, createdBy: opts.createdBy } : e,
         ),
       }));
       refreshHeartbeat(existing.path);
@@ -474,9 +488,9 @@ export async function getOrCreateWorktree(opts: CreateWorktreeOptions): Promise<
 
     // Clean up stale state entry if directory doesn't exist
     if (existing && !existsSync(existing.path)) {
-      await sm.update(s => ({
+      await sm.update((s) => ({
         ...s,
-        entries: s.entries.filter(e => e.path !== existing.path),
+        entries: s.entries.filter((e) => e.path !== existing.path),
       }));
     }
 
@@ -484,7 +498,11 @@ export async function getOrCreateWorktree(opts: CreateWorktreeOptions): Promise<
     refreshHeartbeat(entry.path);
     return entry;
   } finally {
-    try { rmdirSync(lockDir); } catch { /* lock cleanup is best-effort */ }
+    try {
+      rmdirSync(lockDir);
+    } catch {
+      /* lock cleanup is best-effort */
+    }
   }
 }
 
@@ -494,7 +512,7 @@ export async function getOrCreateWorktree(opts: CreateWorktreeOptions): Promise<
 export async function removeWorktree(wtPath: string): Promise<void> {
   const sm = getStateManager();
   const state = await sm.load();
-  const entry = state.entries.find(e => e.path === wtPath);
+  const entry = state.entries.find((e) => e.path === wtPath);
 
   if (entry) {
     // Use git worktree remove
@@ -506,9 +524,9 @@ export async function removeWorktree(wtPath: string): Promise<void> {
   }
 
   // Remove from state
-  await sm.update(s => ({
+  await sm.update((s) => ({
     ...s,
-    entries: s.entries.filter(e => e.path !== wtPath),
+    entries: s.entries.filter((e) => e.path !== wtPath),
   }));
 }
 
@@ -517,12 +535,10 @@ export async function removeWorktree(wtPath: string): Promise<void> {
  */
 export async function markWorktreeMerged(wtPath: string): Promise<void> {
   const sm = getStateManager();
-  await sm.update(s => ({
+  await sm.update((s) => ({
     ...s,
-    entries: s.entries.map(e =>
-      e.path === wtPath
-        ? { ...e, mergedAt: new Date().toISOString(), keepUntilMerged: false }
-        : e
+    entries: s.entries.map((e) =>
+      e.path === wtPath ? { ...e, mergedAt: new Date().toISOString(), keepUntilMerged: false } : e,
     ),
   }));
 }
@@ -535,7 +551,7 @@ export async function listWorktrees(repoRoot?: string): Promise<WorktreeEntry[]>
   const state = await sm.load();
 
   if (repoRoot) {
-    return state.entries.filter(e => e.repoRoot === repoRoot);
+    return state.entries.filter((e) => e.repoRoot === repoRoot);
   }
   return state.entries;
 }
@@ -545,11 +561,9 @@ export async function listWorktrees(repoRoot?: string): Promise<WorktreeEntry[]>
  */
 export async function lockWorktree(wtPath: string): Promise<void> {
   const sm = getStateManager();
-  await sm.update(s => ({
+  await sm.update((s) => ({
     ...s,
-    entries: s.entries.map(e =>
-      e.path === wtPath ? { ...e, locked: true } : e
-    ),
+    entries: s.entries.map((e) => (e.path === wtPath ? { ...e, locked: true } : e)),
   }));
 }
 
@@ -558,11 +572,9 @@ export async function lockWorktree(wtPath: string): Promise<void> {
  */
 export async function unlockWorktree(wtPath: string): Promise<void> {
   const sm = getStateManager();
-  await sm.update(s => ({
+  await sm.update((s) => ({
     ...s,
-    entries: s.entries.map(e =>
-      e.path === wtPath ? { ...e, locked: false } : e
-    ),
+    entries: s.entries.map((e) => (e.path === wtPath ? { ...e, locked: false } : e)),
   }));
 }
 
@@ -578,7 +590,7 @@ export async function pruneOrphaned(): Promise<PruneResult> {
   const errors: string[] = [];
 
   // Collect unique repo roots
-  const repoRoots = [...new Set(state.entries.map(e => e.repoRoot))];
+  const repoRoots = [...new Set(state.entries.map((e) => e.repoRoot))];
 
   // Run git worktree prune on each repo
   for (const repo of repoRoots) {
@@ -591,16 +603,16 @@ export async function pruneOrphaned(): Promise<PruneResult> {
   }
 
   // Remove state entries where directory no longer exists
-  const staleEntries = state.entries.filter(e => !existsSync(e.path));
+  const staleEntries = state.entries.filter((e) => !existsSync(e.path));
   for (const entry of staleEntries) {
     removed.push(entry.path);
   }
 
   if (staleEntries.length > 0) {
-    const stalePaths = new Set(staleEntries.map(e => e.path));
-    await sm.update(s => ({
+    const stalePaths = new Set(staleEntries.map((e) => e.path));
+    await sm.update((s) => ({
       ...s,
-      entries: s.entries.filter(e => !stalePaths.has(e.path)),
+      entries: s.entries.filter((e) => !stalePaths.has(e.path)),
     }));
   }
 
@@ -662,9 +674,9 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     // Directory must exist to evaluate
     if (!existsSync(entry.path)) {
       // Stale state entry — clean it from state but don't count as "removed"
-      await sm.update(s => ({
+      await sm.update((s) => ({
         ...s,
-        entries: s.entries.filter(e => e.path !== entry.path),
+        entries: s.entries.filter((e) => e.path !== entry.path),
       }));
       console.log(`${tag}: cleaned stale state entry (directory missing)`);
       continue;
@@ -682,7 +694,10 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
       const dirStat = statSync(entry.path);
       const ageMs = Date.now() - dirStat.mtimeMs;
       if (ageMs < staleAfterMs) {
-        result.skipped.push({ path: entry.path, reason: `directory modified ${Math.round(ageMs / 60000)}m ago (threshold: ${Math.round(staleAfterMs / 60000)}m)` });
+        result.skipped.push({
+          path: entry.path,
+          reason: `directory modified ${Math.round(ageMs / 60000)}m ago (threshold: ${Math.round(staleAfterMs / 60000)}m)`,
+        });
         console.log(`${tag}: SKIP — recently modified (${Math.round(ageMs / 60000)}m ago)`);
         continue;
       }
@@ -695,7 +710,10 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     let isDirty = false;
     try {
       const statusOut = execFileSync("git", ["status", "--porcelain"], {
-        cwd: entry.path, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+        cwd: entry.path,
+        encoding: "utf-8",
+        stdio: "pipe",
+        timeout: 10_000,
       }).trim();
       isDirty = statusOut.length > 0;
     } catch (e) {
@@ -712,16 +730,20 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     let isMerged = false;
     try {
       execFileSync("git", ["merge-base", "--is-ancestor", entry.branch, "main"], {
-        cwd: entry.repoRoot, stdio: "pipe", timeout: 10_000,
+        cwd: entry.repoRoot,
+        stdio: "pipe",
+        timeout: 10_000,
       });
       isMerged = true; // exit 0 = branch is ancestor of main
     } catch {
       // Non-zero = not merged — check if zero commits ahead as a fallback
       try {
-        const ahead = execFileSync(
-          "git", ["rev-list", "--count", `main..${entry.branch}`],
-          { cwd: entry.repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 10_000 }
-        ).trim();
+        const ahead = execFileSync("git", ["rev-list", "--count", `main..${entry.branch}`], {
+          cwd: entry.repoRoot,
+          encoding: "utf-8",
+          stdio: "pipe",
+          timeout: 10_000,
+        }).trim();
         isMerged = parseInt(ahead, 10) === 0;
       } catch {
         // Can't determine — skip safely
@@ -746,7 +768,7 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     } catch (e) {
       // If the worktree remove fails, try cleaning the directory directly
       try {
-        const { rmSync } = await import("fs");
+        const { rmSync } = await import("node:fs");
         rmSync(entry.path, { recursive: true, force: true });
       } catch {
         result.errors.push(`${entry.path}: failed to remove: ${e instanceof Error ? e.message : String(e)}`);
@@ -757,7 +779,9 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     // Optionally delete the local branch (only if safely merged)
     try {
       execFileSync("git", ["branch", "-d", entry.branch], {
-        cwd: entry.repoRoot, stdio: "pipe", timeout: 10_000,
+        cwd: entry.repoRoot,
+        stdio: "pipe",
+        timeout: 10_000,
       });
     } catch {
       // Non-fatal — branch may already be deleted or may need force-delete
@@ -765,9 +789,9 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
     }
 
     // Clean from state
-    await sm.update(s => ({
+    await sm.update((s) => ({
       ...s,
-      entries: s.entries.filter(e => e.path !== entry.path),
+      entries: s.entries.filter((e) => e.path !== entry.path),
     }));
 
     result.removed.push(entry.path);
@@ -782,15 +806,11 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
  * Returns the GcResult for that one entry.
  * If the branch is the integrator's reuse branch, skips without error.
  */
-export async function gcWorktreeForBranch(
-  branch: string,
-  repoRoot: string,
-  opts: GcOptions = {},
-): Promise<GcResult> {
+export async function gcWorktreeForBranch(branch: string, repoRoot: string, opts: GcOptions = {}): Promise<GcResult> {
   // Load state to find the entry for this branch+repo
   const sm = getStateManager();
   const state = await sm.load();
-  const entry = state.entries.find(e => e.branch === branch && e.repoRoot === repoRoot);
+  const entry = state.entries.find((e) => e.branch === branch && e.repoRoot === repoRoot);
   if (!entry) {
     return {
       removed: [],
@@ -948,7 +968,9 @@ Examples:
       if (values.json) {
         console.log(JSON.stringify(gcResult, null, 2));
       } else {
-        console.log(`GC: removed ${gcResult.removed.length}  skipped ${gcResult.skipped.length}  errors ${gcResult.errors.length}`);
+        console.log(
+          `GC: removed ${gcResult.removed.length}  skipped ${gcResult.skipped.length}  errors ${gcResult.errors.length}`,
+        );
         for (const r of gcResult.removed) {
           console.log(`  REMOVED: ${r}`);
         }
@@ -972,4 +994,13 @@ if (import.meta.main) {
   main().catch(console.error);
 }
 
-export { worktreesDir, slugify, gitExec, removeStaleGitLock, GC_STALE_AFTER_MS, INTEGRATOR_REUSE_BRANCH, repoSlug, worktreePath };
+export {
+  worktreesDir,
+  slugify,
+  gitExec,
+  removeStaleGitLock,
+  GC_STALE_AFTER_MS,
+  INTEGRATOR_REUSE_BRANCH,
+  repoSlug,
+  worktreePath,
+};

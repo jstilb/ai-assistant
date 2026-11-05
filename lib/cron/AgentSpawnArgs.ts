@@ -29,7 +29,7 @@ export const DEFAULT_AGENT_EFFORT = "medium";
  */
 export const FALLBACK_AGENT_MODEL = "sonnet";
 
-export interface AgentSpawnArgOptions {
+interface AgentSpawnArgOptions {
   /** Replaces the job's model for this spawn (the post-fallback attempt). */
   modelOverride?: string;
 }

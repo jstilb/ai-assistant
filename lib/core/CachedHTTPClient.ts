@@ -43,9 +43,9 @@
  * @version 1.0.0
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
-import { getKayaHome } from './KayaHome.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
 // Types & Interfaces
@@ -56,13 +56,13 @@ import { getKayaHome } from './KayaHome.ts';
  */
 export interface FetchOptions {
   /** Cache mode: 'memory' (LRU), 'disk' (persistent), or 'none' */
-  cache?: 'memory' | 'disk' | 'none';
+  cache?: "memory" | "disk" | "none";
   /** Cache TTL in seconds */
   ttl?: number;
   /** Number of retry attempts */
   retry?: number;
   /** Backoff strategy for retries */
-  backoff?: 'exponential' | 'linear' | 'fixed';
+  backoff?: "exponential" | "linear" | "fixed";
   /** Request timeout in milliseconds */
   timeout?: number;
   /** Rate limit configuration */
@@ -200,7 +200,7 @@ class LRUCache<K, V> {
     } else if (this.cache.size >= this.maxSize) {
       // Delete oldest (first) entry
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) this.cache.delete(firstKey);
     }
     this.cache.set(key, value);
   }
@@ -243,15 +243,15 @@ class HTTPClientImpl implements CachedHTTPClient {
   private readonly CIRCUIT_RESET_TIMEOUT = 30000; // 30 seconds
 
   constructor(config: ClientConfig = {}) {
-    const defaultCacheDir = join(getKayaHome(), '.cache', 'http');
+    const defaultCacheDir = join(getKayaHome(), ".cache", "http");
 
     this.config = {
       cacheDir: config.cacheDir ?? defaultCacheDir,
       defaultTtl: config.defaultTtl ?? 300, // 5 minutes
       maxCacheSize: config.maxCacheSize ?? 1000,
       maxRetries: config.maxRetries ?? 3,
-      userAgent: config.userAgent ?? 'Kaya-CachedHTTPClient/1.0',
-      fetchFn: config.fetchFn ?? globalThis.fetch
+      userAgent: config.userAgent ?? "Kaya-CachedHTTPClient/1.0",
+      fetchFn: config.fetchFn ?? globalThis.fetch,
     };
 
     this.memoryCache = new LRUCache(this.config.maxCacheSize);
@@ -267,14 +267,14 @@ class HTTPClientImpl implements CachedHTTPClient {
   // ==========================================================================
 
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
-    const method = options.method ?? 'GET';
+    const method = options.method ?? "GET";
     // Non-GET requests always bypass cache
-    const cacheMode = (method === 'GET' || method === 'HEAD') ? (options.cache ?? 'memory') : 'none';
+    const cacheMode = method === "GET" || method === "HEAD" ? (options.cache ?? "memory") : "none";
     const ttl = options.ttl ?? this.config.defaultTtl;
     const cacheKey = this.generateCacheKey(url, options.headers);
 
     // Check cache first
-    if (cacheMode !== 'none') {
+    if (cacheMode !== "none") {
       const cached = this.getFromCache(cacheKey, cacheMode);
       if (cached && !this.isExpired(cached)) {
         this.stats.hits++;
@@ -293,12 +293,13 @@ class HTTPClientImpl implements CachedHTTPClient {
 
     // Request deduplication - only idempotent GET/HEAD requests are coalesced.
     // POST/PUT/PATCH/DELETE are always sent: two sends are two sends.
-    const dedupable = method === 'GET' || method === 'HEAD';
+    const dedupable = method === "GET" || method === "HEAD";
     const inflightKey = `${method}:${url}:${JSON.stringify(options.headers ?? {})}`;
     if (dedupable) {
       const inflight = this.inflightRequests.get(inflightKey);
       if (inflight) {
-        return inflight.then(r => r.clone());
+        // clone() is typed as Bun's Response | undici's Response (@types/node merge); at runtime it is Bun's.
+        return inflight.then((r) => r.clone() as Response);
       }
     }
 
@@ -313,14 +314,14 @@ class HTTPClientImpl implements CachedHTTPClient {
       const clonedResponse = response.clone();
 
       // Cache successful response
-      if (response.ok && cacheMode !== 'none') {
+      if (response.ok && cacheMode !== "none") {
         const text = await clonedResponse.text();
         const entry: CacheEntry = {
           data: text,
           timestamp: Date.now(),
           ttl: ttl * 1000, // Convert to ms
           headers: Object.fromEntries(response.headers.entries()),
-          status: response.status
+          status: response.status,
         };
         this.setInCache(cacheKey, entry, cacheMode);
       }
@@ -349,12 +350,8 @@ class HTTPClientImpl implements CachedHTTPClient {
     return response.json() as Promise<T>;
   }
 
-  async fetchWithHash(
-    url: string,
-    previousHash?: string,
-    options: FetchOptions = {}
-  ): Promise<HashFetchResult> {
-    const cacheMode = options.cache ?? 'memory';
+  async fetchWithHash(url: string, previousHash?: string, options: FetchOptions = {}): Promise<HashFetchResult> {
+    const cacheMode = options.cache ?? "memory";
     const ttl = options.ttl ?? this.config.defaultTtl;
     const cacheKey = this.generateCacheKey(url, options.headers);
 
@@ -362,7 +359,7 @@ class HTTPClientImpl implements CachedHTTPClient {
     let cached: CacheEntry | null = null;
     let fromCache = false;
 
-    if (cacheMode !== 'none') {
+    if (cacheMode !== "none") {
       cached = this.getFromCache(cacheKey, cacheMode);
       if (cached && !this.isExpired(cached)) {
         fromCache = true;
@@ -378,18 +375,18 @@ class HTTPClientImpl implements CachedHTTPClient {
       status = cached.status;
     } else {
       // Execute request
-      const response = await this.fetch(url, { ...options, cache: 'none' });
+      const response = await this.fetch(url, { ...options, cache: "none" });
       data = await response.text();
       status = response.status;
 
       // Cache the response
-      if (response.ok && cacheMode !== 'none') {
+      if (response.ok && cacheMode !== "none") {
         const entry: CacheEntry = {
           data,
           timestamp: Date.now(),
           ttl: ttl * 1000,
           headers: Object.fromEntries(response.headers.entries()),
-          status
+          status,
         };
         this.setInCache(cacheKey, entry, cacheMode);
       }
@@ -404,7 +401,7 @@ class HTTPClientImpl implements CachedHTTPClient {
       hash,
       changed,
       cached: fromCache,
-      status
+      status,
     };
   }
 
@@ -417,7 +414,7 @@ class HTTPClientImpl implements CachedHTTPClient {
     if (existsSync(this.config.cacheDir)) {
       const files = readdirSync(this.config.cacheDir);
       for (const file of files) {
-        if (file.endsWith('.cache')) {
+        if (file.endsWith(".cache")) {
           rmSync(join(this.config.cacheDir, file));
         }
       }
@@ -428,7 +425,7 @@ class HTTPClientImpl implements CachedHTTPClient {
     return {
       hits: this.stats.hits,
       misses: this.stats.misses,
-      size: this.memoryCache.size
+      size: this.memoryCache.size,
     };
   }
 
@@ -437,7 +434,7 @@ class HTTPClientImpl implements CachedHTTPClient {
       tokens: requests,
       lastRefill: Date.now(),
       maxTokens: requests,
-      refillRate: requests / perMs
+      refillRate: requests / perMs,
     });
   }
 
@@ -446,30 +443,36 @@ class HTTPClientImpl implements CachedHTTPClient {
   // ==========================================================================
 
   private generateCacheKey(url: string, headers?: Record<string, string>): string {
-    const sortedHeaders = headers ? JSON.stringify(Object.keys(headers).sort().reduce(
-      (acc, key) => ({ ...acc, [key]: headers[key] }),
-      {}
-    )) : '';
+    const sortedHeaders = headers
+      ? JSON.stringify(
+          Object.keys(headers)
+            .sort()
+            .reduce<Record<string, string | undefined>>((acc, key) => {
+              acc[key] = headers[key];
+              return acc;
+            }, {}),
+        )
+      : "";
     const input = `GET:${url}:${sortedHeaders}`;
     return this.hashContent(input);
   }
 
   private hashContent(content: string): string {
     // Use Bun's built-in hash if available, otherwise fallback
-    if (typeof Bun !== 'undefined' && Bun.hash) {
+    if (typeof Bun !== "undefined" && Bun.hash) {
       return Bun.hash(content).toString(16);
     }
     // Fallback to simple hash
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return Math.abs(hash).toString(16);
   }
 
-  private getFromCache(key: string, mode: 'memory' | 'disk'): CacheEntry | null {
+  private getFromCache(key: string, mode: "memory" | "disk"): CacheEntry | null {
     // Check memory first
     const memoryEntry = this.memoryCache.get(key);
     if (memoryEntry) {
@@ -477,11 +480,11 @@ class HTTPClientImpl implements CachedHTTPClient {
     }
 
     // Check disk if requested
-    if (mode === 'disk') {
+    if (mode === "disk") {
       const diskPath = join(this.config.cacheDir, `${key}.cache`);
       if (existsSync(diskPath)) {
         try {
-          const content = readFileSync(diskPath, 'utf-8');
+          const content = readFileSync(diskPath, "utf-8");
           const entry = JSON.parse(content) as CacheEntry;
           // Also populate memory cache
           this.memoryCache.set(key, entry);
@@ -495,15 +498,15 @@ class HTTPClientImpl implements CachedHTTPClient {
     return null;
   }
 
-  private setInCache(key: string, entry: CacheEntry, mode: 'memory' | 'disk'): void {
+  private setInCache(key: string, entry: CacheEntry, mode: "memory" | "disk"): void {
     // Always set in memory
     this.memoryCache.set(key, entry);
 
     // Also persist to disk if requested
-    if (mode === 'disk') {
+    if (mode === "disk") {
       const diskPath = join(this.config.cacheDir, `${key}.cache`);
       try {
-        writeFileSync(diskPath, JSON.stringify(entry), 'utf-8');
+        writeFileSync(diskPath, JSON.stringify(entry), "utf-8");
       } catch (error) {
         console.warn(`Failed to write cache to disk: ${error}`);
       }
@@ -518,7 +521,7 @@ class HTTPClientImpl implements CachedHTTPClient {
     const headers = new Headers(entry.headers);
     return new Response(entry.data, {
       status: entry.status,
-      headers
+      headers,
     });
   }
 
@@ -532,11 +535,11 @@ class HTTPClientImpl implements CachedHTTPClient {
 
   private async executeWithRetry(url: string, options: FetchOptions): Promise<Response> {
     const maxRetries = options.retry ?? this.config.maxRetries;
-    const backoff = options.backoff ?? 'exponential';
+    const backoff = options.backoff ?? "exponential";
     const timeout = options.timeout ?? 30000;
-    const method = options.method ?? 'GET';
+    const method = options.method ?? "GET";
     // POST/PUT/PATCH requests are not retried by default to avoid side effects
-    const effectiveMaxRetries = (method === 'GET' || method === 'HEAD') ? maxRetries : 0;
+    const effectiveMaxRetries = method === "GET" || method === "HEAD" ? maxRetries : 0;
 
     const callerSignal = options.signal;
     let lastError: Error | undefined;
@@ -549,12 +552,11 @@ class HTTPClientImpl implements CachedHTTPClient {
       // Whichever fires first aborts the attempt: the client timeout or the caller signal.
       const signal = callerSignal ? AbortSignal.any([controller.signal, callerSignal]) : controller.signal;
       try {
-
         const fetchInit: RequestInit = {
           method,
           headers: {
-            'User-Agent': this.config.userAgent,
-            ...options.headers
+            "User-Agent": this.config.userAgent,
+            ...options.headers,
           },
           signal,
         };
@@ -582,16 +584,16 @@ class HTTPClientImpl implements CachedHTTPClient {
         }
 
         return response;
-      } catch (error: any) {
+      } catch (error: unknown) {
         clearTimeout(timeoutId);
         // A caller abort is final: surface the caller's reason, never retry.
         if (callerSignal?.aborted) {
           throw callerSignal.reason;
         }
-        lastError = error;
+        lastError = error instanceof Error ? error : new Error(String(error));
 
         // Timeout handling
-        if (error.name === 'AbortError') {
+        if (lastError.name === "AbortError") {
           lastError = new Error(`Request timeout after ${timeout}ms`);
         }
 
@@ -601,25 +603,24 @@ class HTTPClientImpl implements CachedHTTPClient {
       }
     }
 
-    throw lastError ?? new Error('Request failed');
+    throw lastError ?? new Error("Request failed");
   }
 
-  private calculateBackoff(attempt: number, strategy: 'exponential' | 'linear' | 'fixed'): number {
+  private calculateBackoff(attempt: number, strategy: "exponential" | "linear" | "fixed"): number {
     const baseDelay = 100; // 100ms base
 
     switch (strategy) {
-      case 'exponential':
-        return baseDelay * Math.pow(2, attempt);
-      case 'linear':
+      case "exponential":
+        return baseDelay * 2 ** attempt;
+      case "linear":
         return baseDelay * (attempt + 1);
-      case 'fixed':
       default:
-        return baseDelay;
+        return baseDelay; // "fixed" and any unknown strategy
     }
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async waitForRateLimit(domain: string): Promise<void> {
@@ -707,7 +708,7 @@ export const httpClient: CachedHTTPClient = createHTTPClient();
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     console.log(`
 CachedHTTPClient - Unified HTTP Client for Kaya
 
@@ -749,9 +750,9 @@ Examples:
   const hasFlag = (name: string): boolean => args.includes(name);
 
   // Handle --stats
-  if (hasFlag('--stats')) {
+  if (hasFlag("--stats")) {
     const stats = httpClient.getCacheStats();
-    console.log('Cache Statistics:');
+    console.log("Cache Statistics:");
     console.log(`  Hits:   ${stats.hits}`);
     console.log(`  Misses: ${stats.misses}`);
     console.log(`  Size:   ${stats.size} items`);
@@ -759,34 +760,36 @@ Examples:
   }
 
   // Handle --clear
-  if (hasFlag('--clear')) {
-    const pattern = getArg('--clear');
-    if (pattern && !pattern.startsWith('--')) {
-      console.error('Error: pattern-based clearing was removed (cache keys are content hashes; it never matched anything). Use --clear with no argument to clear all cache.');
+  if (hasFlag("--clear")) {
+    const pattern = getArg("--clear");
+    if (pattern && !pattern.startsWith("--")) {
+      console.error(
+        "Error: pattern-based clearing was removed (cache keys are content hashes; it never matched anything). Use --clear with no argument to clear all cache.",
+      );
       process.exit(1);
     }
     httpClient.clearCache();
-    console.log('Cleared all cache');
+    console.log("Cleared all cache");
     return;
   }
 
   // Handle --url
-  const url = getArg('--url');
+  const url = getArg("--url");
   if (!url) {
-    console.error('Error: --url is required');
+    console.error("Error: --url is required");
     process.exit(1);
   }
 
   const options: FetchOptions = {
-    cache: (getArg('--cache') as 'memory' | 'disk' | 'none') || 'memory',
-    ttl: parseInt(getArg('--ttl') ?? '300'),
-    retry: parseInt(getArg('--retry') ?? '3'),
-    timeout: parseInt(getArg('--timeout') ?? '30000')
+    cache: (getArg("--cache") as "memory" | "disk" | "none") || "memory",
+    ttl: parseInt(getArg("--ttl") ?? "300"),
+    retry: parseInt(getArg("--retry") ?? "3"),
+    timeout: parseInt(getArg("--timeout") ?? "30000"),
   };
 
-  const outputJson = hasFlag('--json');
-  const useHash = hasFlag('--hash');
-  const previousHash = getArg('--previous');
+  const outputJson = hasFlag("--json");
+  const useHash = hasFlag("--hash");
+  const previousHash = getArg("--previous");
 
   try {
     if (useHash) {
@@ -801,28 +804,34 @@ Examples:
         console.log(`Changed: ${result.changed}`);
         console.log(`Cached:  ${result.cached}`);
         console.log(`---`);
-        console.log(result.data.substring(0, 500) + (result.data.length > 500 ? '...' : ''));
+        console.log(result.data.substring(0, 500) + (result.data.length > 500 ? "..." : ""));
       }
     } else {
       const response = await httpClient.fetch(url, options);
       const text = await response.text();
 
       if (outputJson) {
-        console.log(JSON.stringify({
-          url,
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: text.substring(0, 1000)
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              url,
+              status: response.status,
+              headers: Object.fromEntries(response.headers.entries()),
+              body: text.substring(0, 1000),
+            },
+            null,
+            2,
+          ),
+        );
       } else {
         console.log(`URL:    ${url}`);
         console.log(`Status: ${response.status}`);
         console.log(`---`);
-        console.log(text.substring(0, 1000) + (text.length > 1000 ? '...' : ''));
+        console.log(text.substring(0, 1000) + (text.length > 1000 ? "..." : ""));
       }
     }
-  } catch (error: any) {
-    console.error(`Error: ${error.message}`);
+  } catch (error: unknown) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

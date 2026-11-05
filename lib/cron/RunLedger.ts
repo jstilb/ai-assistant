@@ -19,13 +19,13 @@
  * with no I/O so it's trivially unit-testable.
  */
 
-import { readFileSync } from 'fs';
-import { createAppendLog } from '../core/AppendLog.ts';
-import { RUN_LEDGER_PATH } from '../core/MemoryPaths.ts';
+import { readFileSync } from "node:fs";
+import { createAppendLog } from "../core/AppendLog.ts";
+import { RUN_LEDGER_PATH } from "../core/MemoryPaths.ts";
 
-export type RunOutcome = 'success' | 'failure' | 'deferred' | 'skipped';
+export type RunOutcome = "success" | "failure" | "deferred" | "skipped";
 
-export interface RunLedgerRow {
+interface RunLedgerRow {
   jobId: string;
   slotKey: string;
   startedAt: string;
@@ -59,8 +59,10 @@ export function appendRunLedger(row: RunLedgerRow): void {
     // Path resolved per call (KAYA_HOME can change under tests), so the
     // AppendLog handle is created per call too — createAppendLog is cheap.
     createAppendLog(ledgerPath).append(row);
-  } catch {
-    // Logging is best-effort; never fail the job over a ledger write.
+  } catch (err) {
+    // Logging is best-effort; never fail the job over a ledger write. Report it: a lost row
+    // weakens the idempotency check.
+    console.error(`RunLedger: cannot append row: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -75,13 +77,17 @@ export function lastOutcomeForSlot(jobId: string, slotKey: string): RunOutcome |
   const ledgerPath = RUN_LEDGER_PATH();
   let raw: string;
   try {
-    raw = readFileSync(ledgerPath, 'utf-8');
-  } catch {
+    raw = readFileSync(ledgerPath, "utf-8");
+  } catch (err) {
+    // No ledger yet is normal; any other read failure is reported.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(`RunLedger: cannot read ${ledgerPath}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return undefined;
   }
 
   let mostRecent: RunOutcome | undefined;
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
       const row = JSON.parse(line) as Partial<RunLedgerRow>;
@@ -104,5 +110,5 @@ export function lastOutcomeForSlot(jobId: string, slotKey: string): RunOutcome |
  * future (S5) reconciler re-running an already-successful slot.
  */
 export function shouldSkipIdempotent(priorOutcome: RunOutcome | undefined): boolean {
-  return priorOutcome === 'success';
+  return priorOutcome === "success";
 }

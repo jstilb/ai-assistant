@@ -40,12 +40,13 @@
  * that already went through the live hook path. See docs/decisions/015.
  */
 
-import { parseArgs } from "util";
-import * as fs from "fs";
-import * as path from "path";
+import { parseArgs } from "node:util";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import { inference } from "./Inference.ts";
 import { LEARNING_JUDGMENT_CRITERIA, parseLearningsArray, type LearningItem } from "./LearningJudgment.ts";
-import { prepareOutputPath } from "./OutputPathResolver";
+import { prepareOutputPath } from "./OutputPathResolver.ts";
 import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
@@ -54,13 +55,12 @@ import { getKayaHome } from "./KayaHome.ts";
 
 // frozen at import (getKayaHome cached); no test re-pins this module
 const CLAUDE_DIR = getKayaHome();
-const USERNAME = process.env.USER || require("os").userInfo().username;
+const USERNAME = process.env.USER || os.userInfo().username;
 const PROJECT_SLUG = `-Users-${USERNAME}--claude`;
 const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", PROJECT_SLUG);
 // Same default + override as bin/claude-browser's BROWSER_HOME.
-const BROWSER_HOME = process.env.CLAUDE_BROWSER_HOME || path.join(require("os").homedir(), ".claude-browser-home");
+const BROWSER_HOME = process.env.CLAUDE_BROWSER_HOME || path.join(os.homedir(), ".claude-browser-home");
 const BROWSER_PROJECTS_ROOT = path.join(BROWSER_HOME, "projects");
-const LEARNING_DIR = path.join(CLAUDE_DIR, "MEMORY", "LEARNING");
 
 /** Minimum non-whitespace turns before a session is worth an inference call. */
 const MIN_TURNS = 1;
@@ -85,12 +85,14 @@ interface ProjectsEntry {
   type?: "user" | "assistant" | "summary";
   message?: {
     role?: string;
-    content?: string | Array<{
-      type: string;
-      text?: string;
-      name?: string;
-      input?: any;
-    }>;
+    content?:
+      | string
+      | Array<{
+          type: string;
+          text?: string;
+          name?: string;
+          input?: unknown;
+        }>;
   };
   timestamp?: string;
 }
@@ -114,9 +116,10 @@ interface HarvestedLearning {
  */
 function getBrowserSessionDirs(): string[] {
   if (!fs.existsSync(BROWSER_PROJECTS_ROOT)) return [];
-  return fs.readdirSync(BROWSER_PROJECTS_ROOT)
-    .filter(d => d === PROJECT_SLUG || d.startsWith(`${PROJECT_SLUG}--claude-worktrees-`))
-    .map(d => path.join(BROWSER_PROJECTS_ROOT, d));
+  return fs
+    .readdirSync(BROWSER_PROJECTS_ROOT)
+    .filter((d) => d === PROJECT_SLUG || d.startsWith(`${PROJECT_SLUG}--claude-worktrees-`))
+    .map((d) => path.join(BROWSER_PROJECTS_ROOT, d));
 }
 
 function getSessionFiles(options: { recent?: number; all?: boolean; sessionId?: string }): string[] {
@@ -126,46 +129,49 @@ function getSessionFiles(options: { recent?: number; all?: boolean; sessionId?: 
     return [];
   }
 
-  const dirs = [PROJECTS_DIR, ...browserDirs].filter(d => fs.existsSync(d));
+  const dirs = [PROJECTS_DIR, ...browserDirs].filter((d) => fs.existsSync(d));
   const files = dirs
-    .flatMap(dir => fs.readdirSync(dir)
-      .filter(f => f.endsWith('.jsonl'))
-      .map(f => ({
-        name: f,
-        path: path.join(dir, f),
-        mtime: fs.statSync(path.join(dir, f)).mtime.getTime()
-      })))
+    .flatMap((dir) =>
+      fs
+        .readdirSync(dir)
+        .filter((f) => f.endsWith(".jsonl"))
+        .map((f) => ({
+          name: f,
+          path: path.join(dir, f),
+          mtime: fs.statSync(path.join(dir, f)).mtime.getTime(),
+        })),
+    )
     .sort((a, b) => b.mtime - a.mtime);
 
   if (options.sessionId) {
-    const match = files.find(f => f.name.includes(options.sessionId!));
+    const match = files.find((f) => f.name.includes(options.sessionId!));
     return match ? [match.path] : [];
   }
 
   if (options.all) {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return files.filter(f => f.mtime > sevenDaysAgo).map(f => f.path);
+    return files.filter((f) => f.mtime > sevenDaysAgo).map((f) => f.path);
   }
 
   const limit = options.recent || 10;
-  return files.slice(0, limit).map(f => f.path);
+  return files.slice(0, limit).map((f) => f.path);
 }
 
 // ============================================================================
 // Content Extraction
 // ============================================================================
 
-function extractTextContent(content: string | Array<any>): string {
-  if (typeof content === 'string') return content;
+function extractTextContent(content: string | Array<{ type?: string; text?: string }>): string {
+  if (typeof content === "string") return content;
 
   if (Array.isArray(content)) {
     return content
-      .filter(c => c.type === 'text' && c.text)
-      .map(c => c.text)
-      .join('\n');
+      .filter((c) => c.type === "text" && c.text)
+      .map((c) => c.text)
+      .join("\n");
   }
 
-  return '';
+  return "";
 }
 
 // ============================================================================
@@ -179,9 +185,9 @@ function extractTextContent(content: string | Array<any>): string {
  * genuine learning moments — no regex pre-filtering of which lines "count".
  */
 async function harvestLearnings(sessionPath: string): Promise<HarvestedLearning[]> {
-  const sessionId = path.basename(sessionPath, '.jsonl');
-  const content = fs.readFileSync(sessionPath, 'utf-8');
-  const lines = content.split('\n').filter(line => line.trim());
+  const sessionId = path.basename(sessionPath, ".jsonl");
+  const content = fs.readFileSync(sessionPath, "utf-8");
+  const lines = content.split("\n").filter((line) => line.trim());
 
   const turns: string[] = [];
   let lastTimestamp = new Date().toISOString();
@@ -194,7 +200,7 @@ async function harvestLearnings(sessionPath: string): Promise<HarvestedLearning[
       const textContent = extractTextContent(entry.message.content);
       if (!textContent || textContent.length < 20) continue;
 
-      const role = entry.type === 'user' ? 'User' : entry.type === 'assistant' ? 'Assistant' : null;
+      const role = entry.type === "user" ? "User" : entry.type === "assistant" ? "Assistant" : null;
       if (!role) continue;
 
       if (entry.timestamp) lastTimestamp = entry.timestamp;
@@ -206,7 +212,7 @@ async function harvestLearnings(sessionPath: string): Promise<HarvestedLearning[
 
   if (turns.length < MIN_TURNS) return [];
 
-  const body = turns.join('\n\n');
+  const body = turns.join("\n\n");
   const transcriptExcerpt = body.length > TRANSCRIPT_CAP ? body.slice(-TRANSCRIPT_CAP) : body;
 
   const result = await inference({
@@ -224,7 +230,7 @@ async function harvestLearnings(sessionPath: string): Promise<HarvestedLearning[
 
   const learnings = parseLearningsArray((result.parsed as { learnings?: unknown }).learnings);
 
-  return learnings.map(item => ({
+  return learnings.map((item) => ({
     sessionId,
     timestamp: lastTimestamp,
     category: item.category,
@@ -266,13 +272,13 @@ async function writeLearning(learning: HarvestedLearning): Promise<string> {
   const { path: filepath } = await prepareOutputPath({
     skill: `LEARNING/${learning.category}`,
     title: `learning-${sessionShort}`,
-    extension: 'md',
+    extension: "md",
     includeTimestamp: true,
   });
 
   // Skip if file already exists
   if (fs.existsSync(filepath)) {
-    return filepath + ' (skipped - exists)';
+    return filepath + " (skipped - exists)";
   }
 
   const content = formatLearningFile(learning);
@@ -322,7 +328,7 @@ to run over large --all windows.
 const sessionFiles = getSessionFiles({
   recent: values.recent ? parseInt(values.recent) : undefined,
   all: values.all,
-  sessionId: values.session
+  sessionId: values.session,
 });
 
 if (sessionFiles.length === 0) {
@@ -330,15 +336,17 @@ if (sessionFiles.length === 0) {
   process.exit(0);
 }
 
-const phoneCount = sessionFiles.filter(f => f.startsWith(BROWSER_PROJECTS_ROOT + path.sep)).length;
-console.log(`🔍 Scanning ${sessionFiles.length} session(s)${phoneCount ? ` (${phoneCount} from phone/claude-browser sessions)` : ''}...`);
+const phoneCount = sessionFiles.filter((f) => f.startsWith(BROWSER_PROJECTS_ROOT + path.sep)).length;
+console.log(
+  `🔍 Scanning ${sessionFiles.length} session(s)${phoneCount ? ` (${phoneCount} from phone/claude-browser sessions)` : ""}...`,
+);
 
 // Harvest learnings from each session (one inference call per session)
 let totalLearnings = 0;
 const allLearnings: HarvestedLearning[] = [];
 
 for (const sessionFile of sessionFiles) {
-  const sessionName = path.basename(sessionFile, '.jsonl').slice(0, 8);
+  const sessionName = path.basename(sessionFile, ".jsonl").slice(0, 8);
   const learnings = await harvestLearnings(sessionFile);
 
   if (learnings.length > 0) {
@@ -354,8 +362,8 @@ if (totalLearnings === 0) {
 }
 
 console.log(`\n📊 Found ${totalLearnings} learning(s)`);
-console.log(`   - SYSTEM: ${allLearnings.filter(l => l.category === 'SYSTEM').length}`);
-console.log(`   - ALGORITHM: ${allLearnings.filter(l => l.category === 'ALGORITHM').length}`);
+console.log(`   - SYSTEM: ${allLearnings.filter((l) => l.category === "SYSTEM").length}`);
+console.log(`   - ALGORITHM: ${allLearnings.filter((l) => l.category === "ALGORITHM").length}`);
 
 if (values["dry-run"]) {
   console.log("\n🔍 DRY RUN - Would write:");

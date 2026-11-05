@@ -8,13 +8,13 @@
  * Progressively compact for smaller terminals
  */
 
-import { readdirSync, existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { spawnSync } from "child_process";
-import { loadSettings } from "./ConfigLoader";
+import { readdirSync, existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { loadSettings } from "./ConfigLoader.ts";
+import { getKayaHome } from "./KayaHome.ts";
 
-const HOME = process.env.HOME!;
-const CLAUDE_DIR = join(HOME, ".claude");
+const CLAUDE_DIR = getKayaHome();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Terminal Width Detection
@@ -40,17 +40,21 @@ function getTerminalWidth(): number {
           }
         }
       }
-    } catch {}
+    } catch {
+      /* intentionally silent: kitty probe fails outside kitty; falls through to stty/tput/COLUMNS */
+    }
   }
 
   if (!width || width <= 0) {
     try {
       const result = spawnSync("sh", ["-c", "stty size </dev/tty 2>/dev/null"], { encoding: "utf-8" });
       if (result.stdout) {
-        const cols = parseInt(result.stdout.trim().split(/\s+/)[1]);
+        const cols = parseInt(result.stdout.trim().split(/\s+/)[1] ?? "");
         if (cols > 0) width = cols;
       }
-    } catch {}
+    } catch {
+      /* intentionally silent: stty fails without a tty; falls through to tput/COLUMNS */
+    }
   }
 
   if (!width || width <= 0) {
@@ -60,7 +64,9 @@ function getTerminalWidth(): number {
         const cols = parseInt(result.stdout.trim());
         if (cols > 0) width = cols;
       }
-    } catch {}
+    } catch {
+      /* intentionally silent: tput is optional; falls through to COLUMNS/default width */
+    }
   }
 
   if (!width || width <= 0) {
@@ -75,19 +81,19 @@ function getTerminalWidth(): number {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const RESET = "\x1b[0m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
 const ITALIC = "\x1b[3m";
 
 const rgb = (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`;
 
-// Sparkline characters
-const SPARK = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"];
-
 // Box drawing
 const BOX = {
-  tl: "\u256d", tr: "\u256e", bl: "\u2570", br: "\u256f",
-  h: "\u2500", v: "\u2502", dh: "\u2550",
+  tl: "\u256d",
+  tr: "\u256e",
+  bl: "\u2570",
+  br: "\u256f",
+  h: "\u2500",
+  v: "\u2502",
+  dh: "\u2550",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -114,9 +120,16 @@ function getStats(): SystemStats {
   try {
     const settings = loadSettings();
     name = settings.daidentity?.displayName || settings.daidentity?.name || "Kaya";
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner; falls back to the default name "Kaya" */
+  }
 
-  let skills = 0, workflows = 0, hooks = 0, learnings = 0, userFiles = 0, sessions = 0;
+  let skills = 0,
+    workflows = 0,
+    hooks = 0,
+    learnings = 0,
+    userFiles = 0,
+    sessions = 0;
 
   try {
     const skillsDir = join(CLAUDE_DIR, "skills");
@@ -134,14 +147,18 @@ function getStats(): SystemStats {
               count++;
             }
           }
-        } catch {}
+        } catch {
+          /* intentionally silent: unreadable category dir counts as zero sub-skills; cosmetic stat */
+        }
         return count;
       })();
 
       // Count this entry: if it has sub-skills, count the sub-skills; otherwise count itself
       skills += subSkillCount > 0 ? subSkillCount : 1;
     }
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner stat; falls back to the default skill count */
+  }
 
   // Count workflows in docs/workflows
   try {
@@ -151,13 +168,17 @@ function getStats(): SystemStats {
         if (e.isFile() && e.name.endsWith(".md")) workflows++;
       }
     }
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner stat; workflow count stays 0 */
+  }
 
   try {
     for (const e of readdirSync(join(CLAUDE_DIR, "hooks"), { withFileTypes: true })) {
       if (e.isFile() && e.name.endsWith(".ts")) hooks++;
     }
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner stat; hook count stays 0 */
+  }
 
   const countFiles = (dir: string): number => {
     let c = 0;
@@ -166,7 +187,9 @@ function getStats(): SystemStats {
         if (e.isDirectory()) c += countFiles(join(dir, e.name));
         else if (e.isFile()) c++;
       }
-    } catch {}
+    } catch {
+      /* intentionally silent: unreadable dir counts as zero files; cosmetic stat */
+    }
     return c;
   };
 
@@ -177,9 +200,11 @@ function getStats(): SystemStats {
     const historyFile = join(CLAUDE_DIR, "history.jsonl");
     if (existsSync(historyFile)) {
       const content = readFileSync(historyFile, "utf-8");
-      sessions = content.split("\n").filter(line => line.trim()).length;
+      sessions = content.split("\n").filter((line) => line.trim()).length;
     }
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner stat; session count stays 0 */
+  }
 
   // Get platform info
   const platform = process.platform === "darwin" ? "macOS" : process.platform;
@@ -191,9 +216,11 @@ function getStats(): SystemStats {
     const result = spawnSync("claude", ["--version"], { encoding: "utf-8" });
     if (result.stdout) {
       const match = result.stdout.match(/(\d+\.\d+\.\d+)/);
-      if (match) ccVersion = match[1];
+      if (match) ccVersion = match[1] ?? ccVersion;
     }
-  } catch {}
+  } catch {
+    /* intentionally silent: cosmetic banner stat; keeps the default Claude Code version */
+  }
 
   return {
     name,
@@ -223,28 +250,10 @@ function padEnd(str: string, width: number): string {
   return str + " ".repeat(Math.max(0, width - visibleLength(str)));
 }
 
-function padStart(str: string, width: number): string {
-  return " ".repeat(Math.max(0, width - visibleLength(str))) + str;
-}
-
 function center(str: string, width: number): string {
   const visible = visibleLength(str);
   const left = Math.floor((width - visible) / 2);
   return " ".repeat(Math.max(0, left)) + str + " ".repeat(Math.max(0, width - visible - left));
-}
-
-function randomHex(len: number = 4): string {
-  return Array.from({ length: len }, () =>
-    Math.floor(Math.random() * 16).toString(16).toUpperCase()
-  ).join("");
-}
-
-function sparkline(length: number, colors?: string[]): string {
-  return Array.from({ length }, (_, i) => {
-    const level = Math.floor(Math.random() * 8);
-    const color = colors ? colors[i % colors.length] : "";
-    return `${color}${SPARK[level]}${RESET}`;
-  }).join("");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,8 +264,8 @@ function sparkline(length: number, colors?: string[]): string {
 function createNavyBanner(stats: SystemStats, width: number): string {
   const C = {
     // Logo colors matching reference image
-    navy: rgb(30, 58, 138),       // Dark navy (P column, horizontal bars)
-    medBlue: rgb(59, 130, 246),   // Medium blue (A column, bottom right blocks)
+    navy: rgb(30, 58, 138), // Dark navy (P column, horizontal bars)
+    medBlue: rgb(59, 130, 246), // Medium blue (A column, bottom right blocks)
     lightBlue: rgb(147, 197, 253), // Light blue (I column accent)
     // Info section colors - blue palette gradient
     steel: rgb(51, 65, 85),
@@ -301,14 +310,14 @@ function createNavyBanner(stats: SystemStats, width: number): string {
   const infoLines = [
     `${C.slate}"${RESET}${C.lightBlue}${stats.name}${RESET} ${C.slate}here, ready to go..."${RESET}`,
     `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    `${C.navy}\u2B22${RESET}  ${C.slate}Kaya${RESET}       ${C.silver}v${stats.version}${RESET}`,                            // ⬢ hexagon (tech/AI)
-    `${C.lightBlue}\u2726${RESET}  ${C.slate}Skills${RESET}    ${C.silver}${stats.skills}${RESET}`,            // ✦ four-pointed star (capabilities)
-    `${C.skyBlue}\u21BB${RESET}  ${C.slate}Workflows${RESET} ${C.iceBlue}${stats.workflows}${RESET}`,          // ↻ cycle (process flow)
-    `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`,         // ↪ hook arrow
-    `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`,          // ✦ star (user sentiment signals)
-    `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`,           // ≡ identical to (files/menu)
+    `${C.navy}\u2B22${RESET}  ${C.slate}Kaya${RESET}       ${C.silver}v${stats.version}${RESET}`, // ⬢ hexagon (tech/AI)
+    `${C.lightBlue}\u2726${RESET}  ${C.slate}Skills${RESET}    ${C.silver}${stats.skills}${RESET}`, // ✦ four-pointed star (capabilities)
+    `${C.skyBlue}\u21BB${RESET}  ${C.slate}Workflows${RESET} ${C.iceBlue}${stats.workflows}${RESET}`, // ↻ cycle (process flow)
+    `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`, // ↪ hook arrow
+    `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`, // ✦ star (user sentiment signals)
+    `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`, // ≡ identical to (files/menu)
     `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    ``,                                                                                                        // empty line for centering
+    ``, // empty line for centering
   ];
 
   // Layout with separator: logo | separator | info
@@ -328,14 +337,12 @@ function createNavyBanner(stats: SystemStats, width: number): string {
     tr: "\u2513", // ┓
     bl: "\u2517", // ┗
     br: "\u251B", // ┛
-    h: "\u2501",  // ━
+    h: "\u2501", // ━
   };
 
   // Frame dimensions
   const frameWidth = 70;
   const framePad = " ".repeat(Math.floor((width - frameWidth) / 2));
-  const cornerLen = 3; // Length of corner pieces
-  const innerSpace = frameWidth - (cornerLen * 2);
 
   const lines: string[] = [""];
 
@@ -365,7 +372,7 @@ function createNavyBanner(stats: SystemStats, width: number): string {
   // Main content: logo | separator | info
   for (let i = 0; i < infoLines.length; i++) {
     const logoIndex = i - logoTopPad;
-    const logoRow = (logoIndex >= 0 && logoIndex < logo.length) ? logo[logoIndex] : emptyLogoSpace;
+    const logoRow = (logoIndex >= 0 ? logo[logoIndex] : undefined) ?? emptyLogoSpace;
     const infoRow = infoLines[i];
     lines.push(`${pad}${padEnd(logoRow, LOGO_WIDTH)}${gap}${SEPARATOR}${gapAfter}${infoRow}`);
   }
@@ -481,7 +488,7 @@ function createNavyMediumBanner(stats: SystemStats, width: number): string {
   // Main content
   for (let i = 0; i < infoLines.length; i++) {
     const logoIndex = i - logoTopPad;
-    const logoRow = (logoIndex >= 0 && logoIndex < logo.length) ? logo[logoIndex] : emptyLogoSpace;
+    const logoRow = (logoIndex >= 0 ? logo[logoIndex] : undefined) ?? emptyLogoSpace;
     lines.push(`${pad}${padEnd(logoRow, LOGO_WIDTH)}${gap}${SEPARATOR}${gapAfter}${infoLines[i]}`);
   }
 
@@ -530,7 +537,7 @@ function createNavyCompactBanner(stats: SystemStats, width: number): string {
   // Main content
   for (let i = 0; i < infoLines.length; i++) {
     const logoIndex = i - logoTopPad;
-    const logoRow = (logoIndex >= 0 && logoIndex < logo.length) ? logo[logoIndex] : emptyLogoSpace;
+    const logoRow = (logoIndex >= 0 ? logo[logoIndex] : undefined) ?? emptyLogoSpace;
     lines.push(`${pad}${padEnd(logoRow, LOGO_WIDTH)}${gap}${SEPARATOR}${gapAfter}${infoLines[i]}`);
   }
   lines.push("");
@@ -561,7 +568,7 @@ function createNavyMinimalBanner(stats: SystemStats, width: number): string {
   const lines: string[] = [""];
 
   for (let i = 0; i < logo.length; i++) {
-    lines.push(`${pad}${padEnd(logo[i], LOGO_WIDTH)}${gap}${infoLines[i] || ""}`);
+    lines.push(`${pad}${padEnd(logo[i] ?? "", LOGO_WIDTH)}${gap}${infoLines[i] || ""}`);
   }
   lines.push("");
 
@@ -578,7 +585,12 @@ function createNavyUltraCompactBanner(stats: SystemStats, width: number): string
   lines.push(center(kayaColored, width));
   lines.push(center(`${C.lightBlue}${stats.name}${RESET}${C.slate}@kaya v${stats.version}${RESET}`, width));
   lines.push(center(`${C.steel}${BOX.h.repeat(Math.min(20, width - 4))}${RESET}`, width));
-  lines.push(center(`${C.lightBlue}\u2726${RESET}${C.silver}${stats.skills}${RESET} ${C.royalBlue}\u21AA${RESET}${C.periwinkle}${stats.hooks}${RESET} ${C.medBlue}\u2726${RESET}${C.skyBlue}${stats.learnings}${RESET}`, width));
+  lines.push(
+    center(
+      `${C.lightBlue}\u2726${RESET}${C.silver}${stats.skills}${RESET} ${C.royalBlue}\u21AA${RESET}${C.periwinkle}${stats.hooks}${RESET} ${C.medBlue}\u2726${RESET}${C.skyBlue}${stats.learnings}${RESET}`,
+      width,
+    ),
+  );
   lines.push("");
 
   return lines.join("\n");
@@ -590,10 +602,10 @@ function createNavyUltraCompactBanner(stats: SystemStats, width: number): string
 
 // Breakpoints for responsive Navy banner
 const BREAKPOINTS = {
-  FULL: 85,      // Full Navy with border
-  MEDIUM: 70,    // No border, full content
-  COMPACT: 55,   // Small logo, reduced info
-  MINIMAL: 45,   // Very condensed
+  FULL: 85, // Full Navy with border
+  MEDIUM: 70, // No border, full content
+  COMPACT: 55, // Small logo, reduced info
+  MINIMAL: 45, // Very condensed
   // Below 45: Ultra-compact text only
 };
 
@@ -607,11 +619,16 @@ function createBanner(forceDesign?: string): string {
   // If a specific design is requested (for --design= flag or --test mode)
   if (forceDesign) {
     switch (forceDesign) {
-      case "navy": return createNavyBanner(stats, width);
-      case "navy-medium": return createNavyMediumBanner(stats, width);
-      case "navy-compact": return createNavyCompactBanner(stats, width);
-      case "navy-minimal": return createNavyMinimalBanner(stats, width);
-      case "navy-ultra": return createNavyUltraCompactBanner(stats, width);
+      case "navy":
+        return createNavyBanner(stats, width);
+      case "navy-medium":
+        return createNavyMediumBanner(stats, width);
+      case "navy-compact":
+        return createNavyCompactBanner(stats, width);
+      case "navy-minimal":
+        return createNavyMinimalBanner(stats, width);
+      case "navy-ultra":
+        return createNavyUltraCompactBanner(stats, width);
     }
   }
 
@@ -636,20 +653,22 @@ function createBanner(forceDesign?: string): string {
 const args = process.argv.slice(2);
 const testMode = args.includes("--test");
 const statsJsonMode = args.includes("--stats-json");
-const designArg = args.find(a => a.startsWith("--design="))?.split("=")[1];
+const designArg = args.find((a) => a.startsWith("--design="))?.split("=")[1];
 
 try {
   if (statsJsonMode) {
     // Output only stats as JSON (for compact context injection)
     const stats = getStats();
-    console.log(JSON.stringify({
-      version: stats.version,
-      skills: stats.skills,
-      workflows: stats.workflows,
-      hooks: stats.hooks,
-      learnings: stats.learnings,
-      userFiles: stats.userFiles,
-    }));
+    console.log(
+      JSON.stringify({
+        version: stats.version,
+        skills: stats.skills,
+        workflows: stats.workflows,
+        hooks: stats.hooks,
+        learnings: stats.learnings,
+        userFiles: stats.userFiles,
+      }),
+    );
   } else if (testMode) {
     for (const design of ALL_DESIGNS) {
       console.log(`\n${"═".repeat(60)}`);

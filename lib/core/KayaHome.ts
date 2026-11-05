@@ -15,9 +15,9 @@
  *   const settings = kayaHomePath('settings.json');
  */
 
-import { homedir } from 'os';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
 
 interface KayaHomeCacheEntry {
   /** The KAYA_HOME||KAYA_DIR value that produced `home` — undefined when neither was set. */
@@ -66,7 +66,7 @@ export function getKayaHome(): string {
  * (decoy-db incident, 2026-07-02).
  */
 export function defaultKayaHome(): string {
-  return join(homedir(), '.claude');
+  return join(homedir(), ".claude");
 }
 
 /**
@@ -90,9 +90,9 @@ export function kayaHomePath(...segments: string[]): string {
 export function getSharedGraphDir(): string {
   const env = process.env.KAYA_GRAPH_DIR;
   if (env) return expandPath(env);
-  const shared = join(homedir(), '.kaya', 'graph');
+  const shared = join(homedir(), ".kaya", "graph");
   if (existsSync(shared)) return shared;
-  return join(getKayaHome(), 'MEMORY', 'GRAPH');
+  return join(getKayaHome(), "MEMORY", "GRAPH");
 }
 
 /**
@@ -111,9 +111,9 @@ export function getSharedGraphDir(): string {
 export function runtimeDir(): string {
   const env = process.env.KAYA_RUNTIME;
   if (env) return expandPath(env);
-  const shared = join(homedir(), '.kaya', 'runtime');
+  const shared = join(homedir(), ".kaya", "runtime");
   if (existsSync(shared)) return shared;
-  return join(getKayaHome(), 'MEMORY');
+  return join(getKayaHome(), "MEMORY");
 }
 
 /**
@@ -123,7 +123,7 @@ export function runtimeDir(): string {
  * per-call, mirroring defaultKayaHome()'s contract.
  */
 export function defaultAutoMemoryDir(): string {
-  return join(homedir(), '.kaya', 'memory');
+  return join(homedir(), ".kaya", "memory");
 }
 
 /**
@@ -166,12 +166,12 @@ export function getAutoMemoryDir(): string {
  * before it touches a single real file, not silently rewrite live auto-memory.
  */
 export function assertNotLiveAutoMemoryDirUnderTest(component: string, memoryDirInUse: string): void {
-  if (process.env.NODE_ENV === 'test' && memoryDirInUse === defaultAutoMemoryDir()) {
+  if (process.env.NODE_ENV === "test" && memoryDirInUse === defaultAutoMemoryDir()) {
     throw new Error(
       `[hermetic-guard] ${component} attempted a write against the LIVE auto-memory directory ` +
-      `(${defaultAutoMemoryDir()}) while NODE_ENV=test. Pin KAYA_MEMORY_DIR (or pass an explicit ` +
-      `memoryDir option) to a mkdtemp dir in this test. This guard prevents tests from rewriting ` +
-      `Jm's real memory files.`
+        `(${defaultAutoMemoryDir()}) while NODE_ENV=test. Pin KAYA_MEMORY_DIR (or pass an explicit ` +
+        `memoryDir option) to a mkdtemp dir in this test. This guard prevents tests from rewriting ` +
+        `Jm's real memory files.`,
     );
   }
 }
@@ -205,11 +205,11 @@ export function expandPath(path: string): string {
  * real write, instead of silently corrupting live MEMORY/ state.
  */
 export function assertNotLiveHomeUnderTest(component: string): void {
-  if (process.env.NODE_ENV === 'test' && getKayaHome() === defaultKayaHome()) {
+  if (process.env.NODE_ENV === "test" && getKayaHome() === defaultKayaHome()) {
     throw new Error(
       `[hermetic-guard] ${component} attempted a write against the LIVE Kaya home ` +
-      `(${defaultKayaHome()}) while NODE_ENV=test. Pin KAYA_HOME to a mkdtemp dir in this test ` +
-      `(see structured-falcon §69 hermetic invariant). This guard prevents tests from corrupting live state.`
+        `(${defaultKayaHome()}) while NODE_ENV=test. Pin KAYA_HOME to a mkdtemp dir in this test ` +
+        `(see structured-falcon §69 hermetic invariant). This guard prevents tests from corrupting live state.`,
     );
   }
 }
@@ -257,15 +257,15 @@ export function assertNotLiveHomeUnderTest(component: string): void {
  * only produce false-positive throws in otherwise-correct hermetic tests.
  */
 export function assertNotLiveDefaultUnderTest(component: string): void {
-  if (process.env.NODE_ENV === 'test' || !!process.env.KAYA_VERIFY_SESSION) {
+  if (process.env.NODE_ENV === "test" || process.env.KAYA_VERIFY_SESSION) {
     throw new Error(
       `[hermetic-guard] ${component} attempted a write against the LIVE Kaya home ` +
-      `(${defaultKayaHome()}), which this module hardcodes regardless of KAYA_HOME/KAYA_DIR ` +
-      `(a documented exemption — see AlertManager.ts's module-level comment). Pinning KAYA_HOME ` +
-      `will NOT bypass this guard for this module class, because the write target ignores it. ` +
-      `Use a caller-supplied scratch-dir DI override instead (e.g. AlertManagerOptions.alertsLogPath), ` +
-      `or VerifyHarness.ts for manual/agent verification. This guard prevents tests and ad-hoc ` +
-      `verify scripts from corrupting live state (2026-07-20 incident).`
+        `(${defaultKayaHome()}), which this module hardcodes regardless of KAYA_HOME/KAYA_DIR ` +
+        `(a documented exemption — see AlertManager.ts's module-level comment). Pinning KAYA_HOME ` +
+        `will NOT bypass this guard for this module class, because the write target ignores it. ` +
+        `Use a caller-supplied scratch-dir DI override instead (e.g. AlertManagerOptions.alertsLogPath), ` +
+        `or VerifyHarness.ts for manual/agent verification. This guard prevents tests and ad-hoc ` +
+        `verify scripts from corrupting live state (2026-07-20 incident).`,
     );
   }
 }

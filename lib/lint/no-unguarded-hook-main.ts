@@ -9,7 +9,7 @@
  * files; the bare import executed the hook -> stdin wait -> process.exit(0),
  * which killed the Bun test process before any test could report. This made
  * `bun run test` FALSE-GREEN (exit 0, zero tests reported). See
- * docs/testing-baseline-2026-07.md.
+ * docs/testing-baseline.md.
  *
  * Two modes:
  *   - checkNoUnguardedHookMain(rootDir)        — full-tree scan of hooks/*.hook.ts;
@@ -27,9 +27,9 @@
  * guarded as of this rule's introduction.
  */
 
-import { execSync } from 'child_process';
-import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { execSync } from "node:child_process";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 export interface LintResult {
   errors: string[];
@@ -37,7 +37,7 @@ export interface LintResult {
 }
 
 const HOOK_FILE_PATTERN = /\.hook\.ts$/;
-const REQUIRED_MARKER = 'import.meta.main';
+const REQUIRED_MARKER = "import.meta.main";
 
 function violationMessage(relativePath: string): string {
   return (
@@ -56,7 +56,7 @@ export async function checkNoUnguardedHookMain(rootDir: string = process.cwd()):
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  const hooksDir = join(rootDir, 'hooks');
+  const hooksDir = join(rootDir, "hooks");
   let entries: string[];
   try {
     entries = readdirSync(hooksDir);
@@ -71,7 +71,7 @@ export async function checkNoUnguardedHookMain(rootDir: string = process.cwd()):
     const filePath = join(hooksDir, entry);
     let content: string;
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = readFileSync(filePath, "utf-8");
     } catch (err) {
       warnings.push(`[no-unguarded-hook-main] Could not read hooks/${entry}: ${err}`);
       continue;
@@ -97,16 +97,20 @@ export async function checkNoUnguardedHookMainStaged(rootDir: string = process.c
 
   let stagedOutput: string;
   try {
-    stagedOutput = execSync(
-      `git diff --cached --name-only --diff-filter=ACMR -- 'hooks/*.hook.ts'`,
-      { encoding: 'utf-8', cwd: rootDir },
+    stagedOutput = execSync(`git diff --cached --name-only --diff-filter=ACMR -- 'hooks/*.hook.ts'`, {
+      encoding: "utf-8",
+      cwd: rootDir,
+    });
+  } catch (err) {
+    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
+    warnings.push(
+      `no-unguarded-hook-main: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`,
     );
-  } catch {
     return { errors, warnings };
   }
 
   const stagedFiles = stagedOutput
-    .split('\n')
+    .split("\n")
     .map((f) => f.trim())
     .filter((f) => f.length > 0 && HOOK_FILE_PATTERN.test(f));
 
@@ -114,7 +118,7 @@ export async function checkNoUnguardedHookMainStaged(rootDir: string = process.c
     let content: string;
     try {
       content = execSync(`git show ":${relativePath}"`, {
-        encoding: 'utf-8',
+        encoding: "utf-8",
         cwd: rootDir,
         maxBuffer: 32 * 1024 * 1024,
       });

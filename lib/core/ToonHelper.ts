@@ -35,6 +35,7 @@
  */
 
 import { encode, decode } from "@toon-format/toon";
+import { readStdinText } from "./CliStdin.ts";
 
 // ============================================================================
 // TYPES
@@ -43,7 +44,7 @@ import { encode, decode } from "@toon-format/toon";
 /**
  * Result from maybeEncode indicating which format was chosen
  */
-export interface MaybeEncodeResult {
+interface MaybeEncodeResult {
   format: "json" | "toon";
   data: string;
 }
@@ -51,7 +52,7 @@ export interface MaybeEncodeResult {
 /**
  * Token savings estimate comparing JSON vs TOON
  */
-export interface TokenSavingsEstimate {
+interface TokenSavingsEstimate {
   jsonTokens: number;
   toonTokens: number;
   savingsPercent: number;
@@ -155,10 +156,7 @@ export function fromToon(toon: string): unknown[] {
  * // { format: "json", data: "[{\"type\":\"a\",...}]" }
  * ```
  */
-export function maybeEncode(
-  data: unknown[],
-  threshold: number = 10
-): MaybeEncodeResult {
+export function maybeEncode(data: unknown[], threshold: number = 10): MaybeEncodeResult {
   // Empty arrays always use JSON -- no savings possible
   if (data.length === 0) {
     return { format: "json", data: "[]" };
@@ -170,8 +168,7 @@ export function maybeEncode(
   const jsonTokens = estimateTokens(jsonStr);
   const toonTokens = estimateTokens(toonStr);
 
-  const savingsPercent =
-    jsonTokens > 0 ? ((jsonTokens - toonTokens) / jsonTokens) * 100 : 0;
+  const savingsPercent = jsonTokens > 0 ? ((jsonTokens - toonTokens) / jsonTokens) * 100 : 0;
 
   if (savingsPercent >= threshold) {
     return { format: "toon", data: toonStr };
@@ -207,10 +204,7 @@ export function estimateTokenSavings(data: unknown[]): TokenSavingsEstimate {
   const jsonTokens = estimateTokens(jsonStr);
   const toonTokens = estimateTokens(toonStr);
 
-  const savingsPercent =
-    jsonTokens > 0
-      ? Math.max(0, ((jsonTokens - toonTokens) / jsonTokens) * 100)
-      : 0;
+  const savingsPercent = jsonTokens > 0 ? Math.max(0, ((jsonTokens - toonTokens) / jsonTokens) * 100) : 0;
 
   return {
     jsonTokens,
@@ -222,20 +216,6 @@ export function estimateTokenSavings(data: unknown[]): TokenSavingsEstimate {
 // ============================================================================
 // CLI INTERFACE
 // ============================================================================
-
-async function readStdin(): Promise<string> {
-  const chunks: string[] = [];
-  const reader = Bun.stdin.stream().getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(decoder.decode(value, { stream: true }));
-  }
-
-  return chunks.join("").trim();
-}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -262,7 +242,7 @@ Examples:
     process.exit(0);
   }
 
-  const input = await readStdin();
+  const input = await readStdinText();
   if (!input) {
     console.error("Error: No input on stdin");
     process.exit(1);
@@ -303,8 +283,7 @@ Examples:
         process.exit(1);
       }
       const thresholdIdx = args.indexOf("--threshold");
-      const threshold =
-        thresholdIdx >= 0 ? Number(args[thresholdIdx + 1]) : 10;
+      const threshold = thresholdIdx >= 0 ? Number(args[thresholdIdx + 1]) : 10;
       const result = maybeEncode(data, threshold);
       console.log(JSON.stringify({ format: result.format }, null, 2));
       console.log(result.data);

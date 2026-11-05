@@ -1,7 +1,7 @@
-import { randomUUID } from "crypto";
-import { closeSync, openSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { randomUUID } from "node:crypto";
+import { closeSync, openSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 
-export interface AtomicSecretsIO {
+interface AtomicSecretsIO {
   randomId(): string;
   open(path: string, flags: "wx", mode: number): number;
   write(fd: number, data: string): void;
@@ -45,16 +45,26 @@ export function writeSecretsAtomically(
     failed = true;
   } finally {
     if (fd !== undefined) {
-      try { io.close(fd); } catch { cleanupFailed = true; }
+      try {
+        io.close(fd);
+      } catch {
+        cleanupFailed = true;
+      }
     }
     // Never remove a pre-existing file when exclusive creation fails.
     if (ownsTemp && tempPath !== undefined) {
-      try { io.unlink(tempPath); } catch { cleanupFailed = true; }
+      try {
+        io.unlink(tempPath);
+      } catch {
+        cleanupFailed = true;
+      }
     }
   }
   if (failed || cleanupFailed) {
-    throw new Error(cleanupFailed
-      ? "Could not save secrets; temporary file cleanup failed. Inspect the destination directory privately."
-      : "Could not save secrets; replacement did not complete.");
+    throw new Error(
+      cleanupFailed
+        ? "Could not save secrets; temporary file cleanup failed. Inspect the destination directory privately."
+        : "Could not save secrets; replacement did not complete.",
+    );
   }
 }

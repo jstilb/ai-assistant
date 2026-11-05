@@ -22,13 +22,13 @@
  *     defensively anyway (belt-and-suspenders).
  */
 
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { kayaHomePath, assertNotLiveHomeUnderTest } from './KayaHome.ts';
-import { createAppendLog } from './AppendLog.ts';
-import { getAlertGate, type AlertTier } from './AlertGate.ts';
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { kayaHomePath, assertNotLiveHomeUnderTest } from "./KayaHome.ts";
+import { createAppendLog } from "./AppendLog.ts";
+import { getAlertGate, type AlertTier } from "./AlertGate.ts";
 
-const LOG_RELPATH = 'MEMORY/MONITORING/failure-log.jsonl';
+const LOG_RELPATH = "MEMORY/MONITORING/failure-log.jsonl";
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -38,7 +38,7 @@ const LOG_RELPATH = 'MEMORY/MONITORING/failure-log.jsonl';
  * Unified failure event. `logFailure` is a thin wrapper that calls
  * recordFailure({ source, error, context }) — identical on-disk schema.
  */
-export interface FailureEvent {
+interface FailureEvent {
   /** Module/caller identifier, e.g. "SpecPipelineRunner:runResearchPhase". */
   source: string;
   /** The caught error (Error instance, string, or any unknown value). */
@@ -60,6 +60,10 @@ export interface FailureEvent {
    * Message sent to AlertGate. Default: derived from error.message.
    */
   alertMessage?: string;
+  /**
+   * Content fingerprint passed to AlertGate. Default: `${source}:${error message}`.
+   */
+  fingerprint?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,14 +82,14 @@ export interface FailureEvent {
  * writing into the live Kaya home.
  */
 export function recordFailure(e: FailureEvent): void {
-  assertNotLiveHomeUnderTest('FailureLog.recordFailure');
+  assertNotLiveHomeUnderTest("FailureLog.recordFailure");
   try {
-    const tier = e.tier ?? 'log';
+    const tier = e.tier ?? "log";
 
     // Build the error sub-object — matches original schema exactly.
     const errorField =
       e.error === undefined
-        ? { message: '' }
+        ? { message: "" }
         : e.error instanceof Error
           ? { message: e.error.message, stack: e.error.stack }
           : { message: String(e.error) };
@@ -98,7 +102,7 @@ export function recordFailure(e: FailureEvent): void {
       error: errorField,
       context: e.context ?? {},
     };
-    if (tier !== 'log') record['tier'] = tier;
+    if (tier !== "log") record["tier"] = tier;
 
     const logPath = kayaHomePath(LOG_RELPATH);
     // maxSizeBytes disabled — this module's own rotateFailureLog() (below)
@@ -114,10 +118,10 @@ export function recordFailure(e: FailureEvent): void {
     // throws on its own (see AlertGate.ts), but wrapped defensively anyway so
     // a bridge failure can never affect the forensic write above, which has
     // already completed by this point.
-    if (tier === 'digest' || tier === 'page') {
+    if (tier === "digest" || tier === "page") {
       const msg = e.alertMessage ?? errorField.message;
       const key = e.alertKey ?? e.source;
-      const fingerprint = `${e.source}:${errorField.message}`;
+      const fingerprint = e.fingerprint ?? `${e.source}:${errorField.message}`;
       try {
         getAlertGate().send(msg, { key, tier, fingerprint });
       } catch {
@@ -134,7 +138,7 @@ export function recordFailure(e: FailureEvent): void {
     // visibility only — recordFailure() still never throws (contract
     // unchanged; see this function's own doc comment), it now just says so
     // loudly instead of silently.
-    const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+    const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
     console.error(
       `[FailureLog] INTERNAL ERROR in recordFailure() (source="${e.source}") — this failure ` +
         `event was just silently dropped by an unexpected exception: ${detail}`,
@@ -152,11 +156,7 @@ export function recordFailure(e: FailureEvent): void {
  * @param error   - The caught error (Error instance or unknown)
  * @param context - Optional key/value context (item id, phase, etc.)
  */
-export function logFailure(
-  source: string,
-  error: unknown,
-  context?: Record<string, unknown>
-): void {
+export function logFailure(source: string, error: unknown, context?: Record<string, unknown>): void {
   recordFailure({ source, error, context });
 }
 
@@ -177,7 +177,7 @@ export function logFailure(
 const ROTATE_AGE_DAYS = 90;
 const ROTATE_SIZE_BYTES = 500 * 1024; // 500 KB
 
-export interface RotationResult {
+interface RotationResult {
   skipped: boolean;
   linesRetained: number;
   linesArchived: number;
@@ -198,9 +198,9 @@ export function rotateFailureLog(overrideLogPath?: string): RotationResult {
   try {
     if (!existsSync(logPath)) return { skipped: true, linesRetained: 0, linesArchived: 0, archiveFiles: [] };
 
-    const raw = readFileSync(logPath, 'utf-8');
-    const fileSize = Buffer.byteLength(raw, 'utf-8');
-    const lines = raw.split('\n').filter(Boolean);
+    const raw = readFileSync(logPath, "utf-8");
+    const fileSize = Buffer.byteLength(raw, "utf-8");
+    const lines = raw.split("\n").filter(Boolean);
 
     // Determine cutoff timestamp.
     const cutoffMs = Date.now() - ROTATE_AGE_DAYS * 24 * 60 * 60 * 1000;
@@ -233,14 +233,14 @@ export function rotateFailureLog(overrideLogPath?: string): RotationResult {
     for (const line of old) {
       try {
         const rec = JSON.parse(line) as { ts?: string };
-        const month = (rec.ts ?? '').substring(0, 7); // "YYYY-MM"
-        const key = month || 'unknown';
+        const month = (rec.ts ?? "").substring(0, 7); // "YYYY-MM"
+        const key = month || "unknown";
         if (!byMonth.has(key)) byMonth.set(key, []);
         byMonth.get(key)!.push(line);
       } catch {
         // Put in 'unknown' bucket.
-        if (!byMonth.has('unknown')) byMonth.set('unknown', []);
-        byMonth.get('unknown')!.push(line);
+        if (!byMonth.has("unknown")) byMonth.set("unknown", []);
+        byMonth.get("unknown")!.push(line);
       }
     }
 
@@ -253,22 +253,28 @@ export function rotateFailureLog(overrideLogPath?: string): RotationResult {
         // buckets with no size-based rotation of their own; AppendLog is
         // used here purely as the safe write primitive (dir creation +
         // the underlying fs append call), not for its rotation policy.
-        createAppendLog(archivePath, { maxSizeBytes: Number.MAX_SAFE_INTEGER }).appendRaw(archiveLines.join('\n'));
+        createAppendLog(archivePath, { maxSizeBytes: Number.MAX_SAFE_INTEGER }).appendRaw(archiveLines.join("\n"));
         if (!archiveFiles.includes(archivePath)) archiveFiles.push(archivePath);
       } catch (err) {
-        console.warn(`[FailureLog] rotation: failed to write archive ${archivePath}: ${err instanceof Error ? err.message : err}`);
+        console.warn(
+          `[FailureLog] rotation: failed to write archive ${archivePath}: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
 
     // Atomically rewrite live file: write to .tmp then rename.
-    const tmpPath = logPath + '.tmp';
+    const tmpPath = logPath + ".tmp";
     try {
-      writeFileSync(tmpPath, recent.length > 0 ? recent.join('\n') + '\n' : '', 'utf-8');
+      writeFileSync(tmpPath, recent.length > 0 ? recent.join("\n") + "\n" : "", "utf-8");
       renameSync(tmpPath, logPath);
     } catch (err) {
       console.warn(`[FailureLog] rotation: failed to rewrite live log: ${err instanceof Error ? err.message : err}`);
       // Don't leave a .tmp behind.
-      try { if (existsSync(tmpPath)) renameSync(tmpPath, logPath); } catch { /* best effort */ }
+      try {
+        if (existsSync(tmpPath)) renameSync(tmpPath, logPath);
+      } catch {
+        /* best effort */
+      }
     }
 
     return { skipped: false, linesRetained: recent.length, linesArchived: old.length, archiveFiles };

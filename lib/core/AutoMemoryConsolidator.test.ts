@@ -8,10 +8,10 @@
  * suite costs zero tokens and is fully deterministic.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { execFileSync } from "child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { InferenceResult } from "./Inference.ts";
 import {
   DEFAULT_THRESHOLD_BYTES,
@@ -31,7 +31,6 @@ import {
   type MemoryBlock,
   type SplitPlan,
   type PlannedOutputFile,
-  type GitFn,
 } from "./AutoMemoryConsolidator.ts";
 
 // ============================================================================
@@ -114,25 +113,25 @@ describe("parseMemoryFile", () => {
     expect(parsed.frontmatter.description).toBe("A small test fixture");
     expect(parsed.frontmatter.metadata.type).toBe("project");
     expect(parsed.blocks.length).toBe(4);
-    expect(parsed.blocks[0].headingTitle).toBe("Overview section");
-    expect(parsed.blocks[1].headingTitle).toBe("2026-01-02: first dated finding");
-    expect(parsed.blocks[3].headingTitle).toBe("Undated followup note");
+    expect(parsed.blocks[0]!.headingTitle).toBe("Overview section");
+    expect(parsed.blocks[1]!.headingTitle).toBe("2026-01-02: first dated finding");
+    expect(parsed.blocks[3]!.headingTitle).toBe("Undated followup note");
   });
 
   it("detects dated blocks correctly", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[0].hasDate).toBe(false);
-    expect(parsed.blocks[1].hasDate).toBe(true);
-    expect(parsed.blocks[1].dates).toEqual(["2026-01-02"]);
-    expect(parsed.blocks[2].hasDate).toBe(true);
-    expect(parsed.blocks[2].dates).toEqual(["2026-03-15"]);
-    expect(parsed.blocks[3].hasDate).toBe(false);
+    expect(parsed.blocks[0]!.hasDate).toBe(false);
+    expect(parsed.blocks[1]!.hasDate).toBe(true);
+    expect(parsed.blocks[1]!.dates).toEqual(["2026-01-02"]);
+    expect(parsed.blocks[2]!.hasDate).toBe(true);
+    expect(parsed.blocks[2]!.dates).toEqual(["2026-03-15"]);
+    expect(parsed.blocks[3]!.hasDate).toBe(false);
   });
 
   it("detects NEEDS JM markers", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[1].needsJmMarkers).toEqual(["NEEDS JM"]);
-    expect(parsed.blocks[0].needsJmMarkers).toEqual([]);
+    expect(parsed.blocks[1]!.needsJmMarkers).toEqual(["NEEDS JM"]);
+    expect(parsed.blocks[0]!.needsJmMarkers).toEqual([]);
   });
 
   it("does not flag title-case 'Needs Jm' prose as a marker (only ALL-CAPS)", () => {
@@ -149,13 +148,13 @@ metadata:
 Escalations land in the "Kaya — Needs Jm" project, per Needs-Jm: convention.
 `;
     const parsed = parseMemoryFile(raw, "fixture");
-    expect(parsed.blocks[0].needsJmMarkers).toEqual([]);
+    expect(parsed.blocks[0]!.needsJmMarkers).toEqual([]);
   });
 
   it("detects wikilinks", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[0].wikilinks).toEqual(["some_wikilink"]);
-    expect(parsed.blocks[2].wikilinks).toEqual(["other_link"]);
+    expect(parsed.blocks[0]!.wikilinks).toEqual(["some_wikilink"]);
+    expect(parsed.blocks[2]!.wikilinks).toEqual(["other_link"]);
   });
 
   it("throws loudly when frontmatter is missing", () => {
@@ -343,8 +342,8 @@ describe("buildOutputFiles", () => {
       conflictNotes: [],
     };
     const outputs = buildOutputFiles("project_fixture.md", parsed.frontmatter, parsed.blocks, plan);
-    const reparsed = parseMemoryFile(outputs[0].raw, outputs[0].filename);
-    expect(reparsed.blocks.map((b) => b.raw)).toEqual([parsed.blocks[0].raw, parsed.blocks[3].raw]);
+    const reparsed = parseMemoryFile(outputs[0]!.raw, outputs[0]!.filename);
+    expect(reparsed.blocks.map((b) => b.raw)).toEqual([parsed.blocks[0]!.raw, parsed.blocks[3]!.raw]);
   });
 });
 
@@ -407,7 +406,7 @@ describe("verifySplitPreservesContent", () => {
 
   it("FAILS LOUD when a block is duplicated across two outputs", () => {
     const outputs = validSplit();
-    const duplicated = [...outputs, outputs[0]];
+    const duplicated = [...outputs, outputs[0]!];
     const result = verifySplitPreservesContent(
       SMALL_FIXTURE,
       "fixture",
@@ -480,10 +479,7 @@ describe("writeAndVerifySplit", () => {
   function setupRepo(): { memoryDir: string; sourceRaw: string } {
     initGitRepo(tmpDir);
     writeFileSync(join(tmpDir, "project_fixture.md"), SMALL_FIXTURE);
-    writeFileSync(
-      join(tmpDir, INDEX_FILENAME),
-      "# Auto Memory\n\n- [A small test fixture](project_fixture.md)\n",
-    );
+    writeFileSync(join(tmpDir, INDEX_FILENAME), "# Auto Memory\n\n- [A small test fixture](project_fixture.md)\n");
     git(["add", "-A"], tmpDir);
     git(["commit", "-m", "baseline"], tmpDir);
     return { memoryDir: tmpDir, sourceRaw: SMALL_FIXTURE };
@@ -550,9 +546,9 @@ describe("writeAndVerifySplit", () => {
     const beforeSha = git(["rev-parse", "HEAD"], memoryDir);
     const outputs = validOutputs(sourceRaw).filter((o) => o.filename !== "project_fixture_a.md");
 
-    expect(() =>
-      writeAndVerifySplit({ memoryDir, filename: "project_fixture.md", sourceRaw, outputs, git }),
-    ).toThrow(/POST-WRITE invariant check FAILED/);
+    expect(() => writeAndVerifySplit({ memoryDir, filename: "project_fixture.md", sourceRaw, outputs, git })).toThrow(
+      /POST-WRITE invariant check FAILED/,
+    );
 
     // Nothing committed: HEAD unchanged.
     expect(git(["rev-parse", "HEAD"], memoryDir)).toBe(beforeSha);

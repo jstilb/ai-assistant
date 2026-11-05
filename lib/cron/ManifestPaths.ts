@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from "fs";
-import { join } from "path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 export interface ManifestFile {
   path: string;

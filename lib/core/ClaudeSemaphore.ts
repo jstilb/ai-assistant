@@ -13,8 +13,8 @@
  * acquireClaudeSlot resolves to a release fn whether or not a slot was obtained; check
  * `.acquired` only for logging. Staggering is the primary fix; this smooths bursts.
  */
-import { mkdirSync, readdirSync, rmSync, writeFileSync, readFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 
 // frozen at import (getKayaHome cached); no test re-pins this module
@@ -23,19 +23,36 @@ const SLOT_DIR = process.env.KAYA_CLAUDE_SLOT_DIR || join(KAYA_HOME, "MEMORY/MON
 const MAX_SLOTS = Math.max(1, Number(process.env.MAX_CLAUDE_SLOTS ?? "2") || 2);
 
 function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Remove slots whose recorded owner PID is no longer alive. */
 function pruneDead(): void {
   let entries: string[];
-  try { entries = readdirSync(SLOT_DIR); } catch { return; }
+  try {
+    entries = readdirSync(SLOT_DIR);
+  } catch {
+    return;
+  }
   for (const name of entries) {
     if (!/^slot-\d+$/.test(name)) continue;
     let pid = 0;
-    try { pid = Number(readFileSync(join(SLOT_DIR, name, "pid"), "utf-8").trim()); } catch { /* no pid file */ }
+    try {
+      pid = Number(readFileSync(join(SLOT_DIR, name, "pid"), "utf-8").trim());
+    } catch {
+      /* no pid file */
+    }
     if (!pid || !pidAlive(pid)) {
-      try { rmSync(join(SLOT_DIR, name), { recursive: true, force: true }); } catch { /* race */ }
+      try {
+        rmSync(join(SLOT_DIR, name), { recursive: true, force: true });
+      } catch {
+        /* race */
+      }
     }
   }
 }
@@ -51,15 +68,17 @@ export interface ClaudeSlot {
  * Acquire a claude slot, polling until `timeoutMs`. ALWAYS resolves (never rejects, never
  * blocks forever): on timeout it returns `{ acquired: false }` and the caller proceeds ungated.
  */
-export async function acquireClaudeSlot(opts: {
-  timeoutMs?: number;
-  pollMs?: number;
-  owner?: number;
-} = {}): Promise<ClaudeSlot> {
+export async function acquireClaudeSlot(
+  opts: { timeoutMs?: number; pollMs?: number; owner?: number } = {},
+): Promise<ClaudeSlot> {
   const timeoutMs = opts.timeoutMs ?? 120_000;
   const pollMs = opts.pollMs ?? 3_000;
   const owner = opts.owner ?? process.pid;
-  try { mkdirSync(SLOT_DIR, { recursive: true }); } catch { /* exists */ }
+  try {
+    mkdirSync(SLOT_DIR, { recursive: true });
+  } catch {
+    /* exists */
+  }
 
   const noop: ClaudeSlot = { acquired: false, release: () => {} };
   const deadline = Date.now() + timeoutMs;
@@ -70,17 +89,27 @@ export async function acquireClaudeSlot(opts: {
       const slot = join(SLOT_DIR, `slot-${i}`);
       try {
         mkdirSync(slot); // atomic: throws if the slot is held
-        try { writeFileSync(join(slot, "pid"), String(owner)); } catch { /* best effort */ }
+        try {
+          writeFileSync(join(slot, "pid"), String(owner));
+        } catch {
+          /* best effort */
+        }
         let released = false;
         return {
           acquired: true,
           release: () => {
             if (released) return;
             released = true;
-            try { rmSync(slot, { recursive: true, force: true }); } catch { /* best effort */ }
+            try {
+              rmSync(slot, { recursive: true, force: true });
+            } catch {
+              /* best effort */
+            }
           },
         };
-      } catch { /* slot taken — try the next index */ }
+      } catch {
+        /* slot taken — try the next index */
+      }
     }
     if (Date.now() >= deadline) return noop;
     await new Promise((r) => setTimeout(r, pollMs));
@@ -97,7 +126,11 @@ export async function withClaudeSlot<T>(
 ): Promise<T> {
   const slot = await acquireClaudeSlot(opts);
   if (!slot.acquired && opts.onUngated) {
-    try { opts.onUngated(); } catch { /* logging must not break the run */ }
+    try {
+      opts.onUngated();
+    } catch {
+      /* logging must not break the run */
+    }
   }
   try {
     return await fn();

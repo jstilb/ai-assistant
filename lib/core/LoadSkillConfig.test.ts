@@ -9,11 +9,11 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync, rmSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
 // We test through the public API
-import { loadSkillConfig } from "./LoadSkillConfig";
+import { loadSkillConfig } from "./LoadSkillConfig.ts";
 
 const TEST_DIR = "/tmp/loadskillconfig-test";
 const TEST_SKILL_DIR = join(TEST_DIR, "skills", "TestSkill");
@@ -48,9 +48,7 @@ describe("LoadSkillConfig", () => {
     test("throws on invalid JSON in base config", async () => {
       writeFileSync(join(TEST_SKILL_DIR, "broken.json"), "{ invalid json");
 
-      await expect(
-        loadSkillConfig(TEST_SKILL_DIR, "broken.json")
-      ).rejects.toThrow();
+      await expect(loadSkillConfig(TEST_SKILL_DIR, "broken.json")).rejects.toThrow();
     });
 
     test("handles empty JSON object in base config", async () => {
@@ -82,7 +80,7 @@ describe("LoadSkillConfig", () => {
     });
 
     test("preserves string values with special characters", async () => {
-      const config = { path: "/usr/local/bin", desc: "A \"quoted\" value" };
+      const config = { path: "/usr/local/bin", desc: 'A "quoted" value' };
       writeFileSync(join(TEST_SKILL_DIR, "special.json"), JSON.stringify(config));
 
       const result = await loadSkillConfig<typeof config>(TEST_SKILL_DIR, "special.json");

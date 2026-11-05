@@ -39,9 +39,9 @@
  *   - Terminal may need microphone permissions (System Preferences > Security & Privacy)
  */
 
-import { spawn, spawnSync, ChildProcess } from "child_process";
-import { existsSync, mkdirSync, unlinkSync, writeFileSync, readFileSync, statSync, readdirSync } from "fs";
-import { join } from "path";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync, readFileSync, statSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 
 // Configuration
@@ -49,10 +49,10 @@ const CONFIG = {
   pidFile: process.env.VOICE_INPUT_PID_FILE || "/tmp/voice-input.pid",
   tempDir: process.env.VOICE_INPUT_TEMP_DIR || "/tmp/voice-input",
   extractScript: join(getKayaHome(), "lib/core/extract-transcript.py"),
-  sampleRate: 16000,  // Whisper expects 16kHz
-  channels: 1,        // Mono for speech recognition
-  format: "wav",      // WAV format for compatibility
-  maxTempFileAge: 3600000,  // Clean up files older than 1 hour (in ms)
+  sampleRate: 16000, // Whisper expects 16kHz
+  channels: 1, // Mono for speech recognition
+  format: "wav", // WAV format for compatibility
+  maxTempFileAge: 3600000, // Clean up files older than 1 hour (in ms)
 };
 
 // Clean up old temp files on startup
@@ -70,11 +70,11 @@ function cleanupOldTempFiles(): void {
           unlinkSync(filePath);
         }
       } catch {
-        // Ignore errors on individual files
+        // intentionally silent: one unreadable temp file must not stop cleanup of the rest
       }
     }
   } catch {
-    // Ignore errors
+    // intentionally silent: temp dir missing or unreadable; cleanup is best-effort
   }
 }
 
@@ -88,8 +88,8 @@ interface ParsedArgs {
   model: string;
   json: boolean;
   verbose: boolean;
-  inject: boolean;      // Type into frontmost app via AppleScript
-  autoSubmit: boolean;  // Press Enter after typing
+  inject: boolean; // Type into frontmost app via AppleScript
+  autoSubmit: boolean; // Press Enter after typing
 }
 
 function parseArgs(): ParsedArgs {
@@ -97,8 +97,8 @@ function parseArgs(): ParsedArgs {
   const command = (args[0] || "help") as ParsedArgs["command"];
 
   const getArg = (name: string, defaultValue: string): string => {
-    const arg = args.find(a => a.startsWith(`--${name}=`));
-    return arg ? arg.split("=")[1] : defaultValue;
+    const arg = args.find((a) => a.startsWith(`--${name}=`));
+    return arg ? (arg.split("=")[1] ?? defaultValue) : defaultValue;
   };
 
   const hasFlag = (name: string): boolean => args.includes(`--${name}`);
@@ -242,7 +242,7 @@ async function recordUntilSilence(
   silenceThreshold: number,
   silenceDuration: number,
   maxDuration: number,
-  log: Logger
+  log: Logger,
 ): Promise<{ success: boolean; duration?: number }> {
   return new Promise((resolve) => {
     log.info(`Recording to ${outputPath}...`);
@@ -257,16 +257,26 @@ async function recordUntilSilence(
     //   1 0.1 <threshold>% = wait for sound above threshold for at least 0.1s
     //   1 <duration> <threshold>% = then end after <duration>s of silence below threshold
     const recArgs = [
-      "-q",                                    // Quiet mode
-      "-r", CONFIG.sampleRate.toString(),      // Sample rate
-      "-c", CONFIG.channels.toString(),        // Channels
-      "-b", "16",                              // 16-bit
-      "-e", "signed-integer",                  // Encoding
+      "-q", // Quiet mode
+      "-r",
+      CONFIG.sampleRate.toString(), // Sample rate
+      "-c",
+      CONFIG.channels.toString(), // Channels
+      "-b",
+      "16", // 16-bit
+      "-e",
+      "signed-integer", // Encoding
       outputPath,
       "silence",
-      "1", "0.1", `${silenceThreshold}%`,      // Wait for sound above threshold
-      "1", silenceDuration.toString(), `${silenceThreshold}%`,  // End after silence
-      "trim", "0", maxDuration.toString(),     // Max duration
+      "1",
+      "0.1",
+      `${silenceThreshold}%`, // Wait for sound above threshold
+      "1",
+      silenceDuration.toString(),
+      `${silenceThreshold}%`, // End after silence
+      "trim",
+      "0",
+      maxDuration.toString(), // Max duration
     ];
 
     log.debug(`Running: rec ${recArgs.join(" ")}`);
@@ -322,24 +332,14 @@ async function recordUntilSilence(
 }
 
 // Transcribe audio file using faster-whisper
-async function transcribe(
-  audioPath: string,
-  model: string,
-  log: Logger
-): Promise<string | null> {
+async function transcribe(audioPath: string, model: string, log: Logger): Promise<string | null> {
   log.info(`Transcribing with model: ${model}`);
 
   // Use uv to run the extract-transcript.py script
-  const result = spawnSync("uv", [
-    "run",
-    CONFIG.extractScript,
-    audioPath,
-    "--model", model,
-    "--format", "txt",
-  ], {
+  const result = spawnSync("uv", ["run", CONFIG.extractScript, audioPath, "--model", model, "--format", "txt"], {
     encoding: "utf-8",
-    timeout: 120000,  // 2 minute timeout for large models
-    maxBuffer: 10 * 1024 * 1024,  // 10MB buffer
+    timeout: 120000, // 2 minute timeout for large models
+    maxBuffer: 10 * 1024 * 1024, // 10MB buffer
   });
 
   if (result.status !== 0) {
@@ -360,7 +360,7 @@ async function transcribe(
     try {
       unlinkSync(transcriptPath);
     } catch {
-      // Ignore cleanup errors
+      // intentionally silent: transcript temp file cleanup is best-effort
     }
 
     return transcript;
@@ -373,10 +373,12 @@ async function transcribe(
 // Output result
 function output(text: string, isJson: boolean): void {
   if (isJson) {
-    console.log(JSON.stringify({
-      transcript: text,
-      timestamp: new Date().toISOString(),
-    }));
+    console.log(
+      JSON.stringify({
+        transcript: text,
+        timestamp: new Date().toISOString(),
+      }),
+    );
   } else {
     console.log(text);
   }
@@ -385,10 +387,7 @@ function output(text: string, isJson: boolean): void {
 // Type text into frontmost application using AppleScript
 async function injectText(text: string, autoSubmit: boolean, log: Logger): Promise<boolean> {
   // Escape text for AppleScript (escape backslashes and quotes)
-  const escaped = text
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n');
+  const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 
   // Build AppleScript with delay before Enter to ensure text is fully typed
   let script = `
@@ -399,7 +398,7 @@ tell application "System Events"
   if (autoSubmit) {
     // Add delay to ensure text is typed before pressing Enter
     script += `  delay 0.3\n`;
-    script += `  key code 36\n`;  // 36 = Return key
+    script += `  key code 36\n`; // 36 = Return key
   }
 
   script += `end tell`;
@@ -416,7 +415,7 @@ tell application "System Events"
     return false;
   }
 
-  log.success(`Injected: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+  log.success(`Injected: "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`);
   return true;
 }
 
@@ -428,13 +427,13 @@ function cleanupFile(path: string, log: Logger): void {
       log.debug(`Cleaned up: ${path}`);
     }
   } catch {
-    // Ignore cleanup errors
+    // intentionally silent: temp file cleanup is best-effort
   }
 }
 
 // Test mode - verify setup
 async function runTest(args: ParsedArgs): Promise<void> {
-  const log = createLogger(true);  // Always verbose in test mode
+  const log = createLogger(true); // Always verbose in test mode
 
   console.error("\n=== VoiceInput System Test ===\n");
 
@@ -478,13 +477,14 @@ async function runTest(args: ParsedArgs): Promise<void> {
   const testPath = join(CONFIG.tempDir, `test-${Date.now()}.wav`);
 
   // Simple 2-second recording
-  const recResult = spawnSync("rec", [
-    "-q", "-r", "16000", "-c", "1", "-b", "16", "-e", "signed-integer",
-    testPath, "trim", "0", "2",
-  ], {
-    timeout: 10000,
-    encoding: "utf-8",
-  });
+  const recResult = spawnSync(
+    "rec",
+    ["-q", "-r", "16000", "-c", "1", "-b", "16", "-e", "signed-integer", testPath, "trim", "0", "2"],
+    {
+      timeout: 10000,
+      encoding: "utf-8",
+    },
+  );
 
   if (recResult.status === 0 && existsSync(testPath)) {
     const stat = statSync(testPath);
@@ -548,7 +548,7 @@ async function recordOnce(args: ParsedArgs): Promise<void> {
     args.silenceThreshold,
     args.silenceDuration,
     args.maxDuration,
-    log
+    log,
   );
 
   if (!result.success) {
@@ -579,7 +579,7 @@ async function startContinuous(args: ParsedArgs): Promise<void> {
   if (existsSync(CONFIG.pidFile)) {
     const pid = parseInt(readFileSync(CONFIG.pidFile, "utf-8").trim());
     try {
-      process.kill(pid, 0);  // Check if process exists
+      process.kill(pid, 0); // Check if process exists
       log.error(`Already running (PID: ${pid}). Use 'stop' command first.`);
       process.exit(1);
     } catch {
@@ -630,7 +630,7 @@ async function startContinuous(args: ParsedArgs): Promise<void> {
       args.silenceThreshold,
       args.silenceDuration,
       args.maxDuration,
-      log
+      log,
     );
 
     if (result.success) {
@@ -651,7 +651,7 @@ async function startContinuous(args: ParsedArgs): Promise<void> {
     cleanupFile(audioPath, log);
 
     // Small delay before next recording
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
@@ -688,7 +688,7 @@ function checkStatus(): void {
   const pid = parseInt(readFileSync(CONFIG.pidFile, "utf-8").trim());
 
   try {
-    process.kill(pid, 0);  // Check if process exists
+    process.kill(pid, 0); // Check if process exists
     console.log(JSON.stringify({ running: true, pid }));
   } catch {
     console.log(JSON.stringify({ running: false, stale_pid: pid }));
@@ -763,7 +763,7 @@ async function startClaudeMode(args: ParsedArgs): Promise<void> {
       args.silenceThreshold,
       args.silenceDuration,
       args.maxDuration,
-      log
+      log,
     );
 
     if (result.success) {
@@ -794,7 +794,7 @@ async function startClaudeMode(args: ParsedArgs): Promise<void> {
     cleanupFile(audioPath, log);
 
     // Small delay before next recording
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 }
 

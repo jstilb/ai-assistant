@@ -69,12 +69,7 @@ describe("extractJson — control-char repair", () => {
   });
 
   it("recovers a raw-newline JSON object wrapped in ```json fences", () => {
-    const broken = [
-      "```json",
-      '{"telegram": "line one',
-      'line two", "confidence": "high"}',
-      "```",
-    ].join("\n");
+    const broken = ["```json", '{"telegram": "line one', 'line two", "confidence": "high"}', "```"].join("\n");
     const result = extractJson(broken);
     expect(result).toEqual({ telegram: "line one\nline two", confidence: "high" });
   });
@@ -109,9 +104,9 @@ import { estimateTokens, estimateCostUSD, resolveModelPricing } from "./Inferenc
 
 describe("estimateTokens", () => {
   it("returns Math.ceil(text.length / 4) for normal input", () => {
-    expect(estimateTokens("abcd")).toBe(1);     // 4 chars = exactly 1
-    expect(estimateTokens("abcde")).toBe(2);    // 5 chars → ceil(1.25) = 2
-    expect(estimateTokens("abc")).toBe(1);      // 3 chars → ceil(0.75) = 1
+    expect(estimateTokens("abcd")).toBe(1); // 4 chars = exactly 1
+    expect(estimateTokens("abcde")).toBe(2); // 5 chars → ceil(1.25) = 2
+    expect(estimateTokens("abc")).toBe(1); // 3 chars → ceil(0.75) = 1
     expect(estimateTokens("abcdefgh")).toBe(2); // 8 chars = exactly 2
   });
 
@@ -170,14 +165,14 @@ describe("resolveModelPricing", () => {
 
   it("resolves sonnet pricing by substring match", () => {
     const pricing = resolveModelPricing("claude-sonnet-4");
-    expect(pricing.inputPerMillion).toBe(3.00);
-    expect(pricing.outputPerMillion).toBe(15.00);
+    expect(pricing.inputPerMillion).toBe(3.0);
+    expect(pricing.outputPerMillion).toBe(15.0);
   });
 
   it("resolves opus pricing by substring match", () => {
     const pricing = resolveModelPricing("claude-opus-4");
-    expect(pricing.inputPerMillion).toBe(15.00);
-    expect(pricing.outputPerMillion).toBe(75.00);
+    expect(pricing.inputPerMillion).toBe(15.0);
+    expect(pricing.outputPerMillion).toBe(75.0);
   });
 });
 

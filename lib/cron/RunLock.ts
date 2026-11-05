@@ -45,9 +45,9 @@
  * hermetically, with no real second process or clock wait.
  */
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-import { memPath } from "../core/MemoryPaths";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { memPath } from "../core/MemoryPaths.ts";
 
 /**
  * The ONE canonical locks-dir resolver — both producers (bin/run-cron-job.ts)
@@ -60,20 +60,20 @@ export function defaultRunLocksDir(): string {
 }
 
 /** Persisted lock-file body. */
-export interface RunLockHolder {
+interface RunLockHolder {
   pid: number;
   correlationId?: string;
   acquiredAt: string;
 }
 
-export interface RunLockDeps {
+interface RunLockDeps {
   isPidAlive?: (pid: number) => boolean;
   now?: () => Date;
   /** Start time of a live process, or null when undeterminable. */
   getPidStartTime?: (pid: number) => Date | null;
 }
 
-export interface AcquireRunLockResult {
+interface AcquireRunLockResult {
   acquired: boolean;
   /** Set when acquired: removes the lock file (idempotent, own-pid-guarded). */
   release: () => void;
@@ -113,8 +113,7 @@ const defaultGetPidStartTime = (pid: number): Date | null => {
     const m = /^(?:(\d+)-)?(?:(\d+):)?(\d{1,2}):(\d{2})$/.exec(proc.stdout.toString().trim());
     if (!m) return null;
     const [, d, h, min, s] = m;
-    const elapsedMs =
-      ((Number(d ?? 0) * 24 + Number(h ?? 0)) * 3600 + Number(min) * 60 + Number(s)) * 1000;
+    const elapsedMs = ((Number(d ?? 0) * 24 + Number(h ?? 0)) * 3600 + Number(min) * 60 + Number(s)) * 1000;
     return new Date(Date.now() - elapsedMs);
   } catch {
     // intentionally silent: null = "undeterminable", and the caller treats

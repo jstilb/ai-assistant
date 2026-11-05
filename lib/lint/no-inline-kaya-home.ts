@@ -25,15 +25,30 @@
  * Usage: called by lib/lint/run-all.ts
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from "node:child_process";
+
+/** grep -rnE without a shell: patterns may contain quotes. Exit 1 (no match) → "". */
+function grepTree(pattern: string, rootDir: string): string {
+  try {
+    return execFileSync("grep", ["-rn", "-E", pattern, rootDir, "--include=*.ts", "--include=*.tsx"], {
+      encoding: "utf-8",
+      cwd: rootDir,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch (err) {
+    if ((err as { status?: number }).status === 1) return "";
+    throw err;
+  }
+}
 
 export interface LintResult {
   errors: string[];
   warnings: string[];
 }
 
-const EXEMPT_FILE = 'lib/core/KayaHome.ts';
-const TEST_PATTERN = /\.(test|spec)\.(ts|tsx)$|__tests__\//;
+const EXEMPT_FILE = "lib/core/KayaHome.ts";
+const TEST_PATTERN = /\.(test|spec|e2e)\.(ts|tsx)$|__tests__\//;
 
 /** Patterns that indicate inline Kaya home construction */
 export const BANNED_PATTERNS = [
@@ -42,7 +57,7 @@ export const BANNED_PATTERNS = [
   `join\\(process\\.env\\.HOME.*\\.claude`,
   `process\\.env\\.KAYA_DIR\\s*\\|\\|`,
   `process\\.env\\.KAYA_HOME\\s*\\|\\|`,
-  `"\\/Users\\/[^"]*\\/\\.claude"`,  // hardcoded absolute paths
+  `"\\/Users\\/[^"]*\\/\\.claude"`, // hardcoded absolute paths
 ];
 
 export async function checkNoInlineKayaHome(rootDir: string = process.cwd()): Promise<LintResult> {
@@ -51,18 +66,15 @@ export async function checkNoInlineKayaHome(rootDir: string = process.cwd()): Pr
 
   for (const pattern of BANNED_PATTERNS) {
     try {
-      const output = execSync(
-        `grep -rn -E "${pattern}" "${rootDir}" --include="*.ts" --include="*.tsx" 2>/dev/null || true`,
-        { encoding: 'utf-8', cwd: rootDir }
-      );
+      const output = grepTree(pattern, rootDir);
 
-      const lines = output.split('\n').filter(l => l.trim());
+      const lines = output.split("\n").filter((l) => l.trim());
 
       for (const line of lines) {
-        const [filePart] = line.split(':');
+        const [filePart] = line.split(":");
         if (!filePart) continue;
 
-        const relativePath = filePart.replace(rootDir + '/', '');
+        const relativePath = filePart.replace(rootDir + "/", "");
 
         // Exempt: KayaHome.ts itself
         if (relativePath === EXEMPT_FILE || relativePath.endsWith(EXEMPT_FILE)) {
@@ -75,12 +87,12 @@ export async function checkNoInlineKayaHome(rootDir: string = process.cwd()): Pr
         }
 
         // Exempt: node_modules, worktrees (other branches)
-        if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) {
+        if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) {
           continue;
         }
 
         // Exempt: this lint file itself
-        if (relativePath.includes('lib/lint/')) {
+        if (relativePath.includes("lib/lint/")) {
           continue;
         }
 
@@ -88,7 +100,7 @@ export async function checkNoInlineKayaHome(rootDir: string = process.cwd()): Pr
         // cache + marketplace — gitignored, updated out-of-band, not Kaya
         // source; present on disk in the main checkout but never committed and
         // absent from worktrees). Like node_modules, they are not ours to fix.
-        if (relativePath.includes('plugins/cache/') || relativePath.includes('plugins/marketplaces/')) {
+        if (relativePath.includes("plugins/cache/") || relativePath.includes("plugins/marketplaces/")) {
           continue;
         }
 
@@ -100,24 +112,29 @@ export async function checkNoInlineKayaHome(rootDir: string = process.cwd()): Pr
         // existing appendFileSync exemption. Anchored on the generated-audit
         // path signature ("cli-audit.jsonl") so it survives line-number drift
         // and never exempts real code in the generator itself.
-        if (relativePath.endsWith('CreateCLI/Tools/ScaffoldCLI.ts') && line.includes('cli-audit.jsonl')) {
+        if (relativePath.endsWith("CreateCLI/Tools/ScaffoldCLI.ts") && line.includes("cli-audit.jsonl")) {
           continue;
         }
 
         errors.push(
-          `${line}: Inline Kaya home path construction. ` +
-          `Use getKayaHome() from lib/core/KayaHome.ts instead.`
+          `${line}: Inline Kaya home path construction. ` + `Use getKayaHome() from lib/core/KayaHome.ts instead.`,
         );
       }
-    } catch {
-      // grep exits non-zero when no matches — that's fine
+    } catch (err) {
+      // grep exits 1 on no match — expected. Any other status (2 = grep error) means the scan did
+      // not run, which must not look like a clean pass.
+      if ((err as { status?: number }).status !== 1) {
+        warnings.push(
+          `no-inline-kaya-home: grep failed, scan skipped: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 
   // Deduplicate errors (a file might match multiple patterns)
   const seen = new Set<string>();
-  const deduped = errors.filter(e => {
-    const key = e.split(':')[0] + ':' + e.split(':')[1];
+  const deduped = errors.filter((e) => {
+    const key = e.split(":")[0] + ":" + e.split(":")[1];
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

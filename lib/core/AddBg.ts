@@ -79,11 +79,7 @@ function validateHexColor(color: string): boolean {
 // Add Background
 // ============================================================================
 
-async function addBackground(
-  inputPath: string,
-  hexColor: string,
-  outputPath: string
-): Promise<void> {
+async function addBackground(inputPath: string, hexColor: string, outputPath: string): Promise<void> {
   // Validate input file exists
   if (!existsSync(inputPath)) {
     console.error(`❌ File not found: ${inputPath}`);
@@ -106,10 +102,7 @@ async function addBackground(
     await execAsync(command);
     console.log(`✅ Saved: ${outputPath}`);
   } catch (error) {
-    console.error(
-      `❌ ImageMagick error:`,
-      error instanceof Error ? error.message : String(error)
-    );
+    console.error(`❌ ImageMagick error:`, error instanceof Error ? error.message : String(error));
     console.error("   Make sure ImageMagick is installed: brew install imagemagick");
     process.exit(1);
   }
@@ -134,9 +127,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const inputPath = args[0];
-  const colorArg = args[1];
-  const outputPath = args[2];
+  const [inputPath, colorArg, outputPath] = args;
+  if (!inputPath || !colorArg || !outputPath) {
+    console.error("❌ Missing arguments");
+    process.exit(1);
+  }
 
   // Handle --ul-brand flag
   const hexColor = colorArg === "--ul-brand" ? UL_BRAND_COLOR : colorArg;

@@ -5,7 +5,7 @@
  * it must be a good citizen of the exact convention it implements.
  */
 import { describe, it, expect } from "bun:test";
-import { existsSync } from "fs";
+import { existsSync } from "node:fs";
 
 import { pinKayaHome, restoreKayaHome } from "./pinKayaHome.ts";
 import { getKayaHome } from "../core/KayaHome.ts";

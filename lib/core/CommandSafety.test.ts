@@ -25,7 +25,6 @@ import {
   isExecutableAllowed,
   primaryExecutable,
   isCommandSafe,
-  type CatastrophicAction,
 } from "./CommandSafety.ts";
 
 // ---------------------------------------------------------------------------
@@ -97,7 +96,7 @@ describe("isProtectedBranch", () => {
 describe("BASE_SAFE_EXECUTABLES — true intersection of all 3 original allowlists", () => {
   it("contains exactly the 11 executables common to all three original contexts", () => {
     expect([...BASE_SAFE_EXECUTABLES].sort()).toEqual(
-      ["bun", "cat", "diff", "grep", "head", "jq", "ls", "node", "tail", "test", "wc"].sort()
+      ["bun", "cat", "diff", "grep", "head", "jq", "ls", "node", "tail", "test", "wc"].sort(),
     );
   });
 });
@@ -106,9 +105,27 @@ describe("buildExecutableAllowlist — per-context scope reconstruction", () => 
   it("VERIFIER_SCOPE reconstructs the original 21-executable VERIFICATION_ALLOWED_EXECUTABLES set exactly", () => {
     const set = buildExecutableAllowlist(VERIFIER_SCOPE);
     const expected = new Set([
-      "bun", "node", "tsc", "cat", "ls", "echo", "wc", "grep",
-      "find", "test", "true", "false", "git", "jq", "head", "tail",
-      "diff", "stat", "file", "which", "pwd",
+      "bun",
+      "node",
+      "tsc",
+      "cat",
+      "ls",
+      "echo",
+      "wc",
+      "grep",
+      "find",
+      "test",
+      "true",
+      "false",
+      "git",
+      "jq",
+      "head",
+      "tail",
+      "diff",
+      "stat",
+      "file",
+      "which",
+      "pwd",
     ]);
     expect(set).toEqual(expected);
   });
@@ -116,10 +133,36 @@ describe("buildExecutableAllowlist — per-context scope reconstruction", () => 
   it("SELF_VERIFY_SCOPE reconstructs the original 31-executable SELF_VERIFY_ALLOWED_EXECUTABLES set exactly", () => {
     const set = buildExecutableAllowlist(SELF_VERIFY_SCOPE);
     const expected = new Set([
-      "bun", "bunx", "node", "npm", "npx", "pnpm", "yarn",
-      "tsc", "curl", "git", "cat", "ls", "echo", "wc", "grep",
-      "find", "test", "true", "false", "jq", "head", "tail",
-      "diff", "stat", "file", "which", "pwd", "sleep", "kill", "timeout",
+      "bun",
+      "bunx",
+      "node",
+      "npm",
+      "npx",
+      "pnpm",
+      "yarn",
+      "tsc",
+      "curl",
+      "git",
+      "cat",
+      "ls",
+      "echo",
+      "wc",
+      "grep",
+      "find",
+      "test",
+      "true",
+      "false",
+      "jq",
+      "head",
+      "tail",
+      "diff",
+      "stat",
+      "file",
+      "which",
+      "pwd",
+      "sleep",
+      "kill",
+      "timeout",
       "playwright",
     ]);
     expect(set).toEqual(expected);
@@ -128,7 +171,19 @@ describe("buildExecutableAllowlist — per-context scope reconstruction", () => 
   it("COMMAND_RUNNER_SCOPE reconstructs the original 13-executable ALLOWED_EXECUTABLES set exactly (git excluded — handled via subcommand scope)", () => {
     const set = buildExecutableAllowlist(COMMAND_RUNNER_SCOPE);
     const expected = new Set([
-      "bun", "node", "npx", "grep", "rg", "test", "diff", "wc", "jq", "ls", "cat", "head", "tail",
+      "bun",
+      "node",
+      "npx",
+      "grep",
+      "rg",
+      "test",
+      "diff",
+      "wc",
+      "jq",
+      "ls",
+      "cat",
+      "head",
+      "tail",
     ]);
     expect(set).toEqual(expected);
     expect(set.has("git")).toBe(false);
@@ -138,9 +193,7 @@ describe("buildExecutableAllowlist — per-context scope reconstruction", () => 
     const git = COMMAND_RUNNER_SCOPE.git;
     expect(typeof git).toBe("object");
     if (typeof git === "object") {
-      expect([...git.subcommands].sort()).toEqual(
-        ["diff", "log", "show", "status", "rev-parse", "merge-base"].sort()
-      );
+      expect([...git.subcommands].sort()).toEqual(["diff", "log", "show", "status", "rev-parse", "merge-base"].sort());
     }
   });
 });

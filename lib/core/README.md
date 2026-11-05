@@ -4,7 +4,7 @@ Core utilities that eliminate redundancy and provide consistent patterns across 
 
 ## Overview
 
-These 8 infrastructure tools consolidate common patterns found across Kaya, reducing code duplication by 70% and providing battle-tested implementations for state management, notifications, configuration, caching, memory, approvals, agent orchestration, and workflow execution.
+These infrastructure tools consolidate common patterns found across Kaya: state persistence, notifications, configuration, HTTP caching, memory storage and output paths. Each one has a Zod-validated API and tests in `lib/core/`.
 
 ## Quick Reference
 
@@ -15,115 +15,25 @@ These 8 infrastructure tools consolidate common patterns found across Kaya, redu
 | [ConfigLoader](#configloader) | Configuration loading | SYSTEM/USER tiering, schemas, hot reload |
 | [CachedHTTPClient](#cachedhttpclient) | HTTP with caching | Memory/disk cache, retry, rate limiting |
 | [MemoryStore](#memorystore) | Unified memory storage | Deduplication, tags, lifecycle tiers |
-| [ApprovalQueue](#approvalqueue) | Generic approval workflow | Priority, expiry, multiple backends |
 | [OutputPathResolver](#outputpathresolver) | Skill output path generation | Memory/work/downloads paths, timestamps, auto-create dirs |
 
 ---
 
-## Adoption Status (2026-02-10)
+## Adoption Status (2026-11-04)
 
-### Current Imports by Tool
+Counts are non-test `.ts` files that import the tool (`git grep` on `lib/`, `skills/`, `bin/`, `hooks/`).
 
-| Tool | Skills Using | Adoption Level |
-|------|--------------|----------------|
-| StateManager | QueueRouter (Worker), Browser, _RALPHLOOP, AutonomousWork, ContinualLearning (ChangeDetector) | ⬛⬛⬛⬜⬜ Medium |
-| NotificationService | QueueRouter (Worker), AutoMaintenance, ProactiveEngine | ⬛⬛⬛⬜⬜ Medium |
-| ConfigLoader | Agents, KayaUpgrade, Browser | ⬛⬛⬜⬜⬜ Low |
-| CachedHTTPClient | KayaUpgrade, Recon (IpinfoClient, DnsUtils, SubdomainEnum) | ⬛⬛⬛⬜⬜ Medium |
-| MemoryStore | ContinualLearning (InsightGenerator), Recon (DnsUtils, IpinfoClient, SubdomainEnum, WhoisParser) | ⬛⬛⬛⬛⬜ High |
-| ApprovalQueue | AutonomousWork (via CORE) | ⬛⬜⬜⬜⬜ Very Low |
-| OutputPathResolver | Prompting, UnixCLI | ⬛⬛⬜⬜⬜ Low |
-| Inference | hooks (UpdateTabTitle, AutoWorkCreation), DigitalMaestro, InformationManager, Kaya, QueueRouter, Obsidian, Evals | ⬛⬛⬛⬛⬛ Very High |
+| Tool | Main importers |
+|------|----------------|
+| StateManager | AgentMonitor (6), lib/core (5), JobSearch (4), KayaUpgrade (4), Browser, VoiceInteraction, InteriorDesign (3 each) |
+| NotificationService | KayaUpgrade (4), QueueRouter, InteriorDesign, LucidTasks (3 each), AgentMonitor (2) |
+| ConfigLoader | lib/core (6), Browser, VoiceInteraction (2 each), AutonomousWork, VaultGraph |
+| CachedHTTPClient | VoiceInteraction (6), ContentAggregator, MoodBoard, UnixCLI, KayaUpgrade, JobSearch, DailyBriefing (2 each) |
+| MemoryStore | lib/core, QueueRouter, AutonomousWork, KayaUpgrade (2 each), AgentMonitor, Evals, LucidTasks, IssueTrace |
+| OutputPathResolver | lib/core only (no skill imports it) |
 
-### High-Priority Expansion Targets
-
-Skills that should adopt CORE tools but haven't yet:
-
-| Skill | Recommended Tools | Benefit |
-|-------|------------------|---------|
-| **OSINT** | CachedHTTPClient, StateManager, MemoryStore, ApprovalQueue | Cache DNS/WHOIS lookups, persist investigation state |
-| **Recon** | CachedHTTPClient, StateManager, MemoryStore, ApprovalQueue | Cache cert transparency, track scan authorization |
-| **Shopping** | CachedHTTPClient, StateManager, MemoryStore | Cache product APIs, persist cart state |
-| **Evals** | StateManager, ApprovalQueue, MemoryStore | Track suite state, human review integration |
-| **ContinualLearning** | StateManager, Inference | Replace manual JSON I/O, tier-aware inference |
-
-### Recent Migrations (Completed)
-
-#### QueueRouter/Worker.ts → StateManager + NotificationService
-
-**Before (redundant implementations):**
-```typescript
-// WRONG: Custom notification function
-const VOICE_SERVER_URL = "http://localhost:8888/notify";
-async function notify(message: string): Promise<void> {
-  await fetch(VOICE_SERVER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-}
-
-// WRONG: Manual state I/O without validation
-function loadWorkerState(): WorkerState {
-  return JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
-}
-function saveWorkerState(state: WorkerState): void {
-  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-}
-```
-
-**After:**
-```typescript
-import { z } from "zod";
-import { notifySync } from "../../CORE/Tools/NotificationService.ts";
-import { createStateManager, type StateManager } from "../../CORE/Tools/StateManager.ts";
-
-// Zod schema for type-safe validation
-const WorkerStateSchema = z.object({
-  lastRun: z.string().nullable(),
-  lastProcessed: z.string().nullable(),
-  itemsProcessed: z.number(),
-  itemsFailed: z.number(),
-  running: z.boolean(),
-  pid: z.number().optional(),
-  startedAt: z.string().optional(),
-});
-
-// StateManager with validation and backups
-const stateManager: StateManager<WorkerState> = createStateManager({
-  path: WORKER_STATE_FILE,
-  schema: WorkerStateSchema,
-  defaults: {
-    lastRun: null,
-    lastProcessed: null,
-    itemsProcessed: 0,
-    itemsFailed: 0,
-    running: false,
-  },
-  backupOnWrite: false,
-});
-
-// Usage: Replace custom functions
-async function loadWorkerState(): Promise<WorkerState> {
-  return stateManager.load();
-}
-
-// In daemon: Replace notify() with notifySync()
-notifySync("Queue worker started");
-```
-
-#### AutonomousWork → CORE ApprovalQueue
-
-**Before (duplicate implementation):**
-```
-skills/AutonomousWork/Tools/ApprovalQueue.ts  # 589 lines - DELETED
-```
-
-**After:**
-```bash
-# SKILL.md now references CORE's ApprovalQueue
-bun run ~/.claude/lib/core/ApprovalQueue.ts add --data '{...}' --priority high
-```
+Skills that this table once listed (OSINT, Recon, ContinualLearning, _RALPHLOOP, DigitalMaestro, Prompting) no longer exist.
+`Inference.ts` is documented in `CLAUDE.md`, not here.
 
 ---
 
@@ -424,69 +334,6 @@ bun run MemoryStore.ts consolidate
 
 ---
 
-## ApprovalQueue
-
-**Purpose:** Generic approval workflow with priority ordering and multiple backends.
-
-### When to Use
-- Human-in-the-loop approval workflows
-- Queuing items for batch review
-- Any workflow requiring explicit approval/rejection
-
-### Quick Start
-
-```typescript
-import { createApprovalQueue, FileApprovalQueue } from '~/.claude/lib/core/ApprovalQueue.ts';
-
-// Create queue
-const queue = createApprovalQueue('file', '~/.claude/MEMORY/WORK/approvals.json', {
-  defaultExpiry: 7, // Days until auto-expire
-  onApprove: (item) => console.log(`Approved: ${item.title}`),
-  onReject: (item) => console.log(`Rejected: ${item.title}`),
-});
-
-// Add item for approval
-const id = await queue.add(
-  { title: 'Deploy to production', branch: 'main' },
-  { priority: 'high' }
-);
-
-// List pending items
-const pending = await queue.list({ status: 'pending' });
-
-// Approve/reject
-await queue.approve(id, 'Looks good!', 'reviewer-name');
-await queue.reject(id, 'Needs more tests');
-
-// Batch operations
-await queue.batchApprove(['id1', 'id2', 'id3'], 'Batch approved');
-```
-
-### Priority Levels
-
-| Priority | Use Case |
-|----------|----------|
-| `critical` | Requires immediate attention |
-| `high` | Should be reviewed soon |
-| `normal` | Standard priority (default) |
-| `low` | Can wait |
-
-### Key Features
-- **Priority Ordering:** Higher priority items surface first
-- **Expiry:** Auto-expire items after configurable period
-- **Hooks:** onAdd, onApprove, onReject, onExpire callbacks
-- **Backends:** Memory (transient) or File (persistent)
-
-### CLI Usage
-```bash
-bun run ApprovalQueue.ts add --data '{"title":"Deploy"}' --priority high
-bun run ApprovalQueue.ts list --status pending
-bun run ApprovalQueue.ts approve abc123 --notes "Approved"
-bun run ApprovalQueue.ts stats
-```
-
----
-
 ## Integration Patterns
 
 ### Common Combinations
@@ -554,49 +401,4 @@ See `MIGRATION.md` for detailed migration instructions from:
 - Direct settings reads to ConfigLoader
 - Scattered fetch() to CachedHTTPClient
 - Multiple memory directories to MemoryStore
-- Skill-specific approval to ApprovalQueue
 - Hardcoded output paths to OutputPathResolver
-
----
-
-## Roadmap: CORE Tool Expansion
-
-Based on the 2026-02-02 audit, here's the recommended adoption roadmap:
-
-### Phase 1: Remove Redundancies (Complete)
-- [x] Delete AutonomousWork/ApprovalQueue.ts duplicate
-- [x] Refactor QueueRouter/Worker.ts to use StateManager + NotificationService
-- [x] Add Zod validation to QueueRouter/QueueManager.ts
-
-### Phase 2: Critical Expansions (Complete)
-- [x] **Add CachedHTTPClient to high-API-call skills**
-  - ~~OSINT~~ (empty Tools/ directory)
-  - [x] Recon/IpinfoClient.ts: 7-day disk cache for IP lookups
-  - [x] Recon/DnsUtils.ts: 30-day disk cache for crt.sh
-  - [x] Recon/SubdomainEnum.ts: 30-day disk cache for crt.sh
-  - ~~InformationManager~~ (uses CLI tools, not direct HTTP)
-
-- [x] **Add StateManager to stateful skills**
-  - [x] ContinualLearning/ChangeDetector.ts: Zod schema + StateManager
-  - Shopping: Uses markdown profiles (appropriate for user editing)
-  - Evals: Uses YAML suites (appropriate for user editing)
-
-### Phase 3: Full Integration
-- [ ] **Add MemoryStore to knowledge-generating skills**
-  - ContinualLearning: Capture all synthesized patterns
-  - Shopping: Store recommendations and price tracking
-  - OSINT/Recon: Investigation findings database
-
-- [ ] **Add ApprovalQueue to authorization-sensitive skills**
-  - OSINT: Authorization tracking for active recon
-  - Recon: Explicit scan approval
-  - Evals: Human review integration
-
-- [ ] **Add Inference to LLM-calling skills**
-  - ContinualLearning: fast/standard/smart tier selection
-  - Shopping: Consistent model selection for research
-
-### Impact When Complete
-- **Redundancy Reduction:** ~1,500 lines of duplicate code removed
-- **Consistency Gains:** All state validated, all notifications unified, all outputs standardized
-- **New Capabilities:** Cross-skill memory search, unified approval workflows, consistent model selection

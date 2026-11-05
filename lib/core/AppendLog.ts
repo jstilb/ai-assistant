@@ -23,11 +23,12 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
   statSync,
   unlinkSync,
-} from 'fs';
-import { basename, dirname, join } from 'path';
+} from "node:fs";
+import { basename, dirname, join } from "node:path";
 
 export interface AppendLogOptions {
   /** Rotate when file exceeds this size in bytes. Default: 10 MB */
@@ -94,8 +95,8 @@ const ROTATION_PATTERN = /\.(\d{4}-\d{2}-\d{2}T[\d\-:.]+Z)\.jsonl$/;
 
 function getRotationBase(filePath: string): string {
   // Strip .jsonl extension for rotation prefix
-  if (filePath.endsWith('.jsonl')) {
-    return filePath.slice(0, -'.jsonl'.length);
+  if (filePath.endsWith(".jsonl")) {
+    return filePath.slice(0, -".jsonl".length);
   }
   return filePath;
 }
@@ -106,8 +107,8 @@ function listRotatedFiles(filePath: string): string[] {
   if (!existsSync(dir)) return [];
   try {
     return readdirSync(dir)
-      .filter(f => f.startsWith(base) && ROTATION_PATTERN.test(f))
-      .map(f => join(dir, f));
+      .filter((f) => f.startsWith(base) && ROTATION_PATTERN.test(f))
+      .map((f) => join(dir, f));
   } catch {
     return [];
   }
@@ -116,7 +117,7 @@ function listRotatedFiles(filePath: string): string[] {
 /** Embedded rotation timestamp string, or '' if the filename doesn't match. */
 function extractRotationTimestamp(filePath: string): string {
   const match = basename(filePath).match(ROTATION_PATTERN);
-  return match ? match[1] : '';
+  return match?.[1] ?? "";
 }
 
 /**
@@ -125,22 +126,18 @@ function extractRotationTimestamp(filePath: string): string {
  * lexicographically sortable in chronological order.
  */
 function sortRotatedOldestFirst(paths: string[]): string[] {
-  return [...paths].sort((a, b) =>
-    extractRotationTimestamp(a).localeCompare(extractRotationTimestamp(b)),
-  );
+  return [...paths].sort((a, b) => extractRotationTimestamp(a).localeCompare(extractRotationTimestamp(b)));
 }
 
 export function createAppendLog(filePath: string, options: AppendLogOptions = {}): AppendLog {
   const maxSizeBytes =
-    options.maxSizeMB !== undefined
-      ? options.maxSizeMB * 1024 * 1024
-      : (options.maxSizeBytes ?? 10 * 1024 * 1024);
+    options.maxSizeMB !== undefined ? options.maxSizeMB * 1024 * 1024 : (options.maxSizeBytes ?? 10 * 1024 * 1024);
   const retentionDays = options.retentionDays ?? 90;
   const maxRotatedFiles = options.maxRotatedFiles ?? 10;
-  const encoding = options.encoding ?? 'utf-8';
+  const encoding = options.encoding ?? "utf-8";
   // appendFileSync applies `mode` only on create (O_CREAT) — exactly the
   // "applied when the file is created" contract fileMode documents.
-  const writeOpts: import('fs').WriteFileOptions =
+  const writeOpts: import("fs").WriteFileOptions =
     options.fileMode !== undefined ? { encoding, mode: options.fileMode } : { encoding };
 
   let _dirEnsured = false;
@@ -160,10 +157,10 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
   }
 
   function doRotate(): string {
-    if (!existsSync(filePath)) return '';
-    if (currentSize() === 0) return '';
+    if (!existsSync(filePath)) return "";
+    if (currentSize() === 0) return "";
 
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const rotatedPath = `${getRotationBase(filePath)}.${ts}.jsonl`;
     try {
       renameSync(filePath, rotatedPath);
@@ -171,8 +168,8 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
       doCleanup();
       return rotatedPath;
     } catch (err) {
-      console.error('[AppendLog] rotation failed:', err);
-      return '';
+      console.error("[AppendLog] rotation failed:", err);
+      return "";
     }
   }
 
@@ -201,7 +198,7 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
     // Delete oldest files beyond maxRotatedFiles
     if (surviving.length > maxRotatedFiles) {
       // Sort by mtime ascending (oldest first)
-      const withMtime = surviving.map(f => {
+      const withMtime = surviving.map((f) => {
         try {
           return { f, mtime: statSync(f).mtimeMs };
         } catch {
@@ -215,7 +212,7 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
           unlinkSync(f);
           deleted++;
         } catch {
-          // ignore
+          // intentionally silent: rotated file already removed by another process; retention is best-effort
         }
       }
     }
@@ -226,9 +223,8 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
   function countLines(): number {
     if (!existsSync(filePath)) return 0;
     try {
-      const { readFileSync } = require('fs') as typeof import('fs');
-      const content = readFileSync(filePath, 'utf-8');
-      return content.split('\n').filter(l => l.trim().length > 0).length;
+      const content = readFileSync(filePath, "utf-8");
+      return content.split("\n").filter((l) => l.trim().length > 0).length;
     } catch {
       return 0;
     }
@@ -254,7 +250,7 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
       }
       ensureDir();
       // This write MUST throw on error — do not swallow
-      appendFileSync(filePath, JSON.stringify(record) + '\n', writeOpts);
+      appendFileSync(filePath, JSON.stringify(record) + "\n", writeOpts);
     },
 
     appendRaw(line: string): void {
@@ -262,7 +258,7 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
         doRotate();
       }
       ensureDir();
-      const toWrite = line.endsWith('\n') ? line : line + '\n';
+      const toWrite = line.endsWith("\n") ? line : line + "\n";
       appendFileSync(filePath, toWrite, writeOpts);
     },
 
@@ -273,17 +269,16 @@ export function createAppendLog(filePath: string, options: AppendLogOptions = {}
     readLastN<T = Record<string, unknown>>(n: number): T[] {
       if (!existsSync(filePath)) return [];
       try {
-        const { readFileSync } = require('fs') as typeof import('fs');
         const content = readFileSync(filePath, encoding).trim();
         if (!content) return [];
 
-        const lines = content.split('\n');
+        const lines = content.split("\n");
         const start = Math.max(0, lines.length - n);
         const results: T[] = [];
 
-        for (let i = start; i < lines.length; i++) {
+        for (const line of lines.slice(start)) {
           try {
-            results.push(JSON.parse(lines[i]) as T);
+            results.push(JSON.parse(line) as T);
           } catch {
             // Skip malformed lines
           }

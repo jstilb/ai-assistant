@@ -1,0 +1,48 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/ml5x7f7b-b294k0-spec.md",
+  "layoutNote": "4-col Layout A (21 rows)",
+  "rowCount": 10,
+  "rows": [
+    {
+      "number": 100,
+      "description": "Can define a simulation scenario in YAML and run it in a sandboxed environment with zero production side effects"
+    },
+    {
+      "number": 101,
+      "description": "Fault injection works -- can inject Read/Write/Bash failures with configurable probability and observe agent behavior"
+    },
+    {
+      "number": 102,
+      "description": "Mock data generation produces realistic synthetic prompts and tool responses"
+    },
+    {
+      "number": 103,
+      "description": "Behavioral invariants are verified at checkpoints (e.g., no-production-writes, graceful-error-handling)"
+    },
+    {
+      "number": 104,
+      "description": "Workflow replay works -- can load a real transcript, mutate it, replay, and detect behavioral drift"
+    },
+    {
+      "number": 105,
+      "description": "Stress testing identifies degradation thresholds (e.g., \"agent behavior degrades at 40% tool failure rate\")"
+    },
+    {
+      "number": 106,
+      "description": "Reports are generated in Markdown with actionable findings and clear pass/fail summaries"
+    },
+    {
+      "number": 107,
+      "description": "Simulation results can be exported as Evals tasks and suites, feeding into pass@k metrics"
+    },
+    {
+      "number": 108,
+      "description": "Full simulation suite (20 runs) completes within 15 minutes"
+    },
+    {
+      "number": 109,
+      "description": "Sandbox directories auto-clean after configured TTL"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.232Z"
+}

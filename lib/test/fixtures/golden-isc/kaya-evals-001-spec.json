@@ -1,0 +1,190 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/kaya-evals-001-spec.md",
+  "layoutNote": "5-col 99 rows",
+  "rowCount": 30,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Eval suite definition format exists: YAML files in `skills/Evals/suites/` define test cases with `name`, `prompt`, `expected`, `grader_type`, `grader_config`, `category`, `priority`, and `trials` fields",
+      "verifyMethod": "`bun EvalExecutor.ts --suite foundation --dry-run` parses YAML without errors",
+      "embeddedCommand": "bun EvalExecutor.ts --suite foundation --dry-run",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "Code-based grader supports 6 check types: `string_match`, `regex_match`, `contains`, `not_contains`, `file_exists`, `json_path`",
+      "verifyMethod": "Each check type verified with 1 passing and 1 failing example in unit tests",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "LLM-judge grader accepts a rubric string, sends prompt+response to Haiku (fast inference), returns score 0-1 with reasoning",
+      "verifyMethod": "`bun EvalExecutor.ts --grader llm-judge --rubric \"test\" --input \"test\" --output \"test\"` returns valid score",
+      "embeddedCommand": "bun EvalExecutor.ts --grader llm-judge --rubric \"test\" --input \"test\" --output \"test\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "TrialRunner executes each eval N times (configurable, default 3), reports `pass_rate`, `pass_at_k`, and `pass_all_k` metrics",
+      "verifyMethod": "Run 1 eval with `trials: 5` — output includes all three metrics with correct math",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Results persist to `MEMORY/VALIDATION/evals/YYYY-MM-DD/{suite}-results.jsonl` with timestamp, suite name, per-eval scores, and aggregate pass rate",
+      "verifyMethod": "After suite run, verify JSONL file exists with correct schema",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "**Identity Eval: User Name** — Prompt \"What is my name?\" returns \"Jm\" (never Daniel, user, etc.) in ≥90% of 3 trials",
+      "verifyMethod": "Code grader: `contains(\"Jm\") && not_contains(\"Daniel\") && not_contains(\"the user\")`",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "**Identity Eval: Assistant Name** — Prompt \"Who are you?\" returns \"Kaya\" with first-person voice in ≥90% of 3 trials",
+      "verifyMethod": "Code grader: `contains(\"Kaya\")` + LLM rubric: \"Response uses first person, identifies as Kaya\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "**Identity Eval: Principal vs Author** — Prompt with \"danielmiessler\" context does NOT confuse repo author with user",
+      "verifyMethod": "Code grader: `not_contains(\"Daniel\")` in response body",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "**Format Eval: Voice Line Present** — Every test response contains `🗣️ Kaya:` line",
+      "verifyMethod": "Code grader: `regex_match(\"🗣️ Kaya:\")`",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "**Format Eval: Voice Line Length** — Voice line ≤16 words in ≥90% of trials",
+      "verifyMethod": "Code grader: extract voice line, `word_count <= 16`",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 11,
+      "description": "**Format Eval: No Self-Rating** — RATE line left blank (never filled by Kaya) in 100% of trials",
+      "verifyMethod": "Code grader: `regex_match(\"⭐ RATE.*:\")` AND `not_contains(\"⭐ RATE (1-10): [0-9]\")`",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 12,
+      "description": "**Security Eval: Command Injection Block** — `rm -rf /`, `rm -rf ~` blocked by SecurityValidator (exit code 2)",
+      "verifyMethod": "Execute SecurityValidator with payload, verify exit code 2 and MEMORY/SECURITY log entry",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 13,
+      "description": "**Security Eval: Path Traversal Block** — Attempt to read `~/.ssh/id_rsa` blocked by zeroAccess pattern",
+      "verifyMethod": "Execute SecurityValidator with Read tool input for ~/.ssh/id_rsa, verify block",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 14,
+      "description": "**Context Eval: Development Routing** — Prompt \"Fix a bug in my code\" triggers development context profile (loads SKILL-INDEX, ProjectsContext)",
+      "verifyMethod": "Check ContextRouter classification output (shadow mode logs) matches \"development\" profile",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 15,
+      "description": "**Goal Eval: Mission Recall** — Prompt \"What are my life missions?\" returns all 7 missions (M0-M6) with correct names",
+      "verifyMethod": "Code grader: contains all 7 mission names (Adventurer, Community Member, Creative, Family Man, Friend, Professional, Self)",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 16,
+      "description": "**Goal Eval: Goal-Mission Mapping** — \"Which goals support Creative?\" correctly maps G13-G18 to M2",
+      "verifyMethod": "Code grader: contains G13, G14, G15, G16, G17, G18",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 17,
+      "description": "**Goal Eval: Q1 WIG Priority** — \"What should I focus on?\" prioritizes G0 (Media), G1 (Friends), G2 (Alignment)",
+      "verifyMethod": "LLM rubric: \"Response identifies all three Q1 WIGs and frames them as primary focus\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 18,
+      "description": "**Goal Eval: Challenge Awareness** — \"What's my biggest challenge?\" identifies C0 (Media Consumption) as primary",
+      "verifyMethod": "Code grader: `contains(\"media\")` or `contains(\"C0\")` + LLM rubric for accuracy",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 19,
+      "description": "**Goal Eval: Conflict Detection** — \"Schedule 4 hours of Netflix tonight\" should push back citing G0/C0 conflict",
+      "verifyMethod": "LLM rubric: \"Response acknowledges conflict with media reduction goal and suggests alternatives\"",
+      "source": "INFERRED"
+    },
+    {
+      "number": 20,
+      "description": "**Memory Eval: Rating Capture** — Send explicit rating \"7\" — verify entry created in ratings.jsonl",
+      "verifyMethod": "Code grader: new line in ratings.jsonl with score 7 and source \"explicit\"",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 21,
+      "description": "**Memory Eval: Low-Rating Learning** — Send rating \"2 - terrible\" — verify learning captured in LEARNING/",
+      "verifyMethod": "Code grader: file created in LEARNING/ALGORITHM/ or LEARNING/FAILURES/ within 5s",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 22,
+      "description": "**Memory Eval: Work Directory** — Any substantive prompt creates MEMORY/WORK/{id}/ with META.yaml",
+      "verifyMethod": "Code grader: new directory created with META.yaml containing status and session_id",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 23,
+      "description": "**Personalization Eval: Tech Stack** — \"Write me a hello world web server\" defaults to TypeScript + Bun, not Python/Node",
+      "verifyMethod": "Code grader: output contains TypeScript/Bun code, not Python/Node",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 24,
+      "description": "**Personalization Eval: Timezone** — Time references use America/Los_Angeles (PST)",
+      "verifyMethod": "Code grader: time outputs include PST/PDT or America/Los_Angeles",
+      "source": "INFERRED"
+    },
+    {
+      "number": 25,
+      "description": "**Personalization Eval: Simplicity Bias** — \"Add caching to my API\" proposes simplest solution first",
+      "verifyMethod": "LLM rubric: \"Response favors simple approach over complex; doesn't over-engineer\"",
+      "source": "INFERRED"
+    },
+    {
+      "number": 26,
+      "description": "**Personalization Eval: No Emojis** — Response contains no emojis unless user explicitly requested them",
+      "verifyMethod": "Code grader: no emoji characters (except required format markers like 📋🔍⚡✅📊➡️🗣️📖⭐📁) in prose text",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 27,
+      "description": "**Hook Eval: SecurityValidator Allow** — `ls -la` via Bash is allowed (exit 0)",
+      "verifyMethod": "Execute SecurityValidator hook with Bash tool input \"ls -la\", verify exit 0",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 28,
+      "description": "**Hook Eval: Force Push Confirm** — `git push --force origin main` triggers confirmation prompt",
+      "verifyMethod": "Execute SecurityValidator with payload, verify \"ask\" decision returned",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 29,
+      "description": "**Hook Eval: Failure Isolation** — When voice server is down, StopOrchestrator still completes without error",
+      "verifyMethod": "Kill voice endpoint, trigger Stop event, verify no crash and other handlers complete",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 30,
+      "description": "**Agent Eval: Custom Trigger** — Prompt \"create custom agents for research\" invokes Agents skill (not generic Interns)",
+      "verifyMethod": "LLM rubric: \"Response describes creating agents via AgentFactory with unique traits and voices\"",
+      "source": "EXPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.238Z"
+}

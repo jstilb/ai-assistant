@@ -30,11 +30,11 @@
  * see ReplyContext).
  */
 
-import { existsSync, readFileSync, statSync, openSync, readSync, closeSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome, assertNotLiveHomeUnderTest } from './KayaHome.ts';
-import { createAppendLog } from './AppendLog.ts';
-import { loadSettings } from './ConfigLoader.ts';
+import { existsSync, readFileSync, statSync, openSync, readSync, closeSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome, assertNotLiveHomeUnderTest } from "./KayaHome.ts";
+import { createAppendLog } from "./AppendLog.ts";
+import { loadSettings } from "./ConfigLoader.ts";
 
 export interface OutboundRecord {
   /** ISO timestamp of the send. */
@@ -54,7 +54,7 @@ const MAX_TEXT_CHARS = 1500;
 const MAX_READ_BYTES = 512 * 1024;
 
 function ledgerPath(): string {
-  return join(getKayaHome(), 'MEMORY', 'TELEGRAM', 'outbound.jsonl');
+  return join(getKayaHome(), "MEMORY", "TELEGRAM", "outbound.jsonl");
 }
 
 /**
@@ -63,12 +63,8 @@ function ledgerPath(): string {
  * and swallowed — EXCEPT the hermetic-guard throw (NODE_ENV=test writing to
  * the live home), which must fail the offending test loudly.
  */
-export function recordOutbound(entry: {
-  messageId: number;
-  source: string;
-  text: string;
-}): void {
-  assertNotLiveHomeUnderTest('TelegramOutboundLedger.recordOutbound');
+export function recordOutbound(entry: { messageId: number; source: string; text: string }): void {
+  assertNotLiveHomeUnderTest("TelegramOutboundLedger.recordOutbound");
   try {
     const record: OutboundRecord = {
       timestamp: new Date().toISOString(),
@@ -78,7 +74,7 @@ export function recordOutbound(entry: {
     };
     createAppendLog(ledgerPath(), { maxSizeMB: 5, maxRotatedFiles: 3 }).append(record);
   } catch (err) {
-    console.error('[TelegramOutboundLedger] record failed (send already succeeded, continuing):', err);
+    console.error("[TelegramOutboundLedger] record failed (send already succeeded, continuing):", err);
   }
 }
 
@@ -95,12 +91,12 @@ export async function recordOutboundFromTelegramResponse(
   try {
     const raw = (await response.json()) as { ok?: boolean; result?: { message_id?: number } };
     const messageId = raw?.result?.message_id;
-    if (raw?.ok && typeof messageId === 'number') {
+    if (raw?.ok && typeof messageId === "number") {
       recordOutbound({ messageId, source, text });
     }
   } catch (err) {
     // Body unreadable/not-JSON — the send itself already succeeded upstream.
-    console.error('[TelegramOutboundLedger] could not parse send response for ledger:', err);
+    console.error("[TelegramOutboundLedger] could not parse send response for ledger:", err);
   }
 }
 
@@ -122,12 +118,12 @@ export function isTelegramPushEnabled(): boolean {
   try {
     notifications = loadSettings().notifications;
   } catch (err) {
-    console.error('[TelegramOutboundLedger] settings load failed — Telegram push stays enabled:', err);
+    console.error("[TelegramOutboundLedger] settings load failed — Telegram push stays enabled:", err);
     return true;
   }
-  if (typeof notifications !== 'object' || notifications === null) return true;
+  if (typeof notifications !== "object" || notifications === null) return true;
   const push = (notifications as { telegramPush?: unknown }).telegramPush;
-  if (typeof push !== 'object' || push === null) return true;
+  if (typeof push !== "object" || push === null) return true;
   return (push as { enabled?: unknown }).enabled !== false;
 }
 
@@ -139,25 +135,25 @@ function readTail(): OutboundRecord[] {
     const size = statSync(path).size;
     let content: string;
     if (size > MAX_READ_BYTES) {
-      const fd = openSync(path, 'r');
+      const fd = openSync(path, "r");
       try {
         const buf = Buffer.alloc(MAX_READ_BYTES);
         readSync(fd, buf, 0, MAX_READ_BYTES, size - MAX_READ_BYTES);
-        content = buf.toString('utf-8');
+        content = buf.toString("utf-8");
         // Drop the (likely torn) first line of the tail window.
-        content = content.slice(content.indexOf('\n') + 1);
+        content = content.slice(content.indexOf("\n") + 1);
       } finally {
         closeSync(fd);
       }
     } else {
-      content = readFileSync(path, 'utf-8');
+      content = readFileSync(path, "utf-8");
     }
     const records: OutboundRecord[] = [];
-    for (const line of content.split('\n')) {
+    for (const line of content.split("\n")) {
       if (!line.trim()) continue;
       try {
         const parsed = JSON.parse(line) as OutboundRecord;
-        if (typeof parsed.telegram_message_id === 'number' && typeof parsed.text === 'string') {
+        if (typeof parsed.telegram_message_id === "number" && typeof parsed.text === "string") {
           records.push(parsed);
         }
       } catch {
@@ -186,11 +182,7 @@ export function findByMessageId(messageId: number): OutboundRecord | null {
  * Used for the "Jm may be reacting to a recent notification" injection when
  * an inbound message is NOT a formal Telegram reply.
  */
-export function recentOutbound(opts?: {
-  windowMs?: number;
-  limit?: number;
-  nowMs?: number;
-}): OutboundRecord[] {
+export function recentOutbound(opts?: { windowMs?: number; limit?: number; nowMs?: number }): OutboundRecord[] {
   const windowMs = opts?.windowMs ?? 30 * 60 * 1000;
   const limit = opts?.limit ?? 3;
   const nowMs = opts?.nowMs ?? Date.now();

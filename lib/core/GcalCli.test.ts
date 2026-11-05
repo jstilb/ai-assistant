@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { join } from "path";
-import { mkdtempSync, readFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
+import { join } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   resolveKayaCliPath,
   buildAgendaArgs,
@@ -53,9 +53,13 @@ describe("buildAgendaArgs", () => {
       calendars: ["[user]@gmail.com", "[user-email]"],
     });
     expect(args).toEqual([
-      "--calendar", "[user]@gmail.com",
-      "--calendar", "[user-email]",
-      "agenda", "today", "tomorrow",
+      "--calendar",
+      "[user]@gmail.com",
+      "--calendar",
+      "[user-email]",
+      "agenda",
+      "today",
+      "tomorrow",
       "--nocolor",
     ]);
   });
@@ -82,13 +86,20 @@ describe("buildAddEventArgs", () => {
       description: "why-line\nhttps://tickets.example.com",
     });
     expect(args).toEqual([
-      "add", "--noprompt",
-      "--calendar", "[user-email]",
-      "--title", "Tycho at Observatory",
-      "--when", "2026-06-08 21:00",
-      "--duration", "120",
-      "--where", "2891 University Ave",
-      "--description", "why-line\nhttps://tickets.example.com",
+      "add",
+      "--noprompt",
+      "--calendar",
+      "[user-email]",
+      "--title",
+      "Tycho at Observatory",
+      "--when",
+      "2026-06-08 21:00",
+      "--duration",
+      "120",
+      "--where",
+      "2891 University Ave",
+      "--description",
+      "why-line\nhttps://tickets.example.com",
     ]);
   });
 
@@ -100,17 +111,26 @@ describe("buildAddEventArgs", () => {
       duration: 30,
     });
     expect(args).toEqual([
-      "add", "--noprompt",
-      "--calendar", "[user-email]",
-      "--title", "Decision review: Alphatec vs Zywave",
-      "--when", "2027-01-03 09:00",
-      "--duration", "30",
+      "add",
+      "--noprompt",
+      "--calendar",
+      "[user-email]",
+      "--title",
+      "Decision review: Alphatec vs Zywave",
+      "--when",
+      "2027-01-03 09:00",
+      "--duration",
+      "30",
     ]);
   });
 
   it("omits --noprompt when noprompt: false", () => {
     const args = buildAddEventArgs({
-      calendar: "c", title: "t", when: "w", duration: 10, noprompt: false,
+      calendar: "c",
+      title: "t",
+      when: "w",
+      duration: 10,
+      noprompt: false,
     });
     expect(args).not.toContain("--noprompt");
   });
@@ -125,15 +145,23 @@ describe("buildDeleteEventArgs", () => {
       calendar: "[user-email]",
     });
     expect(args).toEqual([
-      "delete", "Tycho at Observatory North Park", "2026-06-08", "2026-06-09",
-      "--calendar", "[user-email]",
+      "delete",
+      "Tycho at Observatory North Park",
+      "2026-06-08",
+      "2026-06-09",
+      "--calendar",
+      "[user-email]",
       "--iamaexpert",
     ]);
   });
 
   it("omits --iamaexpert when iamaexpert: false", () => {
     const args = buildDeleteEventArgs({
-      text: "t", startDate: "2026-01-01", endDate: "2026-01-02", calendar: "c", iamaexpert: false,
+      text: "t",
+      startDate: "2026-01-01",
+      endDate: "2026-01-02",
+      calendar: "c",
+      iamaexpert: false,
     });
     expect(args).not.toContain("--iamaexpert");
   });
@@ -176,47 +204,78 @@ describe("agenda() / addEvent() / deleteEvent() — exec wiring", () => {
     expect(stdout).toBe("[]");
     expect(captured).not.toBeNull();
     expect(captured!.file).toBe("/fake/kaya-cli");
-    expect(captured!.args).toEqual([
-      "gcal", "--calendar", "a@b.com", "agenda", "today", "tomorrow", "--nocolor",
-    ]);
+    expect(captured!.args).toEqual(["gcal", "--calendar", "a@b.com", "agenda", "today", "tomorrow", "--nocolor"]);
   });
 
   it("addEvent() invokes kayaCliPath with ['gcal', ...buildAddEventArgs]", () => {
     let captured: { file: string; args: string[] } | null = null;
     addEvent({
-      calendar: "c@x.com", title: "T", when: "2026-01-01 10:00", duration: 60,
+      calendar: "c@x.com",
+      title: "T",
+      when: "2026-01-01 10:00",
+      duration: 60,
       kayaCliPath: "/fake/kaya-cli",
       logPath,
-      execImpl: (file, args) => { captured = { file, args }; return ""; },
+      execImpl: (file, args) => {
+        captured = { file, args };
+        return "";
+      },
     });
     expect(captured!.file).toBe("/fake/kaya-cli");
     expect(captured!.args).toEqual([
-      "gcal", "add", "--noprompt", "--calendar", "c@x.com",
-      "--title", "T", "--when", "2026-01-01 10:00", "--duration", "60",
+      "gcal",
+      "add",
+      "--noprompt",
+      "--calendar",
+      "c@x.com",
+      "--title",
+      "T",
+      "--when",
+      "2026-01-01 10:00",
+      "--duration",
+      "60",
     ]);
   });
 
   it("deleteEvent() invokes kayaCliPath with ['gcal', ...buildDeleteEventArgs]", () => {
     let captured: { file: string; args: string[] } | null = null;
     deleteEvent({
-      text: "T", startDate: "2026-01-01", endDate: "2026-01-02", calendar: "c@x.com",
+      text: "T",
+      startDate: "2026-01-01",
+      endDate: "2026-01-02",
+      calendar: "c@x.com",
       kayaCliPath: "/fake/kaya-cli",
       logPath,
-      execImpl: (file, args) => { captured = { file, args }; return ""; },
+      execImpl: (file, args) => {
+        captured = { file, args };
+        return "";
+      },
     });
     expect(captured!.file).toBe("/fake/kaya-cli");
     expect(captured!.args).toEqual([
-      "gcal", "delete", "T", "2026-01-01", "2026-01-02", "--calendar", "c@x.com", "--iamaexpert",
+      "gcal",
+      "delete",
+      "T",
+      "2026-01-01",
+      "2026-01-02",
+      "--calendar",
+      "c@x.com",
+      "--iamaexpert",
     ]);
   });
 
   it("propagates exec failures (callers rely on this for their existing try/catch fallbacks)", () => {
     expect(() =>
       addEvent({
-        calendar: "c", title: "t", when: "w", duration: 10,
+        calendar: "c",
+        title: "t",
+        when: "w",
+        duration: 10,
         logPath,
-        execImpl: () => { throw new Error("gcalcli: boom"); },
-      })
+        execImpl: () => {
+          throw new Error("gcalcli: boom");
+        },
+      }),
     ).toThrow("gcalcli: boom");
   });
 });
@@ -259,7 +318,10 @@ describe("SECURITY: hostile strings pass through as literal argv (no shell)", ()
   for (const payload of HOSTILE_PAYLOADS) {
     it(`buildAddEventArgs: hostile title ${JSON.stringify(payload)} is one untouched argv element`, () => {
       const args = buildAddEventArgs({
-        calendar: "c@x.com", title: payload, when: "2026-01-01 10:00", duration: 60,
+        calendar: "c@x.com",
+        title: payload,
+        when: "2026-01-01 10:00",
+        duration: 60,
       });
       // The hostile string must appear VERBATIM as exactly one array element —
       // proof the shell never got a chance to tokenize/expand it.
@@ -270,7 +332,10 @@ describe("SECURITY: hostile strings pass through as literal argv (no shell)", ()
 
     it(`buildDeleteEventArgs: hostile text ${JSON.stringify(payload)} is one untouched argv element`, () => {
       const args = buildDeleteEventArgs({
-        text: payload, startDate: "2026-01-01", endDate: "2026-01-02", calendar: "c@x.com",
+        text: payload,
+        startDate: "2026-01-01",
+        endDate: "2026-01-02",
+        calendar: "c@x.com",
       });
       expect(args[1]).toBe(payload);
     });
@@ -282,12 +347,19 @@ describe("SECURITY: hostile strings pass through as literal argv (no shell)", ()
     });
 
     it(`addEvent(): hostile description ${JSON.stringify(payload)} reaches the fake exec as one literal argv element`, () => {
-      let captured: string[] | null = null;
+      // Widened explicitly: TS does not track the assignment inside the execImpl closure.
+      let captured = null as string[] | null;
       addEvent({
-        calendar: "c@x.com", title: "safe title", when: "2026-01-01 10:00", duration: 60,
+        calendar: "c@x.com",
+        title: "safe title",
+        when: "2026-01-01 10:00",
+        duration: 60,
         description: payload,
         logPath: secLogPath,
-        execImpl: (_file, args) => { captured = args; return ""; },
+        execImpl: (_file, args) => {
+          captured = args;
+          return "";
+        },
       });
       expect(captured).not.toBeNull();
       // No element of argv should differ from the raw payload by virtue of shell
@@ -340,7 +412,7 @@ describe("addEvent() / deleteEvent() — write audit logging (S5)", () => {
     expect(typeof entry.timestamp).toBe("string");
   });
 
-  it("addEvent() defaults caller to \"unknown\" when omitted — always log SOMETHING", () => {
+  it('addEvent() defaults caller to "unknown" when omitted — always log SOMETHING', () => {
     addEvent({
       calendar: "[user-email]",
       title: "T",
@@ -353,7 +425,7 @@ describe("addEvent() / deleteEvent() — write audit logging (S5)", () => {
     expect(entry.caller).toBe("unknown");
   });
 
-  it("addEvent() logs outcome starting with \"error:\" AND still throws on exec failure — logging must never swallow the error", () => {
+  it('addEvent() logs outcome starting with "error:" AND still throws on exec failure — logging must never swallow the error', () => {
     let threw = false;
     try {
       addEvent({
@@ -363,7 +435,9 @@ describe("addEvent() / deleteEvent() — write audit logging (S5)", () => {
         duration: 30,
         caller: "test.caller",
         logPath,
-        execImpl: () => { throw new Error("gcalcli: boom"); },
+        execImpl: () => {
+          throw new Error("gcalcli: boom");
+        },
       });
     } catch (err) {
       threw = true;
@@ -392,14 +466,19 @@ describe("addEvent() / deleteEvent() — write audit logging (S5)", () => {
     expect(entry.outcome).toBe("success");
   });
 
-  it("deleteEvent() logs outcome starting with \"error:\" AND still throws on exec failure", () => {
+  it('deleteEvent() logs outcome starting with "error:" AND still throws on exec failure', () => {
     let threw = false;
     try {
       deleteEvent({
-        text: "T", startDate: "2026-01-01", endDate: "2026-01-02", calendar: "c@x.com",
+        text: "T",
+        startDate: "2026-01-01",
+        endDate: "2026-01-02",
+        calendar: "c@x.com",
         caller: "test.caller",
         logPath,
-        execImpl: () => { throw new Error("gcalcli: delete boom"); },
+        execImpl: () => {
+          throw new Error("gcalcli: delete boom");
+        },
       });
     } catch {
       threw = true;
@@ -412,7 +491,10 @@ describe("addEvent() / deleteEvent() — write audit logging (S5)", () => {
 
   it("never logs to the LIVE calendar-writes.jsonl during tests — logPath override is honored (no default-path fallback when set)", () => {
     addEvent({
-      calendar: "c", title: "t", when: "w", duration: 10,
+      calendar: "c",
+      title: "t",
+      when: "w",
+      duration: 10,
       logPath,
       execImpl: () => "",
     });

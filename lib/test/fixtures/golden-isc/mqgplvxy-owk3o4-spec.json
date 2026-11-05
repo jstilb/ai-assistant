@@ -1,0 +1,59 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mqgplvxy-owk3o4-spec.md",
+  "layoutNote": "3-col (30 rows)",
+  "rowCount": 10,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`lifeos.db` exists with WAL mode; `habit_log`, `lead_log`, `food_log`, `finance_transactions` tables present with correct typed columns; `tests/lifeos-db.test.ts` all green",
+      "verifyMethod": "`bun tests/lifeos-db.test.ts` exits 0; `sqlite3 lifeos.db \"PRAGMA journal_mode\"` → `wal`; `sqlite3 lifeos.db \".schema\"` shows all four tables with expected columns",
+      "embeddedCommand": "bun tests/lifeos-db.test.ts"
+    },
+    {
+      "number": 2,
+      "description": "`LifeOSQuery.ts` compiles under `tsc --strict --noEmit`; all typed accessors return correct types; write SQL strings are rejected (runtime guard or branded type)",
+      "verifyMethod": "`tsc --strict --noEmit` exits 0; test asserts that passing a non-SELECT SQL string to the Query API throws; return types verified by TypeScript narrowing in tests"
+    },
+    {
+      "number": 3,
+      "description": "All Log rows backfilled from Workbook into `lifeos.db`; row counts match Sheets source-of-truth exactly (±0) per Log table",
+      "verifyMethod": "`bun bin/lifeos-migrate.ts && bun bin/lifeos-migrate-verify.ts` exits 0; no diff output; counts confirmed for `habit_log`, `lead_log`, `food_log`"
+    },
+    {
+      "number": 4,
+      "description": "Router.ts Captures (Telegram + voice) land in `lifeos.db`; a test Capture sent via Telegram appears in `lifeos.db` within 5 seconds; Sheets write path is non-blocking",
+      "verifyMethod": "Send `/habit` via Telegram; `SELECT * FROM habit_log ORDER BY created_at DESC LIMIT 1` returns the row within 5s; set `GOOGLE_SHEETS_URL=invalid` → send Capture → Router.ts returns success, row in `lifeos.db`, error in `logs/sheets-errors.log`"
+    },
+    {
+      "number": 5,
+      "description": "Google OAuth consent screen status = \"Published\" in Google Cloud Console; Router.ts graceful-failure: Capture succeeds when Sheets is unreachable",
+      "verifyMethod": "Google Cloud Console → OAuth consent screen → Status shows \"Published\"; simulate Sheets unavailability → Router.ts logs soft error, Capture still lands in `lifeos.db`, no thrown exception"
+    },
+    {
+      "number": 6,
+      "description": "`finance_transactions` populated from Plaid: `SELECT COUNT(*) FROM finance_transactions` > 0; `bin/plaid-sync.ts` exits 0; `PLAID_CLIENT_ID` present in `secrets.json`",
+      "verifyMethod": "`cat ~/.kaya/secrets.json | jq .PLAID_CLIENT_ID` non-empty; `bun bin/plaid-sync.ts` exits 0; `sqlite3 lifeos.db \"SELECT COUNT(*) FROM finance_transactions\"` > 0"
+    },
+    {
+      "number": 7,
+      "description": "Local web Dashboard at `localhost:PORT` renders four metric panels (habits, leads, finance, food) with real data from `lifeos.db`; each panel has working drill-down",
+      "verifyMethod": "`curl -s localhost:PORT/api/health` → `{\"ok\":true}`; open browser → all four panels show non-zero real data; clicking each panel shows last 14 days of Log rows"
+    },
+    {
+      "number": 8,
+      "description": "Jm can run `kaya lifeos audit lead`, locate a specific lead by name, read its last 3 Log entries, identify any anomalies — all within 5 minutes",
+      "verifyMethod": "Jm live-demos: runs audit command, locates named lead, reads 3 entries, completes inspection; wall-clock time < 5 minutes"
+    },
+    {
+      "number": 9,
+      "description": "08:00 daily briefing fires and contains habit summary sourced from `lifeos.db` (via Query API); confirmed in launchd logs",
+      "verifyMethod": "Manually trigger: `launchctl start com.kaya.briefing`; check `logs/briefing-$(date +%Y%m%d).log` → contains habit summary with today's date; `log show --predicate 'process contains \"briefing\"' --last 1h` shows run"
+    },
+    {
+      "number": 10,
+      "description": "All 13 launchd jobs loaded and non-error; `launchctl list | grep com.kaya | wc -l` = 13; no job shows repeated non-zero last-exit",
+      "verifyMethod": "`launchctl list | grep com.kaya | wc -l` = 13; no entry in `launchctl list` output has repeated non-zero `LastExitStatus`; `bin/rebuild-plists.sh` runs clean"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.231Z"
+}

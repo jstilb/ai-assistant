@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, afterEach } from "bun:test";
-import { execFileSync } from "child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { revParseRef, changedFilesBetween, isBranchAncestor, verifyMergeOnDisk } from "./MergeSafety.ts";
 
@@ -34,7 +34,11 @@ function makeRepo(): string {
 afterEach(() => {
   while (repos.length) {
     const r = repos.pop()!;
-    try { rmSync(r, { recursive: true, force: true }); } catch { /* best-effort */ }
+    try {
+      rmSync(r, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
   }
 });
 

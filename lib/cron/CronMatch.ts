@@ -37,16 +37,19 @@
  * (`1-5`), and bare exact values.
  */
 export function matchesField(expr: string, value: number): boolean {
-  if (expr === '*') return true;
-  if (expr.startsWith('*/')) {
+  if (expr === "*") return true;
+  if (expr.startsWith("*/")) {
     const step = parseInt(expr.slice(2), 10);
     return Number.isFinite(step) && step > 0 && value % step === 0;
   }
-  if (expr.includes(',')) {
-    return expr.split(',').map(s => parseInt(s, 10)).includes(value);
+  if (expr.includes(",")) {
+    return expr
+      .split(",")
+      .map((s) => parseInt(s, 10))
+      .includes(value);
   }
-  if (expr.includes('-')) {
-    const [lo, hi] = expr.split('-').map(s => parseInt(s, 10));
+  if (expr.includes("-")) {
+    const [lo, hi] = expr.split("-").map((s) => parseInt(s, 10));
     return value >= lo! && value <= hi!;
   }
   return parseInt(expr, 10) === value;

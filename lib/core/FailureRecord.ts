@@ -23,10 +23,10 @@
  * @version 1.0.0
  */
 
-import { join } from "path";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from "fs";
-import { prepareOutputPath } from "./OutputPathResolver";
-import { execSync } from "child_process";
+import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { prepareOutputPath } from "./OutputPathResolver.ts";
+import { execFileSync } from "node:child_process";
 import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
@@ -82,10 +82,10 @@ function getKayaDir(): string {
   return getKayaHome();
 }
 function getFailuresDir(): string {
-  return join(getKayaDir(), 'MEMORY', 'LEARNING', 'FAILURES');
+  return join(getKayaDir(), "MEMORY", "LEARNING", "FAILURES");
 }
 function getContextSessionPath(): string {
-  return join(getKayaDir(), 'MEMORY', 'State', 'context-session.json');
+  return join(getKayaDir(), "MEMORY", "State", "context-session.json");
 }
 const MAX_PACKAGE_SIZE_BYTES = 50 * 1024; // 50KB
 const HAIKU_TIMEOUT_MS = 5000;
@@ -102,29 +102,32 @@ export async function recordFailure(input: FailureRecordInput): Promise<string> 
   const shortSessionId = input.sessionId.slice(0, 8);
 
   // Use OutputPathResolver for consistent path generation
-  const { path: filepath, directory } = await prepareOutputPath({
-    skill: 'LEARNING/FAILURES',
+  const { path: filepath } = await prepareOutputPath({
+    skill: "LEARNING/FAILURES",
     title: `failure-${shortSessionId}`,
-    extension: 'md',
+    extension: "md",
     includeTimestamp: true,
   });
 
   // Get last few entries from transcript for context
-  let transcriptContext = '';
+  let transcriptContext = "";
   if (input.transcriptPath && existsSync(input.transcriptPath)) {
     try {
-      const content = readFileSync(input.transcriptPath, 'utf-8');
-      const lines = content.trim().split('\n').slice(-20); // Last 20 entries
-      transcriptContext = lines.map(line => {
-        try {
-          const entry = JSON.parse(line);
-          const role = entry.role || 'unknown';
-          const text = entry.content?.slice(0, 500) || '[no content]';
-          return `**${role}**: ${text}${entry.content?.length > 500 ? '...' : ''}`;
-        } catch {
-          return '';
-        }
-      }).filter(Boolean).join('\n\n');
+      const content = readFileSync(input.transcriptPath, "utf-8");
+      const lines = content.trim().split("\n").slice(-20); // Last 20 entries
+      transcriptContext = lines
+        .map((line) => {
+          try {
+            const entry = JSON.parse(line);
+            const role = entry.role || "unknown";
+            const text = entry.content?.slice(0, 500) || "[no content]";
+            return `**${role}**: ${text}${entry.content?.length > 500 ? "..." : ""}`;
+          } catch {
+            return "";
+          }
+        })
+        .filter(Boolean)
+        .join("\n\n");
     } catch (err) {
       transcriptContext = `[Error reading transcript: ${err}]`;
     }
@@ -143,11 +146,11 @@ ${input.sentimentSummary}
 
 ## Detailed Context
 
-${input.detailedContext || '[No detailed context provided]'}
+${input.detailedContext || "[No detailed context provided]"}
 
 ## Transcript Excerpt
 
-${transcriptContext || '[No transcript available]'}
+${transcriptContext || "[No transcript available]"}
 
 ---
 
@@ -155,7 +158,7 @@ ${transcriptContext || '[No transcript available]'}
 `;
 
   // Write the file
-  writeFileSync(filepath, content, 'utf-8');
+  writeFileSync(filepath, content, "utf-8");
 
   return filepath;
 }
@@ -172,40 +175,41 @@ function extractToolCalls(transcriptPath: string): ToolCallEntry[] {
   if (!transcriptPath || !existsSync(transcriptPath)) return [];
 
   try {
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean);
+    const content = readFileSync(transcriptPath, "utf-8");
+    const lines = content.trim().split("\n").filter(Boolean);
     const toolCalls: ToolCallEntry[] = [];
 
     for (const line of lines) {
       try {
         const entry = JSON.parse(line);
         // Look for tool_use blocks in assistant messages
-        if (entry.type === 'assistant' && Array.isArray(entry.message?.content)) {
+        if (entry.type === "assistant" && Array.isArray(entry.message?.content)) {
           for (const block of entry.message.content) {
-            if (block.type === 'tool_use') {
+            if (block.type === "tool_use") {
               toolCalls.push({
-                tool: block.name ?? 'unknown',
+                tool: block.name ?? "unknown",
                 input_summary: JSON.stringify(block.input ?? {}).slice(0, 200),
-                result_status: 'success', // assume success unless tool_result says otherwise
+                result_status: "success", // assume success unless tool_result says otherwise
                 timestamp: entry.timestamp ?? new Date().toISOString(),
               });
             }
-            if (block.type === 'tool_result' && block.is_error) {
+            if (block.type === "tool_result" && block.is_error) {
               // Mark the last call with matching tool_use_id as error
               const lastIdx = toolCalls.length - 1;
-              if (lastIdx >= 0) {
-                toolCalls[lastIdx].result_status = 'error';
+              const lastCall = toolCalls[lastIdx];
+              if (lastCall) {
+                lastCall.result_status = "error";
               }
             }
           }
         }
         // Also handle flat tool_use at top level
-        if (entry.role === 'assistant' && entry.content?.type === 'tool_use') {
+        if (entry.role === "assistant" && entry.content?.type === "tool_use") {
           const c = entry.content;
           toolCalls.push({
-            tool: c.name ?? 'unknown',
+            tool: c.name ?? "unknown",
             input_summary: JSON.stringify(c.input ?? {}).slice(0, 200),
-            result_status: 'success',
+            result_status: "success",
             timestamp: entry.timestamp ?? new Date().toISOString(),
           });
         }
@@ -223,29 +227,32 @@ function extractToolCalls(transcriptPath: string): ToolCallEntry[] {
  * Read last N lines of transcript for Haiku summarization.
  */
 function getTranscriptLastLines(transcriptPath: string, n: number = 20): string {
-  if (!transcriptPath || !existsSync(transcriptPath)) return '';
+  if (!transcriptPath || !existsSync(transcriptPath)) return "";
   try {
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean).slice(-n);
-    return lines.map(line => {
-      try {
-        const entry = JSON.parse(line);
-        const role = entry.role ?? entry.type ?? 'unknown';
-        let text = '';
-        if (typeof entry.content === 'string') text = entry.content.slice(0, 300);
-        else if (Array.isArray(entry.message?.content)) {
-          text = entry.message.content
-            .filter((c: { type: string; text?: string }) => c.type === 'text')
-            .map((c: { type: string; text?: string }) => (c.text ?? '').slice(0, 300))
-            .join(' ');
+    const content = readFileSync(transcriptPath, "utf-8");
+    const lines = content.trim().split("\n").filter(Boolean).slice(-n);
+    return lines
+      .map((line) => {
+        try {
+          const entry = JSON.parse(line);
+          const role = entry.role ?? entry.type ?? "unknown";
+          let text = "";
+          if (typeof entry.content === "string") text = entry.content.slice(0, 300);
+          else if (Array.isArray(entry.message?.content)) {
+            text = entry.message.content
+              .filter((c: { type: string; text?: string }) => c.type === "text")
+              .map((c: { type: string; text?: string }) => (c.text ?? "").slice(0, 300))
+              .join(" ");
+          }
+          return `[${role}]: ${text}`;
+        } catch {
+          return "";
         }
-        return `[${role}]: ${text}`;
-      } catch {
-        return '';
-      }
-    }).filter(Boolean).join('\n');
+      })
+      .filter(Boolean)
+      .join("\n");
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -254,20 +261,27 @@ function getTranscriptLastLines(transcriptPath: string, n: number = 20): string 
  * Returns the response text, or null on timeout/error.
  */
 function callHaikuWithTimeout(prompt: string): string | null {
-  const inferencePath = join(getKayaDir(), 'tools', 'Inference.ts');
+  // Opt-in. This runs synchronously (execFileSync) inside recordFailureDump,
+  // which the UserPromptSubmit hook ExplicitRatingRecord calls: two calls can
+  // block the prompt for up to 2 x HAIKU_TIMEOUT_MS. Until 2026-11-05 a wrong
+  // path made this always skip, so the default keeps that effective behavior.
+  // Set KAYA_FAILURE_HAIKU=1 to enable the analysis.
+  if (process.env.KAYA_FAILURE_HAIKU !== "1") return null;
+  const inferencePath = join(getKayaDir(), "lib", "core", "Inference.ts");
   if (!existsSync(inferencePath)) return null;
 
   try {
-    const result = execSync(
-      `echo ${JSON.stringify(prompt)} | bun ${inferencePath} fast`,
-      {
-        timeout: HAIKU_TIMEOUT_MS,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'ignore'],
-      }
+    // execFileSync, not a shell pipeline: the prompt holds transcript text, and `$(...)` or backticks
+    // inside a double-quoted shell string would run as commands.
+    const result = execFileSync(
+      process.execPath,
+      [inferencePath, "--level", "fast", "You write short, factual failure analyses.", prompt],
+      { timeout: HAIKU_TIMEOUT_MS, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
     );
     return result.trim() || null;
   } catch {
+    // Timeout or nonzero exit from the inference subprocess: the analysis falls back to the
+    // "[Haiku unavailable]" placeholder, so the failure dump itself still succeeds.
     return null;
   }
 }
@@ -279,8 +293,12 @@ function dirSizeBytes(dirPath: string): number {
   if (!existsSync(dirPath)) return 0;
   try {
     return readdirSync(dirPath)
-      .map(f => {
-        try { return statSync(join(dirPath, f)).size; } catch { return 0; }
+      .map((f) => {
+        try {
+          return statSync(join(dirPath, f)).size;
+        } catch {
+          return 0;
+        }
       })
       .reduce((a, b) => a + b, 0);
   } catch {
@@ -306,11 +324,11 @@ export async function recordFailureDump(input: FailureDumpInput): Promise<string
   }
 
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number) => String(n).padStart(2, "0");
   const yearMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
   const datePart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  const slug = input.sessionId.replace(/-/g, '').slice(0, 6);
+  const slug = input.sessionId.replace(/-/g, "").slice(0, 6);
 
   const packageDir = join(getFailuresDir(), yearMonth, `${datePart}-${timePart}_${slug}`);
   mkdirSync(packageDir, { recursive: true });
@@ -319,31 +337,23 @@ export async function recordFailureDump(input: FailureDumpInput): Promise<string
   let contextSnapshot: unknown = null;
   if (existsSync(getContextSessionPath())) {
     try {
-      contextSnapshot = JSON.parse(readFileSync(getContextSessionPath(), 'utf-8'));
+      contextSnapshot = JSON.parse(readFileSync(getContextSessionPath(), "utf-8"));
     } catch {
-      contextSnapshot = { error: 'Failed to parse context-session.json' };
+      contextSnapshot = { error: "Failed to parse context-session.json" };
     }
   }
-  writeFileSync(
-    join(packageDir, 'context-snapshot.json'),
-    JSON.stringify(contextSnapshot ?? {}, null, 2),
-    'utf-8'
-  );
+  writeFileSync(join(packageDir, "context-snapshot.json"), JSON.stringify(contextSnapshot ?? {}, null, 2), "utf-8");
 
   // --- tool-calls.json ---
   const toolCalls = extractToolCalls(input.transcriptPath);
-  const failedCallCount = toolCalls.filter(c => c.result_status === 'error').length;
+  const failedCallCount = toolCalls.filter((c) => c.result_status === "error").length;
   const toolCallsJson: ToolCallsJson = {
     session_id: input.sessionId,
     total_calls: toolCalls.length,
     failed_calls: failedCallCount,
     calls: toolCalls,
   };
-  writeFileSync(
-    join(packageDir, 'tool-calls.json'),
-    JSON.stringify(toolCallsJson, null, 2),
-    'utf-8'
-  );
+  writeFileSync(join(packageDir, "tool-calls.json"), JSON.stringify(toolCallsJson, null, 2), "utf-8");
 
   // --- analysis.md (Haiku-generated) ---
   const transcriptExcerpt = getTranscriptLastLines(input.transcriptPath, 20);
@@ -351,81 +361,79 @@ export async function recordFailureDump(input: FailureDumpInput): Promise<string
   // Haiku transcript summary (ISC 8740)
   const summaryPrompt = `You are analyzing a Kaya AI assistant session that received a low rating of ${input.rating}/10.\nSummarize the last 20 turns in 3 bullet points (1 sentence each).\nFocus on what went wrong, not what went right.\nBe specific and factual. Output ONLY the 3 bullets, no preamble.\n\nTranscript:\n${transcriptExcerpt.slice(0, 3000)}`;
 
-  let haikuSummary = callHaikuWithTimeout(summaryPrompt);
+  const haikuSummary = callHaikuWithTimeout(summaryPrompt);
   let haikuRootCause: string | null = null;
 
   if (haikuSummary) {
-    const rootCausePrompt = `Given this session summary: ${haikuSummary}\nAnd user comment: ${input.comment ?? 'none'}\nIn 1-2 sentences, hypothesize the root cause of the failure.\nBe specific. Avoid generic phrases like "miscommunication".\nOutput only the hypothesis, no preamble.`;
+    const rootCausePrompt = `Given this session summary: ${haikuSummary}\nAnd user comment: ${input.comment ?? "none"}\nIn 1-2 sentences, hypothesize the root cause of the failure.\nBe specific. Avoid generic phrases like "miscommunication".\nOutput only the hypothesis, no preamble.`;
     haikuRootCause = callHaikuWithTimeout(rootCausePrompt);
   }
 
   // Get context info from snapshot
   const sessionSnapshot = contextSnapshot as Record<string, unknown> | null;
-  const profileName = typeof sessionSnapshot?.profile === 'string' ? sessionSnapshot.profile : 'unknown';
-  const profileConfidence = typeof sessionSnapshot?.classificationConfidence === 'number'
-    ? sessionSnapshot.classificationConfidence : null;
-  const filesLoaded: string[] = Array.isArray(sessionSnapshot?.filesLoaded) ? sessionSnapshot.filesLoaded as string[] : [];
+  const profileName = typeof sessionSnapshot?.profile === "string" ? sessionSnapshot.profile : "unknown";
+  const profileConfidence =
+    typeof sessionSnapshot?.classificationConfidence === "number" ? sessionSnapshot.classificationConfidence : null;
+  const filesLoaded: string[] = Array.isArray(sessionSnapshot?.filesLoaded)
+    ? (sessionSnapshot.filesLoaded as string[])
+    : [];
 
   const analysisContent = `# Failure Analysis — Rating ${input.rating}/10
 
 **Session:** ${input.sessionId}
 **Timestamp:** ${now.toISOString()}
 **Rating:** ${input.rating}/10
-**User Comment:** ${input.comment ?? 'none'}
+**User Comment:** ${input.comment ?? "none"}
 
-## Session Summary ${haikuSummary ? '(Haiku-generated)' : ''}
+## Session Summary ${haikuSummary ? "(Haiku-generated)" : ""}
 
-${haikuSummary ?? '[Haiku unavailable — manual review required]'}
+${haikuSummary ?? "[Haiku unavailable — manual review required]"}
 
-## Root Cause Hypothesis ${haikuRootCause ? '(Haiku-generated)' : ''}
+## Root Cause Hypothesis ${haikuRootCause ? "(Haiku-generated)" : ""}
 
-${haikuRootCause ?? '[Haiku unavailable — manual review required]'}
+${haikuRootCause ?? "[Haiku unavailable — manual review required]"}
 
 ## Context Loaded
 
-Profile: ${profileName}${profileConfidence !== null ? ` (confidence: ${profileConfidence}%)` : ''}
-Files loaded: ${filesLoaded.length > 0 ? filesLoaded.join(', ') : 'none recorded'}
+Profile: ${profileName}${profileConfidence !== null ? ` (confidence: ${profileConfidence}%)` : ""}
+Files loaded: ${filesLoaded.length > 0 ? filesLoaded.join(", ") : "none recorded"}
 
 ## Signals
 
-- Manual context loads: ${typeof sessionSnapshot?.manualLoads === 'number' ? sessionSnapshot.manualLoads : 'unknown'}
-- Session duration: ${typeof sessionSnapshot?.durationMinutes === 'number' ? sessionSnapshot.durationMinutes : 'unknown'} minutes
+- Manual context loads: ${typeof sessionSnapshot?.manualLoads === "number" ? sessionSnapshot.manualLoads : "unknown"}
+- Session duration: ${typeof sessionSnapshot?.durationMinutes === "number" ? sessionSnapshot.durationMinutes : "unknown"} minutes
 - Tool calls: ${toolCalls.length} total (${failedCallCount} failed)
 `;
 
-  writeFileSync(join(packageDir, 'analysis.md'), analysisContent, 'utf-8');
+  writeFileSync(join(packageDir, "analysis.md"), analysisContent, "utf-8");
 
   // --- Size enforcement (ISC 1352) ---
   const totalSize = dirSizeBytes(packageDir);
   if (totalSize > MAX_PACKAGE_SIZE_BYTES) {
     // First: truncate tool-calls.json by removing successful calls
-    const failedCalls = toolCalls.filter(c => c.result_status !== 'success');
+    const failedCalls = toolCalls.filter((c) => c.result_status !== "success");
     const truncatedToolCalls: ToolCallsJson = {
       session_id: input.sessionId,
       total_calls: toolCalls.length,
       failed_calls: failedCallCount,
       calls: failedCalls, // keep only failed
     };
-    writeFileSync(
-      join(packageDir, 'tool-calls.json'),
-      JSON.stringify(truncatedToolCalls, null, 2),
-      'utf-8'
-    );
+    writeFileSync(join(packageDir, "tool-calls.json"), JSON.stringify(truncatedToolCalls, null, 2), "utf-8");
 
     // Check again after truncating tool-calls
     const sizeAfterToolTruncation = dirSizeBytes(packageDir);
     if (sizeAfterToolTruncation > MAX_PACKAGE_SIZE_BYTES) {
       // Truncate analysis.md transcript section
-      const maxAnalysisBytes = MAX_PACKAGE_SIZE_BYTES
-        - (existsSync(join(packageDir, 'context-snapshot.json'))
-            ? statSync(join(packageDir, 'context-snapshot.json')).size
-            : 0)
-        - (existsSync(join(packageDir, 'tool-calls.json'))
-            ? statSync(join(packageDir, 'tool-calls.json')).size
-            : 0);
+      const maxAnalysisBytes =
+        MAX_PACKAGE_SIZE_BYTES -
+        (existsSync(join(packageDir, "context-snapshot.json"))
+          ? statSync(join(packageDir, "context-snapshot.json")).size
+          : 0) -
+        (existsSync(join(packageDir, "tool-calls.json")) ? statSync(join(packageDir, "tool-calls.json")).size : 0);
       if (maxAnalysisBytes > 200) {
-        const truncatedAnalysis = analysisContent.slice(0, maxAnalysisBytes - 30) + '\n\n[truncated — size limit reached]';
-        writeFileSync(join(packageDir, 'analysis.md'), truncatedAnalysis, 'utf-8');
+        const truncatedAnalysis =
+          analysisContent.slice(0, maxAnalysisBytes - 30) + "\n\n[truncated — size limit reached]";
+        writeFileSync(join(packageDir, "analysis.md"), truncatedAnalysis, "utf-8");
       }
     }
   }
@@ -443,27 +451,29 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
 
   if (args.length < 2) {
-    console.log('Usage: bun FailureRecord.ts <sessionId> <rating> [summary]');
+    console.log("Usage: bun FailureRecord.ts <sessionId> <rating> [summary]");
     process.exit(1);
   }
 
-  const [sessionId, ratingStr, summary = 'Manual failure capture'] = args;
+  const [sessionId = "", ratingStr = "", summary = "Manual failure capture"] = args;
   const rating = parseInt(ratingStr, 10);
 
-  if (isNaN(rating) || rating < 1 || rating > 10) {
-    console.error('Rating must be a number between 1 and 10');
+  if (Number.isNaN(rating) || rating < 1 || rating > 10) {
+    console.error("Rating must be a number between 1 and 10");
     process.exit(1);
   }
 
   recordFailure({
-    transcriptPath: '',
+    transcriptPath: "",
     rating,
     sentimentSummary: summary,
     sessionId,
-  }).then(filepath => {
-    console.log(`Failure captured: ${filepath}`);
-  }).catch(err => {
-    console.error(`Error: ${err}`);
-    process.exit(1);
-  });
+  })
+    .then((filepath) => {
+      console.log(`Failure captured: ${filepath}`);
+    })
+    .catch((err) => {
+      console.error(`Error: ${err}`);
+      process.exit(1);
+    });
 }

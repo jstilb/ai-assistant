@@ -10,15 +10,15 @@
  * Inherited from the SkillIntegrationBridge.emitEvalSignal that this replaces.
  */
 
-import { memPath } from './MemoryPaths.ts';
-import { createAppendLog } from './AppendLog.ts';
+import { memPath } from "./MemoryPaths.ts";
+import { createAppendLog } from "./AppendLog.ts";
 
 export interface EvalSignalPayload {
   source: string;
-  signalType: 'failure' | 'success' | 'regression' | 'capability_result';
+  signalType: "failure" | "success" | "regression" | "capability_result";
   description: string;
   category: string;
-  severity?: 'low' | 'medium' | 'high' | 'critical';
+  severity?: "low" | "medium" | "high" | "critical";
   suite?: string;
   score?: number;
   rawData?: Record<string, unknown>;
@@ -26,7 +26,7 @@ export interface EvalSignalPayload {
 
 /** Absolute path to the eval-signals JSONL — resolved lazily under KAYA_HOME. */
 export function evalSignalsPath(): string {
-  return memPath('EVAL_SIGNALS', 'signals.jsonl');
+  return memPath("EVAL_SIGNALS", "signals.jsonl");
 }
 
 /**
@@ -43,7 +43,7 @@ export async function appendEvalSignal(payload: EvalSignalPayload): Promise<void
       signalType: payload.signalType,
       description: payload.description,
       category: payload.category,
-      severity: payload.severity || 'medium',
+      severity: payload.severity || "medium",
       suite: payload.suite,
       score: payload.score,
       rawData: payload.rawData,
@@ -54,6 +54,6 @@ export async function appendEvalSignal(payload: EvalSignalPayload): Promise<void
     // AppendLog handle is constructed per call too — createAppendLog is cheap.
     createAppendLog(path).append(record);
   } catch (error) {
-    console.error('[EvalSignals] appendEvalSignal failed:', error instanceof Error ? error.message : error);
+    console.error("[EvalSignals] appendEvalSignal failed:", error instanceof Error ? error.message : error);
   }
 }

@@ -9,9 +9,9 @@
  * FailureClassifier.ts), does no I/O, so it's trivially unit-testable.
  */
 
-import type { FailureClass } from './FailureClassifier';
+import type { FailureClass } from "./FailureClassifier.ts";
 
-const RETRYABLE: ReadonlySet<FailureClass> = new Set(['transient', 'timeout', 'environment']);
+const RETRYABLE: ReadonlySet<FailureClass> = new Set(["transient", "timeout", "environment"]);
 
 export function isRetryableFailure(failureClass: FailureClass): boolean {
   return RETRYABLE.has(failureClass);

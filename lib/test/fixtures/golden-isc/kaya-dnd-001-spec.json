@@ -1,0 +1,99 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/kaya-dnd-001-spec.md",
+  "layoutNote": "4-col Layout A (45 rows)",
+  "rowCount": 15,
+  "rows": [
+    {
+      "number": 1,
+      "description": "CRCalculator produces correct CR for 10 known SRD monsters",
+      "verifyMethod": "Run calculator against Adult Red Dragon (CR17), Goblin (CR1/4), etc. — output matches published CR",
+      "source": "P1"
+    },
+    {
+      "number": 2,
+      "description": "MonsterGenerator creates stat blocks with stats within ±10% of CR targets",
+      "verifyMethod": "Generate monsters at CR 1, 5, 10, 15, 20 — compare HP/AC/DPR to DMG tables",
+      "source": "P2"
+    },
+    {
+      "number": 3,
+      "description": "EncounterBalancer produces correct XP budgets per DMG p82",
+      "verifyMethod": "Calculate budget for party of 4 level-5 PCs — Easy=1000, Medium=2000, Hard=3000, Deadly=4400",
+      "source": "P2"
+    },
+    {
+      "number": 4,
+      "description": "LootGenerator rolls from DMG treasure tables with correct distribution",
+      "verifyMethod": "Generate 10 CR-7 hoards — verify coin ranges and magic item table references match DMG",
+      "source": "P2"
+    },
+    {
+      "number": 5,
+      "description": "SpellForge creates balanced spells with comparison to SRD precedent",
+      "verifyMethod": "Create a level-3 damage spell — damage should be comparable to Fireball (8d6)",
+      "source": "P2"
+    },
+    {
+      "number": 6,
+      "description": "HomebrewValidator correctly flags overpowered content",
+      "verifyMethod": "Feed it a CR-5 monster with CR-15 stats — should flag as overpowered with specific adjustments",
+      "source": "P2"
+    },
+    {
+      "number": 7,
+      "description": "MonsterArt generates D&D-style creature art via Gemini",
+      "verifyMethod": "Generate art for 3 different creature types — images saved to ~/Downloads/",
+      "source": "P3"
+    },
+    {
+      "number": 8,
+      "description": "MapPrompt generates usable battlemaps with grid overlay",
+      "verifyMethod": "Generate forest battlemap — image has visible grid, terrain features, VTT-appropriate resolution",
+      "source": "P3"
+    },
+    {
+      "number": 9,
+      "description": "StatBlock outputs valid Foundry VTT JSON",
+      "verifyMethod": "Generate monster → export --format foundry → import into Foundry VTT → stat block renders correctly",
+      "source": "P3"
+    },
+    {
+      "number": 10,
+      "description": "CampaignState persists and loads across sessions",
+      "verifyMethod": "Create campaign → add session data → restart Kaya → load campaign → data intact",
+      "source": "P1"
+    },
+    {
+      "number": 11,
+      "description": "ImprovGenerate produces content in <15s (no art)",
+      "verifyMethod": "Time `bun MonsterGenerator.ts --cr 5 --random` — must complete in <15s",
+      "embeddedCommand": "bun MonsterGenerator.ts --cr 5 --random",
+      "source": "P4"
+    },
+    {
+      "number": 12,
+      "description": "SessionDesigner orchestrates all modules into complete session packet",
+      "verifyMethod": "Run full session prep → output directory contains: encounter stat blocks, NPC roster, maps, loot tables",
+      "source": "P4"
+    },
+    {
+      "number": 13,
+      "description": "SKILL.md passes CreateSkill validator (all required sections present)",
+      "verifyMethod": "Run validator — Customization, Voice Notification, Workflow Routing, Examples, Integration all present",
+      "source": "P4"
+    },
+    {
+      "number": 14,
+      "description": "All tools support --json and stdin piping",
+      "verifyMethod": "Pipe MonsterGenerator output to StatBlock to HomebrewValidator — chain works",
+      "source": "P2"
+    },
+    {
+      "number": 15,
+      "description": "WarMechanics handles 100+ combatant battles with squad aggregation",
+      "verifyMethod": "Design battle with 200 combatants — resolves in squad-level turns with morale tracking",
+      "source": "P4"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.233Z"
+}

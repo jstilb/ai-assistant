@@ -71,8 +71,8 @@
  *   bun lib/core/FreshnessClassifier.ts
  */
 
-import { existsSync, readdirSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { memPathUnder } from "./MemoryPaths.ts";
 
 // ============================================================================
@@ -119,7 +119,7 @@ export type FreshnessDeclaration = TimelessFreshness | DatedSnapshotFreshness | 
  * USER/TELOS/ and context/: the 10 unfilled scaffolds score 58–77% placeholder
  * lines, every filled file scores 0.
  */
-const TEMPLATE_PLACEHOLDER = /(?<!\[)\[[A-Z][^\]\n]{2,}\](?![(\[\]:])/;
+const TEMPLATE_PLACEHOLDER = /(?<!\[)\[[A-Z][^\]\n]{2,}\](?![([\]:])/;
 
 /** An artifact is an empty template when at least this many body lines are
  *  placeholders AND they are at least this share of the body. Both bounds

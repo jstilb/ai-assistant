@@ -1,0 +1,63 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/path-a-contextmanager-fix-spec.md",
+  "layoutNote": "non-standard ISC subsection (11 rows)",
+  "rowCount": 11,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`general` profile `tokenBudget` is 1000",
+      "verifyMethod": "`python3 -c \"import json; assert json.load(open('~/.claude/skills/ContextManager/config/profiles.json'))['profiles']['general']['tokenBudget'] == 1000; print('PASS')\"`"
+    },
+    {
+      "number": 2,
+      "description": "`context/CalendarContext.md` is in `general` profile `required` array",
+      "verifyMethod": "`python3 -c \"import json; assert 'context/CalendarContext.md' in json.load(open('~/.claude/skills/ContextManager/config/profiles.json'))['profiles']['general']['required']; print('PASS')\"`"
+    },
+    {
+      "number": 3,
+      "description": "`skills/Development/UnixCLI/CLI-INDEX.md` is absent from `general` profile `recommended`",
+      "verifyMethod": "`python3 -c \"import json; p=json.load(open('~/.claude/skills/ContextManager/config/profiles.json')); assert 'skills/Development/UnixCLI/CLI-INDEX.md' not in p['profiles']['general'].get('recommended',[]); print('PASS')\"`"
+    },
+    {
+      "number": 4,
+      "description": "`skills/Development/UnixCLI/CLI-INDEX.md` is absent from `conversational` profile `recommended`",
+      "verifyMethod": "`python3 -c \"import json; p=json.load(open('~/.claude/skills/ContextManager/config/profiles.json')); assert 'skills/Development/UnixCLI/CLI-INDEX.md' not in p['profiles']['conversational'].get('recommended',[]); print('PASS')\"`"
+    },
+    {
+      "number": 5,
+      "description": "`development` profile is unchanged: `tokenBudget` 1800, CLI-INDEX in `required`",
+      "verifyMethod": "`python3 -c \"import json; d=json.load(open('~/.claude/skills/ContextManager/config/profiles.json'))['profiles']['development']; assert d['tokenBudget']==1800 and 'skills/Development/UnixCLI/CLI-INDEX.md' in d['required']; print('PASS')\"`"
+    },
+    {
+      "number": 6,
+      "description": "Stage B inference timeout is 4000ms in IntentClassifier.ts",
+      "verifyMethod": "`grep -n \"timeout:\" ~/.claude/skills/ContextManager/Tools/IntentClassifier.ts | grep 4000`"
+    },
+    {
+      "number": 7,
+      "description": "`classifyIntent` on an ambiguous prompt returns confidence >= 0.4 OR profile != \"general\"",
+      "verifyMethod": "`bun ~/.claude/skills/ContextManager/Tools/IntentClassifier.ts \"how does kaya navigate our context graph\" 2>/dev/null | python3 -c \"import json,sys; r=json.load(sys.stdin); assert r['confidence']>=0.4 or r['profile']!='general', f'Still degraded: {r}'; print('PASS')\"`"
+    },
+    {
+      "number": 8,
+      "description": "ContextSelector for `general` profile returns at least one file with positive token count",
+      "verifyMethod": "`bun ~/.claude/skills/ContextManager/Tools/ContextSelector.ts general 2>/dev/null | python3 -c \"import json,sys; r=json.load(sys.stdin); assert len(r.get('files',[]))>0 and r.get('totalTokens',0)>0; print('PASS')\"`"
+    },
+    {
+      "number": 9,
+      "description": "No `general` session after fix timestamp has `filesLoaded: []`",
+      "verifyMethod": "`python3 -c \"import json; lines=[json.loads(l) for l in open('~/.claude/MEMORY/LEARNING/SIGNALS/context-feedback.jsonl')]; post=[l for l in lines if l.get('timestamp','')>='2026-03-24T17:00:00Z' and l.get('profile')=='general']; bad=[l for l in post if l.get('filesLoaded')==[]]; assert len(bad)==0, f'Empty filesLoaded still occurring: {bad}'; print('PASS')\"`"
+    },
+    {
+      "number": 10,
+      "description": "profiles.json is valid JSON with no parse errors",
+      "verifyMethod": "`python3 -m json.tool ~/.claude/skills/ContextManager/config/profiles.json > /dev/null && echo PASS`"
+    },
+    {
+      "number": 11,
+      "description": "All 10 expected profile names remain present (no accidental deletions)",
+      "verifyMethod": "`python3 -c \"import json; p=json.load(open('~/.claude/skills/ContextManager/config/profiles.json'))['profiles']; expected={'boot','development','life-coaching','planning','scheduling','task-management','knowledge-lookup','general','conversational','voice-conversation'}; missing=expected-set(p.keys()); assert not missing, f'Missing profiles: {missing}'; print('PASS')\"`"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.239Z"
+}

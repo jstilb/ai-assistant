@@ -16,7 +16,10 @@ let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "prl-statusline-"));
   mkdirSync(join(dir, "MEMORY", "State", "cache"), { recursive: true });
-  writeFileSync(join(dir, "settings.json"), JSON.stringify({ daidentity: { name: "Kaya" }, rateLimits: { enabled: false } }));
+  writeFileSync(
+    join(dir, "settings.json"),
+    JSON.stringify({ daidentity: { name: "Kaya" }, rateLimits: { enabled: false } }),
+  );
 });
 
 function render(payload: unknown): { code: number; stateRaw: string } {
@@ -37,7 +40,13 @@ describe("statusline-command.sh rate-limits.json", () => {
   it("parses five_hour / seven_day and writes ISO resetsAt, observedAt and lastReal", () => {
     const five = nowSec() + 3600;
     const week = nowSec() + 86_400;
-    const { stateRaw } = render({ ...base, rate_limits: { five_hour: { used_percentage: 42.4, resets_at: five }, seven_day: { used_percentage: 81, resets_at: week } } });
+    const { stateRaw } = render({
+      ...base,
+      rate_limits: {
+        five_hour: { used_percentage: 42.4, resets_at: five },
+        seven_day: { used_percentage: 81, resets_at: week },
+      },
+    });
     const s = RateLimitsSchema.parse(JSON.parse(stateRaw));
     expect(s.fiveHour?.usedPercentage).toBe(42.4);
     expect(s.fiveHour?.resetsAt).toBe(new Date(five * 1000).toISOString().replace(".000Z", "Z"));
@@ -48,7 +57,9 @@ describe("statusline-command.sh rate-limits.json", () => {
 
   it("a render with no rate_limits NEVER overwrites the last real reading", () => {
     render({ ...base, rate_limits: { five_hour: { used_percentage: 70, resets_at: nowSec() + 3600 } } });
-    const first = RateLimitsSchema.parse(JSON.parse(readFileSync(join(dir, "MEMORY", "State", "rate-limits.json"), "utf-8")));
+    const first = RateLimitsSchema.parse(
+      JSON.parse(readFileSync(join(dir, "MEMORY", "State", "rate-limits.json"), "utf-8")),
+    );
     const { stateRaw } = render(base);
     const s = RateLimitsSchema.parse(JSON.parse(stateRaw));
     expect(s.fiveHour).toBeNull();
@@ -58,8 +69,17 @@ describe("statusline-command.sh rate-limits.json", () => {
   });
 
   it("a window the payload drops keeps its own last reading while the other updates", () => {
-    render({ ...base, rate_limits: { five_hour: { used_percentage: 10, resets_at: nowSec() + 3600 }, seven_day: { used_percentage: 55, resets_at: nowSec() + 86_400 } } });
-    const { stateRaw } = render({ ...base, rate_limits: { five_hour: { used_percentage: 12, resets_at: nowSec() + 3600 } } });
+    render({
+      ...base,
+      rate_limits: {
+        five_hour: { used_percentage: 10, resets_at: nowSec() + 3600 },
+        seven_day: { used_percentage: 55, resets_at: nowSec() + 86_400 },
+      },
+    });
+    const { stateRaw } = render({
+      ...base,
+      rate_limits: { five_hour: { used_percentage: 12, resets_at: nowSec() + 3600 } },
+    });
     const s = RateLimitsSchema.parse(JSON.parse(stateRaw));
     expect(s.lastReal?.fiveHour?.usedPercentage).toBe(12);
     expect(s.lastReal?.sevenDay?.usedPercentage).toBe(55);
@@ -82,7 +102,10 @@ describe("statusline-command.sh rate-limits.json", () => {
   });
 
   it("the old wrong key names (5_hour / 7_day) are not read", () => {
-    const { stateRaw } = render({ ...base, rate_limits: { "5_hour": { used_percentage: 99, resets_at: nowSec() + 3600 } } });
+    const { stateRaw } = render({
+      ...base,
+      rate_limits: { "5_hour": { used_percentage: 99, resets_at: nowSec() + 3600 } },
+    });
     const s = RateLimitsSchema.parse(JSON.parse(stateRaw));
     expect(s.fiveHour).toBeNull();
     expect(s.lastReal?.fiveHour).toBeNull();

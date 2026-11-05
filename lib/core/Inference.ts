@@ -48,10 +48,10 @@
  * ============================================================================
  */
 
-import { spawn, execSync } from "child_process";
-import { existsSync, openSync, closeSync, readFileSync, statSync, unlinkSync } from "fs";
-import { join } from "path";
-import { loadTieredConfig } from "./ConfigLoader.ts";
+import { spawn, execSync } from "node:child_process";
+import { existsSync, openSync, closeSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { loadSettings, loadTieredConfig } from "./ConfigLoader.ts";
 import { getKayaHome, defaultKayaHome } from "./KayaHome.ts";
 import { moonshotChat, KIMI_K3_MODEL, KIMI_K3_PRICING } from "./MoonshotClient.ts";
 import { z } from "zod";
@@ -71,7 +71,7 @@ let _oauthTokenCache: string | null | undefined;
 let _oauthTokenCacheMtime: number | null = null;
 let _oauthTokenCachePath: string | null = null;
 export function loadOAuthToken(): string | undefined {
-  const secretsPath = join(getKayaHome(), 'secrets.json');
+  const secretsPath = join(getKayaHome(), "secrets.json");
 
   // Path-keyed: a KAYA_HOME override mid-process resolves a different
   // secrets.json — the cached value belongs to the old path, discard it.
@@ -89,21 +89,29 @@ export function loadOAuthToken(): string | undefined {
         _oauthTokenCache = undefined;
         _oauthTokenCacheMtime = null;
       }
-    } catch { /* stat failed (e.g. file deleted) — keep existing cache */ }
+    } catch {
+      /* stat failed (e.g. file deleted) — keep existing cache */
+    }
   }
 
   if (_oauthTokenCache !== undefined) return _oauthTokenCache ?? undefined;
   try {
     if (existsSync(secretsPath)) {
       const mtimeMs = statSync(secretsPath).mtimeMs;
-      const secrets = JSON.parse(readFileSync(secretsPath, 'utf-8')) as Record<string, unknown>;
-      const token = typeof secrets.CLAUDE_CODE_OAUTH_TOKEN === 'string' ? secrets.CLAUDE_CODE_OAUTH_TOKEN : null;
+      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
+      const token = typeof secrets.CLAUDE_CODE_OAUTH_TOKEN === "string" ? secrets.CLAUDE_CODE_OAUTH_TOKEN : null;
       _oauthTokenCache = token;
       _oauthTokenCacheMtime = mtimeMs;
       _oauthTokenCachePath = secretsPath;
       return token ?? undefined;
     }
-  } catch { /* fail open — caller falls back to inherited env */ }
+  } catch (err) {
+    // Fail open (caller falls back to the inherited env token), but say why: a malformed or
+    // unreadable secrets.json otherwise looks like "no token" and ends in a stale-token 401.
+    console.error(
+      `Inference: cannot read OAuth token from ${secretsPath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   // Cache the miss with mtime 0 so a secrets.json created LATER (mtime > 0)
   // invalidates it — otherwise the null would be sticky for process lifetime.
   _oauthTokenCache = null;
@@ -122,12 +130,12 @@ const EXIT_STDOUT_TAIL_CHARS = 1000;
  */
 function summarizeEnvelope(rec: Record<string, unknown>): string {
   const parts: string[] = [];
-  for (const key of ['subtype', 'terminal_reason', 'api_error_status']) {
+  for (const key of ["subtype", "terminal_reason", "api_error_status"]) {
     const v = rec[key];
-    if (typeof v === 'string' || typeof v === 'number') parts.push(`${key}=${v}`);
+    if (typeof v === "string" || typeof v === "number") parts.push(`${key}=${v}`);
   }
-  if (parts.length === 0) return 'claude envelope without message';
-  return `claude envelope${rec.is_error === true ? ' is_error' : ''} (${parts.join(', ')})`;
+  if (parts.length === 0) return "claude envelope without message";
+  return `claude envelope${rec.is_error === true ? " is_error" : ""} (${parts.join(", ")})`;
 }
 
 /** Max chars of `[claude-code:…]` stderr tag lines surfaced in an exit error. */
@@ -147,20 +155,22 @@ const EXIT_TAG_CHARS = 300;
  */
 export function buildExitError(code: number | null, stdout: string, stderr: string): string {
   const errTrim = stderr.trim();
-  const tagOnly = errTrim !== '' &&
-    errTrim.split('\n').every((l) => l.trim() === '' || /^\[claude-code:[^\]]+\]/.test(l.trim()));
+  const tagOnly =
+    errTrim !== "" && errTrim.split("\n").every((l) => l.trim() === "" || /^\[claude-code:[^\]]+\]/.test(l.trim()));
   if (errTrim && !tagOnly) return stderr;
-  const tag = tagOnly ? ` [${errTrim.replace(/\s*\n\s*/g, ' ').slice(0, EXIT_TAG_CHARS)}]` : '';
+  const tag = tagOnly ? ` [${errTrim.replace(/\s*\n\s*/g, " ").slice(0, EXIT_TAG_CHARS)}]` : "";
   let detail = stdout.trim();
   if (!detail) return `Process exited with code ${code}${tag}`;
   try {
     const parsed: unknown = JSON.parse(detail);
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
       const rec = parsed as Record<string, unknown>;
       const result = rec.result;
-      detail = typeof result === 'string' && result.trim() ? result.trim() : summarizeEnvelope(rec);
+      detail = typeof result === "string" && result.trim() ? result.trim() : summarizeEnvelope(rec);
     }
-  } catch { /* intentionally silent: stdout is often plain text, not a JSON envelope — falling back to the raw tail is the normal path */ }
+  } catch {
+    /* intentionally silent: stdout is often plain text, not a JSON envelope — falling back to the raw tail is the normal path */
+  }
   return `exit ${code}: ${detail.slice(-EXIT_STDOUT_TAIL_CHARS)}${tag}`;
 }
 
@@ -172,11 +182,7 @@ export function buildExitError(code: number | null, stdout: string, stderr: stri
  */
 function resolveClaudePath(): string {
   // Known install locations (ordered by likelihood)
-  const knownPaths = [
-    `${process.env.HOME}/.local/bin/claude`,
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-  ];
+  const knownPaths = [`${process.env.HOME}/.local/bin/claude`, "/usr/local/bin/claude", "/opt/homebrew/bin/claude"];
 
   // First, try the known paths directly (fastest, no shell needed)
   for (const p of knownPaths) {
@@ -185,23 +191,23 @@ function resolveClaudePath(): string {
 
   // Fallback: try `which` in case it's somewhere else on PATH
   try {
-    return execSync('which claude', { encoding: 'utf-8' }).trim();
+    return execSync("which claude", { encoding: "utf-8" }).trim();
   } catch {
     // Last resort — return bare name and let spawn fail with a clear error
-    return 'claude';
+    return "claude";
   }
 }
 
 export const CLAUDE_PATH = resolveClaudePath();
 
-export type InferenceLevel = 'fast' | 'standard' | 'smart' | 'kimi';
+export type InferenceLevel = "fast" | "standard" | "smart" | "kimi";
 
 /**
  * Levels that do NOT spawn `claude -p`. Currently only `kimi`, which calls
  * Moonshot's OpenAI-compatible HTTPS API with a metered key.
  */
 export function isExternalApiLevel(level: InferenceLevel): boolean {
-  return level === 'kimi';
+  return level === "kimi";
 }
 
 export interface InferenceOptions {
@@ -221,7 +227,7 @@ export interface InferenceOptions {
   /** Explicit model for this call (claude -p `--model`), overriding the level's configured model. Not for the `kimi` level. */
   model?: string;
   /** Explicit effort for this call (claude -p `--effort`), overriding the level's configured effort. Not for the `kimi` level. */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   timeout?: number;
   /** When true, detect JSON arrays in userPrompt and TOON-encode them before sending.
    *  Only applies when settings.json toon.enableInInference is also true. */
@@ -253,13 +259,13 @@ export interface InferenceResult {
 
 /** Published per-token pricing by model family (USD per million tokens). */
 const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
-  opus:   { inputPerMillion: 15.00, outputPerMillion: 75.00 },
-  sonnet: { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  haiku:  { inputPerMillion: 0.25,  outputPerMillion: 1.25  },
+  opus: { inputPerMillion: 15.0, outputPerMillion: 75.0 },
+  sonnet: { inputPerMillion: 3.0, outputPerMillion: 15.0 },
+  haiku: { inputPerMillion: 0.25, outputPerMillion: 1.25 },
   // Metered Moonshot API — unlike the Claude rows above (subscription-billed),
   // this cost is really charged to Jm's card. Cache-hit input is $0.30/M but we
   // cannot observe cache status per call, so the miss rate is the honest estimate.
-  kimi:   { inputPerMillion: KIMI_K3_PRICING.inputPerMillion, outputPerMillion: KIMI_K3_PRICING.outputPerMillion },
+  kimi: { inputPerMillion: KIMI_K3_PRICING.inputPerMillion, outputPerMillion: KIMI_K3_PRICING.outputPerMillion },
 };
 
 /**
@@ -277,27 +283,21 @@ export function estimateTokens(text: string): number {
  * Matches by substring: 'claude-3-opus-*' → 'opus', etc.
  * Defaults to sonnet pricing for unknown models.
  */
-export function resolveModelPricing(
-  modelName: string
-): { inputPerMillion: number; outputPerMillion: number } {
+export function resolveModelPricing(modelName: string): { inputPerMillion: number; outputPerMillion: number } {
   const lower = modelName.toLowerCase();
-  if (lower.includes('kimi'))   return MODEL_PRICING['kimi']!;
-  if (lower.includes('opus'))   return MODEL_PRICING['opus']!;
-  if (lower.includes('sonnet')) return MODEL_PRICING['sonnet']!;
-  if (lower.includes('haiku'))  return MODEL_PRICING['haiku']!;
-  return MODEL_PRICING['sonnet']!;
+  if (lower.includes("kimi")) return MODEL_PRICING["kimi"]!;
+  if (lower.includes("opus")) return MODEL_PRICING["opus"]!;
+  if (lower.includes("sonnet")) return MODEL_PRICING["sonnet"]!;
+  if (lower.includes("haiku")) return MODEL_PRICING["haiku"]!;
+  return MODEL_PRICING["sonnet"]!;
 }
 
 /**
  * Calculate estimated cost in USD for a single inference call.
  */
-export function estimateCostUSD(params: {
-  inputTokens: number;
-  outputTokens: number;
-  modelName: string;
-}): number {
+export function estimateCostUSD(params: { inputTokens: number; outputTokens: number; modelName: string }): number {
   const pricing = resolveModelPricing(params.modelName);
-  const inputCost  = (params.inputTokens  / 1_000_000) * pricing.inputPerMillion;
+  const inputCost = (params.inputTokens / 1_000_000) * pricing.inputPerMillion;
   const outputCost = (params.outputTokens / 1_000_000) * pricing.outputPerMillion;
   return inputCost + outputCost;
 }
@@ -307,23 +307,23 @@ export function estimateCostUSD(params: {
 // Opus 5 default to `high`; the routine one-shot work these tiers serve does
 // not need it. Anthropic's Fable 5.1 guidance: low/medium for routine work,
 // high for most tasks. Kimi has no effort dial (Moonshot HTTPS path).
-const EffortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+const EffortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 
 const LevelConfigSchema = z.object({
   fast: z.object({
-    model: z.string().default('haiku'),
+    model: z.string().default("haiku"),
     defaultTimeout: z.number().default(60000),
-    effort: EffortSchema.default('low'),
+    effort: EffortSchema.default("low"),
   }),
   standard: z.object({
-    model: z.string().default('sonnet'),
+    model: z.string().default("sonnet"),
     defaultTimeout: z.number().default(240000),
-    effort: EffortSchema.default('medium'),
+    effort: EffortSchema.default("medium"),
   }),
   smart: z.object({
-    model: z.string().default('opus'),
+    model: z.string().default("opus"),
     defaultTimeout: z.number().default(240000),
-    effort: EffortSchema.default('high'),
+    effort: EffortSchema.default("high"),
   }),
   kimi: z.object({
     model: z.string().default(KIMI_K3_MODEL),
@@ -333,9 +333,9 @@ const LevelConfigSchema = z.object({
 
 // Default level configurations
 const DEFAULT_LEVEL_CONFIG = {
-  fast: { model: 'haiku', defaultTimeout: 60000, effort: 'low' },
-  standard: { model: 'sonnet', defaultTimeout: 240000, effort: 'medium' },
-  smart: { model: 'opus', defaultTimeout: 240000, effort: 'high' },
+  fast: { model: "haiku", defaultTimeout: 60000, effort: "low" },
+  standard: { model: "sonnet", defaultTimeout: 240000, effort: "medium" },
+  smart: { model: "opus", defaultTimeout: 240000, effort: "high" },
   kimi: { model: KIMI_K3_MODEL, defaultTimeout: 240000 },
 };
 
@@ -347,13 +347,21 @@ const DEFAULT_LEVEL_CONFIG = {
  * - SYSTEM: ~/.claude/docs/system/config/inference.json
  * - ENV:    KAYA_INFERENCE_FAST_MODEL, KAYA_INFERENCE_FAST_TIMEOUT, etc.
  */
+let _levelConfigWarned = false;
+
 function getLevelConfig(): Record<InferenceLevel, { model: string; defaultTimeout: number; effort?: string }> {
   try {
-    return loadTieredConfig('inference', LevelConfigSchema, DEFAULT_LEVEL_CONFIG, {
-      envPrefix: 'KAYA_INFERENCE',
+    return loadTieredConfig("inference", LevelConfigSchema, DEFAULT_LEVEL_CONFIG, {
+      envPrefix: "KAYA_INFERENCE",
     });
-  } catch {
-    // If config loading fails, use defaults
+  } catch (err) {
+    // Fall back to defaults so inference still runs, but report the broken config once.
+    if (!_levelConfigWarned) {
+      _levelConfigWarned = true;
+      console.error(
+        `Inference: level config failed to load, using defaults: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return DEFAULT_LEVEL_CONFIG;
   }
 }
@@ -386,23 +394,23 @@ export function detectJsonArraysInText(text: string): JsonArrayMatch[] {
   let searchFrom = 0;
 
   while (searchFrom < text.length) {
-    const openIdx = text.indexOf('[', searchFrom);
+    const openIdx = text.indexOf("[", searchFrom);
     if (openIdx === -1) break;
 
     // Find the matching close bracket using a bracket depth counter
     let depth = 0;
     let inString = false;
-    let escape = false;
+    let escaped = false;
     let closeIdx = -1;
 
     for (let i = openIdx; i < text.length; i++) {
       const ch = text[i];
-      if (escape) {
-        escape = false;
+      if (escaped) {
+        escaped = false;
         continue;
       }
-      if (ch === '\\' && inString) {
-        escape = true;
+      if (ch === "\\" && inString) {
+        escaped = true;
         continue;
       }
       if (ch === '"') {
@@ -411,8 +419,8 @@ export function detectJsonArraysInText(text: string): JsonArrayMatch[] {
       }
       if (inString) continue;
 
-      if (ch === '[') depth++;
-      else if (ch === ']') {
+      if (ch === "[") depth++;
+      else if (ch === "]") {
         depth--;
         if (depth === 0) {
           closeIdx = i;
@@ -429,7 +437,7 @@ export function detectJsonArraysInText(text: string): JsonArrayMatch[] {
     const candidate = text.slice(openIdx, closeIdx + 1);
     try {
       const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object" && parsed[0] !== null) {
         matches.push({
           original: candidate,
           parsed,
@@ -460,17 +468,17 @@ export function toonEncodePrompt(text: string): string {
   if (matches.length === 0) return text;
 
   // Lazy import ToonHelper
-  const { maybeEncode } = require("./ToonHelper") as typeof import("./ToonHelper");
+  const { maybeEncode } = require("./ToonHelper.ts") as typeof import("./ToonHelper");
 
   // Process matches in reverse order to preserve indices
   let result = text;
   for (let i = matches.length - 1; i >= 0; i--) {
     const match = matches[i];
+    if (!match) continue;
     const encoded = maybeEncode(match.parsed);
-    if (encoded.format === 'toon') {
-      result = result.slice(0, match.startIndex) +
-        `<toon-data>\n${encoded.data}\n</toon-data>` +
-        result.slice(match.endIndex);
+    if (encoded.format === "toon") {
+      result =
+        result.slice(0, match.startIndex) + `<toon-data>\n${encoded.data}\n</toon-data>` + result.slice(match.endIndex);
     }
   }
 
@@ -482,11 +490,13 @@ export function toonEncodePrompt(text: string): string {
  */
 function isToonInferenceEnabled(): boolean {
   try {
-    const { loadSettings } = require("./ConfigLoader") as typeof import("./ConfigLoader");
     const settings = loadSettings() as Record<string, unknown>;
     const toon = settings.toon as Record<string, boolean> | undefined;
     return toon?.enableInInference === true;
-  } catch {
+  } catch (err) {
+    console.error(
+      `Inference: cannot read toon setting, TOON encoding off: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return false;
   }
 }
@@ -524,11 +534,23 @@ export function escapeControlCharsInStrings(json: string): string {
       continue;
     }
     if (inString) {
-      if (ch === "\n") { out += "\\n"; continue; }
-      if (ch === "\r") { out += "\\r"; continue; }
-      if (ch === "\t") { out += "\\t"; continue; }
+      if (ch === "\n") {
+        out += "\\n";
+        continue;
+      }
+      if (ch === "\r") {
+        out += "\\r";
+        continue;
+      }
+      if (ch === "\t") {
+        out += "\\t";
+        continue;
+      }
       const code = ch.charCodeAt(0);
-      if (code < 0x20) { out += "\\u" + code.toString(16).padStart(4, "0"); continue; }
+      if (code < 0x20) {
+        out += "\\u" + code.toString(16).padStart(4, "0");
+        continue;
+      }
     }
     out += ch;
   }
@@ -552,23 +574,47 @@ export function extractJson(output: string): unknown | undefined {
   const trimmed = output.trim();
 
   // Strategy 1: Direct parse (clean JSON response)
-  try { return JSON.parse(trimmed); } catch { /* intentionally silent: falls through to escaped-string retry below */ }
-  try { return JSON.parse(escapeControlCharsInStrings(trimmed)); } catch { /* intentionally silent: falls through to strategy 2 */ }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    /* intentionally silent: falls through to escaped-string retry below */
+  }
+  try {
+    return JSON.parse(escapeControlCharsInStrings(trimmed));
+  } catch {
+    /* intentionally silent: falls through to strategy 2 */
+  }
 
   // Strategy 2: Strip markdown code fences
   const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
-    const fenced = fenceMatch[1].trim();
-    try { return JSON.parse(fenced); } catch { /* intentionally silent: falls through to escaped-string retry below */ }
-    try { return JSON.parse(escapeControlCharsInStrings(fenced)); } catch { /* intentionally silent: falls through to strategy 3 */ }
+    const fenced = (fenceMatch[1] ?? "").trim();
+    try {
+      return JSON.parse(fenced);
+    } catch {
+      /* intentionally silent: falls through to escaped-string retry below */
+    }
+    try {
+      return JSON.parse(escapeControlCharsInStrings(fenced));
+    } catch {
+      /* intentionally silent: falls through to strategy 3 */
+    }
   }
 
   // Strategy 3: Greedy regex (try both object and array patterns)
   for (const pattern of [/\{[\s\S]*\}/, /\[[\s\S]*\]/]) {
     const jsonMatch = trimmed.match(pattern);
     if (jsonMatch) {
-      try { return JSON.parse(jsonMatch[0]); } catch { /* intentionally silent: falls through to escaped-string retry below */ }
-      try { return JSON.parse(escapeControlCharsInStrings(jsonMatch[0])); } catch { /* intentionally silent: tries the next pattern, or returns undefined */ }
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {
+        /* intentionally silent: falls through to escaped-string retry below */
+      }
+      try {
+        return JSON.parse(escapeControlCharsInStrings(jsonMatch[0]));
+      } catch {
+        /* intentionally silent: tries the next pattern, or returns undefined */
+      }
     }
   }
 
@@ -602,35 +648,39 @@ export function parseStructuredEnvelope(stdout: string): StructuredEnvelopeResul
   let envelope: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(stdout.trim());
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return { ok: false, resultText: '', error: 'schema path: envelope is valid JSON but not an object' };
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { ok: false, resultText: "", error: "schema path: envelope is valid JSON but not an object" };
     }
     envelope = parsed as Record<string, unknown>;
   } catch (e) {
     return {
       ok: false,
-      resultText: '',
+      resultText: "",
       error: `schema path: claude --output-format json envelope is not valid JSON (${(e as Error).message}); stdout starts: ${stdout.trim().slice(0, 200)}`,
     };
   }
 
-  const resultText = typeof envelope.result === 'string' ? envelope.result : '';
+  const resultText = typeof envelope.result === "string" ? envelope.result : "";
 
   const usageRaw = envelope.usage as Record<string, unknown> | undefined;
-  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-  const usage = usageRaw && typeof usageRaw === 'object'
-    ? {
-        input: num(usageRaw.input_tokens) + num(usageRaw.cache_creation_input_tokens) + num(usageRaw.cache_read_input_tokens),
-        output: num(usageRaw.output_tokens),
-      }
-    : undefined;
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const usage =
+    usageRaw && typeof usageRaw === "object"
+      ? {
+          input:
+            num(usageRaw.input_tokens) +
+            num(usageRaw.cache_creation_input_tokens) +
+            num(usageRaw.cache_read_input_tokens),
+          output: num(usageRaw.output_tokens),
+        }
+      : undefined;
 
-  if (envelope.is_error === true || (typeof envelope.subtype === 'string' && envelope.subtype !== 'success')) {
+  if (envelope.is_error === true || (typeof envelope.subtype === "string" && envelope.subtype !== "success")) {
     return {
       ok: false,
       resultText,
       usage,
-      error: `schema path: claude reported an error envelope (subtype: ${String(envelope.subtype)})${resultText ? `: ${resultText.slice(0, 300)}` : ''}`,
+      error: `schema path: claude reported an error envelope (subtype: ${String(envelope.subtype)})${resultText ? `: ${resultText.slice(0, 300)}` : ""}`,
     };
   }
 
@@ -639,7 +689,8 @@ export function parseStructuredEnvelope(stdout: string): StructuredEnvelopeResul
       ok: false,
       resultText,
       usage,
-      error: 'schema path: envelope has no structured_output field — the model was not schema-constrained (check --json-schema support on the installed claude binary)',
+      error:
+        "schema path: envelope has no structured_output field — the model was not schema-constrained (check --json-schema support on the installed claude binary)",
     };
   }
 
@@ -649,9 +700,9 @@ export function parseStructuredEnvelope(stdout: string): StructuredEnvelopeResul
 /** Read a file's contents, returning empty string if missing or unreadable. */
 function readFileSafe(filePath: string): string {
   try {
-    return readFileSync(filePath, 'utf-8');
+    return readFileSync(filePath, "utf-8");
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -668,16 +719,13 @@ function readFileSafe(filePath: string): string {
  * duplicating it. A caller passing `env: {...process.env}` must not be able
  * to reintroduce these keys and un-harden the spawn.
  */
-const HARDENED_CLAUDE_ENV_ALLOWLIST = new Set([
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'CLAUDE_CODE_SUBSCRIPTION_TYPE',
-]);
+const HARDENED_CLAUDE_ENV_ALLOWLIST = new Set(["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SUBSCRIPTION_TYPE"]);
 
 export function stripDangerousClaudeEnvKeys(env: Record<string, string | undefined>): void {
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;
   for (const key of Object.keys(env)) {
-    if (key.startsWith('CLAUDE_CODE_') && !HARDENED_CLAUDE_ENV_ALLOWLIST.has(key)) {
+    if (key.startsWith("CLAUDE_CODE_") && !HARDENED_CLAUDE_ENV_ALLOWLIST.has(key)) {
       delete env[key];
     }
   }
@@ -714,15 +762,15 @@ export function buildHardenedClaudeEnv(): Record<string, string | undefined> {
   // Fable 5 → Sonnet. This undocumented var feeds the credential builder the
   // missing tier (anthropics/claude-code #70124, #79360; live-verified
   // 2026-07-20). Remove once setup tokens carry user:profile upstream.
-  env.CLAUDE_CODE_SUBSCRIPTION_TYPE = 'max';
+  env.CLAUDE_CODE_SUBSCRIPTION_TYPE = "max";
 
   // defaultKayaHome() (real ~/.claude, env-independent) — the kaya-cli binary
   // is installed at the real home, not wherever KAYA_HOME points (crons set
   // KAYA_HOME=repo-root); must NOT follow the override.
-  const claudeBin = join(defaultKayaHome(), 'bin');
-  const existingPath = env.PATH ?? '';
-  const pathSegments = existingPath.split(':').filter(Boolean);
-  if (env.KAYA_LAB_WORLD === '1') {
+  const claudeBin = join(defaultKayaHome(), "bin");
+  const existingPath = env.PATH ?? "";
+  const pathSegments = existingPath.split(":").filter(Boolean);
+  if (env.KAYA_LAB_WORLD === "1") {
     // Eval Lab fake Kaya world (rule 10): the cell's PATH already has its own shims first. Prepending the
     // real bin would put the live kaya-cli (real gmail/calendar) ahead of the record-only shim.
     env.PATH = existingPath;
@@ -758,8 +806,8 @@ async function kimiInferenceOnce(
   timeout: number,
   startTime: number,
 ): Promise<InferenceResult> {
-  const level: InferenceLevel = 'kimi';
-  const zeroCost: InferenceResult['estimatedTokens'] = { input: 0, output: 0, total: 0 };
+  const level: InferenceLevel = "kimi";
+  const zeroCost: InferenceResult["estimatedTokens"] = { input: 0, output: 0, total: 0 };
 
   const res = await moonshotChat({
     systemPrompt: options.systemPrompt,
@@ -786,7 +834,7 @@ async function kimiInferenceOnce(
 
   // Prefer the API's reported usage; fall back to the length heuristic only if
   // the response omitted it (so cost is never silently reported as zero).
-  const inputTokens = res.usage?.inputTokens || estimateTokens(options.systemPrompt + '\n' + options.userPrompt);
+  const inputTokens = res.usage?.inputTokens || estimateTokens(options.systemPrompt + "\n" + options.userPrompt);
   const outputTokens = res.usage?.outputTokens || estimateTokens(output);
   const costFields = {
     estimatedTokens: {
@@ -805,7 +853,7 @@ async function kimiInferenceOnce(
     return {
       success: false,
       output,
-      error: 'No JSON found in response',
+      error: "No JSON found in response",
       latencyMs,
       level,
       estimatedTokens: zeroCost,
@@ -818,7 +866,7 @@ async function kimiInferenceOnce(
 
 /** Per-call override (Eval Lab lane arms): an explicit model/effort wins over the level's config. */
 export function resolveModelEffort(
-  options: Pick<InferenceOptions, 'model' | 'effort'>,
+  options: Pick<InferenceOptions, "model" | "effort">,
   config: { model: string; effort?: string },
 ): { model: string; effort: string | undefined } {
   return { model: options.model ?? config.model, effort: options.effort ?? config.effort };
@@ -826,29 +874,34 @@ export function resolveModelEffort(
 
 /** The `claude -p` argv for one call (system prompt included; user prompt goes on stdin). Pure. */
 export function buildClaudeArgs(
-  options: Pick<InferenceOptions, 'systemPrompt' | 'schema'>,
+  options: Pick<InferenceOptions, "systemPrompt" | "schema">,
   model: string,
   effort: string | undefined,
 ): string[] {
   const args = [
-    '-p',
-    '--model', model,
-    ...(effort ? ['--effort', effort] : []),
-    '--tools', '',  // Disable tools for faster response
+    "-p",
+    "--model",
+    model,
+    ...(effort ? ["--effort", effort] : []),
+    "--tools",
+    "", // Disable tools for faster response
     // schema mode needs the JSON result envelope to carry structured_output;
     // plain mode stays on text so 73 existing expectJson callers are untouched.
-    '--output-format', options.schema ? 'json' : 'text',
-    '--setting-sources', '',  // Disable hooks to prevent recursion
-    '--system-prompt', options.systemPrompt,
+    "--output-format",
+    options.schema ? "json" : "text",
+    "--setting-sources",
+    "", // Disable hooks to prevent recursion
+    "--system-prompt",
+    options.systemPrompt,
   ];
   if (options.schema) {
-    args.push('--json-schema', JSON.stringify(options.schema));
+    args.push("--json-schema", JSON.stringify(options.schema));
   }
   return args;
 }
 
 async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult> {
-  const level = options.level || 'standard';
+  const level = options.level || "standard";
   const levelConfig = getLevelConfig();
   const config = levelConfig[level];
   const startTime = Date.now();
@@ -861,18 +914,26 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
   }
 
   // Per-call model/effort are claude -p flags: an empty model is a caller bug, and kimi has no such dials. Fail loud.
-  if (options.model !== undefined && options.model.trim() === '') {
+  if (options.model !== undefined && options.model.trim() === "") {
     return {
-      success: false, output: '', error: 'model option must be a non-empty string', latencyMs: Date.now() - startTime, level,
-      estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+      success: false,
+      output: "",
+      error: "model option must be a non-empty string",
+      latencyMs: Date.now() - startTime,
+      level,
+      estimatedTokens: { input: 0, output: 0, total: 0 },
+      estimatedCostUSD: 0,
     };
   }
   if (isExternalApiLevel(level) && (options.model !== undefined || options.effort !== undefined)) {
     return {
-      success: false, output: '',
+      success: false,
+      output: "",
       error: `model/effort options are not supported on the '${level}' level (no claude -p spawn). Use fast/standard/smart, or drop them.`,
-      latencyMs: Date.now() - startTime, level,
-      estimatedTokens: { input: 0, output: 0, total: 0 }, estimatedCostUSD: 0,
+      latencyMs: Date.now() - startTime,
+      level,
+      estimatedTokens: { input: 0, output: 0, total: 0 },
+      estimatedCostUSD: 0,
     };
   }
 
@@ -886,7 +947,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
     if (options.schema) {
       return {
         success: false,
-        output: '',
+        output: "",
         error: `schema option is not supported on the '${level}' level (no claude -p spawn). Use fast/standard/smart, or drop the schema option.`,
         latencyMs: Date.now() - startTime,
         level,
@@ -910,32 +971,49 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
   const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpOut = `/tmp/kaya-inf-${uid}.out`;
   const tmpErr = `/tmp/kaya-inf-${uid}.err`;
-  const outFd = openSync(tmpOut, 'w');
-  const errFd = openSync(tmpErr, 'w');
+  const outFd = openSync(tmpOut, "w");
+  const errFd = openSync(tmpErr, "w");
 
   return new Promise((resolve) => {
     const cleanup = () => {
-      try { closeSync(outFd); } catch {}
-      try { closeSync(errFd); } catch {}
-      try { unlinkSync(tmpOut); } catch {}
-      try { unlinkSync(tmpErr); } catch {}
+      try {
+        closeSync(outFd);
+      } catch {
+        /* intentionally silent: best-effort fd cleanup; fd may already be closed */
+      }
+      try {
+        closeSync(errFd);
+      } catch {
+        /* intentionally silent: best-effort fd cleanup; fd may already be closed */
+      }
+      try {
+        unlinkSync(tmpOut);
+      } catch {
+        /* intentionally silent: best-effort temp-file cleanup; file may already be gone */
+      }
+      try {
+        unlinkSync(tmpErr);
+      } catch {
+        /* intentionally silent: best-effort temp-file cleanup; file may already be gone */
+      }
     };
 
     const proc = spawn(CLAUDE_PATH, args, {
       env,
-      stdio: ['pipe', outFd, errFd],
+      stdio: ["pipe", outFd, errFd],
     });
 
     // Pipe user prompt via stdin to avoid CLI argument parsing issues
-    proc.stdin.write(userPrompt);
-    proc.stdin.end();
+    // stdio[0] is 'pipe', so stdin is always present here.
+    proc.stdin!.write(userPrompt);
+    proc.stdin!.end();
 
     // Zero-cost sentinel for failure paths
-    const zeroCost: InferenceResult['estimatedTokens'] = { input: 0, output: 0, total: 0 };
+    const zeroCost: InferenceResult["estimatedTokens"] = { input: 0, output: 0, total: 0 };
 
     /** Compute cost fields from input prompt and output text. */
     const computeCostFields = (inputText: string, outputText: string) => {
-      const inputTokens  = estimateTokens(inputText);
+      const inputTokens = estimateTokens(inputText);
       const outputTokens = estimateTokens(outputText);
       return {
         estimatedTokens: { input: inputTokens, output: outputTokens, total: inputTokens + outputTokens },
@@ -945,19 +1023,23 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
 
     // Handle timeout
     const timeoutId = setTimeout(() => {
-      proc.kill('SIGTERM');
+      proc.kill("SIGTERM");
       // Force kill if SIGTERM doesn't work after 2s
       const killId = setTimeout(() => {
-        try { proc.kill('SIGKILL'); } catch {}
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+          /* intentionally silent: kill after timeout; process may already have exited */
+        }
       }, 2000);
-      proc.on('close', () => clearTimeout(killId));
+      proc.on("close", () => clearTimeout(killId));
       const stdout = readFileSafe(tmpOut);
       const stderr = readFileSafe(tmpErr);
       cleanup();
       resolve({
         success: false,
         output: stdout,
-        error: `Timeout after ${timeout}ms${stderr ? ` (stderr: ${stderr.slice(0, 500)})` : ''}`,
+        error: `Timeout after ${timeout}ms${stderr ? ` (stderr: ${stderr.slice(0, 500)})` : ""}`,
         latencyMs: Date.now() - startTime,
         level,
         estimatedTokens: zeroCost,
@@ -965,7 +1047,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
       });
     }, timeout);
 
-    proc.on('close', (code) => {
+    proc.on("close", (code) => {
       clearTimeout(timeoutId);
       const latencyMs = Date.now() - startTime;
       const stdout = readFileSafe(tmpOut);
@@ -1018,7 +1100,7 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
                 modelName: model,
               }),
             }
-          : computeCostFields(options.systemPrompt + '\n' + userPrompt, envelope.resultText);
+          : computeCostFields(options.systemPrompt + "\n" + userPrompt, envelope.resultText);
         resolve({
           success: true,
           output: envelope.resultText,
@@ -1033,16 +1115,24 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
       // Parse JSON if requested
       if (options.expectJson) {
         const parsed = extractJson(output);
-        const costFields = computeCostFields(options.systemPrompt + '\n' + userPrompt, output);
+        const costFields = computeCostFields(options.systemPrompt + "\n" + userPrompt, output);
         if (parsed !== undefined) {
           resolve({ success: true, output, parsed, latencyMs, level, ...costFields });
         } else {
-          resolve({ success: false, output, error: 'No JSON found in response', latencyMs, level, estimatedTokens: zeroCost, estimatedCostUSD: 0 });
+          resolve({
+            success: false,
+            output,
+            error: "No JSON found in response",
+            latencyMs,
+            level,
+            estimatedTokens: zeroCost,
+            estimatedCostUSD: 0,
+          });
         }
         return;
       }
 
-      const costFields = computeCostFields(options.systemPrompt + '\n' + userPrompt, output);
+      const costFields = computeCostFields(options.systemPrompt + "\n" + userPrompt, output);
       resolve({
         success: true,
         output,
@@ -1052,12 +1142,12 @@ async function inferenceOnce(options: InferenceOptions): Promise<InferenceResult
       });
     });
 
-    proc.on('error', (err) => {
+    proc.on("error", (err) => {
       clearTimeout(timeoutId);
       cleanup();
       resolve({
         success: false,
-        output: '',
+        output: "",
         error: err.message,
         latencyMs: Date.now() - startTime,
         level,
@@ -1085,7 +1175,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
   for (let attempt = 1; !result.success && attempt <= retries; attempt++) {
     console.error(
       `[inference] attempt ${attempt}/${retries + 1} failed ` +
-      `(${(result.error ?? 'unknown').slice(0, 120)}); retrying in ${retryDelayMs}ms`,
+        `(${(result.error ?? "unknown").slice(0, 120)}); retrying in ${retryDelayMs}ms`,
     );
     await new Promise((r) => setTimeout(r, retryDelayMs));
     result = await inferenceOnce(options);
@@ -1103,17 +1193,19 @@ async function main() {
   let expectJson = false;
   let schema: Record<string, unknown> | undefined;
   let timeout: number | undefined;
-  let level: InferenceLevel = 'standard';
+  let level: InferenceLevel = "standard";
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--json') {
+    const arg = args[i] ?? "";
+    const next = args[i + 1];
+    if (arg === "--json") {
       expectJson = true;
-    } else if (args[i] === '--schema' && args[i + 1]) {
+    } else if (arg === "--schema" && next) {
       try {
-        const parsed: unknown = JSON.parse(args[i + 1]);
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          throw new Error('schema must be a JSON object');
+        const parsed: unknown = JSON.parse(next);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          throw new Error("schema must be a JSON object");
         }
         schema = parsed as Record<string, unknown>;
       } catch (e) {
@@ -1121,29 +1213,31 @@ async function main() {
         process.exit(1);
       }
       i++;
-    } else if (args[i] === '--level' && args[i + 1]) {
-      const requestedLevel = args[i + 1].toLowerCase();
-      if (['fast', 'standard', 'smart', 'kimi'].includes(requestedLevel)) {
+    } else if (arg === "--level" && next) {
+      const requestedLevel = next.toLowerCase();
+      if (["fast", "standard", "smart", "kimi"].includes(requestedLevel)) {
         level = requestedLevel as InferenceLevel;
       } else {
-        console.error(`Invalid level: ${args[i + 1]}. Use fast, standard, smart, or kimi.`);
+        console.error(`Invalid level: ${next}. Use fast, standard, smart, or kimi.`);
         process.exit(1);
       }
       i++;
-    } else if (args[i] === '--timeout' && args[i + 1]) {
-      timeout = parseInt(args[i + 1], 10);
+    } else if (arg === "--timeout" && next) {
+      timeout = parseInt(next, 10);
       i++;
     } else {
-      positionalArgs.push(args[i]);
+      positionalArgs.push(arg);
     }
   }
 
   if (positionalArgs.length < 2) {
-    console.error('Usage: bun Inference.ts [--level fast|standard|smart|kimi] [--json] [--schema <json-schema>] [--timeout <ms>] <system_prompt> <user_prompt>');
+    console.error(
+      "Usage: bun Inference.ts [--level fast|standard|smart|kimi] [--json] [--schema <json-schema>] [--timeout <ms>] <system_prompt> <user_prompt>",
+    );
     process.exit(1);
   }
 
-  const [systemPrompt, userPrompt] = positionalArgs;
+  const [systemPrompt = "", userPrompt = ""] = positionalArgs;
 
   const result = await inference({
     systemPrompt,

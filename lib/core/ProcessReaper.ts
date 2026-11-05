@@ -28,9 +28,9 @@
  * Never throw — a failed sweep is reported on stderr and returns what it did.
  */
 
-import { spawnSync } from "child_process";
-import { readdirSync, readFileSync, readlinkSync, realpathSync } from "fs";
-import { sep } from "path";
+import { spawnSync } from "node:child_process";
+import { readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { sep } from "node:path";
 
 /** Env key AgentSpawner sets on every spawn; its value is a per-run UUID. */
 export const AGENT_RUN_ENV_KEY = "KAYA_AGENT_RUN_ID";
@@ -38,18 +38,18 @@ export const AGENT_RUN_ENV_KEY = "KAYA_AGENT_RUN_ID";
 const DEFAULT_GRACE_MS = 2000;
 const POLL_MS = 100;
 
-export interface ProcEnvRow {
+interface ProcEnvRow {
   pid: number;
   /** Command line plus env, space-joined (macOS `ps -E` shape). */
   envText: string;
 }
 
-export interface ProcCwdRow {
+interface ProcCwdRow {
   pid: number;
   cwd: string;
 }
 
-export interface ReaperDeps {
+interface ReaperDeps {
   listProcessEnvFn?: () => ProcEnvRow[];
   listProcessCwdFn?: () => ProcCwdRow[];
   /** Same contract as process.kill (throws ESRCH when the pid is gone). */
@@ -73,7 +73,7 @@ function listProcessEnvDarwin(): ProcEnvRow[] {
   const rows: ProcEnvRow[] = [];
   for (const line of res.stdout.split("\n")) {
     const m = line.match(/^\s*(\d+)\s(.*)$/);
-    if (m) rows.push({ pid: Number(m[1]), envText: m[2] });
+    if (m) rows.push({ pid: Number(m[1]), envText: m[2] ?? "" });
   }
   return rows;
 }
@@ -131,17 +131,13 @@ const defaultListProcessCwd = process.platform === "linux" ? listProcessCwdLinux
 /** Pids whose env carries `AGENT_RUN_ENV_KEY=<runId>` as a whole token. */
 export function findAgentRunPids(runId: string, rows: ProcEnvRow[]): number[] {
   const token = `${AGENT_RUN_ENV_KEY}=${runId}`;
-  return rows
-    .filter(r => r.envText.split(/\s/).includes(token))
-    .map(r => r.pid);
+  return rows.filter((r) => r.envText.split(/\s/).includes(token)).map((r) => r.pid);
 }
 
 /** Pids whose cwd is `dir` or below it. `dir` should already be a real path. */
 export function findPidsInDir(dir: string, rows: ProcCwdRow[]): number[] {
   const root = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
-  return rows
-    .filter(r => r.cwd === root || r.cwd.startsWith(root + sep))
-    .map(r => r.pid);
+  return rows.filter((r) => r.cwd === root || r.cwd.startsWith(root + sep)).map((r) => r.pid);
 }
 
 // ============================================================================
@@ -179,7 +175,7 @@ export function terminatePids(pids: number[], deps: ReaperDeps = {}): number[] {
   }
 
   let waited = 0;
-  while (waited < graceMs && signalled.some(p => isAlive(p, kill))) {
+  while (waited < graceMs && signalled.some((p) => isAlive(p, kill))) {
     sleep(POLL_MS);
     waited += POLL_MS;
   }

@@ -47,10 +47,10 @@
  *   bun AutoMemoryConsolidator.ts run --all [--threshold <bytes>] [--dry-run] [--json]
  */
 
-import { parseArgs } from "util";
-import { execFileSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync, statSync } from "fs";
-import { join } from "path";
+import { parseArgs } from "node:util";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import * as YAML from "yaml";
 import { z } from "zod";
 import {
@@ -124,7 +124,7 @@ export interface MemoryFrontmatter {
   metadata: Record<string, unknown>;
 }
 
-export interface ParsedMemoryFile {
+interface ParsedMemoryFile {
   frontmatter: MemoryFrontmatter;
   blocks: MemoryBlock[];
 }
@@ -153,11 +153,11 @@ function extractBlockMeta(raw: string, index: number): MemoryBlock {
   const headingMatch = /^#{2,3}\s+(.+)$/m.exec(raw);
   const dates = [...raw.matchAll(DATE_RE)].map((m) => m[0]);
   const needsJmMarkers = [...raw.matchAll(NEEDS_JM_RE)].map((m) => m[0]);
-  const wikilinks = [...raw.matchAll(WIKILINK_RE)].map((m) => m[1]);
+  const wikilinks = [...raw.matchAll(WIKILINK_RE)].map((m) => m[1] ?? "");
   return {
     index,
     raw,
-    headingTitle: headingMatch ? headingMatch[1].trim() : null,
+    headingTitle: headingMatch?.[1]?.trim() ?? null,
     hasDate: dates.length > 0,
     dates,
     needsJmMarkers,
@@ -182,7 +182,7 @@ export function parseMemoryFile(raw: string, sourceLabel: string): ParsedMemoryF
 
   let fmParsed: unknown;
   try {
-    fmParsed = YAML.parse(fmMatch[1]);
+    fmParsed = YAML.parse(fmMatch[1] ?? "");
   } catch (err) {
     throw new Error(
       `${sourceLabel}: frontmatter YAML failed to parse: ${err instanceof Error ? err.message : String(err)}`,
@@ -236,7 +236,7 @@ function extractNeedsJmMarkers(raw: string): string[] {
 }
 
 function extractWikilinks(raw: string): string[] {
-  return [...bodyOnly(raw).matchAll(WIKILINK_RE)].map((m) => m[1]).sort();
+  return [...bodyOnly(raw).matchAll(WIKILINK_RE)].map((m) => m[1] ?? "").sort();
 }
 
 // ============================================================================
@@ -472,7 +472,13 @@ export function buildOutputFiles(
   plan: Extract<SplitPlan, { action: "split" }>,
 ): PlannedOutputFile[] {
   return plan.files.map((f) => {
-    const orderedBlocks = [...f.blockIndices].sort((a, b) => a - b).map((i) => blocks[i]);
+    const orderedBlocks = [...f.blockIndices]
+      .sort((a, b) => a - b)
+      .map((i) => {
+        const block = blocks[i];
+        if (!block) throw new Error(`split plan for ${f.filename} references missing block ${i}`);
+        return block;
+      });
     const fm = buildOutputFrontmatter(f.filename, f.description, frontmatter, originalFilename);
     return { filename: f.filename, raw: renderMemoryFile(fm, orderedBlocks), description: f.description };
   });
@@ -482,14 +488,14 @@ export function buildOutputFiles(
 // Invariant verification guard
 // ============================================================================
 
-export interface DatedFindingSummary {
+interface DatedFindingSummary {
   index: number;
   headingTitle: string | null;
   dates: string[];
   file?: string;
 }
 
-export interface InvariantCheckResult {
+interface InvariantCheckResult {
   ok: boolean;
   errors: string[];
   datedFindingsBefore: DatedFindingSummary[];
@@ -561,12 +567,13 @@ export function verifySplitPreservesContent(
         `source block ${srcBlock.index} (heading: ${srcBlock.headingTitle ?? "none"}) appears in ${matches.length} outputs (duplicated): ${matches.map((m) => m.file).join(", ")}`,
       );
     }
-    if (srcBlock.hasDate && matches.length >= 1) {
+    const firstMatch = matches[0];
+    if (srcBlock.hasDate && firstMatch) {
       datedFindingsAfter.push({
         index: srcBlock.index,
         headingTitle: srcBlock.headingTitle,
         dates: [...new Set(srcBlock.dates)],
-        file: matches[0].file,
+        file: firstMatch.file,
       });
     }
   }
@@ -641,7 +648,7 @@ export function updateMemoryIndex(
 // Git safety net (commit before + after every real rewrite)
 // ============================================================================
 
-export type GitFn = (args: string[], cwd: string) => string;
+type GitFn = (args: string[], cwd: string) => string;
 
 const defaultGit: GitFn = (args, cwd) =>
   execFileSync("git", args, { cwd, encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 }).trim();
@@ -669,7 +676,7 @@ function ensureCommitted(memoryDir: string, message: string, git: GitFn): string
 // upstream of it into producing one.
 // ============================================================================
 
-export interface WriteAndVerifyResult {
+interface WriteAndVerifyResult {
   postCheck: InvariantCheckResult;
   beforeSha: string;
   afterSha: string;
@@ -781,7 +788,7 @@ export interface ConsolidateOptions {
   git?: GitFn;
 }
 
-export type ConsolidateAction =
+type ConsolidateAction =
   | "split"
   | "flag_for_human"
   | "skipped_under_threshold"
@@ -789,7 +796,7 @@ export type ConsolidateAction =
   | "skipped_no_frontmatter"
   | "skipped_not_found";
 
-export interface ConsolidateResult {
+interface ConsolidateResult {
   file: string;
   action: ConsolidateAction;
   reason?: string;
@@ -810,7 +817,7 @@ export function listCandidateFiles(memoryDir: string): string[] {
     .sort();
 }
 
-export interface OversizedFile {
+interface OversizedFile {
   filename: string;
   sizeBytes: number;
 }
@@ -935,7 +942,7 @@ export async function consolidateFile(filename: string, opts: ConsolidateOptions
 }
 
 /** Consolidate every file currently over threshold, sequentially (largest first). */
-export async function consolidateAll(opts: ConsolidateOptions = {}): Promise<ConsolidateResult[]> {
+async function consolidateAll(opts: ConsolidateOptions = {}): Promise<ConsolidateResult[]> {
   const memoryDir = opts.memoryDir ?? getAutoMemoryDir();
   const thresholdBytes = opts.thresholdBytes ?? DEFAULT_THRESHOLD_BYTES;
   const oversized = findOversizedFiles(memoryDir, thresholdBytes);
@@ -1032,7 +1039,7 @@ Options:
 
 if (import.meta.main) {
   main().catch((err) => {
-    console.error(err instanceof Error ? err.stack ?? err.message : String(err));
+    console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
     process.exit(1);
   });
 }

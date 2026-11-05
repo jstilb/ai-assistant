@@ -26,14 +26,10 @@
  * ============================================================================
  */
 
-import { parseArgs } from "util";
-import { join } from "path";
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "fs";
+import { parseArgs } from "node:util";
+import { join } from "node:path";
+import { type Dirent, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { loadSettings } from "./ConfigLoader.ts";
 import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
@@ -112,9 +108,9 @@ function extractDescription(content: string): string {
 function extractTriggersFromDescription(content: string): string[] {
   const descMatch = content.match(/description:\s*(.+?)(?:\n|$)/i);
   if (!descMatch) return [];
-  const useWhenMatch = descMatch[1].match(/USE WHEN\s+(.+?)(?:\.|$)/i);
+  const useWhenMatch = (descMatch[1] ?? "").match(/USE WHEN\s+(.+?)(?:\.|$)/i);
   if (!useWhenMatch) return [];
-  return useWhenMatch[1]
+  return (useWhenMatch[1] ?? "")
     .split(/,\s*|\s+OR\s+/i)
     .map((t) => t.trim().toLowerCase())
     .filter(Boolean);
@@ -134,11 +130,7 @@ export function isCategoryDir(categoryPath: string): boolean {
 
   try {
     const entries = readdirSync(categoryPath, { withFileTypes: true });
-    return entries.some(
-      (e) =>
-        e.isDirectory() &&
-        existsSync(join(categoryPath, e.name, "SKILL.md"))
-    );
+    return entries.some((e) => e.isDirectory() && existsSync(join(categoryPath, e.name, "SKILL.md")));
   } catch {
     return false;
   }
@@ -148,20 +140,32 @@ export function isCategoryDir(categoryPath: string): boolean {
 // Sub-Skill Scanning
 // ============================================================================
 
+/** `skillOverrides` from settings.json: skill name -> "on" | "off" | ... (only "off" hides a skill). */
+export type SkillOverrides = Record<string, string>;
+
+/** True when `overrides` turns the named skill off (case-insensitive name match). */
+export function isSkillOff(name: string, overrides: SkillOverrides | undefined): boolean {
+  if (!overrides) return false;
+  const wanted = name.toLowerCase();
+  return Object.entries(overrides).some(([key, value]) => key.toLowerCase() === wanted && value === "off");
+}
+
 /**
  * Scan a category directory for sub-skills with SKILL.md files.
- * Returns entries sorted alphabetically by name.
+ * Returns entries sorted alphabetically by name. Sub-skills that `skillOverrides` turns "off"
+ * are left out (default: no overrides, every sub-skill is listed).
  * Unreadable sub-skill SKILL.md files are skipped silently (errors surfaced
  * via the errors array in GenerateResult — callers collect them separately).
  */
 export function scanCategorySubSkills(
   categoryName: string,
-  skillsDir: string
+  skillsDir: string,
+  skillOverrides?: SkillOverrides,
 ): SubSkillEntry[] {
   const categoryPath = join(skillsDir, categoryName);
   const entries: SubSkillEntry[] = [];
 
-  let dirEntries;
+  let dirEntries: Dirent[];
   try {
     dirEntries = readdirSync(categoryPath, { withFileTypes: true });
   } catch {
@@ -170,6 +174,7 @@ export function scanCategorySubSkills(
 
   for (const dirent of dirEntries) {
     if (!dirent.isDirectory()) continue;
+    if (isSkillOff(dirent.name, skillOverrides)) continue;
     const subSkillMd = join(categoryPath, dirent.name, "SKILL.md");
     if (!existsSync(subSkillMd)) continue;
 
@@ -207,22 +212,12 @@ export function scanCategorySubSkills(
  * Build the markdown Sub-Skills table string for a category.
  * Includes the heading, column headers, separator row, and one row per sub-skill.
  */
-export function buildSubSkillsTable(
-  _categoryName: string,
-  subSkills: SubSkillEntry[]
-): string {
-  const rows = subSkills.map(
-    (s) =>
-      `| **${s.name}** | ${s.triggers.join(", ")} | \`${s.path}\` |`
-  );
+export function buildSubSkillsTable(_categoryName: string, subSkills: SubSkillEntry[]): string {
+  const rows = subSkills.map((s) => `| **${s.name}** | ${s.triggers.join(", ")} | \`${s.path}\` |`);
 
-  return [
-    "## Sub-Skills",
-    "",
-    "| Sub-Skill | Triggers | Load |",
-    "|-----------|----------|------|",
-    ...rows,
-  ].join("\n");
+  return ["## Sub-Skills", "", "| Sub-Skill | Triggers | Load |", "|-----------|----------|------|", ...rows].join(
+    "\n",
+  );
 }
 
 // ============================================================================
@@ -239,7 +234,7 @@ export function buildSubSkillsTable(
 export function regenerateCategorySkillMd(
   existingContent: string,
   categoryName: string,
-  subSkills: SubSkillEntry[]
+  subSkills: SubSkillEntry[],
 ): string {
   // Find the position of `## Sub-Skills` at a line boundary
   const headingIndex = existingContent.search(/\n## Sub-Skills/);
@@ -254,14 +249,7 @@ export function regenerateCategorySkillMd(
   const table = buildSubSkillsTable(categoryName, subSkills);
 
   return (
-    preserved +
-    "\n" +
-    table +
-    "\n\n" +
-    WORKFLOW_ROUTING_BOILERPLATE +
-    "\n\n" +
-    VOICE_NOTIFICATION_BOILERPLATE +
-    "\n"
+    preserved + "\n" + table + "\n\n" + WORKFLOW_ROUTING_BOILERPLATE + "\n\n" + VOICE_NOTIFICATION_BOILERPLATE + "\n"
   );
 }
 
@@ -278,7 +266,8 @@ export function regenerateCategorySkillMd(
 export function generateForCategory(
   categoryName: string,
   skillsDir: string,
-  dryRun: boolean = false
+  dryRun: boolean = false,
+  skillOverrides?: SkillOverrides,
 ): CategoryResult {
   const categoryPath = join(skillsDir, categoryName);
 
@@ -292,7 +281,7 @@ export function generateForCategory(
     };
   }
 
-  const subSkills = scanCategorySubSkills(categoryName, skillsDir);
+  const subSkills = scanCategorySubSkills(categoryName, skillsDir, skillOverrides);
 
   if (subSkills.length === 0) {
     return {
@@ -357,7 +346,7 @@ function buildCommandContent(
   skillName: string,
   categoryName: string,
   skillPath: string,
-  description: string
+  description: string,
 ): string {
   return [
     `# /${commandName} - ${skillName} (${categoryName})`,
@@ -394,7 +383,7 @@ function isHandWrittenCommand(commandPath: string): boolean {
 export function generateCommandFiles(
   categories: CategoryResult[],
   commandsDir: string = DEFAULT_COMMANDS_DIR,
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): CommandResult[] {
   const results: CommandResult[] = [];
 
@@ -416,15 +405,10 @@ export function generateCommandFiles(
         continue;
       }
 
-      const content = buildCommandContent(
-        commandName,
-        sub.name,
-        cat.category,
-        sub.path,
-        sub.description
-      );
+      const content = buildCommandContent(commandName, sub.name, cat.category, sub.path, sub.description);
 
       if (!dryRun) {
+        mkdirSync(commandsDir, { recursive: true }); // a --commands-dir override may not exist yet
         writeFileSync(commandPath, content, "utf-8");
       }
 
@@ -445,6 +429,8 @@ export function generateCommandFiles(
 // ============================================================================
 
 export interface GenerateOptions {
+  /** Hide sub-skills that settings.json `skillOverrides` marks "off" (default: list everything). */
+  skillOverrides?: SkillOverrides;
   skillsDir?: string;
   commandsDir?: string;
   dryRun?: boolean;
@@ -460,13 +446,11 @@ export interface GenerateOptions {
  */
 export function generateAllRoutingTables(
   skillsDirOrOptions: string | GenerateOptions = DEFAULT_SKILLS_DIR,
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): GenerateResult {
   // Support both legacy (string, boolean) and new (options object) signatures
   const opts: GenerateOptions =
-    typeof skillsDirOrOptions === "string"
-      ? { skillsDir: skillsDirOrOptions, dryRun }
-      : skillsDirOrOptions;
+    typeof skillsDirOrOptions === "string" ? { skillsDir: skillsDirOrOptions, dryRun } : skillsDirOrOptions;
 
   const skillsDir = opts.skillsDir ?? DEFAULT_SKILLS_DIR;
   const effectiveDryRun = opts.dryRun ?? dryRun;
@@ -476,13 +460,11 @@ export function generateAllRoutingTables(
   const errors: string[] = [];
   const categories: CategoryResult[] = [];
 
-  let topLevelEntries;
+  let topLevelEntries: Dirent[];
   try {
     topLevelEntries = readdirSync(skillsDir, { withFileTypes: true });
   } catch (err) {
-    errors.push(
-      `Cannot read skills directory "${skillsDir}": ${err instanceof Error ? err.message : String(err)}`
-    );
+    errors.push(`Cannot read skills directory "${skillsDir}": ${err instanceof Error ? err.message : String(err)}`);
     return { categories: [], totalSubSkills: 0, commands: [], errors };
   }
 
@@ -495,18 +477,13 @@ export function generateAllRoutingTables(
     const categoryPath = join(skillsDir, name);
     if (!isCategoryDir(categoryPath)) continue;
 
-    const result = generateForCategory(name, skillsDir, effectiveDryRun);
+    const result = generateForCategory(name, skillsDir, effectiveDryRun, opts.skillOverrides);
     categories.push(result);
   }
 
-  const totalSubSkills = categories.reduce(
-    (sum, c) => sum + c.subSkills.length,
-    0
-  );
+  const totalSubSkills = categories.reduce((sum, c) => sum + c.subSkills.length, 0);
 
-  const commands = generateCmds
-    ? generateCommandFiles(categories, commandsDir, effectiveDryRun)
-    : [];
+  const commands = generateCmds ? generateCommandFiles(categories, commandsDir, effectiveDryRun) : [];
 
   return { categories, totalSubSkills, commands, errors };
 }
@@ -514,6 +491,12 @@ export function generateAllRoutingTables(
 // ============================================================================
 // CLI Entry Point
 // ============================================================================
+
+/** Read `skillOverrides` from settings.json (only string values are kept). */
+function readSkillOverrides(): SkillOverrides {
+  const raw = (loadSettings() as unknown as { skillOverrides?: Record<string, unknown> }).skillOverrides ?? {};
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -523,6 +506,8 @@ async function main(): Promise<void> {
       "dry-run": { type: "boolean", short: "n" },
       "no-commands": { type: "boolean" },
       "skills-dir": { type: "string", short: "d" },
+      "commands-dir": { type: "string" },
+      "respect-skill-overrides": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: false,
@@ -538,12 +523,15 @@ USAGE:
   bun lib/core/GenerateRoutingTables.ts --dry-run            # preview only
   bun lib/core/GenerateRoutingTables.ts --no-commands        # routing tables only
   bun lib/core/GenerateRoutingTables.ts --skills-dir /path   # override path
+  bun lib/core/GenerateRoutingTables.ts --commands-dir /path # write Commands/*.md here instead of the live tree
 
 OPTIONS:
   -c, --category <name>   Process only this category
   -n, --dry-run           Compute changes without writing files
       --no-commands       Skip generating Commands/*.md slash command files
   -d, --skills-dir <path> Override default skills directory
+      --commands-dir <path> Override the Commands directory (default: live Commands/)
+      --respect-skill-overrides  Leave out sub-skills that settings.json skillOverrides marks "off"
   -h, --help              Show this help message
 
 NOTES:
@@ -559,6 +547,8 @@ NOTES:
   const skillsDir = values["skills-dir"] ?? DEFAULT_SKILLS_DIR;
   const dryRun = values["dry-run"] ?? false;
   const noCommands = values["no-commands"] ?? false;
+  const commandsDir = values["commands-dir"] ?? DEFAULT_COMMANDS_DIR;
+  const skillOverrides = values["respect-skill-overrides"] ? readSkillOverrides() : undefined;
 
   if (!existsSync(skillsDir)) {
     console.error(`Error: skills directory not found: ${skillsDir}`);
@@ -572,10 +562,8 @@ NOTES:
   let result: GenerateResult;
 
   if (values.category) {
-    const single = generateForCategory(values.category, skillsDir, dryRun);
-    const commands = noCommands
-      ? []
-      : generateCommandFiles([single], DEFAULT_COMMANDS_DIR, dryRun);
+    const single = generateForCategory(values.category, skillsDir, dryRun, skillOverrides);
+    const commands = noCommands ? [] : generateCommandFiles([single], commandsDir, dryRun);
     result = {
       categories: [single],
       totalSubSkills: single.subSkills.length,
@@ -587,6 +575,8 @@ NOTES:
       skillsDir,
       dryRun,
       commands: !noCommands,
+      commandsDir,
+      skillOverrides,
     });
   }
 
@@ -596,12 +586,12 @@ NOTES:
       console.log(`SKIP  ${cat.category}${cat.reason ? ` — ${cat.reason}` : ""}`);
     } else if (cat.written) {
       console.log(
-        `OK    ${cat.category} — ${cat.subSkills.length} sub-skills: ${cat.subSkills.map((s) => s.name).join(", ")}`
+        `OK    ${cat.category} — ${cat.subSkills.length} sub-skills: ${cat.subSkills.map((s) => s.name).join(", ")}`,
       );
     } else {
       // dry-run
       console.log(
-        `DRY   ${cat.category} — ${cat.subSkills.length} sub-skills would be written: ${cat.subSkills.map((s) => s.name).join(", ")}`
+        `DRY   ${cat.category} — ${cat.subSkills.length} sub-skills would be written: ${cat.subSkills.map((s) => s.name).join(", ")}`,
       );
     }
   }
@@ -635,7 +625,7 @@ NOTES:
 
   console.log(
     `\nDone. ${action} ${processed} categories (${result.totalSubSkills} total sub-skills), skipped ${skipped}.` +
-    (result.commands.length > 0 ? ` ${cmdAction} ${cmdCount} commands.` : "")
+      (result.commands.length > 0 ? ` ${cmdAction} ${cmdCount} commands.` : ""),
   );
 }
 

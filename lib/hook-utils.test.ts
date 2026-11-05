@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from "bun:test";
 import {
   readHookInput,
   readHookInputSync,
@@ -9,7 +9,7 @@ import {
   SecurityHookInputError,
   SECURITY_HOOK_INPUT_TIMEOUT_MS,
   OBSERVABILITY_HOOK_INPUT_TIMEOUT_MS,
-} from './hook-utils.ts';
+} from "./hook-utils.ts";
 
 // Subprocess-spawning harnesses are unreliable inside the test runner
 // (child stdin sometimes does not get the piped input from spawnSync).
@@ -19,40 +19,40 @@ import {
 //   2. The underlying readHookInputSync over /dev/stdin — covered implicitly
 //      under the test runner, which gives us a real "empty stdin" condition.
 
-describe('hook-utils', () => {
-  describe('module exports', () => {
-    it('exports the four typed entry points', async () => {
-      expect(typeof readSecurityHookInput).toBe('function');
-      expect(typeof readObservabilityHookInput).toBe('function');
-      expect(typeof readSecurityHookInputSync).toBe('function');
-      expect(typeof readObservabilityHookInputSync).toBe('function');
+describe("hook-utils", () => {
+  describe("module exports", () => {
+    it("exports the four typed entry points", async () => {
+      expect(typeof readSecurityHookInput).toBe("function");
+      expect(typeof readObservabilityHookInput).toBe("function");
+      expect(typeof readSecurityHookInputSync).toBe("function");
+      expect(typeof readObservabilityHookInputSync).toBe("function");
     });
 
-    it('exports SecurityHookInputError class', () => {
-      const err = new SecurityHookInputError('test');
+    it("exports SecurityHookInputError class", () => {
+      const err = new SecurityHookInputError("test");
       expect(err).toBeInstanceOf(Error);
-      expect(err.name).toBe('SecurityHookInputError');
-      expect(err.message).toBe('test');
+      expect(err.name).toBe("SecurityHookInputError");
+      expect(err.message).toBe("test");
     });
 
-    it('exports canonical timeout constants — security tolerates more latency than observability', () => {
-      expect(typeof SECURITY_HOOK_INPUT_TIMEOUT_MS).toBe('number');
-      expect(typeof OBSERVABILITY_HOOK_INPUT_TIMEOUT_MS).toBe('number');
+    it("exports canonical timeout constants — security tolerates more latency than observability", () => {
+      expect(typeof SECURITY_HOOK_INPUT_TIMEOUT_MS).toBe("number");
+      expect(typeof OBSERVABILITY_HOOK_INPUT_TIMEOUT_MS).toBe("number");
       expect(SECURITY_HOOK_INPUT_TIMEOUT_MS).toBeGreaterThan(OBSERVABILITY_HOOK_INPUT_TIMEOUT_MS);
     });
 
-    it('keeps legacy readHookInput / readHookInputSync exports', () => {
-      expect(typeof readHookInput).toBe('function');
-      expect(typeof readHookInputSync).toBe('function');
+    it("keeps legacy readHookInput / readHookInputSync exports", () => {
+      expect(typeof readHookInput).toBe("function");
+      expect(typeof readHookInputSync).toBe("function");
     });
   });
 
-  describe('fail-CLOSED policy via empty test runner stdin', () => {
+  describe("fail-CLOSED policy via empty test runner stdin", () => {
     // Inside `bun test`, fd 0 has no JSON payload. readHookInputSync returns null.
     // The security wrapper must throw; the observability wrapper must return null.
     // This is the most important contract — failure modes diverge across policies.
 
-    it('readSecurityHookInputSync throws SecurityHookInputError on empty stdin', () => {
+    it("readSecurityHookInputSync throws SecurityHookInputError on empty stdin", () => {
       let caught: unknown = null;
       try {
         readSecurityHookInputSync();
@@ -60,16 +60,16 @@ describe('hook-utils', () => {
         caught = err;
       }
       expect(caught).toBeInstanceOf(SecurityHookInputError);
-      const message = caught instanceof Error ? caught.message : '';
-      expect(message).toContain('Security hook input unavailable');
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain("Security hook input unavailable");
     });
 
-    it('readObservabilityHookInputSync returns null on empty stdin', () => {
+    it("readObservabilityHookInputSync returns null on empty stdin", () => {
       const result = readObservabilityHookInputSync();
       expect(result).toBeNull();
     });
 
-    it('readSecurityHookInput (async) rejects with SecurityHookInputError when underlying reader yields null', async () => {
+    it("readSecurityHookInput (async) rejects with SecurityHookInputError when underlying reader yields null", async () => {
       // Use a deliberately tiny timeout so the async path resolves to null
       // immediately (no real stdin payload available under the test runner).
       let caught: unknown = null;
@@ -81,35 +81,34 @@ describe('hook-utils', () => {
       expect(caught).toBeInstanceOf(SecurityHookInputError);
     });
 
-    it('readObservabilityHookInput (async) resolves to null when underlying reader yields null', async () => {
+    it("readObservabilityHookInput (async) resolves to null when underlying reader yields null", async () => {
       const result = await readObservabilityHookInput({ timeoutMs: 50 });
       expect(result).toBeNull();
     });
   });
-
 });
 
-describe('SecurityHookInputError', () => {
-  it('preserves a cause when provided', () => {
-    const cause = new Error('underlying');
-    const err = new SecurityHookInputError('wrapper', cause);
+describe("SecurityHookInputError", () => {
+  it("preserves a cause when provided", () => {
+    const cause = new Error("underlying");
+    const err = new SecurityHookInputError("wrapper", cause);
     expect(err.cause).toBe(cause);
   });
 
-  it('omits cause when not provided', () => {
-    const err = new SecurityHookInputError('only');
+  it("omits cause when not provided", () => {
+    const err = new SecurityHookInputError("only");
     expect(err.cause).toBeUndefined();
   });
 });
 
-describe('real-stdin integration via Readable.from', () => {
+describe("real-stdin integration via Readable.from", () => {
   // Swap process.stdin for a Readable.from stream so we exercise the actual
   // event-listener plumbing in readHookInput. This is the only reliable way
   // to integration-test the async path without subprocesses.
 
   const setStdin = (replacement: NodeJS.ReadStream): NodeJS.ReadStream => {
     const original = process.stdin;
-    Object.defineProperty(process, 'stdin', {
+    Object.defineProperty(process, "stdin", {
       value: replacement,
       configurable: true,
       writable: true,
@@ -117,8 +116,8 @@ describe('real-stdin integration via Readable.from', () => {
     return original;
   };
 
-  it('readObservabilityHookInput resolves with parsed JSON when stdin yields a valid payload', async () => {
-    const { Readable } = await import('stream');
+  it("readObservabilityHookInput resolves with parsed JSON when stdin yields a valid payload", async () => {
+    const { Readable } = await import("node:stream");
     const fake = Readable.from(['{"a":7}']) as unknown as NodeJS.ReadStream;
     const original = setStdin(fake);
     try {
@@ -129,8 +128,8 @@ describe('real-stdin integration via Readable.from', () => {
     }
   });
 
-  it('readSecurityHookInput resolves with parsed JSON when stdin yields a valid payload', async () => {
-    const { Readable } = await import('stream');
+  it("readSecurityHookInput resolves with parsed JSON when stdin yields a valid payload", async () => {
+    const { Readable } = await import("node:stream");
     const fake = Readable.from(['{"a":3}']) as unknown as NodeJS.ReadStream;
     const original = setStdin(fake);
     try {
@@ -141,9 +140,9 @@ describe('real-stdin integration via Readable.from', () => {
     }
   });
 
-  it('readSecurityHookInput throws when stdin yields invalid JSON', async () => {
-    const { Readable } = await import('stream');
-    const fake = Readable.from(['not-json{{{']) as unknown as NodeJS.ReadStream;
+  it("readSecurityHookInput throws when stdin yields invalid JSON", async () => {
+    const { Readable } = await import("node:stream");
+    const fake = Readable.from(["not-json{{{"]) as unknown as NodeJS.ReadStream;
     const original = setStdin(fake);
     try {
       let caught: unknown = null;
@@ -158,9 +157,9 @@ describe('real-stdin integration via Readable.from', () => {
     }
   });
 
-  it('readObservabilityHookInput returns null when stdin yields invalid JSON', async () => {
-    const { Readable } = await import('stream');
-    const fake = Readable.from(['not-json{{{']) as unknown as NodeJS.ReadStream;
+  it("readObservabilityHookInput returns null when stdin yields invalid JSON", async () => {
+    const { Readable } = await import("node:stream");
+    const fake = Readable.from(["not-json{{{"]) as unknown as NodeJS.ReadStream;
     const original = setStdin(fake);
     try {
       const result = await readObservabilityHookInput({ timeoutMs: 1000 });
@@ -168,5 +167,27 @@ describe('real-stdin integration via Readable.from', () => {
     } finally {
       setStdin(original);
     }
+  });
+});
+
+describe("readHookInput leaves no pending timer", () => {
+  it("process exits well before the 5 s timeout once stdin ends", async () => {
+    const script = [
+      `import { readHookInput } from ${JSON.stringify(`${import.meta.dir}/hook-utils.ts`)};`,
+      "const input = await readHookInput();",
+      "console.log(JSON.stringify(input));",
+    ].join("\n");
+    const proc = Bun.spawn([process.execPath, "-e", script], {
+      stdin: new Blob(['{"a":1}']),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const start = Date.now();
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    const elapsed = Date.now() - start;
+    expect(out.trim()).toBe('{"a":1}');
+    // Before the fix an uncleared 5000 ms setTimeout kept the process alive ~5 s.
+    expect(elapsed).toBeLessThan(2500);
   });
 });

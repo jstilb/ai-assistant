@@ -39,7 +39,7 @@ export interface WakeLockProcess {
 
 export type SpawnCaffeinate = (args: string[]) => WakeLockProcess;
 
-export interface WakeLockHandle {
+interface WakeLockHandle {
   /** True if a real caffeinate assertion was successfully spawned. */
   held: boolean;
   /** Release the wake lock. Safe to call multiple times (idempotent). */
@@ -47,15 +47,15 @@ export interface WakeLockHandle {
 }
 
 const defaultSpawn: SpawnCaffeinate = (args: string[]) => {
-  const proc = Bun.spawn(['caffeinate', ...args], {
-    stdout: 'ignore',
-    stderr: 'ignore',
+  const proc = Bun.spawn(["caffeinate", ...args], {
+    stdout: "ignore",
+    stderr: "ignore",
   });
   return {
     pid: proc.pid,
     kill: (signal?: string) => {
       try {
-        proc.kill(signal as any);
+        proc.kill(signal as NodeJS.Signals | undefined);
       } catch {
         // Already gone — fine.
       }
@@ -75,13 +75,10 @@ const defaultSpawn: SpawnCaffeinate = (args: string[]) => {
  * environment), `held` is false and `release()` is a no-op — a wake-lock
  * failure must never fail the job it's protecting.
  */
-export function acquireWakeLock(
-  runnerPid: number,
-  spawnFn: SpawnCaffeinate = defaultSpawn,
-): WakeLockHandle {
+export function acquireWakeLock(runnerPid: number, spawnFn: SpawnCaffeinate = defaultSpawn): WakeLockHandle {
   let proc: WakeLockProcess | null = null;
   try {
-    proc = spawnFn(['-i', '-s', '-w', String(runnerPid)]);
+    proc = spawnFn(["-i", "-s", "-w", String(runnerPid)]);
   } catch {
     proc = null;
   }
@@ -92,7 +89,7 @@ export function acquireWakeLock(
     release(): void {
       if (released || !proc) return;
       released = true;
-      proc.kill('SIGTERM');
+      proc.kill("SIGTERM");
     },
   };
 }

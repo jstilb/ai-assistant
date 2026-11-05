@@ -90,9 +90,11 @@ export const CATASTROPHIC_PATTERNS: Array<{ pattern: RegExp; action: Catastrophi
 export const PROTECTED_BRANCHES = ["main", "master", "production", "prod"];
 
 /** Full-command-string scan against the shared catastrophic denylist. */
-export function isCatastrophicCommand(
-  command: string
-): { blocked: boolean; action?: CatastrophicAction; reason?: string } {
+export function isCatastrophicCommand(command: string): {
+  blocked: boolean;
+  action?: CatastrophicAction;
+  reason?: string;
+} {
   for (const { pattern, action } of CATASTROPHIC_PATTERNS) {
     if (pattern.test(command)) {
       return { blocked: true, action, reason: `Catastrophic action detected: ${action}` };
@@ -115,7 +117,17 @@ export function isProtectedBranch(branch: string): boolean {
  * into a shared base widens nothing.
  */
 export const BASE_SAFE_EXECUTABLES = new Set([
-  "bun", "node", "grep", "test", "diff", "wc", "jq", "ls", "cat", "head", "tail",
+  "bun",
+  "node",
+  "grep",
+  "test",
+  "diff",
+  "wc",
+  "jq",
+  "ls",
+  "cat",
+  "head",
+  "tail",
 ]);
 
 /** Executables that are NEVER allowed, in any scope. None of today's three
@@ -133,9 +145,9 @@ const NEVER_ALLOWED_EXECUTABLES = new Set(["claude"]);
  *   { subcommands: [...] }    — only these git subcommands are safe (matches
  *                                "command-runner" today).
  */
-export type GitScope = "none" | "any" | { subcommands: readonly string[] };
+type GitScope = "none" | "any" | { subcommands: readonly string[] };
 
-export interface CommandSafetyScope {
+interface CommandSafetyScope {
   name: string;
   /** Executables allowed in addition to BASE_SAFE_EXECUTABLES. */
   additionalExecutables: readonly string[];
@@ -159,8 +171,25 @@ export const VERIFIER_SCOPE: CommandSafetyScope = {
 export const SELF_VERIFY_SCOPE: CommandSafetyScope = {
   name: "self-verify",
   additionalExecutables: [
-    "bunx", "npm", "npx", "pnpm", "yarn", "tsc", "curl", "echo", "find", "true", "false",
-    "stat", "file", "which", "pwd", "sleep", "kill", "timeout", "playwright",
+    "bunx",
+    "npm",
+    "npx",
+    "pnpm",
+    "yarn",
+    "tsc",
+    "curl",
+    "echo",
+    "find",
+    "true",
+    "false",
+    "stat",
+    "file",
+    "which",
+    "pwd",
+    "sleep",
+    "kill",
+    "timeout",
+    "playwright",
   ],
   git: "any",
   stripExecutablePath: true,
@@ -202,7 +231,7 @@ export function primaryExecutable(cmd: string, scope: CommandSafetyScope): strin
   const first = cmd.trim().split(/\s+/)[0];
   if (!first) return null;
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(first)) return null;
-  return scope.stripExecutablePath ? first.split("/").pop() ?? first : first;
+  return scope.stripExecutablePath ? (first.split("/").pop() ?? first) : first;
 }
 
 /**
@@ -212,7 +241,7 @@ export function primaryExecutable(cmd: string, scope: CommandSafetyScope): strin
  * inline gate composition.
  */
 export function isCommandSafe(cmd: string, scope: CommandSafetyScope): boolean {
-  if (!cmd || !cmd.trim()) return false;
+  if (!cmd?.trim()) return false;
   if (isCatastrophicCommand(cmd).blocked) return false;
   const exe = primaryExecutable(cmd, scope);
   if (!exe) return false;

@@ -32,13 +32,13 @@
  *   MEMORY.state.rateLimits.write(next);             // atomic tmp+rename
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
-import { z, type ZodType } from 'zod';
-import { getKayaHome } from './KayaHome.ts';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { z, type ZodType } from "zod";
+import { getKayaHome } from "./KayaHome.ts";
 
 function lazyPath(...segments: string[]): string {
-  return [getKayaHome(), 'MEMORY', ...segments].join('/');
+  return [getKayaHome(), "MEMORY", ...segments].join("/");
 }
 
 // ── Typed file-accessor factory (Slice 0 of candidate #2) ────────────────────
@@ -90,7 +90,7 @@ export function defineFileAccessor<T>(
       if (!existsSync(filepath)) return null;
       let raw: string;
       try {
-        raw = readFileSync(filepath, 'utf-8');
+        raw = readFileSync(filepath, "utf-8");
       } catch (err) {
         console.warn(`[MemoryPaths:${label}] read failed: ${(err as Error).message}`);
         return null;
@@ -114,7 +114,7 @@ export function defineFileAccessor<T>(
       if (!existsSync(filepath)) {
         throw new Error(`[MemoryPaths:${label}] missing file: ${filepath}`);
       }
-      const raw = readFileSync(filepath, 'utf-8');
+      const raw = readFileSync(filepath, "utf-8");
       const parsed = JSON.parse(raw);
       return schema.parse(parsed);
     },
@@ -123,7 +123,7 @@ export function defineFileAccessor<T>(
       const dir = dirname(filepath);
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       const tmpPath = `${filepath}.tmp.${process.pid}.${Date.now()}`;
-      writeFileSync(tmpPath, JSON.stringify(value, null, 2), 'utf-8');
+      writeFileSync(tmpPath, JSON.stringify(value, null, 2), "utf-8");
       renameSync(tmpPath, filepath);
     },
     update(mutator: (current: T) => T): T {
@@ -216,61 +216,49 @@ export const MEMORY = {
   ROOT: () => lazyPath(),
 
   // Top-level dirs
-  STATE:           () => lazyPath('State'),
-  DAEMON:          () => lazyPath('daemon'),
-  NOTIFICATIONS:   () => lazyPath('NOTIFICATIONS'),
-  WORK:            () => lazyPath('WORK'),
-  MONITORING:      () => lazyPath('MONITORING'),
-  SECURITY:        () => lazyPath('security'),
-  LEARNING:        () => lazyPath('LEARNING'),
-  KNOWLEDGE:       () => lazyPath('KNOWLEDGE'),
-  BRIEFINGS:       () => lazyPath('BRIEFINGS'),
-  AUTOMAINTENANCE: () => lazyPath('AutoMaintenance'),
-  EVAL_SIGNALS:    () => lazyPath('EVAL_SIGNALS'),
-  QUEUES:          () => lazyPath('QUEUES'),
-  ENTRIES:         () => lazyPath('entries'),
-  VOICE:           () => lazyPath('VOICE'),
-  PROGRESS:        () => lazyPath('State', 'progress'),
+  STATE: () => lazyPath("State"),
+  DAEMON: () => lazyPath("daemon"),
+  NOTIFICATIONS: () => lazyPath("NOTIFICATIONS"),
+  WORK: () => lazyPath("WORK"),
+  MONITORING: () => lazyPath("MONITORING"),
+  SECURITY: () => lazyPath("security"),
+  LEARNING: () => lazyPath("LEARNING"),
+  KNOWLEDGE: () => lazyPath("KNOWLEDGE"),
+  BRIEFINGS: () => lazyPath("BRIEFINGS"),
+  AUTOMAINTENANCE: () => lazyPath("AutoMaintenance"),
+  EVAL_SIGNALS: () => lazyPath("EVAL_SIGNALS"),
+  QUEUES: () => lazyPath("QUEUES"),
+  ENTRIES: () => lazyPath("entries"),
+  VOICE: () => lazyPath("VOICE"),
+  PROGRESS: () => lazyPath("State", "progress"),
 
   // Well-known files
-  NOTIFICATIONS_JSONL:    () => lazyPath('NOTIFICATIONS', 'notifications.jsonl'),
-  WORK_QUEUE_JSON:        () => lazyPath('WORK', 'work-queue.json'),
-  AGENT_SESSIONS_JSON:    () => lazyPath('State', 'agent-sessions.json'),
-  CONTEXT_CLASSIFICATION: () => lazyPath('State', 'context-classification.json'),
-  CONTEXT_SESSION:        () => lazyPath('State', 'context-session.json'),
-  INTEGRITY_STATE:        () => lazyPath('State', 'integrity-state.json'),
-  RATE_LIMITS:            () => lazyPath('State', 'rate-limits.json'),
-  TAB_TITLE:              () => lazyPath('State', 'tab-title.json'),
-  VOICE_EVENTS:           () => lazyPath('VOICE', 'voice-events.jsonl'),
-  DAEMON_MESSAGE_QUEUE:   () => lazyPath('daemon', 'message-queue.json'),
-  DAEMON_CRON_STATE:      () => lazyPath('daemon', 'cron', 'state.json'),
-  PIPELINE_LOCK:          () => lazyPath('MONITORING', 'state', 'pipeline.lock'),
-  ACTIVE_ANOMALIES:       () => lazyPath('MONITORING', 'state', 'active-anomalies.json'),
-  ALERTS_JSONL:           () => lazyPath('MONITORING', 'audit', 'alerts.jsonl'),
-  MONITOR_AUDIT:          () => lazyPath('MONITORING', 'audit', 'monitor-audit.jsonl'),
+  NOTIFICATIONS_JSONL: () => lazyPath("NOTIFICATIONS", "notifications.jsonl"),
+  WORK_QUEUE_JSON: () => lazyPath("WORK", "work-queue.json"),
+  AGENT_SESSIONS_JSON: () => lazyPath("State", "agent-sessions.json"),
+  CONTEXT_CLASSIFICATION: () => lazyPath("State", "context-classification.json"),
+  CONTEXT_SESSION: () => lazyPath("State", "context-session.json"),
+  INTEGRITY_STATE: () => lazyPath("State", "integrity-state.json"),
+  RATE_LIMITS: () => lazyPath("State", "rate-limits.json"),
+  TAB_TITLE: () => lazyPath("State", "tab-title.json"),
+  VOICE_EVENTS: () => lazyPath("VOICE", "voice-events.jsonl"),
+  DAEMON_MESSAGE_QUEUE: () => lazyPath("daemon", "message-queue.json"),
+  DAEMON_CRON_STATE: () => lazyPath("daemon", "cron", "state.json"),
+  PIPELINE_LOCK: () => lazyPath("MONITORING", "state", "pipeline.lock"),
+  ACTIVE_ANOMALIES: () => lazyPath("MONITORING", "state", "active-anomalies.json"),
+  ALERTS_JSONL: () => lazyPath("MONITORING", "audit", "alerts.jsonl"),
+  MONITOR_AUDIT: () => lazyPath("MONITORING", "audit", "monitor-audit.jsonl"),
 
   // Typed accessor namespaces — Slices 1+ of candidate #2.
   // Each property holds a FileAccessor<T> built via defineFileAccessor().
   // Lookups go through .read() / .write() / .update() instead of hand-rolled
   // readFileSync + JSON.parse + ad-hoc shape access.
   state: {
-    rateLimits: defineFileAccessor(
-      'rateLimits',
-      () => lazyPath('State', 'rate-limits.json'),
-      RateLimitsSchema,
-    ),
-    integrity: defineFileAccessor(
-      'integrity',
-      () => lazyPath('State', 'integrity-state.json'),
-      IntegrityStateSchema,
-    ),
+    rateLimits: defineFileAccessor("rateLimits", () => lazyPath("State", "rate-limits.json"), RateLimitsSchema),
+    integrity: defineFileAccessor("integrity", () => lazyPath("State", "integrity-state.json"), IntegrityStateSchema),
   },
   work: {
-    queue: defineFileAccessor(
-      'workQueue',
-      () => lazyPath('WORK', 'work-queue.json'),
-      WorkQueueStateSchema,
-    ),
+    queue: defineFileAccessor("workQueue", () => lazyPath("WORK", "work-queue.json"), WorkQueueStateSchema),
   },
 } as const;
 
@@ -289,19 +277,19 @@ export function memPath(...segments: string[]): string {
  * layout knowledge still lives here, not at the call site.
  */
 export function memPathUnder(root: string, ...segments: string[]): string {
-  return [root, 'MEMORY', ...segments].join('/');
+  return [root, "MEMORY", ...segments].join("/");
 }
 
 // ── Spec-P1 canonical named exports (matches ISC row 9 verification command) ──
 
-export const RATINGS_PATH      = () => lazyPath('LEARNING', 'SIGNALS', 'ratings.jsonl');
-export const MONITORING_DIR    = () => lazyPath('MONITORING');
-export const SEMANTIC_INDEX_PATH = () => lazyPath('State', 'semantic-index.json');
-export const KNOWLEDGE_GRAPH_PATH = () => lazyPath('State', 'knowledge-graph.json');
-export const HEALTH_STATE_PATH = () => lazyPath('AutoMaintenance', 'health-state.json');
-export const QUEUE_STATE_PATH  = () => lazyPath('QUEUES', 'state.json');
-export const MEMORY_INDEX_PATH = () => lazyPath('index.json');
-export const APPROVED_WORK_PATH = () => lazyPath('QUEUES', 'approved-work.jsonl');
-export const APPROVALS_PATH    = () => lazyPath('QUEUES', 'approvals.jsonl');
-export const PENDING_APPROVAL_QUEUE_PATH = () => lazyPath('WORK', 'pending-approval', 'queue.json');
-export const RUN_LEDGER_PATH   = () => lazyPath('daemon', 'cron', 'run-ledger.jsonl');
+export const RATINGS_PATH = () => lazyPath("LEARNING", "SIGNALS", "ratings.jsonl");
+export const MONITORING_DIR = () => lazyPath("MONITORING");
+export const SEMANTIC_INDEX_PATH = () => lazyPath("State", "semantic-index.json");
+export const KNOWLEDGE_GRAPH_PATH = () => lazyPath("State", "knowledge-graph.json");
+export const HEALTH_STATE_PATH = () => lazyPath("AutoMaintenance", "health-state.json");
+export const QUEUE_STATE_PATH = () => lazyPath("QUEUES", "state.json");
+export const MEMORY_INDEX_PATH = () => lazyPath("index.json");
+export const APPROVED_WORK_PATH = () => lazyPath("QUEUES", "approved-work.jsonl");
+export const APPROVALS_PATH = () => lazyPath("QUEUES", "approvals.jsonl");
+export const PENDING_APPROVAL_QUEUE_PATH = () => lazyPath("WORK", "pending-approval", "queue.json");
+export const RUN_LEDGER_PATH = () => lazyPath("daemon", "cron", "run-ledger.jsonl");

@@ -14,12 +14,12 @@
  * against temp files (mkdtempSync) to prove the disk-reading path works too
  * — real SKILL.md/Router.ts are never written to by this test.
  *
- * Run: bun test ~/.claude/lib/lint/lifeos-label-table-drift.test.ts
+ * Run: bun test ./lib/lint/lifeos-label-table-drift.test.ts
  */
 import { describe, test, expect, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   parseLabelUnion,
   parseClassificationTableLabels,

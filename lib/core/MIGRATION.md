@@ -308,7 +308,7 @@ if (result.changed) {
 ### Before (Scattered Memory Files)
 
 ```typescript
-// ContinualLearning creates files in MEMORY/LEARNING/
+// A skill writes its own files into MEMORY/LEARNING/
 function captureLearning(content: string) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `${timestamp}_LEARNING_${sanitize(title)}.md`;
@@ -384,91 +384,6 @@ if (similar.length > 0) {
 
 ---
 
-## ApprovalQueue: From Ad-hoc Approval Logic
-
-### Before (Custom Approval Logic)
-
-```typescript
-// Each skill implements approval differently
-interface PendingItem {
-  id: string;
-  data: any;
-  createdAt: string;
-}
-
-const pendingItems: PendingItem[] = [];
-
-function addForApproval(data: any) {
-  pendingItems.push({
-    id: randomUUID(),
-    data,
-    createdAt: new Date().toISOString(),
-  });
-}
-
-function approve(id: string) {
-  const index = pendingItems.findIndex(i => i.id === id);
-  if (index !== -1) {
-    const item = pendingItems[index];
-    pendingItems.splice(index, 1);
-    // Execute approval logic
-  }
-}
-```
-
-**Problems:**
-- No persistence (lost on restart)
-- No priority ordering
-- No expiry
-- No batch operations
-- Duplicated across skills
-
-### After (Using ApprovalQueue)
-
-```typescript
-import { createApprovalQueue } from '~/.claude/lib/core/ApprovalQueue';
-import { z } from 'zod';
-
-const ItemSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-});
-
-const queue = createApprovalQueue({
-  schema: ItemSchema,
-  defaultExpiry: 7, // days
-  onApprove: async (item) => {
-    console.log(`Approved: ${item.title}`);
-    await executeApproval(item);
-  },
-});
-
-// Add with priority
-const id = await queue.add(
-  { title: 'Deploy to prod', description: '...' },
-  { priority: 'high' }
-);
-
-// List by priority
-const pending = await queue.list({ status: 'pending' });
-
-// Batch approve
-await queue.batchApprove([id1, id2, id3], 'Batch approved');
-
-// Auto-cleanup expired
-await queue.cleanup(30); // Remove items > 30 days old
-```
-
-**Benefits:**
-- File-based persistence
-- Priority ordering
-- Expiry with auto-cleanup
-- Batch operations
-- Hooks for approval/rejection
-- Statistics and filtering
-
----
-
 ## Migration Checklist
 
 When migrating a skill to use infrastructure tools:
@@ -503,26 +418,6 @@ When migrating a skill to use infrastructure tools:
 - [ ] Use correct `type` and `category`
 - [ ] Set appropriate `tier` (hot/warm/cold)
 
-### 6. Approval Workflows
-- [ ] Create `ApprovalQueue` instance
-- [ ] Define Zod schema for approval items
-- [ ] Add hooks for approval/rejection
-- [ ] Use batch operations where applicable
-
-### 7. Agent Spawning
-- [ ] Use aggregation strategies
-- [ ] Add spotcheck for verification
-- [ ] Use debates for decision-making
-
-### 8. Workflows
-- [ ] Define workflow config with steps
-- [ ] Add dependencies with `dependsOn`
-- [ ] Enable parallel execution where safe
-- [ ] Add ISC criteria
-- [ ] Enable checkpointing for long workflows
-
----
-
 ## Testing After Migration
 
 Run comprehensive tests after migrating:
@@ -542,9 +437,6 @@ bun run lib/core/CachedHTTPClient.ts --stats
 
 # Test memory store
 bun run lib/core/MemoryStore.ts stats
-
-# Test approval queue
-bun run lib/core/ApprovalQueue.ts stats
 
 ```
 

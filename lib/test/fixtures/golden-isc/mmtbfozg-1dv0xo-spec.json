@@ -1,0 +1,44 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mmtbfozg-1dv0xo-spec.md",
+  "layoutNote": "7-col (22 rows)",
+  "rowCount": 7,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`Inference.ts` extraction pattern is located and documented with exact file path, line number, and current regex/parse logic — confirming whether it is vulnerable to the array-blind bug",
+      "verifyMethod": "`grep -nE 'regex|extract|JSON\\.parse|match' src/**/Inference.ts` returns the relevant line; file path and line number recorded in a `findings.md`"
+    },
+    {
+      "number": 2,
+      "description": "Extraction function updated to handle both `{...}` object and `[...]` array top-level JSON; change is ≤5 LOC; no `any` types introduced; return type is properly generic",
+      "verifyMethod": "`git diff` shows only Inference.ts changed; TypeScript compiles with `tsc --noEmit` zero errors; return type annotation is `T | T[]` or equivalent generic",
+      "embeddedCommand": "git diff"
+    },
+    {
+      "number": 3,
+      "description": "Unit test suite includes ≥4 cases: (a) object extraction works, (b) array extraction works, (c) malformed JSON returns null, (d) nested arrays inside objects are unaffected",
+      "verifyMethod": "`npm test` exits 0; test output shows all 4 cases passing with descriptive labels"
+    },
+    {
+      "number": 4,
+      "description": "Blast-radius audit produces a documented list of all skills categorized as `affected` (expects array), `safe` (expects object), or `unknown` (dynamic/unclear) — covering all skills in `skills/`",
+      "verifyMethod": "File `docs/array-blast-radius.md` exists; every skill directory has exactly one entry; no skill is missing from the list"
+    },
+    {
+      "number": 5,
+      "description": "At least 2 skills from the `affected` category are smoke-tested with a mock LLM array response and confirmed to return the correct parsed array (not null, not empty)",
+      "verifyMethod": "Test output or manual run log shows skill name, input mock, and actual returned value — both returning non-null arrays"
+    },
+    {
+      "number": 6,
+      "description": "No regressions: all pre-existing passing tests continue to pass after the patch is applied",
+      "verifyMethod": "`npm test` full suite exits 0; CI output (or local run) shows same pass count as before patch for non-new tests"
+    },
+    {
+      "number": 7,
+      "description": "`findings.md` documents the resolution: vulnerability confirmed or not, patch applied, affected skill count, and any skills requiring follow-up",
+      "verifyMethod": "File exists at `docs/inference-array-fix-findings.md`; sections: Vulnerability Status, Patch Summary, Affected Skills Count, Follow-up Items"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.241Z"
+}

@@ -1,0 +1,51 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mq5vmjmh-8rf97i-spec.md",
+  "layoutNote": "3-col (lifeos migration)",
+  "rowCount": 8,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`lifeos.db` exists at `skills/Productivity/LifeOS/Data/lifeos.db`, contains all active Log tables, and row counts match the Workbook within ±1 per tab (backfill verified)",
+      "verifyMethod": "Run `bun tests/lifeos-migration-verify.test.ts` — prints per-tab counts from both SQLite and Sheets and asserts ≤1 drift; all rows pass",
+      "embeddedCommand": "bun tests/lifeos-migration-verify.test.ts"
+    },
+    {
+      "number": 2,
+      "description": "Dual-write is live: a test Capture via Telegram `/habit` lands in both `lifeos.db` and the Workbook within the same request; a Sheets write failure is logged but does NOT fail the Capture",
+      "verifyMethod": "Submit a test habit entry via Telegram; read `habit_log` from SQLite and confirm the row appears; disconnect Sheets (revoke OAuth token temporarily); resubmit; confirm SQLite row lands and Telegram reply is normal"
+    },
+    {
+      "number": 3,
+      "description": "`LifeOSQuery` acceptance harness passes: \"how many habit rows this week?\", \"lead count this month?\", \"last 5 food rows with ratings?\" all return correct answers from SQLite without any SheetsIO import",
+      "verifyMethod": "`bun tests/lifeos-query-acceptance.test.ts` exits 0; all three queries return results matching known ground truth; no SheetsIO subprocess spawned (verified by mocking kaya-cli)",
+      "embeddedCommand": "bun tests/lifeos-query-acceptance.test.ts"
+    },
+    {
+      "number": 4,
+      "description": "All seven external consumers (DailyBriefing, Telegram /habit, voice CaptureGate, EventScout, StatusRefresh, plaid-sync, InformationManager) produce identical output before and after reader cutover",
+      "verifyMethod": "Run each consumer in isolation against both Sheets and SQLite backends; diff outputs; zero behavioral differences; daily briefing fires at 08:00 and generates a complete brief"
+    },
+    {
+      "number": 5,
+      "description": "Local web Dashboard is accessible at `http://localhost:31337`, shows per-Log row counts + freshness for all active Logs, a habit consistency heatmap, WIG/lead summary, and a drill-down table for any Log; the read-only SQL box executes a SELECT and returns results",
+      "verifyMethod": "Browser: open URL; verify all panels render with real data; enter `SELECT COUNT(*) FROM habit_log` in SQL box; confirm result matches ISC-1 count; non-SELECT statement is rejected with an error message"
+    },
+    {
+      "number": 6,
+      "description": "Module restructure complete: six seam folders exist under `skills/Productivity/LifeOS/` (Capture/, StorageIO/, Aggregation/, Dashboards/, FinanceETL/, Ops/); all 13 launchd entry paths are valid after plist regeneration; zero `import` errors at TypeScript compile",
+      "verifyMethod": "`bun --check skills/Productivity/LifeOS/` exits 0; `launchctl list | grep kaya` shows all 13 jobs loaded; `bin/rebuild-plists.sh && install-plists.sh` runs clean",
+      "embeddedCommand": "bun --check skills/Productivity/LifeOS/"
+    },
+    {
+      "number": 7,
+      "description": "`finance_transactions = 0` anomaly is diagnosed and resolved: either Plaid sync is confirmed broken + fixed, or the root cause is documented with a clear remediation path",
+      "verifyMethod": "After Phase 1 investigation, a written diagnosis is present in the spec notes or CONTEXT.md; if fixable in scope, `finance_transactions` has >0 rows after the next 07:30 plaid-sync run"
+    },
+    {
+      "number": 8,
+      "description": "Jm can Audit any active Log domain in under 5 minutes from `http://localhost:31337` without consulting Workbook, CLI, or internal code",
+      "verifyMethod": "Jm live-demos Audit of `lead_log` cold: opens Dashboard → clicks lead_log → sees recent rows + count; wall clock ≤5 minutes; no other tools opened"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.229Z"
+}

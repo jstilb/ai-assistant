@@ -59,7 +59,7 @@
 // run-lock holder means another wrapper is executing the job RIGHT NOW —
 // see lib/cron/RunLock.ts), never by decideCatchUp(), which stays a pure
 // artifact-freshness decision.
-export type CatchUpDecision = 'run' | 'skip-fresh' | 'skip-offline' | 'skip-locked';
+export type CatchUpDecision = "run" | "skip-fresh" | "skip-offline" | "skip-locked";
 
 export interface DecideCatchUpInput {
   /** Whether job.desiredArtifact.path (after {date} substitution) exists on disk. */
@@ -98,13 +98,12 @@ export function decideCatchUp(input: DecideCatchUpInput): CatchUpDecision {
 
   // Conditions gate first: never attempt a re-run while offline or asleep,
   // regardless of how badly the job has drifted from desired state.
-  if (!online || !awake) return 'skip-offline';
+  if (!online || !awake) return "skip-offline";
 
   // Slice A: a marker-present artifact (fallback-authored) is never fresh,
   // even if its mtime is well within maxAgeHrs — see DecideCatchUpInput's doc.
-  const artifactFresh =
-    artifactExists && artifactAgeHrs !== null && artifactAgeHrs <= maxAgeHrs && !markerPresent;
-  return artifactFresh ? 'skip-fresh' : 'run';
+  const artifactFresh = artifactExists && artifactAgeHrs !== null && artifactAgeHrs <= maxAgeHrs && !markerPresent;
+  return artifactFresh ? "skip-fresh" : "run";
 }
 
 // ============================================================================
@@ -205,9 +204,9 @@ export function selectMostStaleJob(
 export function buildLastInvokedAtMap(rows: readonly unknown[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const row of rows) {
-    if (row === null || typeof row !== 'object') continue;
+    if (row === null || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
-    if (typeof r.jobId !== 'string' || typeof r.ts !== 'string' || r.invoked !== true) continue;
+    if (typeof r.jobId !== "string" || typeof r.ts !== "string" || r.invoked !== true) continue;
     if (Number.isNaN(Date.parse(r.ts))) continue;
     const existing = map.get(r.jobId);
     if (existing === undefined || Date.parse(r.ts) > Date.parse(existing)) {
@@ -233,8 +232,8 @@ export function buildLastInvokedAtMap(rows: readonly unknown[]): Map<string, str
  * midnight. Paths with no `{date}` token are returned unchanged.
  */
 export function resolveArtifactPath(path: string, now: Date): string {
-  if (!path.includes('{date}')) return path;
-  const date = now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  if (!path.includes("{date}")) return path;
+  const date = now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
   return path.replace(/\{date\}/g, date);
 }
 
@@ -379,11 +378,11 @@ export function shouldAlertMissedCount(
 export function deriveMissedCountsByTick(rows: readonly unknown[]): number[] {
   const countsByTs = new Map<string, number>();
   for (const row of rows) {
-    if (row === null || typeof row !== 'object') continue;
+    if (row === null || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
-    if (typeof r.ts !== 'string' || typeof r.decision !== 'string') continue;
+    if (typeof r.ts !== "string" || typeof r.decision !== "string") continue;
     if (!countsByTs.has(r.ts)) countsByTs.set(r.ts, 0);
-    if (r.decision !== 'skip-fresh') countsByTs.set(r.ts, countsByTs.get(r.ts)! + 1);
+    if (r.decision !== "skip-fresh") countsByTs.set(r.ts, countsByTs.get(r.ts)! + 1);
   }
   return [...countsByTs.values()];
 }

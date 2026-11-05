@@ -13,7 +13,9 @@ const messages: Record<InputFailure, string> = {
 };
 
 export class SecretInputError extends Error {
-  get exitCode(): number { return this.code === "cancelled" ? 130 : this.code === "terminated" ? 143 : 1; }
+  get exitCode(): number {
+    return this.code === "cancelled" ? 130 : this.code === "terminated" ? 143 : 1;
+  }
   constructor(readonly code: InputFailure) {
     super(messages[code]);
     this.name = "SecretInputError";
@@ -33,14 +35,19 @@ interface SecretInputIO {
 export async function readSecretInput(prompt: string, overrides: Partial<SecretInputIO> = {}): Promise<string> {
   const io: SecretInputIO = {
     input: process.stdin,
-    write: (text) => { process.stderr.write(text); },
+    write: (text) => {
+      process.stderr.write(text);
+    },
     readPipe: () => Bun.stdin.text(),
     ...overrides,
   };
   if (!io.input.isTTY) {
     let value: string;
-    try { value = (await io.readPipe()).trim(); }
-    catch { throw new SecretInputError("read"); }
+    try {
+      value = (await io.readPipe()).trim();
+    } catch {
+      throw new SecretInputError("read");
+    }
     if (!value) throw new SecretInputError("empty");
     return value;
   }
@@ -66,9 +73,22 @@ export async function readSecretInput(prompt: string, overrides: Partial<SecretI
       const value = buffer.trim();
       buffer = "";
       let result = failure ?? (value ? undefined : "empty");
-      try { input.setRawMode(wasRaw); } catch { result = "restore"; }
-      try { if (wasFlowing) input.resume(); else input.pause(); } catch { result = "restore"; }
-      try { io.write("\n"); } catch { result ??= "read"; }
+      try {
+        input.setRawMode(wasRaw);
+      } catch {
+        result = "restore";
+      }
+      try {
+        if (wasFlowing) input.resume();
+        else input.pause();
+      } catch {
+        result = "restore";
+      }
+      try {
+        io.write("\n");
+      } catch {
+        result ??= "read";
+      }
       if (result) reject(new SecretInputError(result));
       else resolve(value);
     };
@@ -79,9 +99,18 @@ export async function readSecretInput(prompt: string, overrides: Partial<SecretI
     const onData = (chunk: Buffer | string) => {
       const text = typeof chunk === "string" ? chunk : decoder.write(chunk);
       for (const character of text) {
-        if (character === "\r" || character === "\n") { finish(); return; }
-        if (character === "\x03") { onCancel(); return; }
-        if (character === "\x04") { onEnd(); return; }
+        if (character === "\r" || character === "\n") {
+          finish();
+          return;
+        }
+        if (character === "\x03") {
+          onCancel();
+          return;
+        }
+        if (character === "\x04") {
+          onEnd();
+          return;
+        }
         if (character === "\x7f" || character === "\b") {
           buffer = Array.from(buffer).slice(0, -1).join("");
         } else {
@@ -99,6 +128,8 @@ export async function readSecretInput(prompt: string, overrides: Partial<SecretI
       process.on("SIGTERM", onTerminate);
       io.write(prompt);
       input.resume();
-    } catch { finish("read"); }
+    } catch {
+      finish("read");
+    }
   });
 }

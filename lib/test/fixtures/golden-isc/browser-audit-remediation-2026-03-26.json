@@ -1,0 +1,74 @@
+{
+  "specPath": "~/.claude/plans/Specs/browser-audit-remediation-2026-03-26.md",
+  "layoutNote": "8-col multi-table grouped",
+  "rowCount": 11,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Fix `BrowserExperiment.ts:31-32` — change both path constants from `skills/Browser/Tools/` to `skills/Development/Browser/Tools/`",
+      "verifyMethod": "D6 Code Hygiene / D10 Learning",
+      "source": "P0"
+    },
+    {
+      "number": 2,
+      "description": "Replace `Stagehand.ts:68-90` `loadSettings()` and `loadSecrets()` with `import { loadSettings } from '../../../../lib/core/ConfigLoader.ts'` and use ConfigLoader's `loadSecrets`-equivalent pattern",
+      "verifyMethod": "D7 Refactoring Need",
+      "source": "P1"
+    },
+    {
+      "number": 3,
+      "description": "Replace `BrowserSession.ts:565` `JSON.parse(readFileSync(statePath))` in state-load handler with StateManager (already initialized in file scope)",
+      "verifyMethod": "D7 Refactoring Need",
+      "source": "P1"
+    },
+    {
+      "number": 4,
+      "description": "Remove stale reference at `SKILL.md:365` — delete or replace the `~/.claude/skills/Development/UnixCLI/Workflows/Browser.md` line with a note that CLI reference is inline",
+      "verifyMethod": "D6 Code Hygiene",
+      "source": "P1"
+    },
+    {
+      "number": 5,
+      "description": "Search all skill files for `skills/Browser/` references (excluding `skills/Development/Browser/`) and update to `skills/Development/Browser/`",
+      "verifyMethod": "D4 Skill Validity",
+      "source": "P2"
+    },
+    {
+      "number": 6,
+      "description": "Add `## Customization` section to SKILL.md documenting `settings.json.stagehand` config keys and CLI timeout flags",
+      "verifyMethod": "D2 Implementation Quality",
+      "source": "P2"
+    },
+    {
+      "number": 7,
+      "description": "Add `## Workflow Routing` table to SKILL.md mapping trigger phrases to the 5 workflow files (Extract, Interact, Screenshot, VerifyPage, Update)",
+      "verifyMethod": "D2 Implementation Quality",
+      "source": "P2"
+    },
+    {
+      "number": 8,
+      "description": "Add learning write-back to `BrowserExperiment.ts` on run completion — emit a summary entry to `~/.claude/MEMORY/LEARNING/` after each experiment run",
+      "verifyMethod": "D10 Learning & Memory",
+      "source": "P2"
+    },
+    {
+      "number": 9,
+      "description": "Add `## Trigger` sections to each of the 5 workflow files: `Workflows/Extract.md`, `Workflows/Interact.md`, `Workflows/Screenshot.md`, `Workflows/VerifyPage.md`, `Workflows/Update.md`",
+      "verifyMethod": "D1 Behavioral Fidelity",
+      "source": "P2"
+    },
+    {
+      "number": 10,
+      "description": "Replace `catch (err: any)` with `catch (err: unknown)` and add `instanceof Error` narrowing at: `Browse.ts:826`, `BrowserSession.ts:641`",
+      "verifyMethod": "D7 Refactoring Need",
+      "source": "P3"
+    },
+    {
+      "number": 11,
+      "description": "Extract shared `SessionStateSchema` (identical in `Browse.ts:53` and `BrowserSession.ts:77`) into `Tools/types.ts`, import from both files",
+      "verifyMethod": "D7 Refactoring Need / D9 Complexity",
+      "source": "P3"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.242Z"
+}

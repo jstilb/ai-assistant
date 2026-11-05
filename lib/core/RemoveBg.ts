@@ -17,13 +17,14 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { getKayaHome } from "./KayaHome.ts";
 
 // ============================================================================
 // Environment Loading
 // ============================================================================
 
 async function loadEnv(): Promise<void> {
-  const envPath = resolve(process.env.HOME!, ".claude/.env");
+  const envPath = resolve(getKayaHome(), ".env");
   try {
     const envContent = await readFile(envPath, "utf-8");
     for (const line of envContent.split("\n")) {
@@ -33,10 +34,7 @@ async function loadEnv(): Promise<void> {
       if (eqIndex === -1) continue;
       const key = trimmed.slice(0, eqIndex).trim();
       let value = trimmed.slice(eqIndex + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
       if (!process.env[key]) {
@@ -90,13 +88,11 @@ ERROR CODES:
 // Background Removal
 // ============================================================================
 
-async function removeBackground(
-  inputPath: string,
-  outputPath?: string
-): Promise<void> {
+async function removeBackground(inputPath: string, outputPath?: string): Promise<void> {
   const apiKey = process.env.REMOVEBG_API_KEY;
   if (!apiKey) {
     console.error("❌ Missing environment variable: REMOVEBG_API_KEY");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell-variable text shown to the user
     console.error("   Add it to ${KAYA_DIR}/.env or export it in your shell");
     process.exit(1);
   }
@@ -135,10 +131,7 @@ async function removeBackground(
     await writeFile(output, resultBuffer);
     console.log(`✅ Saved: ${output}`);
   } catch (error) {
-    console.error(
-      `❌ Error processing ${inputPath}:`,
-      error instanceof Error ? error.message : String(error)
-    );
+    console.error(`❌ Error processing ${inputPath}:`, error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
@@ -158,8 +151,10 @@ async function main(): Promise<void> {
   }
 
   // Single file with optional output
+  const [first, second] = args;
+  if (first === undefined) return;
   if (args.length === 1) {
-    await removeBackground(args[0]);
+    await removeBackground(first);
     return;
   }
 
@@ -168,14 +163,14 @@ async function main(): Promise<void> {
   if (args.length === 2) {
     // If second arg exists as a file, treat as batch mode
     // Otherwise treat as input/output pair
-    if (existsSync(args[1])) {
+    if (second !== undefined && existsSync(second)) {
       // Both files exist - batch mode
       for (const file of args) {
         await removeBackground(file);
       }
     } else {
       // Second arg is output path
-      await removeBackground(args[0], args[1]);
+      await removeBackground(first, second);
     }
     return;
   }
@@ -189,7 +184,8 @@ async function main(): Promise<void> {
     try {
       await removeBackground(file);
       success++;
-    } catch {
+    } catch (err) {
+      console.error(`Failed to process ${file}: ${err instanceof Error ? err.message : String(err)}`);
       failed++;
     }
   }

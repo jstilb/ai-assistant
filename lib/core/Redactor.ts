@@ -1,5 +1,5 @@
 /**
-* Redactor — mask tokens/credentials before they hit logs.
+ * Redactor — mask tokens/credentials before they hit logs.
  *
  * Root cause this exists for (security-audit S-08 addendum, 2026-09-08):
  * Telegraf's own redactToken() throws on Bun (Error.message is readonly), so
@@ -110,9 +110,7 @@ const consoleState: Record<ConsoleStream, { original: ConsoleMethod | null; dept
  * unnecessary work) or restoring the real console early out from under a
  * still-active caller. Returns an uninstall function.
  */
-export function installRedactingConsole(
-  streams: readonly ConsoleStream[] = ["error", "warn"],
-): () => void {
+export function installRedactingConsole(streams: readonly ConsoleStream[] = ["error", "warn"]): () => void {
   const touched: ConsoleStream[] = [];
 
   for (const stream of streams) {

@@ -44,9 +44,27 @@ import { isSelfVerifyCommandSafe } from "../../skills/Automation/AutonomousWork/
 
 describe("compat: verifier context (SkepticalVerifier/Evidence.ts)", () => {
   const allowedExecutables = [
-    "bun", "node", "tsc", "cat", "ls", "echo", "wc", "grep",
-    "find", "test", "true", "false", "git", "jq", "head", "tail",
-    "diff", "stat", "file", "which", "pwd",
+    "bun",
+    "node",
+    "tsc",
+    "cat",
+    "ls",
+    "echo",
+    "wc",
+    "grep",
+    "find",
+    "test",
+    "true",
+    "false",
+    "git",
+    "jq",
+    "head",
+    "tail",
+    "diff",
+    "stat",
+    "file",
+    "which",
+    "pwd",
   ];
   it.each(allowedExecutables)("executable allowed pre-refactor: %s", (exe) => {
     expect(isExecutableAllowed(exe, VERIFIER_SCOPE)).toBe(true);
@@ -142,12 +160,39 @@ describe("compat: self-verify context (SelfVerifyRunner.ts isSelfVerifyCommandSa
 // ---------------------------------------------------------------------------
 
 describe("compat: command-runner context (CommandRunner.ts parseVerificationCommand)", () => {
-  const allowedExecutables = ["bun", "node", "npx", "grep", "rg", "test", "diff", "wc", "jq", "ls", "cat", "head", "tail"];
+  const allowedExecutables = [
+    "bun",
+    "node",
+    "npx",
+    "grep",
+    "rg",
+    "test",
+    "diff",
+    "wc",
+    "jq",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+  ];
   it.each(allowedExecutables)("executable allowed pre-refactor: %s", (exe) => {
     expect(isExecutableAllowed(exe, COMMAND_RUNNER_SCOPE)).toBe(true);
   });
 
-  const deniedExecutables = ["curl", "python", "wget", "rm", "echo", "tsc", "bunx", "npm", "sh", "bash", "find", "stat"];
+  const deniedExecutables = [
+    "curl",
+    "python",
+    "wget",
+    "rm",
+    "echo",
+    "tsc",
+    "bunx",
+    "npm",
+    "sh",
+    "bash",
+    "find",
+    "stat",
+  ];
   it.each(deniedExecutables)("executable denied pre-refactor: %s", (exe) => {
     expect(isExecutableAllowed(exe, COMMAND_RUNNER_SCOPE)).toBe(false);
   });

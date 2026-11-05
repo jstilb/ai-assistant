@@ -13,12 +13,13 @@
  *     fake spawnFn, so it proves real worktree wiring without ever invoking `claude`.
  */
 
-import { describe, it, expect, beforeEach, afterEach, afterAll } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, existsSync } from "fs";
-import { execFileSync } from "child_process";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
+import { pinKayaHome, restoreKayaHome } from "../test/pinKayaHome.ts";
 
 import {
   spawnAgentSync,
@@ -78,13 +79,17 @@ describe("spawnAgentSync — argument construction", () => {
     );
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].args).toEqual([
+    expect(calls[0]!.args).toEqual([
       "-p",
-      "--model", "sonnet",
+      "--model",
+      "sonnet",
       "--dangerously-skip-permissions",
-      "--allowedTools", "Read,Bash",
-      "--setting-sources", "",
-      "--output-format", "text",
+      "--allowedTools",
+      "Read,Bash",
+      "--setting-sources",
+      "",
+      "--output-format",
+      "text",
       "do the thing",
     ]);
   });
@@ -95,7 +100,7 @@ describe("spawnAgentSync — argument construction", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read", effort: "medium" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].args.slice(0, 5)).toEqual(["-p", "--model", "sonnet", "--effort", "medium"]);
+    expect(calls[0]!.args.slice(0, 5)).toEqual(["-p", "--model", "sonnet", "--effort", "medium"]);
   });
 
   it("defaults cwd to process.env.HOME when neither cwd nor worktree is given", () => {
@@ -104,7 +109,7 @@ describe("spawnAgentSync — argument construction", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.cwd).toBe(process.env.HOME ?? "/tmp");
+    expect(calls[0]!.opts.cwd).toBe(process.env.HOME ?? "/tmp");
   });
 
   it("uses an explicit cwd when given", () => {
@@ -113,7 +118,7 @@ describe("spawnAgentSync — argument construction", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read", cwd: "/explicit/dir" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.cwd).toBe("/explicit/dir");
+    expect(calls[0]!.opts.cwd).toBe("/explicit/dir");
   });
 
   it("passes DEFAULT_TIMEOUT_MS and DEFAULT_MAX_BUFFER when not overridden", () => {
@@ -122,8 +127,8 @@ describe("spawnAgentSync — argument construction", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.timeoutMs).toBe(DEFAULT_TIMEOUT_MS);
-    expect(calls[0].opts.maxBuffer).toBe(DEFAULT_MAX_BUFFER);
+    expect(calls[0]!.opts.timeoutMs).toBe(DEFAULT_TIMEOUT_MS);
+    expect(calls[0]!.opts.maxBuffer).toBe(DEFAULT_MAX_BUFFER);
   });
 
   it("honors caller-supplied timeoutMs and maxBuffer overrides", () => {
@@ -132,8 +137,8 @@ describe("spawnAgentSync — argument construction", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read", timeoutMs: 5000, maxBuffer: 1024 },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.timeoutMs).toBe(5000);
-    expect(calls[0].opts.maxBuffer).toBe(1024);
+    expect(calls[0]!.opts.timeoutMs).toBe(5000);
+    expect(calls[0]!.opts.maxBuffer).toBe(1024);
   });
 
   it("throws when opts.worktree is given without an already-resolved cwd", () => {
@@ -162,7 +167,7 @@ describe("spawnAgentSync — argument construction", () => {
       },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    const args = calls[0].args;
+    const args = calls[0]!.args;
     expect(args[args.length - 1]).toBe("the final prompt");
   });
 });
@@ -178,7 +183,7 @@ describe("spawnAgentSync — enforceTools (S-06 slice-3)", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read,Bash" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].args).not.toContain("--tools");
+    expect(calls[0]!.args).not.toContain("--tools");
   });
 
   it("passes --tools <allowedTools> right after --allowedTools when enforceTools: true (on-by-option)", () => {
@@ -187,14 +192,19 @@ describe("spawnAgentSync — enforceTools (S-06 slice-3)", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read,Bash", enforceTools: true },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].args).toEqual([
+    expect(calls[0]!.args).toEqual([
       "-p",
-      "--model", "sonnet",
+      "--model",
+      "sonnet",
       "--dangerously-skip-permissions",
-      "--allowedTools", "Read,Bash",
-      "--tools", "Read,Bash",
-      "--setting-sources", "",
-      "--output-format", "text",
+      "--allowedTools",
+      "Read,Bash",
+      "--tools",
+      "Read,Bash",
+      "--setting-sources",
+      "",
+      "--output-format",
+      "text",
       "p",
     ]);
   });
@@ -208,7 +218,7 @@ describe("spawnAgentSync — enforceTools (S-06 slice-3)", () => {
         { prompt: "p", model: "sonnet", allowedTools: "Read" },
         { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
       );
-      expect(calls[0].args).toContain("--tools");
+      expect(calls[0]!.args).toContain("--tools");
     } finally {
       if (origEnv === undefined) delete process.env.KAYA_HEADLESS_TOOLS_ENFORCE;
       else process.env.KAYA_HEADLESS_TOOLS_ENFORCE = origEnv;
@@ -224,7 +234,7 @@ describe("spawnAgentSync — enforceTools (S-06 slice-3)", () => {
         { prompt: "p", model: "sonnet", allowedTools: "Read", enforceTools: false },
         { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
       );
-      expect(calls[0].args).not.toContain("--tools");
+      expect(calls[0]!.args).not.toContain("--tools");
     } finally {
       if (origEnv === undefined) delete process.env.KAYA_HEADLESS_TOOLS_ENFORCE;
       else process.env.KAYA_HEADLESS_TOOLS_ENFORCE = origEnv;
@@ -240,12 +250,15 @@ describe("spawnAgentSync — leftover-process sweep", () => {
   it("gives each spawn a fresh run marker in env and sweeps that same marker after", () => {
     const { fn, calls } = makeFakeSpawn({ status: 0 });
     const swept: string[] = [];
-    const reapFn = (runId: string) => { swept.push(runId); return []; };
+    const reapFn = (runId: string) => {
+      swept.push(runId);
+      return [];
+    };
     const deps = { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED, reapFn };
     const r1 = spawnAgentSync({ prompt: "p", model: "sonnet", allowedTools: "Read" }, deps);
     spawnAgentSync({ prompt: "p", model: "sonnet", allowedTools: "Read" }, deps);
 
-    expect(calls.map(c => c.opts.env[AGENT_RUN_ENV_KEY])).toEqual(swept);
+    expect(calls.map((c) => c.opts.env[AGENT_RUN_ENV_KEY])).toEqual(swept);
     expect(swept[0]).not.toBe(swept[1]);
     expect(r1.reapedPids).toBeUndefined();
   });
@@ -256,10 +269,14 @@ describe("spawnAgentSync — leftover-process sweep", () => {
     // Fake agent: does what the 2026-10-05 executor run did — starts a bun
     // process with `&` from a shell, with the env it was given, then exits.
     const spawnFn: RawSpawnFn = (_claudePath, _args, opts) => {
-      execFileSync("sh", ["-c", `"${process.execPath}" -e 'setTimeout(() => {}, 600000) // ${tag}' > /dev/null 2>&1 &`], {
-        env: opts.env,
-        cwd: tmpdir(),
-      });
+      execFileSync(
+        "sh",
+        ["-c", `"${process.execPath}" -e 'setTimeout(() => {}, 600000) // ${tag}' > /dev/null 2>&1 &`],
+        {
+          env: opts.env,
+          cwd: tmpdir(),
+        },
+      );
       Bun.sleepSync(200);
       leftover = Number(execFileSync("pgrep", ["-f", tag], { encoding: "utf-8" }).trim());
       return { stdout: "done", stderr: "", status: 0, signal: null };
@@ -274,7 +291,13 @@ describe("spawnAgentSync — leftover-process sweep", () => {
       expect(r.success).toBe(true);
       expect(() => process.kill(leftover, 0)).toThrow();
     } finally {
-      if (leftover > 1) { try { process.kill(leftover, "SIGKILL"); } catch { /* already gone */ } }
+      if (leftover > 1) {
+        try {
+          process.kill(leftover, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
     }
   });
 });
@@ -306,7 +329,7 @@ describe("spawnAgentSync — guardHooks (S-06 slice-3)", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].args).not.toContain("--settings");
+    expect(calls[0]!.args).not.toContain("--settings");
   });
 
   it("appends --settings <json> after --output-format text and before the prompt when guardHooks: true (on-by-option)", () => {
@@ -315,7 +338,7 @@ describe("spawnAgentSync — guardHooks (S-06 slice-3)", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read", guardHooks: true },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    const args = calls[0].args;
+    const args = calls[0]!.args;
     const settingsIdx = args.indexOf("--settings");
     expect(settingsIdx).toBeGreaterThan(-1);
     expect(args[settingsIdx - 1]).toBe("text"); // right after --output-format text
@@ -332,7 +355,7 @@ describe("spawnAgentSync — guardHooks (S-06 slice-3)", () => {
         { prompt: "p", model: "sonnet", allowedTools: "Read" },
         { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
       );
-      expect(calls[0].args).toContain("--settings");
+      expect(calls[0]!.args).toContain("--settings");
     } finally {
       if (origEnv === undefined) delete process.env.KAYA_HEADLESS_GUARD_HOOKS;
       else process.env.KAYA_HEADLESS_GUARD_HOOKS = origEnv;
@@ -348,7 +371,7 @@ describe("spawnAgentSync — guardHooks (S-06 slice-3)", () => {
         { prompt: "p", model: "sonnet", allowedTools: "Read", guardHooks: false },
         { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
       );
-      expect(calls[0].args).not.toContain("--settings");
+      expect(calls[0]!.args).not.toContain("--settings");
     } finally {
       if (origEnv === undefined) delete process.env.KAYA_HEADLESS_GUARD_HOOKS;
       else process.env.KAYA_HEADLESS_GUARD_HOOKS = origEnv;
@@ -391,9 +414,9 @@ describe("buildGuardHookSettings — exact JSON shape", () => {
     expect(matchers).toEqual(["Bash", "Edit", "Write"]);
     for (const m of parsed.hooks.PreToolUse) {
       expect(m.hooks).toHaveLength(1);
-      expect(m.hooks[0].type).toBe("command");
-      expect(m.hooks[0].command).toBe(`${KAYA_DIR}/hooks/SecurityValidator.hook.ts`);
-      expect(m.hooks[0].command.startsWith("/")).toBe(true);
+      expect(m.hooks[0]!.type).toBe("command");
+      expect(m.hooks[0]!.command).toBe(`${KAYA_DIR}/hooks/SecurityValidator.hook.ts`);
+      expect(m.hooks[0]!.command.startsWith("/")).toBe(true);
     }
   });
 
@@ -403,9 +426,9 @@ describe("buildGuardHookSettings — exact JSON shape", () => {
     expect(matchers).toEqual(["Bash", "Read", "WebFetch", "WebSearch"]);
     for (const m of parsed.hooks.PostToolUse) {
       expect(m.hooks).toHaveLength(1);
-      expect(m.hooks[0].type).toBe("command");
-      expect(m.hooks[0].command).toBe(`bun run ${KAYA_DIR}/hooks/PromptInjectionDefender.hook.ts`);
-      expect(m.hooks[0].timeout).toBe(10);
+      expect(m.hooks[0]!.type).toBe("command");
+      expect(m.hooks[0]!.command).toBe(`bun run ${KAYA_DIR}/hooks/PromptInjectionDefender.hook.ts`);
+      expect(m.hooks[0]!.timeout).toBe(10);
     }
   });
 });
@@ -426,9 +449,9 @@ describe("spawnAgentSync — env hardening", () => {
         { prompt: "p", model: "sonnet", allowedTools: "Read" },
         { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
       );
-      expect(calls[0].opts.env.ANTHROPIC_API_KEY).toBeUndefined();
-      expect(calls[0].opts.env.CLAUDE_CODE_FOO).toBeUndefined();
-      expect(calls[0].opts.env.KAYA_AUTONOMOUS).toBe("1");
+      expect(calls[0]!.opts.env.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(calls[0]!.opts.env.CLAUDE_CODE_FOO).toBeUndefined();
+      expect(calls[0]!.opts.env.KAYA_AUTONOMOUS).toBe("1");
     } finally {
       if (origApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = origApiKey;
@@ -443,8 +466,8 @@ describe("spawnAgentSync — env hardening", () => {
       { prompt: "p", model: "sonnet", allowedTools: "Read", env: { KAYA_AUTONOMOUS: "0", CUSTOM_VAR: "x" } },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.env.KAYA_AUTONOMOUS).toBe("0");
-    expect(calls[0].opts.env.CUSTOM_VAR).toBe("x");
+    expect(calls[0]!.opts.env.KAYA_AUTONOMOUS).toBe("0");
+    expect(calls[0]!.opts.env.CUSTOM_VAR).toBe("x");
   });
 
   it("re-strips dangerous keys from a caller-supplied env — a caller cannot un-harden the spawn by passing env: {...process.env}", () => {
@@ -461,10 +484,10 @@ describe("spawnAgentSync — env hardening", () => {
       },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
-    expect(calls[0].opts.env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(calls[0].opts.env.CLAUDECODE).toBeUndefined();
+    expect(calls[0]!.opts.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(calls[0]!.opts.env.CLAUDECODE).toBeUndefined();
     // Legitimate extras must survive the re-strip.
-    expect(calls[0].opts.env.KAYA_AUTONOMOUS).toBe("1");
+    expect(calls[0]!.opts.env.KAYA_AUTONOMOUS).toBe("1");
   });
 });
 
@@ -586,20 +609,23 @@ describe("spawnAgentSync — post-spawn infra classification", () => {
     expect(result.errorCode).toBe("ENOTFOUND");
   });
 
-  it("flags infraUnavailable/network for \"Can't reach the API server\" on STDOUT with non-blank output " +
-    "(REGRESSION — before this slice this text matched NO infra pattern and fell through to a generic task failure)", () => {
-    const { fn } = makeFakeSpawn({
-      status: 1,
-      stdout: "Error: Can't reach the API server. Please check your network connection.",
-    });
-    const result = spawnAgentSync(
-      { prompt: "p", model: "sonnet", allowedTools: "Read" },
-      { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
-    );
-    expect(result.success).toBe(false);
-    expect(result.infraUnavailable).toBe(true);
-    expect(result.infraReason).toBe("network");
-  });
+  it(
+    'flags infraUnavailable/network for "Can\'t reach the API server" on STDOUT with non-blank output ' +
+      "(REGRESSION — before this slice this text matched NO infra pattern and fell through to a generic task failure)",
+    () => {
+      const { fn } = makeFakeSpawn({
+        status: 1,
+        stdout: "Error: Can't reach the API server. Please check your network connection.",
+      });
+      const result = spawnAgentSync(
+        { prompt: "p", model: "sonnet", allowedTools: "Read" },
+        { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
+      );
+      expect(result.success).toBe(false);
+      expect(result.infraUnavailable).toBe(true);
+      expect(result.infraReason).toBe("network");
+    },
+  );
 });
 
 // ============================================================================
@@ -719,12 +745,15 @@ describe("isInfraUnavailable (pure classification)", () => {
     expect(classifyInfraReason({ ...base, errorCode: "ENOTFOUND" })).toBe("network");
   });
 
-  it("is true (infraReason 'network') for \"Can't reach the API server\" text with non-blank output " +
-    "(REGRESSION — before this slice this text matched NO infra pattern, i.e. isInfraUnavailable returned false)", () => {
-    const stdout = "Error: Can't reach the API server. Please check your network connection.";
-    expect(isInfraUnavailable({ ...base, stdout })).toBe(true);
-    expect(classifyInfraReason({ ...base, stdout })).toBe("network");
-  });
+  it(
+    "is true (infraReason 'network') for \"Can't reach the API server\" text with non-blank output " +
+      "(REGRESSION — before this slice this text matched NO infra pattern, i.e. isInfraUnavailable returned false)",
+    () => {
+      const stdout = "Error: Can't reach the API server. Please check your network connection.";
+      expect(isInfraUnavailable({ ...base, stdout })).toBe(true);
+      expect(classifyInfraReason({ ...base, stdout })).toBe("network");
+    },
+  );
 
   it("is true (infraReason 'rate-limit') for rate/usage/session-limit wording", () => {
     const stdout = "You've hit your limit · resets 11:50pm (America/Los_Angeles)";
@@ -772,7 +801,7 @@ describe("spawnAgent (async) — worktree resolution", () => {
 
     expect(worktreeFnCalled).toBe(false);
     expect(result.success).toBe(true);
-    expect(calls[0].opts.cwd).toBe("/explicit/cwd");
+    expect(calls[0]!.opts.cwd).toBe("/explicit/cwd");
   });
 
   it("resolves cwd via an injected getOrCreateWorktreeFn when no explicit cwd is given", async () => {
@@ -787,12 +816,17 @@ describe("spawnAgent (async) — worktree resolution", () => {
     });
 
     const result = await spawnAgent(
-      { prompt: "p", model: "sonnet", allowedTools: "Read", worktree: { repoRoot: "/tmp/repo", branch: "b", createdBy: "x" } },
+      {
+        prompt: "p",
+        model: "sonnet",
+        allowedTools: "Read",
+        worktree: { repoRoot: "/tmp/repo", branch: "b", createdBy: "x" },
+      },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED, getOrCreateWorktreeFn: fakeGetOrCreateWorktree },
     );
 
     expect(result.success).toBe(true);
-    expect(calls[0].opts.cwd).toBe("/fake/worktree/path");
+    expect(calls[0]!.opts.cwd).toBe("/fake/worktree/path");
   });
 });
 
@@ -807,7 +841,13 @@ describe("spawnAgent (async) — real git worktree, fake process spawn", () => {
     execFileSync("git", ["commit", "--allow-empty", "-m", "init"], { cwd: TEST_REPO, stdio: "pipe" });
   }
 
-  afterAll(() => {
+  // WorktreeManager keeps its state.json and worktree dirs under KAYA_HOME; pin it to a temp
+  // dir so this test never writes the live ~/.claude/worktrees tree.
+  beforeAll(() => {
+    pinKayaHome("agentspawner-wt-home-");
+  });
+
+  afterAll(async () => {
     try {
       rmSync(join(worktreesDir(), repoSlug(TEST_REPO)), { recursive: true, force: true });
     } catch {
@@ -818,6 +858,7 @@ describe("spawnAgent (async) — real git worktree, fake process spawn", () => {
     } catch {
       // best effort
     }
+    await restoreKayaHome();
   });
 
   it("resolves cwd from a REAL worktree and passes it to the injected spawn fn (no real claude process spawned)", async () => {
@@ -836,10 +877,10 @@ describe("spawnAgent (async) — real git worktree, fake process spawn", () => {
 
     expect(result.success).toBe(true);
     expect(calls).toHaveLength(1);
-    expect(calls[0].opts.cwd).toContain("agentspawner-smoke");
-    expect(existsSync(calls[0].opts.cwd)).toBe(true);
+    expect(calls[0]!.opts.cwd).toContain("agentspawner-smoke");
+    expect(existsSync(calls[0]!.opts.cwd)).toBe(true);
 
-    await removeWorktree(calls[0].opts.cwd);
+    await removeWorktree(calls[0]!.opts.cwd);
   });
 });
 

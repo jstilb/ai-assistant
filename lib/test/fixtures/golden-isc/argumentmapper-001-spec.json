@@ -1,0 +1,152 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/argumentmapper-001-spec.md",
+  "layoutNote": "5-col 13 rows",
+  "rowCount": 24,
+  "rows": [
+    {
+      "number": 600,
+      "description": "map: Given person + topic, discover and structure their public arguments",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 601,
+      "description": "verify: Given extracted claims, trace to original sources and cross-reference",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 602,
+      "description": "track: Monitor how a person's arguments evolve over time, detect stance shifts, abandoned claims, and new positions",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 603,
+      "description": "Structured I/O: Every function takes typed objects in, returns typed objects out. No string parsing.",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 604,
+      "description": "JSON by default: CLI outputs JSON. `--markdown` flag for human-readable reports.",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 605,
+      "description": "Streaming progress: Long-running operations emit progress events agents can monitor.",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 606,
+      "description": "Composable: `map` and `verify` are independent. An agent can map first, review claims, then selectively verify.",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 607,
+      "description": "Deterministic: Same inputs produce structurally consistent outputs (content varies with web results).",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 608,
+      "description": "Importable: Any TypeScript agent does `import { mapArguments, verifyClaims } from './argumentmapper'`.",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 609,
+      "description": "Scaffold project: `~/Desktop/projects/argumentmapper/`, package.json, tsconfig",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 610,
+      "description": "`src/lib/types.ts`: All TypeScript interfaces",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 611,
+      "description": "`src/lib/search.ts`: Query decomposition + parallel agent search",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 612,
+      "description": "`src/cli.ts`: Basic CLI that runs search: `argumentmapper search \"Person\" \"Topic\"`",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 613,
+      "description": "`src/lib/classify.ts`: Port Sourcerer's classification to TypeScript",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 614,
+      "description": "`src/lib/extract.ts`: Three-pass LLM extraction pipeline",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 615,
+      "description": "Wire up CLI `map` command: Full pipeline: search → classify → extract",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 616,
+      "description": "`src/lib/verify.ts`: Claim decomposition + evidence search + scoring",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 617,
+      "description": "Wire up CLI `verify` command: Takes profile JSON, outputs VerificationReport",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 618,
+      "description": "`src/lib/store.ts`: Snapshot persistence (save/load/list/diff)",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 619,
+      "description": "`src/lib/track.ts`: Evolution analysis (date-filtered search + period diffing)",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 620,
+      "description": "Wire up CLI `track` command: Stores snapshots, shows evolution",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 621,
+      "description": "Markdown templates: Rich output format for `--markdown` flag",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 622,
+      "description": "PAI skill wrapper: `skills/ArgumentMapper/SKILL.md` that shells out to the CLI",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 623,
+      "description": "Register in skill-index.json",
+      "verifyMethod": "inferred",
+      "source": "EXPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.238Z"
+}

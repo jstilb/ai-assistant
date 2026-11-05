@@ -9,13 +9,13 @@
  * a real git repo in a mkdtemp scratch dir, driven with real `git`
  * operations — never the live repo's index.
  *
- * Run: bun test ~/.claude/lib/lint/no-live-write-in-test-staged.test.ts
+ * Run: bun test ./lib/lint/no-live-write-in-test-staged.test.ts
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { execSync } from "child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { execSync } from "node:child_process";
 import { checkNoLiveWriteInTestStaged } from "./no-live-write-in-test-staged.ts";
 
 function git(cwd: string, cmd: string): string {
@@ -38,11 +38,7 @@ describe("checkNoLiveWriteInTestStaged", () => {
 
   test("staged test file importing a live writer with NO pin marker — exactly 1 warning", async () => {
     const file = join(repo, "AlertManager.testwriter.test.ts");
-    writeFileSync(
-      file,
-      "import { AlertManager } from './AlertManager';\n" +
-        "test('x', () => {});\n",
-    );
+    writeFileSync(file, "import { AlertManager } from './AlertManager';\n" + "test('x', () => {});\n");
     git(repo, "add AlertManager.testwriter.test.ts");
 
     const result = await checkNoLiveWriteInTestStaged(repo);
@@ -70,8 +66,7 @@ describe("checkNoLiveWriteInTestStaged", () => {
     const file = join(repo, "HealthManager.test.ts");
     writeFileSync(
       file,
-      "process.env.KAYA_HOME = '/tmp/scratch';\n" +
-        "import { loadHealthState } from './HealthManager';\n",
+      "process.env.KAYA_HOME = '/tmp/scratch';\n" + "import { loadHealthState } from './HealthManager';\n",
     );
     git(repo, "add HealthManager.test.ts");
 

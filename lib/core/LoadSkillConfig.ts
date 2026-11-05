@@ -14,10 +14,10 @@
  *   bun ~/.claude/lib/core/LoadSkillConfig.ts <skill-dir> <filename>
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import { createStateManager } from './StateManager';
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { createStateManager } from "./StateManager.ts";
 
 /** Generic JSON schema for loading arbitrary config files via StateManager */
 const GenericJsonSchema = z.record(z.string(), z.unknown());
@@ -33,7 +33,7 @@ async function loadJsonViaStateManager<T>(filePath: string, defaults: T): Promis
     schema: GenericJsonSchema,
     defaults: defaults as Record<string, unknown>,
   });
-  return await manager.load() as T;
+  return (await manager.load()) as T;
 }
 
 /**
@@ -64,7 +64,7 @@ export async function loadSkillConfig<T>(skillDir: string, filename: string): Pr
 if (import.meta.main) {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === '--help') {
+  if (args.length === 0 || args[0] === "--help") {
     console.log(`
 LoadSkillConfig - Load skill configuration files
 
@@ -80,7 +80,7 @@ Examples:
   const [skillDir, filename] = args;
 
   if (!skillDir || !filename) {
-    console.error('Error: Both skill-dir and filename required');
+    console.error("Error: Both skill-dir and filename required");
     process.exit(1);
   }
 
@@ -88,7 +88,7 @@ Examples:
     const config = await loadSkillConfig(skillDir, filename);
     console.log(JSON.stringify(config, null, 2));
   } catch (error) {
-    console.error('Error loading config:', error);
+    console.error("Error loading config:", error);
     process.exit(1);
   }
 }

@@ -1,0 +1,74 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlzhq70o-vyvhxa-spec.md",
+  "layoutNote": "5-col with Priority",
+  "rowCount": 10,
+  "rows": [
+    {
+      "number": 1,
+      "description": "`.github/workflows/ci.yml` exists and defines jobs running `bun typecheck`, `bun lint`, and `bun test` triggered on both `push` and `pull_request` events",
+      "verifyMethod": "`cat .github/workflows/ci.yml` and confirm all three commands and both triggers are present",
+      "embeddedCommand": "cat .github/workflows/ci.yml",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "README.md contains a GitHub Actions badge linking to the CI workflow for `[user]/ai-assistant` that renders as passing",
+      "verifyMethod": "`grep -i \"github.com/[user]/ai-assistant/actions\" README.md` and visit the badge URL to confirm green status",
+      "embeddedCommand": "grep -i \"github.com/[user]/ai-assistant/actions\" README.md",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "`docs/adr/` contains exactly 5 ADR files covering: JSONL-vs-database, hooks-vs-middleware, SKILL.md discovery, Bun-vs-Node, and prompt injection defense; each file is 300–500 words",
+      "verifyMethod": "`ls docs/adr/ | wc -l` equals 5; `wc -w docs/adr/*.md` shows each file between ~250–550 words (accounting for markdown overhead)",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "Each ADR follows a consistent structure including a Context, Decision, and Consequences section (or equivalent named headers)",
+      "verifyMethod": "`grep -l \"Context|Decision|Consequences\" docs/adr/*.md` returns all 5 files",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Architecture diagram file exists as PNG or SVG in the repo (e.g., `docs/architecture.png` or `docs/architecture.svg`) and depicts all 8 lifecycle stages: user input → hooks → context router → skill dispatch → tool execution → post-tool hooks → output validator → memory capture",
+      "verifyMethod": "`ls docs/architecture.*` returns a `.png` or `.svg`; open file and manually confirm all 8 labeled nodes are present and connected in sequence",
+      "embeddedCommand": "ls docs/architecture.*",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "README.md references or embeds the architecture diagram PNG/SVG, either replacing or supplementing the existing Mermaid diagram",
+      "verifyMethod": "`grep -E \"architecture\\.(png|svg)\" README.md` returns a match",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "`CONTRIBUTING.md` exists at repo root and contains distinct sections for: adding a skill, writing a hook, running tests, code style, and PR process",
+      "verifyMethod": "`cat CONTRIBUTING.md` and confirm five headings covering each topic are present",
+      "embeddedCommand": "cat CONTRIBUTING.md",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "`CONTRIBUTING.md` includes the exact `bun test` command (or equivalent) so contributors can run the test suite locally without additional research",
+      "verifyMethod": "`grep \"bun test\" CONTRIBUTING.md` returns a match",
+      "embeddedCommand": "grep \"bun test\" CONTRIBUTING.md",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "At least 3 and no more than 5 open GitHub Issues on `[user]/ai-assistant` are labeled `good-first-issue`",
+      "verifyMethod": "`gh issue list --label good-first-issue --repo [user]/ai-assistant` returns 3–5 open issues",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "Git log shows individual commits per logical unit of work (CI setup, each ADR, diagram, CONTRIBUTING.md) rather than a single bulk commit",
+      "verifyMethod": "`git log --oneline` shows ≥7 distinct commits with messages corresponding to each deliverable component",
+      "embeddedCommand": "git log --oneline",
+      "source": "EXPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.237Z"
+}

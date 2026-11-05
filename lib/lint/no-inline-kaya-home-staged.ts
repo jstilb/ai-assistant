@@ -18,27 +18,27 @@
  * Used by pre-commit (bin/lint-kaya-home-staged.sh).
  */
 
-import { execSync } from 'child_process';
-import { BANNED_PATTERNS } from './no-inline-kaya-home.ts';
+import { execSync } from "node:child_process";
+import { BANNED_PATTERNS } from "./no-inline-kaya-home.ts";
 
 export interface LintResult {
   errors: string[];
   warnings: string[];
 }
 
-const EXEMPT_FILE = 'lib/core/KayaHome.ts';
-const TEST_PATTERN = /\.(test|spec)\.(ts|tsx)$|__tests__\//;
+const EXEMPT_FILE = "lib/core/KayaHome.ts";
+const TEST_PATTERN = /\.(test|spec|e2e)\.(ts|tsx)$|__tests__\//;
 
 const COMPILED_PATTERNS = BANNED_PATTERNS.map((p) => new RegExp(p));
 
 function isExempt(relativePath: string): boolean {
   if (relativePath === EXEMPT_FILE || relativePath.endsWith(EXEMPT_FILE)) return true;
   if (TEST_PATTERN.test(relativePath)) return true;
-  if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) return true;
-  if (relativePath.includes('lib/lint/')) return true;
+  if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) return true;
+  if (relativePath.includes("lib/lint/")) return true;
   // Vendored third-party plugin caches (gitignored — never actually appear in a
   // staged diff, but kept in sync with the full-tree rule's exemptions).
-  if (relativePath.includes('plugins/cache/') || relativePath.includes('plugins/marketplaces/')) return true;
+  if (relativePath.includes("plugins/cache/") || relativePath.includes("plugins/marketplaces/")) return true;
   return false;
 }
 
@@ -51,54 +51,57 @@ function isExempt(relativePath: string): boolean {
  * Returned violations land in `errors` (not warnings) so pre-commit can fail
  * the commit on any hit.
  */
-export async function checkNoInlineKayaHomeStaged(
-  rootDir: string = process.cwd(),
-): Promise<LintResult> {
+export async function checkNoInlineKayaHomeStaged(rootDir: string = process.cwd()): Promise<LintResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   let diffOutput: string;
   try {
-    diffOutput = execSync(
-      'git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"',
-      { encoding: 'utf-8', cwd: rootDir, maxBuffer: 32 * 1024 * 1024 },
+    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"', {
+      encoding: "utf-8",
+      cwd: rootDir,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (err) {
+    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
+    warnings.push(
+      `no-inline-kaya-home-staged: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`,
     );
-  } catch {
     return { errors, warnings };
   }
 
   let currentFile: string | null = null;
   let currentLineNum = 0;
 
-  for (const rawLine of diffOutput.split('\n')) {
-    if (rawLine.startsWith('+++ b/')) {
+  for (const rawLine of diffOutput.split("\n")) {
+    if (rawLine.startsWith("+++ b/")) {
       currentFile = rawLine.slice(6);
       continue;
     }
-    if (rawLine.startsWith('--- ')) continue;
-    if (rawLine.startsWith('diff ') || rawLine.startsWith('index ')) {
+    if (rawLine.startsWith("--- ")) continue;
+    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
       currentFile = null;
       continue;
     }
-    if (rawLine.startsWith('@@')) {
+    if (rawLine.startsWith("@@")) {
       const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      currentLineNum = match ? parseInt(match[1], 10) : 0;
+      currentLineNum = parseInt(match?.[1] ?? "0", 10);
       continue;
     }
     if (!currentFile || isExempt(currentFile)) continue;
 
-    if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
       const added = rawLine.slice(1);
       // Exempt: ScaffoldCLI's generated-CLI template strings — self-contained
       // generated code that cannot import lib/core (see no-inline-kaya-home.ts).
       // Anchored on the generated-audit signature so real generator code is
       // still linted.
-      if (currentFile.endsWith('CreateCLI/Tools/ScaffoldCLI.ts') && added.includes('cli-audit.jsonl')) {
+      if (currentFile.endsWith("CreateCLI/Tools/ScaffoldCLI.ts") && added.includes("cli-audit.jsonl")) {
         currentLineNum++;
         continue;
       }
-      for (let i = 0; i < COMPILED_PATTERNS.length; i++) {
-        if (COMPILED_PATTERNS[i].test(added)) {
+      for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
+        if (pattern.test(added)) {
           errors.push(
             `${currentFile}:${currentLineNum}: Inline Kaya home path pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
               `Use getKayaHome() from lib/core/KayaHome.ts.`,
@@ -106,7 +109,7 @@ export async function checkNoInlineKayaHomeStaged(
         }
       }
       currentLineNum++;
-    } else if (!rawLine.startsWith('-')) {
+    } else if (!rawLine.startsWith("-")) {
       currentLineNum++;
     }
   }

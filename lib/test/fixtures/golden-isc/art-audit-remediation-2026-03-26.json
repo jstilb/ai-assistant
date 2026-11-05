@@ -1,0 +1,70 @@
+{
+  "specPath": "~/.claude/plans/Specs/art-audit-remediation-2026-03-26.md",
+  "layoutNote": "heading-style #### ISC-N",
+  "rowCount": 13,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Delete 35 orphaned image assets",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "Fix 6 stale cross-skill references",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "Replace raw fetch() in Generate.ts:430 with CachedHTTPClient",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "Evaluate and deprecate Midjourney subsystem (~986 LOC)",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "Extract loadEnv() and CLIError to Lib/cli-utils.ts",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "Add Uses / Feeds Into to SKILL.md + Customization section",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "(DEFERRED): Add README.md or remove the reference in Generate.ts:218",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "(DEFERRED): Remove unreachable break in GenerateMidjourneyImage.ts:206",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "(DEFERRED): Add `## Trigger` sections to 17 workflow files",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "(DEFERRED): Add resilience simulation scenario for API failure",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 100,
+      "description": "All 35 image files confirmed deleted"
+    },
+    {
+      "number": 101,
+      "description": "No `.ts` or `.md` file references break (grep confirms zero references to these file paths)"
+    },
+    {
+      "number": 102,
+      "description": "Directories themselves removed if empty"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.241Z"
+}

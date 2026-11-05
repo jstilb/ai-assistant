@@ -12,12 +12,13 @@
  */
 
 import { describe, it, expect, afterAll } from "bun:test";
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   isCategoryDir,
+  isSkillOff,
   scanCategorySubSkills,
   buildSubSkillsTable,
   regenerateCategorySkillMd,
@@ -25,7 +26,7 @@ import {
   generateCommandFiles,
   type SubSkillEntry,
   type CategoryResult,
-} from "./GenerateRoutingTables";
+} from "./GenerateRoutingTables.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,15 +40,7 @@ function makeTmpDir(suffix: string): string {
 
 /** Write a minimal SKILL.md with a description containing USE WHEN triggers. */
 function writeSkillMd(dir: string, description: string): void {
-  const content = [
-    "---",
-    `description: ${description}`,
-    "---",
-    "",
-    "# Skill",
-    "",
-    "Some prose.",
-  ].join("\n");
+  const content = ["---", `description: ${description}`, "---", "", "# Skill", "", "Some prose."].join("\n");
   writeFileSync(join(dir, "SKILL.md"), content, "utf-8");
 }
 
@@ -153,13 +146,13 @@ describe("scanCategorySubSkills", () => {
     expect(entries).toHaveLength(2);
 
     // Results are sorted alphabetically — Analysis before Research
-    expect(entries[0].name).toBe("Analysis");
-    expect(entries[0].triggers).toEqual(["analyze", "breakdown"]);
-    expect(entries[0].path).toBe("Intelligence/Analysis/SKILL.md");
+    expect(entries[0]!.name).toBe("Analysis");
+    expect(entries[0]!.triggers).toEqual(["analyze", "breakdown"]);
+    expect(entries[0]!.path).toBe("Intelligence/Analysis/SKILL.md");
 
-    expect(entries[1].name).toBe("Research");
-    expect(entries[1].triggers).toEqual(["research", "investigate", "deep dive"]);
-    expect(entries[1].path).toBe("Intelligence/Research/SKILL.md");
+    expect(entries[1]!.name).toBe("Research");
+    expect(entries[1]!.triggers).toEqual(["research", "investigate", "deep dive"]);
+    expect(entries[1]!.path).toBe("Intelligence/Research/SKILL.md");
   });
 
   it("falls back to lowercased name when sub-skill has no USE WHEN clause", () => {
@@ -170,18 +163,14 @@ describe("scanCategorySubSkills", () => {
     mkdirSync(toolDir, { recursive: true });
     writeSkillMd(catDir, "Tools category. USE WHEN tools.");
     // Description without USE WHEN
-    writeFileSync(
-      join(toolDir, "SKILL.md"),
-      "---\ndescription: Just a hammer tool.\n---\n# HammerTool\n",
-      "utf-8"
-    );
+    writeFileSync(join(toolDir, "SKILL.md"), "---\ndescription: Just a hammer tool.\n---\n# HammerTool\n", "utf-8");
 
     const entries = scanCategorySubSkills("Tools", skillsDir);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].name).toBe("HammerTool");
-    expect(entries[0].triggers).toEqual(["hammertool"]);
-    expect(entries[0].path).toBe("Tools/HammerTool/SKILL.md");
+    expect(entries[0]!.name).toBe("HammerTool");
+    expect(entries[0]!.triggers).toEqual(["hammertool"]);
+    expect(entries[0]!.path).toBe("Tools/HammerTool/SKILL.md");
   });
 
   it("returns empty array for nonexistent category", () => {
@@ -203,7 +192,7 @@ describe("scanCategorySubSkills", () => {
 
     const entries = scanCategorySubSkills("Mixed", skillsDir);
     expect(entries).toHaveLength(1);
-    expect(entries[0].name).toBe("HasSkill");
+    expect(entries[0]!.name).toBe("HasSkill");
   });
 });
 
@@ -241,7 +230,12 @@ describe("buildSubSkillsTable", () => {
 
   it("handles a single sub-skill with multiple triggers", () => {
     const subSkills: SubSkillEntry[] = [
-      { name: "Research", triggers: ["research", "investigate", "deep dive"], path: "Int/Research/SKILL.md", description: "" },
+      {
+        name: "Research",
+        triggers: ["research", "investigate", "deep dive"],
+        path: "Int/Research/SKILL.md",
+        description: "",
+      },
     ];
 
     const table = buildSubSkillsTable("Int", subSkills);
@@ -411,8 +405,18 @@ describe("generateCommandFiles", () => {
       {
         category: "Intelligence",
         subSkills: [
-          { name: "Research", triggers: ["research"], path: "Intelligence/Research/SKILL.md", description: "Research skill. USE WHEN research." },
-          { name: "Analysis", triggers: ["analyze"], path: "Intelligence/Analysis/SKILL.md", description: "Analysis skill. USE WHEN analyze." },
+          {
+            name: "Research",
+            triggers: ["research"],
+            path: "Intelligence/Research/SKILL.md",
+            description: "Research skill. USE WHEN research.",
+          },
+          {
+            name: "Analysis",
+            triggers: ["analyze"],
+            path: "Intelligence/Analysis/SKILL.md",
+            description: "Analysis skill. USE WHEN analyze.",
+          },
         ],
         written: true,
         skipped: false,
@@ -422,11 +426,11 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, commandsDir, false);
 
     expect(results).toHaveLength(2);
-    expect(results[0].name).toBe("research");
-    expect(results[0].written).toBe(true);
-    expect(results[0].skipped).toBe(false);
-    expect(results[1].name).toBe("analysis");
-    expect(results[1].written).toBe(true);
+    expect(results[0]!.name).toBe("research");
+    expect(results[0]!.written).toBe(true);
+    expect(results[0]!.skipped).toBe(false);
+    expect(results[1]!.name).toBe("analysis");
+    expect(results[1]!.written).toBe(true);
 
     // Verify file content
     const content = readFileSync(join(commandsDir, "research.md"), "utf-8");
@@ -440,17 +444,18 @@ describe("generateCommandFiles", () => {
     mkdirSync(handWrittenDir, { recursive: true });
 
     // Write a hand-written command (no marker)
-    writeFileSync(
-      join(handWrittenDir, "research.md"),
-      "# /research\nHand-written command.\n",
-      "utf-8"
-    );
+    writeFileSync(join(handWrittenDir, "research.md"), "# /research\nHand-written command.\n", "utf-8");
 
     const categories: CategoryResult[] = [
       {
         category: "Intelligence",
         subSkills: [
-          { name: "Research", triggers: ["research"], path: "Intelligence/Research/SKILL.md", description: "Research skill." },
+          {
+            name: "Research",
+            triggers: ["research"],
+            path: "Intelligence/Research/SKILL.md",
+            description: "Research skill.",
+          },
         ],
         written: true,
         skipped: false,
@@ -460,8 +465,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, handWrittenDir, false);
 
     expect(results).toHaveLength(1);
-    expect(results[0].skipped).toBe(true);
-    expect(results[0].reason).toBe("Hand-written command exists");
+    expect(results[0]!.skipped).toBe(true);
+    expect(results[0]!.reason).toBe("Hand-written command exists");
 
     // Verify original content preserved
     const content = readFileSync(join(handWrittenDir, "research.md"), "utf-8");
@@ -476,14 +481,19 @@ describe("generateCommandFiles", () => {
     writeFileSync(
       join(overwriteDir, "research.md"),
       "<!-- auto-generated by GenerateRoutingTables -->\n# Old content\n",
-      "utf-8"
+      "utf-8",
     );
 
     const categories: CategoryResult[] = [
       {
         category: "Intelligence",
         subSkills: [
-          { name: "Research", triggers: ["research"], path: "Intelligence/Research/SKILL.md", description: "Research skill." },
+          {
+            name: "Research",
+            triggers: ["research"],
+            path: "Intelligence/Research/SKILL.md",
+            description: "Research skill.",
+          },
         ],
         written: true,
         skipped: false,
@@ -493,8 +503,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, overwriteDir, false);
 
     expect(results).toHaveLength(1);
-    expect(results[0].written).toBe(true);
-    expect(results[0].skipped).toBe(false);
+    expect(results[0]!.written).toBe(true);
+    expect(results[0]!.skipped).toBe(false);
 
     const content = readFileSync(join(overwriteDir, "research.md"), "utf-8");
     expect(content).not.toContain("Old content");
@@ -534,8 +544,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, dryDir, true);
 
     expect(results).toHaveLength(1);
-    expect(results[0].written).toBe(false);
-    expect(results[0].skipped).toBe(false);
+    expect(results[0]!.written).toBe(false);
+    expect(results[0]!.skipped).toBe(false);
     expect(existsSync(join(dryDir, "cooking.md"))).toBe(false);
   });
 });
@@ -545,19 +555,94 @@ describe("generateCommandFiles", () => {
 // ---------------------------------------------------------------------------
 
 describe("Smoke: real filesystem", () => {
+  // The repo's own skills/ — not ~/.claude, which only exists on the Mac.
+  const REPO_SKILLS = join(import.meta.dir, "..", "..", "skills");
   it("dry-run on real skills dir produces no errors", () => {
-    const result = generateAllRoutingTables({ dryRun: true });
+    const result = generateAllRoutingTables({ skillsDir: REPO_SKILLS, dryRun: true });
     expect(result.errors).toHaveLength(0);
     expect(result.totalSubSkills).toBeGreaterThan(40);
     expect(result.categories.length).toBeGreaterThanOrEqual(10);
   });
 
   it("dry-run generates command entries for sub-skills", () => {
-    const result = generateAllRoutingTables({ dryRun: true });
+    const result = generateAllRoutingTables({ skillsDir: REPO_SKILLS, dryRun: true });
     expect(result.commands.length).toBeGreaterThan(40);
     // All should be not-written (dry run)
     for (const cmd of result.commands) {
       expect(cmd.written).toBe(false);
     }
+  });
+});
+
+describe("CLI --commands-dir", () => {
+  it("writes Commands/*.md only under the given directory (all categories and --category)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "grt-cli-"));
+    const skills = join(root, "skills");
+    const cmds = join(root, "cmds");
+    try {
+      mkdirSync(join(skills, "Research", "Deep"), { recursive: true });
+      writeCategorySkillMd(join(skills, "Research"), "Research");
+      writeSkillMd(join(skills, "Research", "Deep"), "Deep dive. USE WHEN deep research.");
+      const script = join(import.meta.dir, "GenerateRoutingTables.ts");
+      for (const extra of [[], ["--category", "Research"]]) {
+        rmSync(cmds, { recursive: true, force: true });
+        const proc = Bun.spawn([process.execPath, script, "--skills-dir", skills, "--commands-dir", cmds, ...extra], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+        const code = await proc.exited;
+        expect({ code, err, out: code === 0 ? "" : out }).toEqual({ code: 0, err: "", out: "" });
+        expect(existsSync(join(cmds, "deep.md"))).toBe(true);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("skillOverrides (T1-01): hide skills that settings.json marks off", () => {
+  const tmpDir = makeTmpDir("skill-overrides");
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function buildCategory(): string {
+    const skillsDir = join(tmpDir, "skills");
+    const catDir = join(skillsDir, "System");
+    for (const name of ["Live", "Retired"]) {
+      mkdirSync(join(catDir, name), { recursive: true });
+      writeSkillMd(join(catDir, name), `${name} skill. USE WHEN ${name.toLowerCase()}.`);
+    }
+    writeCategorySkillMd(catDir, "System");
+    return skillsDir;
+  }
+
+  it("isSkillOff matches case-insensitively and only for the value off", () => {
+    expect(isSkillOff("Retired", { retired: "off" })).toBe(true);
+    expect(isSkillOff("Retired", { retired: "on" })).toBe(false);
+    expect(isSkillOff("Retired", {})).toBe(false);
+    expect(isSkillOff("Retired", undefined)).toBe(false);
+  });
+
+  it("lists every sub-skill when no overrides are given (default behavior)", () => {
+    const names = scanCategorySubSkills("System", buildCategory()).map((e) => e.name);
+    expect(names).toEqual(["Live", "Retired"]);
+  });
+
+  it("leaves out an off sub-skill from the scan and from the written table", () => {
+    const skillsDir = buildCategory();
+    expect(scanCategorySubSkills("System", skillsDir, { retired: "off" }).map((e) => e.name)).toEqual(["Live"]);
+
+    const res = generateAllRoutingTables({
+      skillsDir,
+      commands: false,
+      skillOverrides: { Retired: "off" },
+    });
+    expect(res.errors).toEqual([]);
+    const table = readFileSync(join(skillsDir, "System", "SKILL.md"), "utf-8");
+    expect(table).toContain("**Live**");
+    expect(table).not.toContain("**Retired**");
   });
 });

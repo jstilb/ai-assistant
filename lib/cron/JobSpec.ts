@@ -38,7 +38,7 @@
  * S2 also adds `intervalSeconds`, for jobs whose live plist uses launchd's
  * StartInterval trigger (fire every N seconds since load) instead of
  * StartCalendarInterval (fire at specific wall-clock slots) — e.g.
- * com.pai.voicenotes (every 1800s). `schedule` is still REQUIRED and must
+ * com.kaya.voicenotes (every 1800s). `schedule` is still REQUIRED and must
  * hold a best-effort cron-equivalent expression (e.g. "*\/30 * * * *" for a
  * 1800s interval), because run-cron-job.ts's defensive matchesCron()
  * re-check reads job.schedule unconditionally regardless of trigger type.
@@ -54,7 +54,89 @@
  * (validate-jobs.ts coverage) and must NOT be fed through --apply/--regen.
  */
 
+import { accessSync, constants } from "node:fs";
 import { z } from "zod";
+import { getKayaHome } from "../core/KayaHome.ts";
+
+// ----------------------------------------------------------------------------
+// Placeholder expansion. Manifests are checked in and must not hardcode one
+// machine's paths, so they use:
+//   {{KAYA_HOME}} -> getKayaHome()
+//   {{BUN}}       -> /opt/homebrew/bin/bun if it is executable, else
+//                    Bun.which("bun"), else process.execPath
+// The runner spawns execute.command with no shell, so expansion must happen
+// before the spec is used. JobSpecSchema does it automatically (see the
+// preprocess step at the bottom of this file); expandPlaceholdersInString is
+// for tools that read raw manifest text (bin/lint-jobs-manifest.ts).
+// ----------------------------------------------------------------------------
+
+const HOMEBREW_BUN = "/opt/homebrew/bin/bun";
+
+export interface PlaceholderValues {
+  kayaHome: string;
+  bun: string;
+}
+
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve the bun binary for `{{BUN}}`. Dependencies are injectable for tests. */
+export function resolveBunPath(
+  deps: { isExecutable?: (p: string) => boolean; which?: (n: string) => string | null; execPath?: string } = {},
+): string {
+  const exec = deps.isExecutable ?? isExecutable;
+  if (exec(HOMEBREW_BUN)) return HOMEBREW_BUN;
+  const found = (deps.which ?? ((n: string) => Bun.which(n)))("bun");
+  return found ?? deps.execPath ?? process.execPath;
+}
+
+export function defaultPlaceholderValues(): PlaceholderValues {
+  return { kayaHome: getKayaHome(), bun: resolveBunPath() };
+}
+
+/** Replace `{{KAYA_HOME}}` and `{{BUN}}` in one string. */
+export function expandPlaceholdersInString(
+  text: string,
+  values: PlaceholderValues = defaultPlaceholderValues(),
+): string {
+  if (!text.includes("{{")) return text;
+  // Function replacers: a "$" in a path must not act as a replacement pattern.
+  return text.replaceAll("{{KAYA_HOME}}", () => values.kayaHome).replaceAll("{{BUN}}", () => values.bun);
+}
+
+/**
+ * Expand placeholders in the string fields that hold paths or commands:
+ * `task`, `execute.command`, `execute.args[]`, `desiredArtifact.path`.
+ * Takes the raw parsed YAML (unknown shape) and returns a shallow copy.
+ * Anything that is not a plain object is returned unchanged, so the schema
+ * reports the real error.
+ */
+export function expandJobPlaceholders(raw: unknown, values?: PlaceholderValues): unknown {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+  const v = values ?? defaultPlaceholderValues();
+  const expand = (x: unknown): unknown => (typeof x === "string" ? expandPlaceholdersInString(x, v) : x);
+  const job: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  if ("task" in job) job.task = expand(job.task);
+  const exec = job.execute;
+  if (typeof exec === "object" && exec !== null && !Array.isArray(exec)) {
+    const e: Record<string, unknown> = { ...(exec as Record<string, unknown>) };
+    e.command = expand(e.command);
+    if (Array.isArray(e.args)) e.args = e.args.map(expand);
+    job.execute = e;
+  }
+  const art = job.desiredArtifact;
+  if (typeof art === "object" && art !== null && !Array.isArray(art)) {
+    const a = art as Record<string, unknown>;
+    job.desiredArtifact = { ...a, path: expand(a.path) };
+  }
+  return job;
+}
 
 /**
  * Job execution type.
@@ -69,15 +151,7 @@ export type JobType = z.infer<typeof JobTypeSchema>;
  * Job output mode. Union of run-cron-job.ts's narrower 5-way enum and the
  * deleted daemon's 6-way enum (adds discord, telegram) — this is the superset.
  */
-export const OutputModeSchema = z.enum([
-  "silent",
-  "voice",
-  "text",
-  "push",
-  "both",
-  "discord",
-  "telegram",
-]);
+export const OutputModeSchema = z.enum(["silent", "voice", "text", "push", "both", "discord", "telegram"]);
 export type OutputMode = z.infer<typeof OutputModeSchema>;
 
 /**
@@ -118,7 +192,10 @@ export const DesiredArtifactSchema = z.object({
   // set here is duplicated by hand (see daily-briefing.yaml) — keep both
   // sides in sync if the marker text ever changes.
   staleIfFirstLineContains: z.string().optional(),
-  pendingSuffix: z.string().regex(/^\.[a-zA-Z0-9._-]+$/).optional(),
+  pendingSuffix: z
+    .string()
+    .regex(/^\.[a-zA-Z0-9._-]+$/)
+    .optional(),
 });
 export type DesiredArtifact = z.infer<typeof DesiredArtifactSchema>;
 
@@ -149,71 +226,81 @@ export type Precondition = z.infer<typeof PreconditionSchema>;
  *   expectedExitCodes                             — NEW in remediation-s1s5
  *                                                    A2 ([S2] expectedExitCodes)
  */
-export const JobSpecSchema = z.object({
-  id: z.string(),
-  // Optional: absent on `execute`-only jobs (e.g. evals-nightly.yaml) — task
-  // is only read when building the `claude -p` prompt in the non-execute
-  // path (see run-cron-job.ts's directMode branch).
-  task: z.string().optional(),
-  schedule: z.string(),
-  output: OutputModeSchema.default("voice"),
-  enabled: z.boolean().default(true),
-  type: JobTypeSchema,
-  timeout: z.number().default(300000), // 5 min default, matched the deleted daemon
-  execute: ExecuteSchema.optional(),
+const JobSpecObjectSchema = z
+  .object({
+    id: z.string(),
+    // Optional: absent on `execute`-only jobs (e.g. evals-nightly.yaml) — task
+    // is only read when building the `claude -p` prompt in the non-execute
+    // path (see run-cron-job.ts's directMode branch).
+    task: z.string().optional(),
+    schedule: z.string(),
+    output: OutputModeSchema.default("voice"),
+    enabled: z.boolean().default(true),
+    type: JobTypeSchema,
+    timeout: z.number().default(300000), // 5 min default, matched the deleted daemon
+    execute: ExecuteSchema.optional(),
 
-  // Fields specific to the deleted in-process daemon
-  lastRun: z.string().optional(),
-  nextRun: z.string().optional(),
-  runCount: z.number().default(0),
-  failCount: z.number().default(0),
+    // Fields specific to the deleted in-process daemon
+    lastRun: z.string().optional(),
+    nextRun: z.string().optional(),
+    runCount: z.number().default(0),
+    failCount: z.number().default(0),
 
-  // Informal fields already present in some manifest YAMLs
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+    // Informal fields already present in some manifest YAMLs
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
 
-  // NEW in S2 — schema + defaults only, no behavior wiring until S3/S5
-  wakeLock: z.boolean().default(true),
-  retry: RetrySchema.default({ max: 2, backoffMs: 4000 }),
-  catchUp: z.boolean().default(false),
-  desiredArtifact: DesiredArtifactSchema.optional(),
-  precondition: PreconditionSchema.default({ network: false }),
+    // NEW in S2 — schema + defaults only, no behavior wiring until S3/S5
+    wakeLock: z.boolean().default(true),
+    retry: RetrySchema.default({ max: 2, backoffMs: 4000 }),
+    catchUp: z.boolean().default(false),
+    desiredArtifact: DesiredArtifactSchema.optional(),
+    precondition: PreconditionSchema.default({ network: false }),
 
-  // NEW in S2 — documents a live StartInterval plist's original interval
-  // (seconds). See module doc: generator does not yet emit StartInterval.
-  intervalSeconds: z.number().optional(),
+    // NEW in S2 — documents a live StartInterval plist's original interval
+    // (seconds). See module doc: generator does not yet emit StartInterval.
+    intervalSeconds: z.number().optional(),
 
-  // NEW (dailybriefing markdown-first, ADR-022) — agent-mode spawn overrides.
-  // agentTools replaces the default --allowedTools list (comma-separated,
-  // passed through verbatim); agentModel adds --model to the claude -p spawn.
-  // Both ignored in execute (direct) mode. See lib/cron/AgentSpawnArgs.ts.
-  agentTools: z.string().optional(),
-  agentModel: z.string().optional(),
-  // agentEffort sets --effort on the claude -p spawn (Fable 5.1 tuning,
-  // 2026-09-05). Omitted = DEFAULT_AGENT_EFFORT (medium) in AgentSpawnArgs.ts —
-  // scheduled upkeep/ingest work does not need the CLI default (high).
-  agentEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+    // NEW (dailybriefing markdown-first, ADR-022) — agent-mode spawn overrides.
+    // agentTools replaces the default --allowedTools list (comma-separated,
+    // passed through verbatim); agentModel adds --model to the claude -p spawn.
+    // Both ignored in execute (direct) mode. See lib/cron/AgentSpawnArgs.ts.
+    agentTools: z.string().optional(),
+    agentModel: z.string().optional(),
+    // agentEffort sets --effort on the claude -p spawn (Fable 5.1 tuning,
+    // 2026-09-05). Omitted = DEFAULT_AGENT_EFFORT (medium) in AgentSpawnArgs.ts —
+    // scheduled upkeep/ingest work does not need the CLI default (high).
+    agentEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
 
-  // NEW (remediation-s1s5 A2, [S2] expectedExitCodes) — the set of exit
-  // codes JobSpawner.ts treats as success for THIS job. Defaults to [0] so
-  // every job's behavior is unchanged unless it opts in. Detector-style jobs
-  // that self-page via AlertGate on exit 1 (scheduler-watchdog,
-  // token-health-sentinel) set [0, 1] here. See lib/cron/JobSpawner.ts's
-  // success computation.
-  expectedExitCodes: z.array(z.number()).default([0]),
-}).superRefine((job, ctx) => {
-  // B2 (lib/cron/JobReconciler.ts remediation): the catch-up reconciler
-  // deleted its run-ledger fallback signal and now reconciles desired
-  // artifacts ONLY — a catchUp:true job with no desiredArtifact would have
-  // no signal at all to decide "did this job reach its desired state?", so
-  // that combination is now a schema error rather than a silent no-op.
-  if (job.catchUp && !job.desiredArtifact) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "catchUp:true requires desiredArtifact to be set (the reconciler has no ledger fallback — see lib/cron/JobReconciler.ts)",
-      path: ["desiredArtifact"],
-    });
-  }
-});
+    // NEW (remediation-s1s5 A2, [S2] expectedExitCodes) — the set of exit
+    // codes JobSpawner.ts treats as success for THIS job. Defaults to [0] so
+    // every job's behavior is unchanged unless it opts in. Detector-style jobs
+    // that self-page via AlertGate on exit 1 (scheduler-watchdog,
+    // token-health-sentinel) set [0, 1] here. See lib/cron/JobSpawner.ts's
+    // success computation.
+    expectedExitCodes: z.array(z.number()).default([0]),
+  })
+  .superRefine((job, ctx) => {
+    // B2 (lib/cron/JobReconciler.ts remediation): the catch-up reconciler
+    // deleted its run-ledger fallback signal and now reconciles desired
+    // artifacts ONLY — a catchUp:true job with no desiredArtifact would have
+    // no signal at all to decide "did this job reach its desired state?", so
+    // that combination is now a schema error rather than a silent no-op.
+    if (job.catchUp && !job.desiredArtifact) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "catchUp:true requires desiredArtifact to be set (the reconciler has no ledger fallback — see lib/cron/JobReconciler.ts)",
+        path: ["desiredArtifact"],
+      });
+    }
+  });
+
+/**
+ * The public schema: expands `{{KAYA_HOME}}` / `{{BUN}}` right after the YAML
+ * parse, then validates. Every `JobSpecSchema.parse(parseYaml(text))` caller
+ * gets expanded paths with no change.
+ */
+export const JobSpecSchema = z.preprocess((raw) => expandJobPlaceholders(raw), JobSpecObjectSchema);
 
 export type JobSpec = z.infer<typeof JobSpecSchema>;

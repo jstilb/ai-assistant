@@ -1,0 +1,80 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mlzhs5up-ypvqtq-spec.md",
+  "layoutNote": "5-col 12 rows",
+  "rowCount": 12,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Server declares `sampling` in capabilities object during `initialize` handshake response",
+      "verifyMethod": "Run integration test capturing handshake; assert `capabilities.sampling` is present in server `initialize` response",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 2,
+      "description": "`smart_summarize` tool handler issues a `sampling/createMessage` request back to the connected MCP client and returns the client-generated summary as its result",
+      "verifyMethod": "Call `tools/call` with `smart_summarize` via SDK Client in-process; assert outbound `sampling/createMessage` RPC is emitted and tool result reflects client response",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 3,
+      "description": "`configure_analysis` tool triggers `elicitation/create` with a structured JSON schema for follow-up questions, and handles all three response actions — `accept`, `decline`, `cancel` — with graceful fallback behavior for non-accept paths",
+      "verifyMethod": "Unit/integration test with mocked elicitation responses for each action; verify `accept` proceeds with user data, `decline`/`cancel` return defined fallback output without throwing",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 4,
+      "description": "When `MCP_MODE=production` is set, `brave_web_search` calls the live Brave Search API using `BRAVE_API_KEY`, and weather tool calls OpenWeatherMap API using `OPENWEATHERMAP_API_KEY`; without the env var, mock responses are returned by default",
+      "verifyMethod": "Run server with `MCP_MODE=production` and valid API keys, call each tool, assert non-mock structured response; run without env var, assert mock path executes",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 5,
+      "description": "All tools in `tools/list` response include `annotations` object with at least `readOnlyHint`, `idempotentHint`, `destructiveHint`, and `openWorldHint` boolean fields per 2025 MCP spec",
+      "verifyMethod": "Call `tools/list` via SDK Client; iterate every tool entry and assert all four annotation keys exist with boolean values",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 6,
+      "description": "Text analysis tools include an `outputSchema` JSON Schema definition in their tool descriptor describing the structured output shape",
+      "verifyMethod": "Call `tools/list`; assert text analysis tool entries contain `outputSchema` with `type: \"object\"` and at least one named property",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 7,
+      "description": "Integration test suite uses `@modelcontextprotocol/sdk` `Client` class for in-process transport, covering: capability negotiation, `tools/list` returning expected tool names, and `tools/call` returning non-error results for each tool",
+      "verifyMethod": "Run `npm test`; all integration tests pass; test file imports `Client` from `@modelcontextprotocol/sdk` and does not use HTTP mocking libraries as a substitute",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 8,
+      "description": "`prompts/list` returns at least one prompt entry and `prompts/get` returns a valid prompt with messages array; server declares `prompts` capability in `initialize` response",
+      "verifyMethod": "Call `prompts/list` and `prompts/get` via SDK Client in integration test; assert non-empty messages array and presence of `capabilities.prompts` in handshake",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 9,
+      "description": "Repository contains `/docs` or `README` section with Claude Desktop `claude_desktop_config.json` snippet showing correct `mcpServers` entry for `@[user]/mcp-toolkit-server`, and Claude Code usage example",
+      "verifyMethod": "Check `README.md` or `docs/` for JSON block containing `\"command\": \"npx\"` and `\"@[user]/mcp-toolkit-server\"`; verify Claude Code invocation example is present",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 10,
+      "description": "Package is published to npm as `@[user]/mcp-toolkit-server` with `\"main\"` and `\"bin\"` fields set, MCP server executable entry point, and `peerDependencies` or `dependencies` referencing `@modelcontextprotocol/sdk`",
+      "verifyMethod": "Run `npm view @[user]/mcp-toolkit-server`; assert package exists, version ≥ 1.0.0, `bin` field present, and SDK dependency declared",
+      "source": "EXPLICIT"
+    },
+    {
+      "number": 11,
+      "description": "Server handles at least 3 distinct tools across different domains (search, weather, text analysis) all resolvable via a single `tools/list` call with no duplicate tool names",
+      "verifyMethod": "Call `tools/list`; assert response contains ≥ 3 tools, all names unique, covering search/weather/analysis domains",
+      "source": "IMPLICIT"
+    },
+    {
+      "number": 12,
+      "description": "`package.json` `scripts.test` runs the full integration test suite in under 30 seconds without requiring live external API calls (mock mode default)",
+      "verifyMethod": "Run `npm test` with no env vars set; assert exit code 0 and completion within 30 seconds",
+      "source": "IMPLICIT"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.237Z"
+}

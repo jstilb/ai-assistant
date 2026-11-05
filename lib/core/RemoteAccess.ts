@@ -49,13 +49,12 @@ export function resolveRemoteAccess(opts: RemoteAccessOptions): RemoteAccess {
   const secretsPath = opts.secretsPath ?? join(getKayaHome(), "secrets.json");
   const bind = env[opts.bindEnv] || readSecretString(secretsPath, `${opts.secretPrefix}_bind`) || LOOPBACK;
   const envToken = env[opts.tokenEnv] || null;
-  const token = bind === LOOPBACK
-    ? envToken
-    : envToken ?? readSecretString(secretsPath, `${opts.secretPrefix}_token`);
+  const token =
+    bind === LOOPBACK ? envToken : (envToken ?? readSecretString(secretsPath, `${opts.secretPrefix}_token`));
   if (bind !== LOOPBACK && token === null) {
     throw new Error(
       `bind=${bind} requires a token (env ${opts.tokenEnv} or ${opts.secretPrefix}_token in ` +
-      `~/.claude/secrets.json). Refusing to expose the server unauthenticated.`,
+        `~/.claude/secrets.json). Refusing to expose the server unauthenticated.`,
     );
   }
   return { bind, token };
@@ -90,7 +89,7 @@ export function checkRemoteAuth(
     };
   }
   const m = (req.headers.get("cookie") || "").match(new RegExp(`(?:^|;\\s*)${cookieName}=([^;]+)`));
-  return { ok: m !== null && timingSafeEq(decodeURIComponent(m[1]), token) };
+  return { ok: m !== null && timingSafeEq(decodeURIComponent(m[1] ?? ""), token) };
 }
 
 /** Wrap a fetch handler with the auth gate (401 on failure, cookie on first valid ?token=). */
@@ -113,7 +112,13 @@ function readSecretString(path: string, key: string): string | null {
   try {
     const v = (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>)[key];
     return typeof v === "string" && v.length > 0 ? v : null;
-  } catch {
+  } catch (err) {
+    // A missing file is the normal "not configured" case; a malformed or unreadable one is not.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(
+        `RemoteAccess: cannot read ${key} from ${path}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return null;
   }
 }

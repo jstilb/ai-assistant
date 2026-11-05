@@ -34,10 +34,10 @@ export interface LastSleepWake {
 // sleep detection to "no evidence" (the 2026-07-21/27/31 daily-briefing
 // failures: runs the machine slept through burned 3 timeout attempts
 // instead of deferring, because this probe never executed).
-const SYSCTL_BIN = '/usr/sbin/sysctl';
+const SYSCTL_BIN = "/usr/sbin/sysctl";
 
 const defaultExec: ExecSysctl = () => {
-  return Bun.spawnSync([SYSCTL_BIN, '-n', 'kern.sleeptime', 'kern.waketime']).stdout.toString();
+  return Bun.spawnSync([SYSCTL_BIN, "-n", "kern.sleeptime", "kern.waketime"]).stdout.toString();
 };
 
 /** Parses a `sec = (\d+)` value out of one sysctl output line. `sec = 0` (never slept/woken since boot) is null. */
@@ -64,7 +64,7 @@ export function getLastSleepWake(execFn: ExecSysctl = defaultExec): LastSleepWak
     return { lastSleepAtMs: null, lastWakeAtMs: null };
   }
 
-  const lines = raw.split('\n').filter((line) => line.trim().length > 0);
+  const lines = raw.split("\n").filter((line) => line.trim().length > 0);
   const lastSleepAtMs = parseSecLine(lines[0]);
   const lastWakeAtMs = parseSecLine(lines[1]);
 
@@ -126,10 +126,10 @@ export function stableAwakeFor(ms: number, nowMs: number = Date.now(), execFn: E
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const sinceIdx = args.indexOf('--slept-since');
+  const sinceIdx = args.indexOf("--slept-since");
 
   if (sinceIdx === -1 || !args[sinceIdx + 1]) {
-    console.error('Usage: bun lib/core/SleepWindow.ts --slept-since <epochMs>');
+    console.error("Usage: bun lib/core/SleepWindow.ts --slept-since <epochMs>");
     process.exit(1);
   }
 
@@ -139,5 +139,5 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  console.log(sleptSince(sinceMs) ? 'true' : 'false');
+  console.log(sleptSince(sinceMs) ? "true" : "false");
 }

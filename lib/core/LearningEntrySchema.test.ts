@@ -85,11 +85,25 @@ describe("LearningEntrySchema — per-writer real shapes", () => {
     expect(SessionImplicitRatingSchema.safeParse(row).success).toBe(true);
   });
 
-
-
   it("each variant is reachable through the top-level LearningEntrySchema union", () => {
-    const telegram = { timestamp: "t", rating: 5, session_id: "s", source: "implicit", sentiment_summary: "x", confidence: 0.5, platform: "telegram", message_type: "text" };
-    const sessionImplicit = { timestamp: "t", rating: 5, session_id: "s", source: "implicit", sentiment_summary: "x", confidence: 0.5 };
+    const telegram = {
+      timestamp: "t",
+      rating: 5,
+      session_id: "s",
+      source: "implicit",
+      sentiment_summary: "x",
+      confidence: 0.5,
+      platform: "telegram",
+      message_type: "text",
+    };
+    const sessionImplicit = {
+      timestamp: "t",
+      rating: 5,
+      session_id: "s",
+      source: "implicit",
+      sentiment_summary: "x",
+      confidence: 0.5,
+    };
     const explicitHook = { timestamp: "t", rating: 5, session_id: "s" };
 
     expect(LearningEntrySchema.safeParse(telegram).success).toBe(true);

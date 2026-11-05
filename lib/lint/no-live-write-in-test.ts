@@ -39,8 +39,8 @@
  * orchestrator; the staged twin is invoked directly by its bin/ wrapper.
  */
 
-import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 export interface LintResult {
   errors: string[];
@@ -49,14 +49,14 @@ export interface LintResult {
 
 /** Known live-state writers this rule watches for. */
 export const LIVE_WRITER_NAMES = [
-  'AlertManager',
-  'Remediator',
-  'HealthManager',
-  'HealthTracker',
-  'SessionManager',
+  "AlertManager",
+  "Remediator",
+  "HealthManager",
+  "HealthTracker",
+  "SessionManager",
 ] as const;
 
-const TEST_FILE_PATTERN = /(\.test\.ts$)|(__tests__\/.*\.ts$)/;
+const TEST_FILE_PATTERN = /(\.(test|e2e)\.ts$)|(__tests__\/.*\.ts$)/;
 
 /**
  * Returns the subset of LIVE_WRITER_NAMES that `content` imports via an ES
@@ -78,14 +78,14 @@ export function importsLiveWriter(content: string): string[] {
  * anywhere in the file.
  */
 export function hasNoKayaHomePin(content: string): boolean {
-  if (content.includes('pinKayaHome(')) return false;
+  if (content.includes("pinKayaHome(")) return false;
   if (/KAYA_HOME\s*=/.test(content)) return false;
   return true;
 }
 
 export function violationMessage(relativePath: string, writers: string[]): string {
   return (
-    `${relativePath}: imports live-state writer(s) [${writers.join(', ')}] but never calls ` +
+    `${relativePath}: imports live-state writer(s) [${writers.join(", ")}] but never calls ` +
     `pinKayaHome( or assigns KAYA_HOME = anywhere in the file. Without a pin, this suite may ` +
     `write real state to ~/.claude/MEMORY/* under \`bun test\` (see Track C, alert-storm ` +
     `remediation plan). If this file already redirects writes via a per-call path override ` +
@@ -95,10 +95,10 @@ export function violationMessage(relativePath: string, writers: string[]): strin
 }
 
 function isExempt(relativePath: string): boolean {
-  if (relativePath.includes('node_modules/') || relativePath.includes('worktrees/')) return true;
+  if (relativePath.includes("node_modules/") || relativePath.includes("worktrees/")) return true;
   // Exempt this rule's own files (including its test, which legitimately
   // contains the writer names as string literals rather than real imports).
-  if (relativePath.includes('lib/lint/')) return true;
+  if (relativePath.includes("lib/lint/")) return true;
   return false;
 }
 
@@ -120,9 +120,9 @@ export async function checkNoLiveWriteInTest(rootDir: string = process.cwd()): P
   let fileListOutput: string;
   try {
     fileListOutput = execSync(
-      `find "${rootDir}" \\( -name "*.test.ts" -o -path "*/__tests__/*.ts" \\) ` +
+      `find "${rootDir}" \\( -name "*.test.ts" -o -name "*.e2e.ts" -o -path "*/__tests__/*.ts" \\) ` +
         `-not -path "*/node_modules/*" 2>/dev/null || true`,
-      { encoding: 'utf-8', cwd: rootDir, maxBuffer: 32 * 1024 * 1024 },
+      { encoding: "utf-8", cwd: rootDir, maxBuffer: 32 * 1024 * 1024 },
     );
   } catch (err) {
     warnings.push(`[no-live-write-in-test] Could not enumerate test files: ${err}`);
@@ -130,17 +130,17 @@ export async function checkNoLiveWriteInTest(rootDir: string = process.cwd()): P
   }
 
   const files = fileListOutput
-    .split('\n')
+    .split("\n")
     .map((f) => f.trim())
     .filter((f) => f.length > 0 && TEST_FILE_PATTERN.test(f));
 
   for (const filePath of files) {
-    const relativePath = filePath.startsWith(rootDir + '/') ? filePath.slice(rootDir.length + 1) : filePath;
+    const relativePath = filePath.startsWith(rootDir + "/") ? filePath.slice(rootDir.length + 1) : filePath;
     if (isExempt(relativePath)) continue;
 
     let content: string;
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = readFileSync(filePath, "utf-8");
     } catch {
       continue;
     }

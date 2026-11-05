@@ -9,7 +9,7 @@
  *   // → { rating: 8, comment: "great response" }
  */
 
-export interface ParsedRating {
+interface ParsedRating {
   /** Numeric rating value, 1–10 */
   rating: number;
   /** Optional comment following the rating */
@@ -40,19 +40,19 @@ export function parseRating(prompt: string): ParsedRating | null {
   // Form 1: explicit "/10" fraction — unambiguous; any trailing text is a comment.
   const fractionMatch = trimmed.match(/^(10|[1-9])\/10\b\s*(.*)$/);
   if (fractionMatch) {
-    return { rating: parseInt(fractionMatch[1], 10), comment: fractionMatch[2]?.trim() || undefined };
+    return { rating: parseInt(fractionMatch[1] ?? "", 10), comment: fractionMatch[2]?.trim() || undefined };
   }
 
   // Form 2: a bare number on its own line — "8", "10".
   const standaloneMatch = trimmed.match(/^(10|[1-9])$/);
   if (standaloneMatch) {
-    return { rating: parseInt(standaloneMatch[1], 10) };
+    return { rating: parseInt(standaloneMatch[1] ?? "", 10) };
   }
 
   // Form 3: number + explicit "-"/":" separator + comment — "8 - great", "8: great".
   const separatorMatch = trimmed.match(/^(10|[1-9])\s*[-:]\s*(.+)$/);
   if (separatorMatch) {
-    return { rating: parseInt(separatorMatch[1], 10), comment: separatorMatch[2]?.trim() || undefined };
+    return { rating: parseInt(separatorMatch[1] ?? "", 10), comment: separatorMatch[2]?.trim() || undefined };
   }
 
   return null;

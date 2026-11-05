@@ -1,0 +1,49 @@
+{
+  "specPath": "~/.claude/plans/Specs/Queue/mn3bgppe-7yi0zh-spec.md",
+  "layoutNote": "3-col (medium spec)",
+  "rowCount": 8,
+  "rows": [
+    {
+      "number": 1,
+      "description": "Agent spawn utility accepts a `bare: boolean` option and appends `--bare` to the `claude -p` CLI args when `true`, omits it when `false`",
+      "verifyMethod": "Unit test: mock `child_process.spawn`, assert args include `--bare` when `bare: true` and exclude it when `bare: false`"
+    },
+    {
+      "number": 2,
+      "description": "A bare-eligibility classification (map or predicate) exists covering all current Kaya agent types, returning `true` for pure-work agents and `false` for hook-dependent agents, with a safe default of `false` for unknown types",
+      "verifyMethod": "Unit test: table-driven assertions — `isBarEligible(\"SkepticalVerifier\") === true`, `isBareEligible(\"ContextLoader\") === false`, `isBareEligible(\"unknown-xyz\") === false`"
+    },
+    {
+      "number": 3,
+      "description": "The delegation layer automatically consults bare-eligibility before every spawn and passes the flag accordingly — no call site requires manual `bare: true`",
+      "verifyMethod": "Integration test: spawn one classified-bare and one classified-non-bare agent; confirm correct CLI args in both cases"
+    },
+    {
+      "number": 4,
+      "description": "A per-invocation override (`forceBare` / `forceNonBare`) exists and takes precedence over the classification predicate",
+      "verifyMethod": "Unit test: force-bare on a hook-dependent agent type produces `--bare` in args; force-non-bare on a bare-eligible type omits `--bare`"
+    },
+    {
+      "number": 5,
+      "description": "A version gate assertion runs before any bare spawn and throws a clear error if Claude Code < 2.1.81 is detected",
+      "verifyMethod": "Unit test: mock `claude --version` output to `2.1.80`, assert assertion throws with actionable message; mock `2.1.81`, assert no throw"
+    },
+    {
+      "number": 6,
+      "description": "All existing agents that previously relied on hooks continue to spawn without `--bare` and produce identical outputs (no regression)",
+      "verifyMethod": "Integration/smoke test: run the same task via a hook-dependent agent before and after the change; assert outputs match"
+    },
+    {
+      "number": 7,
+      "description": "Documentation exists (README section or `docs/agents.md`) explaining the bare vs. non-bare policy, the classification criteria, tradeoffs (no hooks/LSP/skill walks), and the override mechanism",
+      "verifyMethod": "`grep -q '\\-\\-bare' docs/agents.md` succeeds; section headings for \"Policy\", \"Classification\", \"Tradeoffs\", and \"Override\" are present",
+      "embeddedCommand": "grep -q '\\-\\-bare' docs/agents.md"
+    },
+    {
+      "number": 8,
+      "description": "Bare-spawned agents produce no hook/LSP log output in stderr; non-bare agents continue to emit expected hook lifecycle logs",
+      "verifyMethod": "Runtime check: capture stderr from one bare and one non-bare spawn; assert hook markers absent in bare stderr, present in non-bare stderr"
+    }
+  ],
+  "generatedAt": "2026-06-18T17:49:25.230Z"
+}

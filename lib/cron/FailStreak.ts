@@ -37,17 +37,17 @@
  * FailureLog.ts).
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
-import { memPath } from '../core/MemoryPaths.ts';
-import { sendAlert, type AlertResult } from '../core/AlertGate.ts';
-import type { FailureClass } from './FailureClassifier.ts';
-import type { RunOutcome } from './RunLedger.ts';
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { memPath } from "../core/MemoryPaths.ts";
+import { sendAlert, type AlertResult } from "../core/AlertGate.ts";
+import type { FailureClass } from "./FailureClassifier.ts";
+import type { RunOutcome } from "./RunLedger.ts";
 
 export const HEAL_ESCALATE_THRESHOLD = 3;
 
 function streakPath(jobId: string): string {
-  return memPath('State', `${jobId}-fail-streak.count`);
+  return memPath("State", `${jobId}-fail-streak.count`);
 }
 
 /**
@@ -58,11 +58,15 @@ function streakPath(jobId: string): string {
  */
 export function readFailStreak(jobId: string): number {
   try {
-    const raw = readFileSync(streakPath(jobId), 'utf-8').trim();
+    const raw = readFileSync(streakPath(jobId), "utf-8").trim();
     const n = Number(raw);
     return Number.isFinite(n) && n >= 0 ? n : 0;
-  } catch {
-    return 0; // no file yet, or unreadable — treat as a clean streak
+  } catch (err) {
+    // No file yet is normal; an unreadable file is reported. Either way: a clean streak.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(`FailStreak: cannot read streak for ${jobId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return 0;
   }
 }
 
@@ -74,7 +78,7 @@ export function writeFailStreak(jobId: string, n: number): void {
   try {
     const p = streakPath(jobId);
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, String(n), 'utf-8');
+    writeFileSync(p, String(n), "utf-8");
   } catch {
     // intentionally silent: best-effort — a streak-file write failure must
     // never fail the cron job itself. Next run just re-derives from 0.
@@ -82,9 +86,9 @@ export function writeFailStreak(jobId: string, n: number): void {
 }
 
 export type FailStreakResult =
-  | { action: 'reset' }
-  | { action: 'below-threshold'; streak: number }
-  | { action: 'paged'; streak: number; alertResult: AlertResult };
+  | { action: "reset" }
+  | { action: "below-threshold"; streak: number }
+  | { action: "paged"; streak: number; alertResult: AlertResult };
 
 /**
  * Call once per completed run, after outcome/failureClass are known (see
@@ -111,25 +115,24 @@ export async function trackFailStreak(
   sleptThrough?: boolean,
 ): Promise<FailStreakResult> {
   const isEscalatable =
-    outcome === 'failure' &&
-    (failureClass === 'bug' || (failureClass === 'timeout' && !sleptThrough));
+    outcome === "failure" && (failureClass === "bug" || (failureClass === "timeout" && !sleptThrough));
   if (!isEscalatable) {
     writeFailStreak(jobId, 0);
-    return { action: 'reset' };
+    return { action: "reset" };
   }
 
   const streak = readFailStreak(jobId) + 1;
   writeFailStreak(jobId, streak);
   if (streak < HEAL_ESCALATE_THRESHOLD) {
-    return { action: 'below-threshold', streak };
+    return { action: "below-threshold", streak };
   }
 
   const alertResult = await sendAlertFn(
     `Cron job '${jobId}' has failed with a '${failureClass}'-class error ${streak} consecutive times in a row — ` +
       `a blind retry loop will not fix this; needs investigation.`,
-    { key: `cron-fail-streak-${jobId}`, tier: 'page' },
+    { key: `cron-fail-streak-${jobId}`, tier: "page" },
   );
-  return { action: 'paged', streak, alertResult };
+  return { action: "paged", streak, alertResult };
 }
 
 /**
@@ -185,33 +188,38 @@ export async function trackHealStreak(
 ): Promise<FailStreakResult> {
   if (!needsHealing) {
     writeFailStreak(target, 0);
-    return { action: 'reset' };
+    return { action: "reset" };
   }
 
   const streak = readFailStreak(target) + 1;
   writeFailStreak(target, streak);
   if (streak < HEAL_ESCALATE_THRESHOLD) {
-    return { action: 'below-threshold', streak };
+    return { action: "below-threshold", streak };
   }
 
   const alertResult = await sendAlertFn(buildMessage(streak), {
     key: alertKey,
-    tier: 'page',
+    tier: "page",
     ...(cooldownMs !== undefined ? { cooldownMs } : {}),
   });
-  return { action: 'paged', streak, alertResult };
+  return { action: "paged", streak, alertResult };
 }
 
 function windowStartPath(target: string): string {
-  return memPath('State', `${target}-fail-streak.window-start`);
+  return memPath("State", `${target}-fail-streak.window-start`);
 }
 
 function readWindowStart(target: string): number | undefined {
   try {
-    const raw = readFileSync(windowStartPath(target), 'utf-8').trim();
+    const raw = readFileSync(windowStartPath(target), "utf-8").trim();
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : undefined;
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(
+        `FailStreak: cannot read window start for ${target}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return undefined;
   }
 }
@@ -220,7 +228,7 @@ function writeWindowStart(target: string, ms: number | undefined): void {
   try {
     const p = windowStartPath(target);
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, ms === undefined ? '' : String(ms), 'utf-8');
+    writeFileSync(p, ms === undefined ? "" : String(ms), "utf-8");
   } catch (err) {
     // NOT fail-toward-safe like readWindowStart()'s catch: a swallowed WRITE
     // here means the rolling window never persists, so

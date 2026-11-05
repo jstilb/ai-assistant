@@ -23,8 +23,8 @@
  * @module TelosGoals
  */
 
-import { readFileSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { getKayaHome } from "./KayaHome.ts";
@@ -80,14 +80,13 @@ const GoalsFileSchema = z.object({
   goals: z.record(z.string().regex(/^[GR]\d+$/), GoalDefSchema),
 });
 
-export type TelosMissionRef = z.infer<typeof MissionRefSchema>;
-export type TelosGoalDef = z.infer<typeof GoalDefSchema>;
-export type TelosGoalSection = z.infer<typeof GoalSectionSchema>;
-export type TelosLiteralSection = z.infer<typeof LiteralSectionSchema>;
-export type TelosSection = z.infer<typeof SectionSchema>;
+type TelosMissionRef = z.infer<typeof MissionRefSchema>;
+type TelosGoalDef = z.infer<typeof GoalDefSchema>;
+type TelosGoalSection = z.infer<typeof GoalSectionSchema>;
+type TelosSection = z.infer<typeof SectionSchema>;
 export type GoalsFileModel = z.infer<typeof GoalsFileSchema>;
 
-export function isGoalSection(s: TelosSection): s is TelosGoalSection {
+function isGoalSection(s: TelosSection): s is TelosGoalSection {
   return "heading" in s;
 }
 
@@ -125,22 +124,16 @@ export function parseGoalsModel(yamlText: string): GoalsFileModel {
     }
 
     if (section.wig && !section.heading.includes("WIG")) {
-      throw new Error(
-        `TelosGoals: section "${section.heading}" is flagged wig but its heading does not say "WIG"`,
-      );
+      throw new Error(`TelosGoals: section "${section.heading}" is flagged wig but its heading does not say "WIG"`);
     }
     if (!section.wig && section.heading.includes("WIG")) {
-      throw new Error(
-        `TelosGoals: section "${section.heading}" says "WIG" in its heading but is not flagged wig:true`,
-      );
+      throw new Error(`TelosGoals: section "${section.heading}" says "WIG" in its heading but is not flagged wig:true`);
     }
 
     for (const id of section.goals) {
       const prior = referenced.get(id);
       if (prior !== undefined) {
-        throw new Error(
-          `TelosGoals: goal ${id} is referenced by two sections ("${prior}" and "${section.heading}")`,
-        );
+        throw new Error(`TelosGoals: goal ${id} is referenced by two sections ("${prior}" and "${section.heading}")`);
       }
       referenced.set(id, section.heading);
       if (!(id in model.goals)) {
@@ -223,7 +216,7 @@ export function renderGoalsMd(model: GoalsFileModel): string {
 // ============================================================================
 
 /** One goal with its section context attached. */
-export interface TelosGoalEntry {
+interface TelosGoalEntry {
   id: string;
   title: string;
   type?: string;
@@ -239,7 +232,7 @@ export interface TelosGoalEntry {
   sectionActive: boolean;
 }
 
-export interface TelosGoalsData {
+interface TelosGoalsData {
   model: GoalsFileModel;
   /** All goals in document order. */
   goals: TelosGoalEntry[];

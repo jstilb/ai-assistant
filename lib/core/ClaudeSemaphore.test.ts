@@ -7,24 +7,30 @@
  * slots are never falsely pruned mid-test.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { rmSync, readdirSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { rmSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const SLOT_DIR = join(tmpdir(), `claude-sem-test-${process.pid}-${Date.now()}`);
 process.env.KAYA_CLAUDE_SLOT_DIR = SLOT_DIR;
 process.env.MAX_CLAUDE_SLOTS = "2";
 
-const { acquireClaudeSlot } = await import("./ClaudeSemaphore");
+const { acquireClaudeSlot } = await import("./ClaudeSemaphore.ts");
 
 function clearSlots() {
   try {
     for (const n of readdirSync(SLOT_DIR)) rmSync(join(SLOT_DIR, n), { recursive: true, force: true });
-  } catch { /* dir may not exist yet */ }
+  } catch {
+    /* dir may not exist yet */
+  }
 }
 
 function slotCount(): number {
-  try { return readdirSync(SLOT_DIR).filter((n) => /^slot-\d+$/.test(n)).length; } catch { return 0; }
+  try {
+    return readdirSync(SLOT_DIR).filter((n) => /^slot-\d+$/.test(n)).length;
+  } catch {
+    return 0;
+  }
 }
 
 beforeEach(clearSlots);
@@ -66,8 +72,8 @@ describe("ClaudeSemaphore", () => {
     mkdirSync(join(SLOT_DIR, "slot-0"), { recursive: true });
     writeFileSync(join(SLOT_DIR, "slot-0", "pid"), "2000000000");
     const a = await acquireClaudeSlot({ timeoutMs: 500 });
-    expect(a.acquired).toBe(true);   // dead slot pruned → free slot acquired
-    expect(slotCount()).toBe(1);     // only our live slot remains
+    expect(a.acquired).toBe(true); // dead slot pruned → free slot acquired
+    expect(slotCount()).toBe(1); // only our live slot remains
     a.release();
   });
 

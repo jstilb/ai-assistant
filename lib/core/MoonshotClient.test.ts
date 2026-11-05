@@ -6,7 +6,10 @@
  * a live call costs real money.
  */
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, spyOn } from "bun:test";
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pinKayaHome, restoreKayaHome } from "../test/pinKayaHome.ts";
 import {
   moonshotChat,
   loadMoonshotApiKey,
@@ -192,10 +195,7 @@ describe("moonshotChat — failure paths", () => {
     const boom: FetchLike = async () => {
       throw new Error("ECONNREFUSED");
     };
-    const res = await moonshotChat(
-      { systemPrompt: "s", userPrompt: "u" },
-      { apiKey: "sk-test", fetchFn: boom },
-    );
+    const res = await moonshotChat({ systemPrompt: "s", userPrompt: "u" }, { apiKey: "sk-test", fetchFn: boom });
     expect(res.success).toBe(false);
     expect(res.error).toContain("ECONNREFUSED");
   });
@@ -215,11 +215,46 @@ describe("moonshotChat — failure paths", () => {
 });
 
 describe("loadMoonshotApiKey", () => {
+  let home: string;
+  beforeAll(() => {
+    home = pinKayaHome("moonshot-key-");
+  });
+  afterAll(async () => {
+    await restoreKayaHome();
+  });
+  const secretsPath = () => join(home, "secrets.json");
+
+  it("returns null when secrets.json does not exist", () => {
+    rmSync(secretsPath(), { force: true });
+    expect(loadMoonshotApiKey()).toBeNull();
+  });
+
   it("returns null when secrets.json holds no MOONSHOT_API_KEY", () => {
-    // Live secrets.json genuinely lacks the key as of 2026-07-24; this asserts
-    // the absent-key path resolves to null instead of throwing. It flips to a
-    // string the moment Jm provisions one, so assert only "no throw + type".
-    const key = loadMoonshotApiKey();
-    expect(key === null || typeof key === "string").toBe(true);
+    writeFileSync(secretsPath(), JSON.stringify({ OTHER: "x" }));
+    expect(loadMoonshotApiKey()).toBeNull();
+  });
+
+  it("returns the trimmed key when present", () => {
+    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: "  sk-abc \n" }));
+    expect(loadMoonshotApiKey()).toBe("sk-abc");
+  });
+
+  it("returns null for a whitespace-only or non-string key", () => {
+    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: "   " }));
+    expect(loadMoonshotApiKey()).toBeNull();
+    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: 42 }));
+    expect(loadMoonshotApiKey()).toBeNull();
+  });
+
+  it("returns null and warns on stderr when secrets.json is malformed", () => {
+    writeFileSync(secretsPath(), "{not json");
+    const warn = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(loadMoonshotApiKey()).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("secrets.json");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
