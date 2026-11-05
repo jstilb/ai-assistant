@@ -14,11 +14,12 @@ Usage:
       -- python test.py
 """
 
-import subprocess
-import socket
-import time
-import sys
 import argparse
+import socket
+import subprocess
+import sys
+import time
+
 
 def is_server_ready(port, timeout=30):
     """Wait for server to be ready by polling the port."""
@@ -27,15 +28,20 @@ def is_server_ready(port, timeout=30):
         try:
             with socket.create_connection(('localhost', port), timeout=1):
                 return True
-        except (socket.error, ConnectionRefusedError):
+        except (OSError, ConnectionRefusedError):
             time.sleep(0.5)
     return False
 
 
 def main():
     parser = argparse.ArgumentParser(description='Run command with one or more servers')
-    parser.add_argument('--server', action='append', dest='servers', required=True, help='Server command (can be repeated)')
-    parser.add_argument('--port', action='append', dest='ports', type=int, required=True, help='Port for each server (must match --server count)')
+    parser.add_argument(
+        '--server', action='append', dest='servers', required=True, help='Server command (can be repeated)'
+    )
+    parser.add_argument(
+        '--port', action='append', dest='ports', type=int, required=True,
+        help='Port for each server (must match --server count)',
+    )
     parser.add_argument('--timeout', type=int, default=30, help='Timeout in seconds per server (default: 30)')
     parser.add_argument('command', nargs=argparse.REMAINDER, help='Command to run after server(s) ready')
 
@@ -55,7 +61,7 @@ def main():
         sys.exit(1)
 
     servers = []
-    for cmd, port in zip(args.servers, args.ports):
+    for cmd, port in zip(args.servers, args.ports, strict=True):
         servers.append({'cmd': cmd, 'port': port})
 
     server_processes = []

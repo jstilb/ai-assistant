@@ -29,13 +29,11 @@ Environment Variables:
     ${KAYA_DIR}/.env (never in source code or comments).
 """
 
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
-from typing import Dict, List, Optional, Union, Tuple
 from dataclasses import dataclass
-from enum import Enum
 
 # ─── Load .env file before any API key checks ─────────────────────────────
 try:
@@ -81,13 +79,13 @@ except ImportError:
 
 class OSINTError(Exception):
     """Base exception for OSINT API errors"""
-    def __init__(self, message: str, service: str, error_code: Optional[str] = None):
+    def __init__(self, message: str, service: str, error_code: str | None = None):
         self.message = message
         self.service = service
         self.error_code = error_code
         super().__init__(self.message)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "error": self.__class__.__name__,
             "message": self.message,
@@ -125,10 +123,10 @@ class APIResult:
     """Base class for API results"""
     success: bool
     service: str
-    data: Optional[Dict] = None
-    error: Optional[Dict] = None
+    data: dict | None = None
+    error: dict | None = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "success": self.success,
             "service": self.service,
@@ -167,7 +165,7 @@ class ShodanClient:
         - Small Business: Unlimited queries
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize Shodan client.
 
@@ -222,9 +220,9 @@ class ShodanClient:
             error_msg = str(e)
 
             if "Invalid API key" in error_msg:
-                raise APIKeyInvalidError(error_msg, service="Shodan")
+                raise APIKeyInvalidError(error_msg, service="Shodan") from e
             elif "Rate limit" in error_msg:
-                raise RateLimitError(error_msg, service="Shodan")
+                raise RateLimitError(error_msg, service="Shodan") from e
             else:
                 return APIResult(
                     success=False,
@@ -306,7 +304,7 @@ class DehashedClient:
 
     BASE_URL = "https://api.dehashed.com/search"
 
-    def __init__(self, api_key: Optional[str] = None, email: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, email: str | None = None):
         """
         Initialize Dehashed client.
 
@@ -480,7 +478,7 @@ class OSINTIndustriesClient:
 
     BASE_URL = "https://api.osint.industries/v1"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize OSINT Industries client.
 

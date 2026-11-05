@@ -32,4 +32,4 @@ with open('/tmp/console.log', 'w') as f:
     f.write('\n'.join(console_logs))
 
 print(f"\nCaptured {len(console_logs)} console messages")
-print(f"Logs saved to: /tmp/console.log")
+print("Logs saved to: /tmp/console.log")
