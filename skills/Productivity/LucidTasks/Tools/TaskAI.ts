@@ -14,10 +14,9 @@
  * @module TaskAI
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "node:fs";
 import { z } from "zod";
 import { inference } from "../../../../lib/core/Inference.ts";
-import type { InferenceLevel } from "../../../../lib/core/Inference.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 import type { Task, EstimateCalibration } from "./TaskDB.ts";
@@ -94,7 +93,7 @@ export function loadTrustConfig(): TrustConfig {
           const key = match[1];
           const value = match[2] === "true";
           const section = config[currentSection] as Record<string, boolean>;
-          if (key in section) {
+          if (key !== undefined && key in section) {
             section[key] = value;
           }
         }
@@ -121,7 +120,10 @@ export interface ExtractionContext {
 const ExtractedTaskSchema = z.object({
   title: z.string().min(1),
   due_date: z.string().nullable().optional(),
-  priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
+  priority: z
+    .union([z.literal(1), z.literal(2), z.literal(3)])
+    .nullable()
+    .optional(),
   energy_level: z.enum(["low", "medium", "high"]).nullable().optional(),
   estimated_minutes: z.number().int().positive().nullable().optional(),
   goal_id: z.string().nullable().optional(),
@@ -172,10 +174,7 @@ Rules:
  * callers (TaskManager) can tell a genuine success from a fallback and never
  * claim "AI extracted" for a result the AI didn't actually produce.
  */
-export async function extractTaskMetadata(
-  rawInput: string,
-  context: ExtractionContext
-): Promise<ExtractedTaskResult> {
+export async function extractTaskMetadata(rawInput: string, context: ExtractionContext): Promise<ExtractedTaskResult> {
   const userPrompt = `Current date: ${context.today}
 Available goals: ${context.goalIds.join(", ") || "none"}
 Available projects: ${context.projectNames.join(", ") || "none"}
@@ -247,7 +246,7 @@ const EffortEstimateArraySchema = z.array(
     energy_level: z.enum(["low", "medium", "high"]),
     estimated_minutes: z.number().int().min(1).max(480),
     rationale: z.string().max(160),
-  })
+  }),
 );
 
 const JM_EFFORT_SYSTEM_PROMPT = `You estimate how long a task will take the user — a person doing it themselves, not an AI — and how much energy it demands, so they can decide WHEN to schedule it.
@@ -268,9 +267,10 @@ Output ONLY a JSON array, one entry per input id, every id exactly once:
  * runs several times too high — the numbers, not the prose, do the anchoring.
  */
 function kayaEffortSystemPrompt(c: EstimateCalibration | undefined): string {
-  const calibration = c && c.n > 0
-    ? `CALIBRATION — this outranks intuition: Kaya's past estimates for its own tasks ran ${c.medianRatio}× too high (median estimated/actual over ${c.n} completed tasks). The median ACTUAL was ${c.medianActual} minutes and the 75th percentile ${c.p75Actual} minutes. Anchor on those actuals, not on how big the task sounds.`
-    : `CALIBRATION: no measured actuals are available yet. Kaya historically over-estimates its own work several-fold — anchor on the reference points below, not on how big the task sounds.`;
+  const calibration =
+    c && c.n > 0
+      ? `CALIBRATION — this outranks intuition: Kaya's past estimates for its own tasks ran ${c.medianRatio}× too high (median estimated/actual over ${c.n} completed tasks). The median ACTUAL was ${c.medianActual} minutes and the 75th percentile ${c.p75Actual} minutes. Anchor on those actuals, not on how big the task sounds.`
+      : `CALIBRATION: no measured actuals are available yet. Kaya historically over-estimates its own work several-fold — anchor on the reference points below, not on how big the task sounds.`;
   return `You estimate how long Kaya — an autonomous Claude coding/research agent running headless on Jm's Mac — will take to execute a task end-to-end (load context, build or research, verify, write the deliverable), and the energy it demands in agent terms.
 
 ${calibration}
@@ -296,7 +296,7 @@ Output ONLY a JSON array, one entry per input id, every id exactly once:
  */
 export async function estimateTaskEffort(
   tasks: EffortInput[],
-  opts: { actor: EffortActor; calibration?: EstimateCalibration }
+  opts: { actor: EffortActor; calibration?: EstimateCalibration },
 ): Promise<EffortEstimate[]> {
   if (tasks.length === 0) return [];
 
@@ -319,7 +319,7 @@ ${JSON.stringify(
     current_minutes: t.current_minutes ?? undefined,
   })),
   null,
-  2
+  2,
 )}`;
 
     let failureReason = "unknown failure";
@@ -444,12 +444,10 @@ Rules:
 export async function reorganizeTaskFromComment(
   task: Task,
   comment: string,
-  ctx: ReorganizeContext
+  ctx: ReorganizeContext,
 ): Promise<ReorgResult | null> {
   const projectList =
-    ctx.projects.length > 0
-      ? ctx.projects.map((p) => `  - ${p.id}: ${p.name}`).join("\n")
-      : "  (none)";
+    ctx.projects.length > 0 ? ctx.projects.map((p) => `  - ${p.id}: ${p.name}`).join("\n") : "  (none)";
 
   const userPrompt = `Today: ${ctx.today}
 Valid statuses: ${ctx.statuses.join(", ")}
@@ -550,7 +548,7 @@ Rules:
  */
 export async function decomposeTask(
   task: Task,
-  context: DecompositionContext
+  context: DecompositionContext,
 ): Promise<{ simple: true; message: string } | { simple: false; subtasks: SubtaskProposal[] } | null> {
   const userPrompt = `Task: "${task.title}"
 Description: "${task.description || "none"}"
@@ -588,7 +586,8 @@ Estimated time: ${task.estimated_minutes ? `${task.estimated_minutes} minutes` :
 
     // Cap at 7 subtasks
     return { simple: false, subtasks: subtasks.slice(0, 7) };
-  } catch {
+  } catch (err) {
+    console.error("[TaskAI] decompose response handling failed:", err);
     return null;
   }
 }
@@ -623,11 +622,14 @@ export interface ScoredTaskInput {
   subtaskCount?: number;
 }
 
+/** Placeholder reasoning on a degraded score. Never persist it over a real ai_reasoning. */
+export const AI_SCORING_UNAVAILABLE = "AI scoring unavailable";
+
 export interface AIScoredTask {
   id: string;
-  adjustment: number;        // Clamped to [-20, +20]
-  ai_reasoning: string;      // 1-2 sentence explanation, max 100 chars
-  final_score: number;       // deterministic_score + adjustment
+  adjustment: number; // Clamped to [-20, +20]
+  ai_reasoning: string; // 1-2 sentence explanation, max 100 chars
+  final_score: number; // deterministic_score + adjustment
   /** Additive-only: present (true) only on a fallback item — never on a genuine AI score. */
   degraded?: true;
 }
@@ -648,7 +650,7 @@ const AIScoredTaskArraySchema = z.array(
     id: z.string(),
     adjustment: z.number(),
     ai_reasoning: z.string(),
-  })
+  }),
 );
 
 const SCORING_SYSTEM_PROMPT = `You are a priority scoring assistant. Given a batch of tasks with their deterministic scores, provide small score adjustments (-20 to +20) based on qualitative factors the algorithm can't see.
@@ -679,36 +681,75 @@ Rules:
 - Output ONLY the JSON array, no explanation`;
 
 /**
+ * Per-batch deadline for AI scoring. A healthy 10-task batch returns in ~5-10 s;
+ * the old path used Inference's 240 s standard-level default, and with up to 5
+ * batches run one after another a stalled `claude -p` made `next` hang ~20 min
+ * (2026-11-03/04). 75 s leaves plenty of headroom for a slow-but-alive call.
+ */
+export const SCORING_BATCH_TIMEOUT_MS = 75_000;
+/** Batches scored at once. 50 candidates / 10 per batch = 5 → one wave. */
+export const SCORING_CONCURRENCY = 5;
+
+export interface ScoreTasksOptions {
+  /** Per-batch deadline (ms). Default SCORING_BATCH_TIMEOUT_MS. */
+  batchTimeoutMs?: number;
+  /** Max batches in flight at once. Default SCORING_CONCURRENCY. */
+  concurrency?: number;
+}
+
+/**
  * Score a batch of tasks with AI adjustments using Sonnet (standard tier).
- * Batches up to 10 tasks per inference call.
- * Adjustments are clamped to [-20, +20].
+ * Batches up to 10 tasks per inference call; batches run concurrently
+ * (bounded by `concurrency`) and each has a hard deadline, so the whole call
+ * is bounded by roughly one batch timeout, not the sum of them.
+ * Adjustments are clamped to [-20, +20]. Output order matches input order.
  *
  * TaskAI owns loud failure reporting for its own fallback: any batch that
- * doesn't genuinely succeed calls recordFailure itself (never silent) and
- * every item in that batch is marked `degraded: true` so callers can tell a
- * genuine AI score from a zero-adjustment stub.
+ * doesn't genuinely succeed calls recordFailure itself, prints one stderr
+ * line (never silent), and every item in that batch is marked
+ * `degraded: true` so callers can tell a genuine AI score from a
+ * zero-adjustment stub. Callers must NOT persist degraded items over a prior
+ * real ai_reasoning.
  */
 export async function scoreTasksWithAI(
   tasks: ScoredTaskInput[],
-  context: AIScoringContext
+  context: AIScoringContext,
+  options: ScoreTasksOptions = {},
 ): Promise<AIScoredTask[]> {
   if (tasks.length === 0) return [];
 
   const BATCH_SIZE = 10;
-  const results: AIScoredTask[] = [];
+  const batchTimeoutMs = options.batchTimeoutMs ?? SCORING_BATCH_TIMEOUT_MS;
+  const concurrency = Math.max(1, options.concurrency ?? SCORING_CONCURRENCY);
 
-  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
-    const batch = tasks.slice(i, i + BATCH_SIZE);
-    const batchIndex = Math.floor(i / BATCH_SIZE);
+  const batches: ScoredTaskInput[][] = [];
+  for (let i = 0; i < tasks.length; i += BATCH_SIZE) batches.push(tasks.slice(i, i + BATCH_SIZE));
 
-    const focusBlock = context.userFocusAreas?.length
-      ? `\nUser focus areas:\n${context.userFocusAreas.join("\n")}`
-      : "";
-    const calendarBlock = context.todayCalendar
-      ? `\nToday's calendar:\n${context.todayCalendar}`
-      : "";
+  const batchResults: AIScoredTask[][] = new Array(batches.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < batches.length) {
+      const batchIndex = next++;
+      const batch = batches[batchIndex];
+      if (batch === undefined) break; // unreachable: the loop condition bounds batchIndex
+      batchResults[batchIndex] = await scoreOneBatch(batch, batchIndex, context, batchTimeoutMs);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker));
 
-    const userPrompt = `Current time: ${context.currentTime}
+  return batchResults.flat();
+}
+
+async function scoreOneBatch(
+  batch: ScoredTaskInput[],
+  batchIndex: number,
+  context: AIScoringContext,
+  batchTimeoutMs: number,
+): Promise<AIScoredTask[]> {
+  const focusBlock = context.userFocusAreas?.length ? `\nUser focus areas:\n${context.userFocusAreas.join("\n")}` : "";
+  const calendarBlock = context.todayCalendar ? `\nToday's calendar:\n${context.todayCalendar}` : "";
+
+  const userPrompt = `Current time: ${context.currentTime}
 Recent completions (last 7 days): ${context.recentCompletions}
 Active goals: ${context.activeGoals.map((g) => `${g.id}: ${g.title}`).join(", ") || "none"}${focusBlock}${calendarBlock}
 
@@ -734,79 +775,92 @@ ${JSON.stringify(
     return entry;
   }),
   null,
-  2
+  2,
 )}`;
 
-    let succeeded = false;
-    let failureReason = "unknown failure";
+  const results: AIScoredTask[] = [];
+  let succeeded = false;
+  let failureReason = "unknown failure";
+  const startedAt = Date.now();
 
-    try {
-      const result = await inference({
+  try {
+    // Inference kills its own child at `timeout`; the outer race is the hard
+    // backstop in case the inference promise itself never settles (spawn
+    // stall, wedged stdin). Either way the batch ends by the deadline.
+    let hardTimer: ReturnType<typeof setTimeout> | undefined;
+    const hardDeadline = new Promise<{ success: false; output: string; error: string }>((resolve) => {
+      hardTimer = setTimeout(
+        () => resolve({ success: false, output: "", error: `hard batch deadline after ${batchTimeoutMs + 5000}ms` }),
+        batchTimeoutMs + 5000,
+      );
+    });
+    const result = await Promise.race([
+      inference({
         systemPrompt: SCORING_SYSTEM_PROMPT,
         userPrompt,
         level: "standard",
         expectJson: false, // We'll parse arrays manually
-      });
+        timeout: batchTimeoutMs,
+      }),
+      hardDeadline,
+    ]).finally(() => clearTimeout(hardTimer));
 
-      if (result.success) {
-        // Find JSON array in response
-        const arrayMatch = result.output.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-          const rawParsed = JSON.parse(arrayMatch[0]) as unknown;
-          const parsed = AIScoredTaskArraySchema.safeParse(rawParsed);
-          if (parsed.success) {
-            for (const scored of parsed.data) {
-              const originalTask = batch.find((t) => t.id === scored.id);
-              if (!originalTask) continue;
-
-              // Clamp adjustment to [-20, +20]
-              const adjustment = Math.max(-20, Math.min(20, Math.round(scored.adjustment)));
-              // Truncate reasoning to 100 chars
-              const reasoning = scored.ai_reasoning.slice(0, 100);
-
-              results.push({
-                id: scored.id,
-                adjustment,
-                ai_reasoning: reasoning,
-                final_score: originalTask.deterministic_score + adjustment,
-              });
-            }
-            succeeded = true;
-          } else {
-            failureReason = `schema validation failed: ${parsed.error.message}`;
+    if (result.success) {
+      // Find JSON array in response
+      const arrayMatch = result.output.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        const rawParsed = JSON.parse(arrayMatch[0]) as unknown;
+        const parsed = AIScoredTaskArraySchema.safeParse(rawParsed);
+        if (parsed.success) {
+          const byId = new Map(parsed.data.map((s) => [s.id, s]));
+          for (const originalTask of batch) {
+            const scored = byId.get(originalTask.id);
+            if (!scored) continue;
+            // Clamp adjustment to [-20, +20]
+            const adjustment = Math.max(-20, Math.min(20, Math.round(scored.adjustment)));
+            results.push({
+              id: originalTask.id,
+              adjustment,
+              ai_reasoning: scored.ai_reasoning.slice(0, 100), // Truncate reasoning to 100 chars
+              final_score: originalTask.deterministic_score + adjustment,
+            });
           }
+          succeeded = true;
         } else {
-          failureReason = "no JSON array found in response";
+          failureReason = `schema validation failed: ${parsed.error.message}`;
         }
       } else {
-        failureReason = result.error || "inference returned success:false";
+        failureReason = "no JSON array found in response";
       }
-    } catch (err) {
-      failureReason = err instanceof Error ? err.message : String(err);
+    } else {
+      failureReason = result.error || "inference returned success:false";
     }
-
-    if (!succeeded) {
-      recordFailure({
-        source: "TaskAI:scoreTasksWithAI:batch",
-        error: failureReason,
-        context: { batchIndex, batchSize: batch.length },
-        tier: "log",
-      });
-
-      // Fallback for failed batch: zero adjustment, honestly marked degraded.
-      for (const task of batch) {
-        results.push({
-          id: task.id,
-          adjustment: 0,
-          ai_reasoning: "AI scoring unavailable",
-          final_score: task.deterministic_score,
-          degraded: true,
-        });
-      }
-    }
+  } catch (err) {
+    failureReason = err instanceof Error ? err.message : String(err);
   }
 
-  return results;
+  if (succeeded) return results;
+
+  const elapsedMs = Date.now() - startedAt;
+  recordFailure({
+    source: "TaskAI:scoreTasksWithAI:batch",
+    error: failureReason,
+    context: { batchIndex, batchSize: batch.length, elapsedMs, batchTimeoutMs },
+    tier: "log",
+  });
+  // stderr, so `--json` stdout stays parseable.
+  console.error(
+    `[TaskAI] AI scoring batch ${batchIndex} (${batch.length} tasks) degraded after ${Math.round(elapsedMs / 1000)}s: ${failureReason.slice(0, 200)}`,
+  );
+
+  // Fallback for failed batch: zero adjustment, honestly marked degraded.
+  return batch.map((task) => ({
+    id: task.id,
+    adjustment: 0,
+    ai_reasoning: AI_SCORING_UNAVAILABLE,
+    final_score: task.deterministic_score,
+    degraded: true as const,
+  }));
 }
 
 // ============================================================================
@@ -871,7 +925,7 @@ const WeeklyReviewSchema = z.object({
       tasksCompleted: z.number().int(),
       tasksRemaining: z.number().int(),
       assessment: z.string(),
-    })
+    }),
   ),
   insights: z.array(z.string()).min(1).max(5),
   recommendations: z.array(z.string()).min(1).max(5),
@@ -935,7 +989,9 @@ export async function generateWeeklyReview(data: ReviewData): Promise<WeeklyRevi
 Completed Tasks (${data.completedTasks.length}):
 ${
   data.completedTasks.length > 0
-    ? data.completedTasks.map((t) => `  - "${t.title}" [goal:${t.goal_id || "none"}, est:${t.estimated_minutes || "?"}min]`).join("\n")
+    ? data.completedTasks
+        .map((t) => `  - "${t.title}" [goal:${t.goal_id || "none"}, est:${t.estimated_minutes || "?"}min]`)
+        .join("\n")
     : "  (none)"
 }
 
@@ -954,11 +1010,7 @@ ${
 }
 
 Active Goals (${data.activeGoals.length}):
-${
-  data.activeGoals.length > 0
-    ? data.activeGoals.map((g) => `  - ${g.id}: "${g.title}"`).join("\n")
-    : "  (none)"
-}
+${data.activeGoals.length > 0 ? data.activeGoals.map((g) => `  - ${g.id}: "${g.title}"`).join("\n") : "  (none)"}
 
 Stats:
   Total tasks in system: ${data.stats.total}
@@ -1016,7 +1068,9 @@ export function formatWeeklyReview(review: WeeklyReview): string {
   lines.push("");
 
   lines.push("Summary:");
-  lines.push(`  Completed: ${review.summary.completed} tasks | Added: ${review.summary.added} tasks | Overdue: ${review.summary.overdue}`);
+  lines.push(
+    `  Completed: ${review.summary.completed} tasks | Added: ${review.summary.added} tasks | Overdue: ${review.summary.overdue}`,
+  );
   lines.push(`  Velocity: ${review.summary.velocity_trend}`);
   lines.push("");
 

@@ -21,12 +21,33 @@
  * @module TaskManager
  */
 
-import { join } from "path";
-import { getTaskDB, installRealQueueArchiveHook, DispositionSchema, hasContextLink, inheritedContextLines, CONTEXT_STANDARD_HINT, type Task, type Project, type TaskStatus, type EnergyLevel, type TaskFilter } from "./TaskDB.ts";
+import { join } from "node:path";
+import {
+  getTaskDB,
+  installRealQueueArchiveHook,
+  DispositionSchema,
+  hasContextLink,
+  inheritedContextLines,
+  CONTEXT_STANDARD_HINT,
+  type Task,
+  type Project,
+  type TaskStatus,
+  type EnergyLevel,
+  type TaskFilter,
+} from "./TaskDB.ts";
 import { notifySync } from "../../../../lib/core/NotificationService.ts";
 import {
-  agentOutcomeProblem, createForJmTasks, HUMAN_CLOSE_ACTORS, linkFromTarget, readOutcome, serializeOutcome, systemOutcome,
-  OutcomeRequiredError, OutcomeSchema, type Outcome, type OutcomeLink,
+  agentOutcomeProblem,
+  createForJmTasks,
+  HUMAN_CLOSE_ACTORS,
+  linkFromTarget,
+  readOutcome,
+  serializeOutcome,
+  systemOutcome,
+  OutcomeRequiredError,
+  OutcomeSchema,
+  type Outcome,
+  type OutcomeLink,
 } from "./TaskOutcome.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -66,11 +87,11 @@ export function parseRelativeDate(input: string): string | null {
   const today = new Date();
 
   if (lower === "today") {
-    return today.toISOString().split("T")[0];
+    return today.toISOString().slice(0, 10);
   }
   if (lower === "tomorrow" || lower === "tmrw") {
     today.setDate(today.getDate() + 1);
-    return today.toISOString().split("T")[0];
+    return today.toISOString().slice(0, 10);
   }
 
   // Day names
@@ -89,22 +110,22 @@ export function parseRelativeDate(input: string): string | null {
       let daysUntil = dayIndex - currentDay;
       if (daysUntil <= 0) daysUntil += 7;
       today.setDate(today.getDate() + daysUntil);
-      return today.toISOString().split("T")[0];
+      return today.toISOString().slice(0, 10);
     }
   }
 
   // +Nd format (e.g., +3d = 3 days from now)
   const plusDaysMatch = lower.match(/^\+(\d+)d$/);
   if (plusDaysMatch) {
-    today.setDate(today.getDate() + parseInt(plusDaysMatch[1]));
-    return today.toISOString().split("T")[0];
+    today.setDate(today.getDate() + parseInt(plusDaysMatch[1] ?? "0", 10));
+    return today.toISOString().slice(0, 10);
   }
 
   // +Nw format (e.g., +2w = 2 weeks from now)
   const plusWeeksMatch = lower.match(/^\+(\d+)w$/);
   if (plusWeeksMatch) {
-    today.setDate(today.getDate() + parseInt(plusWeeksMatch[1]) * 7);
-    return today.toISOString().split("T")[0];
+    today.setDate(today.getDate() + parseInt(plusWeeksMatch[1] ?? "0", 10) * 7);
+    return today.toISOString().slice(0, 10);
   }
 
   // ISO date passthrough
@@ -119,7 +140,13 @@ export function parseRelativeDate(input: string): string | null {
 // Formatting (extracted to TaskFormatter.ts)
 // ============================================================================
 
-import { formatTaskLine, formatTaskDetail, safeParseJSON, formatProjectLine, PRIORITY_LABELS } from "./TaskFormatter.ts";
+import {
+  formatTaskLine,
+  formatTaskDetail,
+  safeParseJSON,
+  formatProjectLine,
+  PRIORITY_LABELS,
+} from "./TaskFormatter.ts";
 export { formatTaskLine, formatTaskDetail, safeParseJSON };
 
 function output(data: unknown): void {
@@ -150,7 +177,8 @@ function hasFlag(name: string, args: string[]): boolean {
 function getArgs(name: string, args: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length - 1; i++) {
-    if (args[i] === `--${name}`) out.push(args[i + 1]);
+    const next = args[i + 1];
+    if (args[i] === `--${name}` && next !== undefined) out.push(next);
   }
   return out;
 }
@@ -181,7 +209,8 @@ function failCli(message: string): never {
 function checkOutcomeFlagValues(args: string[]): void {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (!a.startsWith("--") || !(OUTCOME_VALUE_FLAGS as readonly string[]).includes(a.slice(2))) continue;
+    if (a === undefined || !a.startsWith("--") || !(OUTCOME_VALUE_FLAGS as readonly string[]).includes(a.slice(2)))
+      continue;
     const v = args[i + 1];
     if (v === undefined || v.startsWith("--")) failCli(`${a} needs a value${v === undefined ? "" : ` (got "${v}")`}`);
   }
@@ -235,14 +264,21 @@ function validateOutcomeFlags(f: OutcomeFlags, example: string, closing: boolean
     failCli(
       closing
         ? `${f.actor} needs an outcome before closing a task: ${gateReason}. ${use}`
-        : `outcome not saved: ${writeReason}. ${use}`
+        : `outcome not saved: ${writeReason}. ${use}`,
     );
   if (!f.headline || f.headline.trim() === "") {
     refuse("no outcome recorded", `the outcome needs an --outcome "<what changed>" headline`);
   }
-  const parsed = OutcomeSchema.safeParse(outcomeFromFlags(f, f.forJm.map((text) => ({ text: text.trim().slice(0, 300) }))));
+  const parsed = OutcomeSchema.safeParse(
+    outcomeFromFlags(
+      f,
+      f.forJm.map((text) => ({ text: text.trim().slice(0, 300) })),
+    ),
+  );
   if (!parsed.success) {
-    failCli(`invalid outcome: ${parsed.error.issues.map((i) => `${i.path.join(".") || "outcome"}: ${i.message}`).join("; ")}`);
+    failCli(
+      `invalid outcome: ${parsed.error.issues.map((i) => `${i.path.join(".") || "outcome"}: ${i.message}`).join("; ")}`,
+    );
   }
   const problem = agentOutcomeProblem(parsed.data);
   if (problem) {
@@ -266,7 +302,7 @@ function refuseReservedActor(actor: string): void {
   if (!HUMAN_CLOSE_ACTORS.has(actor)) return;
   console.error(
     `Error: --actor ${actor} is reserved for the board, Telegram and the LifeOS home; the CLI closes as an agent. ` +
-      `Pass --outcome … --link … (or --no-artifact "<why>").`
+      `Pass --outcome … --link … (or --no-artifact "<why>").`,
   );
   process.exit(1);
 }
@@ -275,7 +311,7 @@ function refuseReservedActor(actor: string): void {
 // Command Handlers
 // ============================================================================
 
-function cmdToday(args: string[]): void {
+function cmdToday(_args: string[]): void {
   const db = getTaskDB();
   const tasks = db.getTodayTasks();
 
@@ -309,7 +345,7 @@ function cmdToday(args: string[]): void {
   db.close();
 }
 
-function cmdInbox(args: string[]): void {
+function cmdInbox(_args: string[]): void {
   const db = getTaskDB();
   const tasks = db.getInboxTasks();
 
@@ -335,12 +371,14 @@ function cmdInbox(args: string[]): void {
 
 export async function cmdAdd(
   args: string[],
-  deps: { extractTaskMetadataFn?: typeof extractTaskMetadata } = {}
+  deps: { extractTaskMetadataFn?: typeof extractTaskMetadata } = {},
 ): Promise<void> {
   // Get title - first non-flag argument after 'add'
   const rawTitle = args.find((a) => !a.startsWith("--"));
   if (!rawTitle) {
-    console.error("Error: title required. Usage: add \"task title\" [--goal G25] [--project id] [--due fri] [--priority 1-3]");
+    console.error(
+      'Error: title required. Usage: add "task title" [--goal G25] [--project id] [--due fri] [--priority 1-3]',
+    );
     process.exit(1);
   }
 
@@ -372,7 +410,7 @@ export async function cmdAdd(
         } catch {
           // TELOS or project lookup unavailable
         }
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date().toISOString().slice(0, 10);
         const context: ExtractionContext = { today, goalIds, projectNames, projectDescriptions };
         aiExtracted = await extractFn(rawTitle, context);
         if (aiExtracted.degraded) {
@@ -383,7 +421,9 @@ export async function cmdAdd(
             console.warn("  Warning: AI extraction degraded, task created with raw input");
           }
         } else if (!JSON_FLAG) {
-          console.log(`  AI extracted: title="${aiExtracted.title}"${aiExtracted.due_date ? ` due=${aiExtracted.due_date}` : ""}${aiExtracted.priority ? ` priority=${aiExtracted.priority}` : ""}${aiExtracted.energy_level ? ` energy=${aiExtracted.energy_level}` : ""}`);
+          console.log(
+            `  AI extracted: title="${aiExtracted.title}"${aiExtracted.due_date ? ` due=${aiExtracted.due_date}` : ""}${aiExtracted.priority ? ` priority=${aiExtracted.priority}` : ""}${aiExtracted.energy_level ? ` energy=${aiExtracted.energy_level}` : ""}`,
+          );
         }
       } catch (err) {
         // TRUE LAST RESORT — extractTaskMetadata (TaskAI.ts) never throws in
@@ -405,7 +445,7 @@ export async function cmdAdd(
   }
 
   // Explicit flags override AI suggestions
-  const title: string = rawTitle.startsWith("--") ? rawTitle : (aiExtracted?.title || rawTitle);
+  const title: string = rawTitle.startsWith("--") ? rawTitle : aiExtracted?.title || rawTitle;
   const goalId = getArg("goal", args) || aiExtracted?.goal_id || null;
 
   // Goal validation against TELOS
@@ -418,7 +458,9 @@ export async function cmdAdd(
       }
       const goal = getGoal(goalId);
       if (goal && goal.status !== "In Progress") {
-        console.warn(`Warning: Goal ${goalId} status is "${goal.status}" (not In Progress). Task will still be created.`);
+        console.warn(
+          `Warning: Goal ${goalId} status is "${goal.status}" (not In Progress). Task will still be created.`,
+        );
       }
     } catch {
       console.warn("Warning: TELOS not available, skipping goal validation.");
@@ -430,8 +472,9 @@ export async function cmdAdd(
   const scheduledInput = getArg("schedule", args);
   const priorityStr = getArg("priority", args);
   const status = (getArg("status", args) as TaskStatus) || "inbox";
-  let description = getArg("desc", args) || getArg("description", args) || "";
-  const energyLevel = (getArg("energy", args) || aiExtracted?.energy_level) as "low" | "medium" | "high" | undefined || undefined;
+  const description = getArg("desc", args) || getArg("description", args) || "";
+  const energyLevel =
+    ((getArg("energy", args) || aiExtracted?.energy_level) as "low" | "medium" | "high" | undefined) || undefined;
   const estimatedStr = getArg("estimate", args);
   const parentId = getArg("parent", args) || null;
   const recurRule = getArg("recur", args) || null;
@@ -441,7 +484,9 @@ export async function cmdAdd(
     const validRules = ["daily", "weekly", "weekdays", "monthly"];
     const isCustom = /^custom:[MTWRFSU]+$/i.test(recurRule);
     if (!validRules.includes(recurRule) && !isCustom) {
-      console.error(`Warning: invalid recurrence rule "${recurRule}". Use: daily, weekly, weekdays, monthly, or custom:MWF`);
+      console.error(
+        `Warning: invalid recurrence rule "${recurRule}". Use: daily, weekly, weekdays, monthly, or custom:MWF`,
+      );
     }
   }
 
@@ -462,24 +507,20 @@ export async function cmdAdd(
   }
 
   // Resolve due date — explicit flag wins over AI suggestion
-  const dueDate = dueInput
-    ? parseRelativeDate(dueInput)
-    : (aiExtracted?.due_date || null);
+  const dueDate = dueInput ? parseRelativeDate(dueInput) : aiExtracted?.due_date || null;
   if (dueInput && !dueDate) {
-    console.error(`Warning: could not parse due date "${dueInput}". Use: today, tomorrow, fri, +3d, +2w, or YYYY-MM-DD`);
+    console.error(
+      `Warning: could not parse due date "${dueInput}". Use: today, tomorrow, fri, +3d, +2w, or YYYY-MM-DD`,
+    );
   }
 
   const scheduledDate = scheduledInput ? parseRelativeDate(scheduledInput) : null;
 
   // Resolve estimated minutes — explicit flag wins over AI suggestion
-  const estimatedMinutes = estimatedStr
-    ? parseInt(estimatedStr)
-    : (aiExtracted?.estimated_minutes || null);
+  const estimatedMinutes = estimatedStr ? parseInt(estimatedStr) : aiExtracted?.estimated_minutes || null;
 
   // Resolve priority — explicit flag wins over AI suggestion (may be overridden below by router)
-  let priority = priorityStr
-    ? parseInt(priorityStr)
-    : (aiExtracted?.priority || 2);
+  const priority = priorityStr ? parseInt(priorityStr) : aiExtracted?.priority || 2;
 
   // ── Disposition (DUMB WRITE) ──
   // No routing at capture time. The task lands with disposition=null unless an
@@ -491,7 +532,9 @@ export async function cmdAdd(
   if (explicitDisposition) {
     const parsed = DispositionSchema.safeParse(explicitDisposition);
     if (!parsed.success) {
-      console.error(`Error: invalid --disposition "${explicitDisposition}". Valid values: ${DispositionSchema.options.join(", ")}`);
+      console.error(
+        `Error: invalid --disposition "${explicitDisposition}". Valid values: ${DispositionSchema.options.join(", ")}`,
+      );
       process.exit(1);
     }
     routedDisposition = parsed.data;
@@ -536,7 +579,9 @@ export async function cmdAdd(
         const { getQueueClient } = await import("../../../../lib/interfaces/QueueTaskIntegration.ts");
         const queueClient = getQueueClient();
         if (!queueClient) {
-          console.error("  Warning: Queue integration unavailable — no QueueClient registered (import bin/wire-queue-task-integration.ts in the entrypoint)");
+          console.error(
+            "  Warning: Queue integration unavailable — no QueueClient registered (import bin/wire-queue-task-integration.ts in the entrypoint)",
+          );
         } else {
           const queueItemId = await queueClient.enqueueItem(
             {
@@ -544,7 +589,7 @@ export async function cmdAdd(
               description: task.description || "",
               context: { source: "lucidtasks", taskId: task.id, priority: task.priority },
             },
-            { source: "lucidtasks" }
+            { source: "lucidtasks" },
           );
           db.updateTask(task.id, { queue_item_id: queueItemId });
           db.logActivity(task.id, "queue_linked", JSON.stringify({ queueItemId }), "queue");
@@ -564,7 +609,9 @@ export async function cmdAdd(
           // pre-existing LucidTasks<->CalendarAssistant Result-adapter consumption
           // (calassist-overhaul S5 — explicit write target required); seam
           // cross-skill-allowed: candidate CalendarPort (CalendarAssistant redesign pending — 07-02 audit)
-          const { createEvent, PRIMARY_CALENDAR } = await import("../../CalendarAssistant/Tools/GoogleCalendarAdapter.ts");
+          const { createEvent, PRIMARY_CALENDAR } = await import(
+            "../../CalendarAssistant/Tools/GoogleCalendarAdapter.ts"
+          );
           const est = task.estimated_minutes ?? 30;
           const startTime = `${task.due_date} 09:00`;
           const endHour = 9 + Math.floor(est / 60);
@@ -581,7 +628,7 @@ export async function cmdAdd(
               end: endTime,
               description: `LucidTasks: ${task.id}`,
             },
-            { calendar: PRIMARY_CALENDAR, caller: "LucidTasks.TaskManager.calendarCreate" }
+            { calendar: PRIMARY_CALENDAR, caller: "LucidTasks.TaskManager.calendarCreate" },
           );
 
           if (calResult.success) {
@@ -613,9 +660,9 @@ function formatDuration(minutes: number): string {
 async function cmdIcebox(args: string[]): Promise<void> {
   // Collect all non-flag positional args (same multi-arg pattern as cmdDone)
   const taskArgs: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith("--")) continue;
-    taskArgs.push(args[i]);
+  for (const a of args) {
+    if (a.startsWith("--")) continue;
+    taskArgs.push(a);
   }
 
   if (taskArgs.length === 0) {
@@ -642,7 +689,7 @@ async function cmdIcebox(args: string[]): Promise<void> {
       } else {
         const candidates = db.searchTasks(arg, 5);
         const activeCandidates = candidates.filter(
-          (t) => t.status !== "done" && t.status !== "cancelled" && t.status !== "someday"
+          (t) => t.status !== "done" && t.status !== "cancelled" && t.status !== "someday",
         );
 
         if (activeCandidates.length === 0) {
@@ -657,7 +704,9 @@ async function cmdIcebox(args: string[]): Promise<void> {
           }
           continue;
         } else if (activeCandidates.length === 1) {
-          resolvedTask = activeCandidates[0];
+          const [only] = activeCandidates;
+          if (!only) throw new Error("unreachable: one candidate expected");
+          resolvedTask = only;
         } else {
           console.error(`Ambiguous match for '${arg}'. Did you mean?`);
           for (const candidate of activeCandidates) {
@@ -714,18 +763,22 @@ async function cmdDone(args: string[]): Promise<void> {
   // Collect all non-flag positional args
   const taskArgs: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith("--")) {
+    const a = args[i];
+    if (a === undefined) continue;
+    if (a.startsWith("--")) {
       // Skip flag and its value if it takes one
-      if ((OUTCOME_VALUE_FLAGS as readonly string[]).includes(args[i].slice(2))) {
+      if ((OUTCOME_VALUE_FLAGS as readonly string[]).includes(a.slice(2))) {
         i++; // skip the value of a value-taking flag
       }
       continue;
     }
-    taskArgs.push(args[i]);
+    taskArgs.push(a);
   }
 
   if (taskArgs.length === 0) {
-    console.error("Error: task ID or title required. Usage: done <id|title>... --outcome \"<what changed>\" --link <path|url> [--check \"<cmd>\"] [--for-jm \"<item>\"]");
+    console.error(
+      'Error: task ID or title required. Usage: done <id|title>... --outcome "<what changed>" --link <path|url> [--check "<cmd>"] [--for-jm "<item>"]',
+    );
     process.exit(1);
   }
 
@@ -761,8 +814,9 @@ async function cmdDone(args: string[]): Promise<void> {
         if (activeCandidates.length === 0) {
           // Check if all matches are already done
           const doneCandidates = candidates.filter((t) => t.status === "done");
-          if (doneCandidates.length > 0) {
-            const msg = `Task '${doneCandidates[0].title}' (${doneCandidates[0].id}) is already done`;
+          const [firstDone] = doneCandidates;
+          if (firstDone) {
+            const msg = `Task '${firstDone.title}' (${firstDone.id}) is already done`;
             failed.push({ input: arg, error: msg });
             console.error(msg);
           } else {
@@ -771,7 +825,9 @@ async function cmdDone(args: string[]): Promise<void> {
           }
           continue;
         } else if (activeCandidates.length === 1) {
-          resolvedTask = activeCandidates[0];
+          const [only] = activeCandidates;
+          if (!only) throw new Error("unreachable: one candidate expected");
+          resolvedTask = only;
         } else {
           // Ambiguous match
           console.error(`Ambiguous match for '${arg}'. Did you mean?`);
@@ -804,7 +860,7 @@ async function cmdDone(args: string[]): Promise<void> {
       const updatedTask = db.updateTask(
         resolvedTask.id,
         outcomeJson ? { status: "done", outcome: outcomeJson } : { status: "done" },
-        outcomeFlags.actor
+        outcomeFlags.actor,
       );
       if (!updatedTask) {
         failed.push({ input: arg, error: `Failed to update task: ${resolvedTask.id}` });
@@ -829,16 +885,23 @@ async function cmdDone(args: string[]): Promise<void> {
           const gp = progress[updatedTask.goal_id];
           if (gp) {
             await memoryStore.capture({
-              type: 'signal',
-              tags: ['pattern', 'tasks', 'goal-progress', updatedTask.goal_id],
+              type: "signal",
+              tags: ["pattern", "tasks", "goal-progress", updatedTask.goal_id],
               title: `Task completed for ${updatedTask.goal_id}: ${gp.completed}/${gp.total} (${gp.percentage}%)`,
               content: `Completed: "${updatedTask.title}" | Goal: ${updatedTask.goal_id} | Progress: ${gp.completed}/${gp.total} tasks (${gp.percentage}%)`,
-              source: 'LucidTasks',
-              metadata: { goalId: updatedTask.goal_id, missionId: updatedTask.mission_id,
-                completed: gp.completed, total: gp.total, percentage: gp.percentage },
+              source: "LucidTasks",
+              metadata: {
+                goalId: updatedTask.goal_id,
+                missionId: updatedTask.mission_id,
+                completed: gp.completed,
+                total: gp.total,
+                percentage: gp.percentage,
+              },
             });
           }
-        } catch { /* Non-fatal — don't block task completion */ }
+        } catch {
+          /* Non-fatal — don't block task completion */
+        }
       }
 
       // Text output per task
@@ -877,7 +940,9 @@ async function cmdDone(args: string[]): Promise<void> {
         // pre-existing LucidTasks<->CalendarAssistant Result-adapter consumption
         // (calassist-overhaul S5 — explicit write target required); seam
         // cross-skill-allowed: candidate CalendarPort (CalendarAssistant redesign pending — 07-02 audit)
-        const { deleteEvent, PRIMARY_CALENDAR } = await import("../../CalendarAssistant/Tools/GoogleCalendarAdapter.ts");
+        const { deleteEvent, PRIMARY_CALENDAR } = await import(
+          "../../CalendarAssistant/Tools/GoogleCalendarAdapter.ts"
+        );
         const delResult = await deleteEvent(task.title, {
           calendar: PRIMARY_CALENDAR,
           caller: "LucidTasks.TaskManager.calendarDelete",
@@ -900,14 +965,19 @@ async function cmdDone(args: string[]): Promise<void> {
     if (resolvedTask.queue_item_id) {
       try {
         const bridgeResult = Bun.spawnSync([
-          "bun", join(defaultKayaHome(), "skills/Automation/AutonomousWork/Tools/JmTaskBridge.ts"), // installed skill code — real-install path
-          "resolve", "--lucid-task-id", resolvedTask.id,
+          "bun",
+          join(defaultKayaHome(), "skills/Automation/AutonomousWork/Tools/JmTaskBridge.ts"), // installed skill code — real-install path
+          "resolve",
+          "--lucid-task-id",
+          resolvedTask.id,
         ]);
         if (bridgeResult.exitCode === 0) {
           const output = new TextDecoder().decode(bridgeResult.stdout).trim();
           if (output) console.log(`  ${output}`);
         }
-      } catch { /* Bridge failure is non-fatal */ }
+      } catch {
+        /* Bridge failure is non-fatal */
+      }
     }
   }
 
@@ -918,12 +988,12 @@ async function cmdDone(args: string[]): Promise<void> {
 // Scoring Algorithm (extracted to TaskScorer.ts)
 // ============================================================================
 
-import { scoreTask, type ScoringContext, type ScoredTask } from "./TaskScorer.ts";
+import { scoreTask, type ScoringContext } from "./TaskScorer.ts";
 export { scoreTask };
 
 export async function cmdNext(
   args: string[],
-  deps: { scoreTasksWithAIFn?: typeof scoreTasksWithAI } = {}
+  deps: { scoreTasksWithAIFn?: typeof scoreTasksWithAI } = {},
 ): Promise<void> {
   const db = getTaskDB();
 
@@ -993,14 +1063,12 @@ export async function cmdNext(
 
   // Build scoring context
   let activeGoalIds: string[] = [];
-  let goalTitleMap: Record<string, string> = {};
+  const goalTitleMap: Record<string, string> = {};
   let activeGoals: Array<{ id: string; title: string; status: string }> = [];
   let userFocusAreas: string[] = [];
   try {
     const telosData = loadTelosData();
-    activeGoalIds = telosData.goals
-      .filter((g) => g.status === "In Progress")
-      .map((g) => g.id);
+    activeGoalIds = telosData.goals.filter((g) => g.status === "In Progress").map((g) => g.id);
     activeGoals = telosData.goals
       .filter((g) => g.status === "In Progress")
       .map((g) => ({ id: g.id, title: g.title, status: g.status }));
@@ -1049,11 +1117,13 @@ export async function cmdNext(
   // ── AI Scoring (default; --no-ai opts out) ──
   // Deterministic TaskScorer output above is the fallback: if AI ranking
   // fails, topTasks stays in deterministic order and aiScores stays empty.
-  let aiScores: Map<string, { adjustment: number; ai_reasoning: string; final_score: number }> = new Map();
+  const aiScores: Map<string, { adjustment: number; ai_reasoning: string; final_score: number }> = new Map();
   let aiSucceeded = false;
   // True only when AI was attempted (!noAi) and every batch degraded — drives
   // the honest "(AI ranking unavailable)" note in the deterministic header.
   let aiFullyDegraded = false;
+  // Ids whose AI batch degraded this run — surfaced as `ai_degraded` in --json.
+  const degradedIds = new Set<string>();
   if (!noAi) {
     try {
       const scoringInputs: ScoredTaskInput[] = scored.map((st) => ({
@@ -1069,13 +1139,9 @@ export async function cmdNext(
         taskNotes: st.task.description?.slice(0, 200) || undefined,
         projectName: st.task.project_id ? projectMap[st.task.project_id] : undefined,
         goalTitle: st.task.goal_id ? goalTitleMap[st.task.goal_id] : undefined,
-        parentTaskTitle: st.task.parent_task_id
-          ? db.getTask(st.task.parent_task_id)?.title
-          : undefined,
+        parentTaskTitle: st.task.parent_task_id ? db.getTask(st.task.parent_task_id)?.title : undefined,
         subtaskCount: db.getSubtasks(st.task.id).length || undefined,
-        dependencyInfo: st.task.parent_task_id
-          ? `subtask of: ${st.task.parent_task_id}`
-          : undefined,
+        dependencyInfo: st.task.parent_task_id ? `subtask of: ${st.task.parent_task_id}` : undefined,
       }));
 
       const aiCtx: AIScoringContext = {
@@ -1093,12 +1159,16 @@ export async function cmdNext(
       const anyGenuine = aiResults.some((r) => !r.degraded);
 
       for (const r of aiResults) {
-        // Save to DB regardless — even a degraded entry ("AI scoring
-        // unavailable") is useful diagnostic history.
-        db.updateTask(r.id, { ai_priority_score: r.final_score, ai_reasoning: r.ai_reasoning }, "ai");
-        if (!r.degraded) {
-          aiScores.set(r.id, r);
+        // Persist only genuine scores. A degraded entry ("AI scoring
+        // unavailable") used to be saved too and overwrote the task's last
+        // real ai_reasoning; the failure itself is already in the failure log
+        // (TaskAI.ts), so the DB keeps the last real reasoning instead.
+        if (r.degraded) {
+          degradedIds.add(r.id);
+          continue;
         }
+        db.updateTask(r.id, { ai_priority_score: r.final_score, ai_reasoning: r.ai_reasoning }, "ai");
+        aiScores.set(r.id, r);
       }
       aiSucceeded = anyGenuine;
       aiFullyDegraded = aiResults.length > 0 && !anyGenuine;
@@ -1127,8 +1197,9 @@ export async function cmdNext(
   }
 
   // Handle --start flag
-  if (shouldStart && topTasks.length > 0) {
-    const topTask = topTasks[0].task;
+  const firstTop = topTasks[0];
+  if (shouldStart && firstTop) {
+    const topTask = firstTop.task;
     db.updateTask(topTask.id, { status: "in_progress" });
     const now = new Date().toISOString();
     db.setStartedAt(topTask.id, now);
@@ -1141,32 +1212,40 @@ export async function cmdNext(
 
   // Output
   if (JSON_FLAG) {
-    output(topTasks.map((st) => {
-      const ai = aiScores.get(st.task.id);
-      return {
-        task: st.task,
-        score: st.score,
-        reasons: st.reasons,
-        ai_adjustment: ai?.adjustment ?? null,
-        ai_reasoning: ai?.ai_reasoning ?? null,
-        final_score: ai?.final_score ?? st.score,
-      };
-    }));
+    if (aiFullyDegraded) {
+      // stderr keeps stdout valid JSON while still failing loud.
+      console.error("[LucidTasks] AI ranking unavailable this run — showing deterministic order");
+    }
+    output(
+      topTasks.map((st) => {
+        const ai = aiScores.get(st.task.id);
+        return {
+          task: st.task,
+          score: st.score,
+          reasons: st.reasons,
+          ai_adjustment: ai?.adjustment ?? null,
+          ai_reasoning: ai?.ai_reasoning ?? null,
+          final_score: ai?.final_score ?? st.score,
+          ai_degraded: degradedIds.has(st.task.id) || (aiFullyDegraded && !noAi),
+        };
+      }),
+    );
   } else {
     const header = aiSucceeded ? "\nSuggested next tasks (AI-enhanced):\n" : "\nSuggested next tasks:\n";
     console.log(header);
     if (aiFullyDegraded) {
       console.log("  (AI ranking unavailable this run — showing deterministic order)\n");
     }
-    for (let i = 0; i < topTasks.length; i++) {
-      const st = topTasks[i];
+    for (const [i, st] of topTasks.entries()) {
       const ai = aiScores.get(st.task.id);
       const displayScore = ai?.final_score ?? st.score;
       const priority = PRIORITY_LABELS[st.task.priority] || "   ";
       const due = st.task.due_date ? ` due:${st.task.due_date}` : "";
       const goal = st.task.goal_id ? ` ${st.task.goal_id}` : "";
       const project = st.task.project_id ? ` @${st.task.project_id}` : "";
-      console.log(`  ${i + 1}. [Score: ${displayScore}] ${priority} ${st.task.id}  ${st.task.title}${due}${goal}${project}`);
+      console.log(
+        `  ${i + 1}. [Score: ${displayScore}] ${priority} ${st.task.id}  ${st.task.title}${due}${goal}${project}`,
+      );
       if (ai) {
         const sign = ai.adjustment >= 0 ? "+" : "";
         console.log(`     Deterministic: ${st.reasons.join(" + ")} = ${st.score}`);
@@ -1182,7 +1261,7 @@ export async function cmdNext(
   db.close();
 }
 
-function cmdProjects(args: string[]): void {
+function cmdProjects(_args: string[]): void {
   const db = getTaskDB();
   const projects = db.listProjects();
 
@@ -1215,7 +1294,7 @@ function cmdProjects(args: string[]): void {
 function cmdSearch(args: string[]): void {
   const query = args.find((a) => !a.startsWith("--"));
   if (!query) {
-    console.error("Error: search query required. Usage: search \"query\"");
+    console.error('Error: search query required. Usage: search "query"');
     process.exit(1);
   }
 
@@ -1245,7 +1324,7 @@ function cmdSearch(args: string[]): void {
   db.close();
 }
 
-function cmdStats(args: string[]): void {
+function cmdStats(_args: string[]): void {
   const db = getTaskDB();
   const stats = db.getEnhancedStats();
 
@@ -1270,41 +1349,51 @@ ${Object.entries(stats.byStatus)
   .join("\n")}
 
 By Project:
-${Object.entries(stats.byProject)
-  .map(([id, info]) => `  ${info.name.padEnd(20)} ${info.count} active`)
-  .join("\n") || "  (none)"}
+${
+  Object.entries(stats.byProject)
+    .map(([_id, info]) => `  ${info.name.padEnd(20)} ${info.count} active`)
+    .join("\n") || "  (none)"
+}
 
 By Goal:
-${Object.entries(stats.byGoal)
-  .map(([goal, count]) => `  ${goal.padEnd(10)} ${count} active`)
-  .join("\n") || "  (none)"}
+${
+  Object.entries(stats.byGoal)
+    .map(([goal, count]) => `  ${goal.padEnd(10)} ${count} active`)
+    .join("\n") || "  (none)"
+}
 
 Completion Velocity (last 4 weeks):
-${stats.velocity.length > 0
-  ? stats.velocity.map((w) => `  Week ${w.week}:  ${w.count} tasks`).join("\n")
-  : "  No completions in last 4 weeks"}
+${
+  stats.velocity.length > 0
+    ? stats.velocity.map((w) => `  Week ${w.week}:  ${w.count} tasks`).join("\n")
+    : "  No completions in last 4 weeks"
+}
   Average:             ${stats.averageVelocity} tasks/week
 
 Task Duration:
-${stats.tasksWithDuration > 0
-  ? `  Average:             ${Math.round(stats.averageDurationMinutes)} min (based on ${stats.tasksWithDuration} tasks)`
-  : "  No duration data available"}
+${
+  stats.tasksWithDuration > 0
+    ? `  Average:             ${Math.round(stats.averageDurationMinutes)} min (based on ${stats.tasksWithDuration} tasks)`
+    : "  No duration data available"
+}
 
 Goal Progress:
-${Object.entries(stats.goalProgress).length > 0
-  ? Object.entries(stats.goalProgress)
-      .map(([id, p]) => `  ${id.padEnd(10)} ${p.percentage}% (${p.completed}/${p.total})`)
-      .join("\n")
-  : "  (none)"}
+${
+  Object.entries(stats.goalProgress).length > 0
+    ? Object.entries(stats.goalProgress)
+        .map(([id, p]) => `  ${id.padEnd(10)} ${p.percentage}% (${p.completed}/${p.total})`)
+        .join("\n")
+    : "  (none)"
+}
 
 Estimate Accuracy:
 ${(() => {
-    const accuracy = db.getEstimateAccuracy();
-    if (accuracy.count === 0) return "  No tasks with both estimate and actual duration";
-    const direction = accuracy.medianRatio > 1 ? "overestimate" : "underestimate";
-    const pct = Math.round(Math.abs(accuracy.medianRatio - 1) * 100);
-    return `  Median ratio: ${accuracy.medianRatio}x (${accuracy.count} tasks)\n  You tend to ${direction} by ~${pct}%`;
-  })()}
+  const accuracy = db.getEstimateAccuracy();
+  if (accuracy.count === 0) return "  No tasks with both estimate and actual duration";
+  const direction = accuracy.medianRatio > 1 ? "overestimate" : "underestimate";
+  const pct = Math.round(Math.abs(accuracy.medianRatio - 1) * 100);
+  return `  Median ratio: ${accuracy.medianRatio}x (${accuracy.count} tasks)\n  You tend to ${direction} by ~${pct}%`;
+})()}
 
 Energy Distribution:
   High:    ${stats.energyDistribution.high} tasks
@@ -1374,7 +1463,7 @@ function cmdView(args: string[]): void {
 function cmdEdit(args: string[]): void {
   const id = args.find((a) => !a.startsWith("--"));
   if (!id) {
-    console.error("Error: task ID required. Usage: edit <id> --title \"new\" --status next ...");
+    console.error('Error: task ID required. Usage: edit <id> --title "new" --status next ...');
     process.exit(1);
   }
 
@@ -1420,7 +1509,9 @@ function cmdEdit(args: string[]): void {
       }
       const goalData = getGoal(goalId);
       if (goalData && goalData.status !== "In Progress") {
-        console.warn(`Warning: Goal ${goalId} status is "${goalData.status}" (not In Progress). Task will still be updated.`);
+        console.warn(
+          `Warning: Goal ${goalId} status is "${goalData.status}" (not In Progress). Task will still be updated.`,
+        );
       }
     } catch {
       console.warn("Warning: TELOS not available, skipping goal validation.");
@@ -1466,7 +1557,9 @@ function cmdEdit(args: string[]): void {
   if (dispositionInput !== undefined) {
     const parsed = DispositionSchema.safeParse(dispositionInput);
     if (!parsed.success) {
-      console.error(`Error: invalid --disposition "${dispositionInput}". Valid values: ${DispositionSchema.options.join(", ")}`);
+      console.error(
+        `Error: invalid --disposition "${dispositionInput}". Valid values: ${DispositionSchema.options.join(", ")}`,
+      );
       process.exit(1);
     }
     updates.disposition = parsed.data;
@@ -1486,7 +1579,9 @@ function cmdEdit(args: string[]): void {
   if (hasOutcomeFlags) validateOutcomeFlags(outcomeFlags, `tasks update ${id}`, closing);
 
   if (Object.keys(updates).length === 0 && !hasOutcomeFlags) {
-    console.error("Error: no updates provided. Use --title, --status, --due, --goal, --project, --priority, --energy, --estimate, --disposition, --queue-item-id, --clear-queue-item-id, --kaya-triage, or an outcome: --outcome with --link/--no-artifact (plus --check, --for-jm, --details)");
+    console.error(
+      "Error: no updates provided. Use --title, --status, --due, --goal, --project, --priority, --energy, --estimate, --disposition, --queue-item-id, --clear-queue-item-id, --kaya-triage, or an outcome: --outcome with --link/--no-artifact (plus --check, --for-jm, --details)",
+    );
     process.exit(1);
   }
 
@@ -1503,7 +1598,11 @@ function cmdEdit(args: string[]): void {
       console.log(`\nUpdated: ${formatTaskLine(task!)}\n`);
     }
   } catch (err) {
-    console.error(err instanceof OutcomeRequiredError ? `Error: ${err.message}` : `Database error: ${err instanceof Error ? err.message : err}`);
+    console.error(
+      err instanceof OutcomeRequiredError
+        ? `Error: ${err.message}`
+        : `Database error: ${err instanceof Error ? err.message : err}`,
+    );
     process.exit(1);
   }
 
@@ -1513,7 +1612,7 @@ function cmdEdit(args: string[]): void {
 function cmdProjectAdd(args: string[]): void {
   const name = args.find((a) => !a.startsWith("--"));
   if (!name) {
-    console.error("Error: project name required. Usage: project-add \"name\" [--goal G25] [--color blue]");
+    console.error('Error: project name required. Usage: project-add "name" [--goal G25] [--color blue]');
     process.exit(1);
   }
 
@@ -1552,14 +1651,19 @@ function cmdContextLint(args: string[]): void {
     .filter((t) => !hasContextLink(t.description))
     .sort((a, b) => a.priority - b.priority || a.created_at.localeCompare(b.created_at));
   if (JSON_FLAG || hasFlag("json", args)) {
-    output({ count: thin.length, tasks: thin.map((t) => ({ id: t.id, title: t.title, status: t.status, project_id: t.project_id })) });
+    output({
+      count: thin.length,
+      tasks: thin.map((t) => ({ id: t.id, title: t.title, status: t.status, project_id: t.project_id })),
+    });
     return;
   }
   if (thin.length === 0) {
     console.log("\n✅ Every open task carries a context link.\n");
     return;
   }
-  console.log(`\n⚠ ${thin.length} open task(s) with no context link (fix: tasks edit <id> --desc "WHAT: … CONTEXT: /abs/path"):\n`);
+  console.log(
+    `\n⚠ ${thin.length} open task(s) with no context link (fix: tasks edit <id> --desc "WHAT: … CONTEXT: /abs/path"):\n`,
+  );
   for (const t of thin) console.log(`  ${formatTaskLine(t)}`);
   console.log(`\nStandard: skills/Productivity/LucidTasks/SKILL.md "Task context standard"\n`);
 }
@@ -1612,7 +1716,10 @@ function cmdList(args: string[]): void {
 
   // Apply context_tags filter in-memory (SQLite JSON functions may not be universally available)
   if (contextTagsArg) {
-    const filterTags = contextTagsArg.split(",").map((t) => t.trim()).filter(Boolean);
+    const filterTags = contextTagsArg
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     tasks = tasks.filter((task) => {
       const taskTags = safeParseJSON(task.context_tags);
       // Item matches if ALL requested filter tags are present in the task's context_tags
@@ -1724,7 +1831,9 @@ Completion Rate:   ${completionRate}
     console.log(`\nHabit Overview (last ${days} days, ${allStats.length} habits):\n`);
     for (const s of allStats) {
       const bar = "#".repeat(Math.min(s.currentStreak, 20));
-      console.log(`  ${s.taskTitle.padEnd(30)} streak:${String(s.currentStreak).padStart(3)}d  rate:${String(s.completionRate).padStart(3)}%  ${bar}`);
+      console.log(
+        `  ${s.taskTitle.padEnd(30)} streak:${String(s.currentStreak).padStart(3)}d  rate:${String(s.completionRate).padStart(3)}%  ${bar}`,
+      );
     }
     console.log("");
   }
@@ -1735,7 +1844,9 @@ Completion Rate:   ${completionRate}
 function cmdSaveView(args: string[]): void {
   const name = args.find((a) => !a.startsWith("--"));
   if (!name) {
-    console.error("Error: view name required. Usage: save-view \"name\" [--status next] [--project id] [--priority 1-3] [--goal G25] [--energy low|medium|high]");
+    console.error(
+      'Error: view name required. Usage: save-view "name" [--status next] [--project id] [--priority 1-3] [--goal G25] [--energy low|medium|high]',
+    );
     process.exit(1);
   }
 
@@ -1780,7 +1891,7 @@ function cmdSaveView(args: string[]): void {
 function cmdViewSaved(args: string[]): void {
   const name = args.find((a) => !a.startsWith("--"));
   if (!name) {
-    console.error("Error: view name required. Usage: view-saved \"name\"");
+    console.error('Error: view name required. Usage: view-saved "name"');
     process.exit(1);
   }
 
@@ -1813,7 +1924,7 @@ function cmdViewSaved(args: string[]): void {
   db.close();
 }
 
-function cmdViews(args: string[]): void {
+function cmdViews(_args: string[]): void {
   const db = getTaskDB();
   const views = db.listSavedViews();
 
@@ -1824,7 +1935,7 @@ function cmdViews(args: string[]): void {
   }
 
   if (views.length === 0) {
-    console.log("\nNo saved views. Create one with: save-view \"name\" [filters]\n");
+    console.log('\nNo saved views. Create one with: save-view "name" [filters]\n');
     db.close();
     return;
   }
@@ -1846,7 +1957,7 @@ function cmdViews(args: string[]): void {
 function cmdDeleteView(args: string[]): void {
   const name = args.find((a) => !a.startsWith("--"));
   if (!name) {
-    console.error("Error: view name required. Usage: delete-view \"name\"");
+    console.error('Error: view name required. Usage: delete-view "name"');
     process.exit(1);
   }
 
@@ -1948,9 +2059,10 @@ async function cmdDecompose(args: string[]): Promise<void> {
     } else {
       console.log(`\nProposed subtasks (${subtasks.length}) — [DRY RUN, not created]:\n`);
       let totalMinutes = 0;
-      for (let i = 0; i < subtasks.length; i++) {
-        const sub = subtasks[i];
-        console.log(`  ${i + 1}. ${sub.title.padEnd(45)} est: ${formatDuration(sub.estimated_minutes)}  energy: ${sub.energy_level}`);
+      for (const [i, sub] of subtasks.entries()) {
+        console.log(
+          `  ${i + 1}. ${sub.title.padEnd(45)} est: ${formatDuration(sub.estimated_minutes)}  energy: ${sub.energy_level}`,
+        );
         totalMinutes += sub.estimated_minutes;
       }
       console.log(`\nTotal estimated: ${formatDuration(totalMinutes)}\n`);
@@ -1985,10 +2097,11 @@ async function cmdDecompose(args: string[]): Promise<void> {
   } else {
     console.log(`\nDecomposed "${task.title}" into ${subtasks.length} subtasks:\n`);
     let totalMinutes = 0;
-    for (let i = 0; i < subtasks.length; i++) {
-      const sub = subtasks[i];
+    for (const [i, sub] of subtasks.entries()) {
       const id = createdIds[i];
-      console.log(`  ${i + 1}. ${id}  ${sub.title.padEnd(40)} est: ${formatDuration(sub.estimated_minutes)}  energy: ${sub.energy_level}`);
+      console.log(
+        `  ${i + 1}. ${id}  ${sub.title.padEnd(40)} est: ${formatDuration(sub.estimated_minutes)}  energy: ${sub.energy_level}`,
+      );
       totalMinutes += sub.estimated_minutes;
     }
     console.log(`\nTotal estimated: ${formatDuration(totalMinutes)}\n`);
@@ -2024,7 +2137,7 @@ async function cmdPrioritize(args: string[]): Promise<void> {
   // Build deterministic scores first
   let activeGoalIds: string[] = [];
   let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-  let goalTitleMap: Record<string, string> = {};
+  const goalTitleMap: Record<string, string> = {};
   let userFocusAreas: string[] = [];
   try {
     const telosData = loadTelosData();
@@ -2072,13 +2185,9 @@ async function cmdPrioritize(args: string[]): Promise<void> {
     taskNotes: st.task.description?.slice(0, 200) || undefined,
     projectName: st.task.project_id ? prioritizeProjectMap[st.task.project_id] : undefined,
     goalTitle: st.task.goal_id ? goalTitleMap[st.task.goal_id] : undefined,
-    parentTaskTitle: st.task.parent_task_id
-      ? db.getTask(st.task.parent_task_id)?.title
-      : undefined,
+    parentTaskTitle: st.task.parent_task_id ? db.getTask(st.task.parent_task_id)?.title : undefined,
     subtaskCount: db.getSubtasks(st.task.id).length || undefined,
-    dependencyInfo: st.task.parent_task_id
-      ? `subtask of: ${st.task.parent_task_id}`
-      : undefined,
+    dependencyInfo: st.task.parent_task_id ? `subtask of: ${st.task.parent_task_id}` : undefined,
   }));
 
   const aiCtx: AIScoringContext = {
@@ -2158,7 +2267,7 @@ function cmdPriority(args: string[]): void {
         rank: it.rank,
         id: it.task.id,
         title: it.task.title,
-        project: it.task.project_id ? projectMap.get(it.task.project_id) ?? it.task.project_id : null,
+        project: it.task.project_id ? (projectMap.get(it.task.project_id) ?? it.task.project_id) : null,
         status: it.task.status,
         priority: it.task.priority,
         energy_level: it.task.energy_level,
@@ -2174,23 +2283,28 @@ function cmdPriority(args: string[]): void {
     const e = totals.by_energy;
     console.log(
       `\nMy prioritized list — ${totals.count} tasks across all projects · ≈ ${formatMinutes(totals.estimated_minutes)} estimated` +
-        (totals.unestimated ? ` (${totals.unestimated} unestimated)` : "")
+        (totals.unestimated ? ` (${totals.unestimated} unestimated)` : ""),
     );
     console.log(
       `  energy: high ${e.high.count} (${formatMinutes(e.high.minutes)}) · medium ${e.medium.count} (${formatMinutes(e.medium.minutes)}) · low ${e.low.count} (${formatMinutes(e.low.minutes)})` +
         (e.unset.count ? ` · unset ${e.unset.count}` : "") +
-        (totals.waiting ? ` · ⏳ ${totals.waiting} waiting (listed last)` : "")
+        (totals.waiting ? ` · ⏳ ${totals.waiting} waiting (listed last)` : ""),
     );
-    console.log(`  ranked by AI priority score${aiScoredAt ? ` (refreshed ${aiScoredAt.slice(0, 16).replace("T", " ")}Z)` : " (never refreshed — 7-factor only)"}; Kaya's autonomous lane + Icebox hidden\n`);
+    console.log(
+      `  ranked by AI priority score${aiScoredAt ? ` (refreshed ${aiScoredAt.slice(0, 16).replace("T", " ")}Z)` : " (never refreshed — 7-factor only)"}; Kaya's autonomous lane + Icebox hidden\n`,
+    );
     for (const it of shown) {
       const t = it.task;
       const est = t.estimated_minutes ? formatMinutes(t.estimated_minutes) : "?";
       const energy = t.energy_level ?? "energy?";
       const due = t.due_date ? ` · due ${t.due_date}` : "";
       const wait = t.status === "waiting" ? " ⏳" : "";
-      const why = it.source === "ai" ? it.ai_reasoning ?? "AI-ranked" : it.det_reasons.join(", ") || "no scoring factors hit";
+      const why =
+        it.source === "ai" ? (it.ai_reasoning ?? "AI-ranked") : it.det_reasons.join(", ") || "no scoring factors hit";
       console.log(`  ${String(it.rank).padStart(2)}. [${it.score}] ${t.id}  ${t.title.slice(0, 72)}${wait}`);
-      console.log(`      ${t.project_id ? projectMap.get(t.project_id) ?? t.project_id : "No project"} · ${energy} · ${est}${due} · ${why}`);
+      console.log(
+        `      ${t.project_id ? (projectMap.get(t.project_id) ?? t.project_id) : "No project"} · ${energy} · ${est}${due} · ${why}`,
+      );
     }
     if (shown.length < items.length) {
       console.log(`  ... and ${items.length - shown.length} more (raise --top or use --json)`);
@@ -2226,7 +2340,7 @@ async function cmdEstimate(args: string[]): Promise<void> {
       `\nEstimating ${lanes.join(" + ")} lane${lanes.length > 1 ? "s" : ""} with AI` +
         (refresh ? " (refresh: overwriting existing values)" : " (missing fields only)") +
         (dryRun ? " [dry run]" : "") +
-        "..."
+        "...",
     );
   }
 
@@ -2238,20 +2352,28 @@ async function cmdEstimate(args: string[]): Promise<void> {
     for (const lane of lanes) {
       const c = r.lanes[lane];
       if (!c) continue;
-      const cal = lane === "kaya" && r.kayaCalibration
-        ? ` · calibrated to ${r.kayaCalibration.n} measured actuals (past estimates ran ${r.kayaCalibration.medianRatio}× high; median actual ${r.kayaCalibration.medianActual}m)`
-        : "";
-      console.log(`\n${lane === "jm" ? "Jm's tasks" : "Kaya's tasks"}: ${c.applied} of ${c.targeted} targeted estimated (${c.lane_size} in lane)${cal}`);
+      const cal =
+        lane === "kaya" && r.kayaCalibration
+          ? ` · calibrated to ${r.kayaCalibration.n} measured actuals (past estimates ran ${r.kayaCalibration.medianRatio}× high; median actual ${r.kayaCalibration.medianActual}m)`
+          : "";
+      console.log(
+        `\n${lane === "jm" ? "Jm's tasks" : "Kaya's tasks"}: ${c.applied} of ${c.targeted} targeted estimated (${c.lane_size} in lane)${cal}`,
+      );
       if (c.targeted === 0) console.log("  (all estimated — use --refresh to re-estimate)");
       for (const a of r.applied.filter((x) => x.lane === lane)) {
         const parts: string[] = [];
         if (a.energy_level) {
-          const was = a.previous.energy_level && a.previous.energy_level !== a.energy_level ? ` (was ${a.previous.energy_level})` : "";
+          const was =
+            a.previous.energy_level && a.previous.energy_level !== a.energy_level
+              ? ` (was ${a.previous.energy_level})`
+              : "";
           parts.push(`energy=${a.energy_level}${was}`);
         }
         if (a.estimated_minutes) {
-          const was = a.previous.estimated_minutes && a.previous.estimated_minutes !== a.estimated_minutes
-            ? ` (was ${formatMinutes(a.previous.estimated_minutes)})` : "";
+          const was =
+            a.previous.estimated_minutes && a.previous.estimated_minutes !== a.estimated_minutes
+              ? ` (was ${formatMinutes(a.previous.estimated_minutes)})`
+              : "";
           parts.push(`est=${formatMinutes(a.estimated_minutes)}${was}`);
         }
         const mark = dryRun ? "" : a.verified ? " ✓" : " ✗ NOT SAVED";
@@ -2260,7 +2382,8 @@ async function cmdEstimate(args: string[]): Promise<void> {
       }
     }
     if (r.missing.length) console.log(`\n  ✗ AI returned no estimate for ${r.missing.length}: ${r.missing.join(", ")}`);
-    if (r.unverified.length) console.log(`  ✗ Writes did not persist for ${r.unverified.length}: ${r.unverified.join(", ")}`);
+    if (r.unverified.length)
+      console.log(`  ✗ Writes did not persist for ${r.unverified.length}: ${r.unverified.join(", ")}`);
     console.log("");
   }
 
@@ -2268,7 +2391,7 @@ async function cmdEstimate(args: string[]): Promise<void> {
   db.close();
 }
 
-async function cmdReview(args: string[]): Promise<void> {
+async function cmdReview(_args: string[]): Promise<void> {
   const db = getTaskDB();
 
   if (!JSON_FLAG) {
@@ -2277,20 +2400,16 @@ async function cmdReview(args: string[]): Promise<void> {
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const endDate = now.toISOString().split("T")[0];
-  const startDate = weekAgo.toISOString().split("T")[0];
+  const endDate = now.toISOString().slice(0, 10);
+  const startDate = weekAgo.toISOString().slice(0, 10);
 
   // Gather completed tasks this week
   const allCompleted = db.listTasks({ status: "done" as TaskStatus, limit: 500 });
-  const completedThisWeek = allCompleted.filter(
-    (t) => t.completed_at && t.completed_at >= weekAgo.toISOString()
-  );
+  const completedThisWeek = allCompleted.filter((t) => t.completed_at && t.completed_at >= weekAgo.toISOString());
 
   // Gather added tasks this week
   const allTasks = db.listTasks({ limit: 1000 });
-  const addedThisWeek = allTasks.filter(
-    (t) => t.created_at && t.created_at >= weekAgo.toISOString()
-  );
+  const addedThisWeek = allTasks.filter((t) => t.created_at && t.created_at >= weekAgo.toISOString());
 
   // Overdue tasks
   const overdueTasks = db.getOverdueTasks();
@@ -2363,14 +2482,8 @@ async function cmdAutomate(args: string[]): Promise<void> {
   const dryRun = hasFlag("dry-run", args);
 
   // Dynamic import to keep TaskManager lightweight
-  const {
-    runMorning,
-    runEvening,
-    runWeekly,
-    formatMorningSummary,
-    formatEveningSummary,
-    formatWeeklySummary,
-  } = await import("./TaskAutomation.ts");
+  const { runMorning, runEvening, runWeekly, formatMorningSummary, formatEveningSummary, formatWeeklySummary } =
+    await import("./TaskAutomation.ts");
 
   switch (subcommand) {
     case "morning": {
@@ -2404,10 +2517,10 @@ async function cmdAutomate(args: string[]): Promise<void> {
     }
 
     case "status": {
-      const proc = Bun.spawnSync(
-        ["bun", `${import.meta.dir}/TaskAutomation.ts`, "status"],
-        { stdout: "inherit", stderr: "inherit" }
-      );
+      const proc = Bun.spawnSync(["bun", `${import.meta.dir}/TaskAutomation.ts`, "status"], {
+        stdout: "inherit",
+        stderr: "inherit",
+      });
       if (proc.exitCode !== 0) {
         console.error("Error running automation status");
         process.exit(1);
@@ -2598,11 +2711,13 @@ export function syncQueueStatus(taskId: string, queueStatus: string): void {
     // A queue item completing closes the task: record a truthful system outcome (the gate needs one),
     // but never overwrite a real outcome the task already has.
     if (newStatus === "done" && agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null) {
-      updates.outcome = serializeOutcome(systemOutcome({
-        by: "queue",
-        headline: `Closed when work-queue item finished: ${task.title}`,
-        noArtifact: `status synced from work-queue item ${task.queue_item_id ?? "(unlinked)"}`,
-      }));
+      updates.outcome = serializeOutcome(
+        systemOutcome({
+          by: "queue",
+          headline: `Closed when work-queue item finished: ${task.title}`,
+          noArtifact: `status synced from work-queue item ${task.queue_item_id ?? "(unlinked)"}`,
+        }),
+      );
     }
     db.updateTask(taskId, updates, "queue");
     db.logActivity(taskId, "status_sync", JSON.stringify({ from: task.status, to: newStatus, queueStatus }), "queue");
@@ -2618,185 +2733,185 @@ if (import.meta.main) {
   // installRealQueueArchiveHook does a dynamic import; it must complete before any
   // synchronous command runs, otherwise the hook won't be in place when updateTask fires.
   (async () => {
-  // Wire the QueueRouter <-> LucidTasks seam (registers QueueClient/TaskClient)
-  // before anything that needs it: --queue enqueue and the archive hook below.
-  await import("../../../../bin/wire-queue-task-integration.ts");
-  // Install the real QueueManager archive hook on the singleton DB.
-  // Failure is non-fatal and only warns.
-  await installRealQueueArchiveHook().catch((err) => {
-    console.warn("[TaskManager] queue reverse-sync hook install failed:", err);
-  });
+    // Wire the QueueRouter <-> LucidTasks seam (registers QueueClient/TaskClient)
+    // before anything that needs it: --queue enqueue and the archive hook below.
+    await import("../../../../bin/wire-queue-task-integration.ts");
+    // Install the real QueueManager archive hook on the singleton DB.
+    // Failure is non-fatal and only warns.
+    await installRealQueueArchiveHook().catch((err) => {
+      console.warn("[TaskManager] queue reverse-sync hook install failed:", err);
+    });
 
-  const args = process.argv.slice(2);
+    const args = process.argv.slice(2);
 
-  // Remove --json flag from args for command parsing
-  const commandArgs = args.filter((a) => a !== "--json");
-  const command = commandArgs[0];
-  const subArgs = commandArgs.slice(1);
+    // Remove --json flag from args for command parsing
+    const commandArgs = args.filter((a) => a !== "--json");
+    const command = commandArgs[0];
+    const subArgs = commandArgs.slice(1);
 
-  if (hasFlag("help", args) || command === "-h" || command === "--help") {
-    showHelp();
-    process.exit(0);
-  }
+    if (hasFlag("help", args) || command === "-h" || command === "--help") {
+      showHelp();
+      process.exit(0);
+    }
 
-  switch (command) {
-    case undefined:
-    case "today":
-      cmdToday(subArgs);
-      break;
+    switch (command) {
+      case undefined:
+      case "today":
+        cmdToday(subArgs);
+        break;
 
-    case "inbox":
-      cmdInbox(subArgs);
-      break;
+      case "inbox":
+        cmdInbox(subArgs);
+        break;
 
-    case "add":
-      cmdAdd(subArgs).catch((err) => {
-        console.error(`Add error: ${err}`);
+      case "add":
+        cmdAdd(subArgs).catch((err) => {
+          console.error(`Add error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "done":
+      case "complete":
+        cmdDone(subArgs).catch((err) => {
+          console.error(`Done error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "icebox":
+        cmdIcebox(subArgs).catch((err) => {
+          console.error(`Icebox error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "next":
+        cmdNext(subArgs).catch((err) => {
+          console.error(`Next error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "projects":
+        cmdProjects(subArgs);
+        break;
+
+      case "search":
+        cmdSearch(subArgs);
+        break;
+
+      case "stats":
+      case "dashboard":
+        cmdStats(subArgs);
+        break;
+
+      case "view":
+      case "show":
+      case "get":
+        cmdView(subArgs);
+        break;
+
+      case "edit":
+      case "update":
+        cmdEdit(subArgs);
+        break;
+
+      case "list":
+      case "ls":
+        cmdList(subArgs);
+        break;
+
+      case "context-lint":
+        cmdContextLint(subArgs);
+        break;
+
+      case "outcome-lint":
+        cmdOutcomeLint(subArgs);
+        break;
+
+      case "board":
+        cmdBoard(subArgs).catch((err) => {
+          console.error(`Board error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "project-add":
+        cmdProjectAdd(subArgs);
+        break;
+
+      case "habits":
+      case "habit":
+        cmdHabits(subArgs);
+        break;
+
+      case "save-view":
+        cmdSaveView(subArgs);
+        break;
+
+      case "view-saved":
+      case "view-view":
+        cmdViewSaved(subArgs);
+        break;
+
+      case "views":
+      case "saved-views":
+        cmdViews(subArgs);
+        break;
+
+      case "delete-view":
+      case "rm-view":
+        cmdDeleteView(subArgs);
+        break;
+
+      case "decompose":
+        cmdDecompose(subArgs).catch((err) => {
+          console.error(`Decompose error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "prioritize":
+      case "reprioritize":
+        cmdPrioritize(subArgs).catch((err) => {
+          console.error(`Prioritize error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "priority":
+      case "mine":
+        cmdPriority(subArgs);
+        break;
+
+      case "estimate":
+        cmdEstimate(subArgs).catch((err) => {
+          console.error(`Estimate error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "review":
+      case "weekly-review":
+        cmdReview(subArgs).catch((err) => {
+          console.error(`Review error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      case "automate":
+      case "auto":
+        cmdAutomate(subArgs).catch((err) => {
+          console.error(`Automate error: ${err}`);
+          process.exit(1);
+        });
+        break;
+
+      default:
+        console.error(`Unknown command: ${command}`);
+        console.error("Use --help for usage.");
         process.exit(1);
-      });
-      break;
-
-    case "done":
-    case "complete":
-      cmdDone(subArgs).catch((err) => {
-        console.error(`Done error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "icebox":
-      cmdIcebox(subArgs).catch((err) => {
-        console.error(`Icebox error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "next":
-      cmdNext(subArgs).catch((err) => {
-        console.error(`Next error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "projects":
-      cmdProjects(subArgs);
-      break;
-
-    case "search":
-      cmdSearch(subArgs);
-      break;
-
-    case "stats":
-    case "dashboard":
-      cmdStats(subArgs);
-      break;
-
-    case "view":
-    case "show":
-    case "get":
-      cmdView(subArgs);
-      break;
-
-    case "edit":
-    case "update":
-      cmdEdit(subArgs);
-      break;
-
-    case "list":
-    case "ls":
-      cmdList(subArgs);
-      break;
-
-    case "context-lint":
-      cmdContextLint(subArgs);
-      break;
-
-    case "outcome-lint":
-      cmdOutcomeLint(subArgs);
-      break;
-
-    case "board":
-      cmdBoard(subArgs).catch((err) => {
-        console.error(`Board error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "project-add":
-      cmdProjectAdd(subArgs);
-      break;
-
-    case "habits":
-    case "habit":
-      cmdHabits(subArgs);
-      break;
-
-    case "save-view":
-      cmdSaveView(subArgs);
-      break;
-
-    case "view-saved":
-    case "view-view":
-      cmdViewSaved(subArgs);
-      break;
-
-    case "views":
-    case "saved-views":
-      cmdViews(subArgs);
-      break;
-
-    case "delete-view":
-    case "rm-view":
-      cmdDeleteView(subArgs);
-      break;
-
-    case "decompose":
-      cmdDecompose(subArgs).catch((err) => {
-        console.error(`Decompose error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "prioritize":
-    case "reprioritize":
-      cmdPrioritize(subArgs).catch((err) => {
-        console.error(`Prioritize error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "priority":
-    case "mine":
-      cmdPriority(subArgs);
-      break;
-
-    case "estimate":
-      cmdEstimate(subArgs).catch((err) => {
-        console.error(`Estimate error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "review":
-    case "weekly-review":
-      cmdReview(subArgs).catch((err) => {
-        console.error(`Review error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    case "automate":
-    case "auto":
-      cmdAutomate(subArgs).catch((err) => {
-        console.error(`Automate error: ${err}`);
-        process.exit(1);
-      });
-      break;
-
-    default:
-      console.error(`Unknown command: ${command}`);
-      console.error("Use --help for usage.");
-      process.exit(1);
-  }
+    }
   })();
 }

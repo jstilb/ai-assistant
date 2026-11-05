@@ -115,7 +115,7 @@ export function linkFromTarget(target: string, label?: string): z.infer<typeof O
   const prefixed = /^(commit|branch|task|repo|url):(.*)$/s.exec(t);
   if (prefixed) {
     kind = OutcomeLinkKind.parse(prefixed[1]);
-    t = prefixed[2].trim();
+    t = (prefixed[2] ?? "").trim();
     if (t === "") throw new Error(`linkFromTarget: empty target after "${prefixed[1]}:" prefix`);
   }
   const k = kind ?? inferLinkKind(t);
@@ -185,7 +185,12 @@ function clip(s: string, max: number): string {
  * source "system", at = now. Headline and noArtifact are clipped to the schema limits; never throws
  * on long input.
  */
-export function systemOutcome(opts: { by: string; headline: string; noArtifact: string; links?: OutcomeLink[] }): Outcome {
+export function systemOutcome(opts: {
+  by: string;
+  headline: string;
+  noArtifact: string;
+  links?: OutcomeLink[];
+}): Outcome {
   return {
     v: 1,
     headline: clip(opts.headline, 200) || "Closed by system",

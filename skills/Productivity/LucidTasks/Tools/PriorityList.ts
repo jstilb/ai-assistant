@@ -83,11 +83,7 @@ export function isJmLane(task: Task, iceboxId: string | null): boolean {
 // Ranking (pure)
 // ============================================================================
 
-export function rankJmTasks(
-  tasks: Task[],
-  ctx: ScoringContext,
-  iceboxId: string | null,
-): PriorityList {
+export function rankJmTasks(tasks: Task[], ctx: ScoringContext, iceboxId: string | null): PriorityList {
   const scored = tasks
     .filter((t) => isJmLane(t, iceboxId))
     .map((task) => {
@@ -100,7 +96,7 @@ export function rankJmTasks(
         det_score: det.score,
         det_reasons: det.reasons,
         ai_score: aiScore,
-        ai_reasoning: aiScore === null ? null : task.ai_reasoning ?? null,
+        ai_reasoning: aiScore === null ? null : (task.ai_reasoning ?? null),
         manual_rank: typeof task.manual_rank === "number" && task.manual_rank >= 1 ? task.manual_rank : null,
       };
     });
@@ -151,7 +147,7 @@ function placePinned(scored: Unranked[]): Unranked[] {
       if (a.manual_rank !== b.manual_rank) return a.manual_rank - b.manual_rank;
       const ta = a.task.manual_ranked_at || "";
       const tb = b.task.manual_ranked_at || "";
-      if (ta !== tb) return tb.localeCompare(ta);   // newer pin first
+      if (ta !== tb) return tb.localeCompare(ta); // newer pin first
       return a.task.id.localeCompare(b.task.id);
     });
   if (pinned.length === 0) return scored;
@@ -192,7 +188,8 @@ export function loadActiveGoalIds(): string[] {
     return loadTelosData()
       .goals.filter((g) => g.status === "In Progress")
       .map((g) => g.id);
-  } catch {
+  } catch (err) {
+    console.error("[PriorityList] TELOS in-progress goals load failed:", err);
     return [];
   }
 }
@@ -201,10 +198,7 @@ export function findIceboxId(db: TaskDB): string | null {
   return db.listProjects().find((p) => p.name.toLowerCase() === "icebox")?.id ?? null;
 }
 
-export function buildPriorityList(
-  db: TaskDB,
-  opts: { now?: Date; activeGoalIds?: string[] } = {},
-): PriorityList {
+export function buildPriorityList(db: TaskDB, opts: { now?: Date; activeGoalIds?: string[] } = {}): PriorityList {
   const candidates = db.listTasks({ status: [...JM_LANE_STATUSES], limit: 10_000 });
   const ctx: ScoringContext = {
     activeGoalIds: opts.activeGoalIds ?? loadActiveGoalIds(),

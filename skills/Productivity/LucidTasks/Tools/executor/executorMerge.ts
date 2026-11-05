@@ -47,14 +47,17 @@
  * failures in recordFailure() and never lets an event-write failure block the executor.
  */
 
-import { execFileSync } from "child_process";
-import { existsSync, readFileSync, statSync } from "fs";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 import { recordFailure } from "../../../../../lib/core/FailureLog.ts";
 import { notify as realNotify } from "../../../../../lib/core/NotificationService.ts";
-import { markWorktreeMerged as realMarkWorktreeMerged, gcWorktreeForBranch } from "../../../../../lib/core/WorktreeManager.ts";
+import {
+  markWorktreeMerged as realMarkWorktreeMerged,
+  gcWorktreeForBranch,
+} from "../../../../../lib/core/WorktreeManager.ts";
 import {
   revParseRef,
   changedFilesBetween,
@@ -105,14 +108,9 @@ export function checkInteractiveSessionLock(): InteractiveLockInfo | null {
 
 export const LANE_A_ACTOR_PREFIX = "executor:";
 
-export type LaneAToStage = "lane-a-started" | "lane-a-verified" | "lane-a-merged";
+type LaneAToStage = "lane-a-started" | "lane-a-verified" | "lane-a-merged";
 
-export type AppendEventFn = (input: {
-  itemId: string;
-  toStage: string;
-  actor: string;
-  note?: string | null;
-}) => void;
+export type AppendEventFn = (input: { itemId: string; toStage: string; actor: string; note?: string | null }) => void;
 
 const defaultAppendEvent: AppendEventFn = (input) => getPipelineRepository().appendCrossRefEvent(input);
 
@@ -173,7 +171,7 @@ function defaultRunMergeScript(branch: string, repoRoot: string): MergeScriptRes
     return {
       exitCode: e.status ?? 1,
       stdout: e.stdout != null ? String(e.stdout) : "",
-      stderr: e.stderr != null ? String(e.stderr) : e.message ?? String(err),
+      stderr: e.stderr != null ? String(e.stderr) : (e.message ?? String(err)),
     };
   }
 }
@@ -290,7 +288,7 @@ export function formatMergeDeferredComment(lock: InteractiveLockInfo, marker: Me
  */
 export function parseMergeDeferredMarker(commentText: string): MergeDeferredMarker | null {
   if (!commentText.startsWith(MERGE_DEFERRED_MARKER_PREFIX)) return null;
-  const jsonLine = commentText.slice(MERGE_DEFERRED_MARKER_PREFIX.length).split("\n", 1)[0];
+  const jsonLine = commentText.slice(MERGE_DEFERRED_MARKER_PREFIX.length).split("\n", 1)[0] ?? "";
   try {
     const parsed = JSON.parse(jsonLine);
     if (
@@ -305,6 +303,7 @@ export function parseMergeDeferredMarker(commentText: string): MergeDeferredMark
     }
     return null;
   } catch {
+    // not JSON: not a merge-deferred marker
     return null;
   }
 }
@@ -334,7 +333,9 @@ export async function runAutoMerge(
   const getChangedFiles = deps.changedFiles ?? defaultChangedFiles;
   const revParseMain = deps.revParseMain ?? defaultRevParseMain;
   const notify =
-    deps.notify ?? ((message: string, opts?: { channel?: string }) => realNotify(message, { channel: (opts?.channel as never) ?? "telegram" }));
+    deps.notify ??
+    ((message: string, opts?: { channel?: string }) =>
+      realNotify(message, { channel: (opts?.channel as never) ?? "telegram" }));
   const markMerged = deps.markWorktreeMerged ?? realMarkWorktreeMerged;
   const appendEvent = deps.appendEvent ?? defaultAppendEvent;
 
@@ -407,7 +408,11 @@ export async function runAutoMerge(
   try {
     await markMerged(params.wtPath);
   } catch (err) {
-    recordFailure({ source: "executor:merge:worktree", error: err, context: { taskId: params.taskId, wtPath: params.wtPath } });
+    recordFailure({
+      source: "executor:merge:worktree",
+      error: err,
+      context: { taskId: params.taskId, wtPath: params.wtPath },
+    });
   }
 
   try {
@@ -416,7 +421,11 @@ export async function runAutoMerge(
     // fail the completed merge above.
     await gcWorktreeForBranch(params.branch, getKayaHome());
   } catch (err) {
-    recordFailure({ source: "executor:merge:gc", error: err, context: { taskId: params.taskId, branch: params.branch } });
+    recordFailure({
+      source: "executor:merge:gc",
+      error: err,
+      context: { taskId: params.taskId, branch: params.branch },
+    });
   }
 
   try {

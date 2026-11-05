@@ -55,7 +55,7 @@ export interface OutcomeDraft {
 /** Why a merge was attempted but did not complete (runAutoMerge's non-merged outcome kinds). */
 export type MergeAttemptKind = "deferred" | "merge-failed" | "verify-failed";
 
-export interface DeliverablePayload {
+interface DeliverablePayload {
   /** Human-readable account of what the agent did — Jm reviews this on the board. */
   summary: string;
   /** External files the agent wrote (e.g. an Obsidian note). Rendered as [[wikilinks]]. */
@@ -146,9 +146,7 @@ export function formatDeliverableComment(payload: DeliverablePayload): string {
   }
 
   // External-only deliverable (no repo changes).
-  const header = artifactLinks.length > 0
-    ? `Deliverable: ${artifactLinks.join(" ")}`
-    : "Deliverable:";
+  const header = artifactLinks.length > 0 ? `Deliverable: ${artifactLinks.join(" ")}` : "Deliverable:";
   const body = `${header}\n\n${summary}`;
   return verifyLine ? `${verifyLine}\n\n${body}` : body;
 }
@@ -318,10 +316,7 @@ export function deliverTask(db: TaskDB, taskId: string, payload: DeliverablePayl
 /** A non-empty headline: the draft's, else the summary's first sentence, else the task title. */
 function pickHeadline(draftHeadline: string, summary: string, taskTitle: string | undefined): string {
   return (
-    draftHeadline.trim() ||
-    deriveHeadline(summary) ||
-    clip((taskTitle ?? "").trim(), 200) ||
-    "Delivered (no summary)"
+    draftHeadline.trim() || deriveHeadline(summary) || clip((taskTitle ?? "").trim(), 200) || "Delivered (no summary)"
   );
 }
 
@@ -404,7 +399,7 @@ export function recordVerification(db: TaskDB, taskId: string, record: VerifyRec
 // mergeTask (slice F2 — Lane A auto-merge)
 // ============================================================================
 
-export interface MergedPayload {
+interface MergedPayload {
   /** The executor task branch that was merged. */
   branch: string;
   /** The resulting main-branch commit SHA (from merge-to-main.sh's CAS update-ref). */
@@ -422,11 +417,7 @@ export interface MergedPayload {
  * Build the auto-merge completion comment. Pure — exported for tests.
  */
 export function formatMergedComment(payload: MergedPayload): string {
-  return [
-    `✅ Auto-merged branch \`${payload.branch}\` → main @ \`${payload.sha}\`.`,
-    "",
-    payload.summary,
-  ].join("\n");
+  return [`✅ Auto-merged branch \`${payload.branch}\` → main @ \`${payload.sha}\`.`, "", payload.summary].join("\n");
 }
 
 /**

@@ -49,12 +49,7 @@ import {
 } from "./TaskDB.ts";
 import { withRetry } from "./TaskDB.ts";
 import { safeParseJSON } from "./TaskFormatter.ts";
-import {
-  BOARD_CSS,
-  ACTIVE_STATUSES,
-  STATUS_RANK,
-  STATUS_META,
-} from "./TaskBoard.ts";
+import { BOARD_CSS, ACTIVE_STATUSES, STATUS_RANK, STATUS_META } from "./TaskBoard.ts";
 import { reorganizeTaskFromComment, type ReorganizeContext } from "./TaskAI.ts";
 import { scoreTask, type ScoringContext } from "./TaskScorer.ts";
 import { buildPriorityList } from "./PriorityList.ts";
@@ -168,7 +163,10 @@ function handleListProjects(db: TaskDB): Response {
 
 /** GET /api/stats */
 function handleStats(db: TaskDB): Response {
-  return Response.json({ ...db.getStats(), closedWithoutOutcome: db.listClosedWithoutOutcome({ sinceDays: 30 }).length });
+  return Response.json({
+    ...db.getStats(),
+    closedWithoutOutcome: db.listClosedWithoutOutcome({ sinceDays: 30 }).length,
+  });
 }
 
 /**
@@ -215,10 +213,7 @@ async function handleOpenPath(url: URL): Promise<Response> {
   try {
     Bun.spawn(["open", resolved]);
   } catch (err) {
-    return Response.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 },
-    );
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
   return Response.json({ ok: true });
 }
@@ -266,7 +261,7 @@ function runGitView(args: string[]): Response {
       return new Response(partial + "\n[output cut at 2 MB]\n", { headers });
     }
     if (typeof e.status === "number") {
-      const msg = (typeof e.stderr === "string" && e.stderr.trim() !== "" ? e.stderr.trim() : "git failed");
+      const msg = typeof e.stderr === "string" && e.stderr.trim() !== "" ? e.stderr.trim() : "git failed";
       return Response.json({ error: msg }, { status: 404 });
     }
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
@@ -447,11 +442,7 @@ function validateTaskUpdates(db: TaskDB, body: Record<string, unknown>): Validat
   if (body.energy_level !== undefined) {
     if (body.energy_level === null) {
       updates.energy_level = null;
-    } else if (
-      body.energy_level === "low" ||
-      body.energy_level === "medium" ||
-      body.energy_level === "high"
-    ) {
+    } else if (body.energy_level === "low" || body.energy_level === "medium" || body.energy_level === "high") {
       updates.energy_level = body.energy_level;
     } else {
       return { ok: false, error: "energy_level must be low, medium, high, or null", status: 400 };
@@ -576,7 +567,8 @@ function handleMakeForJmTask(db: TaskDB, id: string, indexRaw: string): Response
   if (!task) return Response.json({ error: "task not found" }, { status: 404 });
   const { outcome } = readOutcome(task.outcome);
   if (!outcome) return Response.json({ error: "task has no readable outcome" }, { status: 400 });
-  if (!/^(0|[1-9]\d*)$/.test(indexRaw)) return Response.json({ error: "index must be a non-negative integer" }, { status: 400 });
+  if (!/^(0|[1-9]\d*)$/.test(indexRaw))
+    return Response.json({ error: "index must be a non-negative integer" }, { status: 400 });
   const index = Number(indexRaw);
   const item = outcome.forJm[index];
   if (!item) return Response.json({ error: `no for-Jm item at index ${index}` }, { status: 400 });
@@ -638,12 +630,7 @@ function handleDeleteTask(db: TaskDB, id: string): Response {
  * surface in the comment thread via the drawer's poll. Returns 201 immediately with
  * the stored user comment — does NOT block on the LLM.
  */
-async function handlePostComment(
-  db: TaskDB,
-  id: string,
-  req: Request,
-  deps: BoardDeps,
-): Promise<Response> {
+async function handlePostComment(db: TaskDB, id: string, req: Request, deps: BoardDeps): Promise<Response> {
   const existing = db.getTask(id);
   if (!existing) return Response.json({ error: "task not found" }, { status: 404 });
 
@@ -664,10 +651,7 @@ async function handlePostComment(
     console.error("[BoardServer] reorganize failed:", err);
   });
 
-  return Response.json(
-    { ok: true, comment: { task_id: id, action: "comment", actor: "user", text } },
-    { status: 201 },
-  );
+  return Response.json({ ok: true, comment: { task_id: id, action: "comment", actor: "user", text } }, { status: 201 });
 }
 
 // ============================================================================
@@ -696,7 +680,7 @@ export async function defaultReorganize(
     if (!task) return; // task vanished between comment and reorg — nothing to do
 
     const ctx: ReorganizeContext = {
-      today: new Date().toISOString().split("T")[0],
+      today: new Date().toISOString().slice(0, 10),
       projects: db.listProjects().map((p) => ({ id: p.id, name: p.name })),
       statuses: [...ACTIVE_STATUSES, "done", "cancelled"],
     };
@@ -718,7 +702,9 @@ export async function defaultReorganize(
       // "kaya" is a gated actor. A close Jm asked for in his board comment records that as its outcome,
       // in the SAME update as the status change.
       if (
-        updates.status === "done" && task.status !== "done" && updates.outcome === undefined &&
+        updates.status === "done" &&
+        task.status !== "done" &&
+        updates.outcome === undefined &&
         agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null
       ) {
         const quoted = commentText.replace(/\s+/g, " ").trim();
@@ -872,7 +858,9 @@ export function resolveStartupAuth(
     return {
       ok: false,
       error:
-        "BOARD_BIND=" + bind + " requires a token (env BOARD_TOKEN or " +
+        "BOARD_BIND=" +
+        bind +
+        " requires a token (env BOARD_TOKEN or " +
         "lucidtasks_board_token in ~/.claude/secrets.json). Refusing to expose the board unauthenticated.",
     };
   }
@@ -881,10 +869,11 @@ export function resolveStartupAuth(
 
 function readSecretString(key: string): string | null {
   try {
-    const j = JSON.parse(readFileSync(joinPath(homedir(), ".claude/secrets.json"), "utf8"));
+    const j = JSON.parse(readFileSync(joinPath(getKayaHome(), "secrets.json"), "utf8"));
     const v = (j as Record<string, unknown>)[key];
     return typeof v === "string" && v.length > 0 ? v : null;
   } catch {
+    // optional secrets file: missing or invalid JSON means no key
     return null;
   }
 }
@@ -912,15 +901,13 @@ export function checkBoardAuth(req: Request, token: string | null): BoardAuthRes
     if (timingSafeEq(q, token)) {
       return {
         ok: true,
-        setCookie:
-          "kaya_board=" + encodeURIComponent(token) +
-          "; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000",
+        setCookie: "kaya_board=" + encodeURIComponent(token) + "; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000",
       };
     }
     return { ok: false };
   }
   const m = (req.headers.get("cookie") || "").match(/(?:^|;\s*)kaya_board=([^;]+)/);
-  if (m && timingSafeEq(decodeURIComponent(m[1]), token)) return { ok: true };
+  if (m && timingSafeEq(decodeURIComponent(m[1] ?? ""), token)) return { ok: true };
   return { ok: false };
 }
 
@@ -962,7 +949,7 @@ export async function handleRequest(
     return routeRequest(req, dbOverride, deps);
   }
   // Clone first so a retry still has an unconsumed body (POST/PATCH read req.json()).
-  const retryReq = req.clone();
+  const retryReq = req.clone() as Request; // bun-types types clone() as undici-types Request; the runtime object is a Request
   try {
     return await routeRequest(req, getTaskDB(), deps);
   } catch (err) {
@@ -1017,20 +1004,24 @@ async function routeRequest(req: Request, db: TaskDB, deps: BoardDeps): Promise<
 
   const makeTaskMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/outcome\/for-jm\/([^/]+)\/task$/);
   if (makeTaskMatch && req.method === "POST") {
-    return handleMakeForJmTask(db, decodeURIComponent(makeTaskMatch[1]), decodeURIComponent(makeTaskMatch[2]));
+    return handleMakeForJmTask(
+      db,
+      decodeURIComponent(makeTaskMatch[1] ?? ""),
+      decodeURIComponent(makeTaskMatch[2] ?? ""),
+    );
   }
 
   // POST /api/tasks/:id/comments — match before the generic :id route so the
   // task-id regex below doesn't swallow the trailing "/comments".
   const commentMatch = pathname.match(/^\/api\/tasks\/(.+)\/comments$/);
   if (commentMatch && req.method === "POST") {
-    return handlePostComment(db, decodeURIComponent(commentMatch[1]), req, deps);
+    return handlePostComment(db, decodeURIComponent(commentMatch[1] ?? ""), req, deps);
   }
 
   // Task ids contain no slashes, so [^/]+ is safe and won't catch sub-paths.
   const taskIdMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/);
   if (taskIdMatch) {
-    const id = decodeURIComponent(taskIdMatch[1]);
+    const id = decodeURIComponent(taskIdMatch[1] ?? "");
     if (req.method === "GET") return handleGetTask(db, id);
     if (req.method === "PATCH") return handlePatchTask(db, id, req);
     if (req.method === "DELETE") return handleDeleteTask(db, id);
@@ -3694,18 +3685,12 @@ if (import.meta.main) {
         return res;
       } catch (err) {
         console.error("[BoardServer] handler error:", err);
-        return new Response(
-          `internal error: ${err instanceof Error ? err.message : String(err)}`,
-          { status: 500 },
-        );
+        return new Response(`internal error: ${err instanceof Error ? err.message : String(err)}`, { status: 500 });
       }
     },
   });
 
-  console.log(
-    `LucidTasks live board → http://${bind}:${server.port}` +
-    (authToken ? " (token auth ON)" : ""),
-  );
+  console.log(`LucidTasks live board → http://${bind}:${server.port}` + (authToken ? " (token auth ON)" : ""));
 }
 
 export { HTML };

@@ -12,15 +12,19 @@
  * (computeTriageHash, partitionGrilledItems, decideBackfillAction) for the spec pipeline.
  */
 
-import { join } from "path";
-import { readdirSync, existsSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { memPath } from "../../../../lib/core/MemoryPaths.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 // cross-skill-allowed: the classification engine reads queue context by design (shared engine across LucidTasks/QueueRouter/InformationManager)
-import { QueueManager, hasValidGrillStamp, type QueueItem } from "../../../Automation/QueueRouter/Tools/QueueManager.ts";
+import {
+  type QueueManager,
+  hasValidGrillStamp,
+  type QueueItem,
+} from "../../../Automation/QueueRouter/Tools/QueueManager.ts";
 // cross-skill-allowed: the classification engine reads digest context by design (shared engine across LucidTasks/QueueRouter/InformationManager)
 import { buildAllDigests, type DigestFile } from "../../InformationManager/DigestBuilder.ts";
 // Context Integrity Program Slice D2 — on-stale refresh must use the SAME
@@ -28,7 +32,14 @@ import { buildAllDigests, type DigestFile } from "../../InformationManager/Diges
 // FreshnessGuard.ts (Slice A3) already enforces, rather than a second
 // hardcoded threshold that could silently drift out of sync with it. This is
 // the "ensure our system's refresh process is consistent" guarantee.
-import { classifyArtifact, findRepoRoot, loadRegistry, loadSourceConfigs, type FreshnessDeclaration, type SourceConfigLike } from "../../../../lib/core/FreshnessClassifier.ts";
+import {
+  classifyArtifact,
+  findRepoRoot,
+  loadRegistry,
+  loadSourceConfigs,
+  type FreshnessDeclaration,
+  type SourceConfigLike,
+} from "../../../../lib/core/FreshnessClassifier.ts";
 
 const KAYA_HOME = getKayaHome();
 
@@ -59,9 +70,10 @@ export function enumerateSkillNames(skillsDir?: string): string[] {
   let categories: string[];
   try {
     categories = readdirSync(dir, { withFileTypes: true })
-      .filter(e => e.isDirectory())
-      .map(e => e.name);
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
+    // unreadable skills dir: no skill names
     return [];
   }
 
@@ -75,9 +87,10 @@ export function enumerateSkillNames(skillsDir?: string): string[] {
     let children: string[];
     try {
       children = readdirSync(catPath, { withFileTypes: true })
-        .filter(e => e.isDirectory())
-        .map(e => e.name);
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
     } catch {
+      // unreadable category dir: skip it
       continue;
     }
     for (const child of children) {
@@ -186,9 +199,7 @@ export type ClarityVerdict = z.infer<typeof ClarityVerdictSchema>;
  * When `surface` is absent/undefined (legacy verdict), returns `{}` so callers
  * can safely spread it without polluting the context with an explicit `undefined`.
  */
-export function buildSurfaceContext(
-  surface: Surface | undefined
-): Record<string, unknown> {
+export function buildSurfaceContext(surface: Surface | undefined): Record<string, unknown> {
   if (surface === undefined) return {};
   return { surface };
 }
@@ -208,13 +219,14 @@ export function buildSurfaceContext(
  * - not-executable → "park"  (parked too — needs-grilling is the single visible
  *                             holding pen; Jm confirms or kills at grill time)
  */
-export function decideBackfillAction(
-  verdict: ClarityVerdict["verdict"]
-): "advance" | "park" {
+export function decideBackfillAction(verdict: ClarityVerdict["verdict"]): "advance" | "park" {
   switch (verdict) {
-    case "clear":          return "advance";
-    case "needs-grill":    return "park";
-    case "not-executable": return "park";
+    case "clear":
+      return "advance";
+    case "needs-grill":
+      return "park";
+    case "not-executable":
+      return "park";
   }
 }
 
@@ -264,6 +276,7 @@ export function hasValidTriageStamp(task: LucidTaskInput): boolean {
     if (typeof stamp.hash !== "string") return false;
     return stamp.hash === computeTriageHash(task.project_name, task.title, task.description ?? "");
   } catch {
+    // invalid stamp JSON: not a current triage
     return false;
   }
 }
@@ -290,14 +303,16 @@ export function buildGrillBrief(v: ClarityVerdict): {
   let questions = v.suggested_questions ?? [];
 
   if (missing.length === 0) {
-    missing = v.verdict === "not-executable"
-      ? [`LLM judged not-executable: ${v.reasoning}`]
-      : [`Low-confidence ${v.verdict} verdict (${v.confidence.toFixed(2)}) — scope needs confirmation`];
+    missing =
+      v.verdict === "not-executable"
+        ? [`LLM judged not-executable: ${v.reasoning}`]
+        : [`Low-confidence ${v.verdict} verdict (${v.confidence.toFixed(2)}) — scope needs confirmation`];
   }
   if (questions.length === 0) {
-    questions = v.verdict === "not-executable"
-      ? ["Should Kaya attempt this anyway, or should it be killed/kept as a personal task?"]
-      : ["Is the target, scope, and expected output as the classifier understood it?"];
+    questions =
+      v.verdict === "not-executable"
+        ? ["Should Kaya attempt this anyway, or should it be killed/kept as a personal task?"]
+        : ["Is the target, scope, and expected output as the classifier understood it?"];
   }
 
   return {
@@ -426,7 +441,7 @@ export function loadContextDigests(opts: LoadContextDigestsOptions = {}): Loaded
       registry = null;
       const message = err instanceof Error ? err.message : String(err);
       result.warnings.push(
-        `Canonical freshness classification unavailable (${message}) — falling back to hardcoded ${DIGEST_STALE_HOURS_FALLBACK}h threshold.`
+        `Canonical freshness classification unavailable (${message}) — falling back to hardcoded ${DIGEST_STALE_HOURS_FALLBACK}h threshold.`,
       );
       recordFailure({
         source: "KayaTaskClassifier.loadContextDigests",
@@ -474,7 +489,7 @@ export function loadContextDigests(opts: LoadContextDigestsOptions = {}): Loaded
         anyStale = true;
         staleLabels.push(label);
         result.warnings.push(
-          `Context digest stale (${Math.round(ageMs / 3600000)}h, max ${Math.round(maxAgeMs / 3600000)}h): ${label} — refreshing in place`
+          `Context digest stale (${Math.round(ageMs / 3600000)}h, max ${Math.round(maxAgeMs / 3600000)}h): ${label} — refreshing in place`,
         );
       }
       // Recorded regardless of staleness — the fallback this call serves if
@@ -508,7 +523,7 @@ export function loadContextDigests(opts: LoadContextDigestsOptions = {}): Loaded
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       result.warnings.push(
-        `Context digest regeneration FAILED (${message}) — serving last-known on-disk snapshot, which may still be stale.`
+        `Context digest regeneration FAILED (${message}) — serving last-known on-disk snapshot, which may still be stale.`,
       );
       recordFailure({
         source: "KayaTaskClassifier.loadContextDigests",
@@ -550,33 +565,32 @@ export function buildSystemPrompt(skillNames: string[]): string {
     process.stderr.write(`[KayaTaskClassifier] WARNING: ${w}\n`);
   }
 
-  const skillList = skillNames.length > 0
-    ? skillNames.map(s => `- ${s}`).join("\n")
-    : "- (none found)";
+  const skillList = skillNames.length > 0 ? skillNames.map((s) => `- ${s}`).join("\n") : "- (none found)";
 
   // Build digest sections (empty sections are omitted)
-  const skillCapabilitiesSection = digests.skillCapabilities.length > 0
-    ? `## Skill Capabilities (what Kaya can already do)\n\n${digests.skillCapabilities.map(e => `- ${e}`).join("\n")}`
-    : "";
+  const skillCapabilitiesSection =
+    digests.skillCapabilities.length > 0
+      ? `## Skill Capabilities (what Kaya can already do)\n\n${digests.skillCapabilities.map((e) => `- ${e}`).join("\n")}`
+      : "";
 
-  const activeProjectsSection = digests.activeProjectsGoals.length > 0
-    ? `## Active Projects & Goals\n\n${digests.activeProjectsGoals.map(e => `- ${e}`).join("\n")}`
-    : "";
+  const activeProjectsSection =
+    digests.activeProjectsGoals.length > 0
+      ? `## Active Projects & Goals\n\n${digests.activeProjectsGoals.map((e) => `- ${e}`).join("\n")}`
+      : "";
 
-  const recentCompletionsSection = digests.recentCompletions.length > 0
-    ? `## Recent Completions (most recent finished work)\n\n${digests.recentCompletions.map(e => `- ${e}`).join("\n")}`
-    : "";
+  const recentCompletionsSection =
+    digests.recentCompletions.length > 0
+      ? `## Recent Completions (most recent finished work)\n\n${digests.recentCompletions.map((e) => `- ${e}`).join("\n")}`
+      : "";
 
-  const vaultFolderSection = digests.vaultFolderMap.length > 0
-    ? `## Vault Folder Map (Obsidian knowledge base structure)\n\n${digests.vaultFolderMap.map(e => `- ${e}`).join("\n")}`
-    : "";
+  const vaultFolderSection =
+    digests.vaultFolderMap.length > 0
+      ? `## Vault Folder Map (Obsidian knowledge base structure)\n\n${digests.vaultFolderMap.map((e) => `- ${e}`).join("\n")}`
+      : "";
 
-  const digestBlock = [
-    skillCapabilitiesSection,
-    activeProjectsSection,
-    recentCompletionsSection,
-    vaultFolderSection,
-  ].filter(Boolean).join("\n\n");
+  const digestBlock = [skillCapabilitiesSection, activeProjectsSection, recentCompletionsSection, vaultFolderSection]
+    .filter(Boolean)
+    .join("\n\n");
 
   const contextPreamble = digestBlock
     ? `## Context: Kaya's Current Capabilities and State\n\nUse this context to make accurate executability judgments. Kaya's active projects, recent completions, and vault structure tell you what has already been built and what Jm is working on.\n\n${digestBlock}\n\n`
@@ -731,7 +745,7 @@ async function classifyChunk(
   _totalChunks: number,
   systemPrompt: string,
 ): Promise<ClarityVerdict[]> {
-  const payload = tasks.map(t => ({
+  const payload = tasks.map((t) => ({
     id: t.id,
     title: t.title,
     description: (t.description || "").slice(0, 400),
@@ -806,21 +820,23 @@ export async function classifyTasksForKaya(
 
   const today = new Date().toISOString().slice(0, 10);
   const chunks = chunk(tasks, CHUNK_SIZE);
-  console.log(`[KayaTaskClassifier] Classifying ${tasks.length} task(s) in ${chunks.length} chunk(s) of ${CHUNK_SIZE}.`);
+  console.log(
+    `[KayaTaskClassifier] Classifying ${tasks.length} task(s) in ${chunks.length} chunk(s) of ${CHUNK_SIZE}.`,
+  );
 
   const all: ClarityVerdict[] = [];
   let failedChunks = 0;
 
-  for (let i = 0; i < chunks.length; i++) {
-    console.log(`[KayaTaskClassifier] Chunk ${i + 1}/${chunks.length} (${chunks[i].length} tasks)…`);
+  for (const [i, chunkTasks] of chunks.entries()) {
+    console.log(`[KayaTaskClassifier] Chunk ${i + 1}/${chunks.length} (${chunkTasks.length} tasks)…`);
     try {
-      const verdicts = await classifyFn(chunks[i], today, i, chunks.length, systemPrompt);
+      const verdicts = await classifyFn(chunkTasks, today, i, chunks.length, systemPrompt);
       all.push(...verdicts);
     } catch (err) {
       failedChunks++;
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[KayaTaskClassifier] Chunk ${i + 1}/${chunks.length} failed: ${msg} — skipping (will retry next run)`
+        `[KayaTaskClassifier] Chunk ${i + 1}/${chunks.length} failed: ${msg} — skipping (will retry next run)`,
       );
     }
   }
@@ -828,13 +844,13 @@ export async function classifyTasksForKaya(
   // Total outage: every chunk failed → throw so the CLI exits non-zero.
   if (failedChunks === chunks.length && chunks.length > 0) {
     throw new Error(
-      `KayaTaskClassifier: all ${chunks.length} chunk(s) failed — zero verdicts produced. Check API availability.`
+      `KayaTaskClassifier: all ${chunks.length} chunk(s) failed — zero verdicts produced. Check API availability.`,
     );
   }
 
   if (failedChunks > 0) {
     console.warn(
-      `[KayaTaskClassifier] Partial success: ${failedChunks}/${chunks.length} chunk(s) failed, returning ${all.length} verdict(s).`
+      `[KayaTaskClassifier] Partial success: ${failedChunks}/${chunks.length} chunk(s) failed, returning ${all.length} verdict(s).`,
     );
   }
 

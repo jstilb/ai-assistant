@@ -18,8 +18,8 @@
  * @module TelosGoalLoader
  */
 
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { loadTelosGoals } from "../../../../lib/core/TelosGoals.ts";
 
@@ -35,20 +35,20 @@ const MISSIONS_PATH = join(KAYA_HOME, "USER/TELOS/MISSIONS.md");
 // ============================================================================
 
 export interface TelosGoal {
-  id: string;           // e.g., "G0", "G25"
-  title: string;        // e.g., "Decrease Low-Value Media Consumption"
-  status: string;       // e.g., "In Progress" (full status line as authored)
-  missionId: string;    // e.g., "M6" (first supported mission)
-  missionName: string;  // e.g., "Self"
+  id: string; // e.g., "G0", "G25"
+  title: string; // e.g., "Decrease Low-Value Media Consumption"
+  status: string; // e.g., "In Progress" (full status line as authored)
+  missionId: string; // e.g., "M6" (first supported mission)
+  missionName: string; // e.g., "Self"
 }
 
 export interface TelosMission {
-  id: string;           // e.g., "M0"
-  name: string;         // e.g., "Adventurer"
-  definition: string;   // Full definition text
-  focus: string;        // e.g., "Regional Exploration & International Travel"
-  theme2026: string;    // e.g., "Explore Mexico, visit 3 new countries..."
-  goalIds: string[];    // e.g., ["G3", "G4", "G5", "G6"]
+  id: string; // e.g., "M0"
+  name: string; // e.g., "Adventurer"
+  definition: string; // Full definition text
+  focus: string; // e.g., "Regional Exploration & International Travel"
+  theme2026: string; // e.g., "Explore Mexico, visit 3 new countries..."
+  goalIds: string[]; // e.g., ["G3", "G4", "G5", "G6"]
 }
 
 export interface TelosData {
@@ -93,13 +93,12 @@ export function parseMissions(content: string): TelosMission[] {
 
   // Split by mission headings: ### M{N}: {Name}
   const missionPattern = /^### (M\d+):\s*(.+)$/gm;
-  let match: RegExpExecArray | null;
   const missionPositions: { id: string; name: string; start: number }[] = [];
 
-  while ((match = missionPattern.exec(content)) !== null) {
+  for (const match of content.matchAll(missionPattern)) {
     missionPositions.push({
-      id: match[1],
-      name: match[2].trim(),
+      id: match[1] ?? "",
+      name: (match[2] ?? "").trim(),
       start: match.index,
     });
   }
@@ -107,18 +106,17 @@ export function parseMissions(content: string): TelosMission[] {
   // Parse the goal mapping table at the bottom
   const goalMapping: Map<string, string[]> = new Map();
   const tablePattern = /\|\s*(M\d+)\s*\([^)]*\)\s*\|\s*([^|]+)\|/g;
-  let tableMatch: RegExpExecArray | null;
-  while ((tableMatch = tablePattern.exec(content)) !== null) {
-    const missionId = tableMatch[1];
-    const goalRefs = tableMatch[2].trim();
+  for (const tableMatch of content.matchAll(tablePattern)) {
+    const missionId = tableMatch[1] ?? "";
+    const goalRefs = (tableMatch[2] ?? "").trim();
     // Parse goal IDs like "G3-G6" or "G1, G21-G24"
     const goalIds = expandGoalIds(goalRefs);
     goalMapping.set(missionId, goalIds);
   }
 
-  for (let i = 0; i < missionPositions.length; i++) {
-    const { id, name, start } = missionPositions[i];
-    const end = i + 1 < missionPositions.length ? missionPositions[i + 1].start : content.length;
+  for (const [i, position] of missionPositions.entries()) {
+    const { id, name, start } = position;
+    const end = missionPositions[i + 1]?.start ?? content.length;
     const block = content.slice(start, end);
 
     const defMatch = block.match(/\*\*Definition:\*\*\s*(.+)/);
@@ -128,9 +126,9 @@ export function parseMissions(content: string): TelosMission[] {
     missions.push({
       id,
       name,
-      definition: defMatch ? defMatch[1].trim() : "",
-      focus: focusMatch ? focusMatch[1].trim() : "",
-      theme2026: themeMatch ? themeMatch[1].trim() : "",
+      definition: defMatch ? (defMatch[1] ?? "").trim() : "",
+      focus: focusMatch ? (focusMatch[1] ?? "").trim() : "",
+      theme2026: themeMatch ? (themeMatch[1] ?? "").trim() : "",
       goalIds: goalMapping.get(id) || [],
     });
   }
@@ -149,8 +147,8 @@ export function expandGoalIds(refs: string): string[] {
     const rangeMatch = part.match(/([GR])(\d+)\s*-\s*\1(\d+)/);
     if (rangeMatch) {
       const prefix = rangeMatch[1];
-      const start = parseInt(rangeMatch[2]);
-      const end = parseInt(rangeMatch[3]);
+      const start = parseInt(rangeMatch[2] ?? "");
+      const end = parseInt(rangeMatch[3] ?? "");
       for (let i = start; i <= end; i++) {
         ids.push(`${prefix}${i}`);
       }

@@ -33,8 +33,8 @@ export interface ScoredTask {
 export function scoreTask(task: Task, ctx: ScoringContext): ScoredTask {
   let score = 0;
   const reasons: string[] = [];
-  const today = ctx.now.toISOString().split("T")[0];
-  const in48h = new Date(ctx.now.getTime() + 48 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const today = ctx.now.toISOString().slice(0, 10);
+  const in48h = new Date(ctx.now.getTime() + 48 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // Factor 1: Overdue (+50)
   if (task.due_date && task.due_date < today) {
@@ -55,9 +55,7 @@ export function scoreTask(task: Task, ctx: ScoringContext): ScoredTask {
   // Factor 3: Due soon - within 48h but not overdue (+20)
   if (task.due_date && task.due_date >= today && task.due_date <= in48h) {
     score += 20;
-    const hoursUntil = Math.round(
-      (new Date(task.due_date).getTime() - ctx.now.getTime()) / (1000 * 60 * 60)
-    );
+    const hoursUntil = Math.round((new Date(task.due_date).getTime() - ctx.now.getTime()) / (1000 * 60 * 60));
     reasons.push(`Due in ${hoursUntil}h (+20)`);
   }
 

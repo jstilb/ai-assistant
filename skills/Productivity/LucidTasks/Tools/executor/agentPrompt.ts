@@ -14,18 +14,22 @@
  * Context caps prevent prompt bloat: UserContext ≤4000, TELOS ≤2000, MEMORY ≤3000.
  */
 
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ActivityLogEntry } from "../TaskDB.ts";
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 import { HEADLINE_TARGET } from "../TaskOutcome.ts";
 import { INTENT_RULE, UI_DESIGN_BAR } from "./qualityBar.ts";
 
+/** Where research notes and other non-repo deliverables go (same override the LifeOS skill uses). */
+const VAULT_DIR = process.env.LIFEOS_OBSIDIAN_VAULT_ROOT || join(homedir(), "Desktop", "obsidian");
+
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface TaskInput {
+interface TaskInput {
   id: string;
   title: string;
   description?: string | null;
@@ -47,6 +51,7 @@ function readFileCapped(filePath: string, maxChars: number): string {
     if (content.length <= maxChars) return content;
     return content.slice(0, maxChars) + "\n[... truncated for brevity ...]";
   } catch {
+    // optional grounding file: missing means no context
     return "";
   }
 }
@@ -71,27 +76,19 @@ function readFirstExisting(paths: string[], maxChars: number): string {
  * @param activityLog   - Recent activity/comment thread (up to 50 entries)
  * @param isReEngagement - True when Jm has left feedback and we are re-running
  */
-export function buildAgentPrompt(
-  task: TaskInput,
-  activityLog: ActivityLogEntry[],
-  isReEngagement: boolean
-): string {
+export function buildAgentPrompt(task: TaskInput, activityLog: ActivityLogEntry[], isReEngagement: boolean): string {
   const home = kayaHome();
   const branch = `executor/task-${task.id}`;
 
   // --- Grounding context (inline at build time) ---
   const userContext = readFileCapped(join(home, "USER/UserContext.md"), 4000);
   const telosContent = readFirstExisting(
-    [
-      join(home, "USER/TELOS/MISSIONS.md"),
-      join(home, "USER/TELOS/GOALS.md"),
-    ],
-    2000
+    [join(home, "USER/TELOS/MISSIONS.md"), join(home, "USER/TELOS/GOALS.md")],
+    2000,
   );
-  const memoryContent = readFileCapped(
-    join(home, "projects/-Users-[user]--claude/memory/MEMORY.md"),
-    3000
-  );
+  // Claude Code names a project's memory folder after its path with "/" and "." turned into "-".
+  const memoryRel = `projects/${home.replace(/[/.]/g, "-")}/memory/MEMORY.md`;
+  const memoryContent = readFileCapped(join(home, memoryRel), 3000);
 
   const groundingLines: string[] = [];
   if (userContext) {
@@ -114,10 +111,7 @@ export function buildAgentPrompt(
     const thread = activityLog
       .slice()
       .reverse() // oldest first
-      .map(
-        (e) =>
-          `[${e.actor} @ ${e.created_at}] ${e.action}${e.changes ? "\n  " + e.changes : ""}`
-      )
+      .map((e) => `[${e.actor} @ ${e.created_at}] ${e.action}${e.changes ? "\n  " + e.changes : ""}`)
       .join("\n\n");
 
     reEngagementBlock = `
@@ -179,7 +173,7 @@ copy of the Kaya repo — your changes here do NOT touch the live tree or any ot
   uncommitted changes you leave, so nothing is lost — but committing yourself with clear messages
   is preferred. Jm reviews this branch's diff and merges it when satisfied.
 - For tasks whose output lives **outside the repo** (research notes, documents): write to the
-  appropriate external location — e.g. \`/Users/[user]/Desktop/obsidian/<best-folder>/<slug>.md\`
+  appropriate external location — e.g. \`${VAULT_DIR}/<best-folder>/<slug>.md\`
   — exactly as before, and list those file paths as \`deliverables\` in your verdict.
 
 ---
@@ -194,10 +188,10 @@ ${groundingBlock}
 
 Before external work, mine Jm's existing context with your tools:
 1. \`USER/UserContext.md\`, \`USER/TELOS/\` — identity, preferences, goals
-2. \`projects/-Users-[user]--claude/memory/MEMORY.md\` — cross-session learnings
+2. \`${memoryRel}\` — cross-session learnings
 3. Knowledge graph: \`bun skills/Intelligence/Graph/Tools/GraphQuerier.ts search "<task keywords>"\`
 4. For code tasks: read the relevant skill/module and its tests before changing anything.
-5. \`/Users/[user]/Desktop/obsidian/\` — existing notes, for research tasks.
+5. \`${VAULT_DIR}/\` — existing notes, for research tasks.
 
 Interpret and decide by default. Only surface an ambiguity in your summary if it is truly
 unresolvable from available context.
@@ -257,7 +251,7 @@ EXECUTOR_VERDICT_END
 Example:
 
 EXECUTOR_VERDICT_START
-{"headline": "Added a retry with backoff to the calendar sync, so a failed call no longer drops events.", "summary": "Wrapped the Google Calendar fetch in skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts with 3 retries (1s, 2s, 4s). Added 4 tests; all pass. The sync still fails loudly after the third retry.", "deliverables": ["skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts", "skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts"], "check": "bun test ~/.claude/skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts", "forJm": ["Decide if 3 retries is enough, or if the sync should also page you after the last failure."]}
+{"headline": "Added a retry with backoff to the calendar sync, so a failed call no longer drops events.", "summary": "Wrapped the Google Calendar fetch in skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts with 3 retries (1s, 2s, 4s). Added 4 tests; all pass. The sync still fails loudly after the third retry.", "deliverables": ["skills/Productivity/CalendarAssistant/Tools/CalendarSync.ts", "skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts"], "check": "bun test skills/Productivity/CalendarAssistant/Tools/__tests__/CalendarSync.test.ts", "forJm": ["Decide if 3 retries is enough, or if the sync should also page you after the last failure."]}
 EXECUTOR_VERDICT_END
 
 Rules:

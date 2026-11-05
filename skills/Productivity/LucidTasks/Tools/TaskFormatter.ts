@@ -86,12 +86,14 @@ export function safeParseJSON(str: string | null | undefined): string[] {
     const parsed = JSON.parse(str);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    // invalid JSON column: treat as empty list
     return [];
   }
 }
 
 export function formatProjectLine(project: Project, taskCount?: number): string {
-  const statusIcon = project.status === "active" ? "+" : project.status === "paused" ? "~" : project.status === "completed" ? "x" : "-";
+  const statusIcon =
+    project.status === "active" ? "+" : project.status === "paused" ? "~" : project.status === "completed" ? "x" : "-";
   const count = taskCount !== undefined ? ` (${taskCount} tasks)` : "";
   const goal = project.goal_id ? ` -> ${project.goal_id}` : "";
   return `[${statusIcon}] ${project.id}  ${project.name}${count}${goal}`;

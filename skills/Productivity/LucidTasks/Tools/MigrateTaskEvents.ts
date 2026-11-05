@@ -22,8 +22,8 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync } from "fs";
-import { join } from "path";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import {
   migrateActivityLogToTaskEvents,

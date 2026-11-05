@@ -20,10 +20,10 @@
  * @module TaskAutomation
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { getTaskDB, calculateNextDueDate, generateTaskId } from "./TaskDB.ts";
-import type { Task, HabitStats } from "./TaskDB.ts";
+import type { Task } from "./TaskDB.ts";
 import { loadTrustConfig } from "./TaskAI.ts";
 import type { TrustConfig, ReviewData, WeeklyReview } from "./TaskAI.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
@@ -73,7 +73,8 @@ export interface MorningSummary {
   recurring: { generated: number; titles: string[] };
   overdue: { count: number; rescheduled: number; autopilotOff: boolean };
   inbox: { count: number; needsAttention: boolean; extracted: number };
-  prioritized: { count: number; skipped: boolean };
+  /** count = genuinely re-scored; degraded = tasks whose AI batch failed (left unchanged). */
+  prioritized: { count: number; skipped: boolean; degraded?: number };
   /** Step 5 — EstimateFill over both lanes (jm = Jm's work, kaya = the executor's lane). */
   estimated: { jm: number; kaya: number; targeted: number; missing: number; skipped: boolean; error?: string };
   dryRun: boolean;
@@ -202,7 +203,7 @@ export async function runMorning(options: { dryRun?: boolean } = {}): Promise<Mo
   const db = getTaskDB();
   const trustConfig = loadTrustConfig();
   const state = loadState();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().slice(0, 10);
   const timestamp = new Date().toISOString();
 
   const summary: MorningSummary = {
@@ -259,8 +260,8 @@ export async function runMorning(options: { dryRun?: boolean } = {}): Promise<Mo
 function runRecurringGeneration(
   db: ReturnType<typeof getTaskDB>,
   state: AutomationState,
-  today: string,
-  dryRun: boolean
+  _today: string,
+  dryRun: boolean,
 ): MorningSummary["recurring"] {
   const since = state.lastRecurrenceCheck ?? new Date(0).toISOString();
 
@@ -272,7 +273,7 @@ function runRecurringGeneration(
        WHERE status = 'done'
          AND recurrence_rule IS NOT NULL
          AND completed_at >= $since
-       ORDER BY completed_at ASC`
+       ORDER BY completed_at ASC`,
     )
     .all({ $since: since }) as Task[];
 
@@ -291,7 +292,7 @@ function runRecurringGeneration(
          WHERE parent_task_id = $parent_id
            AND due_date = $due_date
            AND status != 'done'
-         LIMIT 1`
+         LIMIT 1`,
       )
       .get({ $parent_id: task.id, $due_date: nextDueDate }) as { id: string } | null;
 
@@ -304,7 +305,7 @@ function runRecurringGeneration(
            AND due_date = $due_date
            AND status != 'done'
            AND created_at > $since
-         LIMIT 1`
+         LIMIT 1`,
       )
       .get({
         $title: task.title,
@@ -334,7 +335,7 @@ function runRecurringGeneration(
             $estimated_minutes, $due_date, $scheduled_date, $project_id,
             $goal_id, $mission_id, $context_tags, $labels, $recurrence_rule,
             $parent_task_id, $created_at, $updated_at
-          )`
+          )`,
         )
         .run({
           $id: newTaskId,
@@ -361,7 +362,7 @@ function runRecurringGeneration(
         newTaskId,
         "recurrence_generated",
         JSON.stringify({ from_task: task.id, rule: task.recurrence_rule, due_date: nextDueDate }),
-        "cron"
+        "cron",
       );
     }
 
@@ -378,7 +379,7 @@ function runOverdueReschedule(
   db: ReturnType<typeof getTaskDB>,
   trustConfig: TrustConfig,
   today: string,
-  dryRun: boolean
+  dryRun: boolean,
 ): MorningSummary["overdue"] {
   const overdueTasks = db.getOverdueTasks();
   let rescheduled = 0;
@@ -386,12 +387,7 @@ function runOverdueReschedule(
   if (trustConfig.autopilot.reschedule_overdue && !dryRun) {
     for (const task of overdueTasks) {
       db.updateTask(task.id, { due_date: today, scheduled_date: today }, "cron");
-      db.logActivity(
-        task.id,
-        "auto_rescheduled",
-        JSON.stringify({ from_due: task.due_date, to_due: today }),
-        "cron"
-      );
+      db.logActivity(task.id, "auto_rescheduled", JSON.stringify({ from_due: task.due_date, to_due: today }), "cron");
       rescheduled++;
     }
   }
@@ -410,7 +406,7 @@ function runOverdueReschedule(
 async function runInboxTriage(
   db: ReturnType<typeof getTaskDB>,
   trustConfig: TrustConfig,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<MorningSummary["inbox"]> {
   const inboxTasks = db.getInboxTasks();
   const count = inboxTasks.length;
@@ -445,7 +441,7 @@ async function runInboxTriage(
         // TELOS unavailable — proceed without goal context
       }
 
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = new Date().toISOString().slice(0, 10);
       const batchCount = Math.min(Math.ceil(missingMeta.length / INBOX_BATCH_SIZE), MAX_INBOX_BATCHES);
 
       for (let batchIdx = 0; batchIdx < batchCount; batchIdx++) {
@@ -477,12 +473,7 @@ async function runInboxTriage(
 
             if (Object.keys(updates).length > 0) {
               db.updateTask(task.id, updates, "cron");
-              db.logActivity(
-                task.id,
-                "auto_extracted",
-                JSON.stringify(updates),
-                "cron"
-              );
+              db.logActivity(task.id, "auto_extracted", JSON.stringify(updates), "cron");
               extracted++;
             }
           } catch (err) {
@@ -515,7 +506,7 @@ async function runInboxTriage(
 async function runEstimateFill(
   db: ReturnType<typeof getTaskDB>,
   trustConfig: TrustConfig,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<MorningSummary["estimated"]> {
   if (!trustConfig.autopilot.auto_estimate) {
     return { jm: 0, kaya: 0, targeted: 0, missing: 0, skipped: true };
@@ -547,17 +538,19 @@ async function runEstimateFill(
  * inline scorer — TaskScorer.ts has no dependency on TaskManager.ts/TaskAutomation.ts,
  * so importing it directly is cycle-safe).
  */
-async function runPriorityRescore(
+/** Exported for tests; `scoreFn` lets a test stand in for scoreTasksWithAI. */
+export async function runPriorityRescore(
   db: ReturnType<typeof getTaskDB>,
   trustConfig: TrustConfig,
-  dryRun: boolean
+  dryRun: boolean,
+  scoreFn?: typeof import("./TaskAI.ts").scoreTasksWithAI,
 ): Promise<MorningSummary["prioritized"]> {
   if (!trustConfig.autopilot.auto_prioritize) {
     return { count: 0, skipped: true };
   }
 
   try {
-    const { scoreTasksWithAI } = await import("./TaskAI.ts");
+    const scoreTasksWithAI = scoreFn ?? (await import("./TaskAI.ts")).scoreTasksWithAI;
     const { loadTelosData } = await import("./TelosGoalLoader.ts");
 
     const candidates = db.listTasks({
@@ -571,7 +564,7 @@ async function runPriorityRescore(
 
     let activeGoalIds: string[] = [];
     let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-    let goalTitleMap: Record<string, string> = {};
+    const goalTitleMap: Record<string, string> = {};
     let userFocusAreas: string[] = [];
     try {
       const telosData = loadTelosData();
@@ -607,7 +600,9 @@ async function runPriorityRescore(
         const todayMatch = cal.match(/## Today[\s\S]*?(?=##\s|---|\n\n\n|$)/);
         todayCalendar = todayMatch?.[0]?.trim() || "";
       }
-    } catch { /* calendar unavailable */ }
+    } catch {
+      /* calendar unavailable */
+    }
 
     const now = new Date();
     const scoringInputs = candidates.map((task) => {
@@ -625,13 +620,9 @@ async function runPriorityRescore(
         taskNotes: task.description?.slice(0, 200) || undefined,
         projectName: task.project_id ? projectMap[task.project_id] : undefined,
         goalTitle: task.goal_id ? goalTitleMap[task.goal_id] : undefined,
-        parentTaskTitle: task.parent_task_id
-          ? db.getTask(task.parent_task_id)?.title
-          : undefined,
+        parentTaskTitle: task.parent_task_id ? db.getTask(task.parent_task_id)?.title : undefined,
         subtaskCount: db.getSubtasks(task.id).length || undefined,
-        dependencyInfo: task.parent_task_id
-          ? `subtask of: ${task.parent_task_id}`
-          : undefined,
+        dependencyInfo: task.parent_task_id ? `subtask of: ${task.parent_task_id}` : undefined,
       };
     });
 
@@ -644,14 +635,19 @@ async function runPriorityRescore(
       userFocusAreas: userFocusAreas.length > 0 ? userFocusAreas : undefined,
     });
 
+    // Degraded items ("AI scoring unavailable") are never persisted: they used
+    // to overwrite each task's last real ai_reasoning. TaskAI already logged
+    // the batch failure; here we only count it so the morning summary is honest.
+    const genuine = aiResults.filter((r) => !r.degraded);
+    const degraded = aiResults.length - genuine.length;
     if (!dryRun) {
-      for (const result of aiResults) {
+      for (const result of genuine) {
         db.updateTask(result.id, { ai_priority_score: result.final_score, ai_reasoning: result.ai_reasoning }, "cron");
         db.logActivity(result.id, "auto_prioritized", JSON.stringify({ adjustment: result.adjustment }), "cron");
       }
     }
 
-    return { count: aiResults.length, skipped: false };
+    return { count: genuine.length, degraded, skipped: false };
   } catch {
     // TaskAI unavailable — skip gracefully
     return { count: 0, skipped: true };
@@ -675,7 +671,7 @@ export async function runEvening(options: { dryRun?: boolean } = {}): Promise<Ev
   const db = getTaskDB();
   const state = loadState();
   const timestamp = new Date().toISOString();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().slice(0, 10);
 
   // Step 1: Stale in-progress detection
   const staleInProgress = detectStaleInProgress(db);
@@ -683,7 +679,9 @@ export async function runEvening(options: { dryRun?: boolean } = {}): Promise<Ev
   // Step 2: Tomorrow preview
   const tomorrow = getTomorrowDate();
   const tomorrowTasks = db.listTasks({ due_before: getDateAfterTomorrow() });
-  const dueTomorrow = tomorrowTasks.filter((t) => t.due_date === tomorrow && t.status !== "done" && t.status !== "cancelled");
+  const dueTomorrow = tomorrowTasks.filter(
+    (t) => t.due_date === tomorrow && t.status !== "done" && t.status !== "cancelled",
+  );
   const scheduledTomorrow = db.listTasks({ scheduled_date: tomorrow });
   const scheduledTomorrowActive = scheduledTomorrow.filter((t) => t.status !== "done" && t.status !== "cancelled");
 
@@ -712,7 +710,9 @@ export async function runEvening(options: { dryRun?: boolean } = {}): Promise<Ev
   return summary;
 }
 
-function detectStaleInProgress(db: ReturnType<typeof getTaskDB>): Array<{ id: string; title: string; startedHoursAgo: number }> {
+function detectStaleInProgress(
+  db: ReturnType<typeof getTaskDB>,
+): Array<{ id: string; title: string; startedHoursAgo: number }> {
   const rawDb = db.getRawDb();
   const cutoff = new Date(Date.now() - STALE_IN_PROGRESS_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -722,7 +722,7 @@ function detectStaleInProgress(db: ReturnType<typeof getTaskDB>): Array<{ id: st
        WHERE status = 'in_progress'
          AND started_at IS NOT NULL
          AND started_at <= $cutoff
-       ORDER BY started_at ASC`
+       ORDER BY started_at ASC`,
     )
     .all({ $cutoff: cutoff }) as Array<{ id: string; title: string; started_at: string }>;
 
@@ -736,13 +736,13 @@ function detectStaleInProgress(db: ReturnType<typeof getTaskDB>): Array<{ id: st
 function getTomorrowDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+  return d.toISOString().slice(0, 10);
 }
 
 function getDateAfterTomorrow(): string {
   const d = new Date();
   d.setDate(d.getDate() + 2);
-  return d.toISOString().split("T")[0];
+  return d.toISOString().slice(0, 10);
 }
 
 function gatherDailyStats(db: ReturnType<typeof getTaskDB>, today: string): DailyStatsEntry {
@@ -755,7 +755,7 @@ function gatherDailyStats(db: ReturnType<typeof getTaskDB>, today: string): Dail
     rawDb
       .prepare(
         `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'done' AND completed_at >= $start AND completed_at <= $end`
+         WHERE status = 'done' AND completed_at >= $start AND completed_at <= $end`,
       )
       .get({ $start: startOfDay, $end: endOfDay }) as { count: number }
   ).count;
@@ -764,7 +764,7 @@ function gatherDailyStats(db: ReturnType<typeof getTaskDB>, today: string): Dail
     rawDb
       .prepare(
         `SELECT COUNT(*) as count FROM tasks
-         WHERE created_at >= $start AND created_at <= $end`
+         WHERE created_at >= $start AND created_at <= $end`,
       )
       .get({ $start: startOfDay, $end: endOfDay }) as { count: number }
   ).count;
@@ -774,23 +774,18 @@ function gatherDailyStats(db: ReturnType<typeof getTaskDB>, today: string): Dail
       .prepare(
         `SELECT COUNT(*) as count FROM tasks
          WHERE due_date IS NOT NULL AND due_date < $today
-           AND status NOT IN ('done', 'cancelled')`
+           AND status NOT IN ('done', 'cancelled')`,
       )
       .get({ $today: today }) as { count: number }
   ).count;
 
-  const inbox = (
-    rawDb
-      .prepare("SELECT COUNT(*) as count FROM tasks WHERE status = 'inbox'")
-      .get() as { count: number }
-  ).count;
+  const inbox = (rawDb.prepare("SELECT COUNT(*) as count FROM tasks WHERE status = 'inbox'").get() as { count: number })
+    .count;
 
   const active = (
-    rawDb
-      .prepare(
-        "SELECT COUNT(*) as count FROM tasks WHERE status IN ('next', 'in_progress', 'waiting')"
-      )
-      .get() as { count: number }
+    rawDb.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('next', 'in_progress', 'waiting')").get() as {
+      count: number;
+    }
   ).count;
 
   return { date: today, completed, added, overdue, inbox, active };
@@ -820,7 +815,7 @@ export async function runWeekly(options: { dryRun?: boolean } = {}): Promise<Wee
   const db = getTaskDB();
   const state = loadState();
   const timestamp = new Date().toISOString();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().slice(0, 10);
 
   let reviewPath: string | null = null;
 
@@ -859,23 +854,19 @@ async function generateAndSaveReview(
   db: ReturnType<typeof getTaskDB>,
   today: string,
   dryRun: boolean,
-  state: AutomationState
+  state: AutomationState,
 ): Promise<string | null> {
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const startDate = weekAgo.toISOString().split("T")[0];
+  const startDate = weekAgo.toISOString().slice(0, 10);
   const endDate = today;
 
   // Gather review data
   const allCompleted = db.listTasks({ status: "done", limit: 500 });
-  const completedThisWeek = allCompleted.filter(
-    (t) => t.completed_at && t.completed_at >= weekAgo.toISOString()
-  );
+  const completedThisWeek = allCompleted.filter((t) => t.completed_at && t.completed_at >= weekAgo.toISOString());
 
   const allTasks = db.listTasks({ limit: 1000 });
-  const addedThisWeek = allTasks.filter(
-    (t) => t.created_at && t.created_at >= weekAgo.toISOString()
-  );
+  const addedThisWeek = allTasks.filter((t) => t.created_at && t.created_at >= weekAgo.toISOString());
 
   const overdueTasks = db.getOverdueTasks();
   const stats = db.getStats();
@@ -981,10 +972,7 @@ function generateStatsOnlyReview(data: ReviewData): string {
   return lines.join("\n");
 }
 
-function buildGoalAlignmentReport(
-  db: ReturnType<typeof getTaskDB>,
-  today: string
-): GoalAlignmentEntry[] {
+function buildGoalAlignmentReport(db: ReturnType<typeof getTaskDB>, _today: string): GoalAlignmentEntry[] {
   const rawDb = db.getRawDb();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -993,7 +981,7 @@ function buildGoalAlignmentReport(
   const goalIds = rawDb
     .prepare(
       `SELECT DISTINCT goal_id FROM tasks
-       WHERE goal_id IS NOT NULL AND status NOT IN ('done', 'cancelled')`
+       WHERE goal_id IS NOT NULL AND status NOT IN ('done', 'cancelled')`,
     )
     .all() as { goal_id: string }[];
 
@@ -1006,7 +994,7 @@ function buildGoalAlignmentReport(
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
            WHERE goal_id = $goal_id AND status = 'done'
-             AND completed_at >= $week_ago`
+             AND completed_at >= $week_ago`,
         )
         .get({ $goal_id: goal_id, $week_ago: weekAgo }) as { count: number }
     ).count;
@@ -1017,7 +1005,7 @@ function buildGoalAlignmentReport(
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
            WHERE goal_id = $goal_id AND status = 'done'
-             AND completed_at >= $two_weeks_ago AND completed_at < $week_ago`
+             AND completed_at >= $two_weeks_ago AND completed_at < $week_ago`,
         )
         .get({ $goal_id: goal_id, $two_weeks_ago: twoWeeksAgo, $week_ago: weekAgo }) as { count: number }
     ).count;
@@ -1027,7 +1015,7 @@ function buildGoalAlignmentReport(
       rawDb
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
-           WHERE goal_id = $goal_id AND status NOT IN ('done', 'cancelled')`
+           WHERE goal_id = $goal_id AND status NOT IN ('done', 'cancelled')`,
         )
         .get({ $goal_id: goal_id }) as { count: number }
     ).count;
@@ -1068,7 +1056,7 @@ function detectStaleTasks(db: ReturnType<typeof getTaskDB>): WeeklySummary["stal
     rawDb
       .prepare(
         `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'next' AND updated_at <= $cutoff`
+         WHERE status = 'next' AND updated_at <= $cutoff`,
       )
       .get({ $cutoff: cutoff }) as { count: number }
   ).count;
@@ -1077,7 +1065,7 @@ function detectStaleTasks(db: ReturnType<typeof getTaskDB>): WeeklySummary["stal
     rawDb
       .prepare(
         `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'someday' AND updated_at <= $cutoff`
+         WHERE status = 'someday' AND updated_at <= $cutoff`,
       )
       .get({ $cutoff: cutoff }) as { count: number }
   ).count;
@@ -1093,14 +1081,12 @@ function buildHabitReport(db: ReturnType<typeof getTaskDB>): HabitSummaryEntry[]
   // Sort by current streak descending
   allHabitStats.sort((a, b) => b.currentStreak - a.currentStreak);
 
-  const today = new Date().toISOString().split("T")[0];
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return allHabitStats.map((stats) => {
     // A streak is "broken this week" if currentStreak = 0 and there were completions last week
-    const hadCompletionsLastWeek = stats.completionDates.some(
-      (d) => d >= weekAgo && d <= today
-    );
+    const hadCompletionsLastWeek = stats.completionDates.some((d) => d >= weekAgo && d <= today);
     const brokenThisWeek = stats.currentStreak === 0 && hadCompletionsLastWeek;
 
     return {
@@ -1118,18 +1104,16 @@ function buildHabitReport(db: ReturnType<typeof getTaskDB>): HabitSummaryEntry[]
 
 export function formatMorningSummary(summary: MorningSummary): string {
   const date = new Date(summary.timestamp);
-  const timeStr = `${date.toISOString().split("T")[0]} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timeStr = `${date.toISOString().slice(0, 10)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   const prefix = summary.dryRun ? "[DRY RUN] " : "";
 
-  const lines: string[] = [
-    `${prefix}LucidTasks Morning Maintenance (${timeStr})`,
-    "",
-  ];
+  const lines: string[] = [`${prefix}LucidTasks Morning Maintenance (${timeStr})`, ""];
 
   // Recurring
-  const recurDesc = summary.recurring.generated > 0
-    ? `${summary.recurring.generated} generated (${summary.recurring.titles.slice(0, 3).join(", ")}${summary.recurring.titles.length > 3 ? ", ..." : ""})`
-    : "0 generated";
+  const recurDesc =
+    summary.recurring.generated > 0
+      ? `${summary.recurring.generated} generated (${summary.recurring.titles.slice(0, 3).join(", ")}${summary.recurring.titles.length > 3 ? ", ..." : ""})`
+      : "0 generated";
   lines.push(`Recurring:    ${recurDesc}`);
 
   // Overdue
@@ -1137,9 +1121,10 @@ export function formatMorningSummary(summary: MorningSummary): string {
   if (summary.overdue.autopilotOff) {
     overdueDesc = `${summary.overdue.count} task${summary.overdue.count !== 1 ? "s" : ""} overdue (autopilot off — no action taken)`;
   } else {
-    overdueDesc = summary.overdue.rescheduled > 0
-      ? `${summary.overdue.rescheduled} task${summary.overdue.rescheduled !== 1 ? "s" : ""} rescheduled to today`
-      : "none overdue";
+    overdueDesc =
+      summary.overdue.rescheduled > 0
+        ? `${summary.overdue.rescheduled} task${summary.overdue.rescheduled !== 1 ? "s" : ""} rescheduled to today`
+        : "none overdue";
   }
   lines.push(`Overdue:      ${overdueDesc}`);
 
@@ -1158,7 +1143,10 @@ export function formatMorningSummary(summary: MorningSummary): string {
   // Prioritize
   const prioritizeDesc = summary.prioritized.skipped
     ? "Skipped (autopilot off)"
-    : `${summary.prioritized.count} task${summary.prioritized.count !== 1 ? "s" : ""} re-scored`;
+    : `${summary.prioritized.count} task${summary.prioritized.count !== 1 ? "s" : ""} re-scored` +
+      (summary.prioritized.degraded
+        ? ` — AI scoring failed for ${summary.prioritized.degraded} (kept their last AI reasoning)`
+        : "");
   lines.push(`Prioritize:   ${prioritizeDesc}`);
 
   // Estimate (Step 5)
@@ -1167,7 +1155,8 @@ export function formatMorningSummary(summary: MorningSummary): string {
   if (est.skipped) estimateDesc = "Skipped (autopilot off)";
   else if (est.error) estimateDesc = `FAILED — ${est.error}`;
   else if (est.targeted === 0) estimateDesc = "all tasks already estimated";
-  else if (summary.dryRun) estimateDesc = `${est.targeted} task${est.targeted !== 1 ? "s" : ""} need estimates (dry run: not written)`;
+  else if (summary.dryRun)
+    estimateDesc = `${est.targeted} task${est.targeted !== 1 ? "s" : ""} need estimates (dry run: not written)`;
   else {
     estimateDesc = `${est.jm + est.kaya} of ${est.targeted} filled (Jm ${est.jm}, Kaya ${est.kaya})`;
     if (est.missing > 0) estimateDesc += `, ${est.missing} missing`;
@@ -1182,13 +1171,10 @@ export function formatMorningSummary(summary: MorningSummary): string {
 
 export function formatEveningSummary(summary: EveningSummary): string {
   const date = new Date(summary.timestamp);
-  const timeStr = `${date.toISOString().split("T")[0]} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timeStr = `${date.toISOString().slice(0, 10)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   const prefix = summary.dryRun ? "[DRY RUN] " : "";
 
-  const lines: string[] = [
-    `${prefix}LucidTasks Evening Maintenance (${timeStr})`,
-    "",
-  ];
+  const lines: string[] = [`${prefix}LucidTasks Evening Maintenance (${timeStr})`, ""];
 
   // Stale in-progress
   if (summary.staleInProgress.length === 0) {
@@ -1199,11 +1185,15 @@ export function formatEveningSummary(summary: EveningSummary): string {
       .map((t) => `"${t.title}" (started ${t.startedHoursAgo}h ago)`)
       .join(", ");
     const moreCount = summary.staleInProgress.length - 3;
-    lines.push(`Stale:        ${summary.staleInProgress.length} in-progress: ${staleDesc}${moreCount > 0 ? `, +${moreCount} more` : ""}`);
+    lines.push(
+      `Stale:        ${summary.staleInProgress.length} in-progress: ${staleDesc}${moreCount > 0 ? `, +${moreCount} more` : ""}`,
+    );
   }
 
   // Tomorrow
-  lines.push(`Tomorrow:     ${summary.tomorrow.dueCount} task${summary.tomorrow.dueCount !== 1 ? "s" : ""} due, ${summary.tomorrow.scheduledCount} task${summary.tomorrow.scheduledCount !== 1 ? "s" : ""} scheduled`);
+  lines.push(
+    `Tomorrow:     ${summary.tomorrow.dueCount} task${summary.tomorrow.dueCount !== 1 ? "s" : ""} due, ${summary.tomorrow.scheduledCount} task${summary.tomorrow.scheduledCount !== 1 ? "s" : ""} scheduled`,
+  );
 
   // Stats
   const { stats } = summary;
@@ -1217,13 +1207,10 @@ export function formatEveningSummary(summary: EveningSummary): string {
 
 export function formatWeeklySummary(summary: WeeklySummary): string {
   const date = new Date(summary.timestamp);
-  const timeStr = `${date.toISOString().split("T")[0]} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timeStr = `${date.toISOString().slice(0, 10)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   const prefix = summary.dryRun ? "[DRY RUN] " : "";
 
-  const lines: string[] = [
-    `${prefix}LucidTasks Weekly Review (${timeStr})`,
-    "",
-  ];
+  const lines: string[] = [`${prefix}LucidTasks Weekly Review (${timeStr})`, ""];
 
   // Review path
   if (summary.reviewPath) {
@@ -1242,10 +1229,11 @@ export function formatWeeklySummary(summary: WeeklySummary): string {
     lines.push("Goal Progress:");
     for (const g of summary.goalAlignment) {
       const velocityIcon = g.velocity === "increasing" ? "^" : g.velocity === "declining" ? "v" : "-";
-      const note = g.velocity === "declining" && g.completedThisWeek === 0
-        ? ` (was ${g.completedLastWeek} last week)`
-        : "";
-      lines.push(`  ${g.goalId.padEnd(10)} ${g.completedThisWeek} completed, ${g.remaining} remaining  ${velocityIcon} ${g.velocity}${note}`);
+      const note =
+        g.velocity === "declining" && g.completedThisWeek === 0 ? ` (was ${g.completedLastWeek} last week)` : "";
+      lines.push(
+        `  ${g.goalId.padEnd(10)} ${g.completedThisWeek} completed, ${g.remaining} remaining  ${velocityIcon} ${g.velocity}${note}`,
+      );
     }
     lines.push("");
   }

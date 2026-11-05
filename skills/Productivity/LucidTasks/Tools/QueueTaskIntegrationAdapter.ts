@@ -73,11 +73,13 @@ export const taskClientAdapter: TaskClient = {
     // Never overwrite a real outcome the task already has.
     const existing = status === "done" ? db.getTask(taskId) : null;
     if (status === "done" && existing && agentOutcomeProblem(readOutcome(existing.outcome).outcome) !== null) {
-      updates.outcome = serializeOutcome(systemOutcome({
-        by: "queue",
-        headline: "Closed by the work-queue integration",
-        noArtifact: "status set to done through the queue/task integration seam",
-      }));
+      updates.outcome = serializeOutcome(
+        systemOutcome({
+          by: "queue",
+          headline: "Closed by the work-queue integration",
+          noArtifact: "status set to done through the queue/task integration seam",
+        }),
+      );
     }
     const updated = db.updateTask(taskId, updates, "queue");
     return updated !== null;
@@ -97,8 +99,7 @@ export const taskClientAdapter: TaskClient = {
     // Machine-created tasks must carry context (SKILL.md "Task context
     // standard"): callers pass a description with a CONTEXT: line; a caller
     // that has nothing better still gets a pointer at the queue/parent.
-    const description =
-      opts?.description ?? (opts?.parentId ? `CONTEXT: parent task ${opts.parentId}` : "");
+    const description = opts?.description ?? (opts?.parentId ? `CONTEXT: parent task ${opts.parentId}` : "");
     const task = db.createTask({ title, description, parent_task_id: opts?.parentId ?? null });
     return task.id;
   },

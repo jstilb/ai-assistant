@@ -24,10 +24,10 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync } from "fs";
-import { execFileSync } from "child_process";
-import { homedir } from "os";
-import { join } from "path";
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { TaskDB, type ActivityLogEntry, type Task } from "./TaskDB.ts";
 import {
   HEADLINE_TARGET,
@@ -39,7 +39,7 @@ import {
 } from "./TaskOutcome.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
-export const DEFAULT_SINCE = "2026-09-23";
+const DEFAULT_SINCE = "2026-09-23";
 const MAX_DELIVERABLES = 5;
 const MAX_FOR_JM = 20;
 const MAX_SOURCE_CHARS = 14000;
@@ -77,9 +77,14 @@ export function fitHeadline(text: string, max: number = HEADLINE_TARGET): string
 
 /** First sentence of the first paragraph of `text`, fitted to the headline limit. */
 export function firstSentence(text: string, max: number = HEADLINE_TARGET): string {
-  const flat = text.trim().split(/\n\s*\n/)[0]?.replace(/\s+/g, " ").trim() ?? "";
+  const flat =
+    text
+      .trim()
+      .split(/\n\s*\n/)[0]
+      ?.replace(/\s+/g, " ")
+      .trim() ?? "";
   const m = flat.match(/^(.+?[.!?])(?:\s|$)/);
-  return fitHeadline(m ? m[1] : flat, max);
+  return fitHeadline(m ? (m[1] ?? flat) : flat, max);
 }
 
 /** Parse the text of a comment event; null when the event is not a comment or has no text. */
@@ -97,7 +102,7 @@ export function commentText(ev: Pick<ActivityLogEntry, "action" | "changes">): s
 }
 
 /** The `note` of a completed event's changes JSON, or null. */
-export function completedNote(ev: Pick<ActivityLogEntry, "action" | "changes">): string | null {
+function completedNote(ev: Pick<ActivityLogEntry, "action" | "changes">): string | null {
   if (ev.action !== "completed" || !ev.changes) return null;
   try {
     const parsed: unknown = JSON.parse(ev.changes);
@@ -118,7 +123,7 @@ const WIKILINK_RE = /\[\[([^\]\n]+)\]\]/g;
 const OUTCOMEISH_LINE_RE = /^[ \t]*(?:[-*][ \t]+)?(?:RECONCILED|OUTCOME|RESULT|DELIVERED|SHIPPED)\b.*$/gim;
 
 function wikilinks(text: string): string[] {
-  return [...text.matchAll(WIKILINK_RE)].map((m) => m[1].trim()).filter((s) => s !== "");
+  return [...text.matchAll(WIKILINK_RE)].map((m) => (m[1] ?? "").trim()).filter((s) => s !== "");
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {
@@ -126,6 +131,7 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
     const v: unknown = JSON.parse(text);
     return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   } catch {
+    // invalid JSON: not an object record
     return null;
   }
 }
@@ -152,7 +158,14 @@ export interface Extracted {
   lastText: string;
 }
 
-const NOISE_PREFIXES = ["EXECUTOR_PAUSED", "EXECUTOR_RECLAIM", "EXECUTOR_FAIL", "EXECUTOR_VERIFY", "MERGE_DEFERRED:", "MERGE_FAILED:"];
+const NOISE_PREFIXES = [
+  "EXECUTOR_PAUSED",
+  "EXECUTOR_RECLAIM",
+  "EXECUTOR_FAIL",
+  "EXECUTOR_VERIFY",
+  "MERGE_DEFERRED:",
+  "MERGE_FAILED:",
+];
 const MAX_ENTRY_CHARS = 2500;
 
 /**
@@ -161,8 +174,9 @@ const MAX_ENTRY_CHARS = 2500;
  */
 export function anchoredShas(text: string): string[] {
   const out: string[] = [];
-  const re = /(?:\bmerged to main\s*(?:(?:at|@)\s*)?|\bon main at|\bmain @|->|→)\s*(?:main @\s*)?`?([0-9a-f]{7,40})\b/gi;
-  for (const m of text.matchAll(re)) if (!out.includes(m[1])) out.push(m[1]);
+  const re =
+    /(?:\bmerged to main\s*(?:(?:at|@)\s*)?|\bon main at|\bmain @|->|→)\s*(?:main @\s*)?`?([0-9a-f]{7,40})\b/gi;
+  for (const m of text.matchAll(re)) if (!out.includes(m[1] ?? "")) out.push(m[1] ?? "");
   return out;
 }
 
@@ -231,14 +245,18 @@ export function extractFromTask(
     if (ev.actor !== "executor") {
       if (!noise) laterComments.push({ at, text: t });
     } else if (
-      t.startsWith("EXECUTOR_VERIFY:") || t.startsWith("MERGE_DEFERRED:") || t.startsWith("MERGE_FAILED:") ||
-      MERGED_RE.test(t) || DELIVERABLE_BRANCH_RE.test(t) || DELIVERABLE_PATHS_RE.test(t)
+      t.startsWith("EXECUTOR_VERIFY:") ||
+      t.startsWith("MERGE_DEFERRED:") ||
+      t.startsWith("MERGE_FAILED:") ||
+      MERGED_RE.test(t) ||
+      DELIVERABLE_BRANCH_RE.test(t) ||
+      DELIVERABLE_PATHS_RE.test(t)
     ) {
       lastDeliveryAt = at;
     }
 
     if (t.startsWith("EXECUTOR_VERIFY:")) {
-      const rec = parseJsonObject(t.slice("EXECUTOR_VERIFY:".length).split("\n", 1)[0].trim());
+      const rec = parseJsonObject((t.slice("EXECUTOR_VERIFY:".length).split("\n", 1)[0] ?? "").trim());
       const v = rec?.verdict;
       if (v === "pass" || v === "fail" || v === "uncertain") {
         const reasoning = typeof rec?.reasoning === "string" ? rec.reasoning : "";
@@ -247,7 +265,7 @@ export function extractFromTask(
       continue;
     }
     if (t.startsWith("MERGE_DEFERRED:")) {
-      const rec = parseJsonObject(t.slice("MERGE_DEFERRED:".length).split("\n", 1)[0].trim());
+      const rec = parseJsonObject((t.slice("MERGE_DEFERRED:".length).split("\n", 1)[0] ?? "").trim());
       if (rec && merge?.state !== "merged") {
         const branch = typeof rec.branch === "string" ? rec.branch : merge?.branch;
         merge = branch ? { state: "deferred", branch } : { state: "deferred" };
@@ -258,13 +276,14 @@ export function extractFromTask(
       continue;
     }
     if (t.startsWith("MERGE_FAILED:")) {
-      if (merge?.state !== "merged") merge = merge?.branch ? { state: "failed", branch: merge.branch } : { state: "failed" };
+      if (merge?.state !== "merged")
+        merge = merge?.branch ? { state: "failed", branch: merge.branch } : { state: "failed" };
       continue;
     }
 
     const mergedMatch = t.match(MERGED_RE);
     if (mergedMatch) {
-      const [whole, branch, sha] = mergedMatch;
+      const [whole, branch = "", sha = ""] = mergedMatch;
       merge = { state: "merged", branch, sha };
       links = [{ kind: "commit", target: sha, label: "Merge" }];
       summary = t.slice(whole.length).trim();
@@ -273,7 +292,7 @@ export function extractFromTask(
 
     const branchMatch = t.match(DELIVERABLE_BRANCH_RE);
     if (branchMatch && branchMatch.index !== undefined) {
-      const branch = branchMatch[1];
+      const branch = branchMatch[1] ?? "";
       const { body, alsoWrote } = branchDeliverableBody(t.slice(branchMatch.index + branchMatch[0].length));
       merge = { state: "pending", branch };
       links = [{ kind: "branch", target: branch, label: "Diff" }, ...alsoWrote.map((p) => linkFromTarget(p))];
@@ -284,7 +303,7 @@ export function extractFromTask(
 
     const pathsMatch = t.match(DELIVERABLE_PATHS_RE);
     if (pathsMatch && pathsMatch.index !== undefined) {
-      links = wikilinks(pathsMatch[1]).map((p) => linkFromTarget(p));
+      links = wikilinks(pathsMatch[1] ?? "").map((p) => linkFromTarget(p));
       merge = { state: "none" };
       summary = t.slice(pathsMatch.index + pathsMatch[0].length).trim();
       if (t.includes("⚠️ verification skipped")) verify = { verdict: "skipped" };
@@ -300,10 +319,10 @@ export function extractFromTask(
   const head = descLines.length > 0 ? `DESCRIPTION OUTCOME LINES:\n${descLines.join("\n")}` : "";
   let budget = MAX_SOURCE_CHARS - head.length;
   const kept: string[] = [];
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (budget - entries[i].length < 0 && kept.length > 0) break;
-    kept.unshift(entries[i]);
-    budget -= entries[i].length + 2;
+  for (const entry of [...entries].reverse()) {
+    if (budget - entry.length < 0 && kept.length > 0) break;
+    kept.unshift(entry);
+    budget -= entry.length + 2;
   }
   const body = kept.length > 0 ? `Source comments, oldest first:\n${kept.join("\n\n")}` : "";
   const sourceText = [head, body].filter((p) => p !== "").join("\n\n");
@@ -339,7 +358,7 @@ export interface Draft {
   forJm: string[];
 }
 
-export const DRAFT_SYSTEM_PROMPT = [
+const DRAFT_SYSTEM_PROMPT = [
   "You write the headline card for a finished task in Jm's task system.",
   "Draft ONLY from the text given. Do not invent facts, paths, URLs or commands.",
   "Later comments supersede earlier ones. Describe the FINAL state as of the last comment.",
@@ -367,7 +386,7 @@ export const defaultInfer: InferFn = async (systemPrompt, userPrompt) => {
 export function parseDraft(raw: string): Draft | null {
   let text = raw.trim();
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) text = fence[1].trim();
+  if (fence) text = (fence[1] ?? "").trim();
   let obj = parseJsonObject(text);
   if (!obj) {
     const a = text.indexOf("{");
@@ -378,13 +397,20 @@ export function parseDraft(raw: string): Draft | null {
   const headline = typeof obj.headline === "string" ? fitHeadline(obj.headline, HEADLINE_TARGET) : "";
   if (headline === "") return null;
   const strings = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter((s) => s !== "") : [];
+    Array.isArray(v)
+      ? v
+          .filter((x): x is string => typeof x === "string")
+          .map((s) => s.trim())
+          .filter((s) => s !== "")
+      : [];
   const check = typeof obj.check === "string" && obj.check.trim() !== "" ? clip(obj.check, 300) : undefined;
   return {
     headline,
     deliverables: strings(obj.deliverables).slice(0, MAX_DELIVERABLES),
     ...(check ? { check } : {}),
-    forJm: strings(obj.forJm).slice(0, MAX_FOR_JM).map((s) => clip(s, 300)),
+    forJm: strings(obj.forJm)
+      .slice(0, MAX_FOR_JM)
+      .map((s) => clip(s, 300)),
   };
 }
 
@@ -410,10 +436,7 @@ function gitHas(kayaHome: string, ref: string, path: string): boolean {
  * as-is; absolute / ~/ paths need existsSync; repo-relative paths need to exist under the Kaya
  * home or (for the task's branch) in git, in which case the link carries ref = branch.
  */
-export function validateLink(
-  link: OutcomeLink,
-  ctx: { kayaHome: string; branch?: string },
-): OutcomeLink | null {
+export function validateLink(link: OutcomeLink, ctx: { kayaHome: string; branch?: string }): OutcomeLink | null {
   switch (link.kind) {
     case "url":
     case "task":
@@ -425,7 +448,11 @@ export function validateLink(
       return existsSync(abs) ? link : null;
     }
     case "repo": {
-      if (SAFE_REPO_PATH_RE.test(link.target) && !link.target.split("/").includes("..") && existsSync(join(ctx.kayaHome, link.target))) {
+      if (
+        SAFE_REPO_PATH_RE.test(link.target) &&
+        !link.target.split("/").includes("..") &&
+        existsSync(join(ctx.kayaHome, link.target))
+      ) {
         return link;
       }
       if (ctx.branch && gitHas(ctx.kayaHome, ctx.branch, link.target)) return { ...link, ref: ctx.branch };
@@ -438,16 +465,23 @@ export function validateLink(
  * The branch tip sha when `branch` exists and is already an ancestor of main; else null
  * (missing branch, not merged, or git unavailable: never guessed).
  */
-export function mergedBranchTip(kayaHome: string, branch: string): string | null {
+function mergedBranchTip(kayaHome: string, branch: string): string | null {
   if (!SAFE_REF_RE.test(branch)) return null;
   try {
-    const tip = execFileSync("git", ["-C", kayaHome, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 10_000,
-    }).trim();
+    const tip = execFileSync(
+      "git",
+      ["-C", kayaHome, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 10_000,
+      },
+    ).trim();
     if (!/^[0-9a-f]{40}$/.test(tip)) return null;
-    execFileSync("git", ["-C", kayaHome, "merge-base", "--is-ancestor", tip, "main"], { stdio: "ignore", timeout: 10_000 });
+    execFileSync("git", ["-C", kayaHome, "merge-base", "--is-ancestor", tip, "main"], {
+      stdio: "ignore",
+      timeout: 10_000,
+    });
     return tip;
   } catch {
     return null; // non-zero exit = branch absent or not an ancestor of main
@@ -455,7 +489,7 @@ export function mergedBranchTip(kayaHome: string, branch: string): string | null
 }
 
 /** `sha` expanded to 40 hex chars when it is a commit that is an ancestor of main; else null. */
-export function shaOnMain(kayaHome: string, sha: string): string | null {
+function shaOnMain(kayaHome: string, sha: string): string | null {
   if (!/^[0-9a-f]{7,40}$/.test(sha)) return null;
   try {
     const full = execFileSync("git", ["-C", kayaHome, "rev-parse", "--verify", "--quiet", `${sha}^{commit}`], {
@@ -464,15 +498,19 @@ export function shaOnMain(kayaHome: string, sha: string): string | null {
       timeout: 10_000,
     }).trim();
     if (!/^[0-9a-f]{40}$/.test(full)) return null;
-    execFileSync("git", ["-C", kayaHome, "merge-base", "--is-ancestor", full, "main"], { stdio: "ignore", timeout: 10_000 });
+    execFileSync("git", ["-C", kayaHome, "merge-base", "--is-ancestor", full, "main"], {
+      stdio: "ignore",
+      timeout: 10_000,
+    });
     return full;
   } catch {
     return null; // non-zero exit = unknown commit or not an ancestor of main
   }
 }
 
-const CONTRADICTS_MERGED_RE = /\b(?:not (?:yet )?merged|unmerged|until (?:it(?:'s| is)? )?merged|needs? (?:to be )?merg|awaiting (?:a )?merge|on a branch|waiting to be merged)/i;
-export function contradictsMerged(headline: string): boolean {
+const CONTRADICTS_MERGED_RE =
+  /\b(?:not (?:yet )?merged|unmerged|until (?:it(?:'s| is)? )?merged|needs? (?:to be )?merg|awaiting (?:a )?merge|on a branch|waiting to be merged)/i;
+function contradictsMerged(headline: string): boolean {
   return CONTRADICTS_MERGED_RE.test(headline);
 }
 
@@ -483,9 +521,12 @@ const CHECK_EXTS = "ts|tsx|js|mjs|md|json|sh|py|ya?ml|db|txt|html|css|plist|toml
  */
 export function checkPathsExist(check: string, kayaHome: string): boolean {
   const text = check.replace(/https?:\/\/\S+/g, " ");
-  const re = new RegExp(`(?:^|[\\s\`'"(])((?:~/|/)[^\\s\`'"),;]+|[A-Za-z0-9_@+.\\-]+(?:/[A-Za-z0-9_@+.\\-]+)*\\.(?:${CHECK_EXTS}))(?=$|[\\s\`'"),;:])`, "g");
+  const re = new RegExp(
+    `(?:^|[\\s\`'"(])((?:~/|/)[^\\s\`'"),;]+|[A-Za-z0-9_@+.\\-]+(?:/[A-Za-z0-9_@+.\\-]+)*\\.(?:${CHECK_EXTS}))(?=$|[\\s\`'"),;:])`,
+    "g",
+  );
   for (const m of text.matchAll(re)) {
-    const p = m[1].replace(/[.,:;]+$/, "");
+    const p = (m[1] ?? "").replace(/[.,:;]+$/, "");
     const abs = p.startsWith("~/") ? join(homedir(), p.slice(2)) : p.startsWith("/") ? p : join(kayaHome, p);
     if (!existsSync(abs)) return false;
   }
@@ -527,10 +568,7 @@ export async function buildBackfillOutcome(
   if (extracted.laterHandled) {
     // Someone other than the executor spoke after its delivery: its merge/verify claims are stale.
     verify = undefined;
-    const candidates = [
-      ...extracted.claimedShas,
-      ...(merge?.state === "merged" && merge.sha ? [merge.sha] : []),
-    ];
+    const candidates = [...extracted.claimedShas, ...(merge?.state === "merged" && merge.sha ? [merge.sha] : [])];
     for (const c of candidates) {
       confirmedSha = shaOnMain(opts.kayaHome, c);
       if (confirmedSha) break;
@@ -558,7 +596,10 @@ export async function buildBackfillOutcome(
     confirmedSha = shaOnMain(opts.kayaHome, merge.sha);
   }
   if (confirmedSha && !baseLinks.some((l) => l.kind === "commit" && l.target === confirmedSha)) {
-    baseLinks = [...baseLinks.filter((l) => l.kind !== "commit"), { kind: "commit", target: confirmedSha, label: "Commit" }];
+    baseLinks = [
+      ...baseLinks.filter((l) => l.kind !== "commit"),
+      { kind: "commit", target: confirmedSha, label: "Commit" },
+    ];
   }
   const mergedConfirmed = confirmedSha !== null;
   // Files on main need no branch ref; an open (unmerged) branch keeps its ref.
@@ -588,7 +629,10 @@ export async function buildBackfillOutcome(
   const seen = new Set<string>();
   const add = (raw: OutcomeLink | null): void => {
     if (!raw) return;
-    const l = raw.kind === "path" && raw.target.startsWith("~/") ? { ...raw, target: join(homedir(), raw.target.slice(2)) } : raw;
+    const l =
+      raw.kind === "path" && raw.target.startsWith("~/")
+        ? { ...raw, target: join(homedir(), raw.target.slice(2)) }
+        : raw;
     if (seen.has(linkKey(l)) || links.length >= 20) return;
     seen.add(linkKey(l));
     links.push(l);
@@ -601,6 +645,7 @@ export async function buildBackfillOutcome(
       try {
         link = linkFromTarget(target);
       } catch {
+        // target that cannot form a link: skip it
         continue;
       }
       add(validateLink(link, { kayaHome: opts.kayaHome, branch }));
@@ -636,7 +681,7 @@ export async function buildBackfillOutcome(
 // Runner
 // ============================================================================
 
-export interface BackfillOptions {
+interface BackfillOptions {
   since?: string;
   apply?: boolean;
   limit?: number;
@@ -648,7 +693,7 @@ export interface BackfillOptions {
   serialize?: (o: Outcome) => string;
 }
 
-export interface TaskReport {
+interface TaskReport {
   id: string;
   title: string;
   headline: string;
@@ -662,7 +707,7 @@ export interface TaskReport {
   outcome: Outcome;
 }
 
-export interface SkippedReport {
+interface SkippedReport {
   id: string;
   title: string;
   closer: string | null;
@@ -670,9 +715,16 @@ export interface SkippedReport {
   detail?: string;
 }
 
-export interface BackfillReport {
+interface BackfillReport {
   apply: boolean;
-  counts: { candidates: number; processed: number; drafted: number; llmFallback: number; skippedNoText: number; skippedInvalid: number };
+  counts: {
+    candidates: number;
+    processed: number;
+    drafted: number;
+    llmFallback: number;
+    skippedNoText: number;
+    skippedInvalid: number;
+  };
   tasks: TaskReport[];
   skipped: SkippedReport[];
   /** After --apply with at least one write: a ready-to-run SQL line that undoes it; else null. */
@@ -680,7 +732,7 @@ export interface BackfillReport {
 }
 
 /** Tasks with no outcome that are waiting, or done since `since`. Newest first. */
-export function listCandidates(db: TaskDB, since: string, ids?: string[]): Task[] {
+function listCandidates(db: TaskDB, since: string, ids?: string[]): Task[] {
   const all = db.listTasks({ status: ["waiting", "done"] });
   const idSet = ids && ids.length > 0 ? new Set(ids) : null;
   return all
@@ -696,7 +748,14 @@ export async function runBackfill(db: TaskDB, opts: BackfillOptions): Promise<Ba
   const batch = opts.limit !== undefined ? candidates.slice(0, opts.limit) : candidates;
   const report: BackfillReport = {
     apply: opts.apply === true,
-    counts: { candidates: candidates.length, processed: batch.length, drafted: 0, llmFallback: 0, skippedNoText: 0, skippedInvalid: 0 },
+    counts: {
+      candidates: candidates.length,
+      processed: batch.length,
+      drafted: 0,
+      llmFallback: 0,
+      skippedNoText: 0,
+      skippedInvalid: 0,
+    },
     tasks: [],
     skipped: [],
     rollbackSql: null,
@@ -764,7 +823,9 @@ export function formatReport(r: BackfillReport): string {
   if (r.skipped.length > 0) {
     lines.push("", "SKIPPED:");
     for (const s of r.skipped) {
-      lines.push(`  ${s.id} "${clip(s.title, 60)}" closer=${s.closer ?? "unknown"} (${s.reason}${s.detail ? `: ${s.detail}` : ""})`);
+      lines.push(
+        `  ${s.id} "${clip(s.title, 60)}" closer=${s.closer ?? "unknown"} (${s.reason}${s.detail ? `: ${s.detail}` : ""})`,
+      );
     }
   }
   if (r.rollbackSql) lines.push("", `ROLLBACK (sqlite3 <db> "..."): ${r.rollbackSql}`);
@@ -775,7 +836,7 @@ export function formatReport(r: BackfillReport): string {
 // CLI
 // ============================================================================
 
-export interface CliArgs {
+interface CliArgs {
   since: string;
   apply: boolean;
   limit?: number;
@@ -801,7 +862,11 @@ export function parseArgs(argv: string[]): CliArgs {
     else if (a === "--since") out.since = value(i++, a);
     else if (a === "--db") out.db = value(i++, a);
     else if (a === "--backup") out.backup = value(i++, a);
-    else if (a === "--ids") out.ids = value(i++, a).split(",").map((s) => s.trim()).filter((s) => s !== "");
+    else if (a === "--ids")
+      out.ids = value(i++, a)
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s !== "");
     else if (a === "--limit") {
       const n = Number(value(i++, a));
       if (!Number.isInteger(n) || n < 0) throw new Error("--limit needs a non-negative integer");

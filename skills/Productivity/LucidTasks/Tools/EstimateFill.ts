@@ -125,9 +125,7 @@ export async function fillEstimates(db: TaskDB, opts: FillOptions): Promise<Fill
 
   for (const lane of opts.lanes) {
     const lane_size_tasks = laneTasks(db, lane);
-    const targets = refresh
-      ? lane_size_tasks
-      : lane_size_tasks.filter((t) => !t.energy_level || !t.estimated_minutes);
+    const targets = refresh ? lane_size_tasks : lane_size_tasks.filter((t) => !t.energy_level || !t.estimated_minutes);
     const counts: LaneCounts = { lane_size: lane_size_tasks.length, targeted: targets.length, applied: 0 };
     result.lanes[lane] = counts;
     if (targets.length === 0) continue;
@@ -160,9 +158,10 @@ export async function fillEstimates(db: TaskDB, opts: FillOptions): Promise<Fill
         result.missing.push(t.id);
         continue;
       }
-      const minutes = lane === "kaya"
-        ? Math.min(KAYA_MAX_MINUTES, Math.max(KAYA_MIN_MINUTES, e.estimated_minutes))
-        : e.estimated_minutes;
+      const minutes =
+        lane === "kaya"
+          ? Math.min(KAYA_MAX_MINUTES, Math.max(KAYA_MIN_MINUTES, e.estimated_minutes))
+          : e.estimated_minutes;
 
       // Fill-only keeps any field already set; --refresh overwrites both.
       const updates: Partial<Task> = {};

@@ -16,8 +16,8 @@
  *     (guards against releasing a lock we don't own after a stale-cleanup race).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 function kayaHome(): string {
@@ -53,7 +53,7 @@ export function acquireLock(): boolean {
     const raw = readFileSync(path, "utf-8").trim();
     const pid = parseInt(raw, 10);
 
-    if (!isNaN(pid) && isProcessAlive(pid)) {
+    if (!Number.isNaN(pid) && isProcessAlive(pid)) {
       // Lock is held by a live process
       return false;
     }

@@ -49,8 +49,8 @@
  * safe to call in a loop. The `run <taskId>` CLI wrapper translates result → exit code.
  */
 
-import { execFileSync } from "child_process";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 
 import { getTaskDB } from "../TaskDB.ts";
 import type { TaskDB } from "../TaskDB.ts";
@@ -207,6 +207,7 @@ function headSha(wtPath: string): string {
   try {
     return git(["rev-parse", "HEAD"], wtPath).trim();
   } catch {
+    // documented best effort: detached or empty repo has no HEAD
     return "";
   }
 }
@@ -233,11 +234,7 @@ async function cleanupWorktree(wtPath: string): Promise<void> {
  * from where it started (`headBefore`). Catches both agent-committed work and work the agent
  * left uncommitted. Pure-ish — touches only git in the isolated worktree.
  */
-export function captureWorktreeChanges(
-  wtPath: string,
-  headBefore: string,
-  commitMessage: string
-): boolean {
+export function captureWorktreeChanges(wtPath: string, headBefore: string, commitMessage: string): boolean {
   let dirty = false;
   try {
     dirty = git(["status", "--porcelain"], wtPath).trim().length > 0;
@@ -283,10 +280,7 @@ export function changedFilesSinceHead(wtPath: string, headBefore: string, limit 
  * ABSOLUTE deliverable outside the worktree (an Obsidian note etc.). Deliverables inside the
  * worktree are repo changes — they ride on the branch, not as wikilinks. Deduped. Pure.
  */
-export function externalArtifacts(
-  verdict: { artifacts: string[]; deliverables: string[] },
-  wtPath: string,
-): string[] {
+export function externalArtifacts(verdict: { artifacts: string[]; deliverables: string[] }, wtPath: string): string[] {
   const out = [...verdict.artifacts];
   for (const d of verdict.deliverables) {
     if (d.startsWith("/") && !d.startsWith(`${wtPath}/`) && !out.includes(d)) out.push(d);
@@ -344,7 +338,7 @@ export function selectTasks(db: TaskDB, limit = 3): SelectedTask[] {
       `SELECT id FROM tasks
        WHERE disposition = 'autonomous'
          AND status IN ('inbox','next')
-       ORDER BY created_at ASC`
+       ORDER BY created_at ASC`,
     )
     .all() as { id: string }[];
 
@@ -357,7 +351,7 @@ export function selectTasks(db: TaskDB, limit = 3): SelectedTask[] {
       `SELECT id FROM tasks
        WHERE disposition = 'autonomous'
          AND status = 'waiting'
-       ORDER BY created_at ASC`
+       ORDER BY created_at ASC`,
     )
     .all() as { id: string }[];
 
@@ -365,7 +359,7 @@ export function selectTasks(db: TaskDB, limit = 3): SelectedTask[] {
   const newestCommentActorStmt = raw.prepare(
     `SELECT actor FROM task_events
      WHERE task_id = ? AND action = 'comment'
-     ORDER BY id DESC LIMIT 1`
+     ORDER BY id DESC LIMIT 1`,
   );
 
   const reEngagements: SelectedTask[] = [];
@@ -448,7 +442,7 @@ export function sweepZombieTasks(db: TaskDB, deps: ZombieReclaimDeps = {}): Zomb
       `SELECT id, title, updated_at FROM tasks
        WHERE disposition = 'autonomous'
          AND status = 'in_progress'
-       ORDER BY created_at ASC`
+       ORDER BY created_at ASC`,
     )
     .all() as { id: string; title: string; updated_at: string }[];
 
@@ -467,7 +461,7 @@ export function sweepZombieTasks(db: TaskDB, deps: ZombieReclaimDeps = {}): Zomb
       row.id,
       `EXECUTOR_RECLAIM: stranded in_progress for ${staleH}h — a previous run died after claim ` +
         `but before reset (timeout-SIGKILL / sleep kill). Reset to inbox for retry.`,
-      "executor"
+      "executor",
     );
     db.updateTask(row.id, { status: "inbox" }, "executor");
     reclaimed.push({ taskId: row.id, title: row.title, staleHours: staleH });
@@ -536,7 +530,7 @@ export function detectPendingMerge(db: TaskDB, taskId: string): PendingMergeCand
     .prepare(
       `SELECT actor, changes FROM task_events
        WHERE task_id = ? AND action = 'comment'
-       ORDER BY id DESC LIMIT 20`
+       ORDER BY id DESC LIMIT 20`,
     )
     .all(taskId) as { actor: string; changes: string | null }[];
 
@@ -547,6 +541,7 @@ export function detectPendingMerge(db: TaskDB, taskId: string): PendingMergeCand
     try {
       text = (JSON.parse(row.changes ?? "{}").text as string | undefined) ?? "";
     } catch {
+      // malformed activity JSON: skip this row
       continue;
     }
 
@@ -715,10 +710,7 @@ export async function sweepPendingMerges(
  * All failTask + sendAlert loud-fail paths are preserved.
  * The `run <taskId>` CLI wrapper translates the result to an exit code.
  */
-export async function runTask(
-  taskId: string,
-  opts?: { isReEngagement?: boolean }
-): Promise<TaskResult> {
+export async function runTask(taskId: string, opts?: { isReEngagement?: boolean }): Promise<TaskResult> {
   const db = getTaskDB();
 
   // 1. Load task
@@ -731,7 +723,7 @@ export async function runTask(
   // 2. Assert autonomous disposition
   if (task.disposition !== "autonomous") {
     process.stderr.write(
-      `[executor] refusing to run task ${taskId}: disposition='${task.disposition ?? "(null)"}' is not 'autonomous'\n`
+      `[executor] refusing to run task ${taskId}: disposition='${task.disposition ?? "(null)"}' is not 'autonomous'\n`,
     );
     return {
       taskId,
@@ -794,7 +786,7 @@ export async function runTask(
   const res = spawnOutcome.res;
   if (spawnOutcome.fellBack) {
     console.log(
-      `[executor] ${PRIMARY_MODEL} spawn infra-unavailable (${spawnOutcome.primaryInfraReason ?? "unknown"}) — retried task ${taskId} on ${FALLBACK_MODEL}`
+      `[executor] ${PRIMARY_MODEL} spawn infra-unavailable (${spawnOutcome.primaryInfraReason ?? "unknown"}) — retried task ${taskId} on ${FALLBACK_MODEL}`,
     );
   }
 
@@ -828,19 +820,16 @@ export async function runTask(
     db.addComment(taskId, `EXECUTOR_PAUSED: ${infraReasonText}; will retry`, "executor");
     db.updateTask(taskId, { status: "inbox" }, "executor");
 
-    await sendAlert(
-      `Autonomous executor paused — ${infraReasonText} (task ${task.title})`,
-      {
-        key: "executor-credit-pool",
-        tier: "page",
-        fingerprint: "credit-pool-paused",
-        cooldownMs: 4 * 60 * 60 * 1000, // 4h — pool can resume within that window
-        // The fingerprint is deliberately STATIC, so without a TTL it paged
-        // exactly once ever (last: 2026-07-09) and silently ate the Aug 18-24
-        // failure streak. A pool that stays down re-pages daily.
-        fingerprintTtlMs: 24 * 60 * 60 * 1000,
-      }
-    );
+    await sendAlert(`Autonomous executor paused — ${infraReasonText} (task ${task.title})`, {
+      key: "executor-credit-pool",
+      tier: "page",
+      fingerprint: "credit-pool-paused",
+      cooldownMs: 4 * 60 * 60 * 1000, // 4h — pool can resume within that window
+      // The fingerprint is deliberately STATIC, so without a TTL it paged
+      // exactly once ever (last: 2026-07-09) and silently ate the Aug 18-24
+      // failure streak. A pool that stays down re-pages daily.
+      fingerprintTtlMs: 24 * 60 * 60 * 1000,
+    });
 
     appendRunRecord({
       timestamp: new Date().toISOString(),
@@ -862,8 +851,8 @@ export async function runTask(
     const baseFailReason = res.timedOut
       ? "agent timed out (90 min)"
       : res.stdout.trim().length === 0
-      ? "agent returned empty stdout"
-      : `agent exited with code ${res.exitCode}`;
+        ? "agent returned empty stdout"
+        : `agent exited with code ${res.exitCode}`;
     const reason = spawnOutcome.fellBack
       ? `${baseFailReason} (${FALLBACK_MODEL} fallback run, after ${PRIMARY_MODEL} infra-unavailable)`
       : baseFailReason;
@@ -934,11 +923,7 @@ export async function runTask(
   // 8. Capture the work. NO output-verification gate — Jm verifies the result manually and steers
   //    via board feedback. Commit anything the agent left so it's preserved on the branch; if the
   //    run produced no repo changes (pure research/external task), tear the worktree down.
-  const hasChanges = captureWorktreeChanges(
-    wtPath,
-    headBefore,
-    `executor: ${task.title} (task ${taskId})`
-  );
+  const hasChanges = captureWorktreeChanges(wtPath, headBefore, `executor: ${task.title} (task ${taskId})`);
 
   // 8b. Outcome draft (Task Outcome Card): the agent's headline/deliverables/check/forJm. When the
   //     agent listed no deliverables, fall back to the changed files — read NOW, before the
@@ -983,9 +968,7 @@ export async function runTask(
         error: verifyOutcome.reason,
         context: { taskId, branch },
       });
-      process.stderr.write(
-        `[executor] verify SKIPPED (infra unavailable) for ${taskId}: ${verifyOutcome.reason}\n`
-      );
+      process.stderr.write(`[executor] verify SKIPPED (infra unavailable) for ${taskId}: ${verifyOutcome.reason}\n`);
     } else {
       const record = verifyOutcome.record;
       recordVerification(db, taskId, record);
@@ -1124,9 +1107,12 @@ async function poll(limit: number): Promise<void> {
           // Task-id-varying fingerprint + TTL: a NEW stranding always pages, and the SAME
           // task re-stranding repeatedly re-pages daily instead of once ever (the
           // static-fingerprint silence class that ate the Aug 18-24 failure streak).
-          fingerprint: reclaimed.map((r) => r.taskId).join(",").slice(0, 80),
+          fingerprint: reclaimed
+            .map((r) => r.taskId)
+            .join(",")
+            .slice(0, 80),
           fingerprintTtlMs: 24 * 60 * 60 * 1000,
-        }
+        },
       );
     }
 
@@ -1170,7 +1156,7 @@ async function poll(limit: number): Promise<void> {
       // the next run, so this defers — it never drops work.
       if (isRateLimited()) {
         process.stderr.write(
-          `[executor] PAUSED before ${taskId}: session rate limit near cap — deferring remaining ${selected.length - results.length} task(s) to next run\n`
+          `[executor] PAUSED before ${taskId}: session rate limit near cap — deferring remaining ${selected.length - results.length} task(s) to next run\n`,
         );
         await sendAlert("Autonomous executor deferred batch — session rate limit near cap", {
           key: "executor-credit-pool",
@@ -1209,7 +1195,9 @@ async function poll(limit: number): Promise<void> {
 
     const delivered = results.filter((r) => r.status === "delivered").length;
     const failed = results.filter((r) => r.status === "failed").length;
-    console.log(`[executor] poll complete: ${delivered} delivered, ${failed} failed, ${results.length - delivered - failed} skipped`);
+    console.log(
+      `[executor] poll complete: ${delivered} delivered, ${failed} failed, ${results.length - delivered - failed} skipped`,
+    );
 
     // Partial failure visibility: exit non-zero when any task failed so cron
     // wrappers / watchdogs can detect dropout. Success path (zero failures)
@@ -1256,8 +1244,8 @@ if (import.meta.main) {
     let limit = 3;
     const limitIdx = rest.indexOf("--limit");
     if (limitIdx !== -1 && rest[limitIdx + 1]) {
-      const parsed = parseInt(rest[limitIdx + 1], 10);
-      if (!isNaN(parsed) && parsed > 0) limit = parsed;
+      const parsed = parseInt(rest[limitIdx + 1] ?? "", 10);
+      if (!Number.isNaN(parsed) && parsed > 0) limit = parsed;
     }
 
     poll(limit).catch((err) => {

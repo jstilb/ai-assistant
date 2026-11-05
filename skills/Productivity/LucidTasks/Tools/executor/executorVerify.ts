@@ -41,15 +41,12 @@
  *     change without screenshots. A refused pass never reaches runAutoMerge as "pass".
  */
 
-import { execFileSync } from "child_process";
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
-import {
-  describeScopeForPrompt,
-  SELF_VERIFY_SCOPE,
-} from "../../../../../lib/core/CommandSafety.ts";
+import { describeScopeForPrompt, SELF_VERIFY_SCOPE } from "../../../../../lib/core/CommandSafety.ts";
 import {
   spawnAgentSync,
   parseVerdictBlock,
@@ -116,9 +113,7 @@ export interface VerifyRecord {
   gate?: string;
 }
 
-export type VerifyOutcome =
-  | { kind: "verified"; record: VerifyRecord }
-  | { kind: "infra-unavailable"; reason: string };
+type VerifyOutcome = { kind: "verified"; record: VerifyRecord } | { kind: "infra-unavailable"; reason: string };
 
 export interface VerifyTaskInput {
   id: string;
@@ -137,7 +132,7 @@ export interface VerifyParams {
   builderSummary: string;
 }
 
-export interface VerifyDeps extends AgentSpawnDeps {
+interface VerifyDeps extends AgentSpawnDeps {
   /** Injectable diff computation — defaults to a real `git diff --stat`+`diff` in wtPath. */
   gitDiffFn?: (wtPath: string) => string;
   /** Injectable clock for deterministic duration measurement in tests. Defaults to Date.now. */
@@ -187,10 +182,7 @@ function defaultGitDiff(wtPath: string): string {
  * Cap a diff string to DIFF_LINE_CAP lines, appending a truncation notice. Pure — exported
  * for tests. `gitDiffFn` defaults to the real `defaultGitDiff`.
  */
-export function getBoundedDiff(
-  wtPath: string,
-  gitDiffFn: (wtPath: string) => string = defaultGitDiff,
-): string {
+export function getBoundedDiff(wtPath: string, gitDiffFn: (wtPath: string) => string = defaultGitDiff): string {
   const raw = gitDiffFn(wtPath);
   const lines = raw.split("\n");
   if (lines.length <= DIFF_LINE_CAP) return raw;
@@ -202,7 +194,7 @@ export function getBoundedDiff(
 // Prompt
 // ============================================================================
 
-export interface VerifyPromptInput {
+interface VerifyPromptInput {
   task: VerifyTaskInput;
   branch: string;
   builderSummary: string;
@@ -351,14 +343,14 @@ task will be treated as unverified.
 // Evidence gates
 // ============================================================================
 
-export interface EvidenceGateInput {
+interface EvidenceGateInput {
   parsed: VerifyVerdictParsed;
   /** True when the diff touches UI paths (qualityBar.ts isUiPath). */
   ui: boolean;
   shots: ReviewScreenshots;
 }
 
-export interface EvidenceGateResult {
+interface EvidenceGateResult {
   verdict: VerifyRecord["verdict"];
   /** Why a "pass" was refused; undefined when the verdict stands. */
   gate?: string;
@@ -399,11 +391,7 @@ export function applyEvidenceGates(input: EvidenceGateInput): EvidenceGateResult
 // Core
 // ============================================================================
 
-function buildDegradedRecord(
-  params: VerifyParams,
-  reasoning: string,
-  agentDurationMs: number,
-): VerifyRecord {
+function buildDegradedRecord(params: VerifyParams, reasoning: string, agentDurationMs: number): VerifyRecord {
   return {
     taskId: params.task.id,
     branch: params.branch,
@@ -481,11 +469,7 @@ export function runVerification(params: VerifyParams, deps: VerifyDeps = {}): Ve
   if (!parsed) {
     return {
       kind: "verified",
-      record: buildDegradedRecord(
-        params,
-        "verifier agent did not emit a valid EXECUTOR_VERIFY block",
-        agentDurationMs,
-      ),
+      record: buildDegradedRecord(params, "verifier agent did not emit a valid EXECUTOR_VERIFY block", agentDurationMs),
     };
   }
 

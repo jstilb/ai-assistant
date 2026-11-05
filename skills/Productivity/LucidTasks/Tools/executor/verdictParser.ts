@@ -29,7 +29,7 @@
 
 import { HEADLINE_TARGET } from "../TaskOutcome.ts";
 
-export interface ExecutorVerdict {
+interface ExecutorVerdict {
   summary: string;
   /** External files the agent wrote (absolute paths). Always an array; [] if none. */
   artifacts: string[];
@@ -56,9 +56,7 @@ const END_MARKER = "EXECUTOR_VERDICT_END";
 
 function normalizeArtifacts(raw: unknown): string[] {
   if (Array.isArray(raw)) {
-    return raw
-      .filter((a): a is string => typeof a === "string" && a.trim().length > 0)
-      .map((a) => a.trim());
+    return raw.filter((a): a is string => typeof a === "string" && a.trim().length > 0).map((a) => a.trim());
   }
   if (typeof raw === "string" && raw.trim().length > 0) {
     return [raw.trim()];
@@ -77,7 +75,7 @@ export function deriveHeadline(summary: string): string {
       .split("\n")
       .map((l) => l.replace(/^[\s#>*-]+/, "").trim())
       .find((l) => l.length > 0) ?? summary.trim();
-  const sentence = firstLine.split(/(?<=[.!?])\s/, 1)[0].trim();
+  const sentence = (firstLine.split(/(?<=[.!?])\s/, 1)[0] ?? "").trim();
   if (sentence.length <= HEADLINE_TARGET) return sentence;
   return sentence.slice(0, HEADLINE_TARGET - 1).trimEnd() + "…";
 }
@@ -102,6 +100,7 @@ export function parseVerdict(stdout: string): ExecutorVerdict | null {
   try {
     parsed = JSON.parse(raw);
   } catch {
+    // not JSON: the caller treats null as an unparseable verdict
     return null;
   }
 

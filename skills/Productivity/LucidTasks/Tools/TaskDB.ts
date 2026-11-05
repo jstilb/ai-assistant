@@ -12,8 +12,11 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+
+/** Named-parameter object accepted by bun:sqlite statement methods. */
+type SqlNamedParams = Record<string, string | number | bigint | boolean | null>;
+import { existsSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { z } from "zod";
 import { getQueueClient } from "../../../../lib/interfaces/QueueTaskIntegration.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -41,15 +44,7 @@ function defaultDbPath(): string {
 // Types & Schemas
 // ============================================================================
 
-export const TaskStatus = z.enum([
-  "inbox",
-  "next",
-  "in_progress",
-  "waiting",
-  "someday",
-  "done",
-  "cancelled",
-]);
+export const TaskStatus = z.enum(["inbox", "next", "in_progress", "waiting", "someday", "done", "cancelled"]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
 /**
@@ -59,10 +54,10 @@ export type TaskStatus = z.infer<typeof TaskStatus>;
  * and the daily briefing. This is STATE, not a routing brain — there is no TS router.
  */
 export const DispositionSchema = z.enum([
-  "autonomous",    // executor runs these
-  "needs-jm",      // surfaced for Jm; stays a task
+  "autonomous", // executor runs these
+  "needs-jm", // surfaced for Jm; stays a task
   "personal-todo", // Jm's errand; stays a task
-  "drop",          // soft-close sentinel (the agent moved/discarded the capture)
+  "drop", // soft-close sentinel (the agent moved/discarded the capture)
 ]);
 export type Disposition = z.infer<typeof DispositionSchema>;
 
@@ -296,10 +291,8 @@ export function calculateNextDueDate(currentDue: string | null, rule: string): s
       // Handle custom:MWF pattern
       const customMatch = rule.match(/^custom:([MTWRFSU]+)$/i);
       if (customMatch) {
-        const letters = customMatch[1].toUpperCase().split("");
-        const allowedDays = letters
-          .map((l) => DAY_LETTERS[l])
-          .filter((d): d is number => d !== undefined);
+        const letters = (customMatch[1] ?? "").toUpperCase().split("");
+        const allowedDays = letters.map((l) => DAY_LETTERS[l]).filter((d): d is number => d !== undefined);
         if (allowedDays.length > 0) {
           do {
             base.setDate(base.getDate() + 1);
@@ -316,7 +309,7 @@ export function calculateNextDueDate(currentDue: string | null, rule: string): s
     }
   }
 
-  return base.toISOString().split("T")[0];
+  return base.toISOString().slice(0, 10);
 }
 
 // ============================================================================
@@ -337,7 +330,7 @@ export function withRetry<T>(fn: () => T, maxRetries = 3): T {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("SQLITE_BUSY")) throw err;
       lastErr = err;
-      Bun.sleepSync(50 * Math.pow(2, i));
+      Bun.sleepSync(50 * 2 ** i);
     }
   }
   throw lastErr;
@@ -351,11 +344,7 @@ export function withRetry<T>(fn: () => T, maxRetries = 3): T {
  * Statuses that represent a "closed" task — transitioning INTO one of these
  * triggers queue item archival when a queue_item_id is present.
  */
-export const CLOSED_TASK_STATUSES: ReadonlySet<TaskStatus> = new Set([
-  "done",
-  "cancelled",
-  "someday",
-]);
+export const CLOSED_TASK_STATUSES: ReadonlySet<TaskStatus> = new Set(["done", "cancelled", "someday"]);
 
 /**
  * Statuses in which a Priority-list pin (manual_rank) survives a status change.
@@ -476,13 +465,13 @@ export function migrateActivityLogToTaskEvents(db: Database): TaskEventsMigratio
     if (hasEvents) {
       db.exec(
         `INSERT INTO ${TASK_EVENTS_TABLE} (${TASK_EVENTS_COLUMNS})
-         SELECT ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`
+         SELECT ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`,
       );
     } else {
       const legacySeq = sequenceFor(db, LEGACY_TASK_EVENTS_TABLE);
       db.exec(
         `INSERT INTO ${TASK_EVENTS_TABLE} (id, ${TASK_EVENTS_COLUMNS})
-         SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`
+         SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${LEGACY_TASK_EVENTS_TABLE} ORDER BY id`,
       );
       // Inserting explicit ids sets seq to MAX(id); keep the old high-water
       // mark if newer rows had been pruned so ids are never reused.
@@ -496,9 +485,7 @@ export function migrateActivityLogToTaskEvents(db: Database): TaskEventsMigratio
 
     const rowsAfter = rowCount(db, TASK_EVENTS_TABLE);
     if (rowsAfter !== rowsBefore + legacyRows) {
-      throw new Error(
-        `task_events migration row-count mismatch: ${rowsBefore} + ${legacyRows} legacy != ${rowsAfter}`
-      );
+      throw new Error(`task_events migration row-count mismatch: ${rowsBefore} + ${legacyRows} legacy != ${rowsAfter}`);
     }
 
     db.exec(`DROP TABLE ${LEGACY_TASK_EVENTS_TABLE}`); // drops idx_activity_task_id with it
@@ -528,7 +515,7 @@ export function rollbackTaskEventsToActivityLog(db: Database): TaskEventsMigrati
     db.exec(eventsTableDdl(LEGACY_TASK_EVENTS_TABLE));
     db.exec(
       `INSERT INTO ${LEGACY_TASK_EVENTS_TABLE} (id, ${TASK_EVENTS_COLUMNS})
-       SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${TASK_EVENTS_TABLE} ORDER BY id`
+       SELECT id, ${TASK_EVENTS_COLUMNS} FROM ${TASK_EVENTS_TABLE} ORDER BY id`,
     );
     if (seq > sequenceFor(db, LEGACY_TASK_EVENTS_TABLE)) {
       db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = ?").run(seq, LEGACY_TASK_EVENTS_TABLE);
@@ -663,7 +650,14 @@ export class TaskDB {
 
     // Schema migrations for existing databases
     // Discriminating error handler: re-throw any error that isn't "column already exists"
-    for (const columnDef of ["started_at TEXT", "kaya_triage TEXT", "disposition TEXT", "manual_rank INTEGER", "manual_ranked_at TEXT", "outcome TEXT"]) {
+    for (const columnDef of [
+      "started_at TEXT",
+      "kaya_triage TEXT",
+      "disposition TEXT",
+      "manual_rank INTEGER",
+      "manual_ranked_at TEXT",
+      "outcome TEXT",
+    ]) {
       try {
         this.db.exec(`ALTER TABLE tasks ADD COLUMN ${columnDef}`);
       } catch (err) {
@@ -676,9 +670,7 @@ export class TaskDB {
     }
 
     // Prune task_events entries older than 90 days on DB open
-    this.db.exec(
-      `DELETE FROM task_events WHERE datetime(created_at) < datetime('now', '-90 days')`
-    );
+    this.db.exec(`DELETE FROM task_events WHERE datetime(created_at) < datetime('now', '-90 days')`);
 
     // Full-text search virtual table
     this.db.exec(`
@@ -762,9 +754,7 @@ export class TaskDB {
     // Dedup check: if an active task with the same title exists in the same project, return it
     if (input.title && !input.id) {
       const existing = this.db
-        .prepare(
-          `SELECT * FROM tasks WHERE title = ? AND project_id IS ? AND status NOT IN ('done', 'cancelled')`
-        )
+        .prepare(`SELECT * FROM tasks WHERE title = ? AND project_id IS ? AND status NOT IN ('done', 'cancelled')`)
         .get(input.title, input.project_id || null) as Task | null;
       if (existing) {
         return existing;
@@ -842,7 +832,14 @@ export class TaskDB {
   }> {
     const rows = this.db
       .query<
-        { id: string; title: string; raw_input: string | null; disposition: string; created_at: string; updated_at: string },
+        {
+          id: string;
+          title: string;
+          raw_input: string | null;
+          disposition: string;
+          created_at: string;
+          updated_at: string;
+        },
         []
       >(
         `SELECT id, title, raw_input, disposition, created_at, updated_at
@@ -878,36 +875,32 @@ export class TaskDB {
    * Filter tasks by a single tag value — exact match via json_each
    */
   getTasksByTag(tag: string): Task[] {
-    return this.db.query<Task, [string]>(
-      `SELECT t.* FROM tasks t, json_each(t.context_tags) j WHERE j.value = ?`
-    ).all(tag);
+    return this.db
+      .query<Task, [string]>(`SELECT t.* FROM tasks t, json_each(t.context_tags) j WHERE j.value = ?`)
+      .all(tag);
   }
 
   /**
    * Filter tasks by a single label value — exact match via json_each
    */
   getTasksByLabel(label: string): Task[] {
-    return this.db.query<Task, [string]>(
-      `SELECT t.* FROM tasks t, json_each(t.labels) j WHERE j.value = ?`
-    ).all(label);
+    return this.db.query<Task, [string]>(`SELECT t.* FROM tasks t, json_each(t.labels) j WHERE j.value = ?`).all(label);
   }
 
   /**
    * Check if a task has a specific tag (for single-task lookups)
    */
   taskHasTag(taskId: string, tag: string): boolean {
-    const result = this.db.query<{ count: number }, [string, string]>(
-      `SELECT COUNT(*) as count FROM tasks t, json_each(t.context_tags) j
-       WHERE t.id = ? AND j.value = ?`
-    ).get(taskId, tag);
+    const result = this.db
+      .query<{ count: number }, [string, string]>(
+        `SELECT COUNT(*) as count FROM tasks t, json_each(t.context_tags) j
+       WHERE t.id = ? AND j.value = ?`,
+      )
+      .get(taskId, tag);
     return (result?.count ?? 0) > 0;
   }
 
-  updateTask(
-    id: string,
-    updates: Partial<Omit<Task, "id" | "created_at">>,
-    actor: string = "user"
-  ): Task | null {
+  updateTask(id: string, updates: Partial<Omit<Task, "id" | "created_at">>, actor: string = "user"): Task | null {
     const existing = this.getTask(id);
     if (!existing) return null;
 
@@ -921,18 +914,20 @@ export class TaskDB {
       if (problem) {
         throw new OutcomeRequiredError(
           `Task ${id} needs an outcome before ${actor} can close it: ${problem}. ` +
-            `Use: tasks done ${id} --outcome "<what changed>" --link <path|url> (or --no-artifact "<why>")`
+            `Use: tasks done ${id} --outcome "<what changed>" --link <path|url> (or --no-artifact "<why>")`,
         );
       }
     } else if (
-      existing.status === "done" && (updates.status === undefined || updates.status === "done") &&
-      updates.outcome !== undefined && !HUMAN_CLOSE_ACTORS.has(actor)
+      existing.status === "done" &&
+      (updates.status === undefined || updates.status === "done") &&
+      updates.outcome !== undefined &&
+      !HUMAN_CLOSE_ACTORS.has(actor)
     ) {
       // Invariant: a done task keeps an outcome an agent would accept. Only human actors may clear/weaken it.
       const problem = agentOutcomeProblem(readOutcome(updates.outcome).outcome);
       if (problem) {
         throw new OutcomeRequiredError(
-          `Task ${id} is done; ${actor} cannot replace its outcome with an unacceptable one: ${problem}.`
+          `Task ${id} is done; ${actor} cannot replace its outcome with an unacceptable one: ${problem}.`,
         );
       }
     }
@@ -942,7 +937,7 @@ export class TaskDB {
 
     // Build SET clause dynamically
     const setClauses: string[] = ["updated_at = $updated_at"];
-    const params: Record<string, unknown> = {
+    const params: SqlNamedParams = {
       $updated_at: now,
       $id: id,
     };
@@ -967,7 +962,7 @@ export class TaskDB {
     // content. Clear it so the hourly triage re-derives honestly. EscalationHelper
     // (lib/core) passes kaya_triage in the SAME update, so its atomic re-stamp is preserved.
     const contentChanged = "title" in changes || "description" in changes;
-    const isStamping = Object.prototype.hasOwnProperty.call(updates, "kaya_triage");
+    const isStamping = Object.hasOwn(updates, "kaya_triage");
     if (contentChanged && !isStamping && existing.kaya_triage) {
       setClauses.push("kaya_triage = $kaya_triage");
       params.$kaya_triage = null;
@@ -982,11 +977,12 @@ export class TaskDB {
     // silently reapplies when the task returns, or a pinned task flipped to waiting
     // by triage keeps sitting above active work. Explicit manual_rank writes and
     // dragging an already-waiting task (no status change) are untouched.
-    if (existing.manual_rank !== null && !Object.prototype.hasOwnProperty.call(updates, "manual_rank")) {
+    if (existing.manual_rank !== null && !Object.hasOwn(updates, "manual_rank")) {
       const leftLane =
         ("status" in changes && !PINNABLE_STATUSES.has(updates.status ?? "")) ||
         ("disposition" in changes && NON_JM_DISPOSITIONS.has(updates.disposition ?? "")) ||
-        ("project_id" in changes && typeof updates.project_id === "string" &&
+        ("project_id" in changes &&
+          typeof updates.project_id === "string" &&
           this.getProject(updates.project_id)?.name.toLowerCase() === "icebox");
       if (leftLane) {
         setClauses.push("manual_rank = $manual_rank", "manual_ranked_at = $manual_ranked_at");
@@ -1032,7 +1028,7 @@ export class TaskDB {
 
         // Get the freshly updated task to pass to recurrence
         const completedTask = this.getTask(id);
-        if (completedTask && completedTask.recurrence_rule) {
+        if (completedTask?.recurrence_rule) {
           this.createRecurrenceInstance(completedTask);
         }
       });
@@ -1070,13 +1066,15 @@ export class TaskDB {
           console.warn(`[TaskDB] ${action} for item ${queueItemId} (activity log unavailable)`);
         }
       };
-      hookRef(queueItemId, reason).then(() => {
-        logSyncOutcome("queue_synced", { queueItemId });
-      }).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[TaskDB] queue reverse-sync failed for item ${queueItemId}: ${msg}`);
-        logSyncOutcome("queue_sync_failed", { queueItemId, error: msg });
-      });
+      hookRef(queueItemId, reason)
+        .then(() => {
+          logSyncOutcome("queue_synced", { queueItemId });
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[TaskDB] queue reverse-sync failed for item ${queueItemId}: ${msg}`);
+          logSyncOutcome("queue_sync_failed", { queueItemId, error: msg });
+        });
     }
 
     return this.getTask(id);
@@ -1091,12 +1089,10 @@ export class TaskDB {
     const nextDueDate = calculateNextDueDate(completedTask.due_date, rule);
 
     // Record habit completion
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().slice(0, 10);
     try {
       this.db
-        .prepare(
-          "INSERT OR IGNORE INTO habit_completions (task_id, completed_date) VALUES ($task_id, $completed_date)"
-        )
+        .prepare("INSERT OR IGNORE INTO habit_completions (task_id, completed_date) VALUES ($task_id, $completed_date)")
         .run({ $task_id: completedTask.id, $completed_date: today });
     } catch (err) {
       console.error(`Warning: failed to record habit completion: ${err instanceof Error ? err.message : err}`);
@@ -1116,7 +1112,7 @@ export class TaskDB {
           $id, $title, $description, $status, $priority, $energy_level,
           $estimated_minutes, $due_date, $project_id, $goal_id, $mission_id,
           $context_tags, $labels, $recurrence_rule, $created_at, $updated_at
-        )`
+        )`,
       )
       .run({
         $id: newTaskId,
@@ -1175,7 +1171,7 @@ export class TaskDB {
 
   listTasks(filter: TaskFilter = {}): Task[] {
     const conditions: string[] = [];
-    const params: Record<string, unknown> = {};
+    const params: SqlNamedParams = {};
 
     if (filter.status) {
       if (Array.isArray(filter.status)) {
@@ -1239,13 +1235,13 @@ export class TaskDB {
    * Get today's tasks: next + in_progress, optionally including those scheduled for today
    */
   getTodayTasks(): Task[] {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().slice(0, 10);
     return this.db
       .prepare(
         `SELECT * FROM tasks
          WHERE (status IN ('next', 'in_progress'))
             OR (scheduled_date = $today AND status NOT IN ('done', 'cancelled'))
-         ORDER BY priority ASC, due_date ASC NULLS LAST`
+         ORDER BY priority ASC, due_date ASC NULLS LAST`,
       )
       .all({ $today: today }) as Task[];
   }
@@ -1254,23 +1250,21 @@ export class TaskDB {
    * Get inbox items (status = 'inbox')
    */
   getInboxTasks(): Task[] {
-    return this.db
-      .prepare("SELECT * FROM tasks WHERE status = 'inbox' ORDER BY created_at DESC")
-      .all() as Task[];
+    return this.db.prepare("SELECT * FROM tasks WHERE status = 'inbox' ORDER BY created_at DESC").all() as Task[];
   }
 
   /**
    * Get overdue tasks
    */
   getOverdueTasks(): Task[] {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().slice(0, 10);
     return this.db
       .prepare(
         `SELECT * FROM tasks
          WHERE due_date IS NOT NULL
            AND due_date < $today
            AND status NOT IN ('done', 'cancelled')
-         ORDER BY due_date ASC`
+         ORDER BY due_date ASC`,
       )
       .all({ $today: today }) as Task[];
   }
@@ -1291,7 +1285,7 @@ export class TaskDB {
          JOIN tasks_fts ON tasks.rowid = tasks_fts.rowid
          WHERE tasks_fts MATCH $query
          ORDER BY rank
-         LIMIT $limit`
+         LIMIT $limit`,
       )
       .all({ $query: ftsQuery, $limit: limit }) as Task[];
   }
@@ -1325,7 +1319,7 @@ export class TaskDB {
     this.db
       .prepare(
         `INSERT INTO projects (id, name, description, status, goal_id, color, sort_order, asana_project_gid, created_at, updated_at)
-         VALUES ($id, $name, $description, $status, $goal_id, $color, $sort_order, $asana_project_gid, $created_at, $updated_at)`
+         VALUES ($id, $name, $description, $status, $goal_id, $color, $sort_order, $asana_project_gid, $created_at, $updated_at)`,
       )
       .run({
         $id: id,
@@ -1348,9 +1342,7 @@ export class TaskDB {
   }
 
   getProjectByName(name: string): Project | null {
-    return this.db
-      .prepare("SELECT * FROM projects WHERE LOWER(name) = LOWER(?)")
-      .get(name) as Project | null;
+    return this.db.prepare("SELECT * FROM projects WHERE LOWER(name) = LOWER(?)").get(name) as Project | null;
   }
 
   listProjects(status?: ProjectStatus): Project[] {
@@ -1359,21 +1351,16 @@ export class TaskDB {
         .prepare("SELECT * FROM projects WHERE status = ? ORDER BY sort_order ASC, name ASC")
         .all(status) as Project[];
     }
-    return this.db
-      .prepare("SELECT * FROM projects ORDER BY sort_order ASC, name ASC")
-      .all() as Project[];
+    return this.db.prepare("SELECT * FROM projects ORDER BY sort_order ASC, name ASC").all() as Project[];
   }
 
-  updateProject(
-    id: string,
-    updates: Partial<Omit<Project, "id" | "created_at">>
-  ): Project | null {
+  updateProject(id: string, updates: Partial<Omit<Project, "id" | "created_at">>): Project | null {
     const existing = this.getProject(id);
     if (!existing) return null;
 
     const now = new Date().toISOString();
     const setClauses: string[] = ["updated_at = $updated_at"];
-    const params: Record<string, unknown> = { $updated_at: now, $id: id };
+    const params: SqlNamedParams = { $updated_at: now, $id: id };
 
     for (const [key, value] of Object.entries(updates)) {
       if (key === "id" || key === "created_at") continue;
@@ -1397,12 +1384,12 @@ export class TaskDB {
     action: string,
     changes: string | null,
     actor: string = "user",
-    aiReasoning: string | null = null
+    aiReasoning: string | null = null,
   ): void {
     this.db
       .prepare(
         `INSERT INTO task_events (task_id, action, changes, ai_reasoning, actor, created_at)
-         VALUES ($task_id, $action, $changes, $ai_reasoning, $actor, $created_at)`
+         VALUES ($task_id, $action, $changes, $ai_reasoning, $actor, $created_at)`,
       )
       .run({
         $task_id: taskId,
@@ -1416,9 +1403,7 @@ export class TaskDB {
 
   getActivityLog(taskId: string, limit: number = 20): ActivityLogEntry[] {
     return this.db
-      .prepare(
-        "SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at DESC LIMIT ?"
-      )
+      .prepare("SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at DESC LIMIT ?")
       .all(taskId, limit) as ActivityLogEntry[];
   }
 
@@ -1434,7 +1419,7 @@ export class TaskDB {
         .prepare(
           `SELECT task_id, actor FROM task_events
            WHERE action = 'completed' AND task_id IN (${chunk.map(() => "?").join(",")})
-           ORDER BY created_at ASC, rowid ASC`
+           ORDER BY created_at ASC, rowid ASC`,
         )
         .all(...chunk) as { task_id: string; actor: string | null }[];
       for (const r of rows) if (r.actor) out.set(r.task_id, r.actor); // later rows win = latest
@@ -1459,9 +1444,15 @@ export class TaskDB {
              ORDER BY e.created_at DESC, e.rowid DESC LIMIT 1) AS closer
          FROM tasks t
          WHERE t.status = 'done' AND t.completed_at IS NOT NULL AND t.completed_at >= ?
-         ORDER BY t.completed_at DESC`
+         ORDER BY t.completed_at DESC`,
       )
-      .all(cutoff) as { id: string; title: string; completed_at: string; outcome: string | null; closer: string | null }[];
+      .all(cutoff) as {
+      id: string;
+      title: string;
+      completed_at: string;
+      outcome: string | null;
+      closer: string | null;
+    }[];
     const out: ClosedWithoutOutcome[] = [];
     for (const r of rows) {
       if (!r.closer || HUMAN_CLOSE_ACTORS.has(r.closer)) continue;
@@ -1537,14 +1528,13 @@ export class TaskDB {
   // --------------------------------------------------------------------------
 
   getStats(): TaskStats {
-    const total = (
-      this.db.prepare("SELECT COUNT(*) as count FROM tasks").get() as { count: number }
-    ).count;
+    const total = (this.db.prepare("SELECT COUNT(*) as count FROM tasks").get() as { count: number }).count;
 
     // By status
-    const statusRows = this.db
-      .prepare("SELECT status, COUNT(*) as count FROM tasks GROUP BY status")
-      .all() as { status: string; count: number }[];
+    const statusRows = this.db.prepare("SELECT status, COUNT(*) as count FROM tasks GROUP BY status").all() as {
+      status: string;
+      count: number;
+    }[];
     const byStatus: Record<string, number> = {};
     for (const row of statusRows) {
       byStatus[row.status] = row.count;
@@ -1557,7 +1547,7 @@ export class TaskDB {
          FROM projects p
          LEFT JOIN tasks t ON t.project_id = p.id AND t.status NOT IN ('done', 'cancelled')
          GROUP BY p.id
-         ORDER BY count DESC`
+         ORDER BY count DESC`,
       )
       .all() as { id: string; name: string; count: number }[];
     const byProject: Record<string, { name: string; count: number }> = {};
@@ -1570,7 +1560,7 @@ export class TaskDB {
       .prepare(
         `SELECT goal_id, COUNT(*) as count FROM tasks
          WHERE goal_id IS NOT NULL AND status NOT IN ('done', 'cancelled')
-         GROUP BY goal_id ORDER BY count DESC`
+         GROUP BY goal_id ORDER BY count DESC`,
       )
       .all() as { goal_id: string; count: number }[];
     const byGoal: Record<string, number> = {};
@@ -1579,13 +1569,13 @@ export class TaskDB {
     }
 
     // Overdue
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().slice(0, 10);
     const overdue = (
       this.db
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
            WHERE due_date IS NOT NULL AND due_date < $today
-             AND status NOT IN ('done', 'cancelled')`
+             AND status NOT IN ('done', 'cancelled')`,
         )
         .get({ $today: today }) as { count: number }
     ).count;
@@ -1595,7 +1585,7 @@ export class TaskDB {
       this.db
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
-           WHERE due_date = $today AND status NOT IN ('done', 'cancelled')`
+           WHERE due_date = $today AND status NOT IN ('done', 'cancelled')`,
         )
         .get({ $today: today }) as { count: number }
     ).count;
@@ -1607,7 +1597,7 @@ export class TaskDB {
       this.db
         .prepare(
           `SELECT COUNT(*) as count FROM tasks
-           WHERE status = 'done' AND completed_at >= $week_ago`
+           WHERE status = 'done' AND completed_at >= $week_ago`,
         )
         .get({ $week_ago: weekAgo.toISOString() }) as { count: number }
     ).count;
@@ -1630,9 +1620,7 @@ export class TaskDB {
   /**
    * Insert multiple tasks in a transaction for performance
    */
-  bulkCreateTasks(
-    tasks: Array<Parameters<TaskDB["createTask"]>[0]>
-  ): string[] {
+  bulkCreateTasks(tasks: Array<Parameters<TaskDB["createTask"]>[0]>): string[] {
     const ids: string[] = [];
     const transaction = this.db.transaction(() => {
       for (const task of tasks) {
@@ -1648,18 +1636,14 @@ export class TaskDB {
    * Check if task with given asana_gid already exists
    */
   getTaskByAsanaGid(gid: string): Task | null {
-    return this.db
-      .prepare("SELECT * FROM tasks WHERE asana_gid = ?")
-      .get(gid) as Task | null;
+    return this.db.prepare("SELECT * FROM tasks WHERE asana_gid = ?").get(gid) as Task | null;
   }
 
   /**
    * Get project by asana project gid
    */
   getProjectByAsanaGid(gid: string): Project | null {
-    return this.db
-      .prepare("SELECT * FROM projects WHERE asana_project_gid = ?")
-      .get(gid) as Project | null;
+    return this.db.prepare("SELECT * FROM projects WHERE asana_project_gid = ?").get(gid) as Project | null;
   }
 
   // --------------------------------------------------------------------------
@@ -1673,7 +1657,7 @@ export class TaskDB {
   recordHabitCompletion(taskId: string, date: string, notes?: string): void {
     this.db
       .prepare(
-        "INSERT OR IGNORE INTO habit_completions (task_id, completed_date, notes) VALUES ($task_id, $completed_date, $notes)"
+        "INSERT OR IGNORE INTO habit_completions (task_id, completed_date, notes) VALUES ($task_id, $completed_date, $notes)",
       )
       .run({
         $task_id: taskId,
@@ -1691,13 +1675,13 @@ export class TaskDB {
 
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = cutoff.toISOString().split("T")[0];
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
 
     const rows = this.db
       .prepare(
         `SELECT completed_date FROM habit_completions
          WHERE task_id = $task_id AND completed_date >= $cutoff
-         ORDER BY completed_date DESC`
+         ORDER BY completed_date DESC`,
       )
       .all({ $task_id: taskId, $cutoff: cutoffStr }) as { completed_date: string }[];
 
@@ -1712,7 +1696,7 @@ export class TaskDB {
     for (let i = 0; i < days; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dStr = d.toISOString().split("T")[0];
+      const dStr = d.toISOString().slice(0, 10);
       if (dateSet.has(dStr)) {
         currentStreak++;
       } else {
@@ -1722,9 +1706,7 @@ export class TaskDB {
 
     // Longest streak: scan all completions sorted ascending
     const allRows = this.db
-      .prepare(
-        "SELECT completed_date FROM habit_completions WHERE task_id = $task_id ORDER BY completed_date ASC"
-      )
+      .prepare("SELECT completed_date FROM habit_completions WHERE task_id = $task_id ORDER BY completed_date ASC")
       .all({ $task_id: taskId }) as { completed_date: string }[];
 
     let longestStreak = 0;
@@ -1761,9 +1743,7 @@ export class TaskDB {
    * Get habit stats for all tasks that have at least one habit_completion entry.
    */
   getAllHabitStats(days: number = 30): HabitStats[] {
-    const taskIds = this.db
-      .prepare("SELECT DISTINCT task_id FROM habit_completions")
-      .all() as { task_id: string }[];
+    const taskIds = this.db.prepare("SELECT DISTINCT task_id FROM habit_completions").all() as { task_id: string }[];
 
     return taskIds.map((row) => this.getHabitStats(row.task_id, days));
   }
@@ -1777,28 +1757,24 @@ export class TaskDB {
    */
   createSavedView(name: string, filter: TaskFilter, sort?: { field: string; direction: "asc" | "desc" }): void {
     // Use upsert pattern: replace existing view with same name
-    const existing = this.db
-      .prepare("SELECT id FROM saved_views WHERE name = $name")
-      .get({ $name: name }) as { id: string } | null;
+    const existing = this.db.prepare("SELECT id FROM saved_views WHERE name = $name").get({ $name: name }) as {
+      id: string;
+    } | null;
 
     const id = existing ? existing.id : generateViewId();
     const now = new Date().toISOString();
 
     if (existing) {
-      this.db
-        .prepare(
-          "UPDATE saved_views SET filter_json = $filter_json, sort_json = $sort_json WHERE id = $id"
-        )
-        .run({
-          $filter_json: JSON.stringify(filter),
-          $sort_json: sort ? JSON.stringify(sort) : null,
-          $id: id,
-        });
+      this.db.prepare("UPDATE saved_views SET filter_json = $filter_json, sort_json = $sort_json WHERE id = $id").run({
+        $filter_json: JSON.stringify(filter),
+        $sort_json: sort ? JSON.stringify(sort) : null,
+        $id: id,
+      });
     } else {
       this.db
         .prepare(
           `INSERT INTO saved_views (id, name, filter_json, sort_json, is_default, created_at)
-           VALUES ($id, $name, $filter_json, $sort_json, 0, $created_at)`
+           VALUES ($id, $name, $filter_json, $sort_json, 0, $created_at)`,
         )
         .run({
           $id: id,
@@ -1822,7 +1798,9 @@ export class TaskDB {
 
     try {
       const filter = JSON.parse(row.filter_json) as TaskFilter;
-      const sort = row.sort_json ? (JSON.parse(row.sort_json) as { field: string; direction: "asc" | "desc" }) : undefined;
+      const sort = row.sort_json
+        ? (JSON.parse(row.sort_json) as { field: string; direction: "asc" | "desc" })
+        : undefined;
       return { filter, sort };
     } catch {
       console.error(`Error parsing saved view filter for "${name}"`);
@@ -1836,7 +1814,14 @@ export class TaskDB {
   listSavedViews(): SavedView[] {
     const rows = this.db
       .prepare("SELECT id, name, filter_json, sort_json, is_default, created_at FROM saved_views ORDER BY name ASC")
-      .all() as { id: string; name: string; filter_json: string; sort_json: string | null; is_default: number; created_at: string }[];
+      .all() as {
+      id: string;
+      name: string;
+      filter_json: string;
+      sort_json: string | null;
+      is_default: number;
+      created_at: string;
+    }[];
 
     return rows.map((row) => {
       let filter: TaskFilter = {};
@@ -1862,9 +1847,7 @@ export class TaskDB {
    * Delete a saved view by name. Returns true if deleted, false if not found.
    */
   deleteSavedView(name: string): boolean {
-    const result = this.db
-      .prepare("DELETE FROM saved_views WHERE name = $name")
-      .run({ $name: name });
+    const result = this.db.prepare("DELETE FROM saved_views WHERE name = $name").run({ $name: name });
     return result.changes > 0;
   }
 
@@ -1873,9 +1856,7 @@ export class TaskDB {
    */
   setDefaultView(name: string): void {
     this.db.exec("UPDATE saved_views SET is_default = 0");
-    this.db
-      .prepare("UPDATE saved_views SET is_default = 1 WHERE name = $name")
-      .run({ $name: name });
+    this.db.prepare("UPDATE saved_views SET is_default = 1 WHERE name = $name").run({ $name: name });
   }
 
   /**
@@ -1904,7 +1885,7 @@ export class TaskDB {
          WHERE status = 'done'
            AND completed_at >= date('now', $offset)
          GROUP BY week
-         ORDER BY week ASC`
+         ORDER BY week ASC`,
       )
       .all({ $offset: `-${weeks * 7} days` }) as { week: string; count: number }[];
 
@@ -1923,7 +1904,7 @@ export class TaskDB {
          FROM tasks
          WHERE started_at IS NOT NULL
            AND completed_at IS NOT NULL
-           AND status = 'done'`
+           AND status = 'done'`,
       )
       .get() as { avg_minutes: number | null; task_count: number };
 
@@ -1946,7 +1927,7 @@ export class TaskDB {
          FROM tasks
          WHERE goal_id IS NOT NULL
            AND status != 'cancelled'
-         GROUP BY goal_id`
+         GROUP BY goal_id`,
       )
       .all() as { goal_id: string; completed: number; total: number }[];
 
@@ -1969,7 +1950,7 @@ export class TaskDB {
           COUNT(*) as count
          FROM tasks
          WHERE status NOT IN ('done', 'cancelled')
-         GROUP BY level`
+         GROUP BY level`,
       )
       .all() as { level: string; count: number }[];
 
@@ -2010,7 +1991,7 @@ export class TaskDB {
              WHEN '4-7_days' THEN 2
              WHEN '8-14_days' THEN 3
              ELSE 4
-           END`
+           END`,
       )
       .all() as { range: string; count: number }[];
 
@@ -2046,7 +2027,7 @@ export class TaskDB {
            AND started_at IS NOT NULL
            AND completed_at IS NOT NULL
            AND status = 'done'
-           AND (julianday(completed_at) - julianday(started_at)) * 1440 > 0`
+           AND (julianday(completed_at) - julianday(started_at)) * 1440 > 0`,
       )
       .all() as { title: string; estimated_minutes: number; actual_minutes: number }[];
 
@@ -2083,7 +2064,7 @@ export class TaskDB {
            AND started_at IS NOT NULL
            AND completed_at IS NOT NULL
            AND status = 'done'
-           AND (julianday(completed_at) - julianday(started_at)) * 1440 > 0`
+           AND (julianday(completed_at) - julianday(started_at)) * 1440 > 0`,
       )
       .all({ $pattern: `%${keyword.toLowerCase()}%` }) as { actual_minutes: number }[];
 
@@ -2103,9 +2084,7 @@ export class TaskDB {
     const base = this.getStats();
     const velocity = this.getCompletionVelocity(4);
     const averageVelocity =
-      velocity.length > 0
-        ? Math.round((velocity.reduce((s, w) => s + w.count, 0) / velocity.length) * 10) / 10
-        : 0;
+      velocity.length > 0 ? Math.round((velocity.reduce((s, w) => s + w.count, 0) / velocity.length) * 10) / 10 : 0;
     const durationData = this.getAverageTaskDuration();
     const goalProgress = this.getGoalProgress();
     const energyDistribution = this.getEnergyDistribution();
@@ -2203,7 +2182,7 @@ export async function installRealQueueArchiveHook(): Promise<void> {
   if (!client) {
     console.error(
       "[TaskDB] installRealQueueArchiveHook: no QueueClient registered — queue reverse-sync disabled. " +
-      "Import bin/wire-queue-task-integration.ts before calling installRealQueueArchiveHook.",
+        "Import bin/wire-queue-task-integration.ts before calling installRealQueueArchiveHook.",
     );
     return;
   }

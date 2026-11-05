@@ -14,8 +14,8 @@
  * UI change (from the diff's paths), and did the verifier save the desktop + phone screenshots.
  */
 
-import { readdirSync, statSync } from "fs";
-import { join } from "path";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 // ============================================================================
 // Shared prompt text
@@ -72,7 +72,7 @@ export function isUiPath(path: string): boolean {
 /** The changed paths a unified diff names (the `b/` side of each `diff --git` header). */
 export function changedPathsFromDiff(diff: string): string[] {
   const paths = new Set<string>();
-  for (const m of diff.matchAll(/^diff --git a\/.+? b\/(.+)$/gm)) paths.add(m[1]);
+  for (const m of diff.matchAll(/^diff --git a\/.+? b\/(.+)$/gm)) paths.add(m[1] ?? "");
   return [...paths];
 }
 
