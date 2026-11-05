@@ -20,8 +20,8 @@
  * @module KayaDashboard/DashboardServer
  */
 
-import { existsSync, statSync, writeFileSync, renameSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, statSync, writeFileSync, renameSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as C from "./Collectors.ts";
 import { listJobs, toggleJob, runJob, jobLogs, isOn } from "./Jobs.ts";
 
@@ -30,7 +30,10 @@ const HOST = "127.0.0.1";
 const CLIENT_HTML = readFileSync(join(import.meta.dir, "client.html"), "utf8");
 
 const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
 
 function safe<T>(fn: () => T): T | { error: string } {
   try {
@@ -54,12 +57,21 @@ export function overview() {
       on: j.filter(isOn).length,
       off: j.filter((x) => !isOn(x)).length,
       running: j.filter((x) => x.pid !== null).length,
-      lastRunFailed: j.filter((x) => x.lastRun?.outcome === "failure").map((x) => ({ label: x.label, failureClass: x.lastRun?.failureClass })),
-      nonZeroExit: j.filter((x) => x.lastExit !== null && x.lastExit !== 0 && x.pid === null).map((x) => ({ label: x.label, lastExit: x.lastExit })),
+      lastRunFailed: j
+        .filter((x) => x.lastRun?.outcome === "failure")
+        .map((x) => ({ label: x.label, failureClass: x.lastRun?.failureClass })),
+      nonZeroExit: j
+        .filter((x) => x.lastExit !== null && x.lastExit !== 0 && x.pid === null)
+        .map((x) => ({ label: x.label, lastExit: x.lastExit })),
     },
-    usage: "error" in usage ? usage : { days: usage.days, ratings: { avg: usage.ratings.avg, count: usage.ratings.count } },
+    usage:
+      "error" in usage ? usage : { days: usage.days, ratings: { avg: usage.ratings.avg, count: usage.ratings.count } },
     sessions: Array.isArray(sessions)
-      ? { last14d: sessions.length, interactive: sessions.filter((s) => s.interactive).length, today: sessions.filter((s) => s.updatedAt.startsWith(today)).length }
+      ? {
+          last14d: sessions.length,
+          interactive: sessions.filter((s) => s.interactive).length,
+          today: sessions.filter((s) => s.updatedAt.startsWith(today)).length,
+        }
       : sessions,
     graph: "error" in diag ? null : diag.graph,
     skills: (safe(() => C.listSkills().length) as number) ?? 0,
@@ -76,7 +88,8 @@ export async function handleRequest(req: Request): Promise<Response> {
   const p = url.pathname;
   const m = req.method;
 
-  if (p === "/" || p === "/index.html") return new Response(CLIENT_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
+  if (p === "/" || p === "/index.html")
+    return new Response(CLIENT_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
   if (p === "/healthz") return json({ ok: true, port: PORT, kayaHome: C.kayaHome() });
 
   if (m === "GET") {
@@ -109,29 +122,35 @@ export async function handleRequest(req: Request): Promise<Response> {
         return json(safe(() => C.readEditable(url.searchParams.get("path") ?? "")));
     }
     const sess = p.match(/^\/api\/sessions\/([0-9a-f-]{36})$/);
-    if (sess) return json(safe(() => C.sessionTranscript(sess[1])));
+    const sessId = sess?.[1];
+    if (sessId) return json(safe(() => C.sessionTranscript(sessId)));
     const logs = p.match(/^\/api\/jobs\/([^/]+)\/logs$/);
-    if (logs) return json(safe(() => jobLogs(decodeURIComponent(logs[1]), Number(url.searchParams.get("lines") ?? 80))));
+    const logsId = logs?.[1];
+    if (logsId)
+      return json(safe(() => jobLogs(decodeURIComponent(logsId), Number(url.searchParams.get("lines") ?? 80))));
   }
 
   if (m === "POST" || m === "PUT") {
     const deny = needsHeader(req);
     if (deny) return deny;
     const toggle = p.match(/^\/api\/jobs\/([^/]+)\/toggle$/);
-    if (toggle && m === "POST") {
+    const toggleId = toggle?.[1];
+    if (toggleId && m === "POST") {
       const body = (await req.json().catch(() => ({}))) as { enable?: boolean };
       if (typeof body.enable !== "boolean") return json({ error: "body.enable must be boolean" }, 400);
-      const r = toggleJob(decodeURIComponent(toggle[1]), body.enable);
+      const r = toggleJob(decodeURIComponent(toggleId), body.enable);
       return json(r, r.ok ? 200 : 500);
     }
     const run = p.match(/^\/api\/jobs\/([^/]+)\/run$/);
-    if (run && m === "POST") {
-      const r = runJob(decodeURIComponent(run[1]));
+    const runId = run?.[1];
+    if (runId && m === "POST") {
+      const r = runJob(decodeURIComponent(runId));
       return json(r, r.ok ? 200 : 500);
     }
     if (p === "/api/file" && m === "PUT") {
       const body = (await req.json().catch(() => ({}))) as { path?: string; content?: string; mtimeMs?: number };
-      if (typeof body.path !== "string" || typeof body.content !== "string") return json({ error: "path and content required" }, 400);
+      if (typeof body.path !== "string" || typeof body.content !== "string")
+        return json({ error: "path and content required" }, 400);
       try {
         const { abs, writable } = C.resolveEditable(body.path);
         if (!writable) return json({ error: "file is read-only in the dashboard" }, 403);

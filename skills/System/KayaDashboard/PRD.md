@@ -43,7 +43,7 @@ have been verified live (see §Verification).
 | Overview | aggregates below + `~/.kaya/graph/meta.json` |
 | Sessions (linked) | `~/.claude/projects/<slug>/<sessionId>.jsonl` (ai-title, first prompt, cwd), `history.jsonl` (interactive flag); per-session readable transcript view + `claude --resume` copy |
 | Usage patterns | `history.jsonl` (prompts/sessions per day, hour-of-day, projects), `MEMORY/LEARNING/SIGNALS/ratings.jsonl`, `MEMORY/daemon/cron/run-ledger.jsonl` (cron ok/fail, most-failing jobs) |
-| Jobs (toggle / run / logs) | `~/Library/LaunchAgents/com.{kaya,pai}.*.plist`, `launchctl list` + `print-disabled`, `MEMORY/daemon/cron/manifests/<id>.yaml`, run ledger, plist Standard{Out,Error}Path |
+| Jobs (toggle / run / logs) | `~/Library/LaunchAgents/com.kaya.*.plist`, `launchctl list` + `print-disabled`, `MEMORY/daemon/cron/manifests/<id>.yaml`, run ledger, plist Standard{Out,Error}Path |
 | Telegram (recurring) | manifests with `output ≠ silent`, or manifests whose job delivers from its own script (briefing / digest / nudge / notify / Telegram); `MEMORY/TELEGRAM/outbound.jsonl` |
 | Skills | `skills/<Cat>/<Sub>/SKILL.md` frontmatter + Workflows/Tools counts |
 | Hooks | `settings.json` → `hooks` (event, matcher, file, doc comment, missing-file flag) |
@@ -64,7 +64,7 @@ have been verified live (see §Verification).
 | **Edit file** | atomic tmp+rename; refuses (409) if the file's mtime changed since it was opened | |
 
 Guards:
-- Labels must match `^com\.(kaya|pai)\.` and have a plist.
+- Labels must match `^com\.kaya\.` and have a plist.
 - The dashboard refuses to disable itself.
 - Mutating routes require the `x-kaya-dashboard: 1` header (CSRF: a cross-site page can't send it without a preflight that is never granted).
 - Every job action is appended to `logs/kaya-dashboard-actions.jsonl`.

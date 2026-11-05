@@ -1,7 +1,7 @@
 /**
  * Jobs.ts — launchd + cron-manifest inventory, toggle, and run-now for the Kaya dashboard.
  *
- * A "job" is one ~/Library/LaunchAgents/com.{kaya,pai}.*.plist. When its ProgramArguments
+ * A "job" is one ~/Library/LaunchAgents/com.kaya.*.plist. When its ProgramArguments
  * route through bin/run-cron-job.ts <id>, the job also has a manifest at
  * MEMORY/daemon/cron/manifests/<id>.yaml and rows in MEMORY/daemon/cron/run-ledger.jsonl.
  *
@@ -19,10 +19,21 @@
  * All shelling goes through the injectable `Exec` so the logic is unit-testable.
  */
 
-import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync, openSync, statSync, readSync, closeSync } from "fs";
-import { join, basename } from "path";
-import { spawn, spawnSync } from "child_process";
-import { homedir } from "os";
+import { expandPlaceholdersInString } from "../../../../lib/cron/JobSpec.ts";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  renameSync,
+  openSync,
+  statSync,
+  readSync,
+  closeSync,
+} from "node:fs";
+import { join, basename } from "node:path";
+import { spawn, spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 
@@ -80,7 +91,7 @@ export function defaultPaths(): JobsPaths {
 }
 
 export const SELF_LABEL = "com.kaya.dashboard";
-const LABEL_RE = /^com\.(kaya|pai)\.[A-Za-z0-9._-]+$/;
+const LABEL_RE = /^com\.kaya\.[A-Za-z0-9._-]+$/;
 
 export function uid(): string {
   return String(process.getuid?.() ?? 501);
@@ -95,6 +106,7 @@ export function parseLaunchctlList(out: string): Map<string, { pid: number | nul
     const parts = line.trim().split(/\s+/);
     if (parts.length < 3) continue;
     const [pid, status, label] = parts;
+    if (label === undefined) continue;
     m.set(label, {
       pid: pid === "-" ? null : Number(pid),
       lastExit: status === "-" ? null : Number(status),
@@ -106,7 +118,7 @@ export function parseLaunchctlList(out: string): Map<string, { pid: number | nul
 /** Parse `launchctl print-disabled gui/<uid>` → set of disabled labels. */
 export function parseDisabled(out: string): Set<string> {
   const s = new Set<string>();
-  for (const m of out.matchAll(/"([^"]+)"\s*=>\s*(disabled|true)/g)) s.add(m[1]);
+  for (const m of out.matchAll(/"([^"]+)"\s*=>\s*(disabled|true)/g)) if (m[1] !== undefined) s.add(m[1]);
   return s;
 }
 
@@ -115,7 +127,10 @@ export function describeLaunchdSchedule(plist: Record<string, unknown>): { text:
   if (plist.KeepAlive) return { text: "always on (KeepAlive)", kind: "service" };
   if (typeof plist.StartInterval === "number") {
     const s = plist.StartInterval as number;
-    return { text: s % 3600 === 0 ? `every ${s / 3600}h` : s % 60 === 0 ? `every ${s / 60}m` : `every ${s}s`, kind: "interval" };
+    return {
+      text: s % 3600 === 0 ? `every ${s / 3600}h` : s % 60 === 0 ? `every ${s / 60}m` : `every ${s}s`,
+      kind: "interval",
+    };
   }
   const cal = plist.StartCalendarInterval;
   if (cal) {
@@ -126,9 +141,9 @@ export function describeLaunchdSchedule(plist: Record<string, unknown>): { text:
       const hh = e.Hour !== undefined ? String(e.Hour).padStart(2, "0") : "**";
       const mm = e.Minute !== undefined ? String(e.Minute).padStart(2, "0") : "00";
       const parts = [`${hh}:${mm}`];
-      if (e.Weekday !== undefined) parts.unshift(days[e.Weekday % 7]);
+      if (e.Weekday !== undefined) parts.unshift(days[e.Weekday % 7] ?? String(e.Weekday));
       if (e.Day !== undefined) parts.unshift(`day ${e.Day}`);
-      if (e.Month !== undefined) parts.unshift(months[(e.Month - 1) % 12]);
+      if (e.Month !== undefined) parts.unshift(months[(e.Month - 1) % 12] ?? String(e.Month));
       return parts.join(" ");
     };
     const shown = entries.slice(0, 4).map(fmt).join(", ");
@@ -141,7 +156,8 @@ export function describeLaunchdSchedule(plist: Record<string, unknown>): { text:
 /** Extract the cron manifest id from ProgramArguments routed through run-cron-job.ts. */
 export function cronIdFromProgram(program: string[]): string | null {
   const i = program.findIndex((a) => a.endsWith("run-cron-job.ts"));
-  return i >= 0 && program[i + 1] && !program[i + 1].startsWith("-") ? program[i + 1] : null;
+  const next = i >= 0 ? program[i + 1] : undefined;
+  return next && !next.startsWith("-") ? next : null;
 }
 
 /** Minimal field reads from a manifest yaml (no full parse needed for display). */
@@ -150,10 +166,20 @@ export function readManifestFields(yaml: string): { schedule: string | null; ena
   const en = yaml.match(/^enabled:[ \t]*(true|false)[ \t]*$/m)?.[1];
   let description = "";
   const block = yaml.match(/^description:\s*\|?\s*\n((?:[ \t]+.*\n?)+)/m);
-  if (block) description = block[1].split("\n").map((l) => l.trim()).filter(Boolean).join(" ");
+  if (block)
+    description = (block[1] ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .join(" ");
   else description = yaml.match(/^description:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
   if (!description) description = yaml.match(/^task:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
-  return { schedule, enabled: en === undefined ? true : en === "true", description };
+  // Manifests use {{KAYA_HOME}} / {{BUN}} placeholders; show the expanded text.
+  return {
+    schedule,
+    enabled: en === undefined ? true : en === "true",
+    description: expandPlaceholdersInString(description),
+  };
 }
 
 /** Rewrite (or append) the top-level `enabled:` line, preserving every comment and field. */
@@ -181,7 +207,9 @@ export function tailFile(path: string, bytes = 256 * 1024): string {
 }
 
 /** Last ledger row per jobId from the tail of run-ledger.jsonl. */
-export function lastRunsFromLedger(text: string): Map<string, { startedAt: string; outcome: string; failureClass?: string }> {
+export function lastRunsFromLedger(
+  text: string,
+): Map<string, { startedAt: string; outcome: string; failureClass?: string }> {
   const m = new Map<string, { startedAt: string; outcome: string; failureClass?: string }>();
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -209,7 +237,9 @@ function readPlist(path: string, exec: Exec): Record<string, unknown> | null {
 
 export function listJobs(paths: JobsPaths = defaultPaths(), exec: Exec = realExec): Job[] {
   const files = existsSync(paths.launchAgentsDir)
-    ? readdirSync(paths.launchAgentsDir).filter((f) => /^com\.(kaya|pai)\..+\.plist$/.test(f)).sort()
+    ? readdirSync(paths.launchAgentsDir)
+        .filter((f) => /^com\.kaya\..+\.plist$/.test(f))
+        .sort()
     : [];
   const listed = parseLaunchctlList(exec("/bin/launchctl", ["list"]).stdout);
   const disabled = parseDisabled(exec("/bin/launchctl", ["print-disabled", `gui/${uid()}`]).stdout);
@@ -223,7 +253,8 @@ export function listJobs(paths: JobsPaths = defaultPaths(), exec: Exec = realExe
     const program = ((p?.ProgramArguments as string[]) ?? (p?.Program ? [p.Program as string] : [])).map(String);
     const cronId = cronIdFromProgram(program);
     const manifestPath = cronId ? join(paths.manifestDir, `${cronId}.yaml`) : null;
-    const manifest = manifestPath && existsSync(manifestPath) ? readManifestFields(readFileSync(manifestPath, "utf8")) : null;
+    const manifest =
+      manifestPath && existsSync(manifestPath) ? readManifestFields(readFileSync(manifestPath, "utf8")) : null;
     const sched = p ? describeLaunchdSchedule(p) : { text: "unreadable plist", kind: "on-demand" as const };
     const state = listed.get(label);
     jobs.push({
@@ -275,12 +306,20 @@ function findJob(label: string, paths: JobsPaths, exec: Exec): Job {
 function logAction(paths: JobsPaths, entry: Record<string, unknown>): void {
   try {
     createAppendLog(paths.actionLogPath).append({ timestamp: new Date().toISOString(), ...entry });
-  } catch {
+  } catch (err) {
     // audit log is best-effort; the action result is still returned to the caller
+    console.error(
+      `[Jobs] Could not write dashboard action log ${paths.actionLogPath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
-export function toggleJob(label: string, enable: boolean, paths: JobsPaths = defaultPaths(), exec: Exec = realExec): ActionResult {
+export function toggleJob(
+  label: string,
+  enable: boolean,
+  paths: JobsPaths = defaultPaths(),
+  exec: Exec = realExec,
+): ActionResult {
   const action = enable ? "enable" : "disable";
   const steps: string[] = [];
   try {
@@ -317,7 +356,14 @@ export function toggleJob(label: string, enable: boolean, paths: JobsPaths = def
 
     const after = listJobs(paths, exec).find((j) => j.label === label);
     const ok = after ? isOn(after) === enable : false;
-    const res: ActionResult = { ok, label, action, steps, job: after, error: ok ? undefined : "post-action state does not match the request" };
+    const res: ActionResult = {
+      ok,
+      label,
+      action,
+      steps,
+      job: after,
+      error: ok ? undefined : "post-action state does not match the request",
+    };
     logAction(paths, { action, label, ok, steps });
     return res;
   } catch (err) {
@@ -327,7 +373,11 @@ export function toggleJob(label: string, enable: boolean, paths: JobsPaths = def
   }
 }
 
-export type Spawner = (cmd: string, args: string[], opts: { cwd: string; env: Record<string, string>; stdout: string | null; stderr: string | null }) => number | undefined;
+export type Spawner = (
+  cmd: string,
+  args: string[],
+  opts: { cwd: string; env: Record<string, string>; stdout: string | null; stderr: string | null },
+) => number | undefined;
 
 export const realSpawner: Spawner = (cmd, args, opts) => {
   const out = opts.stdout ? openSync(opts.stdout, "a") : "ignore";
@@ -337,17 +387,26 @@ export const realSpawner: Spawner = (cmd, args, opts) => {
   return child.pid;
 };
 
-export function runJob(label: string, paths: JobsPaths = defaultPaths(), exec: Exec = realExec, spawner: Spawner = realSpawner): ActionResult {
+export function runJob(
+  label: string,
+  paths: JobsPaths = defaultPaths(),
+  exec: Exec = realExec,
+  spawner: Spawner = realSpawner,
+): ActionResult {
   const steps: string[] = [];
   try {
     if (label === SELF_LABEL) throw new Error("use launchctl kickstart -k to restart the dashboard itself");
     const job = findJob(label, paths, exec);
     if (job.cronId) {
       const p = readPlist(job.plistPath, exec) ?? {};
-      const env = { ...(process.env as Record<string, string>), ...((p.EnvironmentVariables as Record<string, string>) ?? {}) };
+      const env = {
+        ...(process.env as Record<string, string>),
+        ...((p.EnvironmentVariables as Record<string, string>) ?? {}),
+      };
       delete env.CLAUDECODE; // de-nest: run-cron-job spawns `claude -p`
       const wrapper = job.program.find((a) => a.endsWith("run-cron-job.ts"))!;
       const bun = job.program[0];
+      if (!bun) throw new Error(`LaunchAgent ${label} has no ProgramArguments[0] to run`);
       const pid = spawner(bun, [wrapper, job.cronId, "--catchup"], {
         cwd: (p.WorkingDirectory as string) ?? paths.kayaHome,
         env,
@@ -357,7 +416,9 @@ export function runJob(label: string, paths: JobsPaths = defaultPaths(), exec: E
       steps.push(`spawned ${basename(wrapper)} ${job.cronId} --catchup (pid ${pid ?? "?"})`);
     } else {
       if (!job.loaded) throw new Error("job is not loaded — enable it first");
-      const args = job.keepAlive ? ["kickstart", "-k", `gui/${uid()}/${label}`] : ["kickstart", `gui/${uid()}/${label}`];
+      const args = job.keepAlive
+        ? ["kickstart", "-k", `gui/${uid()}/${label}`]
+        : ["kickstart", `gui/${uid()}/${label}`];
       const r = exec("/bin/launchctl", args);
       steps.push(`launchctl ${args.join(" ")} → ${r.code}${r.stderr.trim() ? ` (${r.stderr.trim()})` : ""}`);
       if (r.code !== 0) throw new Error(`kickstart failed (${r.code})`);
@@ -372,8 +433,19 @@ export function runJob(label: string, paths: JobsPaths = defaultPaths(), exec: E
 }
 
 /** Last N lines of a job's stdout/stderr logs. */
-export function jobLogs(label: string, lines = 60, paths: JobsPaths = defaultPaths(), exec: Exec = realExec): { stdout: string; stderr: string } {
+export function jobLogs(
+  label: string,
+  lines = 60,
+  paths: JobsPaths = defaultPaths(),
+  exec: Exec = realExec,
+): { stdout: string; stderr: string } {
   const job = findJob(label, paths, exec);
-  const last = (p: string | null) => (p ? tailFile(p, 64 * 1024).split("\n").slice(-lines).join("\n") : "");
+  const last = (p: string | null) =>
+    p
+      ? tailFile(p, 64 * 1024)
+          .split("\n")
+          .slice(-lines)
+          .join("\n")
+      : "";
   return { stdout: last(job.stdoutPath), stderr: last(job.stderrPath) };
 }

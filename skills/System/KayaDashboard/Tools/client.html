@@ -191,12 +191,12 @@ R.jobs = async () => {
   const status = (x) => x.pid ? `<span class="pill good">running · ${x.pid}</span>` : !x.loaded ? '<span class="pill">unloaded</span>' :
     x.lastRun?.outcome === "failure" ? `<span class="pill crit" title="${esc(x.lastRun.failureClass ?? "")}">last run failed</span>` :
     (x.lastExit && x.lastExit !== 0) ? `<span class="pill warn">exit ${x.lastExit}</span>` : '<span class="pill">idle</span>';
-  return `<h2>Jobs</h2><p class="sub">${j.length} LaunchAgents (com.kaya.* / com.pai.*). Toggle = launchctl disable+bootout / enable+bootstrap, plus the cron manifest's <code>enabled:</code>. Run = cron wrapper with --catchup, or launchctl kickstart (KeepAlive services restart). Every action is audit-logged to logs/kaya-dashboard-actions.jsonl.</p>
+  return `<h2>Jobs</h2><p class="sub">${j.length} LaunchAgents (com.kaya.*). Toggle = launchctl disable+bootout / enable+bootstrap, plus the cron manifest's <code>enabled:</code>. Run = cron wrapper with --catchup, or launchctl kickstart (KeepAlive services restart). Every action is audit-logged to logs/kaya-dashboard-actions.jsonl.</p>
   <div class="toolbar"><input type="search" id="q" placeholder="filter jobs…" style="min-width:280px"><select id="kind"><option value="">all kinds</option><option>cron</option><option>service</option><option>calendar</option><option>interval</option><option>on-demand</option></select></div>
   <table id="tbl"><tr><th>On</th><th>Job</th><th>Schedule</th><th>Status</th><th>Last run</th><th>Actions</th></tr>
   ${j.map(x => `<tr data-kind="${x.kind}" data-text="${esc((x.label+" "+x.description+" "+x.schedule).toLowerCase())}">
     <td><label class="switch" title="${x.on ? "on" : "off"}${x.disabled ? " (launchd-disabled)" : ""}${x.manifestEnabled === false ? " (manifest enabled:false)" : ""}"><input type="checkbox" data-toggle="${esc(x.label)}" ${x.on ? "checked" : ""} ${x.label === "com.kaya.dashboard" ? "disabled" : ""}><span></span></label></td>
-    <td class="wrap"><b>${esc(x.label.replace(/^com\.(kaya|pai)\./,""))}</b> <span class="pill">${x.kind}</span>${x.manifestPath ? ` ${fileLink(x.manifestPath.replace(/^.*?\/MEMORY\//,"MEMORY/"), "manifest")}` : ""}
+    <td class="wrap"><b>${esc(x.label.replace(/^com\.kaya\./,""))}</b> <span class="pill">${x.kind}</span>${x.manifestPath ? ` ${fileLink(x.manifestPath.replace(/^.*?\/MEMORY\//,"MEMORY/"), "manifest")}` : ""}
       ${x.description ? `<div class="muted small">${esc(x.description.slice(0,220))}</div>` : ""}</td>
     <td class="small mono">${esc(x.schedule)}</td><td>${status(x)}</td>
     <td class="small">${x.lastRun ? `${when(x.lastRun.startedAt)} · ${esc(x.lastRun.outcome)}` : ""}</td>
