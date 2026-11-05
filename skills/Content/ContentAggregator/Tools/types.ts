@@ -11,19 +11,10 @@ import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 // Source Types
 // ============================================================================
 
-export const SourceTypeEnum = z.enum([
-  "rss",
-  "twitter",
-  "youtube",
-  "newsletter",
-  "reddit",
-  "hn",
-  "blog",
-  "podcast",
-]);
+const SourceTypeEnum = z.enum(["rss", "twitter", "youtube", "newsletter", "reddit", "hn", "blog", "podcast"]);
 export type SourceType = z.infer<typeof SourceTypeEnum>;
 
-export const HealthStatusEnum = z.enum(["healthy", "degraded", "failing"]);
+const HealthStatusEnum = z.enum(["healthy", "degraded", "failing"]);
 export type HealthStatus = z.infer<typeof HealthStatusEnum>;
 
 export const ContentSourceSchema = z.object({
@@ -53,14 +44,7 @@ export type SourceRegistry = z.infer<typeof SourceRegistrySchema>;
 // Content Types
 // ============================================================================
 
-export const ContentStatusEnum = z.enum([
-  "new",
-  "scored",
-  "summarized",
-  "delivered",
-  "archived",
-]);
-export type ContentStatus = z.infer<typeof ContentStatusEnum>;
+export const ContentStatusEnum = z.enum(["new", "scored", "summarized", "delivered", "archived"]);
 
 export const ContentItemSchema = z.object({
   id: z.string(),
@@ -96,7 +80,7 @@ export type ContentStoreState = z.infer<typeof ContentStoreStateSchema>;
 // Topic Profile Types
 // ============================================================================
 
-export const TopicPriorityEnum = z.enum(["high", "medium", "low"]);
+const TopicPriorityEnum = z.enum(["high", "medium", "low"]);
 
 export const TopicProfileSchema = z.object({
   id: z.string(),

@@ -35,7 +35,7 @@ function tokenize(text: string): Set<string> {
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, "")
       .split(/\s+/)
-      .filter((w) => w.length > 2) // Skip very short words
+      .filter((w) => w.length > 2), // Skip very short words
   );
 }
 
@@ -95,7 +95,7 @@ export interface DeduplicationResult {
 export function deduplicateContent(
   items: ContentItem[],
   existingItems: ContentItem[] = [],
-  sourceTrustScores: Map<string, number> = new Map()
+  sourceTrustScores: Map<string, number> = new Map(),
 ): DeduplicationResult {
   const stats = {
     inputCount: items.length,
@@ -150,8 +150,7 @@ export function deduplicateContent(
             // Remove old item from unique set and add new one
             const oldIdx = unique.findIndex((u) => u.id === seen.item.id);
             if (oldIdx !== -1) {
-              duplicates.push(unique[oldIdx]);
-              unique.splice(oldIdx, 1);
+              duplicates.push(...unique.splice(oldIdx, 1));
               // Don't mark as duplicate - add the new one instead
               isDuplicate = false;
             }
@@ -167,9 +166,15 @@ export function deduplicateContent(
     if (isDuplicate) {
       duplicates.push(item);
       switch (duplicateType) {
-        case "url": stats.urlDuplicates++; break;
-        case "hash": stats.hashDuplicates++; break;
-        case "title": stats.titleDuplicates++; break;
+        case "url":
+          stats.urlDuplicates++;
+          break;
+        case "hash":
+          stats.hashDuplicates++;
+          break;
+        case "title":
+          stats.titleDuplicates++;
+          break;
       }
     } else {
       unique.push(item);
@@ -231,22 +236,17 @@ if (import.meta.main) {
 
     // Title similarity tests
     test("identical titles are similar", () => {
-      if (!areTitlesSimilar("AI Breakthrough in 2026", "AI Breakthrough in 2026"))
-        throw new Error("Should be similar");
+      if (!areTitlesSimilar("AI Breakthrough in 2026", "AI Breakthrough in 2026")) throw new Error("Should be similar");
     });
 
     test("near-identical titles are similar", () => {
-      if (!areTitlesSimilar(
-        "OpenAI announces new GPT model for developers",
-        "OpenAI announces new GPT model"
-      )) throw new Error("Should be similar");
+      if (!areTitlesSimilar("OpenAI announces new GPT model for developers", "OpenAI announces new GPT model"))
+        throw new Error("Should be similar");
     });
 
     test("different titles are not similar", () => {
-      if (areTitlesSimilar(
-        "New breakthrough in quantum computing",
-        "San Diego weather forecast for the week"
-      )) throw new Error("Should not be similar");
+      if (areTitlesSimilar("New breakthrough in quantum computing", "San Diego weather forecast for the week"))
+        throw new Error("Should not be similar");
     });
 
     // Deduplication tests

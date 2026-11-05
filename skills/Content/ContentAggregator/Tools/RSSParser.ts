@@ -10,6 +10,8 @@
  *   const items = parseRSSFeed(xmlString);
  */
 
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
+
 export interface FeedItem {
   title: string;
   url: string;
@@ -44,17 +46,16 @@ function decodeEntities(text: string): string {
 
 function extractTag(xml: string, tagName: string): string {
   // Handle CDATA sections
-  const cdataPattern = new RegExp(
-    `<${tagName}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tagName}>`,
-    "i"
-  );
+  const cdataPattern = new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tagName}>`, "i");
   const cdataMatch = xml.match(cdataPattern);
-  if (cdataMatch) return cdataMatch[1].trim();
+  const cdata = cdataMatch?.[1];
+  if (cdata !== undefined) return cdata.trim();
 
   // Handle regular content
   const pattern = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, "i");
   const match = xml.match(pattern);
-  if (match) return decodeEntities(match[1].trim());
+  const inner = match?.[1];
+  if (inner !== undefined) return decodeEntities(inner.trim());
 
   return "";
 }
@@ -62,15 +63,13 @@ function extractTag(xml: string, tagName: string): string {
 function extractAttribute(xml: string, tagName: string, attrName: string): string {
   const pattern = new RegExp(`<${tagName}[^>]*${attrName}="([^"]*)"`, "i");
   const match = xml.match(pattern);
-  return match ? decodeEntities(match[1]) : "";
+  const value = match?.[1];
+  return value !== undefined ? decodeEntities(value) : "";
 }
-
 
 function extractDocumentTag(xml: string, tagName: string): string {
   // Strip <item> and <entry> blocks first to avoid matching inside them
-  const stripped = xml
-    .replace(/<item>[\s\S]*?<\/item>/gi, '')
-    .replace(/<entry>[\s\S]*?<\/entry>/gi, '');
+  const stripped = xml.replace(/<item>[\s\S]*?<\/item>/gi, "").replace(/<entry>[\s\S]*?<\/entry>/gi, "");
   return extractTag(stripped, tagName);
 }
 
@@ -78,10 +77,9 @@ function extractAllTags(xml: string, tagName: string): string[] {
   const results: string[] = [];
   const pattern = new RegExp(
     `<${tagName}[^>]*>(?:\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</${tagName}>`,
-    "gi"
+    "gi",
   );
-  let match;
-  while ((match = pattern.exec(xml)) !== null) {
+  for (let match = pattern.exec(xml); match !== null; match = pattern.exec(xml)) {
     const content = (match[1] || match[2] || "").trim();
     if (content) results.push(decodeEntities(content));
   }
@@ -93,7 +91,7 @@ function stripHtml(html: string): string {
     html
       .replace(/<[^>]+>/g, "")
       .replace(/\s+/g, " ")
-      .trim()
+      .trim(),
   );
 }
 
@@ -103,21 +101,19 @@ function parseDate(dateStr: string): string {
   const trimmed = dateStr.trim();
 
   // ISO 8601 basic format: 20260212T100000Z or 20260212T100000+0530
-  const isoBasic = trimmed.match(
-    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z|[+-]\d{2}:?\d{2})?$/
-  );
+  const isoBasic = trimmed.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z|[+-]\d{2}:?\d{2})?$/);
   if (isoBasic) {
     const [, y, mo, d, h, mi, s, tz] = isoBasic;
     const offset = tz ? tz.replace(/(\d{2})(\d{2})$/, "$1:$2") : "Z";
     const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}${offset}`;
     const parsed = new Date(iso);
-    if (!isNaN(parsed.getTime())) return parsed.toISOString();
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
 
   // ISO 8601 week date: 2026-W07 or 2026-W07-4
   const weekDate = trimmed.match(/^(\d{4})-W(\d{2})(?:-(\d))?$/);
   if (weekDate) {
-    const [, yearStr, weekStr, dayStr] = weekDate;
+    const [, yearStr = "", weekStr = "", dayStr] = weekDate;
     const year = parseInt(yearStr);
     const week = parseInt(weekStr);
     const day = dayStr ? parseInt(dayStr) : 1;
@@ -125,21 +121,21 @@ function parseDate(dateStr: string): string {
     const jan4 = new Date(Date.UTC(year, 0, 4));
     const jan4Day = jan4.getUTCDay() || 7; // Mon=1..Sun=7
     const weekStart = new Date(jan4.getTime() + ((week - 1) * 7 + (day - jan4Day)) * 86400000);
-    if (!isNaN(weekStart.getTime())) return weekStart.toISOString();
+    if (!Number.isNaN(weekStart.getTime())) return weekStart.toISOString();
   }
 
   // ISO 8601 ordinal date: 2026-043 (day of year)
   const ordinalDate = trimmed.match(/^(\d{4})-(\d{3})$/);
   if (ordinalDate) {
-    const [, yearStr, dayStr] = ordinalDate;
+    const [, yearStr = "", dayStr = ""] = ordinalDate;
     const d = new Date(Date.UTC(parseInt(yearStr), 0, parseInt(dayStr)));
-    if (!isNaN(d.getTime())) return d.toISOString();
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
 
   // Standard parse covers ISO 8601 extended format and RFC 2822
   try {
     const d = new Date(trimmed);
-    if (!isNaN(d.getTime())) return d.toISOString();
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
   } catch {
     // fall through
   }
@@ -153,7 +149,7 @@ function parseDate(dateStr: string): string {
 
 function parseRSS2(xml: string): ParsedFeed {
   const channelMatch = xml.match(/<channel>([\s\S]*?)<\/channel>/i);
-  const channelXml = channelMatch ? channelMatch[1] : xml;
+  const channelXml = channelMatch?.[1] ?? xml;
 
   const feedTitle = extractDocumentTag(channelXml, "title");
   const feedUrl = extractDocumentTag(channelXml, "link");
@@ -161,29 +157,18 @@ function parseRSS2(xml: string): ParsedFeed {
 
   const items: FeedItem[] = [];
   const itemPattern = /<item>([\s\S]*?)<\/item>/gi;
-  let itemMatch;
-
-  while ((itemMatch = itemPattern.exec(xml)) !== null) {
-    const itemXml = itemMatch[1];
+  for (let itemMatch = itemPattern.exec(xml); itemMatch !== null; itemMatch = itemPattern.exec(xml)) {
+    const itemXml = itemMatch[1] ?? "";
 
     const title = extractTag(itemXml, "title");
     const link = extractTag(itemXml, "link");
     const guid = extractTag(itemXml, "guid");
     const author =
-      extractTag(itemXml, "dc:creator") ||
-      extractTag(itemXml, "author") ||
-      extractTag(itemXml, "creator") ||
-      "";
+      extractTag(itemXml, "dc:creator") || extractTag(itemXml, "author") || extractTag(itemXml, "creator") || "";
     const pubDate =
-      extractTag(itemXml, "pubDate") ||
-      extractTag(itemXml, "dc:date") ||
-      extractTag(itemXml, "date") ||
-      "";
+      extractTag(itemXml, "pubDate") || extractTag(itemXml, "dc:date") || extractTag(itemXml, "date") || "";
     const description = extractTag(itemXml, "description");
-    const content =
-      extractTag(itemXml, "content:encoded") ||
-      extractTag(itemXml, "content") ||
-      "";
+    const content = extractTag(itemXml, "content:encoded") || extractTag(itemXml, "content") || "";
 
     // Extract categories as tags
     const tags = extractAllTags(itemXml, "category");
@@ -217,17 +202,13 @@ function parseRSS2(xml: string): ParsedFeed {
 function parseAtom(xml: string): ParsedFeed {
   const feedTitle = extractDocumentTag(xml, "title");
   const feedUrl =
-    extractAttribute(xml, 'link[^>]*rel="alternate"', "href") ||
-    extractAttribute(xml, "link", "href") ||
-    "";
+    extractAttribute(xml, 'link[^>]*rel="alternate"', "href") || extractAttribute(xml, "link", "href") || "";
   const feedDescription = extractDocumentTag(xml, "subtitle") || "";
 
   const items: FeedItem[] = [];
   const entryPattern = /<entry>([\s\S]*?)<\/entry>/gi;
-  let entryMatch;
-
-  while ((entryMatch = entryPattern.exec(xml)) !== null) {
-    const entryXml = entryMatch[1];
+  for (let entryMatch = entryPattern.exec(xml); entryMatch !== null; entryMatch = entryPattern.exec(xml)) {
+    const entryXml = entryMatch[1] ?? "";
 
     const title = extractTag(entryXml, "title");
     const link =
@@ -235,19 +216,16 @@ function parseAtom(xml: string): ParsedFeed {
       extractAttribute(entryXml, "link", "href") ||
       "";
     const authorName = extractTag(entryXml, "name"); // inside <author>
-    const published =
-      extractTag(entryXml, "published") ||
-      extractTag(entryXml, "updated") ||
-      "";
+    const published = extractTag(entryXml, "published") || extractTag(entryXml, "updated") || "";
     const summary = extractTag(entryXml, "summary");
     const content = extractTag(entryXml, "content");
 
     // Extract categories
     const tags: string[] = [];
     const catPattern = /category[^>]*term="([^"]*)"/gi;
-    let catMatch;
-    while ((catMatch = catPattern.exec(entryXml)) !== null) {
-      tags.push(catMatch[1]);
+    for (let catMatch = catPattern.exec(entryXml); catMatch !== null; catMatch = catPattern.exec(entryXml)) {
+      const term = catMatch[1];
+      if (term !== undefined) tags.push(term);
     }
 
     const body = content || summary;
@@ -283,7 +261,7 @@ export function parseRSSFeed(xml: string): ParsedFeed {
   const trimmed = xml.trim();
 
   // Detect Atom
-  if (trimmed.includes("<feed") && trimmed.includes("xmlns=\"http://www.w3.org/2005/Atom\"")) {
+  if (trimmed.includes("<feed") && trimmed.includes('xmlns="http://www.w3.org/2005/Atom"')) {
     return parseAtom(trimmed);
   }
 
@@ -415,11 +393,7 @@ Usage:
   }
 
   // Read from stdin
-  const chunks: string[] = [];
-  for await (const chunk of Bun.stdin.stream()) {
-    chunks.push(new TextDecoder().decode(chunk));
-  }
-  const xml = chunks.join("");
+  const xml = await readStdinText({ trim: false });
   const result = parseRSSFeed(xml);
   console.log(JSON.stringify(result, null, 2));
 }

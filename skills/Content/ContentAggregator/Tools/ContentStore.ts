@@ -17,9 +17,9 @@
  */
 
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
-import { existsSync, mkdirSync, readdirSync } from "fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
-import { join } from "path";
+import { join } from "node:path";
 import {
   type ContentItem,
   type ContentStoreState,
@@ -119,9 +119,7 @@ export async function getRecentItems(limit = 20): Promise<ContentItem[]> {
   }
 
   // Sort by publishedAt descending and return top N
-  return allItems
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .slice(0, limit);
+  return allItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, limit);
 }
 
 /**
@@ -133,9 +131,7 @@ export async function getTodaysItems(): Promise<ContentItem[]> {
   const manager = getPartitionManager(partition);
   const state = await manager.load();
 
-  return state.items.filter(
-    (item) => item.collectedAt.slice(0, 10) === today
-  );
+  return state.items.filter((item) => item.collectedAt.slice(0, 10) === today);
 }
 
 /**
@@ -143,9 +139,7 @@ export async function getTodaysItems(): Promise<ContentItem[]> {
  */
 export async function getUndeliveredItems(limit = 50): Promise<ContentItem[]> {
   const items = await getRecentItems(limit * 2);
-  return items
-    .filter((item) => item.status === "new" || item.status === "scored")
-    .slice(0, limit);
+  return items.filter((item) => item.status === "new" || item.status === "scored").slice(0, limit);
 }
 
 /**
@@ -153,7 +147,7 @@ export async function getUndeliveredItems(limit = 50): Promise<ContentItem[]> {
  */
 export async function searchItems(
   query: string,
-  options: { topic?: string; limit?: number; months?: number } = {}
+  options: { topic?: string; limit?: number; months?: number } = {},
 ): Promise<ContentItem[]> {
   const { topic, limit = 20, months = 3 } = options;
   ensureStoreDir();
@@ -174,10 +168,7 @@ export async function searchItems(
         item.tags.some((t) => t.toLowerCase().includes(queryLower));
 
       // Topic filter
-      const matchesTopic =
-        !topic ||
-        item.topics.includes(topic) ||
-        item.tags.includes(topic);
+      const matchesTopic = !topic || item.topics.includes(topic) || item.tags.includes(topic);
 
       if (matchesQuery && matchesTopic) {
         results.push(item);
@@ -204,10 +195,7 @@ export async function searchItems(
 /**
  * Get items by topic
  */
-export async function getItemsByTopic(
-  topic: string,
-  limit = 20
-): Promise<ContentItem[]> {
+export async function getItemsByTopic(topic: string, limit = 20): Promise<ContentItem[]> {
   ensureStoreDir();
   const topicLower = topic.toLowerCase();
   const partitions = listPartitions().slice(-3);
@@ -246,7 +234,7 @@ export async function getItemsByTopic(
 export async function updateItemStatus(
   itemId: string,
   status: ContentItem["status"],
-  deliveredVia?: string
+  deliveredVia?: string,
 ): Promise<boolean> {
   const partitions = listPartitions();
 
@@ -263,11 +251,9 @@ export async function updateItemStatus(
             ? {
                 ...item,
                 status,
-                deliveredVia: deliveredVia
-                  ? [...item.deliveredVia, deliveredVia]
-                  : item.deliveredVia,
+                deliveredVia: deliveredVia ? [...item.deliveredVia, deliveredVia] : item.deliveredVia,
               }
-            : item
+            : item,
         ),
       }));
       return true;

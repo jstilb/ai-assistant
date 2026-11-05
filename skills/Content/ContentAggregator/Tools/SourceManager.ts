@@ -20,12 +20,7 @@
  */
 
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
-import {
-  type ContentSource,
-  type SourceRegistry,
-  SourceRegistrySchema,
-  SOURCES_PATH,
-} from "./types.ts";
+import { type ContentSource, type SourceRegistry, SourceRegistrySchema, SOURCES_PATH } from "./types.ts";
 
 // ============================================================================
 // State Manager (uses shared Zod schema from types.ts)
@@ -59,7 +54,7 @@ export async function listSources(enabledOnly = false): Promise<ContentSource[]>
  * Add a new content source to the registry.
  */
 export async function addSource(
-  source: Omit<ContentSource, "id" | "healthStatus" | "failureCount">
+  source: Omit<ContentSource, "id" | "healthStatus" | "failureCount">,
 ): Promise<ContentSource> {
   const newSource: ContentSource = {
     ...source,
@@ -127,7 +122,7 @@ export async function recordSourcePoll(id: string, contentHash?: string): Promis
             lastPolled: new Date().toISOString(),
             lastContentHash: contentHash || src.lastContentHash,
           }
-        : src
+        : src,
     ),
     lastUpdated: new Date().toISOString(),
   }));
@@ -147,7 +142,7 @@ export async function recordSourceSuccess(id: string, contentHash?: string): Pro
             failureCount: 0,
             lastContentHash: contentHash || src.lastContentHash,
           }
-        : src
+        : src,
     ),
     lastUpdated: new Date().toISOString(),
   }));
@@ -158,9 +153,7 @@ export async function recordSourceSuccess(id: string, contentHash?: string): Pro
  * Auto-disables source after AUTO_DISABLE_FAILURE_THRESHOLD consecutive failures.
  * Returns whether the source was auto-disabled.
  */
-export async function recordSourceFailure(
-  id: string
-): Promise<{ disabled: boolean }> {
+export async function recordSourceFailure(id: string): Promise<{ disabled: boolean }> {
   let disabled = false;
 
   await sourceState.update((s) => ({
@@ -315,17 +308,26 @@ ${ANSI.cyan("Options:")}
     }
   } else if (command === "remove") {
     const id = getArg("--id");
-    if (!id) { console.error("Error: --id required"); process.exit(1); }
+    if (!id) {
+      console.error("Error: --id required");
+      process.exit(1);
+    }
     const removed = await removeSource(id);
     console.log(removed ? `${ANSI.green("Removed")} ${id}` : `${ANSI.red("Not found:")} ${id}`);
   } else if (command === "enable") {
     const id = getArg("--id");
-    if (!id) { console.error("Error: --id required"); process.exit(1); }
+    if (!id) {
+      console.error("Error: --id required");
+      process.exit(1);
+    }
     const found = await enableSource(id);
     console.log(found ? `${ANSI.green("Enabled")} ${id}` : `${ANSI.red("Not found:")} ${id}`);
   } else if (command === "disable") {
     const id = getArg("--id");
-    if (!id) { console.error("Error: --id required"); process.exit(1); }
+    if (!id) {
+      console.error("Error: --id required");
+      process.exit(1);
+    }
     const found = await disableSource(id);
     console.log(found ? `${ANSI.yellow("Disabled")} ${id}` : `${ANSI.red("Not found:")} ${id}`);
   } else if (command === "list" || hasFlag("--health")) {
@@ -357,7 +359,9 @@ ${ANSI.cyan("Options:")}
         const healthy = sources.filter((s) => s.healthStatus === "healthy").length;
         const degraded = sources.filter((s) => s.healthStatus === "degraded").length;
         const failing = sources.filter((s) => s.healthStatus === "failing").length;
-        console.log(`\n  ${ANSI.green(String(healthy))} healthy  ${ANSI.yellow(String(degraded))} degraded  ${ANSI.red(String(failing))} failing\n`);
+        console.log(
+          `\n  ${ANSI.green(String(healthy))} healthy  ${ANSI.yellow(String(degraded))} degraded  ${ANSI.red(String(failing))} failing\n`,
+        );
       }
     }
   } else {

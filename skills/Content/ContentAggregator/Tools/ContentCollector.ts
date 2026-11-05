@@ -23,12 +23,7 @@ import {
   recordSourceFailure,
   recordSourceSuccess,
 } from "./SourceManager.ts";
-import {
-  type ContentItem,
-  type ContentSource,
-  type CollectionResult,
-  type CollectionSummary,
-} from "./types.ts";
+import type { ContentItem, ContentSource, CollectionResult, CollectionSummary } from "./types.ts";
 
 // ============================================================================
 // HTTP Client (dedicated instance for content collection)
@@ -55,16 +50,13 @@ function hashContent(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16);
 }
 
-function feedItemToContentItem(
-  feedItem: FeedItem,
-  source: ContentSource
-): ContentItem {
+function feedItemToContentItem(feedItem: FeedItem, source: ContentSource): ContentItem {
   const now = new Date().toISOString();
 
   return {
@@ -98,14 +90,25 @@ export function normalizeUrl(url: string): string {
     const parsed = new URL(url);
 
     // Remove www. prefix
-    let hostname = parsed.hostname.replace(/^www\./, "");
+    const hostname = parsed.hostname.replace(/^www\./, "");
     parsed.hostname = hostname;
 
     // Remove tracking params
     const trackingParams = [
-      "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-      "ref", "source", "fbclid", "gclid", "mc_cid", "mc_eid",
-      "s", "share", "via",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "ref",
+      "source",
+      "fbclid",
+      "gclid",
+      "mc_cid",
+      "mc_eid",
+      "s",
+      "share",
+      "via",
     ];
     for (const param of trackingParams) {
       parsed.searchParams.delete(param);
@@ -150,16 +153,12 @@ async function collectFromSource(source: ContentSource): Promise<{
 
   try {
     // Use fetchWithHash for change detection
-    const fetchResult = await httpClient.fetchWithHash(
-      source.url,
-      source.lastContentHash,
-      {
-        cache: "disk",
-        ttl: source.pollInterval * 60, // Cache matches poll interval
-        timeout: 15000, // 15s timeout per source
-        retry: 2,
-      }
-    );
+    const fetchResult = await httpClient.fetchWithHash(source.url, source.lastContentHash, {
+      cache: "disk",
+      ttl: source.pollInterval * 60, // Cache matches poll interval
+      timeout: 15000, // 15s timeout per source
+      retry: 2,
+    });
 
     // Record the poll
     await recordSourcePoll(source.id, fetchResult.hash);
@@ -176,9 +175,7 @@ async function collectFromSource(source: ContentSource): Promise<{
     result.itemsFound = feed.items.length;
 
     // Convert to ContentItems
-    const items = feed.items.map((feedItem) =>
-      feedItemToContentItem(feedItem, source)
-    );
+    const items = feed.items.map((feedItem) => feedItemToContentItem(feedItem, source));
 
     result.itemsNew = items.length;
     result.durationMs = Date.now() - startTime;
@@ -227,9 +224,7 @@ export async function collectAll(options: {
   // Process in batches for controlled concurrency
   for (let i = 0; i < sources.length; i += concurrency) {
     const batch = sources.slice(i, i + concurrency);
-    const batchResults = await Promise.allSettled(
-      batch.map((source) => collectFromSource(source))
-    );
+    const batchResults = await Promise.allSettled(batch.map((source) => collectFromSource(source)));
 
     for (const settled of batchResults) {
       if (settled.status === "fulfilled") {
@@ -297,18 +292,24 @@ Usage:
 
   if (dryRun) {
     const sources = sourceId
-      ? [await getSource(sourceId)].filter(Boolean) as ContentSource[]
+      ? ([await getSource(sourceId)].filter(Boolean) as ContentSource[])
       : collectAllSources
         ? await listSources(true)
         : await getSourcesDueForPoll();
 
     if (jsonOutput) {
-      console.log(JSON.stringify(sources.map((s) => ({
-        id: s.id,
-        name: s.name,
-        url: s.url,
-        lastPolled: s.lastPolled || "never",
-      })), null, 2));
+      console.log(
+        JSON.stringify(
+          sources.map((s) => ({
+            id: s.id,
+            name: s.name,
+            url: s.url,
+            lastPolled: s.lastPolled || "never",
+          })),
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`\n  ${sources.length} sources would be collected:\n`);
       for (const s of sources) {

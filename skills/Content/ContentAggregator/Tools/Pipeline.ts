@@ -134,16 +134,12 @@ async function phaseCollect(options: {
  */
 async function phaseDeduplicate(
   newItems: ContentItem[],
-  trustScores: Map<string, number>
+  trustScores: Map<string, number>,
 ): Promise<{ unique: ContentItem[]; stats: { inputCount: number; uniqueCount: number; duplicatesRemoved: number } }> {
   // Load recent existing items for cross-dedup
   const existingItems = await getRecentItems(200);
 
-  const { unique, stats } = deduplicateContent(
-    newItems,
-    existingItems,
-    trustScores
-  );
+  const { unique, stats } = deduplicateContent(newItems, existingItems, trustScores);
 
   return {
     unique,
@@ -161,14 +157,15 @@ async function phaseDeduplicate(
 async function phaseScore(
   items: ContentItem[],
   trustScores: Map<string, number>,
-  minScoreThreshold: number
-): Promise<{ scored: ContentItem[]; stats: { inputCount: number; passedFilter: number; filteredOut: number; avgScore: number } }> {
+  minScoreThreshold: number,
+): Promise<{
+  scored: ContentItem[];
+  stats: { inputCount: number; passedFilter: number; filteredOut: number; avgScore: number };
+}> {
   const scored = await scoreAndFilter(items, undefined, trustScores, minScoreThreshold);
 
   const avgScore =
-    scored.length > 0
-      ? Math.round(scored.reduce((sum, i) => sum + i.relevanceScore, 0) / scored.length)
-      : 0;
+    scored.length > 0 ? Math.round(scored.reduce((sum, i) => sum + i.relevanceScore, 0) / scored.length) : 0;
 
   return {
     scored,
@@ -184,9 +181,7 @@ async function phaseScore(
 /**
  * Phase 4: Store items to persistent archive
  */
-async function phaseStore(
-  items: ContentItem[]
-): Promise<{ stored: number; partitions: string[] }> {
+async function phaseStore(items: ContentItem[]): Promise<{ stored: number; partitions: string[] }> {
   const result = await storeItems(items);
   return result;
 }
@@ -194,10 +189,7 @@ async function phaseStore(
 /**
  * Phase 5: Render digest from scored items
  */
-async function phaseDigest(
-  items: ContentItem[],
-  save: boolean
-): Promise<{ markdown: string; path?: string }> {
+async function phaseDigest(items: ContentItem[], save: boolean): Promise<{ markdown: string; path?: string }> {
   const markdown = renderDigest(items, {
     showScores: true,
     maxPerTopic: 5,
@@ -349,33 +341,33 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
         }
 
         // Bridge high-value items to MemoryStore for synthesis
-        let memoryStore: { capture: (opts: unknown) => Promise<unknown> } | undefined;
+        let memoryStore: typeof import("../../../../lib/core/MemoryStore.ts")["memoryStore"] | undefined;
         try {
           memoryStore = (await import("../../../../lib/core/MemoryStore.ts")).memoryStore;
         } catch (importErr) {
           console.warn(`[ContentAggregator] MemoryStore unavailable: ${importErr}`);
         }
         if (memoryStore) {
-          for (const item of items.filter(i => i.relevanceScore >= 60)) {
-            await memoryStore.capture({
-              type: 'artifact',
-              category: item.sourceType,
-              title: sanitizeForPrompt(item.title),
-              content: `<external_content>\n${sanitizeForPrompt(item.summary || item.body.slice(0, 1000) || item.title)}\n</external_content>`,
-              tags: [...item.tags, ...item.topics, 'content', 'pattern'],
-              tier: 'warm',
-              source: 'ContentAggregator',
-              deduplicate: true,
-              metadata: {
-                url: item.canonicalUrl,
-                relevanceScore: item.relevanceScore,
-                publishedAt: item.publishedAt,
-                goalAlignment: item.goalAlignment,
-                sourceId: item.sourceId,
-              },
-            }).catch((writeErr: unknown) =>
-              console.warn(`[ContentAggregator] MemoryStore write failed: ${writeErr}`)
-            );
+          for (const item of items.filter((i) => i.relevanceScore >= 60)) {
+            await memoryStore
+              .capture({
+                type: "artifact",
+                category: item.sourceType,
+                title: sanitizeForPrompt(item.title),
+                content: `<external_content>\n${sanitizeForPrompt(item.summary || item.body.slice(0, 1000) || item.title)}\n</external_content>`,
+                tags: [...item.tags, ...item.topics, "content", "pattern"],
+                tier: "warm",
+                source: "ContentAggregator",
+                deduplicate: true,
+                metadata: {
+                  url: item.canonicalUrl,
+                  relevanceScore: item.relevanceScore,
+                  publishedAt: item.publishedAt,
+                  goalAlignment: item.goalAlignment,
+                  sourceId: item.sourceId,
+                },
+              })
+              .catch((writeErr: unknown) => console.warn(`[ContentAggregator] MemoryStore write failed: ${writeErr}`));
           }
         }
       } else if (dryRun && items.length > 0) {
@@ -409,7 +401,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
 
         try {
           // Sanitize item content before embedding in digest inference prompts
-          const safeItems = items.map(item => ({
+          const safeItems = items.map((item) => ({
             ...item,
             title: sanitizeForPrompt(item.title),
             body: `<external_content>\n${sanitizeForPrompt(item.body)}\n</external_content>`,

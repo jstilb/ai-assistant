@@ -43,16 +43,28 @@ function keywordMatches(text: string, keyword: string): boolean {
 // Default Topic Profiles
 // ============================================================================
 
-export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
+const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
   {
     id: "ai-ml",
     name: "AI & Machine Learning",
     keywords: [
-      "artificial intelligence", "machine learning", "deep learning", "llm",
-      "large language model", "claude", "anthropic",
-      "neural network", "transformer", "ai safety", "alignment",
-      "ai agent", "generative ai",
-      "foundation model", "multimodal", "agi", "superintelligence",
+      "artificial intelligence",
+      "machine learning",
+      "deep learning",
+      "llm",
+      "large language model",
+      "claude",
+      "anthropic",
+      "neural network",
+      "transformer",
+      "ai safety",
+      "alignment",
+      "ai agent",
+      "generative ai",
+      "foundation model",
+      "multimodal",
+      "agi",
+      "superintelligence",
     ],
     goalIds: ["G28"],
     priority: "high",
@@ -62,10 +74,23 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "writing-craft",
     name: "Writing & Storytelling",
     keywords: [
-      "writing", "storytelling", "narrative", "craft", "fiction",
-      "creative writing", "novel", "short story", "prose",
-      "editing", "publishing", "author", "writer", "plot",
-      "character development", "worldbuilding", "screenplay",
+      "writing",
+      "storytelling",
+      "narrative",
+      "craft",
+      "fiction",
+      "creative writing",
+      "novel",
+      "short story",
+      "prose",
+      "editing",
+      "publishing",
+      "author",
+      "writer",
+      "plot",
+      "character development",
+      "worldbuilding",
+      "screenplay",
     ],
     goalIds: [],
     priority: "high",
@@ -75,11 +100,24 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "security-privacy",
     name: "Security & Privacy",
     keywords: [
-      "cybersecurity", "security", "privacy", "infosec",
-      "vulnerability", "exploit", "hacking", "breach",
-      "encryption", "zero-day", "malware", "ransomware",
-      "data protection", "surveillance", "opsec",
-      "authentication", "authorization", "pentest",
+      "cybersecurity",
+      "security",
+      "privacy",
+      "infosec",
+      "vulnerability",
+      "exploit",
+      "hacking",
+      "breach",
+      "encryption",
+      "zero-day",
+      "malware",
+      "ransomware",
+      "data protection",
+      "surveillance",
+      "opsec",
+      "authentication",
+      "authorization",
+      "pentest",
     ],
     goalIds: [],
     priority: "medium",
@@ -89,10 +127,21 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "san-diego",
     name: "San Diego Local",
     keywords: [
-      "san diego", "sd", "north county", "encinitas",
-      "carlsbad", "oceanside", "del mar", "la jolla",
-      "gaslamp", "balboa", "padres", "chargers",
-      "ucsd", "sdsu", "san diego county",
+      "san diego",
+      "sd",
+      "north county",
+      "encinitas",
+      "carlsbad",
+      "oceanside",
+      "del mar",
+      "la jolla",
+      "gaslamp",
+      "balboa",
+      "padres",
+      "chargers",
+      "ucsd",
+      "sdsu",
+      "san diego county",
     ],
     goalIds: [],
     priority: "medium",
@@ -102,9 +151,18 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "startup-entrepreneurship",
     name: "Startup & Entrepreneurship",
     keywords: [
-      "startup", "entrepreneur", "founder", "venture capital",
-      "funding", "bootstrap", "saas", "product market fit",
-      "business model", "acquisition", "ipo", "investor",
+      "startup",
+      "entrepreneur",
+      "founder",
+      "venture capital",
+      "funding",
+      "bootstrap",
+      "saas",
+      "product market fit",
+      "business model",
+      "acquisition",
+      "ipo",
+      "investor",
     ],
     goalIds: [],
     priority: "medium",
@@ -114,11 +172,24 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "philosophy-psychology",
     name: "Philosophy & Psychology",
     keywords: [
-      "philosophy", "psychology", "consciousness", "stoicism",
-      "meditation", "mindfulness", "cognitive", "behavioral",
-      "mental model", "decision making", "bias", "heuristic",
-      "existential", "meaning", "purpose", "wisdom",
-      "first principles", "critical thinking",
+      "philosophy",
+      "psychology",
+      "consciousness",
+      "stoicism",
+      "meditation",
+      "mindfulness",
+      "cognitive",
+      "behavioral",
+      "mental model",
+      "decision making",
+      "bias",
+      "heuristic",
+      "existential",
+      "meaning",
+      "purpose",
+      "wisdom",
+      "first principles",
+      "critical thinking",
     ],
     goalIds: [],
     priority: "low",
@@ -128,10 +199,21 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "creative-process",
     name: "Creative Process",
     keywords: [
-      "creativity", "creative process", "inspiration", "innovation",
-      "artistic", "design thinking", "flow state", "maker",
-      "craft", "practice", "mastery", "deliberate practice",
-      "music production", "beat making", "songwriting",
+      "creativity",
+      "creative process",
+      "inspiration",
+      "innovation",
+      "artistic",
+      "design thinking",
+      "flow state",
+      "maker",
+      "craft",
+      "practice",
+      "mastery",
+      "deliberate practice",
+      "music production",
+      "beat making",
+      "songwriting",
     ],
     goalIds: [],
     priority: "low",
@@ -141,9 +223,13 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
     id: "tech-industry",
     name: "Technology Industry",
     keywords: [
-      "tech industry", "silicon valley", "big tech",
-      "typescript", "software engineering",
-      "open source", "distributed systems",
+      "tech industry",
+      "silicon valley",
+      "big tech",
+      "typescript",
+      "software engineering",
+      "open source",
+      "distributed systems",
     ],
     goalIds: [],
     priority: "low",
@@ -161,7 +247,7 @@ export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
 function _scoreItemFallback(
   item: ContentItem,
   profiles: TopicProfile[],
-  sourceTrustScore: number
+  sourceTrustScore: number,
 ): { score: number; matchedTopics: string[]; matchedGoals: string[] } {
   let totalScore = 0;
   const matchedTopics: string[] = [];
@@ -176,9 +262,7 @@ function _scoreItemFallback(
   const topicMatchStrength: Array<{ id: string; strength: number }> = [];
 
   for (const profile of profiles) {
-    const matchedKeywords = profile.keywords.filter((kw) =>
-      keywordMatches(searchText, kw)
-    );
+    const matchedKeywords = profile.keywords.filter((kw) => keywordMatches(searchText, kw));
 
     if (matchedKeywords.length > 0) {
       topicMatchStrength.push({ id: profile.id, strength: matchedKeywords.length });
@@ -186,7 +270,7 @@ function _scoreItemFallback(
 
       const topicContribution = Math.min(
         20,
-        matchedKeywords.length * (profile.priority === "high" ? 8 : profile.priority === "medium" ? 5 : 3)
+        matchedKeywords.length * (profile.priority === "high" ? 8 : profile.priority === "medium" ? 5 : 3),
       );
 
       topicScore += topicContribution / (1 + topicMatchCount * 0.3);
@@ -209,12 +293,8 @@ function _scoreItemFallback(
   totalScore += recencyScore;
 
   // 4. Tag overlap (10 points max)
-  const allKeywords = new Set(
-    profiles.flatMap((p) => p.keywords.map((k) => k.toLowerCase()))
-  );
-  const matchingTags = item.tags.filter((t) =>
-    allKeywords.has(t.toLowerCase())
-  );
+  const allKeywords = new Set(profiles.flatMap((p) => p.keywords.map((k) => k.toLowerCase())));
+  const matchingTags = item.tags.filter((t) => allKeywords.has(t.toLowerCase()));
   totalScore += Math.min(10, matchingTags.length * 3);
 
   // 5. Title keyword density (25 points max)
@@ -245,7 +325,7 @@ function _scoreItemFallback(
  * Score a single content item against all topic profiles using LLM inference.
  * Falls back to keyword scoring on failure.
  */
-export async function scoreItem(
+async function scoreItem(
   item: ContentItem,
   profiles: TopicProfile[] = DEFAULT_TOPIC_PROFILES,
   sourceTrustScore = 70,
@@ -300,18 +380,21 @@ export async function scoreAndFilter(
   const profileList = profiles.map((p) => `- ${p.id}: ${p.name}`).join("\n");
 
   // Build output array with same length as input
-  const scored: Array<ContentItem & { relevanceScore: number; topics: string[]; goalAlignment: string[]; status: "scored" }> =
-    new Array(items.length);
+  const scored: Array<
+    ContentItem & { relevanceScore: number; topics: string[]; goalAlignment: string[]; status: "scored" }
+  > = new Array(items.length);
 
   // Process in batches of 10
   const BATCH_SIZE = 10;
   for (let batchStart = 0; batchStart < items.length; batchStart += BATCH_SIZE) {
     const batch = items.slice(batchStart, batchStart + BATCH_SIZE);
 
-    const batchDesc = batch.map((item, i) => {
-      const trustScore = sourceTrustScores.get(item.sourceId) ?? 70;
-      return `[${i}] Title: "${item.title}" | Tags: ${(item.tags || []).join(",")} | Body: "${(item.body || "").slice(0, 200)}" | Trust: ${trustScore}/100`;
-    }).join("\n");
+    const batchDesc = batch
+      .map((item, i) => {
+        const trustScore = sourceTrustScores.get(item.sourceId) ?? 70;
+        return `[${i}] Title: "${item.title}" | Tags: ${(item.tags || []).join(",")} | Body: "${(item.body || "").slice(0, 200)}" | Trust: ${trustScore}/100`;
+      })
+      .join("\n");
 
     let llmResults: LLMScoredItem[] | null = null;
 
@@ -375,7 +458,9 @@ export async function scoreAndFilter(
     .filter((item) => {
       if (item.topics.length === 0) return false;
       if (item.relevanceScore < minScore) return false;
-      const lowestTopicThreshold = Math.min(...item.topics.map((tid) => profileMap.get(tid)?.minRelevanceThreshold ?? minScore));
+      const lowestTopicThreshold = Math.min(
+        ...item.topics.map((tid) => profileMap.get(tid)?.minRelevanceThreshold ?? minScore),
+      );
       if (item.relevanceScore < lowestTopicThreshold) return false;
       return true;
     })
@@ -431,7 +516,7 @@ if (import.meta.main) {
       const item = makeItem(
         "Anthropic releases Claude 4 with improved reasoning",
         "The latest large language model from Anthropic shows significant improvements in AI safety and alignment.",
-        ["ai", "claude"]
+        ["ai", "claude"],
       );
       const { score, matchedTopics } = await scoreItem(item);
       if (score < 40) throw new Error(`Score too low: ${score}`);
@@ -442,7 +527,7 @@ if (import.meta.main) {
       const item = makeItem(
         "Critical zero-day vulnerability found in major software",
         "Security researchers discover a new exploit affecting millions of users.",
-        ["security", "vulnerability"]
+        ["security", "vulnerability"],
       );
       const { matchedTopics } = await scoreItem(item);
       if (!matchedTopics.includes("security-privacy")) throw new Error("Should match security topic");
@@ -452,7 +537,7 @@ if (import.meta.main) {
       const item = makeItem(
         "Best pasta recipes for weeknight dinners",
         "Quick and easy Italian cooking tips for busy families.",
-        ["cooking", "food"]
+        ["cooking", "food"],
       );
       const { score } = await scoreItem(item);
       if (score > 30) throw new Error(`Score too high: ${score}`);
@@ -462,7 +547,7 @@ if (import.meta.main) {
       const item = makeItem(
         "San Diego approves new transit expansion plan",
         "The city council voted to expand public transit in North County.",
-        ["san diego", "local"]
+        ["san diego", "local"],
       );
       const { matchedTopics } = await scoreItem(item);
       if (!matchedTopics.includes("san-diego")) throw new Error("Should match SD topic");
@@ -470,7 +555,11 @@ if (import.meta.main) {
 
     await test("scoreAndFilter removes low-scoring items", async () => {
       const items = [
-        makeItem("Anthropic releases Claude with improved AI safety and alignment", "The latest large language model from Anthropic shows deep learning advances in artificial intelligence.", ["ai", "machine learning", "claude"]),
+        makeItem(
+          "Anthropic releases Claude with improved AI safety and alignment",
+          "The latest large language model from Anthropic shows deep learning advances in artificial intelligence.",
+          ["ai", "machine learning", "claude"],
+        ),
         makeItem("Best pasta recipes", "Cooking tips.", ["food"]),
       ];
       const filtered = await scoreAndFilter(items, undefined, undefined, 35);

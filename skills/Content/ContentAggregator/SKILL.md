@@ -61,7 +61,7 @@ User: "Add the Ars Technica RSS feed"
 -> Invokes Sources workflow
 -> Validates feed URL is accessible via CachedHTTPClient
 -> Adds source with URL, topics, trust score
--> Persists to Tools/Sources.json via StateManager
+-> Persists to Tools/sources.json via StateManager
 -> Confirms source added
 ```
 
@@ -79,7 +79,7 @@ Sources (RSS/Atom) -> Pipeline.ts -> Dedup -> Store -> DigestRenderer
 
 ## Quick Reference
 
-- **Sources Config:** `Tools/Sources.json` - registered content sources
+- **Sources Config:** `Tools/sources.json` - registered content sources
 - **Tools:** Pipeline.ts, SourceManager.ts
 - **Output:** `MEMORY/DIGESTS/` - rendered Markdown digests
 - **Archive:** `MEMORY/CONTENT/` - collected content archive (date-partitioned)

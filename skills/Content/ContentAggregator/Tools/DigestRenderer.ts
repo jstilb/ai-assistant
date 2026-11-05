@@ -13,10 +13,10 @@
  *   bun DigestRenderer.ts --json                JSON output
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ContentItem } from "./types.ts";
-import { digestsDir, KAYA_HOME } from "./types.ts";
+import { digestsDir } from "./types.ts";
 
 // ============================================================================
 // BlockResult interface (compatible with DailyBriefing)
@@ -68,18 +68,18 @@ function formatTopicName(topic: string): string {
     "philosophy-psychology": "Philosophy & Psychology",
     "creative-process": "Creative Process",
     "tech-industry": "Technology",
-    "ai": "AI & Machine Learning",
-    "tech": "Technology",
-    "security": "Security",
-    "writing": "Writing",
-    "sandiego": "San Diego",
-    "local": "Local News",
-    "startup": "Startups",
-    "philosophy": "Philosophy",
-    "creativity": "Creative Process",
-    "ml": "Machine Learning",
-    "programming": "Programming",
-    "general": "General",
+    ai: "AI & Machine Learning",
+    tech: "Technology",
+    security: "Security",
+    writing: "Writing",
+    sandiego: "San Diego",
+    local: "Local News",
+    startup: "Startups",
+    philosophy: "Philosophy",
+    creativity: "Creative Process",
+    ml: "Machine Learning",
+    programming: "Programming",
+    general: "General",
   };
 
   return nameMap[topic.toLowerCase()] || topic.charAt(0).toUpperCase() + topic.slice(1);
@@ -108,7 +108,7 @@ function relativeTime(isoDate: string): string {
  */
 export function renderDigest(
   items: ContentItem[],
-  options: { title?: string; maxPerTopic?: number; showScores?: boolean } = {}
+  options: { title?: string; maxPerTopic?: number; showScores?: boolean } = {},
 ): string {
   const { title, maxPerTopic = 5, showScores = false } = options;
   const now = new Date();
@@ -146,9 +146,7 @@ export function renderDigest(
   });
 
   for (const [topicName, topicItems] of sortedGroups) {
-    const displayItems = topicItems
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, maxPerTopic);
+    const displayItems = topicItems.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, maxPerTopic);
 
     md += `## ${topicName}\n\n`;
 
@@ -193,10 +191,8 @@ export function renderDigest(
  * (`--compact` flag) — no automated caller (DailyBriefing's DataGatherer.ts
  * reads ContentStore directly instead). Manual-invocation surface only.
  */
-export function renderCompactDigest(items: ContentItem[], maxItems = 10): string {
-  const topItems = items
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
-    .slice(0, maxItems);
+function renderCompactDigest(items: ContentItem[], maxItems = 10): string {
+  const topItems = items.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, maxItems);
 
   if (topItems.length === 0) {
     return "No new content today.";
@@ -228,9 +224,7 @@ export function renderCompactDigest(items: ContentItem[], maxItems = 10): string
  * report §7 Needs-Jm item 2) since it touches live DailyBriefing behavior.
  */
 export function generateNewsBlock(items: ContentItem[]): BlockResult {
-  const topItems = items
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
-    .slice(0, 15);
+  const topItems = items.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 15);
 
   if (topItems.length === 0) {
     return {
@@ -319,12 +313,10 @@ Usage:
   }
 
   // Import ContentStore to get items
-  const { getRecentItems, getTodaysItems, getUndeliveredItems } = await import("./ContentStore.ts");
+  const { getTodaysItems, getUndeliveredItems } = await import("./ContentStore.ts");
 
   const limit = parseInt(getArg("--limit") || "20");
-  const items = hasFlag("--today")
-    ? await getTodaysItems()
-    : await getUndeliveredItems(limit);
+  const items = hasFlag("--today") ? await getTodaysItems() : await getUndeliveredItems(limit);
 
   if (hasFlag("--news-block")) {
     const block = generateNewsBlock(items);
@@ -353,10 +345,16 @@ Usage:
   }
 
   if (hasFlag("--json")) {
-    console.log(JSON.stringify({
-      itemCount: items.length,
-      markdown,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          itemCount: items.length,
+          markdown,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
