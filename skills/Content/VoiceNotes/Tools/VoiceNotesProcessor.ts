@@ -19,7 +19,7 @@
  *   bun VoiceNotesProcessor.ts status               # ledger stats
  */
 
-import { spawnSync } from "child_process";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -30,18 +30,13 @@ import {
   renameSync,
   copyFileSync,
   unlinkSync,
-} from "fs";
-import { createHash } from "crypto";
-import { basename, dirname, extname, join } from "path";
-import { tmpdir } from "os";
+} from "node:fs";
+import { createHash } from "node:crypto";
+import { basename, dirname, extname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
-import {
-  loadConfig,
-  KAYA_HOME,
-  SUPPORTED_EXTENSIONS,
-  type VoiceNotesConfig,
-} from "./config.ts";
+import { loadConfig, KAYA_HOME, SUPPORTED_EXTENSIONS, type VoiceNotesConfig } from "./config.ts";
 
 const EXTRACT_SCRIPT = join(KAYA_HOME, "lib", "core", "extract-transcript.py");
 
@@ -68,8 +63,10 @@ export function loadLedger(path: string): Ledger {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as Ledger;
     if (!parsed.processed) parsed.processed = {};
     return parsed;
-  } catch {
-    return { processed: {} };
+  } catch (err) {
+    // An empty ledger would make every already-processed file look new (duplicate notes),
+    // so a corrupt or unreadable ledger is a hard error, not a reset.
+    throw new Error(`VoiceNotes ledger ${path} is unreadable or corrupt: ${(err as Error).message}`);
   }
 }
 
@@ -87,11 +84,13 @@ export function hashFile(path: string): string {
 // ============================================================
 
 export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "voice-note";
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "voice-note"
+  );
 }
 
 /** Infer capture device from the source folder path. */
@@ -107,7 +106,7 @@ export function probeDurationSec(path: string): number | undefined {
   const r = spawnSync("afinfo", [path], { encoding: "utf-8", timeout: 10000 });
   if (r.status !== 0 || !r.stdout) return undefined;
   const m = r.stdout.match(/estimated duration:\s*([\d.]+)\s*sec/i);
-  if (m) return Math.round(parseFloat(m[1]));
+  if (m?.[1] !== undefined) return Math.round(parseFloat(m[1]));
   return undefined;
 }
 
@@ -169,7 +168,11 @@ export function buildNote(org: Organized, raw: string, meta: NoteMeta): string {
     "## Raw Transcript",
     "",
     "> [!note]- Original transcription",
-    raw.trim().split("\n").map((l) => `> ${l}`).join("\n"),
+    raw
+      .trim()
+      .split("\n")
+      .map((l) => `> ${l}`)
+      .join("\n"),
     "",
   );
 
@@ -242,16 +245,19 @@ export function discoverPending(cfg: VoiceNotesConfig, ledger: Ledger): PendingF
     let entries: string[];
     try {
       entries = readdirSync(source);
-    } catch {
+    } catch (err) {
+      console.error(`[VoiceNotes] Cannot read source ${source}: ${(err as Error).message}`);
       continue;
     }
     for (const name of entries) {
       if (name.startsWith(".")) continue;
       const full = join(source, name);
-      let st;
+      let st: ReturnType<typeof statSync>;
       try {
         st = statSync(full);
-      } catch {
+      } catch (err) {
+        // File can vanish between readdir and stat (iCloud eviction); report and move on.
+        console.error(`[VoiceNotes] Cannot stat ${full}: ${(err as Error).message}`);
         continue;
       }
       if (!st.isFile()) continue;
@@ -259,7 +265,8 @@ export function discoverPending(cfg: VoiceNotesConfig, ledger: Ledger): PendingF
       let hash: string;
       try {
         hash = hashFile(full);
-      } catch {
+      } catch (err) {
+        console.error(`[VoiceNotes] Cannot hash ${full}, skipping: ${(err as Error).message}`);
         continue;
       }
       if (seenHashes.has(hash)) continue;
@@ -315,7 +322,7 @@ export function buildOrganizePrompt(categories: string[]): string {
     '  "summary": "one or two sentence summary",',
     '  "tags": ["lowercase-hyphenated", "topical tags"],',
     '  "cleaned": "the note body in markdown — lightly cleaned (fix obvious STT',
-    '             errors, remove filler, add paragraphs/bullets) but keep Jm\'s",',
+    "             errors, remove filler, add paragraphs/bullets) but keep Jm's\",",
     '             meaning and voice; do NOT invent content",',
     '  "actionItems": ["any explicit to-dos or follow-ups mentioned"],',
     '  "links": ["Suggested [[wikilink]] targets, bare titles ok; [] if none"]',
@@ -324,7 +331,7 @@ export function buildOrganizePrompt(categories: string[]): string {
     "Choose the single best-fitting category. Allowed vault folders:",
     categories.map((c) => `- ${c}`).join("\n"),
     "",
-    'If the transcript is too short or empty to be meaningful, still return valid JSON',
+    "If the transcript is too short or empty to be meaningful, still return valid JSON",
     'with category "Voice Notes" and the transcript echoed in "cleaned".',
   ].join("\n");
 }
@@ -367,9 +374,7 @@ export async function organize(
       summary: (p.summary || "").trim(),
       tags: Array.isArray(p.tags) ? p.tags.filter((t) => typeof t === "string") : [],
       cleaned: (p.cleaned || raw).trim(),
-      actionItems: Array.isArray(p.actionItems)
-        ? p.actionItems.filter((t) => typeof t === "string")
-        : [],
+      actionItems: Array.isArray(p.actionItems) ? p.actionItems.filter((t) => typeof t === "string") : [],
       links: Array.isArray(p.links) ? p.links.filter((t) => typeof t === "string") : [],
     };
   }
@@ -414,15 +419,11 @@ export async function processFile(
   const createdISO = new Date(statSync(filePath).mtime).toISOString();
   const durationSec = probeDurationSec(filePath);
 
-  const notePath = uniquePath(
-    resolveNotePath(cfg, categories, org.category, org.title, createdISO),
-  );
+  const notePath = uniquePath(resolveNotePath(cfg, categories, org.category, org.title, createdISO));
   const safeCategory = categories.includes(org.category) ? org.category : cfg.defaultCategory;
 
   // Archive destination: preserve original name, keyed by date for uniqueness.
-  const archivedPath = uniquePath(
-    join(cfg.archiveDir, `${createdISO.slice(0, 10)}-${audioName}`),
-  );
+  const archivedPath = uniquePath(join(cfg.archiveDir, `${createdISO.slice(0, 10)}-${audioName}`));
 
   const note = buildNote(org, raw, {
     title: org.title,
@@ -475,7 +476,8 @@ async function main() {
   const dryRun = args.includes("--dry-run");
   if (args.includes("--keep-audio")) cfg.keepAudio = true;
   const modelIdx = args.indexOf("--model");
-  if (modelIdx >= 0 && args[modelIdx + 1]) cfg.whisperModel = args[modelIdx + 1];
+  const modelArg = args[modelIdx + 1];
+  if (modelIdx >= 0 && modelArg) cfg.whisperModel = modelArg;
 
   const ledger = loadLedger(cfg.ledgerPath);
 

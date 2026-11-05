@@ -11,9 +11,9 @@
  * shallow-merged over the defaults.
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 export interface VoiceNotesConfig {
   /** Folders scanned for new audio files. */
@@ -47,13 +47,7 @@ export const KAYA_HOME = (() => {
 /** Stable, worktree-independent state root. */
 const STATE_ROOT = join(HOME, ".kaya", "voicenotes");
 
-const APPLE_VOICE_MEMOS = join(
-  HOME,
-  "Library",
-  "Group Containers",
-  "group.com.apple.VoiceMemos.shared",
-  "Recordings",
-);
+const APPLE_VOICE_MEMOS = join(HOME, "Library", "Group Containers", "group.com.apple.VoiceMemos.shared", "Recordings");
 
 export function defaultConfig(): VoiceNotesConfig {
   const sources = [
@@ -79,13 +73,7 @@ export function defaultConfig(): VoiceNotesConfig {
 
 export function loadConfig(): VoiceNotesConfig {
   const base = defaultConfig();
-  const overridePath = join(
-    KAYA_HOME,
-    "USER",
-    "SKILLCUSTOMIZATIONS",
-    "VoiceNotes",
-    "config.json",
-  );
+  const overridePath = join(KAYA_HOME, "USER", "SKILLCUSTOMIZATIONS", "VoiceNotes", "config.json");
   if (existsSync(overridePath)) {
     try {
       const override = JSON.parse(readFileSync(overridePath, "utf-8")) as Partial<VoiceNotesConfig>;
@@ -99,6 +87,17 @@ export function loadConfig(): VoiceNotesConfig {
 
 /** Audio/video extensions extract-transcript.py can handle. */
 export const SUPPORTED_EXTENSIONS = new Set([
-  ".m4a", ".mp3", ".wav", ".flac", ".ogg", ".aac", ".wma",
-  ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv",
+  ".m4a",
+  ".mp3",
+  ".wav",
+  ".flac",
+  ".ogg",
+  ".aac",
+  ".wma",
+  ".mp4",
+  ".mov",
+  ".avi",
+  ".mkv",
+  ".webm",
+  ".flv",
 ]);

@@ -86,7 +86,7 @@ Lightly cleaned body (filler removed, paragraphs/bullets added — meaning prese
 | **VoiceNotesProcessor** | Scan → transcribe → organize → write → archive pipeline + CLI | `Tools/VoiceNotesProcessor.ts` |
 | **config** | Defaults + user override loader; source folders, vault, model | `Tools/config.ts` |
 | **run wrapper** | Cron-safe wrapper (ensures inboxes, logs, runs `run`) | `Config/voicenotes-run.sh` |
-| **launchd plist** | Periodic auto-processing template | `Config/com.pai.voicenotes.plist` |
+| **launchd plist** | Periodic auto-processing template | `Config/com.kaya.voicenotes.plist` |
 
 ## Configuration
 
@@ -108,7 +108,7 @@ Defaults live in `Tools/config.ts`. Override any field via
 ## Automation (auto-installed by the standard plist fleet)
 
 A periodic launchd job processes new notes without manual runs. `bin/rebuild-plists.sh`
-unconditionally generates and (re)loads `com.pai.voicenotes.plist` as part of its standard
+unconditionally generates and (re)loads `com.kaya.voicenotes.plist` as part of its standard
 "Persistent Services" fleet (`bin/rebuild-plists.sh:1051-1084`) — there is no opt-in gate, so any
 run of the standard plist-rebuild workflow installs/reloads this job every 30 minutes regardless of
 whether Jm made an explicit install decision:
@@ -118,8 +118,8 @@ whether Jm made an explicit install decision:
 bash ~/.claude/skills/Content/VoiceNotes/Config/voicenotes-run.sh
 
 # Manual install/reload, if not going through the standard rebuild:
-cp ~/.claude/skills/Content/VoiceNotes/Config/com.pai.voicenotes.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pai.voicenotes.plist
+cp ~/.claude/skills/Content/VoiceNotes/Config/com.kaya.voicenotes.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kaya.voicenotes.plist
 # (or just run bin/rebuild-plists.sh, which already manages this plist)
 ```
 

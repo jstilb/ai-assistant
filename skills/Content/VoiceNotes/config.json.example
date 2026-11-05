@@ -1,15 +1,15 @@
 {
   "_comment": "Copy to USER/SKILLCUSTOMIZATIONS/VoiceNotes/config.json and edit. All keys optional; merged over defaults in Tools/config.ts.",
   "sources": [
-    "/Users/[user]/VoiceNotesInbox",
-    "/Users/[user]/Library/Mobile Documents/com~apple~CloudDocs/VoiceNotesInbox"
+    "/Users/YOUR_USER/VoiceNotesInbox",
+    "/Users/YOUR_USER/Library/Mobile Documents/com~apple~CloudDocs/VoiceNotesInbox"
   ],
-  "vaultPath": "/Users/[user]/Desktop/obsidian",
+  "vaultPath": "/Users/YOUR_USER/Desktop/obsidian",
   "noteSubfolder": "Voice Notes",
   "defaultCategory": "Voice Notes",
   "whisperModel": "large-v3",
-  "archiveDir": "/Users/[user]/.kaya/voicenotes/archive",
+  "archiveDir": "/Users/YOUR_USER/.kaya/voicenotes/archive",
   "keepAudio": false,
-  "ledgerPath": "/Users/[user]/.kaya/voicenotes/ledger.json",
+  "ledgerPath": "/Users/YOUR_USER/.kaya/voicenotes/ledger.json",
   "inferenceLevel": "standard"
 }

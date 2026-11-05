@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   slugify,
   inferDevice,
@@ -45,7 +45,9 @@ describe("inferDevice", () => {
     expect(inferDevice("/Users/x/VoiceNotesInbox")).toBe("desktop");
   });
   it("marks Apple Voice Memos as unknown", () => {
-    expect(inferDevice("/Users/x/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings")).toBe("unknown");
+    expect(inferDevice("/Users/x/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings")).toBe(
+      "unknown",
+    );
   });
 });
 
@@ -136,7 +138,13 @@ describe("ledger + discovery", () => {
       device: "mobile",
     };
     saveLedger(lpath, led);
-    expect(loadLedger(lpath).processed["abc"].notePath).toBe("/x.md");
+    expect(loadLedger(lpath).processed["abc"]?.notePath).toBe("/x.md");
+  });
+
+  it("throws on a corrupt ledger instead of resetting it (a reset would reprocess every file)", () => {
+    const lpath = join(tmp, "corrupt-ledger.json");
+    writeFileSync(lpath, "{not json");
+    expect(() => loadLedger(lpath)).toThrow(/unreadable or corrupt/);
   });
 
   it("discovers supported audio and skips already-processed hashes", () => {
@@ -152,10 +160,17 @@ describe("ledger + discovery", () => {
     expect(pending.map((p) => p.path)).toEqual([audio]);
 
     // After recording its hash, it is no longer pending.
-    const led = { processed: { [hashFile(audio)]: {
-      hash: hashFile(audio), originalName: "memo.m4a", notePath: "/x.md",
-      processedAt: "now", device: "desktop",
-    } } };
+    const led = {
+      processed: {
+        [hashFile(audio)]: {
+          hash: hashFile(audio),
+          originalName: "memo.m4a",
+          notePath: "/x.md",
+          processedAt: "now",
+          device: "desktop",
+        },
+      },
+    };
     pending = discoverPending(cfg, led);
     expect(pending).toEqual([]);
   });
