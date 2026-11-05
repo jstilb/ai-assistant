@@ -33,17 +33,17 @@
  * - Reads the last 1MB of the transcript; whole file only if the tail has no usage
  */
 
-import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { readObservabilityHookInputSync } from '../lib/hook-utils.ts';
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readObservabilityHookInputSync } from "../lib/hook-utils.ts";
 
 export const SOFT_LIMIT_TOKENS = 400_000;
 export const HARD_LIMIT_TOKENS = 500_000;
 const WINDOW_TOKENS = 1_000_000;
 const TAIL_BYTES = 1024 * 1024;
-const HANDOFF_SKILL = '~/.claude/skills/Automation/Handoff/SKILL.md';
-const EVENTS = new Set(['PostToolBatch', 'UserPromptSubmit']);
+const HANDOFF_SKILL = "~/.claude/skills/Automation/Handoff/SKILL.md";
+const EVENTS = new Set(["PostToolBatch", "UserPromptSubmit"]);
 
 interface HookInput {
   session_id?: string;
@@ -67,9 +67,9 @@ interface TranscriptEntry {
 
 /** Tokens in context after the latest main-chain assistant message, or null if none. */
 export function latestContextTokens(jsonl: string): number | null {
-  const lines = jsonl.split('\n');
+  const lines = jsonl.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? "").trim();
     if (!line.includes('"usage"')) continue;
     let entry: TranscriptEntry;
     try {
@@ -77,10 +77,10 @@ export function latestContextTokens(jsonl: string): number | null {
     } catch {
       continue;
     }
-    if (entry.type !== 'assistant' || entry.isSidechain === true) continue;
+    if (entry.type !== "assistant" || entry.isSidechain === true) continue;
     const usage = entry.message?.usage;
     // <synthetic> entries (API errors, interrupts) carry zero usage.
-    if (!usage || entry.message?.model === '<synthetic>') continue;
+    if (!usage || entry.message?.model === "<synthetic>") continue;
     const tokens =
       (usage.input_tokens ?? 0) +
       (usage.cache_read_input_tokens ?? 0) +
@@ -92,15 +92,15 @@ export function latestContextTokens(jsonl: string): number | null {
 }
 
 function readTail(path: string, bytes: number): string {
-  const fd = openSync(path, 'r');
+  const fd = openSync(path, "r");
   try {
     const size = fstatSync(fd).size;
     const start = Math.max(0, size - bytes);
     const buf = Buffer.alloc(size - start);
     readSync(fd, buf, 0, buf.length, start);
-    const text = buf.toString('utf-8');
+    const text = buf.toString("utf-8");
     // Drop the first, partial line when the read did not start at the file head.
-    return start === 0 ? text : text.slice(text.indexOf('\n') + 1);
+    return start === 0 ? text : text.slice(text.indexOf("\n") + 1);
   } finally {
     closeSync(fd);
   }
@@ -109,7 +109,7 @@ function readTail(path: string, bytes: number): string {
 export function readContextTokens(transcriptPath: string): number | null {
   return (
     latestContextTokens(readTail(transcriptPath, TAIL_BYTES)) ??
-    latestContextTokens(readFileSync(transcriptPath, 'utf-8'))
+    latestContextTokens(readFileSync(transcriptPath, "utf-8"))
   );
 }
 
@@ -119,30 +119,30 @@ export function budgetNote(tokens: number, softNoteSent: boolean): string | null
   if (tokens >= HARD_LIMIT_TOKENS) {
     return [
       `## Context budget: ${used}. Hand off now.`,
-      'This session is past 50% of its context window. Start no new work here.',
+      "This session is past 50% of its context window. Start no new work here.",
       `Run the Handoff skill now: \`${HANDOFF_SKILL}\`.`,
-      'If the handoff is done and the next session runs, end this session with your final report.',
-    ].join('\n');
+      "If the handoff is done and the next session runs, end this session with your final report.",
+    ].join("\n");
   }
   if (tokens >= SOFT_LIMIT_TOKENS && !softNoteSent) {
     return [
       `## Context budget: ${used}`,
-      'This session passed 40% of its context window. Jm wants long work to continue in a fresh session.',
-      '1. Take the current step to a clean point (no half-done edits).',
+      "This session passed 40% of its context window. Jm wants long work to continue in a fresh session.",
+      "1. Take the current step to a clean point (no half-done edits).",
       `2. Then run the Handoff skill: \`${HANDOFF_SKILL}\`.`,
-      'Do not start a new slice or a large task in this session.',
-      'If the remaining work is one or two short turns, finish it here instead.',
-    ].join('\n');
+      "Do not start a new slice or a large task in this session.",
+      "If the remaining work is one or two short turns, finish it here instead.",
+    ].join("\n");
   }
   return null;
 }
 
 export function markerPath(sessionId: string): string {
-  return join(tmpdir(), 'kaya-context-budget', `${sessionId.replace(/[^\w-]/g, '_')}.soft-noted`);
+  return join(tmpdir(), "kaya-context-budget", `${sessionId.replace(/[^\w-]/g, "_")}.soft-noted`);
 }
 
 function main(): void {
-  if (process.env.KAYA_CONTEXT_GUARD_DISABLED === '1') return;
+  if (process.env.KAYA_CONTEXT_GUARD_DISABLED === "1") return;
 
   const input = readObservabilityHookInputSync<HookInput>();
   if (!input || input.agent_id) return;
@@ -158,11 +158,11 @@ function main(): void {
   if (!note) return;
 
   if (tokens < HARD_LIMIT_TOKENS) {
-    mkdirSync(join(tmpdir(), 'kaya-context-budget'), { recursive: true });
+    mkdirSync(join(tmpdir(), "kaya-context-budget"), { recursive: true });
     writeFileSync(marker, `${new Date().toISOString()} ${tokens}\n`);
   }
   process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: note } }) + '\n',
+    JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: note } }) + "\n",
   );
 }
 
@@ -171,7 +171,7 @@ if (import.meta.main) {
     main();
   } catch (err) {
     // Fail open: a broken guard must never block a session. stderr shows in debug logs.
-    console.error('[ContextBudgetGuard] error:', err);
+    console.error("[ContextBudgetGuard] error:", err);
   }
   process.exit(0);
 }

@@ -14,9 +14,9 @@
  * Staleness: Entries older than 30 minutes are auto-pruned on read.
  */
 
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { getKayaHome, defaultKayaHome } from '../../lib/core/KayaHome.ts';
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { getKayaHome, defaultKayaHome } from "../../lib/core/KayaHome.ts";
 
 /**
  * State file path (T7-08.4 seam). Default, unchanged production behavior:
@@ -29,7 +29,7 @@ import { getKayaHome, defaultKayaHome } from '../../lib/core/KayaHome.ts';
  * unconditionally redirect to getKayaHome() either: an ordinary Kaya
  * session shell exports KAYA_DIR pointing at the LIVE tree root even when
  * no test has overridden anything (confirmed live: `echo $KAYA_DIR` in this
- * worktree's own shell prints `~/.claude`, the live tree — NOT
+ * worktree's own shell prints the live tree root (~/.claude), the live tree — NOT
  * this worktree's path). Since defaultKayaHome() resolves to that exact
  * same live-tree path, `getKayaHome() === defaultKayaHome()` is true in
  * that ordinary case, and ONLY differs when something has explicitly
@@ -45,9 +45,9 @@ import { getKayaHome, defaultKayaHome } from '../../lib/core/KayaHome.ts';
 function resolveStateFilePath(): string {
   const resolvedHome = getKayaHome();
   if (resolvedHome !== defaultKayaHome()) {
-    return join(resolvedHome, 'hooks', 'lib', '.active-agents.json');
+    return join(resolvedHome, "hooks", "lib", ".active-agents.json");
   }
-  return join(dirname(new URL(import.meta.url).pathname), '.active-agents.json');
+  return join(dirname(new URL(import.meta.url).pathname), ".active-agents.json");
 }
 
 const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
@@ -71,7 +71,7 @@ function readState(): TrackerState {
   const stateFile = resolveStateFilePath();
   try {
     if (!existsSync(stateFile)) return {};
-    const raw = readFileSync(stateFile, 'utf-8');
+    const raw = readFileSync(stateFile, "utf-8");
     return JSON.parse(raw) as TrackerState;
   } catch {
     return {};
@@ -83,7 +83,7 @@ function writeState(state: TrackerState): void {
   const dir = dirname(stateFile);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-  const tmp = stateFile + '.tmp';
+  const tmp = stateFile + ".tmp";
   writeFileSync(tmp, JSON.stringify(state, null, 2));
   renameSync(tmp, stateFile);
 }
@@ -91,14 +91,13 @@ function writeState(state: TrackerState): void {
 /** Remove entries older than STALE_THRESHOLD_MS */
 function pruneStale(state: TrackerState): TrackerState {
   const now = Date.now();
-  for (const sessionId of Object.keys(state)) {
-    for (const agentId of Object.keys(state[sessionId])) {
-      const entry = state[sessionId][agentId];
+  for (const [sessionId, agents] of Object.entries(state)) {
+    for (const [agentId, entry] of Object.entries(agents)) {
       if (now - new Date(entry.startedAt).getTime() > STALE_THRESHOLD_MS) {
-        delete state[sessionId][agentId];
+        delete agents[agentId];
       }
     }
-    if (Object.keys(state[sessionId]).length === 0) {
+    if (Object.keys(agents).length === 0) {
       delete state[sessionId];
     }
   }
@@ -116,7 +115,7 @@ export function registerAgent(
   agentId: string,
   agentType: string,
   description: string,
-  isBackground: boolean = true
+  isBackground: boolean = true,
 ): void {
   const state = pruneStale(readState());
   if (!state[sessionId]) state[sessionId] = {};
@@ -130,10 +129,7 @@ export function registerAgent(
 }
 
 /** Mark an agent as foreground (called from SubagentStop for non-background agents) */
-export function markForeground(
-  sessionId: string,
-  agentId: string
-): void {
+export function markForeground(sessionId: string, agentId: string): void {
   const state = readState();
   if (state[sessionId]?.[agentId]) {
     state[sessionId][agentId].isBackground = false;
@@ -144,7 +140,7 @@ export function markForeground(
 /** Unregister an agent and return remaining *background* siblings only */
 export function unregisterAgent(
   sessionId: string,
-  agentId: string
+  agentId: string,
 ): { remaining: AgentEntry[]; remainingCount: number } {
   const state = pruneStale(readState());
 
@@ -152,7 +148,7 @@ export function unregisterAgent(
     delete state[sessionId][agentId];
     // Only count background agents as remaining — foreground agents
     // block the turn and resolve before background ones return.
-    const remaining = Object.values(state[sessionId]).filter(a => a.isBackground);
+    const remaining = Object.values(state[sessionId]).filter((a) => a.isBackground);
     if (Object.keys(state[sessionId]).length === 0) {
       delete state[sessionId];
     }
@@ -162,13 +158,6 @@ export function unregisterAgent(
 
   writeState(state);
   return { remaining: [], remainingCount: 0 };
-}
-
-/** Get all active agents for a session */
-export function getActiveAgents(sessionId: string): { agents: SessionAgents; count: number } {
-  const state = pruneStale(readState());
-  const agents = state[sessionId] || {};
-  return { agents, count: Object.keys(agents).length };
 }
 
 /**

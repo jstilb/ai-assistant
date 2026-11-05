@@ -23,16 +23,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runSessionRatingRecord, type SessionRatingDeps } from "./SessionRatingRecord.hook.ts";
 import type { InferenceResult } from "../lib/core/Inference.ts";
 import { SessionImplicitRatingSchema } from "../lib/core/LearningEntrySchema.ts";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-function makeInferenceFn(override?: Partial<{ rating: number; sentiment_summary: string; confidence: number; learnings: unknown }>) {
+function makeInferenceFn(
+  override?: Partial<{ rating: number; sentiment_summary: string; confidence: number; learnings: unknown }>,
+) {
   const defaults = { rating: 7, sentiment_summary: "Session went well", confidence: 0.8, learnings: [] as unknown[] };
   const result = { ...defaults, ...override };
   return async (): Promise<InferenceResult> => ({
@@ -81,7 +83,7 @@ function readRatings(ratingsPath: string): Array<Record<string, unknown>> {
   return readFileSync(ratingsPath, "utf-8")
     .split("\n")
     .filter(Boolean)
-    .map(line => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 // ── test setup ─────────────────────────────────────────────────────────────────
@@ -93,13 +95,17 @@ let transcriptPath: string;
 
 const SESSION_ID = "test-session-abc-123";
 
-const SAMPLE_TRANSCRIPT_CONTENT = JSON.stringify({
-  type: "user",
-  message: { content: "Can you help me fix this bug?" },
-}) + "\n" + JSON.stringify({
-  type: "assistant",
-  message: { content: "Sure! Here is the fix." },
-}) + "\n";
+const SAMPLE_TRANSCRIPT_CONTENT =
+  JSON.stringify({
+    type: "user",
+    message: { content: "Can you help me fix this bug?" },
+  }) +
+  "\n" +
+  JSON.stringify({
+    type: "assistant",
+    message: { content: "Sure! Here is the fix." },
+  }) +
+  "\n";
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "session-rating-test-"));
@@ -114,7 +120,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  try {
+    rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
 });
 
 function makeDeps(overrides: Partial<SessionRatingDeps> = {}): SessionRatingDeps {
@@ -137,7 +147,7 @@ describe("ISC-1: writes exactly one row with correct fields", () => {
     const rows = readRatings(ratingsPath);
     expect(rows).toHaveLength(1);
 
-    const row = rows[0];
+    const row = rows[0]!;
     expect(row.source).toBe("implicit");
     expect(row.rating).toBe(7);
     expect(row.session_id).toBe(SESSION_ID);
@@ -166,7 +176,7 @@ describe("ISC S6b: written row is schema-parsed before append (construction-time
     // doesn't change that fail-open behavior.
     const deps = makeDeps({ inferenceFn: makeInferenceFn({ rating: 999 }) });
     await expect(
-      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps)
+      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps),
     ).resolves.toBeUndefined();
 
     const rows = readRatings(ratingsPath);
@@ -196,7 +206,7 @@ describe("ISC-3: inference failure — no write, handler does not throw", () => 
     const deps = makeDeps({ inferenceFn: makeBrokenInferenceFn() });
     // Must not throw
     await expect(
-      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps)
+      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps),
     ).resolves.toBeUndefined();
 
     const rows = readRatings(ratingsPath);
@@ -206,7 +216,7 @@ describe("ISC-3: inference failure — no write, handler does not throw", () => 
   it("does not write and returns cleanly when inferenceFn returns success:false", async () => {
     const deps = makeDeps({ inferenceFn: makeFailingInferenceFn() });
     await expect(
-      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps)
+      runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps),
     ).resolves.toBeUndefined();
 
     const rows = readRatings(ratingsPath);
@@ -235,7 +245,10 @@ describe("ISC-4: empty or missing transcript — no write", () => {
 
   it("does not write when transcript_path is missing from disk and transcriptReader returns null", async () => {
     const deps = makeDeps({ transcriptReader: () => null });
-    await runSessionRatingRecord({ session_id: "no-transcript-session", transcript_path: "/nonexistent/path.jsonl" }, deps);
+    await runSessionRatingRecord(
+      { session_id: "no-transcript-session", transcript_path: "/nonexistent/path.jsonl" },
+      deps,
+    );
 
     const rows = readRatings(ratingsPath);
     expect(rows).toHaveLength(0);
@@ -249,19 +262,27 @@ describe("ISC-5 (S8): learnings from the same inference call are written as file
     const deps = makeDeps({
       inferenceFn: makeInferenceFn({
         learnings: [
-          { summary: "Nightly cron silently stopped emitting output", category: "SYSTEM", evidence: "needed a keep-alive signal across sleep cycles" },
-          { summary: "Assumed the wrong scope and had to redo the work", category: "ALGORITHM", evidence: "checking in first would have saved a rewrite" },
+          {
+            summary: "Nightly cron silently stopped emitting output",
+            category: "SYSTEM",
+            evidence: "needed a keep-alive signal across sleep cycles",
+          },
+          {
+            summary: "Assumed the wrong scope and had to redo the work",
+            category: "ALGORITHM",
+            evidence: "checking in first would have saved a rewrite",
+          },
         ],
       }),
     });
 
     await runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps);
 
-    const files = listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"));
+    const files = listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(2);
 
-    const systemFile = files.find(f => f.startsWith(join(learningsDir, "SYSTEM")));
-    const algorithmFile = files.find(f => f.startsWith(join(learningsDir, "ALGORITHM")));
+    const systemFile = files.find((f) => f.startsWith(join(learningsDir, "SYSTEM")));
+    const algorithmFile = files.find((f) => f.startsWith(join(learningsDir, "ALGORITHM")));
     expect(systemFile).toBeDefined();
     expect(algorithmFile).toBeDefined();
 
@@ -298,7 +319,7 @@ describe("ISC-6 (S8): empty or absent learnings array writes zero learning files
     const deps = makeDeps({ inferenceFn: makeInferenceFn({ learnings: [] }) });
     await runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps);
 
-    expect(listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"))).toHaveLength(0);
+    expect(listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"))).toHaveLength(0);
   });
 
   it("writes zero learning files when the inference output omits `learnings` entirely", async () => {
@@ -319,7 +340,7 @@ describe("ISC-6 (S8): empty or absent learnings array writes zero learning files
 
     // Rating still gets written (learnings is purely additive, never required)
     expect(readRatings(ratingsPath)).toHaveLength(1);
-    expect(listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"))).toHaveLength(0);
+    expect(listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"))).toHaveLength(0);
   });
 });
 
@@ -338,7 +359,7 @@ describe("ISC-7 (S8): per-item fail-open for malformed learning entries", () => 
     });
     await runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps);
 
-    const files = listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"));
+    const files = listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(1);
     expect(readFileSync(files[0]!, "utf-8")).toContain("Valid one");
   });
@@ -358,7 +379,7 @@ describe("ISC-8 (S8): idempotency — second invocation writes no additional lea
     await runSessionRatingRecord(payload, deps);
     await runSessionRatingRecord(payload, deps);
 
-    const files = listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"));
+    const files = listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(1);
   });
 });
@@ -377,16 +398,20 @@ describe("ISC-8 (S8): idempotency — second invocation writes no additional lea
 
 describe("ISC-9 (S8): end-to-end — out-of-vocabulary learning and frustration venting", () => {
   it("an out-of-vocabulary SYSTEM learning (lc07-style transcript) writes one correctly-categorized file", async () => {
-    const outOfVocabTranscript = JSON.stringify({
-      type: "user",
-      message: { content: "Anything odd with the nightly jobs lately?" },
-    }) + "\n" + JSON.stringify({
-      type: "assistant",
-      message: {
-        content:
-          "Turns out the nightly cron silently stopped emitting output three days ago; it needed a keep-alive signal added to survive the box's sleep cycles.",
-      },
-    }) + "\n";
+    const outOfVocabTranscript =
+      JSON.stringify({
+        type: "user",
+        message: { content: "Anything odd with the nightly jobs lately?" },
+      }) +
+      "\n" +
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content:
+            "Turns out the nightly cron silently stopped emitting output three days ago; it needed a keep-alive signal added to survive the box's sleep cycles.",
+        },
+      }) +
+      "\n";
 
     const deps = makeDeps({
       transcriptReader: () => outOfVocabTranscript,
@@ -395,17 +420,19 @@ describe("ISC-9 (S8): end-to-end — out-of-vocabulary learning and frustration 
       // category:SYSTEM) — the eval proves the LLM produces this judgment for
       // this exact input; here we prove the writer does the right thing with it.
       inferenceFn: makeInferenceFn({
-        learnings: [{
-          summary: "Nightly cron silently stopped emitting output for three days",
-          category: "SYSTEM",
-          evidence: "needed a keep-alive signal added to survive the box's sleep cycles",
-        }],
+        learnings: [
+          {
+            summary: "Nightly cron silently stopped emitting output for three days",
+            category: "SYSTEM",
+            evidence: "needed a keep-alive signal added to survive the box's sleep cycles",
+          },
+        ],
       }),
     });
 
     await runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps);
 
-    const files = listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"));
+    const files = listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(1);
     expect(files[0]).toContain(join("LEARNING", "SYSTEM"));
     const content = readFileSync(files[0]!, "utf-8");
@@ -414,13 +441,17 @@ describe("ISC-9 (S8): end-to-end — out-of-vocabulary learning and frustration 
   });
 
   it("frustration venting with nothing resolved (lc09/lc10-style transcript) writes zero learning files", async () => {
-    const frustrationTranscript = JSON.stringify({
-      type: "user",
-      message: { content: "Any progress on the config issue?" },
-    }) + "\n" + JSON.stringify({
-      type: "assistant",
-      message: { content: "This bug is so frustrating, I keep debugging it and it's still broken, ugh." },
-    }) + "\n";
+    const frustrationTranscript =
+      JSON.stringify({
+        type: "user",
+        message: { content: "Any progress on the config issue?" },
+      }) +
+      "\n" +
+      JSON.stringify({
+        type: "assistant",
+        message: { content: "This bug is so frustrating, I keep debugging it and it's still broken, ugh." },
+      }) +
+      "\n";
 
     const deps = makeDeps({
       transcriptReader: () => frustrationTranscript,
@@ -432,9 +463,101 @@ describe("ISC-9 (S8): end-to-end — out-of-vocabulary learning and frustration 
 
     await runSessionRatingRecord({ session_id: SESSION_ID, transcript_path: transcriptPath }, deps);
 
-    expect(listFilesRecursive(learningsDir).filter(f => f.endsWith(".md"))).toHaveLength(0);
+    expect(listFilesRecursive(learningsDir).filter((f) => f.endsWith(".md"))).toHaveLength(0);
     // Rating row still gets written — the frustration transcript is a valid
     // session, it's specifically the learning classification that is empty.
+    expect(readRatings(ratingsPath)).toHaveLength(1);
+  });
+});
+
+// ── ISC-10: headless / no-user-turn sessions are never rated ─────────────────
+
+/** A transcript shaped like a real `claude -p` session (form-doc coach). */
+const HEADLESS_TRANSCRIPT =
+  JSON.stringify({ type: "queue-operation", operation: "enqueue", content: "Write the coach read" }) +
+  "\n" +
+  JSON.stringify({
+    type: "user",
+    entrypoint: "sdk-cli",
+    message: { role: "user", content: "Write the coach read for this jump data" },
+  }) +
+  "\n" +
+  JSON.stringify({
+    type: "assistant",
+    entrypoint: "sdk-cli",
+    message: { content: [{ type: "text", text: "## Read\nGood jumps." }] },
+  }) +
+  "\n";
+
+describe("ISC-10: a headless claude -p session writes no rating row", () => {
+  it("skips a transcript stamped entrypoint sdk-cli and never calls inference", async () => {
+    let called = 0;
+    const inferenceFn = async (): Promise<InferenceResult> => {
+      called++;
+      return makeInferenceFn()();
+    };
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ inferenceFn, transcriptReader: () => HEADLESS_TRANSCRIPT }),
+    );
+    expect(called).toBe(0);
+    expect(readRatings(ratingsPath)).toHaveLength(0);
+  });
+
+  it("skips an Agent SDK session (entrypoint sdk-ts)", async () => {
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ transcriptReader: () => HEADLESS_TRANSCRIPT.replace(/sdk-cli/g, "sdk-ts") }),
+    );
+    expect(readRatings(ratingsPath)).toHaveLength(0);
+  });
+
+  it("falls back to the CLAUDE_CODE_ENTRYPOINT env value when the transcript has no stamp", async () => {
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ envEntrypoint: "sdk-cli" }),
+    );
+    expect(readRatings(ratingsPath)).toHaveLength(0);
+  });
+
+  it("the transcript stamp wins over the env value (interactive cli is rated)", async () => {
+    const cli = HEADLESS_TRANSCRIPT.replace(/sdk-cli/g, "cli");
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ transcriptReader: () => cli, envEntrypoint: "sdk-cli" }),
+    );
+    expect(readRatings(ratingsPath)).toHaveLength(1);
+  });
+
+  it("skips a JSONL session with no typed user turn (only tool results / meta)", async () => {
+    const noTurn =
+      JSON.stringify({
+        type: "user",
+        entrypoint: "cli",
+        isMeta: true,
+        message: { content: "<system-reminder>x</system-reminder>" },
+      }) +
+      "\n" +
+      JSON.stringify({
+        type: "user",
+        entrypoint: "cli",
+        message: { content: [{ type: "tool_result", content: "ok" }] },
+      }) +
+      "\n" +
+      JSON.stringify({ type: "assistant", entrypoint: "cli", message: { content: [{ type: "text", text: "done" }] } }) +
+      "\n";
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ transcriptReader: () => noTurn }),
+    );
+    expect(readRatings(ratingsPath)).toHaveLength(0);
+  });
+
+  it("still rates an interactive session (env cli, typed user turn)", async () => {
+    await runSessionRatingRecord(
+      { session_id: SESSION_ID, transcript_path: transcriptPath },
+      makeDeps({ envEntrypoint: "cli" }),
+    );
     expect(readRatings(ratingsPath)).toHaveLength(1);
   });
 });

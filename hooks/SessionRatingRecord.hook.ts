@@ -30,6 +30,13 @@
  *   - Writes zero or more MEMORY/LEARNING/<SYSTEM|ALGORITHM>/<yearMonth>/*.md
  *     learning files (empty `learnings` array ⇒ zero files, the common case).
  *
+ * SKIPPED SESSIONS:
+ *   Headless sessions (transcript `entrypoint` "sdk-*", i.e. `claude -p` or the
+ *   Agent SDK — e.g. form-doc's coach, crons, probes) and sessions with no typed
+ *   user turn are never rated: no Jm, no satisfaction. Decided in the launcher
+ *   (no worker spawned) and again in the worker. See hooks/lib/session-origin.ts;
+ *   bin/purge-headless-ratings.ts moves the false rows written before this gate.
+ *
  * IDEMPOTENCY:
  *   If a row already exists in ratings.jsonl with the same session_id AND
  *   source:"implicit", the hook exits BEFORE the inference call — this gate
@@ -57,9 +64,9 @@
  *   whichever sub-task is more demanding.
  */
 
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import { spawn } from "child_process";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
 import { inference } from "../lib/core/Inference.ts";
 import type { InferenceResult } from "../lib/core/Inference.ts";
 import { readHookInput } from "../lib/hook-utils.ts";
@@ -68,6 +75,7 @@ import { createAppendLog } from "../lib/core/AppendLog.ts";
 import { MEMORY, RATINGS_PATH } from "../lib/core/MemoryPaths.ts";
 import { LEARNING_JUDGMENT_CRITERIA, parseLearningsArray, type LearningItem } from "../lib/core/LearningJudgment.ts";
 import { getPSTTimestamp, getPSTDate, getYearMonth } from "./lib/time.ts";
+import { headlessSkipReason } from "./lib/session-origin.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,6 +114,11 @@ export interface SessionRatingDeps {
   learningsDir: string;
   /** Read transcript content; return null/empty to signal missing or too-short transcript */
   transcriptReader: (transcriptPath: string) => string | null;
+  /**
+   * The CLAUDE_CODE_ENTRYPOINT the CLI gave the hook ("cli", "sdk-cli", …).
+   * Fallback only — the transcript's own `entrypoint` stamp wins.
+   */
+  envEntrypoint?: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -141,10 +154,7 @@ Return ONLY valid JSON — no prose, no markdown fences.`;
  * Called by main() with real deps, and by tests with stubs.
  * Returns void; errors are logged to stderr and swallowed (fail-open).
  */
-export async function runSessionRatingRecord(
-  input: SessionEndInput,
-  deps: SessionRatingDeps,
-): Promise<void> {
+export async function runSessionRatingRecord(input: SessionEndInput, deps: SessionRatingDeps): Promise<void> {
   const { session_id, transcript_path } = input;
   const { inferenceFn, ratingsPath, learningsDir, transcriptReader } = deps;
 
@@ -155,7 +165,17 @@ export async function runSessionRatingRecord(
     return;
   }
 
-  // 2. Idempotency check — skip if we already wrote a row for this session.
+  // 2. Origin check — rate only sessions Jm took part in. A headless
+  // `claude -p` call (another app's coach, a cron, a probe) or a session with
+  // no typed user turn has no satisfaction to rate; rating it only wrote a
+  // false neutral row. See hooks/lib/session-origin.ts.
+  const skipReason = headlessSkipReason(transcriptContent, deps.envEntrypoint);
+  if (skipReason) {
+    console.error(`[SessionRatingRecord] Not rating session ${session_id}: ${skipReason}`);
+    return;
+  }
+
+  // 3. Idempotency check — skip if we already wrote a row for this session.
   // This gate runs BEFORE the inference call, so it protects both the rating
   // write and the learning-file writes below (both are downstream of the one
   // inference call it guards).
@@ -164,7 +184,7 @@ export async function runSessionRatingRecord(
     return;
   }
 
-  // 3. Inference — one Sonnet call to rate the session AND extract learnings
+  // 4. Inference — one Sonnet call to rate the session AND extract learnings
   let ratingResult: InferenceRatingResult;
   try {
     const result = await inferenceFn({
@@ -183,7 +203,8 @@ export async function runSessionRatingRecord(
     const parsed = result.parsed as Record<string, unknown>;
     if (
       typeof parsed.rating !== "number" ||
-      parsed.rating < 1 || parsed.rating > 10 ||
+      parsed.rating < 1 ||
+      parsed.rating > 10 ||
       typeof parsed.sentiment_summary !== "string" ||
       typeof parsed.confidence !== "number"
     ) {
@@ -204,7 +225,7 @@ export async function runSessionRatingRecord(
     return;
   }
 
-  // 4. Write rating row
+  // 5. Write rating row
   const row: SessionRatingRow = {
     timestamp: new Date().toISOString(),
     rating: ratingResult.rating,
@@ -222,13 +243,13 @@ export async function runSessionRatingRecord(
     createAppendLog(ratingsPath).append(row);
     console.error(
       `[SessionRatingRecord] Wrote rating ${row.rating}/10 ` +
-      `(conf=${row.confidence.toFixed(2)}) for session ${session_id}`,
+        `(conf=${row.confidence.toFixed(2)}) for session ${session_id}`,
     );
   } catch (err) {
     console.error(`[SessionRatingRecord] Failed to write ratings.jsonl: ${err}`);
   }
 
-  // 5. Write session-end learning files (S8) — empty array is the common case.
+  // 6. Write session-end learning files (S8) — empty array is the common case.
   writeLearningFiles(ratingResult.learnings, session_id, learningsDir);
 }
 
@@ -247,12 +268,16 @@ function hasExistingImplicitRow(ratingsPath: string, session_id: string): boolea
         }
       } catch (err) {
         // skip malformed lines
-        console.error(`[SessionRatingRecord] malformed ratings line skipped: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(
+          `[SessionRatingRecord] malformed ratings line skipped: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   } catch (err) {
     // can't read file — treat as no existing row
-    console.error(`[SessionRatingRecord] failed to read ratings file, treating as no existing row: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `[SessionRatingRecord] failed to read ratings file, treating as no existing row: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   return false;
 }
@@ -263,9 +288,7 @@ function hasExistingImplicitRow(ratingsPath: string, session_id: string): boolea
  */
 function buildUserPrompt(transcriptContent: string): string {
   const cap = 4000;
-  const body = transcriptContent.length > cap
-    ? transcriptContent.slice(-cap)
-    : transcriptContent;
+  const body = transcriptContent.length > cap ? transcriptContent.slice(-cap) : transcriptContent;
   return `Rate this Kaya session and extract any learnings, based on the transcript below:\n\n${body}`;
 }
 
@@ -333,7 +356,7 @@ ${item.evidence}
  * No-op for an empty array (the common case).
  *
  * Idempotency: the caller's hasExistingImplicitRow() pre-inference gate is
- * the primary guard (see runSessionRatingRecord step 2/5). The
+ * the primary guard (see runSessionRatingRecord step 3/6). The
  * existsSync() check here is a second, redundant safety net for the edge
  * case where inference succeeded but the rating-row write above failed
  * (leaving hasExistingImplicitRow() → false on a re-fire) — the filename is
@@ -407,6 +430,7 @@ async function runWorker(session_id: string, transcript_path: string): Promise<v
       ratingsPath: resolveRatingsPath(),
       learningsDir: resolveLearningsDir(),
       transcriptReader: defaultTranscriptReader,
+      envEntrypoint: process.env.CLAUDE_CODE_ENTRYPOINT ?? null,
     };
     await runSessionRatingRecord({ session_id, transcript_path }, realDeps);
   } catch (err) {
@@ -428,17 +452,26 @@ async function runLauncher(): Promise<void> {
       process.exit(0);
     }
 
+    // Headless `claude -p` sessions (and sessions with no user turn) are never
+    // rated — decide here, so no worker or inference call is spent on them.
+    // The worker repeats the check (it is the tested core path).
+    const transcript = defaultTranscriptReader(data.transcript_path ?? "");
+    const skipReason = transcript ? headlessSkipReason(transcript, process.env.CLAUDE_CODE_ENTRYPOINT ?? null) : null;
+    if (skipReason) {
+      console.error(`[SessionRatingRecord] Not rating session ${data.session_id}: ${skipReason}`);
+      process.exit(0);
+    }
+
     // Pre-check idempotency here to avoid spawning a no-op worker.
     if (hasExistingImplicitRow(resolveRatingsPath(), data.session_id)) {
       console.error(`[SessionRatingRecord] Implicit row already exists for session ${data.session_id} — skipping`);
       process.exit(0);
     }
 
-    const child = spawn(
-      process.execPath,
-      [import.meta.path, "--worker", data.session_id, data.transcript_path ?? ""],
-      { detached: true, stdio: "ignore" },
-    );
+    const child = spawn(process.execPath, [import.meta.path, "--worker", data.session_id, data.transcript_path ?? ""], {
+      detached: true,
+      stdio: "ignore",
+    });
     child.unref();
     console.error(`[SessionRatingRecord] Dispatched detached rating worker for session ${data.session_id}`);
   } catch (err) {

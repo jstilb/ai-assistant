@@ -21,7 +21,8 @@
  * - Writes to: hooks/lib/.active-agents.json
  */
 
-import { registerAgent } from './lib/agent-tracker';
+import { registerAgent } from "./lib/agent-tracker.ts";
+import { readObservabilityHookInput } from "../lib/hook-utils.ts";
 
 interface SubagentStartInput {
   session_id: string;
@@ -31,23 +32,9 @@ interface SubagentStartInput {
 }
 
 async function main(): Promise<void> {
-  let input: SubagentStartInput;
+  const input = await readObservabilityHookInput<SubagentStartInput>({ timeoutMs: 200 });
 
-  try {
-    const text = await Promise.race([
-      Bun.stdin.text(),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 200)
-      ),
-    ]);
-
-    if (!text.trim()) {
-      process.exit(0);
-      return;
-    }
-
-    input = JSON.parse(text);
-  } catch {
+  if (!input) {
     process.exit(0);
     return;
   }
@@ -62,8 +49,8 @@ async function main(): Promise<void> {
   registerAgent(
     input.session_id,
     input.agent_id,
-    input.agent_type || 'unknown',
-    '' // description not available in SubagentStart input
+    input.agent_type || "unknown",
+    "", // description not available in SubagentStart input
   );
 
   process.exit(0);

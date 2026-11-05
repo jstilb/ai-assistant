@@ -10,34 +10,20 @@
  *   const kayaDir = getKayaDir(); // Always returns expanded absolute path
  */
 
-import { join } from 'path';
-export { getKayaHome as getKayaDir, kayaHomePath as kayaPath, expandPath } from '../../lib/core/KayaHome.ts';
-import { getKayaHome } from '../../lib/core/KayaHome.ts';
+import { join } from "node:path";
+export { getKayaHome as getKayaDir, kayaHomePath as kayaPath, expandPath } from "../../lib/core/KayaHome.ts";
+import { getKayaHome } from "../../lib/core/KayaHome.ts";
 
 /**
  * Get the settings.json path
  */
 export function getSettingsPath(): string {
-  return join(getKayaHome(), 'settings.json');
-}
-
-/**
- * Get the hooks directory
- */
-export function getHooksDir(): string {
-  return join(getKayaHome(), 'hooks');
-}
-
-/**
- * Get the skills directory
- */
-export function getSkillsDir(): string {
-  return join(getKayaHome(), 'skills');
+  return join(getKayaHome(), "settings.json");
 }
 
 /**
  * Get the MEMORY directory
  */
 export function getMemoryDir(): string {
-  return join(getKayaHome(), 'MEMORY');
+  return join(getKayaHome(), "MEMORY");
 }

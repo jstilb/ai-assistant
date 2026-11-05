@@ -18,13 +18,13 @@
  * convention.
  */
 
-import * as RegexScanner from "./RegexScanner";
-import * as EncodingDetector from "./EncodingDetector";
-import * as StructuralAnalyzer from "./StructuralAnalyzer";
-import * as MLClassifier from "./MLClassifier";
-import type { InferenceFn } from "./MLClassifier";
-import { decide, applyMlOutcome } from "./DecisionEngine";
-import type { ScanFinding, ScanResult, InjectionDefenderConfig, ToolScanConfig } from "./types";
+import * as RegexScanner from "./RegexScanner.ts";
+import * as EncodingDetector from "./EncodingDetector.ts";
+import * as StructuralAnalyzer from "./StructuralAnalyzer.ts";
+import * as MLClassifier from "./MLClassifier.ts";
+import type { InferenceFn } from "./MLClassifier.ts";
+import { decide, applyMlOutcome } from "./DecisionEngine.ts";
+import type { ScanFinding, ScanResult, InjectionDefenderConfig, ToolScanConfig } from "./types.ts";
 
 export interface PipelineOptions {
   /** Injectable for tests. Defaults to MLClassifier.scanAsync's own default
@@ -47,7 +47,7 @@ export async function runScanPipeline(
   filePath: string | undefined,
   config: InjectionDefenderConfig,
   layers: ToolScanConfig["layers"],
-  options: PipelineOptions = {}
+  options: PipelineOptions = {},
 ): Promise<ScanResult> {
   const startTime = options.startTime ?? performance.now();
   const findings: ScanFinding[] = [];
@@ -63,9 +63,7 @@ export async function runScanPipeline(
     // hard block. This returns BEFORE layers 2-4 run at all -- preserved
     // exactly as it existed before T7-05, per the plan's explicit
     // instruction not to disturb it.
-    const hasCriticalBlock = regexFindings.some(
-      (f) => f.severity === "critical" && f.confidence >= 0.8
-    );
+    const hasCriticalBlock = regexFindings.some((f) => f.severity === "critical" && f.confidence >= 0.8);
     if (hasCriticalBlock) {
       const scanTime = performance.now() - startTime;
       return decide(findings, scanTime, layersExecuted, config);
@@ -96,18 +94,8 @@ export async function runScanPipeline(
   // check (not `!== "block"`, not `!== "log"`) is therefore the actual
   // security gate here, not an optimization -- it is the only line standing
   // between "block" and the ML layer for that case.
-  if (
-    layers.includes("ml") &&
-    config.global.enable_ml_layer &&
-    preliminary.recommended_action === "warn"
-  ) {
-    const mlOutcome = await MLClassifier.scanAsync(
-      scanText,
-      toolName,
-      findings,
-      config,
-      options.inferenceFn
-    );
+  if (layers.includes("ml") && config.global.enable_ml_layer && preliminary.recommended_action === "warn") {
+    const mlOutcome = await MLClassifier.scanAsync(scanText, toolName, findings, config, options.inferenceFn);
     const finalScanTime = performance.now() - startTime;
     return applyMlOutcome(findings, mlOutcome, finalScanTime, layersExecuted, config);
   }

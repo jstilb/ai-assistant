@@ -50,14 +50,20 @@
  * (objective metadata) — never regexed out of the message text.
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, statSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
-import { kayaPath } from './lib/paths';
-import { createAppendLog } from '../lib/core/AppendLog.ts';
-import { sendEventToObservability, getCurrentTimestamp, getSourceApp } from './lib/observability';
-import { extractAgentInstanceId } from './lib/metadata-extraction';
-import { notifyBackgroundAgent } from './lib/notifications';
-import { unregisterAgent, markForeground, getAgentEntry } from './lib/agent-tracker';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, statSync, renameSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { kayaPath } from "./lib/paths.ts";
+import { createAppendLog } from "../lib/core/AppendLog.ts";
+import { readObservabilityHookInput } from "../lib/hook-utils.ts";
+import {
+  type ObservabilityEvent,
+  sendEventToObservability,
+  getCurrentTimestamp,
+  getSourceApp,
+} from "./lib/observability.ts";
+import { type AgentToolInput, extractAgentInstanceId } from "./lib/metadata-extraction.ts";
+import { notifyBackgroundAgent } from "./lib/notifications.ts";
+import { unregisterAgent, markForeground, getAgentEntry } from "./lib/agent-tracker.ts";
 
 // ========================================
 // Debug Log Rotation (ISC-9)
@@ -90,31 +96,20 @@ function rotateDebugLogIfNeeded(debugLog: string): void {
  */
 function getPSTTimestamp(): string {
   const date = new Date();
-  const pstDate = new Date(date.toLocaleString('en-US', { timeZone: process.env.TIME_ZONE || 'America/Los_Angeles' }));
+  const pstDate = new Date(date.toLocaleString("en-US", { timeZone: process.env.TIME_ZONE || "America/Los_Angeles" }));
 
   const year = pstDate.getFullYear();
-  const month = String(pstDate.getMonth() + 1).padStart(2, '0');
-  const day = String(pstDate.getDate()).padStart(2, '0');
-  const hours = String(pstDate.getHours()).padStart(2, '0');
-  const minutes = String(pstDate.getMinutes()).padStart(2, '0');
-  const seconds = String(pstDate.getSeconds()).padStart(2, '0');
+  const month = String(pstDate.getMonth() + 1).padStart(2, "0");
+  const day = String(pstDate.getDate()).padStart(2, "0");
+  const hours = String(pstDate.getHours()).padStart(2, "0");
+  const minutes = String(pstDate.getMinutes()).padStart(2, "0");
+  const seconds = String(pstDate.getSeconds()).padStart(2, "0");
 
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} PST`;
 }
 
-function getPSTDate(): string {
-  const date = new Date();
-  const pstDate = new Date(date.toLocaleString('en-US', { timeZone: process.env.TIME_ZONE || 'America/Los_Angeles' }));
-
-  const year = pstDate.getFullYear();
-  const month = String(pstDate.getMonth() + 1).padStart(2, '0');
-  const day = String(pstDate.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
 async function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ========================================
@@ -129,31 +124,31 @@ async function delay(ms: number): Promise<void> {
 // file, observability event) receives the full, untouched message.
 
 const NTFY_MAX_BYTES = 4096;
-const NTFY_TRUNCATION_SUFFIX = '\n… [truncated for ntfy]';
+const NTFY_TRUNCATION_SUFFIX = "\n… [truncated for ntfy]";
 
 export function truncateForNtfy(message: string, maxBytes: number = NTFY_MAX_BYTES): string {
-  if (Buffer.byteLength(message, 'utf-8') <= maxBytes) return message;
+  if (Buffer.byteLength(message, "utf-8") <= maxBytes) return message;
 
-  const suffixBytes = Buffer.byteLength(NTFY_TRUNCATION_SUFFIX, 'utf-8');
+  const suffixBytes = Buffer.byteLength(NTFY_TRUNCATION_SUFFIX, "utf-8");
   // Degenerate limit (< suffix length): a bare hard cut is the only way to
   // honor maxBytes — no marker fits.
   if (maxBytes <= suffixBytes) {
-    const raw = Buffer.from(message, 'utf-8');
+    const raw = Buffer.from(message, "utf-8");
     let hardCut = Math.min(maxBytes, raw.length);
-    while (hardCut > 0 && (raw[hardCut] & 0xc0) === 0x80) hardCut--;
-    return raw.subarray(0, hardCut).toString('utf-8');
+    while (hardCut > 0 && ((raw[hardCut] ?? 0) & 0xc0) === 0x80) hardCut--;
+    return raw.subarray(0, hardCut).toString("utf-8");
   }
   const budget = Math.max(0, maxBytes - suffixBytes);
 
-  const buf = Buffer.from(message, 'utf-8');
+  const buf = Buffer.from(message, "utf-8");
   let cut = Math.min(budget, buf.length);
   // Back off if the cut lands mid-way through a multi-byte UTF-8 sequence
   // (continuation bytes match the 10xxxxxx bit pattern, i.e. 0x80-0xBF).
-  while (cut > 0 && (buf[cut] & 0xc0) === 0x80) {
+  while (cut > 0 && ((buf[cut] ?? 0) & 0xc0) === 0x80) {
     cut--;
   }
 
-  return buf.subarray(0, cut).toString('utf-8') + NTFY_TRUNCATION_SUFFIX;
+  return buf.subarray(0, cut).toString("utf-8") + NTFY_TRUNCATION_SUFFIX;
 }
 
 // ========================================
@@ -166,7 +161,7 @@ export function truncateForNtfy(message: string, maxBytes: number = NTFY_MAX_BYT
 // live parent transcript from THIS session shows 10 `"name":"Agent"`
 // tool_use blocks and 0 `"name":"Task"`). `Task` is kept in the set so
 // older transcripts (pre-rename) still match.
-const SUBAGENT_TOOL_NAMES: ReadonlySet<string> = new Set(['Agent', 'Task']);
+const SUBAGENT_TOOL_NAMES: ReadonlySet<string> = new Set(["Agent", "Task"]);
 
 // ========================================
 // Async/Background Subagent Output Resolution (S-25)
@@ -188,53 +183,62 @@ const SUBAGENT_TOOL_NAMES: ReadonlySet<string> = new Set(['Agent', 'Task']);
 // a fallback for a payload that omits it.
 
 function looksLikeAsyncLaunchStub(text: string): boolean {
-  return text.startsWith('Async agent launched') || text.includes('agentId:');
+  return text.startsWith("Async agent launched") || text.includes("agentId:");
 }
 
 function extractAgentIdFromStubText(text: string): string | null {
   const match = text.match(/agentId:\s*([A-Za-z0-9_-]+)/);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 function resolveSubagentTranscriptPath(transcriptPath: string, sessionId: string, agentId: string): string {
-  return join(dirname(transcriptPath), sessionId, 'subagents', `agent-${agentId}.jsonl`);
+  return join(dirname(transcriptPath), sessionId, "subagents", `agent-${agentId}.jsonl`);
 }
 
 /** Reads a string field off an unknown-shaped parsed JSON payload without an unwarranted cast. */
 function readStringField(payload: unknown, field: string): string | null {
-  if (payload === null || typeof payload !== 'object') return null;
+  if (payload === null || typeof payload !== "object") return null;
   const value = (payload as Record<string, unknown>)[field];
-  return typeof value === 'string' ? value : null;
+  return typeof value === "string" ? value : null;
+}
+
+/** SubagentStop payload: the fields this hook reads. Other fields are allowed. */
+interface SubagentStopPayload {
+  transcript_path?: string;
+  session_id?: string;
+  agent_id?: string;
+  [key: string]: unknown;
 }
 
 /** Finds the last assistant message's text content (joined) in a raw JSONL transcript string. */
 function findLastAssistantText(transcriptContent: string): string | null {
-  const lines = transcriptContent.trim().split('\n');
+  const lines = transcriptContent.trim().split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i]) continue;
+    const line = lines[i];
+    if (!line) continue;
     let entry: unknown;
     try {
-      entry = JSON.parse(lines[i]);
+      entry = JSON.parse(line);
     } catch {
       continue;
     }
-    if (entry === null || typeof entry !== 'object') continue;
+    if (entry === null || typeof entry !== "object") continue;
     const entryObj = entry as Record<string, unknown>;
-    if (entryObj.type !== 'assistant') continue;
+    if (entryObj.type !== "assistant") continue;
     const message = entryObj.message;
-    if (message === null || typeof message !== 'object') continue;
+    if (message === null || typeof message !== "object") continue;
     const content = (message as Record<string, unknown>).content;
     if (!Array.isArray(content)) continue;
     const texts: string[] = [];
     for (const item of content) {
-      if (item !== null && typeof item === 'object') {
+      if (item !== null && typeof item === "object") {
         const itemObj = item as Record<string, unknown>;
-        if (itemObj.type === 'text' && typeof itemObj.text === 'string') {
+        if (itemObj.type === "text" && typeof itemObj.text === "string") {
           texts.push(itemObj.text);
         }
       }
     }
-    if (texts.length > 0) return texts.join('\n');
+    if (texts.length > 0) return texts.join("\n");
   }
   return null;
 }
@@ -253,14 +257,23 @@ function findLastAssistantText(transcriptContent: string): string | null {
 // happened so a genuine parse failure never silently reads as "nothing to
 // find here" — see main()'s handling immediately below this function.
 type FindTaskResultDiagnostic =
-  | 'ok'
-  | 'transcript-missing'
-  | 'transcript-unreadable'
-  | 'transcript-fully-malformed'
-  | 'invocation-found-no-result'
-  | 'no-invocation-found';
+  | "ok"
+  | "transcript-missing"
+  | "transcript-unreadable"
+  | "transcript-fully-malformed"
+  | "invocation-found-no-result"
+  | "no-invocation-found";
 
-async function findTaskResult(transcriptPath: string, maxAttempts: number = 2): Promise<{ result: string | null, agentType: string | null, description: string | null, toolInput: any | null, diagnostic: FindTaskResultDiagnostic }> {
+async function findTaskResult(
+  transcriptPath: string,
+  maxAttempts: number = 2,
+): Promise<{
+  result: string | null;
+  agentType: string | null;
+  description: string | null;
+  toolInput: AgentToolInput | null;
+  diagnostic: FindTaskResultDiagnostic;
+}> {
   console.error(`📂 Looking for Task result in transcript: ${transcriptPath}`);
 
   // If the provided transcript path doesn't exist, try to find the most recent agent transcript
@@ -281,19 +294,21 @@ async function findTaskResult(transcriptPath: string, maxAttempts: number = 2): 
     }
 
     if (!existsSync(actualTranscriptPath)) {
-      console.error(`❌ Transcript file doesn't exist: ${actualTranscriptPath} (attempt ${attempt + 1}/${maxAttempts})`);
+      console.error(
+        `❌ Transcript file doesn't exist: ${actualTranscriptPath} (attempt ${attempt + 1}/${maxAttempts})`,
+      );
 
       // Try to find agent transcript in the same directory
-      const dir = require('path').dirname(transcriptPath);
+      const dir = dirname(transcriptPath);
       if (existsSync(dir)) {
-        const { readdirSync, statSync } = require('fs');
         const files = readdirSync(dir)
-          .filter((f: string) => f.startsWith('agent-') && f.endsWith('.jsonl'))
+          .filter((f: string) => f.startsWith("agent-") && f.endsWith(".jsonl"))
           .map((f: string) => ({ name: f, mtime: statSync(join(dir, f)).mtime }))
-          .sort((a: any, b: any) => b.mtime - a.mtime);
+          .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-        if (files.length > 0) {
-          actualTranscriptPath = join(dir, files[0].name);
+        const newest = files[0];
+        if (newest) {
+          actualTranscriptPath = join(dir, newest.name);
           console.error(`🔄 Found recent agent transcript: ${actualTranscriptPath}`);
         }
       }
@@ -306,46 +321,50 @@ async function findTaskResult(transcriptPath: string, maxAttempts: number = 2): 
     sawFileExist = true;
 
     try {
-      const transcript = readFileSync(actualTranscriptPath, 'utf-8');
+      const transcript = readFileSync(actualTranscriptPath, "utf-8");
       everReadable = true;
-      const lines = transcript.trim().split('\n');
+      const lines = transcript.trim().split("\n");
 
       // Search from the end of the transcript backwards
       for (let i = lines.length - 1; i >= 0; i--) {
-        if (!lines[i]) continue;
+        const line = lines[i];
+        if (!line) continue;
         totalLines++;
         try {
-          const entry = JSON.parse(lines[i]);
+          const entry = JSON.parse(line);
 
           // Look for assistant messages that contain Task tool_use
-          if (entry.type === 'assistant' && entry.message?.content) {
+          if (entry.type === "assistant" && entry.message?.content) {
             for (const content of entry.message.content) {
-              if (content.type === 'tool_use' && SUBAGENT_TOOL_NAMES.has(content.name)) {
+              if (content.type === "tool_use" && SUBAGENT_TOOL_NAMES.has(content.name)) {
                 sawInvocation = true;
                 const toolInput = content.input;
                 const description = toolInput?.description || null;
-                console.error(`✅ Found Task invocation with subagent: ${toolInput?.subagent_type}, description: ${description}`);
+                console.error(
+                  `✅ Found Task invocation with subagent: ${toolInput?.subagent_type}, description: ${description}`,
+                );
                 // Found a Task invocation, now look for its result
                 // The result should be in a subsequent user message
                 for (let j = i + 1; j < lines.length; j++) {
-                  if (!lines[j]) continue;
-                  const resultEntry = JSON.parse(lines[j]);
-                  if (resultEntry.type === 'user' && resultEntry.message?.content) {
+                  const resultLine = lines[j];
+                  if (!resultLine) continue;
+                  const resultEntry = JSON.parse(resultLine);
+                  if (resultEntry.type === "user" && resultEntry.message?.content) {
                     for (const resultContent of resultEntry.message.content) {
-                      if (resultContent.type === 'tool_result' && resultContent.tool_use_id === content.id) {
+                      if (resultContent.type === "tool_result" && resultContent.tool_use_id === content.id) {
                         // Found the matching Task result
                         // Content can be either a string or an array of objects with text
                         let taskOutput: string;
-                        if (typeof resultContent.content === 'string') {
+                        if (typeof resultContent.content === "string") {
                           taskOutput = resultContent.content;
                         } else if (Array.isArray(resultContent.content)) {
                           // Extract text from array of content objects
                           taskOutput = resultContent.content
-                            .filter((item: any) => item.type === 'text')
-                            .map((item: any) => item.text)
-                            .join('\n');
+                            .filter((item: { type?: string }) => item.type === "text")
+                            .map((item: { text?: string }) => item.text)
+                            .join("\n");
                         } else {
-                          console.error('❌ Unexpected tool_result content type');
+                          console.error("❌ Unexpected tool_result content type");
                           continue;
                         }
 
@@ -355,9 +374,9 @@ async function findTaskResult(transcriptPath: string, maxAttempts: number = 2): 
                         // back to null here; main() resolves the final
                         // 'default' fallback alongside instanceMetadata.
                         const agentType: string | null =
-                          typeof toolInput?.subagent_type === 'string' ? toolInput.subagent_type : null;
+                          typeof toolInput?.subagent_type === "string" ? toolInput.subagent_type : null;
 
-                        return { result: taskOutput, agentType, description, toolInput, diagnostic: 'ok' };
+                        return { result: taskOutput, agentType, description, toolInput, diagnostic: "ok" };
                       }
                     }
                   }
@@ -368,33 +387,37 @@ async function findTaskResult(transcriptPath: string, maxAttempts: number = 2): 
         } catch (e) {
           // Invalid JSON line, skip
           malformedLines++;
-          console.error(`[AgentOutputRecord] malformed transcript line skipped while searching for Task result: ${e instanceof Error ? e.message : String(e)}`);
+          console.error(
+            `[AgentOutputRecord] malformed transcript line skipped while searching for Task result: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     } catch (e) {
       // Error reading file, will retry
-      console.error(`[AgentOutputRecord] failed to read transcript ${actualTranscriptPath}, will retry: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(
+        `[AgentOutputRecord] failed to read transcript ${actualTranscriptPath}, will retry: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
   let diagnostic: FindTaskResultDiagnostic;
   if (!sawFileExist) {
-    diagnostic = 'transcript-missing';
+    diagnostic = "transcript-missing";
   } else if (!everReadable) {
-    diagnostic = 'transcript-unreadable';
+    diagnostic = "transcript-unreadable";
   } else if (totalLines > 0 && malformedLines === totalLines) {
-    diagnostic = 'transcript-fully-malformed';
+    diagnostic = "transcript-fully-malformed";
   } else if (sawInvocation) {
-    diagnostic = 'invocation-found-no-result';
+    diagnostic = "invocation-found-no-result";
   } else {
-    diagnostic = 'no-invocation-found';
+    diagnostic = "no-invocation-found";
   }
 
   return { result: null, agentType: null, description: null, toolInput: null, diagnostic };
 }
 
 async function main() {
-  const debugLog = kayaPath('hooks', 'subagent-stop-debug.log');
+  const debugLog = kayaPath("hooks", "subagent-stop-debug.log");
   // maxSizeBytes disabled — rotation for this file is owned by the existing
   // rotateDebugLogIfNeeded() numbered-suffix scheme (.1/.2/.3) called just
   // below; AppendLog's own ISO-timestamp rotation must never also fire here.
@@ -402,7 +425,7 @@ async function main() {
 
   // File logging is opt-in (KAYA_HOOK_DEBUG=1); it ran unconditionally and
   // accumulated ~3.5 MB of rotated logs nobody read.
-  const debugToFile = process.env.KAYA_HOOK_DEBUG === '1';
+  const debugToFile = process.env.KAYA_HOOK_DEBUG === "1";
   function debug(msg: string) {
     if (debugToFile) {
       const timestamp = new Date().toISOString();
@@ -412,60 +435,33 @@ async function main() {
     console.error(msg);
   }
 
-  debug('🔍 SubagentStop hook started');
-  // Read input from stdin with timeout
-  let input = '';
-  try {
-    const decoder = new TextDecoder();
-    const reader = Bun.stdin.stream().getReader();
+  debug("🔍 SubagentStop hook started");
+  // Read input from stdin with timeout (shared reader: empty, timeout and bad JSON all give null)
+  const parsedPayload = await readObservabilityHookInput<SubagentStopPayload>({ timeoutMs: 500 });
 
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 500);
-    });
-
-    const readPromise = (async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        input += decoder.decode(value, { stream: true });
-      }
-    })();
-
-    await Promise.race([readPromise, timeoutPromise]);
-  } catch (e) {
-    debug(`Failed to read input: ${e}`);
-    process.exit(0);
-  }
-  
-  if (!input) {
-    debug('No input received');
+  if (!parsedPayload) {
+    debug("No input received (empty, timed out, or invalid JSON)");
     process.exit(0);
   }
 
-  debug(`Input received: ${input.substring(0, 100)}...`);
+  debug(`Input received: ${JSON.stringify(parsedPayload).substring(0, 100)}...`);
 
-  let transcriptPath: string;
-  let sessionId: string = '';
-  let agentId: string = '';
+  let transcriptPath: string | undefined;
+  let sessionId: string = "";
+  let agentId: string = "";
   // Kept as `unknown` (not re-typed to the parsed payload's actual shape,
   // which is not documented) so the async-stub resolution below can inspect
   // its keys/fields without an unwarranted `any`.
   let parsedInput: unknown = null;
-  try {
-    const parsed = JSON.parse(input);
-    parsedInput = parsed;
-    transcriptPath = parsed.transcript_path;
-    sessionId = parsed.session_id || '';
-    agentId = parsed.agent_id || '';
-    debug(`Transcript path: ${transcriptPath}`);
-    debug(`Session: ${sessionId}, Agent: ${agentId}`);
-  } catch (e) {
-    debug(`Invalid input JSON: ${e}`);
-    process.exit(0);
-  }
+  parsedInput = parsedPayload;
+  transcriptPath = parsedPayload.transcript_path;
+  sessionId = parsedPayload.session_id || "";
+  agentId = parsedPayload.agent_id || "";
+  debug(`Transcript path: ${transcriptPath}`);
+  debug(`Session: ${sessionId}, Agent: ${agentId}`);
 
   if (!transcriptPath) {
-    debug('No transcript path provided');
+    debug("No transcript path provided");
     process.exit(0);
   }
 
@@ -475,7 +471,7 @@ async function main() {
   let remainingAgentDescriptions: string[] = [];
 
   // Wait for and find the Task result
-  debug('Starting findTaskResult...');
+  debug("Starting findTaskResult...");
   let { result: taskOutput, agentType, description, toolInput, diagnostic } = await findTaskResult(transcriptPath);
 
   if (!taskOutput) {
@@ -492,15 +488,19 @@ async function main() {
     // `toolInput` stays null in this branch — main() below tolerates that
     // (optional-chained reads) and isBackground is resolved from the
     // agent-tracker's own SubagentStart-time registration instead.
-    const payloadLastMessage = readStringField(parsedInput, 'last_assistant_message');
-    if (payloadLastMessage && payloadLastMessage.trim()) {
-      debug(`findTaskResult found no result in transcript (diagnostic: ${diagnostic}) — falling back to payload last_assistant_message (${payloadLastMessage.length} chars)`);
+    const payloadLastMessage = readStringField(parsedInput, "last_assistant_message");
+    if (payloadLastMessage?.trim()) {
+      debug(
+        `findTaskResult found no result in transcript (diagnostic: ${diagnostic}) — falling back to payload last_assistant_message (${payloadLastMessage.length} chars)`,
+      );
       taskOutput = payloadLastMessage;
       if (!agentType) {
-        agentType = readStringField(parsedInput, 'agent_type');
+        agentType = readStringField(parsedInput, "agent_type");
       }
     } else {
-      debug(`No Task result found in transcript after waiting (diagnostic: ${diagnostic}), and no last_assistant_message in payload — exiting`);
+      debug(
+        `No Task result found in transcript after waiting (diagnostic: ${diagnostic}), and no last_assistant_message in payload — exiting`,
+      );
       process.exit(0);
     }
   }
@@ -512,12 +512,15 @@ async function main() {
   // only the launch stub — resolve the real output from the subagent's own
   // transcript before treating it as the completion message.
   if (looksLikeAsyncLaunchStub(taskOutput)) {
-    debug('Matched tool_result looks like an async launch stub — resolving real output from the subagent transcript');
-    const payloadKeys = parsedInput !== null && typeof parsedInput === 'object' ? Object.keys(parsedInput as Record<string, unknown>) : [];
-    debug(`SubagentStop payload keys (names only): [${payloadKeys.join(', ')}]`);
+    debug("Matched tool_result looks like an async launch stub — resolving real output from the subagent transcript");
+    const payloadKeys =
+      parsedInput !== null && typeof parsedInput === "object"
+        ? Object.keys(parsedInput as Record<string, unknown>)
+        : [];
+    debug(`SubagentStop payload keys (names only): [${payloadKeys.join(", ")}]`);
 
-    const namedTranscriptPath = readStringField(parsedInput, 'agent_transcript_path');
-    const payloadAgentId = readStringField(parsedInput, 'agent_id');
+    const namedTranscriptPath = readStringField(parsedInput, "agent_transcript_path");
+    const payloadAgentId = readStringField(parsedInput, "agent_id");
     const resolvedAgentId = payloadAgentId || agentId || extractAgentIdFromStubText(taskOutput);
 
     const subagentTranscriptPath =
@@ -525,7 +528,9 @@ async function main() {
       (resolvedAgentId && sessionId ? resolveSubagentTranscriptPath(transcriptPath, sessionId, resolvedAgentId) : null);
 
     if (!subagentTranscriptPath) {
-      debug('Async stub detected but no agent_transcript_path/agent_id in payload and no agentId parseable from stub text — cannot locate subagent transcript, exiting');
+      debug(
+        "Async stub detected but no agent_transcript_path/agent_id in payload and no agentId parseable from stub text — cannot locate subagent transcript, exiting",
+      );
       process.exit(0);
     }
 
@@ -536,15 +541,19 @@ async function main() {
 
     let subagentTranscriptContent: string;
     try {
-      subagentTranscriptContent = readFileSync(subagentTranscriptPath, 'utf-8');
+      subagentTranscriptContent = readFileSync(subagentTranscriptPath, "utf-8");
     } catch (e) {
-      debug(`Async stub detected — failed to read subagent transcript at ${subagentTranscriptPath}: ${e instanceof Error ? e.message : String(e)}`);
+      debug(
+        `Async stub detected — failed to read subagent transcript at ${subagentTranscriptPath}: ${e instanceof Error ? e.message : String(e)}`,
+      );
       process.exit(0);
     }
 
     const realOutput = findLastAssistantText(subagentTranscriptContent);
     if (!realOutput) {
-      debug(`Async stub detected — subagent transcript at ${subagentTranscriptPath} had no assistant text block, exiting`);
+      debug(
+        `Async stub detected — subagent transcript at ${subagentTranscriptPath} had no assistant text block, exiting`,
+      );
       process.exit(0);
     }
 
@@ -553,7 +562,7 @@ async function main() {
   }
 
   // Extract agent instance metadata from Task tool input
-  const instanceMetadata = extractAgentInstanceId(toolInput, description);
+  const instanceMetadata = extractAgentInstanceId(toolInput, description ?? undefined);
   debug(`Instance metadata: ${JSON.stringify(instanceMetadata)}`);
 
   // S4 — let the model speak: relay the agent's final message VERBATIM
@@ -566,7 +575,7 @@ async function main() {
   const completionMessage = taskOutput;
 
   if (!completionMessage.trim()) {
-    debug('Task output was whitespace-only - nothing to capture');
+    debug("Task output was whitespace-only - nothing to capture");
     process.exit(0);
   }
 
@@ -581,18 +590,20 @@ async function main() {
   const rateLimitMatch = taskOutput.match(rateLimitPattern);
   if (rateLimitMatch) {
     debug(`⚠️ RATE LIMIT DETECTED in agent output: ${rateLimitMatch[0]}`);
-    const agentLabel = description || toolInput?.subagent_type || 'unknown';
-    const modelLabel = toolInput?.model || 'sonnet';
+    const agentLabel = description || toolInput?.subagent_type || "unknown";
+    const modelLabel = toolInput?.model || "sonnet";
     console.log(`<system-reminder>
 ⚠️ Agent "${agentLabel}" failed due to rate limit: ${rateLimitMatch[0]}
 The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spawns, or wait for the limit to reset.
 </system-reminder>`);
     // Still capture the output for audit trail, then exit
     try {
-      await captureAgentOutput('rate-limited', `RATE LIMITED: ${rateLimitMatch[0]}`, taskOutput, transcriptPath);
+      await captureAgentOutput("rate-limited", `RATE LIMITED: ${rateLimitMatch[0]}`, taskOutput, transcriptPath);
     } catch (err) {
       // best effort
-      console.error(`[AgentOutputRecord] rate-limited audit-trail capture failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[AgentOutputRecord] rate-limited audit-trail capture failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     process.exit(0);
   }
@@ -601,7 +612,7 @@ The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spa
   // subagent_type field (via findTaskResult's toolInput read, or
   // instanceMetadata's own toolInput-derived fallback) - never
   // regex-derived from the agent's spoken words.
-  const finalAgentType = (agentType || instanceMetadata.agent_type || 'default').toLowerCase();
+  const finalAgentType = (agentType || instanceMetadata.agent_type || "default").toLowerCase();
   debug(`Final agent type: ${finalAgentType}`);
 
   // NOTE: Voice notifications are now handled by agents themselves
@@ -613,7 +624,7 @@ The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spa
   try {
     await captureAgentOutput(finalAgentType, completionMessage, taskOutput, transcriptPath);
   } catch (e) {
-    console.error('Failed to capture agent output:', e);
+    console.error("Failed to capture agent output:", e);
   }
 
   // Determine if this was a background agent, then update tracker.
@@ -627,9 +638,12 @@ The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spa
   // (conservative), which is also this fallback's `?? true`: an unknown
   // agent should be treated as background so the siblings-running guardrail
   // errs toward firing, never toward silently skipping.
-  const isBackground = toolInput !== null
-    ? toolInput?.run_in_background === true
-    : (sessionId && agentId ? (getAgentEntry(sessionId, agentId)?.isBackground ?? true) : true);
+  const isBackground =
+    toolInput !== null
+      ? toolInput?.run_in_background === true
+      : sessionId && agentId
+        ? (getAgentEntry(sessionId, agentId)?.isBackground ?? true)
+        : true;
 
   // Now that we know isBackground, correct the tracker entry if needed.
   // Agents default to isBackground=true on registration (conservative).
@@ -640,8 +654,8 @@ The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spa
     }
     const { remaining, remainingCount } = unregisterAgent(sessionId, agentId);
     remainingAgentCount = remainingCount;
-    remainingAgentDescriptions = remaining.map(a => a.type || 'unknown');
-    debug(`Remaining background siblings: ${remainingCount} [${remainingAgentDescriptions.join(', ')}]`);
+    remainingAgentDescriptions = remaining.map((a) => a.type || "unknown");
+    debug(`Remaining background siblings: ${remainingCount} [${remainingAgentDescriptions.join(", ")}]`);
   }
 
   // Send push notification for background agents
@@ -660,7 +674,7 @@ The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spa
     // 1. Siblings still running → MUST wait for all to complete before acting
     // 2. All done → still check for pending user approval before acting
     if (remainingAgentCount > 0) {
-      const siblingList = remainingAgentDescriptions.join(', ');
+      const siblingList = remainingAgentDescriptions.join(", ");
       console.log(`<system-reminder>
 Background agent "${agentName}" completed: ${completionMessage}
 ⚠️ ${remainingAgentCount} other background agent(s) are still running: [${siblingList}].
@@ -676,11 +690,10 @@ All background agents for this batch have now completed. If you asked the user a
 
   // Send event to observability dashboard with instance metadata
   try {
-    const parsed = JSON.parse(input);
-    const event: any = {
+    const event: ObservabilityEvent = {
       source_app: getSourceApp(),
-      session_id: parsed.session_id,
-      hook_event_type: 'SubagentStop',
+      session_id: sessionId,
+      hook_event_type: "SubagentStop",
       timestamp: getCurrentTimestamp(),
       transcript_path: transcriptPath,
       agent_type: finalAgentType,
@@ -702,7 +715,7 @@ All background agents for this batch have now completed. If you asked the user a
     }
 
     await sendEventToObservability(event);
-  } catch (e) {
+  } catch {
     // intentionally silent: the observability dashboard (localhost:4000) is an
     // optional dev tool that is absent/not-running on most sessions by design
     // — breadcrumbing here would fire on nearly every normal run, not signal
@@ -714,48 +727,41 @@ async function captureAgentOutput(
   agentType: string,
   completionMessage: string,
   taskOutput: string,
-  transcriptPath: string
+  transcriptPath: string,
 ) {
-  const { writeFileSync, mkdirSync, existsSync } = require('fs');
-  const { join } = require('path');
-  const { homedir } = require('os');
-
-  const MEMORY_DIR = kayaPath('MEMORY');
+  const MEMORY_DIR = kayaPath("MEMORY");
 
   // Generate timestamp for filename (PST)
   const pstTimestamp = getPSTTimestamp();
-  const timestamp = pstTimestamp
-    .replace(/ PST$/, '')
-    .replace(/:/g, '')
-    .replace(/ /, '-'); // YYYY-MM-DD-HHMMSS
+  const timestamp = pstTimestamp.replace(/ PST$/, "").replace(/:/g, "").replace(/ /, "-"); // YYYY-MM-DD-HHMMSS
 
   const yearMonth = timestamp.substring(0, 7); // YYYY-MM
 
   // Infer capture type from agent type
   // All agent outputs go to RESEARCH for simplicity (consolidated structure)
-  let captureType = 'RESEARCH';
-  const category = 'RESEARCH';
+  let captureType = "RESEARCH";
+  const category = "RESEARCH";
 
-  if (agentType === 'researcher' || agentType.includes('researcher')) {
-    captureType = 'RESEARCH';
-  } else if (agentType === 'architect') {
-    captureType = 'DECISION';
-  } else if (agentType === 'engineer') {
-    captureType = 'IMPLEMENTATION';
-  } else if (agentType === 'designer') {
-    captureType = 'DESIGN';
-  } else if (agentType === 'pentester') {
-    captureType = 'SECURITY';
-  } else if (agentType === 'intern') {
-    captureType = 'RESEARCH';
+  if (agentType === "researcher" || agentType.includes("researcher")) {
+    captureType = "RESEARCH";
+  } else if (agentType === "architect") {
+    captureType = "DECISION";
+  } else if (agentType === "engineer") {
+    captureType = "IMPLEMENTATION";
+  } else if (agentType === "designer") {
+    captureType = "DESIGN";
+  } else if (agentType === "pentester") {
+    captureType = "SECURITY";
+  } else if (agentType === "intern") {
+    captureType = "RESEARCH";
   }
 
   // Generate description from completion message (kebab-case, max 60 chars)
   const description = completionMessage
     .toLowerCase()
-    .replace(/^(architect|engineer|designer|researcher|pentester|intern)\s+completed\s+/i, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/^(architect|engineer|designer|researcher|pentester|intern)\s+completed\s+/i, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
     .substring(0, 60);
 
   // Generate filename
@@ -779,7 +785,7 @@ agent_completion: ${completionMessage}
 # ${captureType}: ${completionMessage}
 
 **Agent:** ${agentType}
-**Completed:** ${timestamp.replace(/-/g, ':').substring(0, 19)}
+**Completed:** ${timestamp.replace(/-/g, ":").substring(0, 19)}
 
 ---
 

@@ -28,10 +28,10 @@
  * coverage.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { execSync } from "child_process";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execSync } from "node:child_process";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { truncateForNtfy } from "./AgentOutputRecord.hook.ts";
 // T7-08.4 seam: agent-tracker.ts's state file now honors a KAYA_HOME/KAYA_DIR
 // override (resolveStateFilePath() in hooks/lib/agent-tracker.ts), defaulting
@@ -74,7 +74,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  try { rmSync(kayaDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  try {
+    rmSync(kayaDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
   if (originalKayaHome === undefined) {
     delete process.env.KAYA_HOME;
   } else {
@@ -165,7 +169,10 @@ function writeSubagentTranscriptFixture(sessionId: string, agentId: string, fina
   const subagentTranscriptPath = join(subagentDir, `agent-${agentId}.jsonl`);
   const lines = [
     JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "go" }] } }),
-    JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: finalAssistantText }] } }),
+    JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "text", text: finalAssistantText }] },
+    }),
   ];
   writeFileSync(subagentTranscriptPath, lines.join("\n") + "\n");
   return subagentTranscriptPath;
@@ -185,24 +192,21 @@ function runHook(stdinJson: object, timeoutMs = 8000): { stdout: string; stderr:
 
   let exitCode = 0;
   try {
-    execSync(
-      `cat ${tmpInput} | bun run ${HOOK_PATH} 1>${tmpStdout} 2>${tmpStderr}`,
-      {
-        timeout: timeoutMs,
-        env: {
-          ...process.env,
-          // Both names: the hook reads KAYA_DIR/KAYA_HOME via kayaPath();
-          // pinning only one lets live main-tree state gate the hook.
-          KAYA_DIR: kayaDir,
-          KAYA_HOME: kayaDir,
-          // UnifiedEventSink.emit() reads this SEPARATE env var and
-          // defaults to the live ~/.claude/MEMORY tree when unset.
-          KAYA_MEMORY_ROOT: join(kayaDir, "MEMORY"),
-          // Debug-log assertions below need the opt-in file log.
-          KAYA_HOOK_DEBUG: "1",
-        },
-      }
-    );
+    execSync(`cat ${tmpInput} | bun run ${HOOK_PATH} 1>${tmpStdout} 2>${tmpStderr}`, {
+      timeout: timeoutMs,
+      env: {
+        ...process.env,
+        // Both names: the hook reads KAYA_DIR/KAYA_HOME via kayaPath();
+        // pinning only one lets live main-tree state gate the hook.
+        KAYA_DIR: kayaDir,
+        KAYA_HOME: kayaDir,
+        // UnifiedEventSink.emit() reads this SEPARATE env var and
+        // defaults to the live ~/.claude/MEMORY tree when unset.
+        KAYA_MEMORY_ROOT: join(kayaDir, "MEMORY"),
+        // Debug-log assertions below need the opt-in file log.
+        KAYA_HOOK_DEBUG: "1",
+      },
+    });
   } catch (err: unknown) {
     exitCode = (err as { status?: number }).status ?? 1;
   }
@@ -233,7 +237,7 @@ function readDigestSpool(): Array<Record<string, unknown>> {
   return readFileSync(spoolPath, "utf-8")
     .split("\n")
     .filter(Boolean)
-    .map(line => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 /**
@@ -248,7 +252,7 @@ function readObservabilityEvents(): Array<Record<string, unknown>> {
   return readFileSync(eventsFile, "utf-8")
     .split("\n")
     .filter(Boolean)
-    .map(line => (JSON.parse(line) as { payload: Record<string, unknown> }).payload);
+    .map((line) => (JSON.parse(line) as { payload: Record<string, unknown> }).payload);
 }
 
 /** Reads the per-test scratch debug log (kayaDir/hooks/subagent-stop-debug.log). */
@@ -305,7 +309,7 @@ describe("verbatim capture — normal completion message", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    const content = readFileSync(files[0], "utf-8");
+    const content = readFileSync(files[0]!, "utf-8");
     // Verbatim: the ORIGINAL text (including the "🗣️ Engineer:" prefix) is
     // present unmodified. The deleted regex parser would have rewritten
     // this to "Engineer completed Fixed the auth bug..." and dropped the
@@ -315,10 +319,10 @@ describe("verbatim capture — normal completion message", () => {
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0].message).toBe(message);
+    expect(spool[0]!.message).toBe(message);
 
     const events = readObservabilityEvents();
-    const ourEvent = events.find(e => e.summary === message);
+    const ourEvent = events.find((e) => e.summary === message);
     expect(ourEvent).toBeDefined();
     expect(ourEvent!.agent_type).toBe("engineer");
   });
@@ -328,7 +332,8 @@ describe("verbatim capture — normal completion message", () => {
 
 describe("anti-gaming: message matching none of the old completion-pattern regexes", () => {
   it("captures a raw JSON dump with no completion phrasing intact — the old regex parser would have dropped it silently", () => {
-    const message = '{"status":"ok","recordsProcessed":42,"warnings":[],"note":"mid-run data dump, not a completion sentence"}';
+    const message =
+      '{"status":"ok","recordsProcessed":42,"warnings":[],"note":"mid-run data dump, not a completion sentence"}';
     writeTranscriptFixture({
       subagentType: "researcher",
       runInBackground: true,
@@ -345,14 +350,14 @@ describe("anti-gaming: message matching none of the old completion-pattern regex
     // such gate — any non-empty output is captured.
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0].message).toBe(message);
+    expect(spool[0]!.message).toBe(message);
 
     const events = readObservabilityEvents();
-    expect(events.find(e => e.summary === message)).toBeDefined();
+    expect(events.find((e) => e.summary === message)).toBeDefined();
   });
 
   it("captures a message starting mid-sentence with no completion phrasing", () => {
@@ -368,7 +373,7 @@ describe("anti-gaming: message matching none of the old completion-pattern regex
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
   });
 });
 
@@ -403,7 +408,7 @@ describe("whitespace-only completion output", () => {
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0].message).toBe(message);
+    expect(spool[0]!.message).toBe(message);
   });
 });
 
@@ -429,11 +434,13 @@ describe("agentType — objective tool_input.subagent_type only, never regexed f
     // here because the filename's separate description slug is built from
     // the (verbatim) message text, so it legitimately contains the word
     // "haxxor" too; that's expected and not what this assertion is about.
-    const agentTypeToken = files[0].match(/_AGENT-([a-z0-9-]+?)_(?:RESEARCH|DECISION|IMPLEMENTATION|DESIGN|SECURITY)_/)?.[1];
+    const agentTypeToken = files[0]!.match(
+      /_AGENT-([a-z0-9-]+?)_(?:RESEARCH|DECISION|IMPLEMENTATION|DESIGN|SECURITY)_/,
+    )?.[1];
     expect(agentTypeToken).toBe("engineer");
 
     const events = readObservabilityEvents();
-    const ourEvent = events.find(e => e.summary === message);
+    const ourEvent = events.find((e) => e.summary === message);
     expect(ourEvent?.agent_type).toBe("engineer");
   });
 
@@ -473,14 +480,14 @@ describe("ntfy byte-truncation — mechanical protocol cut, not a rewrite", () =
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(longMessage);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(longMessage);
 
     const events = readObservabilityEvents();
-    expect(events.find(e => e.summary === longMessage)).toBeDefined();
+    expect(events.find((e) => e.summary === longMessage)).toBeDefined();
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    const spooledMessage = spool[0].message as string;
+    const spooledMessage = spool[0]!.message as string;
     expect(Buffer.byteLength(spooledMessage, "utf-8")).toBeLessThanOrEqual(4096);
     expect(spooledMessage.length).toBeLessThan(longMessage.length);
     expect(spooledMessage).toContain("[truncated for ntfy]");
@@ -509,7 +516,7 @@ describe("S-25: subagent tool_use named 'Agent' (Claude Code 2.1.263 rename)", (
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
   });
 
   it("still matches a legacy 'Task'-named tool_use (backward compatibility for old transcripts)", () => {
@@ -526,7 +533,7 @@ describe("S-25: subagent tool_use named 'Agent' (Claude Code 2.1.263 rename)", (
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
   });
 });
 
@@ -536,7 +543,8 @@ describe("S-25: async/background subagent — real output resolved from its own 
   it("ignores the parent transcript's launch-stub tool_result and captures the subagent's own final assistant text instead", () => {
     const agentId = "testasyncagent123";
     const sessionId = "async-stub-test-1";
-    const realOutput = "📋 SUMMARY: Async agent finished the real work.\n🗣️ Engineer: Async result captured correctly, not the launch stub.";
+    const realOutput =
+      "📋 SUMMARY: Async agent finished the real work.\n🗣️ Engineer: Async result captured correctly, not the launch stub.";
 
     // Parent transcript: the Agent tool_use's tool_result is ONLY the
     // launch stub (what Claude Code actually writes for a backgrounded
@@ -558,7 +566,7 @@ describe("S-25: async/background subagent — real output resolved from its own 
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    const content = readFileSync(files[0], "utf-8");
+    const content = readFileSync(files[0]!, "utf-8");
     // The real, resolved output is captured...
     expect(content).toContain(realOutput);
     // ...and the launch stub text is NOT what got written as the capture.
@@ -599,7 +607,7 @@ describe("T7-08.4: last_assistant_message payload fallback", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
 
     const debugLog = readDebugLog();
     expect(debugLog).toContain("invocation-found-no-result");
@@ -619,7 +627,7 @@ describe("T7-08.4: last_assistant_message payload fallback", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0], "utf-8")).toContain(message);
+    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
 
     const debugLog = readDebugLog();
     expect(debugLog).toContain("transcript-fully-malformed");
@@ -630,7 +638,10 @@ describe("T7-08.4: last_assistant_message payload fallback", () => {
     // this must NOT be tagged 'transcript-fully-malformed' (that tag is
     // reserved for lines that fail JSON.parse, not lines that parse fine but
     // aren't a subagent invocation).
-    writeFileSync(transcriptPath, JSON.stringify({ type: "user", message: { content: [{ type: "text", text: "hello" }] } }) + "\n");
+    writeFileSync(
+      transcriptPath,
+      JSON.stringify({ type: "user", message: { content: [{ type: "text", text: "hello" }] } }) + "\n",
+    );
 
     const r = runHook({
       session_id: uniqueId("no-invocation"),
@@ -722,7 +733,13 @@ describe("T7-08.4: siblings-running safety guardrail", () => {
     writeUnresolvedInvocationFixture({ subagentType: "engineer", runInBackground: true });
     const message = "🗣️ Engineer: Finished via fallback with a sibling still running.";
 
-    const r = runHook({ session_id: sessionId, transcript_path: transcriptPath, agent_id: agentId, last_assistant_message: message, agent_type: "engineer" });
+    const r = runHook({
+      session_id: sessionId,
+      transcript_path: transcriptPath,
+      agent_id: agentId,
+      last_assistant_message: message,
+      agent_type: "engineer",
+    });
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("1 other background agent(s) are still running");
     expect(r.stdout).toContain("researcher");
@@ -738,7 +755,13 @@ describe("T7-08.4: siblings-running safety guardrail", () => {
     writeUnresolvedInvocationFixture({ subagentType: "engineer", runInBackground: true });
     const message = "🗣️ Engineer: Finished via fallback, no siblings left.";
 
-    const r = runHook({ session_id: sessionId, transcript_path: transcriptPath, agent_id: agentId, last_assistant_message: message, agent_type: "engineer" });
+    const r = runHook({
+      session_id: sessionId,
+      transcript_path: transcriptPath,
+      agent_id: agentId,
+      last_assistant_message: message,
+      agent_type: "engineer",
+    });
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("All background agents for this batch have now completed");
     expect(r.stdout).not.toContain("MANDATORY: Do NOT begin implementing");

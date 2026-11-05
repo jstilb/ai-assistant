@@ -5,10 +5,10 @@
  * RUN: bun hooks/AgentOutputRecord.smoke.ts
  */
 
-import { execSync } from "child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const HOOK_PATH = join(import.meta.dir, "AgentOutputRecord.hook.ts");
 const RESULT_TEXT = "🗣️ Engineer: Smoke-test completion message for S-25.";
@@ -83,7 +83,9 @@ function main(): number {
 
     const researchDir = join(kayaDir, "MEMORY", "RESEARCH");
     if (!existsSync(researchDir)) {
-      console.error(`FAIL: no MEMORY/RESEARCH directory was created at all under ${kayaDir} — the hook captured nothing.`);
+      console.error(
+        `FAIL: no MEMORY/RESEARCH directory was created at all under ${kayaDir} — the hook captured nothing.`,
+      );
       return 1;
     }
 
@@ -98,16 +100,17 @@ function main(): number {
       }
     }
 
-    if (matches.length !== 1) {
+    const match = matches[0];
+    if (matches.length !== 1 || !match) {
       console.error(
         `FAIL: expected exactly one MEMORY/RESEARCH/<YYYY-MM>/AGENT-*.md file, found ${matches.length}: [${matches.join(", ")}]`,
       );
       return 1;
     }
 
-    const content = readFileSync(matches[0], "utf-8");
+    const content = readFileSync(match, "utf-8");
     if (!content.includes(RESULT_TEXT)) {
-      console.error(`FAIL: ${matches[0]} was written but does not contain the fixture's result text.`);
+      console.error(`FAIL: ${match} was written but does not contain the fixture's result text.`);
       console.error(`  expected to find: ${RESULT_TEXT}`);
       return 1;
     }

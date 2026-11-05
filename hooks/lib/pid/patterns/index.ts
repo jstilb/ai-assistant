@@ -9,15 +9,24 @@
  *   - KAYASECURITYSYSTEM/injection-config.yaml
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { getKayaDir } from "../../paths";
-import type {
-  InjectionPatternsConfig,
-  InjectionDefenderConfig,
-  PatternRule,
-} from "../types";
+import { getKayaDir } from "../../paths.ts";
+import type { InjectionPatternsConfig, InjectionDefenderConfig, PatternRule } from "../types.ts";
+
+/**
+ * Directories searched for KAYASECURITYSYSTEM/<file>: the Kaya home first, then the
+ * repo root this hook ships in. On the Mac both are the same directory. In a clone
+ * or a CI checkout, KAYA_HOME may point elsewhere; without the repo fallback the
+ * scanner would load ZERO patterns and detect nothing (silent fail-open).
+ */
+function securityFileCandidates(file: string): string[] {
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+  const paths = [join(getKayaDir(), "KAYASECURITYSYSTEM", file), join(repoRoot, "KAYASECURITYSYSTEM", file)];
+  return [...new Set(paths)];
+}
 
 // Cached loaded patterns and config
 let cachedPatterns: InjectionPatternsConfig | null = null;
@@ -29,28 +38,35 @@ let cachedConfig: InjectionDefenderConfig | null = null;
 export function loadPatterns(): InjectionPatternsConfig {
   if (cachedPatterns) return cachedPatterns;
 
-  const kayaDir = getKayaDir();
-  const patternsPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-patterns.yaml");
+  const patternsPath = securityFileCandidates("injection-patterns.yaml").find((p) => existsSync(p));
 
-  if (existsSync(patternsPath)) {
+  let loaded: InjectionPatternsConfig | null = null;
+  if (patternsPath) {
     try {
       const content = readFileSync(patternsPath, "utf-8");
-      cachedPatterns = parseYaml(content) as InjectionPatternsConfig;
+      loaded = parseYaml(content) as InjectionPatternsConfig;
     } catch (err) {
       // Fall through to defaults
-      console.error(`[patterns] failed to parse injection-patterns.yaml, falling back to defaults: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[patterns] failed to parse injection-patterns.yaml, falling back to defaults: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
-  if (!cachedPatterns) {
-    cachedPatterns = {
+  if (!loaded) {
+    // Fail visibly: an empty pattern set means the scanner detects nothing.
+    console.error(
+      `[patterns] injection-patterns.yaml not found or unreadable (searched: ${securityFileCandidates("injection-patterns.yaml").join(", ")}); prompt-injection regex layer has NO patterns`,
+    );
+    loaded = {
       version: "1.0",
-      last_updated: new Date().toISOString().split("T")[0],
+      last_updated: new Date().toISOString().slice(0, 10),
       categories: {},
     };
   }
 
-  return cachedPatterns;
+  cachedPatterns = loaded;
+  return loaded;
 }
 
 /**
@@ -59,16 +75,17 @@ export function loadPatterns(): InjectionPatternsConfig {
 export function loadConfig(): InjectionDefenderConfig {
   if (cachedConfig) return cachedConfig;
 
-  const kayaDir = getKayaDir();
-  const configPath = join(kayaDir, "KAYASECURITYSYSTEM", "injection-config.yaml");
+  const configPath = securityFileCandidates("injection-config.yaml").find((p) => existsSync(p));
 
-  if (existsSync(configPath)) {
+  if (configPath) {
     try {
       const content = readFileSync(configPath, "utf-8");
       cachedConfig = parseYaml(content) as InjectionDefenderConfig;
     } catch (err) {
       // Fall through to defaults
-      console.error(`[patterns] failed to parse injection-config.yaml, falling back to defaults: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[patterns] failed to parse injection-config.yaml, falling back to defaults: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -122,41 +139,24 @@ export function getEnabledPatterns(toolName: string): PatternRule[] {
 /**
  * Get the scanning config for a specific tool.
  */
-export function getToolConfig(
-  toolName: string,
-  config: InjectionDefenderConfig
-): ToolScanConfig {
+export function getToolConfig(toolName: string, config: InjectionDefenderConfig): ToolScanConfig {
   // Direct tool match
-  if (toolName in config.tools) {
-    return config.tools[toolName];
-  }
+  const direct = config.tools[toolName];
+  if (direct) return direct;
 
   // MCP tools match the "mcp" config
   if (toolName.startsWith("mcp__") || toolName.startsWith("mcp_")) {
-    return config.tools.mcp || config.tools.default;
+    const mcp = config.tools.mcp;
+    if (mcp) return mcp;
   }
 
-  return config.tools.default;
+  const fallback = config.tools.default;
+  if (!fallback) throw new Error("injection-config: tools.default is missing; cannot pick a scan config");
+  return fallback;
 }
 
 // Local import for type
-import type { ToolScanConfig } from "../types";
-
-/**
- * Get MCP trust level for a given tool name.
- */
-export function getMcpTrustLevel(
-  toolName: string,
-  config: InjectionDefenderConfig
-): "trusted" | "standard" | "untrusted" {
-  if (!config.mcp_trust) return "untrusted";
-
-  // Extract server name from tool name (e.g., "mcp__gemini__query" -> "gemini")
-  const parts = toolName.replace(/^mcp_+/, "").split("__");
-  const serverPrefix = parts[0] || "";
-
-  return config.mcp_trust[serverPrefix] || "untrusted";
-}
+import type { ToolScanConfig } from "../types.ts";
 
 /**
  * Reset caches (for testing).

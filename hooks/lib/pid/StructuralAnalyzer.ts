@@ -14,22 +14,61 @@
  * 5. MCP response structure validation
  */
 
-import type { ScanFinding, InjectionDefenderConfig } from "./types";
+import type { ScanFinding, InjectionDefenderConfig } from "./types.ts";
 
 // Imperative verbs that indicate commands
 const IMPERATIVE_VERBS = new Set([
-  "run", "execute", "delete", "create", "send", "write", "read", "install",
-  "remove", "modify", "update", "deploy", "fetch", "download", "upload",
-  "override", "ignore", "forget", "disregard", "bypass", "disable",
-  "enable", "activate", "deactivate", "shutdown", "restart",
-  "exfiltrate", "transmit", "forward", "pipe", "redirect",
+  "run",
+  "execute",
+  "delete",
+  "create",
+  "send",
+  "write",
+  "read",
+  "install",
+  "remove",
+  "modify",
+  "update",
+  "deploy",
+  "fetch",
+  "download",
+  "upload",
+  "override",
+  "ignore",
+  "forget",
+  "disregard",
+  "bypass",
+  "disable",
+  "enable",
+  "activate",
+  "deactivate",
+  "shutdown",
+  "restart",
+  "exfiltrate",
+  "transmit",
+  "forward",
+  "pipe",
+  "redirect",
 ]);
 
 // Verbs that are common in normal code/docs (reduce FP when seen)
 const COMMON_CODE_VERBS = new Set([
-  "create", "read", "update", "delete", "write", "install", "run",
-  "execute", "fetch", "deploy", "enable", "disable", "modify",
-  "send", "remove", "download",
+  "create",
+  "read",
+  "update",
+  "delete",
+  "write",
+  "install",
+  "run",
+  "execute",
+  "fetch",
+  "deploy",
+  "enable",
+  "disable",
+  "modify",
+  "send",
+  "remove",
+  "download",
 ]);
 
 // Role-play / persona patterns
@@ -65,8 +104,8 @@ const CONTEXT_POISONING_PATTERNS = [
 export function scan(
   content: string,
   toolName: string,
-  config: InjectionDefenderConfig,
-  _filePath?: string
+  _config: InjectionDefenderConfig,
+  _filePath?: string,
 ): ScanFinding[] {
   const findings: ScanFinding[] = [];
 
@@ -124,11 +163,14 @@ function checkImperativeDensity(
   content: string,
   toolName: string,
   isCodeContent: boolean,
-  findings: ScanFinding[]
+  findings: ScanFinding[],
 ): void {
   // Extract words (first 5000 chars for performance)
   const sampleContent = content.slice(0, 5000);
-  const words = sampleContent.toLowerCase().split(/[\s,.:;!?()[\]{}"'`]+/).filter(Boolean);
+  const words = sampleContent
+    .toLowerCase()
+    .split(/[\s,.:;!?()[\]{}"'`]+/)
+    .filter(Boolean);
 
   if (words.length < 10) return;
 
@@ -137,9 +179,10 @@ function checkImperativeDensity(
   const imperativePositions: number[] = [];
 
   for (let i = 0; i < words.length; i++) {
-    if (IMPERATIVE_VERBS.has(words[i])) {
+    const word = words[i] ?? "";
+    if (IMPERATIVE_VERBS.has(word)) {
       imperativeCount++;
-      if (COMMON_CODE_VERBS.has(words[i])) {
+      if (COMMON_CODE_VERBS.has(word)) {
         codeVerbCount++;
       }
       // Approximate position in original content
@@ -178,11 +221,7 @@ function checkImperativeDensity(
 /**
  * Check for role-play / persona boundary patterns.
  */
-function checkRolePlayBoundaries(
-  content: string,
-  toolName: string,
-  findings: ScanFinding[]
-): void {
+function checkRolePlayBoundaries(content: string, toolName: string, findings: ScanFinding[]): void {
   for (const pattern of ROLE_PLAY_PATTERNS) {
     const match = pattern.exec(content);
     if (match) {
@@ -207,11 +246,7 @@ function checkRolePlayBoundaries(
 /**
  * Check for instruction/data boundary confusion.
  */
-function checkBoundaryConfusion(
-  content: string,
-  toolName: string,
-  findings: ScanFinding[]
-): void {
+function checkBoundaryConfusion(content: string, toolName: string, findings: ScanFinding[]): void {
   for (const pattern of BOUNDARY_CONFUSION_PATTERNS) {
     const match = pattern.exec(content);
     if (match) {
@@ -226,7 +261,7 @@ function checkBoundaryConfusion(
         layer: "structural",
         category: "context_manipulation",
         severity: "high",
-        confidence: 0.70,
+        confidence: 0.7,
         matched_text: match[0].trim().slice(0, 100),
         description: "Instruction/data boundary confusion (fake system markers)",
         context: {
@@ -243,11 +278,7 @@ function checkBoundaryConfusion(
 /**
  * Check for context window poisoning attempts.
  */
-function checkContextPoisoning(
-  content: string,
-  toolName: string,
-  findings: ScanFinding[]
-): void {
+function checkContextPoisoning(content: string, toolName: string, findings: ScanFinding[]): void {
   for (const pattern of CONTEXT_POISONING_PATTERNS) {
     const match = pattern.exec(content);
     if (match) {
@@ -255,7 +286,7 @@ function checkContextPoisoning(
         layer: "structural",
         category: "context_manipulation",
         severity: "medium",
-        confidence: 0.60,
+        confidence: 0.6,
         matched_text: match[0].slice(0, 100),
         description: "Context window poisoning attempt (fake history/memory)",
         context: {
@@ -275,11 +306,7 @@ function checkContextPoisoning(
 /**
  * Detect large blocks of repeated text (context stuffing).
  */
-function checkContextStuffing(
-  content: string,
-  toolName: string,
-  findings: ScanFinding[]
-): void {
+function checkContextStuffing(content: string, toolName: string, findings: ScanFinding[]): void {
   if (content.length < 1000) return;
 
   // Sample: take 50-char chunks at intervals and check for repetition
@@ -322,11 +349,7 @@ function checkContextStuffing(
 /**
  * Validate MCP response structure for injection.
  */
-function checkMcpResponse(
-  content: string,
-  toolName: string,
-  findings: ScanFinding[]
-): void {
+function checkMcpResponse(content: string, toolName: string, findings: ScanFinding[]): void {
   // Check for nested tool-call structures in MCP responses
   const nestedToolPatterns = [
     /["']?(?:tool_call|function_call|tool_use)["']?\s*[:=]\s*[{[]/i,
@@ -340,7 +363,7 @@ function checkMcpResponse(
         layer: "structural",
         category: "mcp_attacks",
         severity: "high",
-        confidence: 0.70,
+        confidence: 0.7,
         matched_text: match[0].slice(0, 100),
         description: "MCP response contains tool-call or instruction structures",
         context: {

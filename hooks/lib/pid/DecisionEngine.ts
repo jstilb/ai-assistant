@@ -22,8 +22,8 @@ import type {
   InjectionDefenderConfig,
   InjectionPatternsConfig,
   MlScanOutcome,
-} from "./types";
-import { loadPatterns, loadConfig } from "./patterns/index";
+} from "./types.ts";
+import { loadPatterns } from "./patterns/index.ts";
 
 const SEVERITY_RANK: Record<ThreatSeverity, number> = {
   critical: 4,
@@ -40,7 +40,7 @@ export function decide(
   findings: ScanFinding[],
   scanTimeMs: number,
   layersExecuted: string[],
-  config: InjectionDefenderConfig
+  config: InjectionDefenderConfig,
 ): ScanResult {
   // Fast path: no findings
   if (findings.length === 0) {
@@ -81,10 +81,7 @@ export function decide(
 /**
  * Core decision algorithm.
  */
-function determineAction(
-  findings: ScanFinding[],
-  config: InjectionDefenderConfig
-): ThreatAction {
+function determineAction(findings: ScanFinding[], _config: InjectionDefenderConfig): ThreatAction {
   const patterns = loadPatterns();
 
   // Step 1: Any critical finding with confidence >= 0.8?
@@ -153,7 +150,7 @@ export function applyMlOutcome(
   outcome: MlScanOutcome,
   scanTimeMs: number,
   layersExecuted: string[],
-  config: InjectionDefenderConfig
+  config: InjectionDefenderConfig,
 ): ScanResult {
   const executedLayers = [...layersExecuted, "ml"];
 
@@ -176,6 +173,7 @@ export function applyMlOutcome(
   // fall through to decide()'s generic "warn" safe-default and silently cap
   // every escalation short of block.
   let dominant = findings[0];
+  if (!dominant) return decide(findings, scanTimeMs, executedLayers, config); // nothing to escalate
   for (const f of findings) {
     if (SEVERITY_RANK[f.severity] > SEVERITY_RANK[dominant.severity]) dominant = f;
   }
@@ -235,12 +233,12 @@ export function applyMlOutcome(
 function applyCategoryPolicies(
   findings: ScanFinding[],
   currentAction: ThreatAction,
-  config: InjectionDefenderConfig
+  config: InjectionDefenderConfig,
 ): ThreatAction {
   if (!config.category_policies) return currentAction;
 
   // Collect all unique categories from findings
-  const categories = new Set(findings.map(f => f.category));
+  const categories = new Set(findings.map((f) => f.category));
 
   let finalAction = currentAction;
 
@@ -266,10 +264,7 @@ const ACTION_RANK: Record<ThreatAction, number> = {
 /**
  * Get the default action for a category from patterns config.
  */
-function getCategoryDefaultAction(
-  category: string,
-  patterns: InjectionPatternsConfig
-): ThreatAction {
+function getCategoryDefaultAction(category: string, patterns: InjectionPatternsConfig): ThreatAction {
   const cat = patterns.categories[category];
   if (cat) return cat.default_action;
   return "warn"; // Safe default
@@ -278,11 +273,7 @@ function getCategoryDefaultAction(
 /**
  * Format a warning message for injection into Claude's context.
  */
-export function formatWarning(
-  result: ScanResult,
-  sourceDescription: string,
-  toolName: string
-): string {
+export function formatWarning(result: ScanResult, sourceDescription: string, toolName: string): string {
   const lines: string[] = [];
 
   lines.push(`[SECURITY WARNING] Potential prompt injection detected in ${toolName} output.`);
@@ -314,11 +305,7 @@ export function formatWarning(
 /**
  * Format a block message (displayed when exiting with code 2).
  */
-export function formatBlockMessage(
-  result: ScanResult,
-  sourceDescription: string,
-  toolName: string
-): string {
+export function formatBlockMessage(result: ScanResult, sourceDescription: string, toolName: string): string {
   const lines: string[] = [];
 
   lines.push("PROMPT INJECTION BLOCKED");
@@ -326,9 +313,7 @@ export function formatBlockMessage(
   lines.push(`Source: ${sourceDescription}`);
   lines.push(`Severity: ${result.max_severity}`);
 
-  const criticalFindings = result.findings.filter(
-    f => f.severity === "critical" && f.confidence >= 0.8
-  );
+  const criticalFindings = result.findings.filter((f) => f.severity === "critical" && f.confidence >= 0.8);
 
   for (const finding of criticalFindings) {
     lines.push(`  - ${finding.description}`);

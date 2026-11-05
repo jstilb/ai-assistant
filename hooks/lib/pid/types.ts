@@ -10,29 +10,6 @@
 // Hook Input/Output (Claude Code Protocol)
 // =============================================
 
-export interface PostToolUseInput {
-  session_id: string;
-  tool_name: string;
-  tool_input: Record<string, unknown>;
-  tool_output: string;          // The content to scan
-}
-
-export interface HookDecision {
-  continue: true;
-}
-
-export interface HookBlock {
-  decision: "block";
-  message: string;
-}
-
-export interface HookWarn {
-  decision: "warn";
-  message: string;
-}
-
-export type HookOutput = HookDecision | HookBlock | HookWarn;
-
 // =============================================
 // Scanning Pipeline
 // =============================================
@@ -48,14 +25,14 @@ export interface ScanFinding {
   layer: "regex" | "encoding" | "structural" | "ml";
   category: string;
   severity: ThreatSeverity;
-  confidence: number;         // 0.0 to 1.0
-  matched_text: string;       // The suspicious fragment (truncated)
-  pattern_id?: string;        // Which pattern matched (regex layer)
-  description: string;        // Human-readable explanation
+  confidence: number; // 0.0 to 1.0
+  matched_text: string; // The suspicious fragment (truncated)
+  pattern_id?: string; // Which pattern matched (regex layer)
+  description: string; // Human-readable explanation
   context: {
     tool: string;
     position: number;
-    surrounding: string;      // +/- 50 chars for context
+    surrounding: string; // +/- 50 chars for context
   };
 }
 

@@ -43,15 +43,15 @@
  * - Any runtime error: Caught by top-level try/catch, exits 0
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
-import { notifyError } from './lib/notifications';
-import { readHookInput } from '../lib/hook-utils';
-import type { NotificationPriority } from './lib/notifications';
-import { recordFailure } from '../lib/core/FailureLog.ts';
-import { kayaHomePath } from '../lib/core/KayaHome.ts';
-import { trackWindowedHealStreak, type FailStreakResult } from '../lib/cron/FailStreak.ts';
-import type { AlertResult, SendAlertOptions } from '../lib/core/AlertGate.ts';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { notifyError } from "./lib/notifications.ts";
+import { readHookInput } from "../lib/hook-utils.ts";
+import type { NotificationPriority } from "./lib/notifications.ts";
+import { recordFailure } from "../lib/core/FailureLog.ts";
+import { kayaHomePath } from "../lib/core/KayaHome.ts";
+import { trackWindowedHealStreak, type FailStreakResult } from "../lib/cron/FailStreak.ts";
+import type { AlertResult, SendAlertOptions } from "../lib/core/AlertGate.ts";
 
 /** Matches lib/core/AlertGate.ts's `sendAlert()` signature exactly — used
  *  only to type `maybeEscalateInteractiveAuthStreak()`'s test-only DI seam
@@ -64,26 +64,26 @@ type SendAlertFn = (message: string, options: SendAlertOptions) => Promise<Alert
 // ============================================================================
 
 type ErrorType =
-  | 'rate_limit'
-  | 'authentication_failed'
-  | 'billing_error'
-  | 'invalid_request'
-  | 'server_error'
-  | 'max_output_tokens'
-  | 'unknown';
+  | "rate_limit"
+  | "authentication_failed"
+  | "billing_error"
+  | "invalid_request"
+  | "server_error"
+  | "max_output_tokens"
+  | "unknown";
 
 const VALID_ERROR_TYPES: readonly ErrorType[] = [
-  'rate_limit',
-  'authentication_failed',
-  'billing_error',
-  'invalid_request',
-  'server_error',
-  'max_output_tokens',
-  'unknown',
+  "rate_limit",
+  "authentication_failed",
+  "billing_error",
+  "invalid_request",
+  "server_error",
+  "max_output_tokens",
+  "unknown",
 ] as const;
 
 interface StopFailurePayload {
-  hook_event_name: 'StopFailure';
+  hook_event_name: "StopFailure";
   session_id: string;
   transcript_path: string;
   cwd: string;
@@ -103,13 +103,13 @@ const COOLDOWN_MINUTES = 5;
 const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
 
 const PRIORITY_MAP: Record<ErrorType, NotificationPriority> = {
-  rate_limit: 'default',
-  authentication_failed: 'high',
-  billing_error: 'urgent',
-  invalid_request: 'default',
-  server_error: 'default',
-  max_output_tokens: 'low',
-  unknown: 'default',
+  rate_limit: "default",
+  authentication_failed: "high",
+  billing_error: "urgent",
+  invalid_request: "default",
+  server_error: "default",
+  max_output_tokens: "low",
+  unknown: "default",
 };
 
 // T2-03 (theme2-auth-failure-paging.md): PRIORITY_MAP above hard-maps
@@ -127,8 +127,8 @@ const PRIORITY_MAP: Record<ErrorType, NotificationPriority> = {
 // T2-04's consolidated heal-streak machinery) — "N within any window span,"
 // not pure infinite-consecutive, so one stale blip weeks apart can't
 // silently prime a false escalation.
-const INTERACTIVE_AUTH_STREAK_KEY = 'interactive-auth';
-const INTERACTIVE_AUTH_ALERT_KEY = 'interactive-auth-incident';
+const INTERACTIVE_AUTH_STREAK_KEY = "interactive-auth";
+const INTERACTIVE_AUTH_ALERT_KEY = "interactive-auth-incident";
 const INTERACTIVE_AUTH_WINDOW_MS = 10 * 60 * 1000; // "3 within any 10-minute span" (§5)
 // §5: "a persistent SAME incident pages once per half hour, not once per day
 // and not once per occurrence" — matches bin/cron-health-monitor.ts's
@@ -144,7 +144,7 @@ const INTERACTIVE_AUTH_COOLDOWN_MS = 30 * 60 * 1000;
 // cross-check would have double-paged on 2026-07-17's live incident (S2
 // paged at 15:42:52; the authentication_failed cascade started 4 min later).
 const ROOT_CAUSE_CROSS_CHECK_WINDOW_MS = 30 * 60 * 1000;
-const ROOT_CAUSE_ALERT_KEYS = ['keychain-credential-recreated', 'setup-token-invalid'] as const;
+const ROOT_CAUSE_ALERT_KEYS = ["keychain-credential-recreated", "setup-token-invalid"] as const;
 
 // ============================================================================
 // Helpers
@@ -159,33 +159,33 @@ function parsePayload(raw: string): StopFailurePayload | null {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    console.error('[StopFailure] Could not parse stdin as JSON');
+    console.error("[StopFailure] Could not parse stdin as JSON");
     return null;
   }
 
-  if (typeof parsed !== 'object' || parsed === null) {
-    console.error('[StopFailure] Payload is not an object');
+  if (typeof parsed !== "object" || parsed === null) {
+    console.error("[StopFailure] Payload is not an object");
     return null;
   }
 
   const obj = parsed as Record<string, unknown>;
 
-  const sessionId = typeof obj['session_id'] === 'string' ? obj['session_id'] : '';
-  const transcriptPath = typeof obj['transcript_path'] === 'string' ? obj['transcript_path'] : '';
-  const cwd = typeof obj['cwd'] === 'string' ? obj['cwd'] : '';
-  const permissionMode = typeof obj['permission_mode'] === 'string' ? obj['permission_mode'] : '';
-  const lastAssistantMessage = typeof obj['last_assistant_message'] === 'string' ? obj['last_assistant_message'] : '';
-  const errorDetails = typeof obj['error_details'] === 'string' ? obj['error_details'] : undefined;
+  const sessionId = typeof obj["session_id"] === "string" ? obj["session_id"] : "";
+  const transcriptPath = typeof obj["transcript_path"] === "string" ? obj["transcript_path"] : "";
+  const cwd = typeof obj["cwd"] === "string" ? obj["cwd"] : "";
+  const permissionMode = typeof obj["permission_mode"] === "string" ? obj["permission_mode"] : "";
+  const lastAssistantMessage = typeof obj["last_assistant_message"] === "string" ? obj["last_assistant_message"] : "";
+  const errorDetails = typeof obj["error_details"] === "string" ? obj["error_details"] : undefined;
 
-  const rawError = typeof obj['error'] === 'string' ? obj['error'] : '';
-  const error: ErrorType = isValidErrorType(rawError) ? rawError : 'unknown';
+  const rawError = typeof obj["error"] === "string" ? obj["error"] : "";
+  const error: ErrorType = isValidErrorType(rawError) ? rawError : "unknown";
 
   if (!sessionId) {
-    console.error('[StopFailure] Missing session_id — logging with empty session');
+    console.error("[StopFailure] Missing session_id — logging with empty session");
   }
 
   return {
-    hook_event_name: 'StopFailure',
+    hook_event_name: "StopFailure",
     session_id: sessionId,
     transcript_path: transcriptPath,
     cwd,
@@ -199,18 +199,18 @@ function parsePayload(raw: string): StopFailurePayload | null {
 function readCooldownState(cooldownPath: string): CooldownState {
   if (!existsSync(cooldownPath)) return {};
   try {
-    const content = readFileSync(cooldownPath, 'utf-8');
+    const content = readFileSync(cooldownPath, "utf-8");
     const parsed: unknown = JSON.parse(content);
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
       // Validate all values are strings
       const result: CooldownState = {};
       for (const [k, v] of Object.entries(parsed)) {
-        if (typeof v === 'string') result[k] = v;
+        if (typeof v === "string") result[k] = v;
       }
       return result;
     }
   } catch {
-    console.error('[StopFailure] Failed to read cooldown state, resetting');
+    console.error("[StopFailure] Failed to read cooldown state, resetting");
   }
   return {};
 }
@@ -225,7 +225,7 @@ function isOnCooldown(state: CooldownState, errorType: ErrorType): boolean {
 function writeCooldownState(cooldownPath: string, state: CooldownState): void {
   const dir = dirname(cooldownPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(cooldownPath, JSON.stringify(state, null, 2), 'utf-8');
+  writeFileSync(cooldownPath, JSON.stringify(state, null, 2), "utf-8");
 }
 
 /**
@@ -245,7 +245,7 @@ function writeCooldownState(cooldownPath: string, state: CooldownState): void {
  */
 function rootCauseRecentlyPaged(alertGateStatePath: string, nowMs: number): boolean {
   try {
-    const raw = JSON.parse(readFileSync(alertGateStatePath, 'utf-8')) as {
+    const raw = JSON.parse(readFileSync(alertGateStatePath, "utf-8")) as {
       keys?: Record<string, { lastSentAt?: string }>;
     };
     for (const key of ROOT_CAUSE_ALERT_KEYS) {
@@ -287,7 +287,7 @@ async function maybeEscalateInteractiveAuthStreak(
 ): Promise<FailStreakResult | undefined> {
   if (rootCauseRecentlyPaged(alertGateStatePath, nowMs)) {
     console.error(
-      '[StopFailure] interactive-auth streak escalation skipped this occurrence — S2/S3 already paged this root cause recently',
+      "[StopFailure] interactive-auth streak escalation skipped this occurrence — S2/S3 already paged this root cause recently",
     );
     return undefined;
   }
@@ -306,7 +306,7 @@ async function maybeEscalateInteractiveAuthStreak(
     sendAlertFn,
     nowMs,
   );
-  if (result.action === 'paged') {
+  if (result.action === "paged") {
     console.error(`[StopFailure] interactive-auth streak escalated to page (streak=${result.streak})`);
   }
   return result;
@@ -317,14 +317,14 @@ async function maybeEscalateInteractiveAuthStreak(
 // ============================================================================
 
 async function main(): Promise<void> {
-  const cooldownPath = kayaHomePath('MEMORY/MONITORING/stop-failure-cooldown.json');
+  const cooldownPath = kayaHomePath("MEMORY/MONITORING/stop-failure-cooldown.json");
 
   const rawInput = await readHookInput<Record<string, unknown>>({ timeoutMs: 500 });
-  const rawStr = rawInput ? JSON.stringify(rawInput) : '';
+  const rawStr = rawInput ? JSON.stringify(rawInput) : "";
   const payload = parsePayload(rawStr);
 
   if (!payload) {
-    console.error('[StopFailure] Malformed or missing payload — exiting gracefully');
+    console.error("[StopFailure] Malformed or missing payload — exiting gracefully");
     process.exit(0);
   }
 
@@ -334,7 +334,7 @@ async function main(): Promise<void> {
   // tier:'digest' for auth/billing outages so they surface in the daily health digest;
   // everything else is 'log' (forensic only, no alert).
   recordFailure({
-    source: 'StopFailure',
+    source: "StopFailure",
     error: payload.error_details || payload.error,
     context: {
       session_id: payload.session_id,
@@ -342,7 +342,7 @@ async function main(): Promise<void> {
       cwd: payload.cwd,
       last_assistant_message: payload.last_assistant_message,
     },
-    tier: (payload.error === 'authentication_failed' || payload.error === 'billing_error') ? 'digest' : 'log',
+    tier: payload.error === "authentication_failed" || payload.error === "billing_error" ? "digest" : "log",
     alertKey: `stop-failure-${payload.error}`,
   });
   console.error(`[StopFailure] Logged failure: ${payload.error} (session: ${payload.session_id})`);
@@ -350,8 +350,8 @@ async function main(): Promise<void> {
   // T2-03: class-level streak escalation for the residual authentication_failed
   // gap (see maybeEscalateInteractiveAuthStreak's doc). Deliberately BEFORE
   // and independent of the digest-cooldown check below.
-  if (payload.error === 'authentication_failed') {
-    await maybeEscalateInteractiveAuthStreak(kayaHomePath('MEMORY/State/alert-gate.json'));
+  if (payload.error === "authentication_failed") {
+    await maybeEscalateInteractiveAuthStreak(kayaHomePath("MEMORY/State/alert-gate.json"));
   }
 
   // Check cooldown before sending notification
@@ -371,7 +371,7 @@ async function main(): Promise<void> {
   await notifyError(message, {
     title: `Kaya — StopFailure: ${payload.error}`,
     priority,
-    tags: ['warning', 'stop_sign'],
+    tags: ["warning", "stop_sign"],
   });
   console.error(`[StopFailure] Notification sent for error type: ${payload.error}`);
 
@@ -384,7 +384,7 @@ async function main(): Promise<void> {
 
 if (import.meta.main) {
   main().catch((error: unknown) => {
-    console.error('[StopFailure] Fatal error:', error);
+    console.error("[StopFailure] Fatal error:", error);
     process.exit(0);
   });
 }

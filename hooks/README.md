@@ -309,7 +309,6 @@ Located in `hooks/lib/`:
 | `notifications.ts` | Voice server + ntfy integration | Alert helpers |
 | `observability.ts` | Trace emitting | Future use |
 | `metadata-extraction.ts` | Parse assistant responses | Rating hooks |
-| `recovery-types.ts` | Recovery journal types | Security system |
 
 `hooks/lib/learning-utils.ts` (regex-based `isLearningCapture()`/
 `getLearningCategory()`) was deleted 2026-07 (S8, let-the-model-speak) — see

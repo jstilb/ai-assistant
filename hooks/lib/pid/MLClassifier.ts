@@ -21,18 +21,21 @@
  *      fall back to the tripwire's unchanged preliminary verdict on `ok: false`.
  */
 
-import { inference } from "../../../lib/core/Inference.ts";
 import type { InferenceOptions, InferenceResult } from "../../../lib/core/Inference.ts";
-import type {
-  InjectionDefenderConfig,
-  MlJudgment,
-  MlScanOutcome,
-  ScanFinding,
-  ThreatSeverity,
-} from "./types";
+import type { InjectionDefenderConfig, MlJudgment, MlScanOutcome, ScanFinding, ThreatSeverity } from "./types.ts";
 
 /** Matches the signature of `inference()` from lib/core/Inference.ts -- injectable for tests. */
 export type InferenceFn = (options: InferenceOptions) => Promise<InferenceResult>;
+
+/**
+ * Default inference function. Loads lib/core/Inference.ts (config loader, Moonshot client, zod)
+ * on first use only. The ML layer is off by default, and a static import made every
+ * PostToolUse hook process pay that module-load cost (~50-100 ms) before it scanned anything.
+ */
+const defaultInference: InferenceFn = async (options) => {
+  const { inference } = await import("../../../lib/core/Inference.ts");
+  return inference(options);
+};
 
 /**
  * Strict timeout for the ML escalation call. Deliberately separate from
@@ -122,10 +125,7 @@ function parseJudgment(parsed: unknown): MlJudgment | undefined {
   // isTruePositive value itself is trustworthy either. Rejecting routes this
   // down the exact same fail-closed path as every other malformed shape:
   // the tripwire's own preliminary verdict stands, unchanged, loudly logged.
-  if (
-    obj.isTruePositive === false &&
-    (obj.adjustedSeverity !== undefined || obj.adjustedConfidence !== undefined)
-  ) {
+  if (obj.isTruePositive === false && (obj.adjustedSeverity !== undefined || obj.adjustedConfidence !== undefined)) {
     return undefined;
   }
 
@@ -175,7 +175,7 @@ export async function scanAsync(
   toolName: string,
   findings: ScanFinding[],
   config: InjectionDefenderConfig,
-  runInference: InferenceFn = inference
+  runInference: InferenceFn = defaultInference,
 ): Promise<MlScanOutcome> {
   if (!config.global.enable_ml_layer) {
     return { ok: false, failureReason: "ml_layer_disabled" };
@@ -194,7 +194,7 @@ export async function scanAsync(
     const failureReason = `threw: ${err instanceof Error ? err.message : String(err)}`;
     console.error(
       `[MLClassifier] escalation call threw for tool=${toolName} (${failureReason}) -- ` +
-      `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`
+        `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`,
     );
     return { ok: false, failureReason };
   }
@@ -206,7 +206,7 @@ export async function scanAsync(
     const failureReason = `inference success:false (${result.error ?? "no error message"})`;
     console.error(
       `[MLClassifier] escalation call failed for tool=${toolName} (${failureReason}) -- ` +
-      `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`
+        `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`,
     );
     return { ok: false, failureReason };
   }
@@ -216,7 +216,7 @@ export async function scanAsync(
     const failureReason = "unparseable or malformed judgment JSON";
     console.error(
       `[MLClassifier] escalation call returned unparseable output for tool=${toolName} -- ` +
-      `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`
+        `falling back to tripwire's preliminary verdict, unchanged (fail-closed).`,
     );
     return { ok: false, failureReason };
   }

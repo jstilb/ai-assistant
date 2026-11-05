@@ -5,26 +5,20 @@
  * Format: { "Bash": 42, "Edit": 12, ... }
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome } from '../../lib/core/KayaHome.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "../../lib/core/KayaHome.ts";
 
 function getMemoryRoot(): string {
-  return process.env.KAYA_MEMORY_ROOT ?? join(getKayaHome(), 'MEMORY');
+  return process.env.KAYA_MEMORY_ROOT ?? join(getKayaHome(), "MEMORY");
 }
 
 function getTallyPath(date: Date): string {
   const year = date.getFullYear().toString();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
 
-  return join(
-    getMemoryRoot(),
-    'SECURITY',
-    year,
-    month,
-    `${day}-allow-tally.json`
-  );
+  return join(getMemoryRoot(), "SECURITY", year, month, `${day}-allow-tally.json`);
 }
 
 /**
@@ -35,7 +29,7 @@ export function incrementAllowTally(toolName: string): void {
   try {
     const now = new Date();
     const tallyPath = getTallyPath(now);
-    const dir = tallyPath.substring(0, tallyPath.lastIndexOf('/'));
+    const dir = tallyPath.substring(0, tallyPath.lastIndexOf("/"));
 
     // Ensure directory exists
     if (!existsSync(dir)) {
@@ -46,10 +40,12 @@ export function incrementAllowTally(toolName: string): void {
     let tally: Record<string, number> = {};
     if (existsSync(tallyPath)) {
       try {
-        tally = JSON.parse(readFileSync(tallyPath, 'utf-8'));
+        tally = JSON.parse(readFileSync(tallyPath, "utf-8"));
       } catch (err) {
         // Parse error — start fresh
-        console.error(`[allow-tally] failed to parse existing tally file, starting fresh: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(
+          `[allow-tally] failed to parse existing tally file, starting fresh: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

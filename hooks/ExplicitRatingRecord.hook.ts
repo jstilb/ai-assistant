@@ -73,18 +73,18 @@
  * - "5 things to fix" → Not a rating (sentence continuation)
  */
 
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
-import { createAppendLog } from '../lib/core/AppendLog.ts';
-import { join } from 'path';
-import { UNCATEGORIZED } from '../lib/core/LearningJudgment.ts';
-import { getPrincipalName } from './lib/identity';
-import { getISOTimestamp, getPSTComponents } from './lib/time';
-import { recordFailure, recordFailureDump } from '../lib/core/FailureRecord';
-import { readHookInput } from '../lib/hook-utils';
-import { parseRating } from '../lib/core/RatingUtils';
-import { acquireRatingsLock } from './lib/ratings-lock';
-import { ExplicitHookRatingSchema } from '../lib/core/LearningEntrySchema';
-import { getKayaHome } from '../lib/core/KayaHome.ts';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createAppendLog } from "../lib/core/AppendLog.ts";
+import { join } from "node:path";
+import { UNCATEGORIZED } from "../lib/core/LearningJudgment.ts";
+import { getPrincipalName } from "./lib/identity.ts";
+import { getISOTimestamp, getPSTComponents } from "./lib/time.ts";
+import { recordFailure, recordFailureDump } from "../lib/core/FailureRecord.ts";
+import { readHookInput } from "../lib/hook-utils.ts";
+import { parseRating } from "../lib/core/RatingUtils.ts";
+import { acquireRatingsLock } from "./lib/ratings-lock.ts";
+import { ExplicitHookRatingSchema } from "../lib/core/LearningEntrySchema.ts";
+import { getKayaHome } from "../lib/core/KayaHome.ts";
 
 /**
  * Check if failure dumps are enabled in settings.json.
@@ -92,10 +92,10 @@ import { getKayaHome } from '../lib/core/KayaHome.ts';
  */
 function isFailureDumpsEnabled(): boolean {
   const baseDir = getKayaHome();
-  const settingsPath = join(baseDir, 'settings.json');
+  const settingsPath = join(baseDir, "settings.json");
   if (!existsSync(settingsPath)) return true;
   try {
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
     // If failures key exists and enabled is explicitly false, disable
     if (settings.failures && settings.failures.enabled === false) return false;
     return true;
@@ -132,7 +132,7 @@ function writeRating(entry: RatingEntry): void {
   ExplicitHookRatingSchema.parse(entry);
 
   const baseDir = getKayaHome();
-  const ratingsFile = join(baseDir, 'MEMORY', 'LEARNING', 'SIGNALS', 'ratings.jsonl');
+  const ratingsFile = join(baseDir, "MEMORY", "LEARNING", "SIGNALS", "ratings.jsonl");
 
   // S15: append-log seam (dir creation + rotation owned by AppendLog).
   createAppendLog(ratingsFile).append(entry);
@@ -145,33 +145,39 @@ function writeRating(entry: RatingEntry): void {
  */
 function getLastResponseSummary(transcriptPath: string): string {
   try {
-    if (!transcriptPath || !existsSync(transcriptPath)) return '';
+    if (!transcriptPath || !existsSync(transcriptPath)) return "";
 
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
+    const content = readFileSync(transcriptPath, "utf-8");
+    const lines = content.trim().split("\n");
 
-    let lastAssistant = '';
+    let lastAssistant = "";
     for (const line of lines) {
       try {
         const entry = JSON.parse(line);
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const text = typeof entry.message.content === 'string'
-            ? entry.message.content
-            : Array.isArray(entry.message.content)
-              ? entry.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ')
-              : '';
+        if (entry.type === "assistant" && entry.message?.content) {
+          const text =
+            typeof entry.message.content === "string"
+              ? entry.message.content
+              : Array.isArray(entry.message.content)
+                ? entry.message.content
+                    .filter((c: { type?: string }) => c.type === "text")
+                    .map((c: { text?: string }) => c.text)
+                    .join(" ")
+                : "";
           if (text) lastAssistant = text;
         }
       } catch (err) {
         // skip invalid lines
-        console.error(`[ExplicitRatingRecord] malformed transcript line skipped while extracting last response: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(
+          `[ExplicitRatingRecord] malformed transcript line skipped while extracting last response: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
     const summaryMatch = lastAssistant.match(/SUMMARY:\s*([^\n]+)/i);
-    return summaryMatch ? summaryMatch[1].trim() : lastAssistant.slice(0, 500);
+    return summaryMatch?.[1] ? summaryMatch[1].trim() : lastAssistant.slice(0, 500);
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -188,7 +194,7 @@ function captureLowRatingLearning(rating: number, comment: string | undefined, r
   // S8: deferred category, not a regex/LLM guess — see the "LOW-RATING
   // LEARNING CATEGORY" docblock above.
   const category = UNCATEGORIZED;
-  const learningsDir = join(baseDir, 'MEMORY', 'LEARNING', category, yearMonth);
+  const learningsDir = join(baseDir, "MEMORY", "LEARNING", category, yearMonth);
 
   if (!existsSync(learningsDir)) {
     mkdirSync(learningsDir, { recursive: true });
@@ -211,13 +217,13 @@ category: ${category}
 **Date:** ${year}-${month}-${day}
 **Rating:** ${rating}/10
 **Category:** ${category}
-${comment ? `**Feedback:** ${comment}` : ''}
+${comment ? `**Feedback:** ${comment}` : ""}
 
 ---
 
 ## Response Context
 
-${responseContext || 'No response context available'}
+${responseContext || "No response context available"}
 
 ---
 
@@ -225,29 +231,31 @@ ${responseContext || 'No response context available'}
 
 This response was rated ${rating}/10 by ${getPrincipalName()}. Use this as an improvement opportunity.
 
-${comment ? `**${getPrincipalName()}'s feedback:** ${comment}` : ''}
+${comment ? `**${getPrincipalName()}'s feedback:** ${comment}` : ""}
 
 ---
 `;
 
-  writeFileSync(filepath, content, 'utf-8');
+  writeFileSync(filepath, content, "utf-8");
   console.error(`[ExplicitRatingRecord] Captured low rating learning to ${filepath}`);
 }
 
 async function main() {
   try {
-    console.error('[ExplicitRatingRecord] Hook started');
+    console.error("[ExplicitRatingRecord] Hook started");
     const data = await readHookInput<HookInput>();
-    const prompt = data?.prompt || '';
+    const prompt = data?.prompt || "";
 
     const result = parseRating(prompt);
 
-    if (!result) {
-      console.error('[ExplicitRatingRecord] Not a rating, exiting');
+    if (!result || !data) {
+      console.error("[ExplicitRatingRecord] Not a rating, exiting");
       process.exit(0);
     }
 
-    console.error(`[ExplicitRatingRecord] Detected rating: ${result.rating}${result.comment ? ` - ${result.comment}` : ''}`);
+    console.error(
+      `[ExplicitRatingRecord] Detected rating: ${result.rating}${result.comment ? ` - ${result.comment}` : ""}`,
+    );
 
     const entry: RatingEntry = {
       timestamp: getISOTimestamp(),
@@ -267,13 +275,13 @@ async function main() {
 
     // Update trending analysis cache (fire-and-forget, don't block)
     const baseDir = getKayaHome();
-    const trendingScript = join(baseDir, 'tools', 'TrendingAnalysis.ts');
+    const trendingScript = join(baseDir, "tools", "TrendingAnalysis.ts");
     if (existsSync(trendingScript)) {
-      Bun.spawn(['bun', trendingScript, '--force'], {
-        stdout: 'ignore',
-        stderr: 'ignore'
+      Bun.spawn(["bun", trendingScript, "--force"], {
+        stdout: "ignore",
+        stderr: "ignore",
       });
-      console.error('[ExplicitRatingRecord] Triggered TrendingAnalysis update');
+      console.error("[ExplicitRatingRecord] Triggered TrendingAnalysis update");
     }
 
     if (result.rating < 6) {
@@ -304,19 +312,21 @@ async function main() {
             transcriptPath: data.transcript_path,
             rating: result.rating,
             comment: result.comment,
-          }).then(packageDir => {
-            console.error(`[ExplicitRatingRecord] Failure dump package created: ${packageDir}`);
-          }).catch(err => {
-            console.error(`[ExplicitRatingRecord] Failure dump error (non-fatal): ${err}`);
-          });
+          })
+            .then((packageDir) => {
+              console.error(`[ExplicitRatingRecord] Failure dump package created: ${packageDir}`);
+            })
+            .catch((err) => {
+              console.error(`[ExplicitRatingRecord] Failure dump error (non-fatal): ${err}`);
+            });
         } else {
-          console.error('[ExplicitRatingRecord] Failure dumps disabled via settings.failures.enabled=false');
+          console.error("[ExplicitRatingRecord] Failure dumps disabled via settings.failures.enabled=false");
         }
       }
       // Ratings 4-10: no failure dump created (ISC 9240)
     }
 
-    console.error('[ExplicitRatingRecord] Done');
+    console.error("[ExplicitRatingRecord] Done");
     process.exit(0);
   } catch (err) {
     console.error(`[ExplicitRatingRecord] Error: ${err}`);

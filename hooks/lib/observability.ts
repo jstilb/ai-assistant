@@ -7,21 +7,30 @@
  * Client dashboard: localhost:5173
  */
 
-import { emit } from '../../lib/core/UnifiedEventSink';
+import { emit } from "../../lib/core/UnifiedEventSink.ts";
 
 export interface ObservabilityEvent {
   source_app: string;
   session_id: string;
-  hook_event_type: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Notification' | 'Stop' | 'SubagentStop' | 'SessionStart' | 'SessionEnd' | 'PreCompact';
+  hook_event_type:
+    | "PreToolUse"
+    | "PostToolUse"
+    | "UserPromptSubmit"
+    | "Notification"
+    | "Stop"
+    | "SubagentStop"
+    | "SessionStart"
+    | "SessionEnd"
+    | "PreCompact";
   timestamp: string;
   transcript_path?: string;
   summary?: string;
   tool_name?: string;
-  tool_input?: any;
-  tool_output?: any;
+  tool_input?: unknown;
+  tool_output?: unknown;
   agent_type?: string;
   model?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -31,13 +40,11 @@ export interface ObservabilityEvent {
 export async function sendEventToObservability(event: ObservabilityEvent): Promise<void> {
   // Map ObservabilityEvent to KayaEvent and emit via UnifiedEventSink
   emit({
-    source: 'hook',
+    source: "hook",
     category: event.hook_event_type,
-    severity: 'info',
+    severity: "info",
     sessionId: event.session_id,
     payload: {
-      source_app: event.source_app,
-      timestamp: event.timestamp,
       transcript_path: event.transcript_path,
       summary: event.summary,
       tool_name: event.tool_name,
@@ -61,5 +68,5 @@ export function getCurrentTimestamp(): string {
  * Helper to get source app name from environment or default to 'Kaya'
  */
 export function getSourceApp(): string {
-  return process.env.KAYA_SOURCE_APP || 'Kaya';
+  return process.env.KAYA_SOURCE_APP || "Kaya";
 }

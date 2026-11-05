@@ -6,7 +6,7 @@
  * Each tool returns data differently; this normalizes it for scanning.
  */
 
-import type { ExtractedContent } from "./types";
+import type { ExtractedContent } from "./types.ts";
 
 /**
  * Extract scannable content from a tool's output.
@@ -15,7 +15,7 @@ import type { ExtractedContent } from "./types";
 export function extractContent(
   toolName: string,
   toolInput: Record<string, unknown>,
-  toolOutput: string
+  toolOutput: string,
 ): ExtractedContent | null {
   // Fast path: empty or very short output
   if (!toolOutput || toolOutput.length === 0) {
@@ -61,7 +61,7 @@ function getSourceType(toolName: string): ExtractedContent["source_type"] {
 function extractMetadata(
   toolName: string,
   toolInput: Record<string, unknown>,
-  toolOutput: string
+  toolOutput: string,
 ): ExtractedContent["metadata"] {
   const base = { content_length: toolOutput.length };
 

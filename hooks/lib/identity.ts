@@ -6,25 +6,24 @@
  * All hooks and tools should import from here.
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import { kayaPath } from './paths';
+import { readFileSync, existsSync } from "node:fs";
+import { kayaPath } from "./paths.ts";
 
-const SETTINGS_PATH = kayaPath('settings.json');
+const SETTINGS_PATH = kayaPath("settings.json");
 
 // Default identity (fallback if settings.json doesn't have identity section)
 const DEFAULT_IDENTITY = {
-  name: 'Kaya',
-  fullName: 'Personal AI',
-  displayName: 'Kaya',
-  voiceId: '',
-  color: '#3B82F6',
+  name: "Kaya",
+  fullName: "Personal AI",
+  displayName: "Kaya",
+  voiceId: "",
+  color: "#3B82F6",
 };
 
 const DEFAULT_PRINCIPAL = {
-  name: 'User',
-  pronunciation: '',
-  timezone: 'UTC',
+  name: "User",
+  pronunciation: "",
+  timezone: "UTC",
 };
 
 export interface VoiceProsody {
@@ -71,10 +70,14 @@ function loadSettings(): Settings {
       return cachedSettings;
     }
 
-    const content = readFileSync(SETTINGS_PATH, 'utf-8');
+    const content = readFileSync(SETTINGS_PATH, "utf-8");
     cachedSettings = JSON.parse(content);
     return cachedSettings!;
-  } catch {
+  } catch (err) {
+    // A corrupt settings.json must not stop the hook, but the fall-back to defaults must be visible.
+    console.error(
+      `[identity] cannot read ${SETTINGS_PATH}, using defaults: ${err instanceof Error ? err.message : String(err)}`,
+    );
     cachedSettings = {};
     return cachedSettings;
   }
@@ -96,7 +99,7 @@ export function getIdentity(): Identity {
     displayName: daidentity.displayName || daidentity.name || envDA || DEFAULT_IDENTITY.displayName,
     voiceId: daidentity.voiceId || DEFAULT_IDENTITY.voiceId,
     color: daidentity.color || DEFAULT_IDENTITY.color,
-    voice: (daidentity as any).voice as VoiceProsody | undefined,
+    voice: daidentity.voice,
   };
 }
 

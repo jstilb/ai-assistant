@@ -71,7 +71,7 @@ fi
 # Also check any file paths mentioned in the task description
 # Look for common deliverable patterns: file paths with extensions
 MENTIONED_FILES=$(echo "$TASK_DATA" | python3 -c "
-import sys, json, re
+import sys, json, re, os
 data = json.load(sys.stdin)
 desc = data.get('description', '') + ' ' + data.get('subject', '')
 # Find paths that look like file references
@@ -82,7 +82,7 @@ patterns = [
 found = set()
 for pattern in patterns:
     for match in re.finditer(pattern, desc):
-        path = match.group(0).replace('~', '/Users/[user]')
+        path = match.group(0).replace('~', os.path.expanduser('~'))
         if len(path) > 5:
             found.add(path)
 for f in sorted(found):

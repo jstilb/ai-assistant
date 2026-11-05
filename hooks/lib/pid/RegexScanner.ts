@@ -11,13 +11,8 @@
  * - Confidence scoring based on match context
  */
 
-import type {
-  ScanFinding,
-  PatternRule,
-  InjectionDefenderConfig,
-  ThreatSeverity,
-} from "./types";
-import { getEnabledPatterns, loadPatterns } from "./patterns/index";
+import type { ScanFinding, PatternRule, InjectionDefenderConfig, ThreatSeverity } from "./types.ts";
+import { getEnabledPatterns } from "./patterns/index.ts";
 
 /** Pre-compiled pattern with metadata */
 interface CompiledPattern {
@@ -87,7 +82,8 @@ function getCompiledPatterns(toolName: string): CompiledPattern[] {
       let flags = "m"; // multiline by default
       const inlineFlagMatch = patternStr.match(/^\(\?([imsu]+)\)/);
       if (inlineFlagMatch) {
-        flags = inlineFlagMatch[1] + (inlineFlagMatch[1].includes("m") ? "" : "m");
+        const inlineFlags = inlineFlagMatch[1] ?? "";
+        flags = inlineFlags + (inlineFlags.includes("m") ? "" : "m");
         patternStr = patternStr.slice(inlineFlagMatch[0].length);
       } else {
         // Default: case-insensitive + multiline
@@ -101,7 +97,9 @@ function getCompiledPatterns(toolName: string): CompiledPattern[] {
       // exists anywhere in the repo despite the old comment here claiming
       // this is "logged during pattern validation" — confirmed via repo-wide
       // grep for a validator; this is the only place it would be caught.)
-      console.error(`[RegexScanner] invalid regex in pattern rule "${rule.id}", skipping: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[RegexScanner] invalid regex in pattern rule "${rule.id}", skipping: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -139,7 +137,7 @@ function calculateConfidence(
   match: RegExpExecArray,
   content: string,
   isMetaContent: boolean,
-  rule: PatternRule
+  rule: PatternRule,
 ): number {
   let confidence = 0.85; // Base confidence for regex match
 
@@ -160,12 +158,12 @@ function calculateConfidence(
 
   // Reduce confidence if the match is inside quotes (likely an example)
   if (isInsideQuotes(content, matchPos)) {
-    confidence -= 0.20;
+    confidence -= 0.2;
   }
 
   // Reduce confidence for patterns with known FP notes
   if (rule.false_positive_notes) {
-    confidence -= 0.10;
+    confidence -= 0.1;
   }
 
   // Increase confidence for critical severity patterns
@@ -219,7 +217,7 @@ export function scan(
   content: string,
   toolName: string,
   config: InjectionDefenderConfig,
-  filePath?: string
+  filePath?: string,
 ): ScanFinding[] {
   const findings: ScanFinding[] = [];
 
@@ -235,9 +233,8 @@ export function scan(
   const isMetaContent = isSecurityMetaContent(content, filePath);
 
   // Truncate content if needed
-  const scanContent = content.length > config.global.content_size_limit
-    ? content.slice(0, config.global.content_size_limit)
-    : content;
+  const scanContent =
+    content.length > config.global.content_size_limit ? content.slice(0, config.global.content_size_limit) : content;
 
   for (const { regex, rule } of compiled) {
     // Reset lastIndex for global-like behavior
@@ -249,7 +246,7 @@ export function scan(
     const confidence = calculateConfidence(match, scanContent, isMetaContent, rule);
 
     // Skip low-confidence matches entirely (false positive suppression)
-    if (confidence < 0.30) continue;
+    if (confidence < 0.3) continue;
 
     const matchedText = match[0].slice(0, 100); // Truncate matched text
 
@@ -283,12 +280,3 @@ export function scan(
 export function resetCache(): void {
   compiledCache.clear();
 }
-
-/** Export for testing */
-export const _testing = {
-  isSecurityMetaContent,
-  calculateConfidence,
-  isInsideCodeBlock,
-  isInsideQuotes,
-  getCompiledPatterns,
-};

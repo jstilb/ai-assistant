@@ -26,7 +26,7 @@
  * - Typical execution: <5ms
  */
 
-import { readObservabilityHookInputSync } from '../lib/hook-utils.ts';
+import { readObservabilityHookInputSync } from "../lib/hook-utils.ts";
 
 const HINT = `<system-reminder>
 ## Response Brevity
@@ -38,7 +38,7 @@ Your final response to the parent agent enters its context window. Keep it conci
 </system-reminder>`;
 
 function main(): void {
-  if (process.env.KAYA_VERBOSITY_HINT_DISABLED === '1') {
+  if (process.env.KAYA_VERBOSITY_HINT_DISABLED === "1") {
     process.exit(0);
   }
 
@@ -48,7 +48,7 @@ function main(): void {
   // legacy try/catch drain.
   readObservabilityHookInputSync<unknown>();
 
-  process.stdout.write(HINT + '\n');
+  process.stdout.write(HINT + "\n");
   process.exit(0);
 }
 

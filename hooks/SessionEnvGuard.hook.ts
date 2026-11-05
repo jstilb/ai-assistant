@@ -32,8 +32,8 @@
  * - Skipped for subagents (CLAUDE_AGENT_TYPE set) and headless sessions (no tty)
  */
 
-import { execSync } from 'child_process';
-import { readObservabilityHookInput } from '../lib/hook-utils';
+import { execSync } from "node:child_process";
+import { readObservabilityHookInput } from "../lib/hook-utils.ts";
 
 /** Real interactive terminals on macOS show as s000/ttys000; daemons show "??". */
 export function isRealTty(tty: string): boolean {
@@ -51,31 +51,31 @@ export function isClaudeCommand(command: string): boolean {
 }
 
 export function buildWarning(claudePid: number, staleSessionId: string | null): string {
-  const stale = staleSessionId ? ` (stale CLAUDE_CODE_SESSION_ID=${staleSessionId})` : '';
+  const stale = staleSessionId ? ` (stale CLAUDE_CODE_SESSION_ID=${staleSessionId})` : "";
   return [
-    '<system-reminder>',
-    '🚨 SESSION ENV CONTAMINATION DETECTED (SessionEnvGuard)',
+    "<system-reminder>",
+    "🚨 SESSION ENV CONTAMINATION DETECTED (SessionEnvGuard)",
     `This interactive claude process (pid ${claudePid}) was launched from a shell whose`,
     `environment contains CLAUDE_CODE_CHILD_SESSION=1${stale}. This session is running as a`,
     '"child session": it will write NO history.jsonl entries, NO transcript, and will be',
-    'INVISIBLE to `claude --resume`. Work done here cannot be resumed later.',
-    '',
-    'Tell Jm IMMEDIATELY, in your first response, to:',
-    '1. Wrap up work in this tab (commit / write out anything worth keeping).',
-    '2. Fully quit the terminal app (⌘Q) and relaunch it fresh from Dock/Spotlight —',
-    '   NEVER from inside a Claude session.',
-    '3. Verify with: bin/verify-session-persistence.sh',
-    'Root cause: the terminal app was relaunched from inside a Claude session and froze',
-    'its env. See memory project_terminal_env_contamination_child_sessions_20260703.',
-    '</system-reminder>',
-  ].join('\n');
+    "INVISIBLE to `claude --resume`. Work done here cannot be resumed later.",
+    "",
+    "Tell Jm IMMEDIATELY, in your first response, to:",
+    "1. Wrap up work in this tab (commit / write out anything worth keeping).",
+    "2. Fully quit the terminal app (⌘Q) and relaunch it fresh from Dock/Spotlight —",
+    "   NEVER from inside a Claude session.",
+    "3. Verify with: bin/verify-session-persistence.sh",
+    "Root cause: the terminal app was relaunched from inside a Claude session and froze",
+    "its env. See memory project_terminal_env_contamination_child_sessions_20260703.",
+    "</system-reminder>",
+  ].join("\n");
 }
 
 function ps(args: string): string {
   try {
-    return execSync(`ps ${args}`, { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+    return execSync(`ps ${args}`, { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] });
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -142,17 +142,19 @@ async function main(): Promise<void> {
     console.log(buildWarning(claudePid, staleSessionId));
 
     try {
-      const { sendAlert } = await import('../lib/core/AlertGate');
+      const { sendAlert } = await import("../lib/core/AlertGate.ts");
       await sendAlert(
         `🚨 Kaya: interactive claude session (pid ${claudePid}) started with inherited ` +
           `CLAUDE_CODE_CHILD_SESSION=1 — it is NOT being persisted (no history, no transcript, ` +
           `no --resume). Quit the terminal app fully (⌘Q) and relaunch it from the Dock, then run ` +
           `bin/verify-session-persistence.sh.`,
-        { key: 'session-env-contamination', tier: 'page' }
+        { key: "session-env-contamination", tier: "page" },
       );
     } catch (err) {
       // Alerting is best-effort; the in-context warning above already fired.
-      console.error(`[SessionEnvGuard] failed to send AlertGate page for session contamination: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[SessionEnvGuard] failed to send AlertGate page for session contamination: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     process.exit(0);

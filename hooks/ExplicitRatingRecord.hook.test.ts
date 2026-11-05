@@ -23,10 +23,10 @@
  *   in S8; see docs/decisions/015).
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { execSync } from "child_process";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, readdirSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execSync } from "node:child_process";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ExplicitHookRatingSchema } from "../lib/core/LearningEntrySchema.ts";
 
 const HOOK_PATH = join(import.meta.dir, "ExplicitRatingRecord.hook.ts");
@@ -38,10 +38,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  try { rmSync(kayaDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  try {
+    rmSync(kayaDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
 });
 
-function runHookWithKayaDir(stdinJson: object, timeoutMs = 8000): {
+function runHookWithKayaDir(
+  stdinJson: object,
+  timeoutMs = 8000,
+): {
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -60,7 +67,7 @@ function runHookWithKayaDir(stdinJson: object, timeoutMs = 8000): {
       // imports resolves via getKayaHome() (KAYA_HOME) — pinning only one let
       // live main-tree state gate the hook when the suite ran from ~/.claude
       // (passed in worktrees, failed on main: mixed-resolution leak).
-      { timeout: timeoutMs, env: { ...process.env, KAYA_DIR: kayaDir, KAYA_HOME: kayaDir } }
+      { timeout: timeoutMs, env: { ...process.env, KAYA_DIR: kayaDir, KAYA_HOME: kayaDir } },
     );
   } catch (err: unknown) {
     exitCode = (err as { status?: number }).status ?? 1;
@@ -77,7 +84,7 @@ function readRatingsRows(): Array<Record<string, unknown>> {
   return readFileSync(ratingsPath, "utf-8")
     .split("\n")
     .filter(Boolean)
-    .map(line => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 describe("ExplicitRatingRecord.hook.ts — schema adoption (ISC S6b)", () => {

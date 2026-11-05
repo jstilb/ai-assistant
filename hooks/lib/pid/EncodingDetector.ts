@@ -14,7 +14,7 @@
  * - ROT13 detection
  */
 
-import type { ScanFinding, InjectionDefenderConfig } from "./types";
+import type { ScanFinding, InjectionDefenderConfig } from "./types.ts";
 
 // Known-safe Base64 prefixes (images, certs, etc.)
 const SAFE_BASE64_CONTEXTS = [
@@ -29,34 +29,29 @@ const SAFE_BASE64_CONTEXTS = [
 
 // Zero-width characters to detect
 const ZERO_WIDTH_CHARS = new Set([
-  0x200B, // Zero Width Space
-  0x200C, // Zero Width Non-Joiner
-  0x200D, // Zero Width Joiner
-  0xFEFF, // Byte Order Mark
-  0x00AD, // Soft Hyphen
+  0x200b, // Zero Width Space
+  0x200c, // Zero Width Non-Joiner
+  0x200d, // Zero Width Joiner
+  0xfeff, // Byte Order Mark
+  0x00ad, // Soft Hyphen
   0x2060, // Word Joiner
-  0x180E, // Mongolian Vowel Separator
+  0x180e, // Mongolian Vowel Separator
 ]);
-
-// Confusable character pairs: [Latin, Cyrillic/Greek lookalike]
-const HOMOGLYPH_MAP: Record<string, number[]> = {
-  a: [0x0430], // Cyrillic а
-  e: [0x0435, 0x03B5], // Cyrillic е, Greek ε
-  o: [0x043E, 0x03BF], // Cyrillic о, Greek ο
-  p: [0x0440, 0x03C1], // Cyrillic р, Greek ρ
-  c: [0x0441], // Cyrillic с
-  x: [0x0445], // Cyrillic х
-  s: [0x0455], // Cyrillic ѕ
-  i: [0x0456], // Cyrillic і
-  y: [0x0443], // Cyrillic у
-};
 
 // Injection keywords to check in decoded content (simple string matching for speed)
 const INJECTION_KEYWORD_STRINGS = [
-  "ignore", "previous", "instructions",
-  "system prompt", "system message", "system override",
-  "forget", "disregard", "override",
-  "you are now", "new instructions", "jailbreak",
+  "ignore",
+  "previous",
+  "instructions",
+  "system prompt",
+  "system message",
+  "system override",
+  "forget",
+  "disregard",
+  "override",
+  "you are now",
+  "new instructions",
+  "jailbreak",
 ];
 
 /**
@@ -82,8 +77,8 @@ function containsInjectionKeywords(text: string): boolean {
 export function scan(
   content: string,
   toolName: string,
-  config: InjectionDefenderConfig,
-  _filePath?: string
+  _config: InjectionDefenderConfig,
+  _filePath?: string,
 ): ScanFinding[] {
   const findings: ScanFinding[] = [];
 
@@ -107,11 +102,9 @@ export function scan(
 function detectBase64(content: string, toolName: string, findings: ScanFinding[]): void {
   // Match Base64 blocks of 40+ chars
   const base64Regex = /(?:[A-Za-z0-9+/]{4}){10,}={0,2}/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = base64Regex.exec(content)) !== null) {
+  for (const match of content.matchAll(base64Regex)) {
     const b64String = match[0];
-    const position = match.index;
+    const position = match.index ?? 0;
 
     // Check if this is in a known-safe context
     const preceding = content.slice(Math.max(0, position - 100), position);
@@ -206,16 +199,14 @@ function detectHomoglyphs(content: string, toolName: string, findings: ScanFindi
 
   // Check for mixed scripts within words
   const wordRegex = /[a-zA-Z\u0400-\u04FF\u0370-\u03FF]{3,}/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = wordRegex.exec(content)) !== null) {
+  for (const match of content.matchAll(wordRegex)) {
     const word = match[0];
     let hasLatin = false;
     let hasNonLatin = false;
 
     for (const char of word) {
       const code = char.charCodeAt(0);
-      if (code >= 0x41 && code <= 0x7A) hasLatin = true;
+      if (code >= 0x41 && code <= 0x7a) hasLatin = true;
       else if (code >= 0x0370) hasNonLatin = true;
     }
 
@@ -224,7 +215,7 @@ function detectHomoglyphs(content: string, toolName: string, findings: ScanFindi
         layer: "encoding",
         category: "encoded_content",
         severity: "high",
-        confidence: 0.80,
+        confidence: 0.8,
         matched_text: `Mixed-script word: "${word}"`,
         description: "Homoglyph attack: Latin + Cyrillic/Greek characters in same word",
         context: {
@@ -251,9 +242,9 @@ function detectHexEncoding(content: string, toolName: string, findings: ScanFind
   if (match) {
     // Attempt to decode
     try {
-      const decodePattern = new RegExp("\\\\x([0-9a-fA-F]{2})", "g");
+      const decodePattern = /\\x([0-9a-fA-F]{2})/g;
       const decoded = match[0].replace(decodePattern, (_: string, hex: string) =>
-        String.fromCharCode(parseInt(hex, 16))
+        String.fromCharCode(parseInt(hex, 16)),
       );
 
       if (containsInjectionKeywords(decoded)) {
