@@ -1,5 +1,5 @@
 {
-  "name": "@pai/filesystem-mcp-apify",
+  "name": "@kaya/filesystem-mcp-apify",
   "version": "1.0.0",
   "type": "module",
   "description": "Code-first Apify interface for Kaya - replaces token-heavy MCP calls",

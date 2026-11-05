@@ -5,11 +5,11 @@
  * Enables in-code filtering and control flow for massive token savings.
  */
 
-import { ApifyClient } from 'apify-client'
-import { z } from 'zod'
-import { join } from 'path'
-import { getKayaHome } from '../../../lib/core/KayaHome.ts'
-import { createAppendLog } from '../../../lib/core/AppendLog.ts'
+import { ApifyApiError, ApifyClient } from "apify-client";
+import { z } from "zod";
+import { join } from "node:path";
+import { getKayaHome } from "../../../lib/core/KayaHome.ts";
+import { createAppendLog } from "../../../lib/core/AppendLog.ts";
 
 // ---------------------------------------------------------------------------
 // Runtime validation schema (ISC-600 restore, fable-audit batch3 slice 1)
@@ -26,17 +26,19 @@ import { createAppendLog } from '../../../lib/core/AppendLog.ts'
 // valid response is never rejected on a naming/typing technicality.
 // ---------------------------------------------------------------------------
 
-export const ActorRunSchema = z.object({
-  id: z.string(),
-  status: z.enum(['READY', 'RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED', 'ABORTING', 'TIMING-OUT']),
-  startedAt: z.union([z.string(), z.date()]),
-  finishedAt: z.union([z.string(), z.date()]).optional(),
-  defaultDatasetId: z.string(),
-  defaultKeyValueStoreId: z.string(),
-  buildNumber: z.string().optional(),
-  exitCode: z.number().optional(),
-  containerUrl: z.string().optional(),
-}).passthrough()
+export const ActorRunSchema = z
+  .object({
+    id: z.string(),
+    status: z.enum(["READY", "RUNNING", "SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED", "ABORTING", "TIMING-OUT"]),
+    startedAt: z.union([z.string(), z.date()]),
+    finishedAt: z.union([z.string(), z.date()]).optional(),
+    defaultDatasetId: z.string(),
+    defaultKeyValueStoreId: z.string(),
+    buildNumber: z.string().optional(),
+    exitCode: z.number().optional(),
+    containerUrl: z.string().optional(),
+  })
+  .passthrough();
 
 /**
  * Validate an actor-run response against ActorRunSchema.
@@ -49,12 +51,12 @@ export const ActorRunSchema = z.object({
  * against — without adding a new failure mode on the paid, cron-wired path.
  */
 function validateActorRun(run: unknown, context: string): void {
-  const result = ActorRunSchema.safeParse(run)
+  const result = ActorRunSchema.safeParse(run);
   if (!result.success) {
     console.error(
       `[Apify] ActorRun response failed schema validation in ${context}(): ` +
-      result.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')
-    )
+        result.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; "),
+    );
   }
 }
 
@@ -63,51 +65,51 @@ function validateActorRun(run: unknown, context: string): void {
 // ---------------------------------------------------------------------------
 
 export interface Actor {
-  id: string
-  name: string
-  username: string
-  title: string
-  description?: string
-  createdAt?: string
-  modifiedAt?: string
+  id: string;
+  name: string;
+  username: string;
+  title: string;
+  description?: string;
+  createdAt?: string;
+  modifiedAt?: string;
   stats?: {
-    totalRuns?: number
-    lastRunStartedAt?: string
-  }
+    totalRuns?: number;
+    lastRunStartedAt?: string;
+  };
 }
 
 export interface ActorRunOutput<T = unknown> {
-  body: T
-  contentType: string
+  body: T;
+  contentType: string;
 }
 
 export interface ActorRun<TOutput = unknown> {
-  id: string
-  actorId: string
-  status: 'READY' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED-OUT' | 'ABORTED' | 'ABORTING' | 'TIMING-OUT'
-  startedAt: string
-  finishedAt?: string
-  defaultDatasetId: string
-  defaultKeyValueStoreId: string
-  buildNumber?: string
-  exitCode?: number
-  containerUrl?: string
-  output?: ActorRunOutput<TOutput>
+  id: string;
+  actorId: string;
+  status: "READY" | "RUNNING" | "SUCCEEDED" | "FAILED" | "TIMED-OUT" | "ABORTED" | "ABORTING" | "TIMING-OUT";
+  startedAt: string;
+  finishedAt?: string;
+  defaultDatasetId: string;
+  defaultKeyValueStoreId: string;
+  buildNumber?: string;
+  exitCode?: number;
+  containerUrl?: string;
+  output?: ActorRunOutput<TOutput>;
 }
 
 export interface DatasetOptions {
-  offset?: number
-  limit?: number
-  fields?: string[]
-  omit?: string[]
-  clean?: boolean
+  offset?: number;
+  limit?: number;
+  fields?: string[];
+  omit?: string[];
+  clean?: boolean;
 }
 
 export interface GetAllItemsOptions {
   /** Default: 10 — hard cap. Pass Infinity to disable. */
-  maxPages?: number
+  maxPages?: number;
   /** Default: 1000 */
-  pageSize?: number
+  pageSize?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,32 +117,58 @@ export interface GetAllItemsOptions {
 // ---------------------------------------------------------------------------
 
 export interface ApifyRunAuditEntry {
-  ts: number
-  actorId: string
-  runId?: string
+  ts: number;
+  actorId: string;
+  runId?: string;
   /** First 100 chars of JSON.stringify(input) — avoids logging PII */
-  inputSummary: string
-  startedAt: string
-  finishedAt?: string
-  status: string
-  durationMs?: number
-  datasetId?: string
-  itemCount?: number
-  error?: string
+  inputSummary: string;
+  startedAt: string;
+  finishedAt?: string;
+  status: string;
+  durationMs?: number;
+  datasetId?: string;
+  itemCount?: number;
+  error?: string;
 }
 
 export function logActorRun(entry: ApifyRunAuditEntry): void {
   try {
-    const logPath = join(getKayaHome(), 'MEMORY', 'MONITORING', 'audit', 'apify-runs.jsonl')
+    const logPath = join(getKayaHome(), "MEMORY", "MONITORING", "audit", "apify-runs.jsonl");
     // A fresh AppendLog per call (not a module-level singleton): getKayaHome()
     // can change between calls (e.g. tests overriding KAYA_HOME), so the
     // target path must be re-resolved every time rather than cached against
     // a stale directory. createAppendLog() itself is a cheap, stateless
     // factory — this adds no per-call I/O beyond the append.
-    createAppendLog(logPath).append(entry)
-  } catch {
-    // Fire-and-forget: log failures must not interrupt the caller
+    createAppendLog(logPath).append(entry);
+  } catch (err) {
+    // Fire-and-forget: a log failure must not interrupt the caller, but it must not be silent either.
+    console.error(`[Apify] audit log write failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Retry classification (T5-04, plans/audits/remediation/theme5-apify-retry-restore.md)
+//
+// apify-client already retries 429 / 5xx / network errors up to 8 times with
+// backoff. callActor adds ONE more attempt, only for those same classes, so a
+// persistent transient fault gets one fresh try. Every other error (401, 403,
+// 404, 422 ... bad token, bad actor id, bad input) is never retried: a retry
+// would bill a second actor run for a failure that cannot change.
+// ---------------------------------------------------------------------------
+
+/** Total attempts for callActor (1 retry). Sized to the 200s actor / 600s ingest budget. */
+export const CALL_ACTOR_MAX_ATTEMPTS = 2;
+
+const RETRYABLE_NETWORK_CODES = new Set(["ECONNRESET", "ECONNABORTED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"]);
+
+/** True for HTTP 429, HTTP 5xx, and known transient network error codes. */
+export function isRetryableApifyError(err: unknown): boolean {
+  if (err instanceof ApifyApiError || (err instanceof Error && err.name === "ApifyApiError")) {
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    return typeof statusCode === "number" && (statusCode === 429 || statusCode >= 500);
+  }
+  const code = (err as { code?: unknown } | null | undefined)?.code;
+  return typeof code === "string" && RETRYABLE_NETWORK_CODES.has(code);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +179,9 @@ export function logActorRun(entry: ApifyRunAuditEntry): void {
  * Main Apify client for code-first operations
  */
 export class Apify {
-  private client: ApifyClient
+  private client: ApifyClient;
+  /** Pause before the retry in callActor. A field so tests can set it to 0. */
+  private retryDelayMs = 2000;
 
   constructor(token?: string) {
     // ISC-603 restore: canonical token resolution — APIFY_TOKEN only, no
@@ -161,14 +191,14 @@ export class Apify {
     // on the cron-wired seam. It only changes behavior for the dead
     // actor-wrapper library's bare `new Apify()` call sites, which have 0
     // consumers today.
-    const resolvedToken = token ?? process.env.APIFY_TOKEN
+    const resolvedToken = token ?? process.env.APIFY_TOKEN;
     if (!resolvedToken) {
       throw new Error(
-        'Apify token is required. Set APIFY_TOKEN environment variable or pass token to constructor.\n' +
-        'Get your token at: https://console.apify.com/account/integrations'
-      )
+        "Apify token is required. Set APIFY_TOKEN environment variable or pass token to constructor.\n" +
+          "Get your token at: https://console.apify.com/account/integrations",
+      );
     }
-    this.client = new ApifyClient({ token: resolvedToken })
+    this.client = new ApifyClient({ token: resolvedToken });
   }
 
   /**
@@ -181,44 +211,52 @@ export class Apify {
    * @param options - Search options
    * @returns Array of matching actors
    */
-  async search(query: string, options?: {
-    limit?: number
-    offset?: number
-  }): Promise<Actor[]> {
+  async search(
+    query: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<Actor[]> {
     // Fetch more actors than needed to ensure we get enough matches
-    const fetchLimit = Math.max((options?.limit ?? 10) * 3, 30)
+    const fetchLimit = Math.max((options?.limit ?? 10) * 3, 30);
 
     const { items } = await this.client.actors().list({
       limit: fetchLimit,
-      offset: options?.offset ?? 0
-    })
+      offset: options?.offset ?? 0,
+    });
 
     // Filter client-side by query
     // Match if ANY word in query appears in actor fields
-    const queryWords = query.toLowerCase().split(/\s+/)
+    const queryWords = query.toLowerCase().split(/\s+/);
     const filtered = items.filter((actor) => {
-      const a = actor as Actor
-      const name = (a.name || '').toLowerCase()
-      const title = (a.title || '').toLowerCase()
-      const description = (a.description || '').toLowerCase()
-      const username = (a.username || '').toLowerCase()
-      const searchText = `${name} ${title} ${description} ${username}`
+      const a = actor as unknown as Actor; // list items carry the fields read below; the SDK type omits some
+      const name = (a.name || "").toLowerCase();
+      const title = (a.title || "").toLowerCase();
+      const description = (a.description || "").toLowerCase();
+      const username = (a.username || "").toLowerCase();
+      const searchText = `${name} ${title} ${description} ${username}`;
 
       // Match if any query word is found
-      return queryWords.some(word => searchText.includes(word))
-    })
+      return queryWords.some((word) => searchText.includes(word));
+    });
 
     // Return requested number of matches
-    return filtered.slice(0, options?.limit ?? 10) as Actor[]
+    return filtered.slice(0, options?.limit ?? 10) as unknown as Actor[];
   }
 
   /**
    * Call (execute) an actor
    *
    * Validates the response shape (ISC-600) and writes a fire-and-forget
-   * JSONL audit entry (ISC-604) on completion. Does NOT retry on failure —
-   * retry-with-backoff was deliberately not restored here (touches paid
-   * actor-run cost; Needs-Jm per fable-audit batch3).
+   * JSONL audit entry (ISC-604) on completion.
+   *
+   * Retry (T5-04): at most CALL_ACTOR_MAX_ATTEMPTS (2) attempts, and only
+   * for transient errors (HTTP 429, 5xx, network codes; see
+   * isRetryableApifyError). A 4xx error is thrown at once, so a bad request
+   * never bills a second run. A failure is logged to the audit trail and
+   * rethrown unchanged. A TIMED-OUT run resolves (does not throw), so it is
+   * not retried here; the caller checks run.status.
    *
    * @param actorId - Actor ID or "username/actor-name"
    * @param input - Actor input configuration
@@ -229,41 +267,70 @@ export class Apify {
     actorId: string,
     input: TInput,
     options?: {
-      memory?: number    // Memory in MB (128, 256, 512, 1024, etc.)
-      timeout?: number   // Timeout in seconds
-      build?: string     // Build number or tag
-    }
+      memory?: number; // Memory in MB (128, 256, 512, 1024, etc.)
+      timeout?: number; // Timeout in seconds
+      build?: string; // Build number or tag
+    },
   ): Promise<ActorRun<TOutput>> {
-    const startedAt = new Date().toISOString()
-    const inputSummary = JSON.stringify(input).slice(0, 100)
+    const startedAt = new Date().toISOString();
+    const inputSummary = JSON.stringify(input).slice(0, 100);
 
-    const run = await this.client.actor(actorId).call(input, {
-      memory: options?.memory,
-      timeout: options?.timeout,
-      build: options?.build
-    })
+    let run: Awaited<ReturnType<ReturnType<ApifyClient["actor"]>["call"]>> | undefined;
+    for (let attempt = 1; attempt <= CALL_ACTOR_MAX_ATTEMPTS; attempt++) {
+      try {
+        run = await this.client.actor(actorId).call(input, {
+          memory: options?.memory,
+          timeout: options?.timeout,
+          build: options?.build,
+        });
+        break;
+      } catch (err) {
+        const retryable = isRetryableApifyError(err);
+        if (retryable && attempt < CALL_ACTOR_MAX_ATTEMPTS) {
+          console.error(
+            `[Apify] callActor ${actorId} attempt ${attempt} failed (${err instanceof Error ? err.message : String(err)}); retrying`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
+          continue;
+        }
+        logActorRun({
+          ts: Date.now(),
+          actorId,
+          inputSummary,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          status: retryable ? "RETRY_EXHAUSTED" : "ERROR",
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
+    }
 
-    validateActorRun(run, 'callActor')
-    const result = run as unknown as ActorRun<TOutput>
+    validateActorRun(run, "callActor");
+    const result = run as unknown as ActorRun<TOutput>;
 
     // ISC-604: async fire-and-forget audit log
-    Promise.resolve().then(() => {
-      logActorRun({
-        ts: Date.now(),
-        actorId,
-        runId: result.id,
-        inputSummary,
-        startedAt,
-        finishedAt: result.finishedAt,
-        status: result.status,
-        durationMs: result.finishedAt
-          ? new Date(result.finishedAt).getTime() - new Date(startedAt).getTime()
-          : undefined,
-        datasetId: result.defaultDatasetId,
+    Promise.resolve()
+      .then(() => {
+        logActorRun({
+          ts: Date.now(),
+          actorId,
+          runId: result.id,
+          inputSummary,
+          startedAt,
+          finishedAt: result.finishedAt,
+          status: result.status,
+          durationMs: result.finishedAt
+            ? new Date(result.finishedAt).getTime() - new Date(startedAt).getTime()
+            : undefined,
+          datasetId: result.defaultDatasetId,
+        });
       })
-    }).catch(() => {/* fire-and-forget */})
+      .catch(() => {
+        /* fire-and-forget */
+      });
 
-    return result
+    return result;
   }
 
   /**
@@ -273,7 +340,7 @@ export class Apify {
    * @returns ApifyDataset instance
    */
   getDataset(datasetId: string): ApifyDataset {
-    return new ApifyDataset(this.client, datasetId)
+    return new ApifyDataset(this.client, datasetId);
   }
 
   /**
@@ -283,9 +350,9 @@ export class Apify {
    * @returns Run information
    */
   async getRun(runId: string): Promise<ActorRun> {
-    const run = await this.client.run(runId).get()
-    validateActorRun(run, 'getRun')
-    return run as unknown as ActorRun
+    const run = await this.client.run(runId).get();
+    validateActorRun(run, "getRun");
+    return run as unknown as ActorRun;
   }
 
   /**
@@ -301,34 +368,35 @@ export class Apify {
    * @param options - Wait options (waitSecs defaults to 300)
    * @returns Final run information
    */
-  async waitForRun<TOutput = unknown>(
-    runId: string,
-    options?: { waitSecs?: number }
-  ): Promise<ActorRun<TOutput>> {
-    const waitSecs = options?.waitSecs ?? 300
+  async waitForRun<TOutput = unknown>(runId: string, options?: { waitSecs?: number }): Promise<ActorRun<TOutput>> {
+    const waitSecs = options?.waitSecs ?? 300;
 
-    const run = await this.client.run(runId).waitForFinish({ waitSecs })
-    validateActorRun(run, 'waitForRun')
-    const result = run as unknown as ActorRun<TOutput>
+    const run = await this.client.run(runId).waitForFinish({ waitSecs });
+    validateActorRun(run, "waitForRun");
+    const result = run as unknown as ActorRun<TOutput>;
 
     // ISC-604: audit log final status
-    Promise.resolve().then(() => {
-      logActorRun({
-        ts: Date.now(),
-        actorId: result.actorId,
-        runId: result.id,
-        inputSummary: '(waitForRun — input not available)',
-        startedAt: result.startedAt,
-        finishedAt: result.finishedAt,
-        status: result.status,
-        durationMs: result.finishedAt
-          ? new Date(result.finishedAt).getTime() - new Date(result.startedAt).getTime()
-          : undefined,
-        datasetId: result.defaultDatasetId,
+    Promise.resolve()
+      .then(() => {
+        logActorRun({
+          ts: Date.now(),
+          actorId: result.actorId,
+          runId: result.id,
+          inputSummary: "(waitForRun — input not available)",
+          startedAt: result.startedAt,
+          finishedAt: result.finishedAt,
+          status: result.status,
+          durationMs: result.finishedAt
+            ? new Date(result.finishedAt).getTime() - new Date(result.startedAt).getTime()
+            : undefined,
+          datasetId: result.defaultDatasetId,
+        });
       })
-    }).catch(() => {/* fire-and-forget */})
+      .catch(() => {
+        /* fire-and-forget */
+      });
 
-    return result
+    return result;
   }
 }
 
@@ -345,7 +413,7 @@ export class Apify {
 export class ApifyDataset {
   constructor(
     private client: ApifyClient,
-    private datasetId: string
+    private datasetId: string,
   ) {}
 
   /**
@@ -360,10 +428,10 @@ export class ApifyDataset {
       limit: options?.limit,
       fields: options?.fields,
       omit: options?.omit,
-      clean: options?.clean
-    })
+      clean: options?.clean,
+    });
 
-    return items as TItem[]
+    return items as TItem[];
   }
 
   /**
@@ -382,34 +450,34 @@ export class ApifyDataset {
    * @returns Array of all items up to the cap
    */
   async getAllItems<TItem = unknown>(options?: GetAllItemsOptions): Promise<TItem[]> {
-    const maxPages = options?.maxPages ?? 10
-    const pageSize = options?.pageSize ?? 1000
-    const allItems: TItem[] = []
-    let offset = 0
-    let pages = 0
+    const maxPages = options?.maxPages ?? 10;
+    const pageSize = options?.pageSize ?? 1000;
+    const allItems: TItem[] = [];
+    let offset = 0;
+    let pages = 0;
 
     while (true) {
       if (pages >= maxPages) {
         console.warn(
           `[Apify] getAllItems() reached maxPages=${maxPages} cap at ${allItems.length} items. ` +
-          `Pass maxPages: Infinity to disable.`
-        )
-        break
+            `Pass maxPages: Infinity to disable.`,
+        );
+        break;
       }
 
       const { items, count, total } = await this.client.dataset(this.datasetId).listItems({
         offset,
-        limit: pageSize
-      })
+        limit: pageSize,
+      });
 
-      allItems.push(...(items as TItem[]))
-      pages++
+      allItems.push(...(items as TItem[]));
+      pages++;
 
-      if (offset + count >= total) break
-      offset += pageSize
+      if (offset + count >= total) break;
+      offset += pageSize;
     }
 
-    return allItems
+    return allItems;
   }
 
   /**
@@ -419,12 +487,9 @@ export class ApifyDataset {
    * @param options - Pagination options for underlying getAllItems call
    * @returns Filtered items
    */
-  async filter<TItem = unknown>(
-    predicate: (item: TItem) => boolean,
-    options?: GetAllItemsOptions
-  ): Promise<TItem[]> {
-    const items = await this.getAllItems<TItem>(options)
-    return items.filter(predicate)
+  async filter<TItem = unknown>(predicate: (item: TItem) => boolean, options?: GetAllItemsOptions): Promise<TItem[]> {
+    const items = await this.getAllItems<TItem>(options);
+    return items.filter(predicate);
   }
 
   /**
@@ -438,12 +503,12 @@ export class ApifyDataset {
   async top<TItem = unknown>(
     sortFn: (a: TItem, b: TItem) => number,
     limit: number,
-    options?: GetAllItemsOptions
+    options?: GetAllItemsOptions,
   ): Promise<TItem[]> {
-    const items = await this.getAllItems<TItem>(options)
-    return items.sort(sortFn).slice(0, limit)
+    const items = await this.getAllItems<TItem>(options);
+    return items.sort(sortFn).slice(0, limit);
   }
 }
 
 // Re-export for convenience
-export { ApifyClient }
+export { ApifyClient };
