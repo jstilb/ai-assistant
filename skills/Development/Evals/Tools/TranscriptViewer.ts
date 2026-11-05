@@ -15,10 +15,10 @@
  *   bun TranscriptViewer.ts summary --last 20
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join, basename } from "path";
-import { parseArgs } from "util";
-import type { EvalRun, Trial, GraderResult, Transcript, ToolCall } from "../Types/index.ts";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import type { EvalRun, Trial, Transcript, ToolCall } from "../Types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -85,8 +85,9 @@ function findLatestRun(taskDir: string): string | null {
     .filter((f) => f.startsWith("run_") && f.endsWith(".json"))
     .sort();
 
-  if (files.length === 0) return null;
-  return join(taskDir, files[files.length - 1]);
+  const latest = files.at(-1);
+  if (latest === undefined) return null;
+  return join(taskDir, latest);
 }
 
 /** Load an EvalRun from a JSON file path */
@@ -94,7 +95,13 @@ function loadRun(filePath: string): EvalRun | null {
   try {
     const raw = readFileSync(filePath, "utf-8");
     return JSON.parse(raw) as EvalRun;
-  } catch {
+  } catch (err) {
+    // A missing file is expected (race with cleanup); a corrupt run file is not silent.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      process.stderr.write(
+        `[TranscriptViewer] Skipping unreadable run ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
     return null;
   }
 }
@@ -146,7 +153,7 @@ function extractToolSequence(trial: Trial): string[] {
     const name = tc.name;
     if (name.startsWith("mcp__")) {
       const parts = name.split("__");
-      return parts[parts.length - 1];
+      return parts.at(-1) ?? name;
     }
     return name;
   });
@@ -218,8 +225,7 @@ function cmdList(options: { task?: string; status?: string; sort?: string }): vo
   const COL_TIME = 9;
 
   // Header
-  const header =
-    `${BOLD}${pad("TASK ID", COL_TASK)}  ${pad("STATUS", COL_STATUS)}  ${pad("SCORE", COL_SCORE, "right")}  ${pad("TOOL SEQUENCE", COL_TOOLS)}  ${pad("TURNS", COL_TURNS, "right")}  ${pad("WALL TIME", COL_TIME, "right")}${RESET}`;
+  const header = `${BOLD}${pad("TASK ID", COL_TASK)}  ${pad("STATUS", COL_STATUS)}  ${pad("SCORE", COL_SCORE, "right")}  ${pad("TOOL SEQUENCE", COL_TOOLS)}  ${pad("TURNS", COL_TURNS, "right")}  ${pad("WALL TIME", COL_TIME, "right")}${RESET}`;
   console.log(header);
   console.log("\u2500".repeat(stripAnsi(header).length));
 
@@ -268,7 +274,7 @@ function cmdView(taskId: string, options: { trial?: number; format?: string }): 
   const trialIdx = options.trial !== undefined ? options.trial - 1 : 0;
   const trial = run.trials[trialIdx];
   if (!trial) {
-    console.log(`Trial ${(options.trial ?? 1)} not found. Available: 1-${run.trials.length}`);
+    console.log(`Trial ${options.trial ?? 1} not found. Available: 1-${run.trials.length}`);
     return;
   }
 
@@ -306,14 +312,14 @@ function printTrialSummary(taskId: string, run: EvalRun, trial: Trial): void {
     const COL_WEIGHT = 8;
 
     console.log(
-      `  ${pad("GRADER", COL_TYPE)}  ${pad("PASS", COL_PASS)}  ${pad("SCORE", COL_GSCORE, "right")}  ${pad("WEIGHT", COL_WEIGHT, "right")}`
+      `  ${pad("GRADER", COL_TYPE)}  ${pad("PASS", COL_PASS)}  ${pad("SCORE", COL_GSCORE, "right")}  ${pad("WEIGHT", COL_WEIGHT, "right")}`,
     );
     console.log(`  ${"─".repeat(COL_TYPE + COL_PASS + COL_GSCORE + COL_WEIGHT + 6)}`);
 
     for (const gr of trial.grader_results) {
       const sc = scoreColor(gr.score);
       console.log(
-        `  ${pad(gr.grader_type, COL_TYPE)}  ${pad(statusBadge(gr.passed), COL_PASS + (statusBadge(gr.passed).length - stripAnsi(statusBadge(gr.passed)).length))}  ${pad(`${sc}${gr.score.toFixed(2)}${RESET}`, COL_GSCORE + (`${sc}${gr.score.toFixed(2)}${RESET}`.length - stripAnsi(`${sc}${gr.score.toFixed(2)}${RESET}`).length), "right")}  ${pad(gr.weight.toFixed(1), COL_WEIGHT, "right")}`
+        `  ${pad(gr.grader_type, COL_TYPE)}  ${pad(statusBadge(gr.passed), COL_PASS + (statusBadge(gr.passed).length - stripAnsi(statusBadge(gr.passed)).length))}  ${pad(`${sc}${gr.score.toFixed(2)}${RESET}`, COL_GSCORE + (`${sc}${gr.score.toFixed(2)}${RESET}`.length - stripAnsi(`${sc}${gr.score.toFixed(2)}${RESET}`).length), "right")}  ${pad(gr.weight.toFixed(1), COL_WEIGHT, "right")}`,
       );
     }
   }
@@ -358,7 +364,9 @@ function printTrialDetail(taskId: string, run: EvalRun, trial: Trial): void {
     console.log(`${"═".repeat(80)}`);
 
     for (const gr of trial.grader_results) {
-      console.log(`\n${BOLD}${gr.grader_type}${RESET}  ${statusBadge(gr.passed)}  score=${scoreColor(gr.score)}${gr.score.toFixed(3)}${RESET}  weight=${gr.weight}  ${DIM}${formatMs(gr.duration_ms)}${RESET}`);
+      console.log(
+        `\n${BOLD}${gr.grader_type}${RESET}  ${statusBadge(gr.passed)}  score=${scoreColor(gr.score)}${gr.score.toFixed(3)}${RESET}  weight=${gr.weight}  ${DIM}${formatMs(gr.duration_ms)}${RESET}`,
+      );
 
       if (gr.reasoning) {
         console.log(`  ${BOLD}Reasoning:${RESET}`);
@@ -434,7 +442,9 @@ function cmdSummary(options: { last?: number }): void {
   console.log(`${BOLD}Total Tasks:${RESET}   ${totalTasks}`);
   console.log(`${BOLD}Passed:${RESET}        ${GREEN}${passedTasks}${RESET}`);
   console.log(`${BOLD}Failed:${RESET}        ${failedTasks > 0 ? RED : WHITE}${failedTasks}${RESET}`);
-  console.log(`${BOLD}Pass Rate:${RESET}     ${scoreColor(overallPassRate)}${(overallPassRate * 100).toFixed(1)}%${RESET}`);
+  console.log(
+    `${BOLD}Pass Rate:${RESET}     ${scoreColor(overallPassRate)}${(overallPassRate * 100).toFixed(1)}%${RESET}`,
+  );
   console.log(`${BOLD}Mean Score:${RESET}    ${scoreColor(meanScore)}${meanScore.toFixed(3)}${RESET}`);
 
   // Most common failures
@@ -570,7 +580,7 @@ function main(): void {
         process.exit(1);
       }
       const trialNum = values.trial ? parseInt(values.trial as string, 10) : undefined;
-      if (trialNum !== undefined && (isNaN(trialNum) || trialNum < 1)) {
+      if (trialNum !== undefined && (Number.isNaN(trialNum) || trialNum < 1)) {
         console.error(`Invalid --trial value: "${values.trial}". Must be a positive integer.`);
         process.exit(1);
       }
@@ -585,7 +595,7 @@ function main(): void {
 
     case "summary": {
       const lastN = values.last ? parseInt(values.last as string, 10) : undefined;
-      if (lastN !== undefined && (isNaN(lastN) || lastN < 1)) {
+      if (lastN !== undefined && (Number.isNaN(lastN) || lastN < 1)) {
         console.error(`Invalid --last value: "${values.last}". Must be a positive integer.`);
         process.exit(1);
       }

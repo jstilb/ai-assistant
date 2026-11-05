@@ -21,11 +21,11 @@
  * never a green "0/0 passed".
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderResult } from '../../Types/index.ts';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult } from "../../Types/index.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
 
 // The per-grader params schema lives WITH the grader (not centralized in
 // Types/index.ts) so the runtime-validated shape and the code that reads it
@@ -42,7 +42,7 @@ const StateCheckParamsSchema = z
           path: z.string(),
           contains: z.array(z.string()).optional(),
           not_contains: z.array(z.string()).optional(),
-        })
+        }),
       )
       .optional(),
     check_env: z.record(z.string(), z.string()).optional(),
@@ -60,20 +60,20 @@ function validateParams(raw: unknown): StateCheckParams {
   const result = StateCheckParamsSchema.safeParse(raw ?? {});
   if (result.success) return result.data;
 
-  const validKeys = Object.keys(StateCheckParamsSchema.shape).join(', ');
+  const validKeys = Object.keys(StateCheckParamsSchema.shape).join(", ");
   const issues = result.error.issues
-    .map(issue =>
-      issue.code === 'unrecognized_keys'
-        ? `unknown param key(s): ${issue.keys.join(', ')}`
-        : `${issue.path.join('.') || '(root)'}: ${issue.message}`
+    .map((issue) =>
+      issue.code === "unrecognized_keys"
+        ? `unknown param key(s): ${issue.keys.join(", ")}`
+        : `${issue.path.join(".") || "(root)"}: ${issue.message}`,
     )
-    .join('; ');
+    .join("; ");
   throw new Error(`StateCheckGrader: invalid params — ${issues}. Valid params: ${validKeys}.`);
 }
 
 export class StateCheckGrader extends BaseGrader {
-  type = 'state_check' as const;
-  category = 'code_based' as const;
+  type = "state_check" as const;
+  category = "code_based" as const;
   // checkState() reads context.transcript.final_outcome and, as a fallback
   // for the `expect` param, parses JSON out of context.output directly.
   readsOutput = true;
@@ -107,13 +107,13 @@ export class StateCheckGrader extends BaseGrader {
           checks.push({
             check: `file.${fileCheck.path}`,
             passed: false,
-            expected: 'file exists',
-            actual: 'file not found',
+            expected: "file exists",
+            actual: "file not found",
           });
           continue;
         }
 
-        const content = readFileSync(filePath, 'utf-8');
+        const content = readFileSync(filePath, "utf-8");
 
         // Check contains
         if (fileCheck.contains) {
@@ -123,7 +123,7 @@ export class StateCheckGrader extends BaseGrader {
               check: `file.${fileCheck.path}.contains`,
               passed: found,
               expected: pattern,
-              actual: found ? 'found' : 'not found',
+              actual: found ? "found" : "not found",
             });
           }
         }
@@ -136,7 +136,7 @@ export class StateCheckGrader extends BaseGrader {
               check: `file.${fileCheck.path}.not_contains`,
               passed: !found,
               expected: `NOT: ${pattern}`,
-              actual: found ? 'found (should not exist)' : 'not found (correct)',
+              actual: found ? "found (should not exist)" : "not found (correct)",
             });
           }
         }
@@ -161,11 +161,11 @@ export class StateCheckGrader extends BaseGrader {
     if (checks.length === 0) {
       return this.createResult(0, false, performance.now() - start, {
         reasoning:
-          'state_check grader has zero configured checks (expect/check_files/check_env were absent or resolved to zero real checks) — refusing to report a trivial pass. Configure at least one check.',
+          "state_check grader has zero configured checks (expect/check_files/check_env were absent or resolved to zero real checks) — refusing to report a trivial pass. Configure at least one check.",
       });
     }
 
-    const passCount = checks.filter(c => c.passed).length;
+    const passCount = checks.filter((c) => c.passed).length;
     const score = passCount / checks.length;
     const passed = passCount === checks.length;
 
@@ -178,7 +178,7 @@ export class StateCheckGrader extends BaseGrader {
   private async checkState(
     key: string,
     expected: unknown,
-    context: GraderContext
+    context: GraderContext,
   ): Promise<{ passed: boolean; actual?: unknown }> {
     // Check if expected state exists in the transcript's final outcome
     if (context.transcript.final_outcome) {
@@ -211,7 +211,7 @@ export class StateCheckGrader extends BaseGrader {
   private deepEqual(a: unknown, b: unknown): boolean {
     if (a === b) return true;
     if (typeof a !== typeof b) return false;
-    if (typeof a !== 'object' || a === null || b === null) return false;
+    if (typeof a !== "object" || a === null || b === null) return false;
 
     const aObj = a as Record<string, unknown>;
     const bObj = b as Record<string, unknown>;
@@ -226,4 +226,4 @@ export class StateCheckGrader extends BaseGrader {
   }
 }
 
-registerGrader('state_check', StateCheckGrader);
+registerGrader("state_check", StateCheckGrader);

@@ -30,7 +30,7 @@
  * Types/index.ts exactly as before — only the definitions moved here.
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // Grader type enum
@@ -91,19 +91,19 @@ import { z } from 'zod';
  */
 export const GRADER_TYPES = [
   // Code-based (fast, deterministic)
-  'string_match',
-  'regex_match',
-  'binary_tests',
-  'state_check',
-  'tool_calls',
+  "string_match",
+  "regex_match",
+  "binary_tests",
+  "state_check",
+  "tool_calls",
   // Code-based (custom, Kaya-specific)
-  'fixture_accuracy',
+  "fixture_accuracy",
   // Model-based (flexible, nuanced)
-  'llm_rubric',
-  'natural_language_assert',
+  "llm_rubric",
+  "natural_language_assert",
   // Model-based (custom, Kaya-specific)
-  'ensemble_label',
-  'nightly_judge',
+  "ensemble_label",
+  "nightly_judge",
 ] as const;
 
 export const GraderTypeSchema = z.enum(GRADER_TYPES);
@@ -113,10 +113,10 @@ export type GraderType = z.infer<typeof GraderTypeSchema>;
 // Shared enums
 // ============================================================================
 
-export const EvalDomainSchema = z.enum(['coding', 'conversational', 'research', 'computer_use', 'general']);
+export const EvalDomainSchema = z.enum(["coding", "conversational", "research", "computer_use", "general"]);
 export type EvalDomain = z.infer<typeof EvalDomainSchema>;
 
-export const EvalTypeSchema = z.enum(['capability', 'regression']);
+export const EvalTypeSchema = z.enum(["capability", "regression"]);
 export type EvalType = z.infer<typeof EvalTypeSchema>;
 
 // ============================================================================
@@ -135,43 +135,45 @@ export type GraderConfig = z.infer<typeof GraderConfigSchema>;
 // Task
 // ============================================================================
 
-const TaskSetupSchema = z.object({
-  sandbox: z.boolean().optional(),
-  git_repo: z.string().optional(),
-  checkout: z.string().optional(),
-  working_dir: z.string().optional(),
-  env_vars: z.record(z.string(), z.string()).optional(),
-  timeout_ms: z.number().positive().optional(),
-  /** User prompt to send to model (overrides description for comparison tasks) */
-  scenario_prompt: z.string().optional(),
-  /** Git ref for baseline comparison (e.g., "pre-streamline") */
-  baseline_ref: z.string().optional(),
-  /** Trial isolation mode */
-  isolation: z.enum(['sandbox', 'shared', 'none']).optional(),
-  /** Shell commands to run in the working directory before the task executes */
-  setup_commands: z.array(z.string()).optional(),
-  /**
-   * Escape hatch for the destructive-scenario guard (evals-rebuild slice B6
-   * — Tools/DestructiveScenarioGuard.ts). A task whose scenario_prompt or
-   * setup_commands legitimately need to combine a destructive verb (rm -rf,
-   * git reset --hard, DROP TABLE, etc. — see the guard's pattern list) with
-   * a REAL absolute path declares that path here, mapped to a
-   * materialization mode. Before the guard scans, the executor copies the
-   * real path into the trial's sandbox and rewrites every literal
-   * occurrence of the real path in scenario_prompt/setup_commands to point
-   * at the sandbox copy instead — the agent (and any setup_commands) then
-   * only ever touches the copy, never the real path. Keys are real absolute
-   * (or `~/`-prefixed) paths exactly as they appear in the prompt text;
-   * 'copy' is the only supported mode today (a full recursive copy via
-   * fs.cpSync) — deliberately minimal, not a general VFS. See
-   * MEMORY/SkillAudits/evals-infra-audit-2026-07-09/liverun.md finding 4 for
-   * the incident this guards against.
-   */
-  sandbox_paths: z.record(z.string(), z.enum(['copy'])).optional(),
-}).optional();
+const TaskSetupSchema = z
+  .object({
+    sandbox: z.boolean().optional(),
+    git_repo: z.string().optional(),
+    checkout: z.string().optional(),
+    working_dir: z.string().optional(),
+    env_vars: z.record(z.string(), z.string()).optional(),
+    timeout_ms: z.number().positive().optional(),
+    /** User prompt to send to model (overrides description for comparison tasks) */
+    scenario_prompt: z.string().optional(),
+    /** Git ref for baseline comparison (e.g., "pre-streamline") */
+    baseline_ref: z.string().optional(),
+    /** Trial isolation mode */
+    isolation: z.enum(["sandbox", "shared", "none"]).optional(),
+    /** Shell commands to run in the working directory before the task executes */
+    setup_commands: z.array(z.string()).optional(),
+    /**
+     * Escape hatch for the destructive-scenario guard (evals-rebuild slice B6
+     * — Tools/DestructiveScenarioGuard.ts). A task whose scenario_prompt or
+     * setup_commands legitimately need to combine a destructive verb (rm -rf,
+     * git reset --hard, DROP TABLE, etc. — see the guard's pattern list) with
+     * a REAL absolute path declares that path here, mapped to a
+     * materialization mode. Before the guard scans, the executor copies the
+     * real path into the trial's sandbox and rewrites every literal
+     * occurrence of the real path in scenario_prompt/setup_commands to point
+     * at the sandbox copy instead — the agent (and any setup_commands) then
+     * only ever touches the copy, never the real path. Keys are real absolute
+     * (or `~/`-prefixed) paths exactly as they appear in the prompt text;
+     * 'copy' is the only supported mode today (a full recursive copy via
+     * fs.cpSync) — deliberately minimal, not a general VFS. See
+     * MEMORY/SkillAudits/evals-infra-audit-2026-07-09/liverun.md finding 4 for
+     * the incident this guards against.
+     */
+    sandbox_paths: z.record(z.string(), z.enum(["copy"])).optional(),
+  })
+  .optional();
 
 const MetricConfigSchema = z.object({
-  type: z.enum(['transcript', 'latency', 'custom']),
+  type: z.enum(["transcript", "latency", "custom"]),
   metrics: z.array(z.string()),
 });
 export type MetricConfig = z.infer<typeof MetricConfigSchema>;
@@ -204,7 +206,7 @@ export const TaskSchema = z.object({
   // Metadata
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
-  source: z.enum(['manual', 'failure_log', 'generated', 'simulation']).optional(),
+  source: z.enum(["manual", "failure_log", "generated", "simulation"]).optional(),
 
   /** Free-form authoring notes (red/green evidence, known limitations, live
    *  wiring TODOs). Not consumed by any loader — a real field on most of

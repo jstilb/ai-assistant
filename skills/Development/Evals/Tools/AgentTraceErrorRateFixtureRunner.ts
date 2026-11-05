@@ -37,14 +37,14 @@
  */
 
 // cross-skill-allowed: evals-rebuild C2 consolidation — this migrated ErrorRate eval net deliberately reuses AgentMonitor's canonical dual-format trace parser (single source of truth) rather than forking a second parser; seam candidate: lift parseTraceLine to lib/core if a third consumer appears
-import { parseTraceLine } from '../../../System/AgentMonitor/Tools/TraceCollector.ts';
+import { parseTraceLine } from "../../../System/AgentMonitor/Tools/TraceCollector.ts";
 import {
   loadFixturesJsonl,
   buildSummary,
   writeSummary,
   parseFixtureRunnerArgs,
   type FixtureResult,
-} from './FixtureRunnerShared.ts';
+} from "./FixtureRunnerShared.ts";
 
 const MAX_ERROR_RATE_PERCENT = 15; // matches the deleted ErrorRateEvaluator's DEFAULT_CONFIG.maxErrorRatePercent
 
@@ -62,12 +62,10 @@ interface Actual {
 }
 
 export function computeErrorRateActual(rawJsonl: string): Actual {
-  const lines = rawJsonl.trim().split('\n');
-  const traces = lines
-    .map(l => parseTraceLine(l))
-    .filter((t): t is NonNullable<typeof t> => t !== null);
+  const lines = rawJsonl.trim().split("\n");
+  const traces = lines.map((l) => parseTraceLine(l)).filter((t): t is NonNullable<typeof t> => t !== null);
   const totalEvents = traces.length;
-  const errorEvents = traces.filter(t => t.eventType === 'error').length;
+  const errorEvents = traces.filter((t) => t.eventType === "error").length;
   const errorRatePercent = totalEvents > 0 ? Math.round((errorEvents / totalEvents) * 1000) / 10 : 0;
   const withinThreshold = errorRatePercent <= MAX_ERROR_RATE_PERCENT;
   return { totalEvents, errorEvents, errorRatePercent, withinThreshold };
@@ -79,12 +77,13 @@ export function runAgentTraceErrorRateFixtures(fixturesPath: string): FixtureRes
 
   for (const fx of fixtures) {
     const actual = computeErrorRateActual(fx.input);
-    const correct = actual.totalEvents === fx.expected.totalEvents
-      && actual.errorEvents === fx.expected.errorEvents
-      && actual.withinThreshold === fx.expected.withinThreshold;
+    const correct =
+      actual.totalEvents === fx.expected.totalEvents &&
+      actual.errorEvents === fx.expected.errorEvents &&
+      actual.withinThreshold === fx.expected.withinThreshold;
     results.push({ ...fx, actual, correct });
     console.log(
-      `  [${correct ? 'OK  ' : 'FAIL'}] ${fx.id}: expected totalEvents=${fx.expected.totalEvents} errorEvents=${fx.expected.errorEvents} withinThreshold=${fx.expected.withinThreshold}, got totalEvents=${actual.totalEvents} errorEvents=${actual.errorEvents} errorRate=${actual.errorRatePercent}% withinThreshold=${actual.withinThreshold}`,
+      `  [${correct ? "OK  " : "FAIL"}] ${fx.id}: expected totalEvents=${fx.expected.totalEvents} errorEvents=${fx.expected.errorEvents} withinThreshold=${fx.expected.withinThreshold}, got totalEvents=${actual.totalEvents} errorEvents=${actual.errorEvents} errorRate=${actual.errorRatePercent}% withinThreshold=${actual.withinThreshold}`,
     );
   }
 
@@ -95,8 +94,10 @@ if (import.meta.main) {
   const { fixtures, out } = parseFixtureRunnerArgs(process.argv.slice(2));
   console.log(`[AgentTraceErrorRateFixtureRunner] Loading fixtures from ${fixtures}`);
   const results = runAgentTraceErrorRateFixtures(fixtures);
-  const summary = buildSummary('agent_trace_error_rate_fixtures', results);
+  const summary = buildSummary("agent_trace_error_rate_fixtures", results);
   writeSummary(out, summary);
-  console.log(`\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`);
+  console.log(
+    `\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`,
+  );
   process.exit(0);
 }

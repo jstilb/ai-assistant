@@ -4,13 +4,13 @@
  * the consensus label. Divergence is spooled to MEMORY/MONITORING for human review.
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult } from '../../Types/index.ts';
-import { inference, type InferenceLevel, type InferenceResult } from '../../../../../lib/core/Inference';
-import { mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { createAppendLog } from '../../../../../lib/core/AppendLog.ts';
-import { getKayaHome } from '../../../../../lib/core/KayaHome.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult } from "../../Types/index.ts";
+import { inference, type InferenceLevel, type InferenceResult } from "../../../../../lib/core/Inference.ts";
+import { mkdirSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { createAppendLog } from "../../../../../lib/core/AppendLog.ts";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 /**
  * Resolved LAZILY per call — NOT frozen at import. A module-scope
@@ -29,7 +29,7 @@ import { getKayaHome } from '../../../../../lib/core/KayaHome.ts';
  * nothing.
  */
 function ensembleDivergencePath(): string {
-  return join(getKayaHome(), 'MEMORY', 'MONITORING', 'ensemble-divergence.jsonl');
+  return join(getKayaHome(), "MEMORY", "MONITORING", "ensemble-divergence.jsonl");
 }
 
 export interface EnsembleLabelParams {
@@ -48,8 +48,8 @@ export interface EnsembleLabelParams {
 }
 
 export class EnsembleLabelGrader extends BaseGrader {
-  type = 'ensemble_label' as const;
-  category = 'model_based' as const;
+  type = "ensemble_label" as const;
+  category = "model_based" as const;
   // `input = params.input ?? context.output` — falls back to context.output
   // whenever a task doesn't supply an explicit static `input`.
   readsOutput = true;
@@ -62,11 +62,11 @@ export class EnsembleLabelGrader extends BaseGrader {
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as EnsembleLabelParams;
+    const params = this.config.params as unknown as EnsembleLabelParams; // config.params is untyped YAML; validated below
 
-    const levels: InferenceLevel[] = params.levels ?? ['fast', 'standard', 'smart'];
+    const levels: InferenceLevel[] = params.levels ?? ["fast", "standard", "smart"];
     const candidateField = params.candidate_field;
-    const divergeKey = params.diverge_key ?? 'ensemble-divergence';
+    const divergeKey = params.diverge_key ?? "ensemble-divergence";
     const input = params.input ?? context.output;
 
     // ── Call all levels in parallel ──────────────────────────────────────────
@@ -88,12 +88,10 @@ export class EnsembleLabelGrader extends BaseGrader {
 
     for (let i = 0; i < rawResults.length; i++) {
       const r = rawResults[i];
-      const label =
-        r.success && r.parsed != null
-          ? (r.parsed as Record<string, unknown>)[candidateField]
-          : undefined;
+      if (!r) continue;
+      const label = r.success && r.parsed != null ? (r.parsed as Record<string, unknown>)[candidateField] : undefined;
 
-      if (typeof label === 'string' || typeof label === 'number') {
+      if (typeof label === "string" || typeof label === "number") {
         const key = String(label);
         votes[key] = (votes[key] ?? 0) + 1;
       } else {
@@ -107,7 +105,7 @@ export class EnsembleLabelGrader extends BaseGrader {
     // ── All failed / abstained ────────────────────────────────────────────────
     if (votersCount === 0) {
       return this.createResult(0, false, duration_ms, {
-        reasoning: 'all ensemble members failed',
+        reasoning: "all ensemble members failed",
         details: {
           divergent: false,
           votes,
@@ -129,10 +127,7 @@ export class EnsembleLabelGrader extends BaseGrader {
     }
 
     const threshold = params.consensus_threshold ?? undefined;
-    const hasMajority =
-      threshold !== undefined
-        ? topCount >= threshold
-        : topCount * 2 > votersCount; // simple majority
+    const hasMajority = threshold !== undefined ? topCount >= threshold : topCount * 2 > votersCount; // simple majority
 
     if (hasMajority && topLabel !== undefined) {
       // CONSENSUS
@@ -164,11 +159,7 @@ export class EnsembleLabelGrader extends BaseGrader {
     });
   }
 
-  private appendDivergenceRecord(opts: {
-    divergeKey: string;
-    input: string;
-    votes: Record<string, number>;
-  }): void {
+  private appendDivergenceRecord(opts: { divergeKey: string; input: string; votes: Record<string, number> }): void {
     const { divergeKey, input, votes } = opts;
     // Resolved lazily, per call — see ensembleDivergencePath()'s doc
     // comment (evals-rebuild slice B1 hermeticity fix).
@@ -195,4 +186,4 @@ export class EnsembleLabelGrader extends BaseGrader {
   }
 }
 
-registerGrader('ensemble_label', EnsembleLabelGrader);
+registerGrader("ensemble_label", EnsembleLabelGrader);

@@ -11,7 +11,7 @@ Feeds Into: [AgentMetacognition]
 
 Evaluates agent *decision quality* — not formatting, not single outputs. Every eval is linked to a documented production failure mode with a clear WHY.
 
-The Eval Lab (compare harnesses, models and setup pieces) moved on 2026-10-23 to `/Users/[user]/projects/eval-lab` (private GitHub `[user]/eval-lab`). Kaya keeps its own nightly evals and the setup-ablation tool.
+The Eval Lab (compare harnesses, models and setup pieces) moved on 2026-10-23 to `~/projects/eval-lab` (private GitHub `[user]/eval-lab`). Kaya keeps its own nightly evals and the setup-ablation tool.
 
 ---
 
@@ -52,47 +52,9 @@ The Eval Lab (compare harnesses, models and setup pieces) moved on 2026-10-23 to
 
 ---
 
-## Graders
+## Graders, Fixture-Net Pattern
 
-Ten grader types are registered (`Graders/Base.ts`'s live registry — run `Tools/EvalExecutor.ts list-graders` to confirm at any time).
-
-### Code-Based (6)
-| Type | What it does |
-|------|--------------|
-| `string_match` | Exact substring matching |
-| `regex_match` | Pattern matching |
-| `binary_tests` | Runs a test command, checks exit code |
-| `state_check` | Verifies filesystem/system state after execution |
-| `tool_calls` | Verifies required/forbidden/sequenced tool calls |
-| `fixture_accuracy` | Grades a JSON record a live fixture-runner already wrote (see "Fixture-Net Pattern" below) — never reads agent output |
-
-### Model-Based (4)
-| Type | What it does |
-|------|--------------|
-| `llm_rubric` | Scores a detailed rubric against transcript + tool results |
-| `natural_language_assert` | Checks a list of plain-language assertions against agent output |
-| `ensemble_label` | Consensus labeling via parallel fast/standard/smart inference calls; divergence is flagged, not averaged away |
-| `nightly_judge` | Static-input grader: scores a **pre-existing** decision record (from a live system path — `autoinfo`, `spec-pipeline`, `work-queue`, `live-verification`) against a golden label. Never spawns a live agent turn. |
-
-Judgment-style quality is graded by `natural_language_assert` (evals-rebuild slice B2, Jm's ruling R1 — no deterministic word-count/regex gate) — see `UseCases/DailyBriefing/dailybriefing_no_fabricated_numbers.yaml`. (The voice-line task was retired 2026-09-29 when CLAUDE.md's response format was removed.)
-
-`nightly_judge`, `natural_language_assert`, and `llm_rubric` (plus `RegressionAlert.ts`'s and `EvalHealthDigest.ts`'s own judges) share one structured judge protocol (`Graders/JudgeProtocol.ts`, evals-rebuild slice B1): `expectJson: true` + zod validation on the response + an always-present `reasoning` field, fail loud on a malformed/unparseable judge reply — never a silent score-0 default. `ensemble_label` sits outside this migration — it predates `JudgeProtocol.ts` and is in fact the grader `JudgeProtocol.ts` was modeled on (per `JudgeProtocol.ts`'s own docblock: "mirrors the ONE grader that already did this right — EnsembleLabelGrader"); it calls `inference({expectJson: true})` directly with its own vote/abstention semantics, has no `reasoning` field on its consensus-pass path, and folds per-member inference failures into abstentions rather than failing loud (`Graders/ModelBased/EnsembleLabel.ts`).
-
----
-
-## Fixture-Net Pattern (live classifier baselines)
-
-Two tasks (`kaya_capture_routing`, `kaya_learning_capture`) baseline a real production classifier against a golden fixture set — proving an LLM judgment call is safe to replace a regex/heuristic gate BEFORE that gate is deleted (the determinism-remediation "let-the-model-speak" doctrine's S0 step).
-
-The split that makes this cheap and honest:
-- **The RUNNER makes the live call.** Each task's `setup_commands` shells out to a dedicated fixture-runner script (`Tools/CaptureRoutingFixtureRunner.ts`, `Tools/LearningCaptureFixtureRunner.ts` — CLI shape `--fixtures <path.jsonl> --out <path.json>`, sharing load/write plumbing via `Tools/FixtureRunnerShared.ts`). It reads a JSONL fixture file from `Data/golden/*-fixtures.jsonl`, calls the REAL production classifier (e.g. `Router.classify()`) or a real `inference()` call once per fixture, and writes a JSON summary (`{ accuracy, total, correct, results }`) to `MEMORY/EVALS/live-fixture-runs/<name>.json`.
-- **The `fixture_accuracy` GRADER only reads the record.** `Graders/CodeBased/FixtureAccuracy.ts` reads `params.record_path` (the file the runner just wrote) — it never touches `context.output` or `context.transcript` (`readsOutput = false`). A missing file, malformed JSON, or `total === 0` all score 0/fail — there's no path to a trivial pass.
-
-This is distinct from `nightly_judge`'s fully-static pattern (reads a pre-existing decision record from a live system path — no per-run classification happens at all). Fixture-net tasks are "live per run, but the live work is invisible to the grader"; `nightly_judge` tasks are "static every run."
-
-Adding a 4th net: new runner script (reuse `FixtureRunnerShared.ts`) + new `Data/golden/*.jsonl` + new task YAML (`setup_commands` calls the runner, `fixture_accuracy` grader reads its `record_path`) + one line in the target suite's `tasks:` list.
-
----
+The code-based graders (6), the model-based graders (4) and the fixture-net pattern for live classifier baselines are in `references/GradersAndFixtureNet.md`. Read it when you choose a grader or build a baseline.
 
 ## Live-Agent-Spawn Skip
 
@@ -114,50 +76,9 @@ Before a deterministic grader/rule is deleted in favor of pure LLM judgment, its
 
 ---
 
-## Key Suites
+## Key Suites, Task Schema
 
-Behavioral/security/honesty coverage was retired in evals-rebuild slice A3b (Jm's ruling R3) — three suites survive, 15 tasks total:
-
-| Suite | Type | Tasks | Threshold | Focus |
-|-------|------|-------|-----------|-------|
-| `kaya-pipeline-nightly` | regression | 12 | 0.80 | Nightly sample of de-determinized pipeline decisions (router/clarity/research/ISC/verifier/judge) + 2 S0 fixture-net/LLM canaries (capture-routing, learning-capture) |
-| `kaya-pipeline-dedeterminization` | regression | 1 | 0.80 | LLM judges replacing deleted regex/heuristic gates in the spec pipeline |
-| `eventscout-markdown-first` | regression | 3 | 0.80 | Agent-resolved NL/classification judgments in EventScout's query/booking/age-gate pipeline |
-
-Every task YAML in the corpus also sets its own `pass_threshold: 0.80` (verified: `grep -rn "^pass_threshold:" UseCases/` — all 15 agree with the 3 suite-level thresholds).
-
----
-
-## Task Schema
-
-```yaml
-# WHY: [Production failure mode + incident count]
-id: task_id_here
-description: "What this eval measures"
-type: regression  # or capability
-domain: coding    # coding | conversational | research | computer_use | general
-setup:
-  scenario_prompt: "The prompt given to the agent"
-  setup_commands:  # Optional: create fixture files, or run a live fixture-runner
-    - "mkdir -p /tmp/fixture && echo 'content' > /tmp/fixture/file.ts"
-  sandbox_paths:   # Optional escape hatch for the destructive-scenario guard
-    "/real/path": copy
-graders:
-  - type: tool_calls
-    weight: 0.50
-    params:
-      required: [{ tool: Bash }]
-  - type: natural_language_assert
-    weight: 0.50
-    params:
-      assertions: ["Agent provides evidence of verification"]
-trials: 3
-pass_threshold: 0.70
-```
-
-Validated at load time against one shared zod schema (`Types/schemas.ts`'s `TaskSchema`) — the single source of truth used by `EvalExecutor.loadTaskConfig`, `SuiteManager.loadSuite`, and `TaskValidator.validateTask`. An invalid task fails loud, naming the file and every schema violation — never a silent partial load.
-
----
+The list of key suites and the task YAML schema are in `references/SuitesAndTaskSchema.md`. Read it when you add or edit a suite or a task.
 
 ## CLI Tools
 
@@ -177,32 +98,9 @@ Full flag reference: `CLIReference.md`.
 
 ---
 
-## Weekly Eval-Health Digest & Regression Alerting
+## Weekly Eval-Health Digest & Regression Alerting, Setup Ablation
 
-Two Kaya-owned tools read `MEMORY/VALIDATION/evals/` (the append-only JSONL store `ResultsPersistence.ts` writes every suite run):
-
-- **`RegressionAlert.ts check <suite>`** — two deterministic tripwires (store missing entirely; every task in the current run scored 0 pass rate) page immediately. Below that, a cheap per-task delta-vs-rolling-baseline check flags candidates, and each candidate is classified by an LLM judge given the task's full recent history (real regression vs. a one-off blip vs. a known-flake oscillation vs. an environmental/fixture cause) — never a bare threshold. Run nightly via `bin/kaya-evals-nightly.ts`'s STEP 2.
-- **`EvalHealthDigest.ts`** — weekly, LLM-written digest (trends, regressions, "silent-red streaks" — 2+ consecutive 0-pass-rate runs — anomalies, cost/wall-time) delivered through `AlertGate` at `tier: 'digest'`. Writes a dated copy to `MEMORY/VALIDATION/evals/digests/<date>.md`.
-
-Both fail loud (throw / page-tier alert) rather than silently producing an empty or fabricated result when the store is missing or the judge call fails — see each tool's module doc for the specific named incidents this replaced.
-
----
-
-## Setup Ablation — clean vs full vs component-ablated, across models
-
-**WHY:** every eval above runs against the LIVE `~/.claude`, so "how much of a score is the model vs. our CLAUDE.md / skills / hooks?" — and "does that still hold on the next model?" — had no mechanism. `Tools/Ablation/` is that mechanism (2026-09-04; Fable 5.1 tuning-review rec #4 "pilot de-prescribing via Evals A/B" runs on it).
-
-**Unit of comparison = a profile**: a materialized Claude Code config directory that `claude -p` boots from via `CLAUDE_CONFIG_DIR` (live-verified: settings.json, CLAUDE.md, `skills/*/SKILL.md`, `commands/`, `agents/`, `plugins/`, `.claude.json` are all read from there and symlinks are followed; `--bare` was rejected because it forces API-key auth — no subscription OAuth). Components, each includable/removable: `claudemd` (with section / line-range / regex surgery against the ORIGINAL line numbering), `skills` (category or `Category/Child`), `commands`, `agents`, `hooks` (by event name or command substring), `env` (settings env keys — e.g. the `CLAUDE_CODE_EFFORT_LEVEL` pin), `plugins`, `mcp`, `memory` (a snapshot COPY, never the live dir). `base: full` mirrors the source home and `remove:` subtracts; `base: clean` is vanilla Claude Code and `include:` adds back. Built-ins live in `Profiles/*.yaml` (`clean`, `full`, `no-claudemd`, `no-skills`, `no-hooks`, `no-agents`, `no-memory`, `no-effort-pin`, `claudemd-no-principles`, `claudemd-only`, `claudemd-and-skills`); ad-hoc ones come from `--without`/`--with` selectors (`skills`, `skill:Development/Evals`, `hooks`, `hook:LoadContext`, `env:KEY`, `claudemd`, `claudemd-section:<heading>`, `claudemd-lines:10-30`, `claudemd-matching:<regex>`, `commands`, `command:<n>`, `agents`, `agent:<n>`, `plugins`, `mcp`, `memory`). A selector that matches nothing FAILS the build (a typo'd ablation that silently removes nothing is a false experiment). Every profile dir carries a `PROFILE.json` manifest of exactly what was kept/dropped.
-
-**Runner** (`Tools/Ablation/AblationRunner.ts run`): profiles × models, sequential cells, each cell = the SAME suite through the real `runSuite()` with `env.CLAUDE_CONFIG_DIR`, `--model`, `--no-session-persistence`, and `persist:false` — ablation cells never feed `MEMORY/VALIDATION/evals/` (RegressionAlert / EvalHealthDigest baselines). Output: `Results/ablations/<runId>/{matrix.json, report.md, cells/*.json}`; profile trees go OUTSIDE the repo to `~/.kaya/runtime/ablations/<runId>/profiles/` (`$KAYA_RUNTIME` overrides; path recorded as `profiles_dir` in matrix.json) because they are symlinks into the live home and `bun test` follows symlinks; the report is re-rendered after every cell (a killed run leaves a usable partial matrix; `--resume <runId>` fills the gaps). `--home <path>` builds profiles from another checkout (a worktree branch vs. main). `--dry-run` builds the profiles and prints the plan, zero spawns.
-
-**Suite** `setup-ablation` (5 cheap tasks, `UseCases/SetupAblation/`, deterministic graders, ~$0.05/task on haiku): `ablation_identity` (CLAUDE.md loaded at all — `clean` MUST fail, `full` MUST pass; if both pass the profile is leaking the live config, if both fail the model ignores CLAUDE.md — either way the matrix is invalid), `ablation_capture_routing_awareness` (the Capture Routing section), `ablation_skill_awareness` (skills/ loaded), `ablation_scope_discipline` (Guiding Principles: one-line fix + tempting legacy line untouched), `ablation_fix_failing_test` (raw coding capability — the model axis). Any other suite whose tasks spawn a live agent works too (`kaya-pipeline-nightly`'s fixture-net tasks skip the spawn and therefore cannot ablate anything).
-
-First live matrix (2026-09-04, haiku, 1 trial): clean 1/5 (identity ❌, routing ❌, skills ❌) vs full 3/5 — the discrimination the sanity-check task demands. Two defects surfaced and fixed on the way: `binary_tests` had NEVER been able to run a multi-word `test_command` (passed to `timeout` as one argv token — every grade 0), and JS regexes reject inline `(?i)` (use the grader's `flags` param).
-
-Workflow: `Workflows/RunAblation.md`.
-
----
+The weekly digest, regression alerting and the setup ablation (clean vs full vs component-ablated, across models) are in `references/DigestAndAblation.md`. For an ablation run, also read `Workflows/RunAblation.md`.
 
 ## Resource Index
 

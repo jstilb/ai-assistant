@@ -49,8 +49,8 @@
  * mis-scaled 8.0 clamped to 1.0.
  */
 
-import { inference, extractJson, type InferenceLevel, type InferenceResult } from '../../../../lib/core/Inference';
-import { z } from 'zod';
+import { inference, extractJson, type InferenceLevel, type InferenceResult } from "../../../../lib/core/Inference.ts";
+import { z } from "zod";
 
 // ============================================================================
 // Schema
@@ -132,7 +132,7 @@ export interface JudgeInferenceResult {
 export function judgeResponseFormatInstruction(opts?: { withAssertions?: boolean }): string {
   const assertionsLine = opts?.withAssertions
     ? '\n  "assertion_results": [{ "assertion": "<assertion text>", "passed": true|false, "explanation": "<brief explanation>" }, ...]'
-    : '';
+    : "";
   return `Respond with ONLY a single JSON object (no markdown fences, no prose outside the JSON) matching exactly this shape:
 {
   "score": <number between 0.0 and 1.0>,
@@ -153,7 +153,7 @@ export async function judgeInference(
   const result = await inferenceFn({
     systemPrompt: opts.systemPrompt,
     userPrompt: opts.userPrompt,
-    level: opts.level ?? 'standard',
+    level: opts.level ?? "standard",
     timeout: opts.timeout,
     retries: opts.retries,
     retryDelayMs: opts.retryDelayMs,
@@ -164,9 +164,9 @@ export async function judgeInference(
     return {
       success: false,
       score: 0,
-      reasoning: '',
-      error: `Judge inference failed: ${result.error ?? 'unknown error'}`,
-      raw_output: result.output ?? '',
+      reasoning: "",
+      error: `Judge inference failed: ${result.error ?? "unknown error"}`,
+      raw_output: result.output ?? "",
       latencyMs: result.latencyMs,
       level: result.level,
     };
@@ -184,8 +184,8 @@ export async function judgeInference(
     return {
       success: false,
       score: 0,
-      reasoning: '',
-      error: 'Judge response was not valid JSON (expected {score, reasoning, assertion_results?})',
+      reasoning: "",
+      error: "Judge response was not valid JSON (expected {score, reasoning, assertion_results?})",
       raw_output: result.output,
       latencyMs: result.latencyMs,
       level: result.level,
@@ -194,13 +194,11 @@ export async function judgeInference(
 
   const validated = JudgeResponseSchema.safeParse(parsedRaw);
   if (!validated.success) {
-    const issues = validated.error.issues
-      .map(i => `${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('; ');
+    const issues = validated.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
     return {
       success: false,
       score: 0,
-      reasoning: '',
+      reasoning: "",
       error: `Judge response failed schema validation: ${issues}`,
       raw_output: result.output,
       latencyMs: result.latencyMs,

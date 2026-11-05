@@ -4,7 +4,7 @@
  * Captures full agent execution trajectories for evaluation
  */
 
-import type { Transcript, Turn, ToolCall, TranscriptMetrics } from '../Types/index.ts';
+import type { Transcript, Turn, ToolCall, TranscriptMetrics } from "../Types/index.ts";
 
 export interface TeamMessageEntry {
   from: string;
@@ -34,13 +34,13 @@ export class TranscriptCapture {
   /**
    * Add a conversation turn
    */
-  addTurn(role: 'user' | 'assistant' | 'system' | 'tool', content: string, tokens?: number): void {
-    if (role === 'assistant' && !this.firstTokenTime) {
+  addTurn(role: "user" | "assistant" | "system" | "tool", content: string, tokens?: number): void {
+    if (role === "assistant" && !this.firstTokenTime) {
       this.firstTokenTime = Date.now();
     }
 
     if (tokens) {
-      if (role === 'user' || role === 'system') {
+      if (role === "user" || role === "system") {
         this.totalInputTokens += tokens;
       } else {
         this.totalOutputTokens += tokens;
@@ -74,7 +74,7 @@ export class TranscriptCapture {
    * Complete a tool call
    */
   completeToolCall(id: string, result?: unknown, error?: string): void {
-    const call = this.toolCalls.find(tc => tc.id === id);
+    const call = this.toolCalls.find((tc) => tc.id === id);
     if (call) {
       call.result = result;
       call.error = error;
@@ -118,15 +118,18 @@ export class TranscriptCapture {
       wall_time_ms: wallTime,
       time_to_first_token_ms: this.firstTokenTime ? this.firstTokenTime - this.startTime : undefined,
       time_to_last_token_ms: wallTime,
-      tokens_per_second: wallTime > 0 ? (this.totalOutputTokens / (wallTime / 1000)) : undefined,
+      tokens_per_second: wallTime > 0 ? this.totalOutputTokens / (wallTime / 1000) : undefined,
     };
 
     // Compute team message metrics if any team messages exist
-    const teamMetrics = this.teamMessages.length > 0 ? {
-      total_team_messages: this.teamMessages.length,
-      unique_senders: new Set(this.teamMessages.map(m => m.from)).size,
-      broadcast_count: this.teamMessages.filter(m => m.to === 'all').length,
-    } : undefined;
+    const teamMetrics =
+      this.teamMessages.length > 0
+        ? {
+            total_team_messages: this.teamMessages.length,
+            unique_senders: new Set(this.teamMessages.map((m) => m.from)).size,
+            broadcast_count: this.teamMessages.filter((m) => m.to === "all").length,
+          }
+        : undefined;
 
     return {
       task_id: this.taskId,
@@ -159,25 +162,21 @@ export class TranscriptCapture {
 /**
  * Parse a Claude Code session transcript into our format
  */
-export function parseClaudeCodeTranscript(
-  sessionLog: string,
-  taskId: string,
-  trialId: string
-): Transcript {
+export function parseClaudeCodeTranscript(sessionLog: string, taskId: string, trialId: string): Transcript {
   const capture = new TranscriptCapture(taskId, trialId);
 
   // Parse JSONL format (Claude Code history format)
-  const lines = sessionLog.trim().split('\n').filter(Boolean);
+  const lines = sessionLog.trim().split("\n").filter(Boolean);
 
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
 
       // Handle different entry types
-      if (entry.type === 'user') {
-        capture.addTurn('user', entry.content, entry.tokens);
-      } else if (entry.type === 'assistant') {
-        capture.addTurn('assistant', entry.content, entry.tokens);
+      if (entry.type === "user") {
+        capture.addTurn("user", entry.content, entry.tokens);
+      } else if (entry.type === "assistant") {
+        capture.addTurn("assistant", entry.content, entry.tokens);
 
         // Extract tool calls from assistant messages
         if (entry.tool_calls) {
@@ -188,9 +187,9 @@ export function parseClaudeCodeTranscript(
             }
           }
         }
-      } else if (entry.type === 'tool_result') {
-        capture.addTurn('tool', entry.content);
-      } else if (entry.type === 'thinking') {
+      } else if (entry.type === "tool_result") {
+        capture.addTurn("tool", entry.content);
+      } else if (entry.type === "thinking") {
         capture.addReasoningTrace(entry.content);
       }
     } catch {
@@ -208,10 +207,10 @@ export function createTranscript(
   taskId: string,
   trialId: string,
   data: {
-    turns: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }[];
+    turns: { role: "user" | "assistant" | "system" | "tool"; content: string }[];
     toolCalls?: { name: string; params: Record<string, unknown>; result?: unknown }[];
     finalOutcome?: unknown;
-  }
+  },
 ): Transcript {
   const capture = new TranscriptCapture(taskId, trialId);
 
@@ -233,12 +232,12 @@ export function createTranscript(
 if (import.meta.main) {
   const [command, ...args] = Bun.argv.slice(2);
 
-  if (command === 'parse' && args[0]) {
+  if (command === "parse" && args[0]) {
     const file = Bun.file(args[0]);
     const content = await file.text();
-    const transcript = parseClaudeCodeTranscript(content, 'test-task', 'trial-1');
+    const transcript = parseClaudeCodeTranscript(content, "test-task", "trial-1");
     console.log(JSON.stringify(transcript, null, 2));
   } else {
-    console.log('Usage: TranscriptCapture.ts parse <session-log-file>');
+    console.log("Usage: TranscriptCapture.ts parse <session-log-file>");
   }
 }

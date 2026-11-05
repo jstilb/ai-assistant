@@ -7,17 +7,25 @@
  * retired (slice 12). Do not extend it. The body below is byte-for-byte from the lab.
  */
 
-import { createHash } from 'crypto';
+import { createHash } from "node:crypto";
 import {
-  copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
-} from 'fs';
-import { basename, join } from 'path';
+  copyFileSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  type Stats,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // 2. Memory exclusion
 // ---------------------------------------------------------------------------
 
-export interface MemoryMarker {
+interface MemoryMarker {
   id: string;
   /** Only counts when the text ALSO matches this (co-occurrence rule). */
   alsoRequires?: RegExp;
@@ -36,33 +44,38 @@ export interface MemoryMarker {
  * manifest lists every drop so a human can audit.
  */
 export const MEMORY_EXCLUSION_MARKERS: readonly MemoryMarker[] = [
-  { id: 'eval-lab', pattern: /eval[-_ ]lab/i },
-  { id: 'scratch-eval-lab', pattern: /\.scratch\/eval-lab/i },
-  { id: 'ablation', pattern: /ablation/i }, // also covers setup-ablation, AblationRunner
-  { id: 'ablation-runner', pattern: /AblationRunner/i },
-  { id: 'harness-bakeoff', pattern: /harness[-_ ]bakeoff/i, indexExempt: true },
-  { id: 'evals-usecases', pattern: /Evals\/UseCases/i, alsoRequires: /ablation|eval[-_ ]lab/i },
-  { id: 'evals-suites', pattern: /Evals\/Suites/i, alsoRequires: /ablation|eval[-_ ]lab/i },
-  { id: 'task-bank-path', pattern: /eval-lab\/bank/i },
-  { id: 'run-dir-path', pattern: /runtime\/eval-lab/i },
+  { id: "eval-lab", pattern: /eval[-_ ]lab/i },
+  { id: "scratch-eval-lab", pattern: /\.scratch\/eval-lab/i },
+  { id: "ablation", pattern: /ablation/i }, // also covers setup-ablation, AblationRunner
+  { id: "ablation-runner", pattern: /AblationRunner/i },
+  { id: "harness-bakeoff", pattern: /harness[-_ ]bakeoff/i, indexExempt: true },
+  { id: "evals-usecases", pattern: /Evals\/UseCases/i, alsoRequires: /ablation|eval[-_ ]lab/i },
+  { id: "evals-suites", pattern: /Evals\/Suites/i, alsoRequires: /ablation|eval[-_ ]lab/i },
+  { id: "task-bank-path", pattern: /eval-lab\/bank/i },
+  { id: "run-dir-path", pattern: /runtime\/eval-lab/i },
 ];
 
 /** Stable hash of the marker list (spec rule 9: recorded in every manifest). */
-export const MEMORY_EXCLUSION_MARKERS_HASH: string = createHash('sha256')
-  .update(MEMORY_EXCLUSION_MARKERS.map(m => `${m.id}\t${m.pattern.source}\t${m.pattern.flags}\t${m.alsoRequires?.source ?? ''}\t${m.indexExempt ?? false}`).join('\n'))
-  .digest('hex');
+export const MEMORY_EXCLUSION_MARKERS_HASH: string = createHash("sha256")
+  .update(
+    MEMORY_EXCLUSION_MARKERS.map(
+      (m) =>
+        `${m.id}\t${m.pattern.source}\t${m.pattern.flags}\t${m.alsoRequires?.source ?? ""}\t${m.indexExempt ?? false}`,
+    ).join("\n"),
+  )
+  .digest("hex");
 
 function markerHits(text: string): MemoryMarker[] {
-  return MEMORY_EXCLUSION_MARKERS.filter(m => m.pattern.test(text) && (!m.alsoRequires || m.alsoRequires.test(text)));
+  return MEMORY_EXCLUSION_MARKERS.filter((m) => m.pattern.test(text) && (!m.alsoRequires || m.alsoRequires.test(text)));
 }
 
-export function matchesMemoryMarker(text: string): string[] {
-  return markerHits(text).map(m => m.id);
+function matchesMemoryMarker(text: string): string[] {
+  return markerHits(text).map((m) => m.id);
 }
 
 /** MEMORY.md and index_*.md are indexes: trim matching lines, keep the rest. */
-export function isMemoryIndexFile(fileName: string): boolean {
-  return fileName === 'MEMORY.md' || /^index_.*\.md$/.test(fileName);
+function isMemoryIndexFile(fileName: string): boolean {
+  return fileName === "MEMORY.md" || /^index_.*\.md$/.test(fileName);
 }
 
 export interface MemoryExclusionReport {
@@ -76,13 +89,13 @@ export interface MemoryExclusionReport {
   skipped_entries: string[];
 }
 
-function listMarkdown(dir: string, rel = ''): string[] {
+function listMarkdown(dir: string, rel = ""): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(join(dir, rel)).sort()) {
     const relPath = rel ? join(rel, entry) : entry;
     const st = lstatSync(join(dir, relPath));
     if (st.isDirectory()) out.push(...listMarkdown(dir, relPath));
-    else if (entry.endsWith('.md')) out.push(relPath);
+    else if (entry.endsWith(".md")) out.push(relPath);
   }
   return out;
 }
@@ -102,18 +115,26 @@ export function snapshotMemory(srcDir: string, destDir: string): MemoryExclusion
     for (const entry of readdirSync(join(srcDir, rel)).sort()) {
       const relPath = rel ? join(rel, entry) : entry;
       const full = join(srcDir, relPath);
-      if (entry.startsWith('.') || BACKUP_NAME.test(entry)) { skipped.push(relPath); continue; }
-      let st;
-      try { st = statSync(full); } catch { skipped.push(relPath); continue; } // dangling symlink
+      if (entry.startsWith(".") || BACKUP_NAME.test(entry)) {
+        skipped.push(relPath);
+        continue;
+      }
+      let st: Stats;
+      try {
+        st = statSync(full);
+      } catch {
+        skipped.push(relPath);
+        continue;
+      } // dangling symlink
       if (st.isDirectory()) walk(relPath);
-      else if (st.isFile() && entry.endsWith('.md')) {
+      else if (st.isFile() && entry.endsWith(".md")) {
         mkdirSync(join(destDir, rel), { recursive: true });
         copyFileSync(full, join(destDir, relPath));
       } else skipped.push(relPath);
     }
   };
   mkdirSync(destDir, { recursive: true });
-  walk('');
+  walk("");
   const report = filterMemorySnapshot(destDir);
   report.skipped_entries = skipped;
   return report;
@@ -128,7 +149,7 @@ export function snapshotMemory(srcDir: string, destDir: string): MemoryExclusion
 export function filterMemorySnapshot(memoryCopyDir: string): MemoryExclusionReport {
   const report: MemoryExclusionReport = {
     marker_list_sha256: MEMORY_EXCLUSION_MARKERS_HASH,
-    marker_ids: MEMORY_EXCLUSION_MARKERS.map(m => m.id),
+    marker_ids: MEMORY_EXCLUSION_MARKERS.map((m) => m.id),
     excluded_files: [],
     trimmed_files: [],
     skipped_entries: [],
@@ -139,26 +160,26 @@ export function filterMemorySnapshot(memoryCopyDir: string): MemoryExclusionRepo
   for (const rel of files) {
     if (isMemoryIndexFile(basename(rel))) continue;
     const full = join(memoryCopyDir, rel);
-    const hits = matchesMemoryMarker(`${rel}\n${readFileSync(full, 'utf-8')}`);
+    const hits = matchesMemoryMarker(`${rel}\n${readFileSync(full, "utf-8")}`);
     if (hits.length) {
       rmSync(full); // a single file in the snapshot copy
       report.excluded_files.push({ file: rel, markers: hits });
-      droppedNames.push(basename(rel, '.md'));
+      droppedNames.push(basename(rel, ".md"));
     }
   }
 
   for (const rel of files) {
     if (!isMemoryIndexFile(basename(rel))) continue;
     const full = join(memoryCopyDir, rel);
-    const lines = readFileSync(full, 'utf-8').split('\n');
-    const kept = lines.filter(line =>
-      !markerHits(line).some(m => !m.indexExempt) && !droppedNames.some(n => line.includes(n)));
+    const lines = readFileSync(full, "utf-8").split("\n");
+    const kept = lines.filter(
+      (line) => !markerHits(line).some((m) => !m.indexExempt) && !droppedNames.some((n) => line.includes(n)),
+    );
     const removed = lines.length - kept.length;
     if (removed > 0) {
-      writeFileSync(full, kept.join('\n'), 'utf-8');
+      writeFileSync(full, kept.join("\n"), "utf-8");
       report.trimmed_files.push({ file: rel, lines_removed: removed });
     }
   }
   return report;
 }
-

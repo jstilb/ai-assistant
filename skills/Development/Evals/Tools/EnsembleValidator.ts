@@ -14,14 +14,14 @@
  * LLM-free test surface: import `runValidation` with a custom `inferenceFn`.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { parse as parseYaml } from 'yaml';
-import { EnsembleLabelGrader } from '../Graders/ModelBased/EnsembleLabel.ts';
-import type { GraderConfig } from '../Types/index.ts';
-import type { GraderContext } from '../Graders/Base.ts';
-import type { InferenceResult } from '../../../../lib/core/Inference';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { parse as parseYaml } from "yaml";
+import { EnsembleLabelGrader } from "../Graders/ModelBased/EnsembleLabel.ts";
+import type { GraderConfig } from "../Types/index.ts";
+import type { GraderContext } from "../Graders/Base.ts";
+import type { InferenceResult } from "../../../../lib/core/Inference.ts";
+import { memPath } from "../../../../lib/core/MemoryPaths.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ export interface FailedCase {
   decision_type: string;
   input: string;
   expected: string;
-  got: string | null;  // null when divergent/abstain
+  got: string | null; // null when divergent/abstain
 }
 
 export interface CalibrationReport {
@@ -62,24 +62,22 @@ export interface CalibrationReport {
 }
 
 export interface ValidationResult {
-  exitCode: number;       // 0 = all classes ≥ 80%; 1 = at least one class below threshold
+  exitCode: number; // 0 = all classes ≥ 80%; 1 = at least one class below threshold
   report: CalibrationReport;
-  summary: string;        // Human-readable per-class summary
+  summary: string; // Human-readable per-class summary
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const KAYA_HOME = getKayaHome();
 
 // Fixture path: resolve relative to this source file so the validator works
 // in both the live ~/.claude checkout and in git worktrees.
 // import.meta.dir = .../skills/Development/Evals/Tools
 // fixture is at    .../skills/Development/Evals/Data/ensemble-known-truth.yaml
-const FIXTURE_PATH = join(import.meta.dir, '../Data/ensemble-known-truth.yaml');
+const FIXTURE_PATH = join(import.meta.dir, "../Data/ensemble-known-truth.yaml");
 
 // Calibration report always goes to the live MEMORY directory (shared).
-const CALIBRATION_PATH = join(KAYA_HOME, 'MEMORY/MONITORING/ensemble-calibration.json');
-const AGREEMENT_THRESHOLD = 0.80;
+const CALIBRATION_PATH = memPath("MONITORING", "ensemble-calibration.json");
+const AGREEMENT_THRESHOLD = 0.8;
 
 // ── Core logic (LLM-free testable) ────────────────────────────────────────────
 
@@ -88,7 +86,9 @@ export interface RunValidationOptions {
    * Injected inference function — use a mock in tests to avoid LLM calls.
    * If omitted, the grader uses the real `inference` from lib/core/Inference.
    */
-  inferenceFn?: (opts: Parameters<import('../../../../lib/core/Inference').inference>[0]) => Promise<InferenceResult>;
+  inferenceFn?: (
+    opts: Parameters<typeof import("../../../../lib/core/Inference").inference>[0],
+  ) => Promise<InferenceResult>;
   /** Path to the YAML fixture (defaults to FIXTURE_PATH) */
   fixturePath?: string;
   /** Where to write the calibration JSON (defaults to CALIBRATION_PATH) */
@@ -100,7 +100,7 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
   const reportPath = opts.reportPath ?? CALIBRATION_PATH;
 
   // Load fixture
-  const raw = readFileSync(fixturePath, 'utf-8');
+  const raw = readFileSync(fixturePath, "utf-8");
   const fixture = parseYaml(raw) as KnownTruthFixture;
 
   const perClass: Record<string, PerClassResult> = {};
@@ -115,7 +115,7 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
     for (const kase of bucket.cases) {
       // Build a grader for this case
       const config: GraderConfig = {
-        type: 'ensemble_label',
+        type: "ensemble_label",
         weight: 1.0,
         params: {
           system_prompt: bucket.system_prompt,
@@ -134,11 +134,11 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
       // Minimal context — the grader reads params.input, not context.output
       const context: GraderContext = {
         task_id: `calibration-${decisionType}`,
-        trial_id: `case-${kase.input.slice(0, 20).replace(/\s/g, '-')}`,
+        trial_id: `case-${kase.input.slice(0, 20).replace(/\s/g, "-")}`,
         output: kase.input,
         transcript: {
           task_id: `calibration-${decisionType}`,
-          trial_id: 'calibration',
+          trial_id: "calibration",
           started_at: new Date().toISOString(),
           turns: [],
           tool_calls: [],
@@ -155,7 +155,8 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
 
       const result = await grader.grade(context);
 
-      const gotLabel = result.details?.divergent === true ? null : (result.details?.label as string | undefined) ?? null;
+      const gotLabel =
+        result.details?.divergent === true ? null : ((result.details?.label as string | undefined) ?? null);
       const agreed = gotLabel === kase.expected;
 
       if (agreed) {
@@ -195,35 +196,33 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
+  writeFileSync(reportPath, JSON.stringify(report, null, 2), "utf-8");
 
   // Determine exit code
-  const anyClassBelow = Object.values(perClass).some(
-    (c) => c.agreement < AGREEMENT_THRESHOLD,
-  );
+  const anyClassBelow = Object.values(perClass).some((c) => c.agreement < AGREEMENT_THRESHOLD);
   const exitCode = anyClassBelow ? 1 : 0;
 
   // Build human-readable summary
-  const lines: string[] = ['', 'Ensemble Calibration Report', '='.repeat(40)];
+  const lines: string[] = ["", "Ensemble Calibration Report", "=".repeat(40)];
   for (const [cls, stats] of Object.entries(perClass)) {
     const pct = (stats.agreement * 100).toFixed(1);
-    const gate = stats.agreement >= AGREEMENT_THRESHOLD ? 'PASS' : 'FAIL';
+    const gate = stats.agreement >= AGREEMENT_THRESHOLD ? "PASS" : "FAIL";
     lines.push(`  ${cls.padEnd(16)} ${pct}%  (${stats.n - stats.wrong}/${stats.n})  [${gate}]`);
   }
-  lines.push('-'.repeat(40));
-  lines.push(`  ${'OVERALL'.padEnd(16)} ${(overallAgreement * 100).toFixed(1)}%  (${totalCorrect}/${totalCases})`);
+  lines.push("-".repeat(40));
+  lines.push(`  ${"OVERALL".padEnd(16)} ${(overallAgreement * 100).toFixed(1)}%  (${totalCorrect}/${totalCases})`);
   if (failedCases.length > 0) {
-    lines.push('', 'Failed cases:');
+    lines.push("", "Failed cases:");
     for (const fc of failedCases) {
-      const input = fc.input.slice(0, 60).replace(/\n/g, '\\n');
-      lines.push(`  [${fc.decision_type}] expected="${fc.expected}" got="${fc.got ?? 'divergent'}"  — "${input}"`);
+      const input = fc.input.slice(0, 60).replace(/\n/g, "\\n");
+      lines.push(`  [${fc.decision_type}] expected="${fc.expected}" got="${fc.got ?? "divergent"}"  — "${input}"`);
     }
   }
-  lines.push('', `Report written to: ${reportPath}`);
-  lines.push(exitCode === 0 ? 'Result: ALL CLASSES PASSED (exit 0)' : 'Result: ONE OR MORE CLASSES BELOW 80% (exit 1)');
-  lines.push('');
+  lines.push("", `Report written to: ${reportPath}`);
+  lines.push(exitCode === 0 ? "Result: ALL CLASSES PASSED (exit 0)" : "Result: ONE OR MORE CLASSES BELOW 80% (exit 1)");
+  lines.push("");
 
-  const summary = lines.join('\n');
+  const summary = lines.join("\n");
 
   return { exitCode, report, summary };
 }
@@ -232,19 +231,19 @@ export async function runValidation(opts: RunValidationOptions = {}): Promise<Va
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const isDryRun = args.includes('--dry-run');
+  const isDryRun = args.includes("--dry-run");
 
   if (isDryRun) {
-    console.log('[EnsembleValidator] --dry-run mode: using mock that returns expected labels');
+    console.log("[EnsembleValidator] --dry-run mode: using mock that returns expected labels");
   }
 
   // Build a dry-run mock that reads the fixture and echoes the expected label
   // for each case. The mock identifies the correct label by matching the
   // userPrompt to the case inputs in the loaded fixture.
-  let dryRunMock: RunValidationOptions['inferenceFn'] | undefined;
+  let dryRunMock: RunValidationOptions["inferenceFn"] | undefined;
 
   if (isDryRun) {
-    const raw = readFileSync(FIXTURE_PATH, 'utf-8');
+    const raw = readFileSync(FIXTURE_PATH, "utf-8");
     const fixture = parseYaml(raw) as KnownTruthFixture;
 
     // Build a lookup: input text → expected label
@@ -256,8 +255,8 @@ async function main(): Promise<void> {
     }
 
     dryRunMock = async (opts) => {
-      const userPrompt = (opts.userPrompt ?? '').trim();
-      const label = lookup.get(userPrompt) ?? 'unknown';
+      const userPrompt = (opts.userPrompt ?? "").trim();
+      const label = lookup.get(userPrompt) ?? "unknown";
       // The ensemble grader expects the response parsed with the candidate_field.
       // We don't know which field at this level, but since we're injecting at
       // the grader level and the grader was constructed with a specific candidate_field,
@@ -272,7 +271,7 @@ async function main(): Promise<void> {
         output: JSON.stringify(parsed),
         parsed,
         latencyMs: 1,
-        level: opts.level ?? 'fast',
+        level: opts.level ?? "fast",
         estimatedTokens: { input: 10, output: 5, total: 15 },
         estimatedCostUSD: 0,
       };
@@ -289,7 +288,7 @@ async function main(): Promise<void> {
 // Run CLI only when executed directly (not when imported by tests)
 if (import.meta.main) {
   main().catch((err) => {
-    console.error('[EnsembleValidator] Fatal error:', err);
+    console.error("[EnsembleValidator] Fatal error:", err);
     process.exit(2);
   });
 }

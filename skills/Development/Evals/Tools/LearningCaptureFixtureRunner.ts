@@ -24,23 +24,23 @@
  *     --out <path/to/result.json>
  */
 
-import { inference } from '../../../../lib/core/Inference.ts';
+import { inference } from "../../../../lib/core/Inference.ts";
 import {
   loadFixturesJsonl,
   buildSummary,
   writeSummary,
   parseFixtureRunnerArgs,
   type FixtureResult,
-} from './FixtureRunnerShared.ts';
+} from "./FixtureRunnerShared.ts";
 
 interface Expected {
   is_learning: boolean;
-  category: 'SYSTEM' | 'ALGORITHM' | null;
+  category: "SYSTEM" | "ALGORITHM" | null;
 }
 
 interface Actual {
   is_learning: boolean;
-  category: 'SYSTEM' | 'ALGORITHM' | null;
+  category: "SYSTEM" | "ALGORITHM" | null;
   rationale: string;
 }
 
@@ -66,12 +66,11 @@ function parseActual(output: string): Actual {
   const parsed = JSON.parse(match[0]) as Record<string, unknown>;
   const is_learning = parsed.is_learning === true;
   const rawCategory = parsed.category;
-  const category: Actual['category'] =
-    rawCategory === 'SYSTEM' || rawCategory === 'ALGORITHM' ? rawCategory : null;
+  const category: Actual["category"] = rawCategory === "SYSTEM" || rawCategory === "ALGORITHM" ? rawCategory : null;
   return {
     is_learning,
     category: is_learning ? category : null,
-    rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+    rationale: typeof parsed.rationale === "string" ? parsed.rationale : "",
   };
 }
 
@@ -86,13 +85,13 @@ export async function runLearningCaptureFixtures(fixturesPath: string): Promise<
       const result = await inference({
         systemPrompt: SYSTEM_PROMPT,
         userPrompt: `Text: ${fx.input}`,
-        level: 'standard',
+        level: "standard",
         expectJson: true,
         timeout: 45_000,
         retries: 1,
         retryDelayMs: 2000,
       });
-      if (!result.success) throw new Error(result.error ?? 'inference failed');
+      if (!result.success) throw new Error(result.error ?? "inference failed");
       actual = parseActual(result.output);
     } catch (e) {
       // Structured marker, not just rationale text: the fallback `actual`
@@ -103,12 +102,13 @@ export async function runLearningCaptureFixtures(fixturesPath: string): Promise<
       infraError = String(e);
       actual = { is_learning: false, category: null, rationale: `ERROR: ${e}` };
     }
-    const correct = infraError === undefined
-      && actual.is_learning === fx.expected.is_learning
-      && (fx.expected.is_learning ? actual.category === fx.expected.category : true);
+    const correct =
+      infraError === undefined &&
+      actual.is_learning === fx.expected.is_learning &&
+      (fx.expected.is_learning ? actual.category === fx.expected.category : true);
     results.push({ ...fx, actual, correct, ...(infraError === undefined ? {} : { infra_error: infraError }) });
     console.log(
-      `  [${correct ? 'OK  ' : 'FAIL'}] ${fx.id} (${fx.category}): expected is_learning=${fx.expected.is_learning} category=${fx.expected.category}, got is_learning=${actual.is_learning} category=${actual.category}`,
+      `  [${correct ? "OK  " : "FAIL"}] ${fx.id} (${fx.category}): expected is_learning=${fx.expected.is_learning} category=${fx.expected.category}, got is_learning=${actual.is_learning} category=${actual.category}`,
     );
   }
 
@@ -119,8 +119,10 @@ if (import.meta.main) {
   const { fixtures, out } = parseFixtureRunnerArgs(process.argv.slice(2));
   console.log(`[LearningCaptureFixtureRunner] Loading fixtures from ${fixtures}`);
   const results = await runLearningCaptureFixtures(fixtures);
-  const summary = buildSummary('learning_capture_fixtures', results);
+  const summary = buildSummary("learning_capture_fixtures", results);
   writeSummary(out, summary);
-  console.log(`\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`);
+  console.log(
+    `\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`,
+  );
   process.exit(0);
 }

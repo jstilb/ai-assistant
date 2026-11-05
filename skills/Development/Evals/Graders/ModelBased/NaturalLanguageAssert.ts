@@ -12,14 +12,14 @@
  * frozen "old parser vs new protocol" agreement disposition table.
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderResult, NaturalLanguageAssertParams } from '../../Types/index.ts';
-import { inference, type InferenceLevel } from '../../../../../lib/core/Inference';
-import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from '../JudgeProtocol.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult, NaturalLanguageAssertParams } from "../../Types/index.ts";
+import { inference, type InferenceLevel } from "../../../../../lib/core/Inference.ts";
+import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from "../JudgeProtocol.ts";
 
 export class NaturalLanguageAssertGrader extends BaseGrader {
-  type = 'natural_language_assert' as const;
-  category = 'model_based' as const;
+  type = "natural_language_assert" as const;
+  category = "model_based" as const;
   // Builds the judge prompt directly from context.output and
   // context.transcript.tool_calls.
   readsOutput = true;
@@ -33,21 +33,21 @@ export class NaturalLanguageAssertGrader extends BaseGrader {
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as NaturalLanguageAssertParams;
+    const params = this.config.params as unknown as NaturalLanguageAssertParams; // config.params is untyped YAML; validated below
 
     if (!params?.assertions?.length) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'No assertions configured',
+        reasoning: "No assertions configured",
       });
     }
 
     // Map model preference to inference level (default to standard/Sonnet)
     const levelMap: Record<string, InferenceLevel> = {
-      'claude-haiku-4-5-20251001': 'fast',
-      'claude-sonnet-4-20250514': 'standard',
-      'claude-opus-4-20250514': 'smart',
+      "claude-haiku-4-5-20251001": "fast",
+      "claude-sonnet-4-20250514": "standard",
+      "claude-opus-4-20250514": "smart",
     };
-    const level: InferenceLevel = levelMap[params.judge_model ?? ''] ?? 'standard';
+    const level: InferenceLevel = levelMap[params.judge_model ?? ""] ?? "standard";
     const requireAll = params.require_all ?? true;
 
     const systemPrompt = `You are an assertion checker. For each assertion, determine if it is TRUE or FALSE based on the given output.
@@ -64,25 +64,26 @@ ${context.output}
 
 ## Tool Calls Made (for context)
 
-${context.transcript.tool_calls.map(tc => {
-  let line = `- ${tc.name}(${JSON.stringify(tc.params).slice(0, 200)})`;
-  if (tc.result) {
-    const r = (typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result)).slice(0, 300);
-    line += `\n  Result: ${r}`;
-  }
-  return line;
-}).join('\n') || 'None'}
+${
+  context.transcript.tool_calls
+    .map((tc) => {
+      let line = `- ${tc.name}(${JSON.stringify(tc.params).slice(0, 200)})`;
+      if (tc.result) {
+        const r = (typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result)).slice(0, 300);
+        line += `\n  Result: ${r}`;
+      }
+      return line;
+    })
+    .join("\n") || "None"
+}
 
 ## Assertions to Verify
 
-${params.assertions.map((a, i) => `${i + 1}. ${a}`).join('\n')}
+${params.assertions.map((a, i) => `${i + 1}. ${a}`).join("\n")}
 
 Check each assertion against the output and tool calls.`;
 
-    const judged = await judgeInference(
-      { systemPrompt, userPrompt, level, timeout: 60000 },
-      this.inferenceFn,
-    );
+    const judged = await judgeInference({ systemPrompt, userPrompt, level, timeout: 60000 }, this.inferenceFn);
 
     // Fail loud: inference failure OR schema-invalid/non-JSON response both
     // surface here as an explicit score-0 grader error — never a silent
@@ -101,7 +102,7 @@ Check each assertion against the output and tool calls.`;
       return this.createResult(0, false, performance.now() - start, {
         reasoning: `Judge returned ${returned.length} assertion_results but ${params.assertions.length} assertions were configured`,
         details: {
-          judge_error: 'assertion_results count mismatch',
+          judge_error: "assertion_results count mismatch",
           raw_output: judged.raw_output,
           inference_level: level,
         },
@@ -116,15 +117,13 @@ Check each assertion against the output and tool calls.`;
     const results = returned.map((r, i) => ({
       assertion: params.assertions[i],
       passed: r.passed,
-      explanation: r.explanation ?? '',
+      explanation: r.explanation ?? "",
     }));
 
-    const passCount = results.filter(r => r.passed).length;
+    const passCount = results.filter((r) => r.passed).length;
     const score = passCount / params.assertions.length;
 
-    const passed = requireAll
-      ? passCount === params.assertions.length
-      : passCount > 0;
+    const passed = requireAll ? passCount === params.assertions.length : passCount > 0;
 
     return this.createResult(score, passed, performance.now() - start, {
       reasoning: `${passCount}/${params.assertions.length} assertions passed`,
@@ -137,4 +136,4 @@ Check each assertion against the output and tool calls.`;
   }
 }
 
-registerGrader('natural_language_assert', NaturalLanguageAssertGrader);
+registerGrader("natural_language_assert", NaturalLanguageAssertGrader);

@@ -10,8 +10,8 @@
  * MEMORY/VALIDATION/evals, where eval results leaked before the fix.
  */
 import { describe, it, expect, afterAll } from "bun:test";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getResultsPath, persistResult } from "./ResultsPersistence.ts";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 

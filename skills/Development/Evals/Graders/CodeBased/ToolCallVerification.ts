@@ -3,12 +3,12 @@
  * Verify that specific tools were called with expected parameters
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult, ToolCallsParams } from '../../Types/index.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult, ToolCallsParams } from "../../Types/index.ts";
 
 export class ToolCallVerificationGrader extends BaseGrader {
-  type = 'tool_calls' as const;
-  category = 'code_based' as const;
+  type = "tool_calls" as const;
+  category = "code_based" as const;
   // Reads context.transcript.tool_calls — a live-agent-turn artifact.
   readsOutput = true;
 
@@ -22,7 +22,7 @@ export class ToolCallVerificationGrader extends BaseGrader {
     // Check required tool calls
     if (params.required) {
       for (const req of params.required) {
-        const matchingCall = toolCalls.find(tc => {
+        const matchingCall = toolCalls.find((tc) => {
           if (tc.name !== req.tool) return false;
 
           // If params specified, check they match
@@ -31,8 +31,8 @@ export class ToolCallVerificationGrader extends BaseGrader {
               const actual = tc.params[key];
 
               // Support glob patterns for paths
-              if (typeof expected === 'string' && expected.includes('*')) {
-                const pattern = new RegExp('^' + expected.replace(/\*/g, '.*') + '$');
+              if (typeof expected === "string" && expected.includes("*")) {
+                const pattern = new RegExp("^" + expected.replace(/\*/g, ".*") + "$");
                 if (!pattern.test(String(actual))) return false;
               } else if (actual !== expected) {
                 return false;
@@ -56,18 +56,18 @@ export class ToolCallVerificationGrader extends BaseGrader {
     // Check forbidden tool calls
     if (params.forbidden) {
       for (const forbidden of params.forbidden) {
-        const found = toolCalls.some(tc => tc.name === forbidden);
+        const found = toolCalls.some((tc) => tc.name === forbidden);
         checks.push({
           check: `forbidden.${forbidden}`,
           passed: !found,
-          details: found ? 'Found (should not exist)' : 'Not found (correct)',
+          details: found ? "Found (should not exist)" : "Not found (correct)",
         });
       }
     }
 
     // Check sequence (tools must be called in order)
     if (params.sequence) {
-      const toolOrder = toolCalls.map(tc => tc.name);
+      const toolOrder = toolCalls.map((tc) => tc.name);
       let seqIndex = 0;
 
       for (const tool of toolOrder) {
@@ -78,10 +78,10 @@ export class ToolCallVerificationGrader extends BaseGrader {
 
       const sequenceComplete = seqIndex === params.sequence.length;
       checks.push({
-        check: 'sequence',
+        check: "sequence",
         passed: sequenceComplete,
         details: sequenceComplete
-          ? `Sequence complete: ${params.sequence.join(' → ')}`
+          ? `Sequence complete: ${params.sequence.join(" → ")}`
           : `Incomplete: found ${seqIndex}/${params.sequence.length} in order`,
       });
     }
@@ -90,13 +90,13 @@ export class ToolCallVerificationGrader extends BaseGrader {
     if (params.max_calls !== undefined) {
       const withinLimit = toolCalls.length <= params.max_calls;
       checks.push({
-        check: 'max_calls',
+        check: "max_calls",
         passed: withinLimit,
         details: `${toolCalls.length} calls (max: ${params.max_calls})`,
       });
     }
 
-    const passCount = checks.filter(c => c.passed).length;
+    const passCount = checks.filter((c) => c.passed).length;
     const score = checks.length > 0 ? passCount / checks.length : 1;
     const passed = passCount === checks.length;
 
@@ -105,10 +105,10 @@ export class ToolCallVerificationGrader extends BaseGrader {
       details: {
         checks,
         total_tool_calls: toolCalls.length,
-        tool_call_summary: toolCalls.map(tc => tc.name),
+        tool_call_summary: toolCalls.map((tc) => tc.name),
       },
     });
   }
 }
 
-registerGrader('tool_calls', ToolCallVerificationGrader);
+registerGrader("tool_calls", ToolCallVerificationGrader);

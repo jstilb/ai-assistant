@@ -20,7 +20,7 @@
  *   const result = contains("Hello Jm", "Jm");
  */
 
-import { existsSync } from "fs";
+import { existsSync } from "node:fs";
 
 // ============================================================================
 // Types
@@ -55,11 +55,7 @@ export function stringMatch(actual: string, expected: string): CheckResult {
 /**
  * regex_match: Pattern matching against actual output
  */
-export function regexMatch(
-  actual: string,
-  pattern: string,
-  flags?: string
-): CheckResult {
+export function regexMatch(actual: string, pattern: string, flags?: string): CheckResult {
   try {
     const regex = new RegExp(pattern, flags);
     const pass = regex.test(actual);
@@ -87,9 +83,7 @@ export function contains(actual: string, expected: string): CheckResult {
   return {
     pass,
     score: pass ? 1 : 0,
-    details: pass
-      ? `Contains: found "${expected}" in output`
-      : `Contains failed: "${expected}" not found in output`,
+    details: pass ? `Contains: found "${expected}" in output` : `Contains failed: "${expected}" not found in output`,
   };
 }
 
@@ -184,10 +178,7 @@ export function jsonPath(actual: string, expected: string): CheckResult {
 // Check Type Registry
 // ============================================================================
 
-const CHECK_TYPES: Record<
-  string,
-  (actual: string, expected: string, flags?: string) => CheckResult
-> = {
+const CHECK_TYPES: Record<string, (actual: string, expected: string, flags?: string) => CheckResult> = {
   string_match: stringMatch,
   regex_match: regexMatch,
   contains,
@@ -199,12 +190,7 @@ const CHECK_TYPES: Record<
 /**
  * Run a check by type name
  */
-export function runCheck(
-  checkType: string,
-  actual: string,
-  expected: string,
-  flags?: string
-): CheckResult {
+export function runCheck(checkType: string, actual: string, expected: string, flags?: string): CheckResult {
   const checkFn = CHECK_TYPES[checkType];
   if (!checkFn) {
     return {
@@ -219,19 +205,14 @@ export function runCheck(
 /**
  * Run multiple checks and aggregate results
  */
-export function runChecks(
-  checks: Array<{ type: string; actual: string; expected: string; flags?: string }>
-): {
+export function runChecks(checks: Array<{ type: string; actual: string; expected: string; flags?: string }>): {
   results: CheckResult[];
   allPassed: boolean;
   aggregateScore: number;
 } {
   const results = checks.map((c) => runCheck(c.type, c.actual, c.expected, c.flags));
   const allPassed = results.every((r) => r.pass);
-  const aggregateScore =
-    results.length > 0
-      ? results.reduce((sum, r) => sum + r.score, 0) / results.length
-      : 0;
+  const aggregateScore = results.length > 0 ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0;
   return { results, allPassed, aggregateScore };
 }
 
@@ -268,6 +249,10 @@ Examples:
   }
 
   const [checkType, actual, expected, flags] = args;
+  if (checkType === undefined || actual === undefined || expected === undefined) {
+    console.error("Usage: CodeGrader <check-type> <actual> <expected> [flags]");
+    process.exit(1);
+  }
   const result = runCheck(checkType, actual, expected, flags);
 
   console.log(JSON.stringify(result, null, 2));

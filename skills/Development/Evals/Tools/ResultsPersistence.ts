@@ -13,8 +13,8 @@
  *   await persistSuiteResults('foundation', results);
  */
 
-import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -69,10 +69,7 @@ export interface SuiteAggregateEntry {
   total_evals: number;
   passed_evals: number;
   aggregate_pass_rate: number;
-  per_category: Record<
-    string,
-    { total: number; passed: number; pass_rate: number }
-  >;
+  per_category: Record<string, { total: number; passed: number; pass_rate: number }>;
 }
 
 // ============================================================================
@@ -129,7 +126,7 @@ export function persistResult(
   suite: string,
   result: EvalResult,
   metrics: { pass_rate: number; pass_at_k: number; pass_all_k: number },
-  date?: Date
+  date?: Date,
 ): string {
   const dateDir = getDateDir(date);
   ensureDir(dateDir);
@@ -146,9 +143,7 @@ export function persistResult(
     pass_at_k: metrics.pass_at_k,
     pass_all_k: metrics.pass_all_k,
     grader_details: result.grader_details,
-    ...(result.infra_skipped
-      ? { status: "infra_skipped" as const, infra_reason: result.infra_skipped.reason }
-      : {}),
+    ...(result.infra_skipped ? { status: "infra_skipped" as const, infra_reason: result.infra_skipped.reason } : {}),
   };
 
   getResultsLog(filePath).append(entry);
@@ -158,11 +153,7 @@ export function persistResult(
 /**
  * Persist aggregate suite results
  */
-export function persistAggregateResults(
-  suite: string,
-  results: EvalResult[],
-  date?: Date
-): string {
+export function persistAggregateResults(suite: string, results: EvalResult[], date?: Date): string {
   const dateDir = getDateDir(date);
   ensureDir(dateDir);
 
@@ -173,18 +164,14 @@ export function persistAggregateResults(
   results = results.filter((r) => !r.infra_skipped);
 
   // Compute per-category stats
-  const perCategory: Record<
-    string,
-    { total: number; passed: number; pass_rate: number }
-  > = {};
+  const perCategory: Record<string, { total: number; passed: number; pass_rate: number }> = {};
 
   for (const result of results) {
-    if (!perCategory[result.category]) {
-      perCategory[result.category] = { total: 0, passed: 0, pass_rate: 0 };
-    }
-    perCategory[result.category].total++;
+    const stats = perCategory[result.category] ?? { total: 0, passed: 0, pass_rate: 0 };
+    perCategory[result.category] = stats;
+    stats.total++;
     if (result.passed.every((p) => p)) {
-      perCategory[result.category].passed++;
+      stats.passed++;
     }
   }
 
@@ -201,8 +188,7 @@ export function persistAggregateResults(
     type: "aggregate",
     total_evals: results.length,
     passed_evals: passedEvals,
-    aggregate_pass_rate:
-      results.length > 0 ? passedEvals / results.length : 0,
+    aggregate_pass_rate: results.length > 0 ? passedEvals / results.length : 0,
     per_category: perCategory,
   };
 
@@ -219,7 +205,7 @@ export function persistSuiteResults(
     eval: EvalResult;
     metrics: { pass_rate: number; pass_at_k: number; pass_all_k: number };
   }>,
-  date?: Date
+  date?: Date,
 ): string {
   let filePath = "";
 
@@ -284,11 +270,7 @@ Output:
       ],
     };
 
-    const path = persistResult(
-      "test",
-      testResult,
-      { pass_rate: 1.0, pass_at_k: 1.0, pass_all_k: 1.0 },
-    );
+    const path = persistResult("test", testResult, { pass_rate: 1.0, pass_at_k: 1.0, pass_all_k: 1.0 });
     console.log(`Test result written to: ${path}`);
   }
 }

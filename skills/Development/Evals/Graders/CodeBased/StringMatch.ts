@@ -3,40 +3,38 @@
  * Fast deterministic check for exact or pattern matching
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult, StringMatchParams } from '../../Types/index.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult, StringMatchParams } from "../../Types/index.ts";
 
 export class StringMatchGrader extends BaseGrader {
-  type = 'string_match' as const;
-  category = 'code_based' as const;
+  type = "string_match" as const;
+  category = "code_based" as const;
   // Tests context.output directly against configured patterns.
   readsOutput = true;
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as StringMatchParams;
+    const params = this.config.params as unknown as StringMatchParams; // config.params is untyped YAML; validated below
 
     if (!params?.patterns?.length) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'No patterns configured',
+        reasoning: "No patterns configured",
       });
     }
 
     const output = params.case_sensitive ? context.output : context.output.toLowerCase();
-    const patterns = params.patterns.map(p =>
-      params.case_sensitive ? p : p.toLowerCase()
-    );
+    const patterns = params.patterns.map((p) => (params.case_sensitive ? p : p.toLowerCase()));
 
-    const matches = patterns.map(pattern => output.includes(pattern));
+    const matches = patterns.map((pattern) => output.includes(pattern));
     const matchCount = matches.filter(Boolean).length;
 
     let passed: boolean;
     let score: number;
 
-    if (params.mode === 'all') {
+    if (params.mode === "all") {
       passed = matchCount === patterns.length;
       score = matchCount / patterns.length;
-    } else if (params.mode === 'none_match') {
+    } else if (params.mode === "none_match") {
       passed = matchCount === 0;
       score = matchCount === 0 ? 1 : 0;
     } else {
@@ -56,4 +54,4 @@ export class StringMatchGrader extends BaseGrader {
   }
 }
 
-registerGrader('string_match', StringMatchGrader);
+registerGrader("string_match", StringMatchGrader);

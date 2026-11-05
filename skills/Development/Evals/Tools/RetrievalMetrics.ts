@@ -37,14 +37,14 @@
  */
 export function recallAtK(retrieved: string[], relevant: string[], k: number): number {
   if (relevant.length === 0) {
-    throw new Error('recallAtK: relevant set is empty — recall is undefined for a query with no ground truth');
+    throw new Error("recallAtK: relevant set is empty — recall is undefined for a query with no ground truth");
   }
   if (k < 0) {
     throw new Error(`recallAtK: k must be >= 0, got ${k}`);
   }
   const relevantSet = new Set(relevant);
   const topK = retrieved.slice(0, k);
-  const found = topK.filter(id => relevantSet.has(id)).length;
+  const found = topK.filter((id) => relevantSet.has(id)).length;
   return found / relevant.length;
 }
 
@@ -59,11 +59,12 @@ export function recallAtK(retrieved: string[], relevant: string[], k: number): n
  */
 export function reciprocalRank(retrieved: string[], relevant: string[]): number {
   if (relevant.length === 0) {
-    throw new Error('reciprocalRank: relevant set is empty — rank is undefined for a query with no ground truth');
+    throw new Error("reciprocalRank: relevant set is empty — rank is undefined for a query with no ground truth");
   }
   const relevantSet = new Set(relevant);
   for (let i = 0; i < retrieved.length; i++) {
-    if (relevantSet.has(retrieved[i])) {
+    const item = retrieved[i];
+    if (item !== undefined && relevantSet.has(item)) {
       return 1 / (i + 1);
     }
   }
@@ -73,7 +74,7 @@ export function reciprocalRank(retrieved: string[], relevant: string[]): number 
 /** Arithmetic mean of a non-empty array of numbers. Throws on empty input — an average over zero queries is undefined, not zero. */
 export function mean(values: number[]): number {
   if (values.length === 0) {
-    throw new Error('mean: cannot average zero values');
+    throw new Error("mean: cannot average zero values");
   }
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }

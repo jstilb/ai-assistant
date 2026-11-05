@@ -15,9 +15,9 @@
  * See MEMORY/SkillAudits/evals-infra-audit-2026-07-09/results.md, finding #1.
  */
 
-import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome } from '../../../../../lib/core/KayaHome.ts';
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Store paths
@@ -29,7 +29,7 @@ import { getKayaHome } from '../../../../../lib/core/KayaHome.ts';
 // LIVE MEMORY/VALIDATION/evals tree instead of its temp fixture (same
 // de-freeze pattern as ResultsPersistence.ts's validationDir()).
 function validationEvalsDir(): string {
-  return join(getKayaHome(), 'MEMORY', 'VALIDATION', 'evals');
+  return join(getKayaHome(), "MEMORY", "VALIDATION", "evals");
 }
 
 // ============================================================================
@@ -67,7 +67,7 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Test seam: EVALS_KNOWN_OUTAGES_PATH points the reader at a fixture config. */
 function knownOutagesPath(): string {
-  return process.env.EVALS_KNOWN_OUTAGES_PATH ?? join(import.meta.dir, '..', '..', 'Config', 'known-outages.json');
+  return process.env.EVALS_KNOWN_OUTAGES_PATH ?? join(import.meta.dir, "..", "..", "Config", "known-outages.json");
 }
 
 /** Loads and strictly validates the outage config. Throws (never returns an
@@ -77,9 +77,11 @@ export function loadKnownOutages(): KnownOutage[] {
   const path = knownOutagesPath();
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    parsed = JSON.parse(readFileSync(path, "utf-8"));
   } catch (err) {
-    throw new KnownOutagesConfigError(`[ResultsUtils] known-outages config unreadable at ${path}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new KnownOutagesConfigError(
+      `[ResultsUtils] known-outages config unreadable at ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   const outages = (parsed as { outages?: unknown } | null)?.outages;
   if (!Array.isArray(outages)) {
@@ -90,12 +92,15 @@ export function loadKnownOutages(): KnownOutage[] {
     const bad = (why: string): never => {
       throw new KnownOutagesConfigError(`[ResultsUtils] known-outages config ${path}: outages[${i}] ${why}`);
     };
-    if (!e || typeof e !== 'object') return bad('is not an object');
-    if (typeof e.from !== 'string' || !DATE_ONLY.test(e.from)) return bad('needs "from" as YYYY-MM-DD');
-    if (typeof e.to !== 'string' || !DATE_ONLY.test(e.to) || e.to < e.from) return bad('needs "to" as YYYY-MM-DD >= from');
-    if (!Array.isArray(e.suites) || e.suites.length === 0 || !e.suites.every(x => typeof x === 'string')) return bad('needs non-empty "suites" string array');
-    if (typeof e.reason !== 'string' || e.reason.length === 0) return bad('needs "reason"');
-    if (!Array.isArray(e.evidence) || e.evidence.length === 0 || !e.evidence.every(x => typeof x === 'string')) return bad('needs non-empty "evidence" string array');
+    if (!e || typeof e !== "object") return bad("is not an object");
+    if (typeof e.from !== "string" || !DATE_ONLY.test(e.from)) return bad('needs "from" as YYYY-MM-DD');
+    if (typeof e.to !== "string" || !DATE_ONLY.test(e.to) || e.to < e.from)
+      return bad('needs "to" as YYYY-MM-DD >= from');
+    if (!Array.isArray(e.suites) || e.suites.length === 0 || !e.suites.every((x) => typeof x === "string"))
+      return bad('needs non-empty "suites" string array');
+    if (typeof e.reason !== "string" || e.reason.length === 0) return bad('needs "reason"');
+    if (!Array.isArray(e.evidence) || e.evidence.length === 0 || !e.evidence.every((x) => typeof x === "string"))
+      return bad('needs non-empty "evidence" string array');
     return { from: e.from, to: e.to, suites: e.suites as string[], reason: e.reason, evidence: e.evidence as string[] };
   });
 }
@@ -103,7 +108,7 @@ export function loadKnownOutages(): KnownOutage[] {
 /** The declared outage covering this run (UTC date of its timestamp), if any. */
 function outageFor(suite: string, timestamp: string, outages: KnownOutage[]): KnownOutage | undefined {
   const day = timestamp.slice(0, 10);
-  return outages.find(o => o.suites.includes(suite) && day >= o.from && day <= o.to);
+  return outages.find((o) => o.suites.includes(suite) && day >= o.from && day <= o.to);
 }
 
 const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -111,7 +116,7 @@ const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // Separator between a run's source file path and its identifying timestamp
 // in the opaque run id returned by findSuiteRuns(). Not expected to appear
 // in a filesystem path.
-const RUN_ID_SEPARATOR = '::';
+const RUN_ID_SEPARATOR = "::";
 
 // ============================================================================
 // JSONL line shapes (mirrors ResultsPersistence.ts's SuiteResultEntry /
@@ -138,7 +143,7 @@ interface SuiteResultLine {
 interface SuiteAggregateLine {
   timestamp: string;
   suite: string;
-  type: 'aggregate';
+  type: "aggregate";
   total_evals: number;
   passed_evals: number;
   aggregate_pass_rate: number;
@@ -197,8 +202,8 @@ function warnOnce(key: string, message: string): void {
  * vanish without a trace.
  */
 function parseFileRuns(filePath: string): ParsedRun[] {
-  const raw = readFileSync(filePath, 'utf-8');
-  const rawLines = raw.split('\n');
+  const raw = readFileSync(filePath, "utf-8");
+  const rawLines = raw.split("\n");
 
   const runs: ParsedRun[] = [];
   let buffer: EvalRunResult[] = [];
@@ -219,31 +224,28 @@ function parseFileRuns(filePath: string): ParsedRun[] {
       warnOnce(
         warnKey,
         `[ResultsUtils] Skipping malformed JSONL line at ${filePath}:${lineNumber}: ` +
-          `${err instanceof Error ? err.message : String(err)}`
+          `${err instanceof Error ? err.message : String(err)}`,
       );
       return;
     }
 
-    if (typeof parsed !== 'object' || parsed === null) {
-      warnOnce(
-        warnKey,
-        `[ResultsUtils] Skipping malformed JSONL line at ${filePath}:${lineNumber}: not a JSON object`
-      );
+    if (typeof parsed !== "object" || parsed === null) {
+      warnOnce(warnKey, `[ResultsUtils] Skipping malformed JSONL line at ${filePath}:${lineNumber}: not a JSON object`);
       return;
     }
 
     const obj = parsed as Record<string, unknown>;
 
-    if (typeof obj.timestamp !== 'string' || typeof obj.suite !== 'string') {
+    if (typeof obj.timestamp !== "string" || typeof obj.suite !== "string") {
       warnOnce(
         warnKey,
         `[ResultsUtils] Skipping malformed JSONL line at ${filePath}:${lineNumber}: ` +
-          `missing required "timestamp"/"suite" field`
+          `missing required "timestamp"/"suite" field`,
       );
       return;
     }
 
-    if (obj.type === 'aggregate') {
+    if (obj.type === "aggregate") {
       const agg = obj as unknown as SuiteAggregateLine;
       runs.push({ filePath, timestamp: agg.timestamp, results: buffer, infraSkipped: skippedBuffer });
       buffer = [];
@@ -253,11 +255,11 @@ function parseFileRuns(filePath: string): ParsedRun[] {
     }
 
     // Per-task line.
-    if (typeof obj.eval_name !== 'string' || !Array.isArray(obj.trial_scores)) {
+    if (typeof obj.eval_name !== "string" || !Array.isArray(obj.trial_scores)) {
       warnOnce(
         warnKey,
         `[ResultsUtils] Skipping malformed JSONL line at ${filePath}:${lineNumber}: ` +
-          `missing required "eval_name"/"trial_scores" field`
+          `missing required "eval_name"/"trial_scores" field`,
       );
       return;
     }
@@ -265,7 +267,7 @@ function parseFileRuns(filePath: string): ParsedRun[] {
     const line_ = obj as unknown as SuiteResultLine;
     // B2: an outage is not a score of 0. The line stays in the file as an
     // audit trail but contributes nothing to any regression/baseline reader.
-    if (line_.status === 'infra_skipped') {
+    if (line_.status === "infra_skipped") {
       skippedBuffer.push(line_.eval_name);
       return;
     }
@@ -275,7 +277,7 @@ function parseFileRuns(filePath: string): ParsedRun[] {
     buffer.push({
       task_id: line_.eval_name,
       suite: line_.suite,
-      category: line_.category ?? '',
+      category: line_.category ?? "",
       mean_score: meanScore,
       pass_rate: line_.pass_rate,
     });
@@ -286,9 +288,9 @@ function parseFileRuns(filePath: string): ParsedRun[] {
   // incomplete run rather than silently dropping them.
   if (buffer.length > 0 || skippedBuffer.length > 0) {
     warnOnce(
-      `${filePath}:incomplete-run:${lastLineTimestamp ?? 'unknown'}`,
+      `${filePath}:incomplete-run:${lastLineTimestamp ?? "unknown"}`,
       `[ResultsUtils] ${filePath}: ${buffer.length} result line(s) with no closing ` +
-        `"aggregate" line — treating as an incomplete run (likely a crashed write).`
+        `"aggregate" line — treating as an incomplete run (likely a crashed write).`,
     );
     runs.push({
       filePath,
@@ -319,9 +321,9 @@ function parseFileRuns(filePath: string): ParsedRun[] {
  */
 export function findSuiteRuns(suiteName: string, limit?: number): string[] {
   const outages = loadKnownOutages();
-  const kept = collectRuns(suiteName).filter(r => !outageFor(suiteName, r.timestamp, outages));
+  const kept = collectRuns(suiteName).filter((r) => !outageFor(suiteName, r.timestamp, outages));
   const limited = limit !== undefined ? kept.slice(0, limit) : kept;
-  return limited.map(r => `${r.filePath}${RUN_ID_SEPARATOR}${r.timestamp}`);
+  return limited.map((r) => `${r.filePath}${RUN_ID_SEPARATOR}${r.timestamp}`);
 }
 
 /**
@@ -352,8 +354,8 @@ function collectRuns(suiteName: string): ParsedRun[] {
   if (!existsSync(root)) return [];
 
   const dateDirs = readdirSync(root, { withFileTypes: true })
-    .filter(e => e.isDirectory() && DATE_DIR_PATTERN.test(e.name))
-    .map(e => e.name);
+    .filter((e) => e.isDirectory() && DATE_DIR_PATTERN.test(e.name))
+    .map((e) => e.name);
 
   const allRuns: ParsedRun[] = [];
   for (const date of dateDirs) {
@@ -377,9 +379,7 @@ function collectRuns(suiteName: string): ParsedRun[] {
 export function loadRun(runId: string): EvalRunResult[] {
   const sepIdx = runId.lastIndexOf(RUN_ID_SEPARATOR);
   if (sepIdx === -1) {
-    throw new Error(
-      `loadRun: malformed run id "${runId}" (expected "<filePath>${RUN_ID_SEPARATOR}<timestamp>")`
-    );
+    throw new Error(`loadRun: malformed run id "${runId}" (expected "<filePath>${RUN_ID_SEPARATOR}<timestamp>")`);
   }
 
   const filePath = runId.slice(0, sepIdx);
@@ -390,7 +390,7 @@ export function loadRun(runId: string): EvalRunResult[] {
   }
 
   const runs = parseFileRuns(filePath);
-  const match = runs.find(r => r.timestamp === timestamp);
+  const match = runs.find((r) => r.timestamp === timestamp);
   if (!match) {
     throw new Error(`loadRun: no run with timestamp ${timestamp} found in ${filePath}`);
   }
@@ -410,7 +410,7 @@ export function loadRunInfraSkipped(runId: string): string[] {
   }
   const filePath = runId.slice(0, sepIdx);
   const timestamp = runId.slice(sepIdx + RUN_ID_SEPARATOR.length);
-  const match = parseFileRuns(filePath).find(r => r.timestamp === timestamp);
+  const match = parseFileRuns(filePath).find((r) => r.timestamp === timestamp);
   if (!match) {
     throw new Error(`loadRunInfraSkipped: no run with timestamp ${timestamp} found in ${filePath}`);
   }

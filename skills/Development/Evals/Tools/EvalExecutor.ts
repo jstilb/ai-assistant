@@ -12,27 +12,30 @@
  *   bun run EvalExecutor.ts list-graders
  */
 
-import type { Task, Transcript, EvalRun, GraderConfig, GraderType } from '../Types/index.ts';
-import { TaskSchema } from '../Types/schemas.ts';
-import { TranscriptCapture, parseClaudeCodeTranscript } from './TranscriptCapture.ts';
-import { TrialRunner, formatEvalResults, matchKnownInfraSignature, isJudgeFailedTrial, type TaskExecutor } from './TrialRunner.ts';
-import { anyGraderReadsOutput, listGradersByCategory } from '../Graders/Base.ts';
-import { loadSuite } from './SuiteManager.ts';
-import { findTaskFile } from './shared/TaskUtils.ts';
+import type { Task, Transcript, EvalRun, GraderConfig, GraderType } from "../Types/index.ts";
+import { TaskSchema } from "../Types/schemas.ts";
+import { TranscriptCapture } from "./TranscriptCapture.ts";
+import {
+  TrialRunner,
+  formatEvalResults,
+  matchKnownInfraSignature,
+  isJudgeFailedTrial,
+  type TaskExecutor,
+} from "./TrialRunner.ts";
+import { anyGraderReadsOutput, listGradersByCategory } from "../Graders/Base.ts";
+import { loadSuite } from "./SuiteManager.ts";
+import { findTaskFile } from "./shared/TaskUtils.ts";
 import {
   scanForDestructiveScenario,
   resolveSandboxPathMappings,
   formatRefusalMessage,
   redactInfraSignatures,
-} from './DestructiveScenarioGuard.ts';
-import { persistSuiteResults, type EvalResult as PersistEvalResult } from './ResultsPersistence.ts';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
-import { parse as parseYaml } from 'yaml';
-import {
-  buildHardenedClaudeEnv,
-  stripDangerousClaudeEnvKeys,
-} from '../../../../lib/core/Inference.ts';
+} from "./DestructiveScenarioGuard.ts";
+import { persistSuiteResults, type EvalResult as PersistEvalResult } from "./ResultsPersistence.ts";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, renameSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { parse as parseYaml } from "yaml";
+import { buildHardenedClaudeEnv, stripDangerousClaudeEnvKeys } from "../../../../lib/core/Inference.ts";
 
 /**
  * Keys an eval cell inherits from the launching process. Everything else in
@@ -45,19 +48,19 @@ import {
  * config.env.
  */
 export const EVAL_ENV_ALLOWLIST: readonly string[] = [
-  'HOME',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'PATH',
-  'TMPDIR',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TERM',
-  'TZ',
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'CLAUDE_CODE_SUBSCRIPTION_TYPE',
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "PATH",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TERM",
+  "TZ",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "CLAUDE_CODE_SUBSCRIPTION_TYPE",
 ];
 
 /**
@@ -88,14 +91,14 @@ export function buildEvalEnv(
   stripDangerousClaudeEnvKeys(env);
   return env;
 }
-import { parseArgs } from 'util';
-import { tmpdir } from 'os';
-import { $ } from 'bun';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { parseArgs } from "node:util";
+import { tmpdir } from "node:os";
+import { $ } from "bun";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
-const EVALS_DIR = join(import.meta.dir, '..');
-const RESULTS_DIR = join(EVALS_DIR, 'Results');
-const DOMAIN_PATTERNS_PATH = join(EVALS_DIR, 'Data', 'DomainPatterns.yaml');
+const EVALS_DIR = join(import.meta.dir, "..");
+const RESULTS_DIR = join(EVALS_DIR, "Results");
+const DOMAIN_PATTERNS_PATH = join(EVALS_DIR, "Data", "DomainPatterns.yaml");
 
 // Default working directory for claude -p execution.
 // This ensures CLAUDE.md and project-level settings are loaded.
@@ -104,10 +107,10 @@ const CLAUDE_HOME = getKayaHome();
 // System prompt appended to eval runs to ensure the agent treats the
 // prompt as a real user message rather than a meta-description.
 const EVAL_SYSTEM_PROMPT = [
-  'Treat the following as a real user request.',
-  'Use your configured response format, personality, and skill routing.',
-  'Do NOT describe what you would do - actually do it.',
-].join(' ');
+  "Treat the following as a real user request.",
+  "Use your configured response format, personality, and skill routing.",
+  "Do NOT describe what you would do - actually do it.",
+].join(" ");
 
 // Placeholder output for tasks whose live agent spawn was skipped (see
 // executeTask()). Historically had to be non-empty/non-whitespace because
@@ -119,8 +122,8 @@ const EVAL_SYSTEM_PROMPT = [
 // so an empty string here would no longer misclassify. Left descriptive and
 // non-empty anyway — it's useful debugging signal in transcripts/logs.
 const AGENT_RUN_SKIPPED_OUTPUT =
-  '[eval: live agent spawn skipped — no grader on this task reads agent output/transcript; ' +
-  'setup_commands already produced the record these graders read]';
+  "[eval: live agent spawn skipped — no grader on this task reads agent output/transcript; " +
+  "setup_commands already produced the record these graders read]";
 
 // ============================================================================
 // Types
@@ -177,21 +180,27 @@ export interface ResolvedContext {
 // ============================================================================
 
 // Context files used by legacy (pre-streamline) settings.json
-const LEGACY_CONTEXT_CONFIG_PATH = join(EVALS_DIR, 'Config', 'legacy-context-files.yaml');
+const LEGACY_CONTEXT_CONFIG_PATH = join(EVALS_DIR, "Config", "legacy-context-files.yaml");
 
 function loadLegacyContextFiles(): string[] {
   if (!existsSync(LEGACY_CONTEXT_CONFIG_PATH)) {
     // Non-fatal: baseline comparison will work without legacy context
     process.stderr.write(
       `[Evals] Warning: legacy-context-files.yaml not found at ${LEGACY_CONTEXT_CONFIG_PATH}. ` +
-      `Baseline comparison will use no legacy context.\n`
+        `Baseline comparison will use no legacy context.\n`,
     );
     return [];
   }
   try {
-    const config = parseYaml(readFileSync(LEGACY_CONTEXT_CONFIG_PATH, 'utf-8')) as { files: string[] };
+    const config = parseYaml(readFileSync(LEGACY_CONTEXT_CONFIG_PATH, "utf-8")) as { files: string[] };
     return config.files || [];
-  } catch {
+  } catch (err) {
+    // The file exists but is unreadable or malformed: baseline comparison would
+    // silently run with no legacy context. Make that visible.
+    process.stderr.write(
+      `[Evals] Warning: could not parse ${LEGACY_CONTEXT_CONFIG_PATH}: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Baseline comparison will use no legacy context.\n`,
+    );
     return [];
   }
 }
@@ -216,7 +225,7 @@ async function gitShowFile(ref: string, relativePath: string): Promise<string | 
  */
 async function reconstructContextFromRef(ref: string): Promise<ResolvedContext> {
   // Try settings.json contextFiles first
-  const settingsContent = await gitShowFile(ref, 'settings.json');
+  const settingsContent = await gitShowFile(ref, "settings.json");
   let contextFiles = LEGACY_CONTEXT_FILES;
 
   if (settingsContent) {
@@ -230,19 +239,19 @@ async function reconstructContextFromRef(ref: string): Promise<ResolvedContext> 
     }
   }
 
-  let combined = '';
+  let combined = "";
   const loadedFiles: string[] = [];
 
   for (const relativePath of contextFiles) {
     const content = await gitShowFile(ref, relativePath);
     if (content) {
-      if (combined) combined += '\n\n---\n\n';
+      if (combined) combined += "\n\n---\n\n";
       combined += content;
       loadedFiles.push(relativePath);
     }
   }
 
-  const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' PST';
+  const currentDate = new Date().toISOString().slice(0, 19).replace("T", " ") + " PST";
 
   // Reconstruct the legacy system prompt format (matches LoadContext.hook.ts)
   const context = `<system-reminder>
@@ -285,32 +294,32 @@ This context is now active. Additional context loads dynamically as needed.
  *   reconstructs from settings.json contextFiles at that ref
  */
 export async function resolveContextAtRef(ref: string): Promise<ResolvedContext> {
-  const isHead = ref === 'HEAD' || ref === 'current';
+  const isHead = ref === "HEAD" || ref === "current";
 
   if (isHead) {
     // Read CLAUDE.md directly from disk (current state)
-    const claudeMdPath = join(CLAUDE_HOME, 'CLAUDE.md');
-    let claudeMd = '';
+    const claudeMdPath = join(CLAUDE_HOME, "CLAUDE.md");
+    let claudeMd = "";
     if (existsSync(claudeMdPath)) {
-      claudeMd = readFileSync(claudeMdPath, 'utf-8');
+      claudeMd = readFileSync(claudeMdPath, "utf-8");
     }
 
     // Also read contextFiles from settings.json to get CORE/SKILL.md, etc.
     // These are loaded by hooks in interactive mode but skipped in pipe mode
-    const settingsPath = join(CLAUDE_HOME, 'settings.json');
-    let contextFileContents = '';
+    const settingsPath = join(CLAUDE_HOME, "settings.json");
+    let contextFileContents = "";
     const loadedFiles: string[] = [];
 
     if (existsSync(settingsPath)) {
       try {
-        const settingsRaw = readFileSync(settingsPath, 'utf-8');
+        const settingsRaw = readFileSync(settingsPath, "utf-8");
         const settings = JSON.parse(settingsRaw);
         const contextFiles: string[] = settings.contextFiles ?? LEGACY_CONTEXT_FILES;
         for (const relativePath of contextFiles) {
           const fullPath = join(CLAUDE_HOME, relativePath);
           if (existsSync(fullPath)) {
             try {
-              const fileContent = readFileSync(fullPath, 'utf-8');
+              const fileContent = readFileSync(fullPath, "utf-8");
               if (fileContent.trim()) {
                 contextFileContents += `\n\n---\n\n${fileContent}`;
                 loadedFiles.push(relativePath);
@@ -327,12 +336,11 @@ export async function resolveContextAtRef(ref: string): Promise<ResolvedContext>
 
     if (claudeMd || contextFileContents) {
       const combined = claudeMd + contextFileContents;
-      const source = loadedFiles.length > 0
-        ? `CLAUDE.md + ${loadedFiles.length} contextFiles (disk)`
-        : 'CLAUDE.md (disk)';
+      const source =
+        loadedFiles.length > 0 ? `CLAUDE.md + ${loadedFiles.length} contextFiles (disk)` : "CLAUDE.md (disk)";
       console.log(`  [context] ${source}, ${combined.length} chars`);
       if (loadedFiles.length > 0) {
-        console.log(`  [context] Loaded: ${loadedFiles.join(', ')}`);
+        console.log(`  [context] Loaded: ${loadedFiles.join(", ")}`);
       }
       return {
         context: combined,
@@ -344,7 +352,7 @@ export async function resolveContextAtRef(ref: string): Promise<ResolvedContext>
   }
 
   // Try git show for the ref
-  const claudeMd = await gitShowFile(ref, 'CLAUDE.md');
+  const claudeMd = await gitShowFile(ref, "CLAUDE.md");
 
   if (claudeMd && claudeMd.length > 200) {
     // Real CLAUDE.md content (post-streamline)
@@ -373,19 +381,18 @@ export async function resolveContextAtRef(ref: string): Promise<ResolvedContext>
 export async function executeTask(
   task: Task,
   trialNumber: number,
-  config: ExecutorConfig = {}
+  config: ExecutorConfig = {},
 ): Promise<ExecutionResult> {
-  const startTime = Date.now();
   const capture = new TranscriptCapture(task.id, `trial_${trialNumber}`);
 
   const timeout = config.timeout ?? task.setup?.timeout_ms ?? 300000; // 5 min default
 
   // Trial isolation: create temp working directory
-  const isolation = task.setup?.isolation ?? 'sandbox';
+  const isolation = task.setup?.isolation ?? "sandbox";
   let workingDir = config.workingDir ?? task.setup?.working_dir ?? CLAUDE_HOME;
   let tempDir: string | null = null;
 
-  if (isolation === 'sandbox') {
+  if (isolation === "sandbox") {
     tempDir = mkdtempSync(join(tmpdir(), `eval-${task.id}-`));
     workingDir = tempDir;
   } else if (!existsSync(workingDir)) {
@@ -435,7 +442,7 @@ export async function executeTask(
     // Build the prompt for the agent (uses the post-sandbox_paths-rewrite
     // scenario_prompt, if any mapping applied).
     const prompt = buildTaskPrompt(task, effectiveScenarioPrompt);
-    capture.addTurn('user', prompt);
+    capture.addTurn("user", prompt);
 
     // Run setup commands in the working directory before task execution
     // (also post-rewrite — see sandbox_paths handling above).
@@ -479,15 +486,15 @@ export async function executeTask(
     // fallback.
     if (effectiveSetupCommands?.length) {
       for (const cmd of effectiveSetupCommands) {
-        const proc = Bun.spawnSync(['sh', '-c', cmd], { cwd: workingDir, env: process.env, timeout });
+        const proc = Bun.spawnSync(["sh", "-c", cmd], { cwd: workingDir, env: process.env, timeout });
         if (proc.exitedDueToTimeout) {
           const stderr = proc.stderr.toString().slice(0, 200);
           const safeTaskId = redactInfraSignatures(task.id);
           const safeCmd = redactInfraSignatures(cmd);
-          const safeStderr = stderr ? redactInfraSignatures(stderr) : '';
+          const safeStderr = stderr ? redactInfraSignatures(stderr) : "";
           const message =
             `Task ${safeTaskId}: setup command exceeded its ${timeout}ms budget and was killed: ${safeCmd}` +
-            (safeStderr ? ` — ${safeStderr}` : '');
+            (safeStderr ? ` — ${safeStderr}` : "");
           if (matchKnownInfraSignature(message) === null) {
             throw new Error(message);
           }
@@ -497,7 +504,7 @@ export async function executeTask(
           // excluded infra_failure.
           throw new Error(
             `Task ${safeTaskId}: a setup command exceeded its execution budget and was killed ` +
-            `(command and output withheld — contained infra-signature text)`
+              `(command and output withheld — contained infra-signature text)`,
           );
         }
         if (proc.exitCode !== 0) {
@@ -553,15 +560,17 @@ export async function executeTask(
           noSessionPersistence: config.noSessionPersistence,
         });
       } else {
-        console.log(`  [skip] Task ${task.id}: no grader reads agent output/transcript (readsOutput=false for all ${task.graders?.length ?? 0} grader(s)) — skipping the live agent spawn; setup_commands already produced everything the grader(s) will read.`);
+        console.log(
+          `  [skip] Task ${task.id}: no grader reads agent output/transcript (readsOutput=false for all ${task.graders?.length ?? 0} grader(s)) — skipping the live agent spawn; setup_commands already produced everything the grader(s) will read.`,
+        );
         result = {
           output: AGENT_RUN_SKIPPED_OUTPUT,
           exitCode: 0,
-          outcome: { agentRunSkipped: true, reason: 'no configured grader declares readsOutput=true' },
+          outcome: { agentRunSkipped: true, reason: "no configured grader declares readsOutput=true" },
         };
       }
 
-      capture.addTurn('assistant', result.output);
+      capture.addTurn("assistant", result.output);
 
       // Parse any tool calls from the output
       if (result.toolCalls) {
@@ -582,11 +591,11 @@ export async function executeTask(
         resultErrorSubtype: result.resultErrorSubtype,
       };
     } catch (e) {
-      capture.addTurn('assistant', `Error: ${e}`);
+      capture.addTurn("assistant", `Error: ${e}`);
       const transcript = capture.finalize({ error: String(e) });
 
       return {
-        output: '',
+        output: "",
         transcript,
         exitCode: 1,
         error: String(e),
@@ -631,11 +640,11 @@ function buildTaskPrompt(task: Task, scenarioPromptOverride?: string): string {
   }
 
   // Add any constraints based on graders
-  const toolCallsGrader = task.graders.find(g => g.type === 'tool_calls');
+  const toolCallsGrader = task.graders.find((g) => g.type === "tool_calls");
   if (toolCallsGrader?.params) {
     const params = toolCallsGrader.params as { forbidden?: string[] };
     if (params.forbidden?.length) {
-      prompt += `\n\nNote: Do NOT use these tools: ${params.forbidden.join(', ')}`;
+      prompt += `\n\nNote: Do NOT use these tools: ${params.forbidden.join(", ")}`;
     }
   }
 
@@ -671,9 +680,12 @@ interface StreamJsonParsed {
 }
 
 function parseStreamJsonOutput(rawOutput: string): StreamJsonParsed {
-  const lines = rawOutput.split('\n').filter(l => l.trim());
-  const toolCallsById = new Map<string, { name: string; params: Record<string, unknown>; result?: unknown; error?: string }>();
-  let finalOutput = '';
+  const lines = rawOutput.split("\n").filter((l) => l.trim());
+  const toolCallsById = new Map<
+    string,
+    { name: string; params: Record<string, unknown>; result?: unknown; error?: string }
+  >();
+  let finalOutput = "";
   let cost: number | undefined;
   let duration: number | undefined;
   let turns: number | undefined;
@@ -689,37 +701,37 @@ function parseStreamJsonOutput(rawOutput: string): StreamJsonParsed {
       const event = JSON.parse(line);
 
       switch (event.type) {
-        case 'assistant': {
+        case "assistant": {
           // Tool calls and text are nested inside assistant message content blocks
           const contentBlocks: unknown[] = event.message?.content ?? event.content ?? [];
           if (Array.isArray(contentBlocks)) {
             for (const block of contentBlocks) {
               const b = block as Record<string, unknown>;
-              if (b.type === 'tool_use' && typeof b.id === 'string' && typeof b.name === 'string') {
+              if (b.type === "tool_use" && typeof b.id === "string" && typeof b.name === "string") {
                 toolCallsById.set(b.id, {
                   name: b.name,
                   params: (b.input ?? b.params ?? {}) as Record<string, unknown>,
                 });
-              } else if (b.type === 'text' && typeof b.text === 'string') {
+              } else if (b.type === "text" && typeof b.text === "string") {
                 finalOutput += b.text;
               }
             }
-          } else if (typeof event.message === 'string') {
+          } else if (typeof event.message === "string") {
             finalOutput += event.message;
           }
           break;
         }
 
-        case 'user': {
+        case "user": {
           // Tool results are nested inside user message content blocks
           const contentBlocks: unknown[] = event.message?.content ?? event.content ?? [];
           if (Array.isArray(contentBlocks)) {
             for (const block of contentBlocks) {
               const b = block as Record<string, unknown>;
-              if (b.type === 'tool_result' && typeof b.tool_use_id === 'string' && toolCallsById.has(b.tool_use_id)) {
+              if (b.type === "tool_result" && typeof b.tool_use_id === "string" && toolCallsById.has(b.tool_use_id)) {
                 const tc = toolCallsById.get(b.tool_use_id)!;
                 if (b.is_error) {
-                  tc.error = typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+                  tc.error = typeof b.content === "string" ? b.content : JSON.stringify(b.content);
                 } else {
                   tc.result = b.content;
                 }
@@ -729,22 +741,22 @@ function parseStreamJsonOutput(rawOutput: string): StreamJsonParsed {
           break;
         }
 
-        case 'result':
+        case "result":
           // Final result event - contains the response text and metrics
           if (event.result) finalOutput = event.result;
           if (event.total_cost_usd) cost = event.total_cost_usd;
           if (event.duration_ms) duration = event.duration_ms;
           if (event.num_turns) turns = event.num_turns;
           // Structured error fields — machine-authored, not free text.
-          if (typeof event.is_error === 'boolean') isError = event.is_error;
-          if (typeof event.subtype === 'string') resultSubtype = event.subtype;
+          if (typeof event.is_error === "boolean") isError = event.is_error;
+          if (typeof event.subtype === "string") resultSubtype = event.subtype;
           // Extract token metrics from usage object
           if (event.usage) {
             const u = event.usage as Record<string, unknown>;
-            if (typeof u.input_tokens === 'number') inputTokens = u.input_tokens;
-            if (typeof u.output_tokens === 'number') outputTokens = u.output_tokens;
-            if (typeof u.cache_read_input_tokens === 'number') cacheReadTokens = u.cache_read_input_tokens;
-            if (typeof u.cache_creation_input_tokens === 'number') cacheCreationTokens = u.cache_creation_input_tokens;
+            if (typeof u.input_tokens === "number") inputTokens = u.input_tokens;
+            if (typeof u.output_tokens === "number") outputTokens = u.output_tokens;
+            if (typeof u.cache_read_input_tokens === "number") cacheReadTokens = u.cache_read_input_tokens;
+            if (typeof u.cache_creation_input_tokens === "number") cacheCreationTokens = u.cache_creation_input_tokens;
           }
           break;
       }
@@ -793,15 +805,18 @@ export function buildClaudeArgs(options: {
   noSessionPersistence?: boolean;
 }): string[] {
   const args = [
-    'claude',
-    '-p',
-    '--verbose',
-    '--output-format', 'stream-json',
-    '--permission-mode', 'bypassPermissions',
-    '--append-system-prompt', options.systemPrompt,
+    "claude",
+    "-p",
+    "--verbose",
+    "--output-format",
+    "stream-json",
+    "--permission-mode",
+    "bypassPermissions",
+    "--append-system-prompt",
+    options.systemPrompt,
   ];
-  if (options.model) args.push('--model', options.model);
-  if (options.noSessionPersistence) args.push('--no-session-persistence');
+  if (options.model) args.push("--model", options.model);
+  if (options.noSessionPersistence) args.push("--no-session-persistence");
   args.push(options.prompt);
   return args;
 }
@@ -815,7 +830,7 @@ async function executeWithClaude(
     systemContext?: string;
     model?: string;
     noSessionPersistence?: boolean;
-  }
+  },
 ): Promise<{
   output: string;
   exitCode: number;
@@ -826,11 +841,14 @@ async function executeWithClaude(
   resultErrorSubtype?: string;
 }> {
   // Check if claude CLI is available
-  const claudeExists = await $`which claude`.quiet().then(() => true).catch(() => false);
+  const claudeExists = await $`which claude`
+    .quiet()
+    .then(() => true)
+    .catch(() => false);
 
   if (!claudeExists) {
     // Fallback to simulation mode for testing
-    console.log('Warning: claude CLI not found, running in simulation mode');
+    console.log("Warning: claude CLI not found, running in simulation mode");
     return simulateExecution(prompt);
   }
 
@@ -853,8 +871,8 @@ async function executeWithClaude(
     const proc = Bun.spawn(args, {
       cwd: options.workingDir,
       env: options.env as Record<string, string>,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdout: "pipe",
+      stderr: "pipe",
     });
 
     // Race against timeout
@@ -862,7 +880,7 @@ async function executeWithClaude(
       setTimeout(() => {
         proc.kill();
         reject(new Error(`Timeout after ${options.timeout}ms`));
-      }, options.timeout)
+      }, options.timeout),
     );
 
     const exitCode = await Promise.race([proc.exited, timeoutPromise]);
@@ -881,15 +899,18 @@ async function executeWithClaude(
           output: parsed.output,
           exitCode: exitCode as number,
           toolCalls: parsed.toolCalls.length > 0 ? parsed.toolCalls : undefined,
-          outcome: (parsed.cost || parsed.inputTokens) ? {
-            cost: parsed.cost,
-            duration: parsed.duration,
-            turns: parsed.turns,
-            inputTokens: parsed.inputTokens,
-            outputTokens: parsed.outputTokens,
-            cacheReadTokens: parsed.cacheReadTokens,
-            cacheCreationTokens: parsed.cacheCreationTokens,
-          } : undefined,
+          outcome:
+            parsed.cost || parsed.inputTokens
+              ? {
+                  cost: parsed.cost,
+                  duration: parsed.duration,
+                  turns: parsed.turns,
+                  inputTokens: parsed.inputTokens,
+                  outputTokens: parsed.outputTokens,
+                  cacheReadTokens: parsed.cacheReadTokens,
+                  cacheCreationTokens: parsed.cacheCreationTokens,
+                }
+              : undefined,
           stderr: stderr || undefined,
           resultIsError: parsed.isError,
           resultErrorSubtype: parsed.resultSubtype,
@@ -937,9 +958,7 @@ function simulateExecution(prompt: string): {
   return {
     output: `[Simulated] Task executed: ${prompt.slice(0, 100)}...`,
     exitCode: 0,
-    toolCalls: [
-      { name: 'Read', params: { file_path: 'test.ts' }, result: '// file content' },
-    ],
+    toolCalls: [{ name: "Read", params: { file_path: "test.ts" }, result: "// file content" }],
   };
 }
 
@@ -963,13 +982,13 @@ function applyDomainPatterns(task: Task): void {
   }
 
   try {
-    const patternsContent = readFileSync(DOMAIN_PATTERNS_PATH, 'utf-8');
+    const patternsContent = readFileSync(DOMAIN_PATTERNS_PATH, "utf-8");
     const patterns = parseYaml(patternsContent) as {
       domains: Record<string, { primary_graders: GraderConfig[] }>;
     };
 
     const domainPattern = patterns.domains[task.domain];
-    if (!domainPattern || !domainPattern.primary_graders) {
+    if (!domainPattern?.primary_graders) {
       console.warn(`⚠️  No domain pattern found for domain: ${task.domain}`);
       return;
     }
@@ -1005,12 +1024,10 @@ export function loadTaskConfig(taskPath: string): Task {
   if (!existsSync(taskPath)) {
     throw new Error(`Task config not found: ${taskPath}`);
   }
-  const raw = parseYaml(readFileSync(taskPath, 'utf-8'));
+  const raw = parseYaml(readFileSync(taskPath, "utf-8"));
   const result = TaskSchema.safeParse(raw);
   if (!result.success) {
-    const formatted = result.error.issues
-      .map(i => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('\n');
+    const formatted = result.error.issues.map((i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
     throw new Error(`Invalid task config at ${taskPath}:\n${formatted}`);
   }
   return result.data;
@@ -1041,7 +1058,7 @@ export async function runTask(
     model?: string;
     /** `--no-session-persistence` for the spawned agent. */
     noSessionPersistence?: boolean;
-  } = {}
+  } = {},
 ): Promise<EvalRun> {
   // Load task
   const task = loadTaskConfig(taskPath);
@@ -1060,26 +1077,28 @@ export async function runTask(
   // Create runner with our executor
   const runner = new TrialRunner({
     task,
-    executor: options.executor ?? (async (t, trialNum) => {
-      const result = await executeTask(t, trialNum, {
-        timeout: options.timeout,
-        systemContext: options.systemContext,
-        env: options.env,
-        model: options.model,
-        noSessionPersistence: options.noSessionPersistence,
-      });
-      return {
-        output: result.output,
-        transcript: result.transcript,
-        outcome: result.exitCode === 0 ? 'success' : 'failure',
-        exitCode: result.exitCode,
-        stderr: result.stderr,
-        resultIsError: result.resultIsError,
-        resultErrorSubtype: result.resultErrorSubtype,
-      };
-    }),
+    executor:
+      options.executor ??
+      (async (t, trialNum) => {
+        const result = await executeTask(t, trialNum, {
+          timeout: options.timeout,
+          systemContext: options.systemContext,
+          env: options.env,
+          model: options.model,
+          noSessionPersistence: options.noSessionPersistence,
+        });
+        return {
+          output: result.output,
+          transcript: result.transcript,
+          outcome: result.exitCode === 0 ? "success" : "failure",
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+          resultIsError: result.resultIsError,
+          resultErrorSubtype: result.resultErrorSubtype,
+        };
+      }),
     onTrialComplete: (trial) => {
-      const icon = trial.passed ? '✅' : '❌';
+      const icon = trial.passed ? "✅" : "❌";
       console.log(`  Trial ${trial.trial_number}: ${icon} (score: ${trial.score.toFixed(2)})`);
     },
   });
@@ -1087,8 +1106,8 @@ export async function runTask(
   console.log(`\nRunning task: ${task.id}`);
   console.log(`  Description: ${task.description.slice(0, 80)}...`);
   console.log(`  Trials: ${task.trials ?? 1}`);
-  console.log(`  Graders: ${task.graders.map(g => g.type).join(', ')}`);
-  console.log('');
+  console.log(`  Graders: ${task.graders.map((g) => g.type).join(", ")}`);
+  console.log("");
 
   const run = await runner.run();
   if (options.model) run.model = options.model;
@@ -1194,9 +1213,9 @@ export function isJudgeFailureRun(run: EvalRun): boolean {
   // "only reads 4 fields": n_trials/infra_failures/pass_rate/mean_score) —
   // an absent/malformed trials array is never judge-failed, never a throw.
   if (!Array.isArray(run.trials) || run.trials.length === 0) return false;
-  const behavioralTrials = run.trials.filter(t => t.status !== 'infra_failure');
+  const behavioralTrials = run.trials.filter((t) => t.status !== "infra_failure");
   if (behavioralTrials.length === 0) return false;
-  return behavioralTrials.every(trial => {
+  return behavioralTrials.every((trial) => {
     return isJudgeFailedTrial(trial);
   });
 }
@@ -1227,11 +1246,11 @@ export function isErrorFallbackFixtureRun(run: EvalRun): boolean {
   // Same defensive shape as isJudgeFailureRun — minimal EvalRun
   // fixtures without `trials` are never error-fallback, never a throw.
   if (!Array.isArray(run.trials) || run.trials.length === 0) return false;
-  const behavioralTrials = run.trials.filter(t => t.status !== 'infra_failure');
+  const behavioralTrials = run.trials.filter((t) => t.status !== "infra_failure");
   if (behavioralTrials.length === 0) return false;
-  return behavioralTrials.every(trial => {
+  return behavioralTrials.every((trial) => {
     if (trial.grader_results.length === 0) return false;
-    return trial.grader_results.every(g => g.details?.['fixture_infra_error'] !== undefined);
+    return trial.grader_results.every((g) => g.details?.["fixture_infra_error"] !== undefined);
   });
 }
 
@@ -1243,17 +1262,17 @@ export function isErrorFallbackFixtureRun(run: EvalRun): boolean {
  */
 export function noSignalReason(run: EvalRun): string | null {
   if (isInfraSkippedRun(run)) {
-    const cause = run.trials?.find(t => t.error)?.error;
-    return `all ${run.infra_failures}/${run.n_trials} trial(s) infra-failed${cause ? `: ${cause}` : ''}`;
+    const cause = run.trials?.find((t) => t.error)?.error;
+    return `all ${run.infra_failures}/${run.n_trials} trial(s) infra-failed${cause ? `: ${cause}` : ""}`;
   }
   if (isJudgeFailureRun(run)) {
     const first = run.trials
-      .flatMap(t => t.grader_results)
-      .map(g => g.details?.['judge_error'])
-      .find((e): e is string => typeof e === 'string');
-    return `judge failure: ${first ?? 'unknown'}`;
+      .flatMap((t) => t.grader_results)
+      .map((g) => g.details?.["judge_error"])
+      .find((e): e is string => typeof e === "string");
+    return `judge failure: ${first ?? "unknown"}`;
   }
-  if (isErrorFallbackFixtureRun(run)) return 'fixture-runner infra failure (majority of fixtures errored)';
+  if (isErrorFallbackFixtureRun(run)) return "fixture-runner infra failure (majority of fixtures errored)";
   return null;
 }
 
@@ -1367,7 +1386,7 @@ export function summarizeSuiteRuns(runs: EvalRun[]): {
  */
 export interface SuiteSummaryTask {
   task_id: string;
-  status: 'passed' | 'failed' | 'infra_skipped' | 'error' | 'not_found';
+  status: "passed" | "failed" | "infra_skipped" | "error" | "not_found";
   mean_score: number;
   pass: boolean;
   pass_rate: number;
@@ -1410,7 +1429,7 @@ export interface SuiteSummaryFile {
  * the live tree. Mirrors ResultsPersistence.ts's validationDir() convention.
  */
 export function getSuiteSummaryPath(suiteName: string): string {
-  return join(getKayaHome(), 'MEMORY', 'VALIDATION', 'evals', 'last-suite-run', `${suiteName}.json`);
+  return join(getKayaHome(), "MEMORY", "VALIDATION", "evals", "last-suite-run", `${suiteName}.json`);
 }
 
 /**
@@ -1428,7 +1447,7 @@ export function writeSuiteSummaryFile(file: SuiteSummaryFile): string {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
   const tmpPath = `${path}.tmp.${process.pid}.${Date.now()}`;
-  writeFileSync(tmpPath, JSON.stringify(file, null, 2), 'utf-8');
+  writeFileSync(tmpPath, JSON.stringify(file, null, 2), "utf-8");
   renameSync(tmpPath, path);
   return path;
 }
@@ -1466,7 +1485,7 @@ export async function runSuite(
      *  config; persisting them would poison the baseline for that suite).
      *  The per-task Results/<task>/run_<id>.json dumps still happen. */
     persist?: boolean;
-  } = {}
+  } = {},
 ): Promise<{
   results: EvalRun[];
   summary: {
@@ -1474,6 +1493,8 @@ export async function runSuite(
     failed: number;
     total: number;
     meanScore: number;
+    infraSkipped: number;
+    ok: boolean;
   };
 }> {
   const suiteStartedAt = new Date();
@@ -1488,11 +1509,11 @@ export async function runSuite(
 
   if (options.taskFilter?.length) {
     const wanted = new Set(options.taskFilter);
-    const unknown = options.taskFilter.filter(id => !suite.tasks.includes(id));
+    const unknown = options.taskFilter.filter((id) => !suite.tasks.includes(id));
     if (unknown.length) {
-      console.log(`  [filter] Not in suite ${suite.name}, skipped: ${unknown.join(', ')}`);
+      console.log(`  [filter] Not in suite ${suite.name}, skipped: ${unknown.join(", ")}`);
     }
-    taskIds = taskIds.filter(id => wanted.has(id));
+    taskIds = taskIds.filter((id) => wanted.has(id));
     console.log(`  [filter] Restricted to ${taskIds.length}/${suite.tasks.length} task(s)`);
   }
 
@@ -1505,9 +1526,11 @@ export async function runSuite(
       if (!taskPath) continue;
       try {
         const task = loadTaskConfig(taskPath);
-        const allCodeBased = task.graders?.every(g => codeBased.has(g.type)) ?? true;
+        const allCodeBased = task.graders?.every((g) => codeBased.has(g.type)) ?? true;
         if (allCodeBased) filtered.push(taskId);
-      } catch { /* skip unparseable */ }
+      } catch {
+        /* skip unparseable */
+      }
     }
     console.log(`  [quick] Filtered to ${filtered.length}/${taskIds.length} code-based tasks`);
     taskIds = filtered;
@@ -1519,17 +1542,23 @@ export async function runSuite(
     // Fisher-Yates shuffle
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const a = shuffled[i];
+      const b = shuffled[j];
+      if (a === undefined || b === undefined) continue;
+      shuffled[i] = b;
+      shuffled[j] = a;
     }
     taskIds = shuffled.slice(0, options.sample);
     console.log(`  [sample] Selected ${taskIds.length} random tasks`);
   }
 
-  console.log(`\n${'='.repeat(60)}`);
+  console.log(`\n${"=".repeat(60)}`);
   console.log(`Running suite: ${suite.name}`);
   console.log(`Description: ${suite.description}`);
-  console.log(`Tasks: ${taskIds.length}${options.quick ? ' (code-based only)' : ''}${options.sample ? ` (sampled ${options.sample})` : ''}`);
-  console.log(`${'='.repeat(60)}\n`);
+  console.log(
+    `Tasks: ${taskIds.length}${options.quick ? " (code-based only)" : ""}${options.sample ? ` (sampled ${options.sample})` : ""}`,
+  );
+  console.log(`${"=".repeat(60)}\n`);
 
   const results: EvalRun[] = [];
   // Per-task records for the structured suite-summary handoff (getSuiteSummaryPath) —
@@ -1546,8 +1575,13 @@ export async function runSuite(
     if (!taskPath) {
       console.log(`  ⚠️  Task not found: ${taskId}`);
       taskRecords.push({
-        task_id: taskId, status: 'not_found', mean_score: 0, pass: false,
-        pass_rate: 0, infra_failures: 0, n_trials: 0,
+        task_id: taskId,
+        status: "not_found",
+        mean_score: 0,
+        pass: false,
+        pass_rate: 0,
+        infra_failures: 0,
+        n_trials: 0,
       });
       // A missing task FILE is a config/registry issue, never attempted a
       // spawn — doesn't feed (and isn't reset by) the hard-failure streak.
@@ -1574,10 +1608,17 @@ export async function runSuite(
       const infraSkipped = isInfraSkippedRun(run);
       hardFailure = infraSkipped;
       if (infraSkipped) {
-        console.log(`  ⚠️  ${taskId}: all ${run.infra_failures}/${run.n_trials} trial(s) infra-failed — excluded from suite pass/mean (transient infra, not a behavioral result)`);
+        console.log(
+          `  ⚠️  ${taskId}: all ${run.infra_failures}/${run.n_trials} trial(s) infra-failed — excluded from suite pass/mean (transient infra, not a behavioral result)`,
+        );
         taskRecords.push({
-          task_id: taskId, status: 'infra_skipped', mean_score: run.mean_score, pass: false,
-          pass_rate: run.pass_rate, infra_failures: run.infra_failures, n_trials: run.n_trials,
+          task_id: taskId,
+          status: "infra_skipped",
+          mean_score: run.mean_score,
+          pass: false,
+          pass_rate: run.pass_rate,
+          infra_failures: run.infra_failures,
+          n_trials: run.n_trials,
           error: noSignalReason(run) ?? undefined,
         });
       } else if (isJudgeFailureRun(run)) {
@@ -1586,10 +1627,17 @@ export async function runSuite(
         // "no behavioral signal" treatment as an infra-skipped run, but
         // NOT a spawn failure itself (the agent spawn worked), so it does
         // not feed the circuit breaker's streak.
-        console.log(`  🚨 ${taskId}: zero score from a JUDGE failure (structured GraderResult.details.judge_error, not agent behavior) — recorded as infra_skipped (no score), excluded from baselines and regression detection`);
+        console.log(
+          `  🚨 ${taskId}: zero score from a JUDGE failure (structured GraderResult.details.judge_error, not agent behavior) — recorded as infra_skipped (no score), excluded from baselines and regression detection`,
+        );
         taskRecords.push({
-          task_id: taskId, status: 'infra_skipped', mean_score: run.mean_score, pass: false,
-          pass_rate: run.pass_rate, infra_failures: run.infra_failures, n_trials: run.n_trials,
+          task_id: taskId,
+          status: "infra_skipped",
+          mean_score: run.mean_score,
+          pass: false,
+          pass_rate: run.pass_rate,
+          infra_failures: run.infra_failures,
+          n_trials: run.n_trials,
           error: noSignalReason(run) ?? undefined,
         });
       } else if (isErrorFallbackFixtureRun(run)) {
@@ -1598,25 +1646,43 @@ export async function runSuite(
         // doc comment. Same "no behavioral signal" treatment; like the
         // auth-shaped branch, not a spawn failure (fixture tasks skip the
         // agent spawn entirely), so it does not feed the circuit breaker.
-        console.log(`  🚨 ${taskId}: fixture-runner infra failure (structured GraderResult.details.fixture_infra_error — majority of fixtures errored, results are fallback defaults not judgments) — recorded as infra_skipped (no score), excluded from baselines and regression detection`);
+        console.log(
+          `  🚨 ${taskId}: fixture-runner infra failure (structured GraderResult.details.fixture_infra_error — majority of fixtures errored, results are fallback defaults not judgments) — recorded as infra_skipped (no score), excluded from baselines and regression detection`,
+        );
         taskRecords.push({
-          task_id: taskId, status: 'infra_skipped', mean_score: run.mean_score, pass: false,
-          pass_rate: run.pass_rate, infra_failures: run.infra_failures, n_trials: run.n_trials,
+          task_id: taskId,
+          status: "infra_skipped",
+          mean_score: run.mean_score,
+          pass: false,
+          pass_rate: run.pass_rate,
+          infra_failures: run.infra_failures,
+          n_trials: run.n_trials,
           error: noSignalReason(run) ?? undefined,
         });
       } else {
         // Single authoritative check — see taskPassedInSuite()'s doc comment.
         const pass = taskPassedInSuite(run);
         taskRecords.push({
-          task_id: taskId, status: pass ? 'passed' : 'failed', mean_score: run.mean_score, pass,
-          pass_rate: run.pass_rate, infra_failures: run.infra_failures, n_trials: run.n_trials,
+          task_id: taskId,
+          status: pass ? "passed" : "failed",
+          mean_score: run.mean_score,
+          pass,
+          pass_rate: run.pass_rate,
+          infra_failures: run.infra_failures,
+          n_trials: run.n_trials,
         });
       }
     } catch (e) {
       console.error(`  ❌ Error running ${taskId}: ${e}`);
       taskRecords.push({
-        task_id: taskId, status: 'error', mean_score: 0, pass: false,
-        pass_rate: 0, infra_failures: 0, n_trials: 0, error: String(e),
+        task_id: taskId,
+        status: "error",
+        mean_score: 0,
+        pass: false,
+        pass_rate: 0,
+        infra_failures: 0,
+        n_trials: 0,
+        error: String(e),
       });
       hardFailure = true;
     }
@@ -1631,12 +1697,17 @@ export async function runSuite(
       if (skipped.length > 0) {
         console.error(
           `  🚨 CIRCUIT BREAKER: ${consecutiveHardFailures} consecutive hard spawn failures — ` +
-          `aborting suite run. ${skipped.length} remaining task(s) skipped, never attempted: ${skipped.join(', ')}`
+            `aborting suite run. ${skipped.length} remaining task(s) skipped, never attempted: ${skipped.join(", ")}`,
         );
         for (const skippedId of skipped) {
           taskRecords.push({
-            task_id: skippedId, status: 'error', mean_score: 0, pass: false,
-            pass_rate: 0, infra_failures: 0, n_trials: 0,
+            task_id: skippedId,
+            status: "error",
+            mean_score: 0,
+            pass: false,
+            pass_rate: 0,
+            infra_failures: 0,
+            n_trials: 0,
             error: `skipped: circuit breaker tripped after ${consecutiveHardFailures} consecutive hard spawn failures`,
           });
         }
@@ -1646,21 +1717,23 @@ export async function runSuite(
   }
 
   const summary = summarizeSuiteRuns(results);
-  const infraSkippedNames = results.filter(run => noSignalReason(run) !== null).map(run => run.task_id);
+  const infraSkippedNames = results.filter((run) => noSignalReason(run) !== null).map((run) => run.task_id);
 
   // Print summary
-  console.log(`\n${'='.repeat(60)}`);
+  console.log(`\n${"=".repeat(60)}`);
   console.log(`Suite Summary: ${suiteName}`);
-  console.log(`${'='.repeat(60)}`);
+  console.log(`${"=".repeat(60)}`);
   console.log(`  Tasks passed: ${summary.passed}/${summary.total}`);
   console.log(`  Mean score: ${(summary.meanScore * 100).toFixed(1)}%`);
   if (summary.infraSkipped > 0) {
-    console.log(`  Infra-skipped: ${summary.infraSkipped} task(s) (no behavioral signal — excluded from pass/mean): ${infraSkippedNames.join(', ')}`);
+    console.log(
+      `  Infra-skipped: ${summary.infraSkipped} task(s) (no behavioral signal — excluded from pass/mean): ${infraSkippedNames.join(", ")}`,
+    );
   }
   if (summary.total === 0 && results.length > 0) {
     console.log(`  ⚠️  NO BEHAVIORAL SIGNAL: every task infra-failed — suite FAILED (not a pass)`);
   }
-  console.log(`  Status: ${summary.ok ? '✅ PASSED' : '❌ FAILED'}`);
+  console.log(`  Status: ${summary.ok ? "✅ PASSED" : "❌ FAILED"}`);
 
   // Persist results to MEMORY/VALIDATION/evals/ for Learning & Memory tracking.
   // Uses the SAME exclusion rule as the console summary above
@@ -1671,22 +1744,22 @@ export async function runSuite(
   // scores: shared/ResultsUtils.ts skips it, so it can never trip
   // RegressionAlert's pass-rate-zero tripwire, a delta-vs-baseline false
   // regression, or a rolling baseline — yet the skip stays visible in the file.
-  const persistPayload = results.map(run => {
+  const persistPayload = results.map((run) => {
     const reason = noSignalReason(run);
     return {
-    eval: {
-      eval_name: run.task_id,
-      category: run.task_id.split('_')[0] ?? 'general',
-      scores: reason === null ? [run.mean_score] : [],
-      passed: reason === null ? [taskPassedInSuite(run)] : [],
-      grader_details: [],
-      ...(reason === null ? {} : { infra_skipped: { reason } }),
-    } satisfies PersistEvalResult,
-    metrics: {
-      pass_rate: run.pass_rate,
-      pass_at_k: run.pass_at_k ?? run.pass_rate,
-      pass_all_k: run.pass_all_k ?? run.pass_rate,
-    },
+      eval: {
+        eval_name: run.task_id,
+        category: run.task_id.split("_")[0] ?? "general",
+        scores: reason === null ? [run.mean_score] : [],
+        passed: reason === null ? [taskPassedInSuite(run)] : [],
+        grader_details: [],
+        ...(reason === null ? {} : { infra_skipped: { reason } }),
+      } satisfies PersistEvalResult,
+      metrics: {
+        pass_rate: run.pass_rate,
+        pass_at_k: run.pass_at_k ?? run.pass_rate,
+        pass_all_k: run.pass_to_k ?? run.pass_rate,
+      },
     };
   });
   const persist = options.persist ?? true;
@@ -1694,7 +1767,9 @@ export async function runSuite(
     const persistPath = persistSuiteResults(suiteName, persistPayload);
     console.log(`  Results persisted: ${persistPath}`);
   } else {
-    console.log(`  Results NOT persisted (persist:false — ${summary.total} scored task(s) kept out of the regression store)`);
+    console.log(
+      `  Results NOT persisted (persist:false — ${summary.total} scored task(s) kept out of the regression store)`,
+    );
   }
 
   // Structured machine-to-machine handoff (evals-rebuild A7) — see
@@ -1743,18 +1818,18 @@ if (import.meta.main) {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      task: { type: 'string', short: 't' },
-      name: { type: 'string', short: 'n' },
+      task: { type: "string", short: "t" },
+      name: { type: "string", short: "n" },
       // No default here: an omitted --trials must stay undefined so the task
       // yaml's `trials:` wins (precedence: --trials flag > task yaml > 1).
       // A default of '1' silently clamped every yaml `trials: N` down to 1.
-      trials: { type: 'string' },
-      timeout: { type: 'string' },
-      graders: { type: 'string', short: 'g' },
-      ref: { type: 'string', short: 'r' },
-      quick: { type: 'boolean' },
-      sample: { type: 'string' },
-      help: { type: 'boolean', short: 'h' },
+      trials: { type: "string" },
+      timeout: { type: "string" },
+      graders: { type: "string", short: "g" },
+      ref: { type: "string", short: "r" },
+      quick: { type: "boolean" },
+      sample: { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
@@ -1807,21 +1882,21 @@ Examples:
   }
 
   switch (command) {
-    case 'run': {
+    case "run": {
       if (!values.task) {
-        console.error('Error: --task required');
+        console.error("Error: --task required");
         process.exit(1);
       }
 
       const trials = values.trials ? parseInt(values.trials) : undefined;
       const timeout = values.timeout ? parseInt(values.timeout) : undefined;
-      const ref = values.ref ?? 'HEAD';
+      const ref = values.ref ?? "HEAD";
 
       // Parse grader overrides if provided
       let graderOverrides: GraderConfig[] | undefined;
       if (values.graders) {
-        graderOverrides = values.graders.split(',').map(type => ({
-          type: type.trim() as GraderConfig['type'],
+        graderOverrides = values.graders.split(",").map((type) => ({
+          type: type.trim() as GraderConfig["type"],
           weight: 1.0,
         }));
       }
@@ -1833,7 +1908,7 @@ Examples:
           return runTask(values.task!, { trials, timeout, graderOverrides, systemContext: resolved.context });
         })
         .then((run) => {
-          console.log('\n' + formatEvalResults(run));
+          console.log("\n" + formatEvalResults(run));
           process.exit(taskPassedInSuite(run) ? 0 : 1);
         })
         .catch((e) => {
@@ -1843,15 +1918,15 @@ Examples:
       break;
     }
 
-    case 'suite': {
+    case "suite": {
       if (!values.name) {
-        console.error('Error: --name required');
+        console.error("Error: --name required");
         process.exit(1);
       }
 
       const trials = values.trials ? parseInt(values.trials) : undefined;
       const timeout = values.timeout ? parseInt(values.timeout) : undefined;
-      const ref = values.ref ?? 'HEAD';
+      const ref = values.ref ?? "HEAD";
       const quick = values.quick ?? false;
       const sample = values.sample ? parseInt(values.sample) : undefined;
 
@@ -1871,9 +1946,10 @@ Examples:
       break;
     }
 
-    case 'smoke': {
+    // biome-ignore lint/suspicious/noFallthroughSwitchClause: the block always ends in process.exit(), which never returns
+    case "smoke": {
       if (!values.name) {
-        console.error('Error: --name required for smoke test');
+        console.error("Error: --name required for smoke test");
         process.exit(1);
       }
 
@@ -1887,7 +1963,7 @@ Examples:
 
       // Grader registry: type resolution + categorization both derive from
       // here (evals-rebuild slice A6) — never a hand-maintained list.
-      const { listGraders, categoryOf } = await import('../Graders/Base.ts');
+      const { listGraders, categoryOf } = await import("../Graders/Base.ts");
       const registeredGraders = new Set(listGraders());
 
       let issues = 0;
@@ -1923,9 +1999,9 @@ Examples:
         // this catches the OPPOSITE drift direction, a type the enum still
         // lists but whose class was deregistered (see TaskValidator.ts's
         // identical check / evals audit finding #3).
-        const unknownGraders = task.graders.filter(g => !registeredGraders.has(g.type));
+        const unknownGraders = task.graders.filter((g) => !registeredGraders.has(g.type));
         if (unknownGraders.length > 0) {
-          console.log(`  ⚠️  ${taskId}: unknown graders: ${unknownGraders.map(g => g.type).join(', ')}`);
+          console.log(`  ⚠️  ${taskId}: unknown graders: ${unknownGraders.map((g) => g.type).join(", ")}`);
           issues++;
           continue;
         }
@@ -1937,38 +2013,38 @@ Examples:
         valid++;
       }
 
-      console.log(`\n${'='.repeat(50)}`);
+      console.log(`\n${"=".repeat(50)}`);
       console.log(`Smoke Test Results: ${suite.name}`);
-      console.log(`${'='.repeat(50)}`);
+      console.log(`${"=".repeat(50)}`);
       console.log(`  Valid: ${valid}/${suite.tasks.length}`);
       console.log(`  Issues: ${issues}`);
       console.log(`\n  Grader distribution:`);
       for (const [type, count] of Object.entries(graderTypeCounts).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))) {
-        const category = categoryOf(type as GraderType) === 'model_based' ? 'model' : 'code';
+        const category = categoryOf(type as GraderType) === "model_based" ? "model" : "code";
         console.log(`    ${type}: ${count} (${category})`);
       }
-      console.log(`\n  Status: ${issues === 0 ? '✅ ALL CONFIGS VALID' : `⚠️  ${issues} ISSUES FOUND`}`);
+      console.log(`\n  Status: ${issues === 0 ? "✅ ALL CONFIGS VALID" : `⚠️  ${issues} ISSUES FOUND`}`);
       process.exit(issues === 0 ? 0 : 1);
     }
 
-    case 'list-graders': {
+    case "list-graders": {
       // Derived from the live registry (evals-rebuild slice A6) — never a
       // hand-maintained list. Descriptions below are cosmetic display text
       // keyed by type (a lookup miss just omits the description, never
       // hides or miscategorizes a grader), not a categorization decision.
-      const { listGradersByCategory } = await import('../Graders/Base.ts');
+      const { listGradersByCategory } = await import("../Graders/Base.ts");
       const buckets = listGradersByCategory();
       const descriptions: Partial<Record<GraderType, string>> = {
-        string_match: 'Exact substring matching',
-        regex_match: 'Pattern matching',
-        binary_tests: 'Run test files',
-        state_check: 'Verify system state after execution',
-        tool_calls: 'Verify specific tools were called',
+        string_match: "Exact substring matching",
+        regex_match: "Pattern matching",
+        binary_tests: "Run test files",
+        state_check: "Verify system state after execution",
+        tool_calls: "Verify specific tools were called",
         fixture_accuracy: "Grade a live fixture-runner's accuracy record (see setup_commands)",
-        llm_rubric: 'Score against detailed rubric',
-        natural_language_assert: 'Check assertions are true',
-        ensemble_label: 'Consensus labeling via parallel fast/standard/smart inference; divergence flagged',
-        nightly_judge: 'Static-input grader: scores a pre-existing decision record against a golden label',
+        llm_rubric: "Score against detailed rubric",
+        natural_language_assert: "Check assertions are true",
+        ensemble_label: "Consensus labeling via parallel fast/standard/smart inference; divergence flagged",
+        nightly_judge: "Static-input grader: scores a pre-existing decision record against a golden label",
       };
       const printBucket = (types: GraderType[]) => {
         for (const type of types) {
@@ -1977,16 +2053,16 @@ Examples:
         }
       };
 
-      console.log('\nAvailable Graders:\n');
-      console.log('Code-Based (fast, deterministic):');
+      console.log("\nAvailable Graders:\n");
+      console.log("Code-Based (fast, deterministic):");
       printBucket(buckets.code_based);
-      console.log('\nModel-Based (nuanced):');
+      console.log("\nModel-Based (nuanced):");
       printBucket(buckets.model_based);
       if (buckets.human.length > 0) {
-        console.log('\nHuman (gold standard):');
+        console.log("\nHuman (gold standard):");
         printBucket(buckets.human);
       }
-      console.log('');
+      console.log("");
       break;
     }
 

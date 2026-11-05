@@ -4,15 +4,15 @@
  * Execute multiple trials and calculate pass@k / pass^k metrics
  */
 
-import type { Task, Trial, EvalRun, GraderResult, Transcript, GraderConfig, InfraFailureType } from '../Types/index.ts';
-import { createGrader, runGraders, type GraderContext } from '../Graders/Base.ts';
-import { TranscriptCapture } from './TranscriptCapture.ts';
-import { parseArgs } from 'util';
-import { USAGE_LIMIT_PATTERNS } from '../../../../lib/cron/FailureClassifier.ts';
+import type { Task, Trial, EvalRun, Transcript, InfraFailureType } from "../Types/index.ts";
+import { createGrader, runGraders, type GraderContext } from "../Graders/Base.ts";
+import { TranscriptCapture } from "./TranscriptCapture.ts";
+import { parseArgs } from "node:util";
+import { USAGE_LIMIT_PATTERNS } from "../../../../lib/cron/FailureClassifier.ts";
 
 // Import graders to register them
-import '../Graders/CodeBased/index.ts';
-import '../Graders/ModelBased/index.ts';
+import "../Graders/CodeBased/index.ts";
+import "../Graders/ModelBased/index.ts";
 
 /**
  * Structured, machine-authored signals an executor threads back to
@@ -39,11 +39,16 @@ export interface InfraSignals {
 }
 
 // Executor type for running tasks
-export type TaskExecutor = (task: Task, trialNumber: number) => Promise<{
-  output: string;
-  transcript: Transcript;
-  outcome?: unknown;
-} & InfraSignals>;
+export type TaskExecutor = (
+  task: Task,
+  trialNumber: number,
+) => Promise<
+  {
+    output: string;
+    transcript: Transcript;
+    outcome?: unknown;
+  } & InfraSignals
+>;
 
 export interface TrialRunnerConfig {
   task: Task;
@@ -64,9 +69,15 @@ export interface TrialRunnerConfig {
  * "redact".
  */
 export const INFRA_SIGNATURE_GROUPS: { type: InfraFailureType; substrings: string[] }[] = [
-  { type: 'rate_limit', substrings: ['rate limit', '429', 'too many requests', 'overloaded', 'hit your limit', "you've hit your limit"] },
-  { type: 'timeout', substrings: ['timeout', 'timed out', 'etimedout', 'econnreset'] },
-  { type: 'auth_error', substrings: ['401', '403', 'unauthorized', 'authentication', 'invalid api key', 'permission denied'] },
+  {
+    type: "rate_limit",
+    substrings: ["rate limit", "429", "too many requests", "overloaded", "hit your limit", "you've hit your limit"],
+  },
+  { type: "timeout", substrings: ["timeout", "timed out", "etimedout", "econnreset"] },
+  {
+    type: "auth_error",
+    substrings: ["401", "403", "unauthorized", "authentication", "invalid api key", "permission denied"],
+  },
 ];
 
 /**
@@ -92,10 +103,10 @@ export const INFRA_SIGNATURE_GROUPS: { type: InfraFailureType; substrings: strin
  * InfraFailureType: a limit, not a bug).
  */
 export function matchKnownInfraSignature(text: string): InfraFailureType | null {
-  if (USAGE_LIMIT_PATTERNS.some(re => re.test(text))) return 'rate_limit';
+  if (USAGE_LIMIT_PATTERNS.some((re) => re.test(text))) return "rate_limit";
   const t = text.toLowerCase();
   for (const group of INFRA_SIGNATURE_GROUPS) {
-    if (group.substrings.some(s => t.includes(s))) return group.type;
+    if (group.substrings.some((s) => t.includes(s))) return group.type;
   }
   return null;
 }
@@ -122,11 +133,11 @@ function classifyInfraFailure(signals: InfraSignals): InfraFailureType | null {
 
   if (signals.resultIsError) {
     const bySubtype = signals.resultErrorSubtype ? matchKnownInfraSignature(signals.resultErrorSubtype) : null;
-    return bySubtype ?? 'exec_error';
+    return bySubtype ?? "exec_error";
   }
 
   if (signals.exitCode !== 0) {
-    return 'exec_error';
+    return "exec_error";
   }
 
   return null;
@@ -136,13 +147,14 @@ function classifyInfraFailure(signals: InfraSignals): InfraFailureType | null {
  *  marker (the judge failed to produce a verdict). False for a trial with no
  *  grader results. */
 export function isJudgeFailedTrial(trial: Trial): boolean {
-  return trial.grader_results.length > 0
-    && trial.grader_results.every(g => typeof g.details?.['judge_error'] === 'string');
+  return (
+    trial.grader_results.length > 0 && trial.grader_results.every((g) => typeof g.details?.["judge_error"] === "string")
+  );
 }
 
 function judgeErrorOf(trial: Trial): string {
-  const e = trial.grader_results[0]?.details?.['judge_error'];
-  return typeof e === 'string' ? e : 'unknown';
+  const e = trial.grader_results[0]?.details?.["judge_error"];
+  return typeof e === "string" ? e : "unknown";
 }
 
 export class TrialRunner {
@@ -161,12 +173,12 @@ export class TrialRunner {
   private getDefaultExecutor(): TaskExecutor {
     return async (task, trialNumber) => {
       // Dynamically import to avoid circular dependency
-      const { executeTask } = await import('./EvalExecutor.ts');
+      const { executeTask } = await import("./EvalExecutor.ts");
       const result = await executeTask(task, trialNumber);
       return {
         output: result.output,
         transcript: result.transcript,
-        outcome: result.exitCode === 0 ? 'success' : 'failure',
+        outcome: result.exitCode === 0 ? "success" : "failure",
         exitCode: result.exitCode,
         stderr: result.stderr,
         resultIsError: result.resultIsError,
@@ -187,7 +199,7 @@ export class TrialRunner {
     const startTime = Date.now();
 
     // Create graders
-    const graders = task.graders.map(config => createGrader(config));
+    const graders = task.graders.map((config) => createGrader(config));
 
     for (let i = 0; i < nTrials; i++) {
       const trialId = `trial_${i + 1}`;
@@ -206,7 +218,7 @@ export class TrialRunner {
             id: trialId,
             task_id: task.id,
             trial_number: i + 1,
-            status: 'infra_failure',
+            status: "infra_failure",
             started_at: new Date(trialStart).toISOString(),
             completed_at: new Date().toISOString(),
             transcript: execution.transcript,
@@ -247,7 +259,7 @@ export class TrialRunner {
           id: trialId,
           task_id: task.id,
           trial_number: i + 1,
-          status: passed ? 'passed' : 'failed',
+          status: passed ? "passed" : "failed",
           started_at: new Date(trialStart).toISOString(),
           completed_at: new Date().toISOString(),
           transcript: execution.transcript,
@@ -274,7 +286,7 @@ export class TrialRunner {
           id: trialId,
           task_id: task.id,
           trial_number: i + 1,
-          status: infraType ? 'infra_failure' : 'error',
+          status: infraType ? "infra_failure" : "error",
           started_at: new Date(trialStart).toISOString(),
           completed_at: new Date().toISOString(),
           transcript: new TranscriptCapture(task.id, trialId).finalize(),
@@ -300,27 +312,30 @@ export class TrialRunner {
     // If EVERY trial is judge-failed the run is left as-is for
     // isJudgeFailureRun() (whole-run skip) — not converted here, so a judge
     // outage doesn't feed the suite circuit breaker (agent spawns succeeded).
-    const judgeFailedTrials = trials.filter(t => t.status !== 'infra_failure' && isJudgeFailedTrial(t));
-    if (judgeFailedTrials.length > 0 && judgeFailedTrials.length < trials.filter(t => t.status !== 'infra_failure').length) {
+    const judgeFailedTrials = trials.filter((t) => t.status !== "infra_failure" && isJudgeFailedTrial(t));
+    if (
+      judgeFailedTrials.length > 0 &&
+      judgeFailedTrials.length < trials.filter((t) => t.status !== "infra_failure").length
+    ) {
       for (const t of judgeFailedTrials) {
         const judgeError = judgeErrorOf(t);
-        t.status = 'infra_failure';
+        t.status = "infra_failure";
         t.passed = false;
         t.error = `Judge failure: ${judgeError}`;
-        t.infra_failure_type = matchKnownInfraSignature(judgeError) ?? 'exec_error';
+        t.infra_failure_type = matchKnownInfraSignature(judgeError) ?? "exec_error";
         console.log(`  ⚠️  Trial ${t.trial_number}: judge failed (${judgeError}) — counted as infra trial`);
       }
     }
 
     // Calculate aggregate metrics, excluding infra failures from denominator
-    const infraFailures = trials.filter(t => t.status === 'infra_failure').length;
-    const behavioralTrials = trials.filter(t => t.status !== 'infra_failure');
-    const passCount = behavioralTrials.filter(t => t.passed).length;
+    const infraFailures = trials.filter((t) => t.status === "infra_failure").length;
+    const behavioralTrials = trials.filter((t) => t.status !== "infra_failure");
+    const passCount = behavioralTrials.filter((t) => t.passed).length;
     const behavioralCount = behavioralTrials.length;
 
-    const scores = behavioralTrials.map(t => t.score);
+    const scores = behavioralTrials.map((t) => t.score);
     const meanScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    const variance = scores.length > 0 ? scores.reduce((sum, s) => sum + Math.pow(s - meanScore, 2), 0) / scores.length : 0;
+    const variance = scores.length > 0 ? scores.reduce((sum, s) => sum + (s - meanScore) ** 2, 0) / scores.length : 0;
     const stdDev = Math.sqrt(variance);
 
     // Calculate pass@k and pass^k using only behavioral trials
@@ -361,7 +376,7 @@ export class TrialRunner {
    * Simplified: At least one trial passed
    */
   private calculatePassAtK(trials: Trial[]): number {
-    const anyPassed = trials.some(t => t.passed);
+    const anyPassed = trials.some((t) => t.passed);
     return anyPassed ? 1 : 0;
   }
 
@@ -373,7 +388,7 @@ export class TrialRunner {
    * Simplified: pass_rate
    */
   private calculatePassToK(trials: Trial[]): number {
-    const passCount = trials.filter(t => t.passed).length;
+    const passCount = trials.filter((t) => t.passed).length;
     return passCount / trials.length;
   }
 }
@@ -383,11 +398,11 @@ export class TrialRunner {
  */
 export function calculatePassAtKForK(trials: Trial[], k: number): number {
   const n = trials.length;
-  const c = trials.filter(t => t.passed).length;
+  const c = trials.filter((t) => t.passed).length;
 
-  if (k > n) return 0;  // Can't calculate for k > n
-  if (c === 0) return 0;  // No successes
-  if (c >= k) return 1;  // Guaranteed at least one success in any k sample
+  if (k > n) return 0; // Can't calculate for k > n
+  if (c === 0) return 0; // No successes
+  if (c >= k) return 1; // Guaranteed at least one success in any k sample
 
   // Calculate: 1 - (n-c choose k) / (n choose k)
   // = 1 - [(n-c)! / (k! * (n-c-k)!)] / [n! / (k! * (n-k)!)]
@@ -408,12 +423,12 @@ export function formatEvalResults(run: EvalRun): string {
   const lines: string[] = [];
 
   lines.push(`## Evaluation Results: ${run.task_id}`);
-  lines.push('');
+  lines.push("");
   lines.push(`**Run ID:** ${run.id}`);
   lines.push(`**Duration:** ${(run.total_duration_ms / 1000).toFixed(2)}s`);
-  lines.push('');
-  lines.push('### Summary');
-  lines.push('');
+  lines.push("");
+  lines.push("### Summary");
+  lines.push("");
   lines.push(`| Metric | Value |`);
   lines.push(`|--------|-------|`);
   lines.push(`| Trials | ${run.n_trials} |`);
@@ -425,34 +440,41 @@ export function formatEvalResults(run: EvalRun): string {
   if (run.infra_failures > 0) {
     lines.push(`| Infra Failures | ${run.infra_failures} (excluded from pass_rate) |`);
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('### Trial Results');
-  lines.push('');
+  lines.push("### Trial Results");
+  lines.push("");
   lines.push(`| Trial | Status | Score | Duration |`);
   lines.push(`|-------|--------|-------|----------|`);
 
   for (const trial of run.trials) {
-    const status = trial.passed ? '✅ PASS' : trial.status === 'infra_failure' ? '⚠️ INFRA' : trial.status === 'error' ? '❌ ERROR' : '❌ FAIL';
+    const status = trial.passed
+      ? "✅ PASS"
+      : trial.status === "infra_failure"
+        ? "⚠️ INFRA"
+        : trial.status === "error"
+          ? "❌ ERROR"
+          : "❌ FAIL";
     const duration = trial.transcript.metrics.wall_time_ms;
     lines.push(`| ${trial.trial_number} | ${status} | ${trial.score.toFixed(3)} | ${(duration / 1000).toFixed(2)}s |`);
   }
 
   // Show grader breakdown for first trial
-  if (run.trials.length > 0 && run.trials[0].grader_results.length > 0) {
-    lines.push('');
-    lines.push('### Grader Breakdown (Trial 1)');
-    lines.push('');
+  const firstTrial = run.trials[0];
+  if (firstTrial && firstTrial.grader_results.length > 0) {
+    lines.push("");
+    lines.push("### Grader Breakdown (Trial 1)");
+    lines.push("");
     lines.push(`| Grader | Score | Passed | Weight |`);
     lines.push(`|--------|-------|--------|--------|`);
 
-    for (const result of run.trials[0].grader_results) {
-      const passed = result.passed ? '✅' : '❌';
+    for (const result of firstTrial.grader_results) {
+      const passed = result.passed ? "✅" : "❌";
       lines.push(`| ${result.grader_type} | ${result.score.toFixed(3)} | ${passed} | ${result.weight} |`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // CLI interface
@@ -460,14 +482,14 @@ if (import.meta.main) {
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      'task-file': { type: 'string', short: 't' },
-      trials: { type: 'string', short: 'n', default: '1' },
-      help: { type: 'boolean', short: 'h' },
+      "task-file": { type: "string", short: "t" },
+      trials: { type: "string", short: "n", default: "1" },
+      help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
 
-  if (values.help || !values['task-file']) {
+  if (values.help || !values["task-file"]) {
     console.log(`
 TrialRunner - Execute evaluations with multiple trials
 
@@ -485,6 +507,6 @@ Example:
     process.exit(0);
   }
 
-  console.log('Note: Full execution requires an agent executor to be configured.');
-  console.log('This CLI is for testing the runner infrastructure.');
+  console.log("Note: Full execution requires an agent executor to be configured.");
+  console.log("This CLI is for testing the runner infrastructure.");
 }

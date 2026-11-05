@@ -3,15 +3,15 @@
  * All graders implement this interface for consistent execution
  */
 
-import type { GraderConfig, GraderResult, Transcript, GraderType } from '../Types/index.ts';
+import type { GraderConfig, GraderResult, Transcript, GraderType } from "../Types/index.ts";
 
 export interface GraderContext {
   task_id: string;
   trial_id: string;
   transcript: Transcript;
-  output: string;  // Final output text
+  output: string; // Final output text
   working_dir?: string;
-  reference?: string;  // Reference/golden output if available
+  reference?: string; // Reference/golden output if available
   /**
    * The task's pass_threshold (Task.pass_threshold, YAML default 0.75 —
    * see Types/index.ts's Task interface doc comment). THE authoritative
@@ -37,7 +37,7 @@ export interface GraderContext {
 
 export abstract class BaseGrader {
   abstract type: GraderType;
-  abstract category: 'code_based' | 'model_based' | 'human';
+  abstract category: "code_based" | "model_based" | "human";
 
   /**
    * Whether this grader's grade() reads a live agent execution turn's
@@ -91,7 +91,7 @@ export abstract class BaseGrader {
     options?: {
       reasoning?: string;
       details?: Record<string, unknown>;
-    }
+    },
   ): GraderResult {
     return {
       grader_type: this.type,
@@ -126,7 +126,7 @@ export function listGraders(): GraderType[] {
   return Array.from(graderRegistry.keys());
 }
 
-export type GraderCategory = 'code_based' | 'model_based' | 'human';
+export type GraderCategory = "code_based" | "model_based" | "human";
 
 /**
  * Resolve the registered grader class's declared `.category` for a type.
@@ -167,7 +167,7 @@ export function listGradersByCategory(): Record<GraderCategory, GraderType[]> {
  * or task ids elsewhere to answer this question.
  */
 export function anyGraderReadsOutput(graderConfigs: GraderConfig[]): boolean {
-  return graderConfigs.some(config => createGrader(config).readsOutput);
+  return graderConfigs.some((config) => createGrader(config).readsOutput);
 }
 
 /**
@@ -175,7 +175,7 @@ export function anyGraderReadsOutput(graderConfigs: GraderConfig[]): boolean {
  */
 export async function runGraders(
   graders: BaseGrader[],
-  context: GraderContext
+  context: GraderContext,
 ): Promise<{ results: GraderResult[]; aggregate_score: number; passed: boolean }> {
   const results: GraderResult[] = [];
   let totalWeight = 0;

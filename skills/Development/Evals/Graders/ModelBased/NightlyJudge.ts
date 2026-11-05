@@ -14,14 +14,14 @@
  * / the B1 report — see Graders/__tests__/fixtures/judge-raw-responses.json.
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult } from '../../Types/index.ts';
-import { inference } from '../../../../../lib/core/Inference';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import { getKayaHome } from '../../../../../lib/core/KayaHome.ts';
-import { memPathUnder } from '../../../../../lib/core/MemoryPaths.ts';
-import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from '../JudgeProtocol.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult } from "../../Types/index.ts";
+import { inference } from "../../../../../lib/core/Inference.ts";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { memPathUnder } from "../../../../../lib/core/MemoryPaths.ts";
+import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from "../JudgeProtocol.ts";
 
 /**
  * Canonical live paths by record_source, resolved LAZILY per call — NOT frozen
@@ -33,15 +33,15 @@ import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from
 function sourcePathFor(source: string): string | undefined {
   const kayaHome = getKayaHome();
   const map: Record<string, string> = {
-    'autoinfo':           memPathUnder(kayaHome, 'AUTOINFO'),
-    'spec-pipeline':      memPathUnder(kayaHome, 'QUEUES'),
-    'work-queue':         memPathUnder(kayaHome, 'AutonomousWork'),
-    'live-verification':  memPathUnder(kayaHome, 'AutonomousWork'),
+    autoinfo: memPathUnder(kayaHome, "AUTOINFO"),
+    "spec-pipeline": memPathUnder(kayaHome, "QUEUES"),
+    "work-queue": memPathUnder(kayaHome, "AutonomousWork"),
+    "live-verification": memPathUnder(kayaHome, "AutonomousWork"),
   };
   return map[source];
 }
 
-export type RecordSource = 'autoinfo' | 'spec-pipeline' | 'work-queue' | 'live-verification';
+export type RecordSource = "autoinfo" | "spec-pipeline" | "work-queue" | "live-verification";
 
 export interface NightlyJudgeParams {
   /** Path to the JSON/JSONL file holding the decision record */
@@ -57,7 +57,7 @@ export interface NightlyJudgeParams {
   /** Judging instructions / rubric */
   rubric: string;
   /** Inference level for the judge (only 'standard' supported now) */
-  judge_level?: 'standard';
+  judge_level?: "standard";
   /**
    * For an append-only JSONL `record_path` (e.g. a live monitoring source), score only
    * the most recent N records instead of the whole file. Bounds the judge prompt size so
@@ -68,8 +68,8 @@ export interface NightlyJudgeParams {
 }
 
 export class NightlyJudgeGrader extends BaseGrader {
-  type = 'nightly_judge' as const;
-  category = 'model_based' as const;
+  type = "nightly_judge" as const;
+  category = "model_based" as const;
   // Reads only record_path/record_source (files) and context.reference (a
   // static config field, not live agent output) — never context.output or
   // context.transcript. See module docblock (HAZARD H2 guard).
@@ -83,7 +83,7 @@ export class NightlyJudgeGrader extends BaseGrader {
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as NightlyJudgeParams;
+    const params = this.config.params as unknown as NightlyJudgeParams; // config.params is untyped YAML; validated below
 
     // ── 1. Resolve record ──────────────────────────────────────────────────────
     const recordResult = this.loadRecord(params);
@@ -97,7 +97,7 @@ export class NightlyJudgeGrader extends BaseGrader {
 
     // ── 2. Resolve golden label ────────────────────────────────────────────────
     const golden = this.loadGolden(params, context);
-    const goldenId = params.golden_id ?? 'context.reference';
+    const goldenId = params.golden_id ?? "context.reference";
 
     // ── 3. Build judge prompt ──────────────────────────────────────────────────
     const systemPrompt = this.buildSystemPrompt(params.rubric);
@@ -108,7 +108,7 @@ export class NightlyJudgeGrader extends BaseGrader {
       {
         systemPrompt,
         userPrompt,
-        level: 'standard',
+        level: "standard",
         // Judging a full golden set + rubric is a large prompt — 60s was too tight
         // (4/7 evals timed out on the first live run). Generous timeout + one retry
         // per the "determinism must earn its place" backstop (timeout-too-low is our bug).
@@ -168,7 +168,7 @@ export class NightlyJudgeGrader extends BaseGrader {
     }
 
     if (!filePath) {
-      return { ok: false, error: 'record not found: no record_path or record_source provided' };
+      return { ok: false, error: "record not found: no record_path or record_source provided" };
     }
 
     if (!existsSync(filePath)) {
@@ -177,14 +177,14 @@ export class NightlyJudgeGrader extends BaseGrader {
 
     let raw: string;
     try {
-      raw = readFileSync(filePath, 'utf-8');
+      raw = readFileSync(filePath, "utf-8");
     } catch (e) {
       return { ok: false, error: `record not readable: ${e}` };
     }
 
     // JSONL: find the entry with matching id
-    if (params.record_id && filePath.endsWith('.jsonl')) {
-      const lines = raw.split('\n').filter(Boolean);
+    if (params.record_id && filePath.endsWith(".jsonl")) {
+      const lines = raw.split("\n").filter(Boolean);
       for (const line of lines) {
         try {
           const obj = JSON.parse(line) as Record<string, unknown>;
@@ -201,10 +201,10 @@ export class NightlyJudgeGrader extends BaseGrader {
     // JSONL tail: when max_records is set, score only the most recent N records. An
     // append-only live source grows unboundedly; window to recent extractions so the
     // judge prompt stays bounded and reflects CURRENT health, not ancient records.
-    if (params.max_records && params.max_records > 0 && filePath.endsWith('.jsonl')) {
-      const lines = raw.split('\n').filter(Boolean);
+    if (params.max_records && params.max_records > 0 && filePath.endsWith(".jsonl")) {
+      const lines = raw.split("\n").filter(Boolean);
       const tail = lines.slice(-params.max_records);
-      return { ok: true, record: tail.join('\n'), recordId: params.record_id ?? filePath };
+      return { ok: true, record: tail.join("\n"), recordId: params.record_id ?? filePath };
     }
 
     // Single JSON object or raw file
@@ -215,28 +215,31 @@ export class NightlyJudgeGrader extends BaseGrader {
     // Prefer context.reference (passed at run time)
     if (context.reference) return context.reference;
 
-    if (!params.golden_set_path || !params.golden_id) return '(no golden label provided)';
+    if (!params.golden_set_path || !params.golden_id) return "(no golden label provided)";
 
-    if (!existsSync(params.golden_set_path)) return '(golden set not found)';
+    if (!existsSync(params.golden_set_path)) return "(golden set not found)";
 
     try {
-      const raw = readFileSync(params.golden_set_path, 'utf-8');
+      const raw = readFileSync(params.golden_set_path, "utf-8");
       // Try JSONL
-      const lines = raw.split('\n').filter(Boolean);
+      const lines = raw.split("\n").filter(Boolean);
       for (const line of lines) {
         try {
           const obj = JSON.parse(line) as Record<string, unknown>;
           if (obj.id === params.golden_id) {
-            return typeof obj.label === 'string' ? obj.label : JSON.stringify(obj);
+            return typeof obj.label === "string" ? obj.label : JSON.stringify(obj);
           }
         } catch {
           // continue
         }
       }
-    } catch {
-      // fall through
+    } catch (err) {
+      // The file passed existsSync above, so a read failure is unexpected: say so.
+      process.stderr.write(
+        `[NightlyJudge] Could not read golden set ${params.golden_set_path}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
-    return '(golden entry not found)';
+    return "(golden entry not found)";
   }
 
   private buildSystemPrompt(rubric: string): string {
@@ -265,4 +268,4 @@ Judge the record against the expected label and provide your reasoning and score
   }
 }
 
-registerGrader('nightly_judge', NightlyJudgeGrader);
+registerGrader("nightly_judge", NightlyJudgeGrader);

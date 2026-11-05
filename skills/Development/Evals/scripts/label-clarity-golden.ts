@@ -27,16 +27,10 @@
  *   bun skills/Development/Evals/scripts/label-clarity-golden.ts --live      # explicit live mode alias
  */
 
-import { inference } from "../../../../lib/core/Inference.ts";
+import { ENSEMBLE_LEVELS, ensembleVote } from "./EnsembleVote.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import {
-  writeFileSync,
-  mkdirSync,
-  existsSync,
-  readFileSync,
-  readdirSync,
-} from "fs";
-import { join, dirname } from "path";
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 // ============================================================================
 // Config
@@ -117,7 +111,8 @@ const SYNTHETIC_CASES: Array<{ title: string; reasoning: string }> = [
   },
   {
     title: "research best standing desks under $500 with monitor arm compatibility",
-    reasoning: "Clear research task with defined scope and budget constraint — Kaya's Research skill can execute this immediately.",
+    reasoning:
+      "Clear research task with defined scope and budget constraint — Kaya's Research skill can execute this immediately.",
   },
   {
     title: "analyze my habit_log CSV and produce weekly consistency report",
@@ -134,11 +129,13 @@ const SYNTHETIC_CASES: Array<{ title: string; reasoning: string }> = [
   // --- needs-grill ---
   {
     title: "improve the EventScout skill",
-    reasoning: "EventScout is in-scope for Kaya but 'improve' is underspecified — which sources, which bugs, what outcome?",
+    reasoning:
+      "EventScout is in-scope for Kaya but 'improve' is underspecified — which sources, which bugs, what outcome?",
   },
   {
     title: "look into building a voice journal feature",
-    reasoning: "Building a feature is in-scope but the design, integration point, and acceptance criteria are all undefined.",
+    reasoning:
+      "Building a feature is in-scope but the design, integration point, and acceptance criteria are all undefined.",
   },
   {
     title: "figure out a better morning routine",
@@ -146,11 +143,13 @@ const SYNTHETIC_CASES: Array<{ title: string; reasoning: string }> = [
   },
   {
     title: "research group piano courses / lessons",
-    reasoning: "Kaya can research piano courses but location, budget, skill level, and desired output are all unspecified.",
+    reasoning:
+      "Kaya can research piano courses but location, budget, skill level, and desired output are all unspecified.",
   },
   {
     title: "look into fashion/style course - can be in person or online",
-    reasoning: "Kaya can research fashion/style courses but the goal, budget, format preference, and expected output are all unspecified.",
+    reasoning:
+      "Kaya can research fashion/style courses but the goal, budget, format preference, and expected output are all unspecified.",
   },
   // --- not-executable ---
   {
@@ -179,7 +178,7 @@ function loadDailyRunCaptures(): CaptureTask[] {
 
   const allFiles = readdirSync(DAILY_RUNS_DIR)
     .filter((f) => f.endsWith(".json"))
-    .sort()    // chronological ascending
+    .sort() // chronological ascending
     .reverse(); // most recent first
 
   const seen = new Set<string>();
@@ -229,6 +228,7 @@ function buildCorpus(): CaptureTask[] {
   const syntheticBatch = SYNTHETIC_CASES.slice(0, needed);
   for (let i = 0; i < syntheticBatch.length; i++) {
     const s = syntheticBatch[i];
+    if (!s) continue;
     corpus.push({
       taskId: `synthetic-${i + 1}`,
       title: s.title,
@@ -244,8 +244,7 @@ function buildCorpus(): CaptureTask[] {
 // Ensemble labeler
 // ============================================================================
 
-type InferenceLevel = "fast" | "standard" | "smart";
-const LEVELS: InferenceLevel[] = ["fast", "standard", "smart"];
+const LEVELS = ENSEMBLE_LEVELS;
 
 interface EnsembleResult {
   taskId: string;
@@ -261,56 +260,13 @@ async function ensembleLabel(task: CaptureTask): Promise<EnsembleResult> {
     ? `Task title: ${task.title}\n\nRouting reasoning: ${task.reasoning}`
     : `Task title: ${task.title}`;
 
-  // Run all three levels in parallel
-  const rawResults = await Promise.all(
-    LEVELS.map((level) =>
-      inference({
-        systemPrompt: CLARITY_SYSTEM_PROMPT,
-        userPrompt,
-        level,
-        expectJson: true,
-        retries: 2,
-      })
-    )
-  );
-
-  // Tally votes
-  const votes: Record<string, number> = {};
-  let voterCount = 0;
-
-  for (const result of rawResults) {
-    const raw =
-      result.success && result.parsed != null
-        ? (result.parsed as Record<string, unknown>)[CANDIDATE_FIELD]
-        : undefined;
-
-    if (typeof raw === "string" && VALID_VERDICTS.has(raw)) {
-      votes[raw] = (votes[raw] ?? 0) + 1;
-      voterCount++;
-    }
-  }
-
-  if (voterCount === 0) {
-    return { taskId: task.taskId, title: task.title, label: null, divergent: true, votes };
-  }
-
-  // Simple majority: top vote must have >50% of voter count
-  let topLabel: string | undefined;
-  let topCount = 0;
-  for (const [label, count] of Object.entries(votes)) {
-    if (count > topCount) {
-      topCount = count;
-      topLabel = label;
-    }
-  }
-
-  const hasMajority = topLabel !== undefined && topCount * 2 > voterCount;
-
-  if (hasMajority && topLabel !== undefined) {
-    return { taskId: task.taskId, title: task.title, label: topLabel, divergent: false, votes };
-  }
-
-  return { taskId: task.taskId, title: task.title, label: null, divergent: true, votes };
+  const vote = await ensembleVote({
+    systemPrompt: CLARITY_SYSTEM_PROMPT,
+    userPrompt,
+    candidateField: CANDIDATE_FIELD,
+    validLabels: VALID_VERDICTS,
+  });
+  return { taskId: task.taskId, title: task.title, ...vote };
 }
 
 // ============================================================================
@@ -331,11 +287,11 @@ console.log(`Mode:           ${isDryRun ? "DRY-RUN (no LLM calls)" : "LIVE"}\n`)
 
 if (isDryRun) {
   console.log("Corpus (dry-run):");
-  CORPUS.forEach((t, i) =>
+  CORPUS.forEach((t, i) => {
     console.log(
-      `  ${i + 1}. [${(t.disposition ?? t.source).padEnd(15)}] ${t.title.slice(0, 65)}${t.title.length > 65 ? "…" : ""}`
-    )
-  );
+      `  ${i + 1}. [${(t.disposition ?? t.source).padEnd(15)}] ${t.title.slice(0, 65)}${t.title.length > 65 ? "…" : ""}`,
+    );
+  });
   process.exit(0);
 }
 
@@ -350,10 +306,9 @@ console.log("Labeling captures...\n");
 
 for (let i = 0; i < CORPUS.length; i++) {
   const task = CORPUS[i];
+  if (!task) continue;
   const display = task.title.slice(0, 55);
-  process.stdout.write(
-    `[${i + 1}/${CORPUS.length}] ${display}${task.title.length > 55 ? "…" : ""} `
-  );
+  process.stdout.write(`[${i + 1}/${CORPUS.length}] ${display}${task.title.length > 55 ? "…" : ""} `);
 
   try {
     const result = await ensembleLabel(task);
@@ -372,7 +327,7 @@ for (let i = 0; i < CORPUS.length; i++) {
           capture_source: task.source,
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     } else {
       consensusCount++;
@@ -388,7 +343,7 @@ for (let i = 0; i < CORPUS.length; i++) {
           capture_source: task.source,
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     }
   } catch (err) {
@@ -406,7 +361,7 @@ for (let i = 0; i < CORPUS.length; i++) {
         capture_source: task.source,
         labeled_at: labeledAt,
         criteria_version: CRITERIA_VERSION,
-      })
+      }),
     );
   }
 }

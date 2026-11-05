@@ -64,27 +64,33 @@
  *      report, never dropped outright) — it can never silently swallow one.
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import type { EvalRunResult } from './shared/ResultsUtils.ts';
-import { findSuiteRuns, loadRun, loadRunInfraSkipped, findExcludedOutageRuns, KnownOutagesConfigError } from './shared/ResultsUtils.ts';
-import { inference, extractJson, type InferenceLevel, type InferenceResult } from '../../../../lib/core/Inference.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { sendAlert } from '../../../../lib/core/AlertGate.ts';
-import { recordFailure } from '../../../../lib/core/FailureLog.ts';
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import type { EvalRunResult } from "./shared/ResultsUtils.ts";
+import {
+  findSuiteRuns,
+  loadRun,
+  loadRunInfraSkipped,
+  findExcludedOutageRuns,
+  KnownOutagesConfigError,
+} from "./shared/ResultsUtils.ts";
+import { inference, extractJson, type InferenceLevel, type InferenceResult } from "../../../../lib/core/Inference.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { sendAlert } from "../../../../lib/core/AlertGate.ts";
+import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
 const DEFAULT_LAST = 3;
-const DEFAULT_THRESHOLD = 0.10;
+const DEFAULT_THRESHOLD = 0.1;
 // Nightly cadence is 24h; one full skipped cycle of slack before this
 // tripwire fires avoids paging on a single delayed-but-recovering run while
 // still catching the documented "N nights in a row" failure class.
 const DEFAULT_MAX_AGE_HOURS = 48;
-const JUDGE_LEVEL: InferenceLevel = 'standard';
+const JUDGE_LEVEL: InferenceLevel = "standard";
 
 // Separator convention duplicated from shared/ResultsUtils.ts's opaque run-id
 // contract ("<filePath>::<timestamp>", documented on findSuiteRuns/loadRun) —
@@ -92,7 +98,7 @@ const JUDGE_LEVEL: InferenceLevel = 'standard';
 // module's internals. Same "the contract is the shape, not a shared const"
 // reasoning ResultsUtils.ts itself uses for not importing ResultsPersistence's
 // line types.
-const RUN_ID_SEPARATOR = '::';
+const RUN_ID_SEPARATOR = "::";
 
 function extractRunTimestamp(runId: string): string {
   const idx = runId.lastIndexOf(RUN_ID_SEPARATOR);
@@ -103,7 +109,7 @@ function extractRunTimestamp(runId: string): string {
 // KAYA_HOME after this module loads still targets its sandbox — same
 // de-freeze pattern as ResultsUtils.ts's validationEvalsDir().
 function evalsStoreRoot(): string {
-  return join(getKayaHome(), 'MEMORY', 'VALIDATION', 'evals');
+  return join(getKayaHome(), "MEMORY", "VALIDATION", "evals");
 }
 
 // =============================================================================
@@ -115,8 +121,8 @@ export interface RegressionAlertEntry {
   current_score: number;
   baseline_score: number;
   delta: number;
-  severity: 'critical' | 'warning';
-  verdict_source: 'llm' | 'raw-fallback';
+  severity: "critical" | "warning";
+  verdict_source: "llm" | "raw-fallback";
   reasoning: string;
 }
 
@@ -129,7 +135,7 @@ export interface DismissedCandidate {
 }
 
 export interface Tripwire {
-  type: 'suite-failed-to-run' | 'suite-pass-rate-zero' | 'suite-no-behavioural-signal';
+  type: "suite-failed-to-run" | "suite-pass-rate-zero" | "suite-no-behavioural-signal";
   message: string;
 }
 
@@ -152,7 +158,7 @@ interface RegressionCandidate {
   delta: number;
   /** The trigger's own naive severity guess — used as the fallback severity
    *  when the judge is unavailable, and as context fed TO the judge. */
-  raw_severity: 'critical' | 'warning';
+  raw_severity: "critical" | "warning";
 }
 
 // =============================================================================
@@ -182,14 +188,14 @@ export function checkSuiteFreshnessTripwire(opts: {
     return {
       tripped: true,
       reason:
-        'the eval results store (MEMORY/VALIDATION/evals/) does not exist at all — ' +
-        'the nightly pipeline has apparently never persisted a single suite run ' +
-        '(see MEMORY/SkillAudits/evals-infra-audit-2026-07-09/nightly.md finding 1: ' +
-        '11 of 12 nightly runs silently failed/timed out with zero alerting)',
+        "the eval results store (MEMORY/VALIDATION/evals/) does not exist at all — " +
+        "the nightly pipeline has apparently never persisted a single suite run " +
+        "(see MEMORY/SkillAudits/evals-infra-audit-2026-07-09/nightly.md finding 1: " +
+        "11 of 12 nightly runs silently failed/timed out with zero alerting)",
     };
   }
   if (opts.freshestRunTimestamp === null) {
-    return { tripped: false, reason: 'no history yet for this suite (benign — new suite, no baseline)' };
+    return { tripped: false, reason: "no history yet for this suite (benign — new suite, no baseline)" };
   }
   const ageMs = opts.nowMs - Date.parse(opts.freshestRunTimestamp);
   if (Number.isNaN(ageMs)) {
@@ -219,7 +225,7 @@ export function checkSuiteFreshnessTripwire(opts: {
  */
 export function checkSuitePassRateZeroTripwire(currentRun: EvalRunResult[]): boolean {
   if (currentRun.length === 0) return false;
-  return currentRun.every(r => r.pass_rate === 0);
+  return currentRun.every((r) => r.pass_rate === 0);
 }
 
 // =============================================================================
@@ -229,7 +235,7 @@ export function checkSuitePassRateZeroTripwire(currentRun: EvalRunResult[]): boo
 export function detectRegressionCandidates(
   currentRun: EvalRunResult[],
   baselineRuns: EvalRunResult[][],
-  threshold: number
+  threshold: number,
 ): RegressionCandidate[] {
   const candidates: RegressionCandidate[] = [];
 
@@ -256,7 +262,7 @@ export function detectRegressionCandidates(
         current_score: currentScore,
         baseline_score: baselineScore,
         delta,
-        raw_severity: Math.abs(delta) > threshold * 2 ? 'critical' : 'warning',
+        raw_severity: Math.abs(delta) > threshold * 2 ? "critical" : "warning",
       });
     }
   }
@@ -271,7 +277,7 @@ export function detectRegressionCandidates(
 
 const RegressionVerdictSchema = z.object({
   regression: z.boolean(),
-  severity: z.enum(['critical', 'warning', 'noise']),
+  severity: z.enum(["critical", "warning", "noise"]),
   reasoning: z.string().min(1),
 });
 export type RegressionVerdict = z.infer<typeof RegressionVerdictSchema>;
@@ -347,7 +353,7 @@ function buildRegressionJudgeUserPrompt(opts: {
       history: opts.history,
     },
     null,
-    2
+    2,
   );
 }
 
@@ -380,8 +386,7 @@ export async function judgeRegressionVerdict(opts: {
   level?: InferenceLevel;
 }): Promise<RegressionVerdictResult> {
   const infer = opts.inferenceFn ?? inference;
-  const userPrompt =
-    buildRegressionJudgeUserPrompt(opts) + '\n\n' + regressionVerdictFormatInstruction();
+  const userPrompt = buildRegressionJudgeUserPrompt(opts) + "\n\n" + regressionVerdictFormatInstruction();
 
   let result: InferenceResult;
   try {
@@ -400,7 +405,7 @@ export async function judgeRegressionVerdict(opts: {
   if (!result.success) {
     return {
       verdict: null,
-      error: `judge inference failed: ${result.error ?? 'unknown error'}`,
+      error: `judge inference failed: ${result.error ?? "unknown error"}`,
       raw_output: result.output,
     };
   }
@@ -413,14 +418,14 @@ export async function judgeRegressionVerdict(opts: {
   if (parsedRaw === undefined) {
     return {
       verdict: null,
-      error: 'judge response was not valid JSON (expected {regression, severity, reasoning})',
+      error: "judge response was not valid JSON (expected {regression, severity, reasoning})",
       raw_output: result.output,
     };
   }
 
   const validated = RegressionVerdictSchema.safeParse(parsedRaw);
   if (!validated.success) {
-    const issues = validated.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    const issues = validated.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
     return {
       verdict: null,
       error: `judge response failed schema validation: ${issues}`,
@@ -446,11 +451,11 @@ function buildTaskHistory(
   baseline: EvalRunResult[][],
   baselineRunPaths: string[],
   current: EvalRunResult[],
-  currentRunPath: string
+  currentRunPath: string,
 ): TaskHistoryPoint[] {
   const points: TaskHistoryPoint[] = [];
   for (let i = baseline.length - 1; i >= 0; i--) {
-    const entry = baseline[i]?.find(r => r.task_id === taskId);
+    const entry = baseline[i]?.find((r) => r.task_id === taskId);
     if (entry) {
       points.push({
         timestamp: extractRunTimestamp(baselineRunPaths[i]!),
@@ -459,7 +464,7 @@ function buildTaskHistory(
       });
     }
   }
-  const currentEntry = current.find(r => r.task_id === taskId);
+  const currentEntry = current.find((r) => r.task_id === taskId);
   if (currentEntry) {
     points.push({
       timestamp: extractRunTimestamp(currentRunPath),
@@ -472,7 +477,7 @@ function buildTaskHistory(
 
 function sortRegressions(regressions: RegressionAlertEntry[]): RegressionAlertEntry[] {
   return [...regressions].sort((a, b) => {
-    if (a.severity !== b.severity) return a.severity === 'critical' ? -1 : 1;
+    if (a.severity !== b.severity) return a.severity === "critical" ? -1 : 1;
     return a.delta - b.delta;
   });
 }
@@ -493,7 +498,7 @@ export async function cmdCheck(
   suite: string,
   last: number,
   threshold: number,
-  opts: CmdCheckOptions = {}
+  opts: CmdCheckOptions = {},
 ): Promise<AlertReport> {
   const maxAgeHours = opts.maxAgeHours ?? DEFAULT_MAX_AGE_HOURS;
   const nowMs = opts.nowMs ?? Date.now();
@@ -509,21 +514,32 @@ export async function cmdCheck(
   // B2: a run with 0 scored tasks (every task infra-skipped) is NOT a fresh run
   // — freshness is measured from the newest run that actually produced scores,
   // otherwise a total outage would reset the stale-suite clock.
-  const firstScoredRun = allRuns.find(id => loadRun(id).length > 0);
-  const freshestTimestamp = firstScoredRun ? extractRunTimestamp(firstScoredRun) : (allRuns.length > 0 ? extractRunTimestamp(allRuns[0]!) : null);
+  const firstScoredRun = allRuns.find((id) => loadRun(id).length > 0);
+  const freshestTimestamp = firstScoredRun
+    ? extractRunTimestamp(firstScoredRun)
+    : allRuns.length > 0
+      ? extractRunTimestamp(allRuns[0]!)
+      : null;
   const excludedOutages = storeRootExists ? findExcludedOutageRuns(suite) : [];
   if (excludedOutages.length > 0) {
-    console.log(`ℹ️  ${excludedOutages.length} run(s) excluded as declared outages: ${excludedOutages.map(e => e.timestamp.slice(0, 10)).join(', ')} (${excludedOutages[0]!.reason})\n`);
+    console.log(
+      `ℹ️  ${excludedOutages.length} run(s) excluded as declared outages: ${excludedOutages.map((e) => e.timestamp.slice(0, 10)).join(", ")} (${excludedOutages[0]!.reason})\n`,
+    );
   }
 
-  const freshness = checkSuiteFreshnessTripwire({ storeRootExists, freshestRunTimestamp: freshestTimestamp, nowMs, maxAgeHours });
+  const freshness = checkSuiteFreshnessTripwire({
+    storeRootExists,
+    freshestRunTimestamp: freshestTimestamp,
+    nowMs,
+    maxAgeHours,
+  });
   if (freshness.tripped) {
     console.error(`🚨 TRIPWIRE (suite-failed-to-run): ${freshness.reason}`);
-    tripwires.push({ type: 'suite-failed-to-run', message: freshness.reason });
+    tripwires.push({ type: "suite-failed-to-run", message: freshness.reason });
     recordFailure({
-      source: 'RegressionAlert',
+      source: "RegressionAlert",
       error: `suite failed to run: ${freshness.reason}`,
-      context: { suite, step: 'freshnessTripwire' },
+      context: { suite, step: "freshnessTripwire" },
     });
     // B3: awaited (main() process.exit()s right after cmdCheck returns — a floating page send
     // could be cut off). On a total outage this and the no-signal tripwire below both fire;
@@ -533,7 +549,7 @@ export async function cmdCheck(
     if (!latestAllSkipped) {
       await sendAlert(`Eval regression check: ${suite} — suite failed to run (${freshness.reason})`, {
         key: `regression-alert-outage:${suite}`,
-        tier: 'page',
+        tier: "page",
         cooldownMs: 12 * 3600_000,
       });
     }
@@ -562,19 +578,22 @@ export async function cmdCheck(
   // Before B2 that night scored all-0 and tripped suite-pass-rate-zero.
   if (allRuns.length > 0 && loadRun(allRuns[0]!).length === 0) {
     const skipped = loadRunInfraSkipped(allRuns[0]!);
-    const reason = `no behavioural signal: latest run ${extractRunTimestamp(allRuns[0]!)} has 0 scored tasks (${skipped.length} task(s) infra-skipped${skipped.length > 0 ? `: ${skipped.join(', ')}` : ''})`;
+    const reason = `no behavioural signal: latest run ${extractRunTimestamp(allRuns[0]!)} has 0 scored tasks (${skipped.length} task(s) infra-skipped${skipped.length > 0 ? `: ${skipped.join(", ")}` : ""})`;
     console.error(`🚨 TRIPWIRE (suite-no-behavioural-signal): ${reason}`);
-    tripwires.push({ type: 'suite-no-behavioural-signal', message: reason });
+    tripwires.push({ type: "suite-no-behavioural-signal", message: reason });
     recordFailure({
-      source: 'RegressionAlert',
+      source: "RegressionAlert",
       error: `suite no behavioural signal: ${reason}`,
-      context: { suite, step: 'noSignalTripwire', run: allRuns[0] },
+      context: { suite, step: "noSignalTripwire", run: allRuns[0] },
     });
-    await sendAlert(`Eval regression check: ${suite} — ${reason}${freshness.tripped ? ` (also: ${freshness.reason})` : ''}`, {
-      key: `regression-alert-outage:${suite}`,
-      tier: 'page',
-      cooldownMs: 12 * 3600_000,
-    });
+    await sendAlert(
+      `Eval regression check: ${suite} — ${reason}${freshness.tripped ? ` (also: ${freshness.reason})` : ""}`,
+      {
+        key: `regression-alert-outage:${suite}`,
+        tier: "page",
+        cooldownMs: 12 * 3600_000,
+      },
+    );
     // Nothing to compare: never fall through to a "No regressions detected" line.
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
     return {
@@ -611,31 +630,33 @@ export async function cmdCheck(
   const baselineRunPaths = runs.slice(1, last + 1);
 
   console.log(`📊 Loading runs...`);
-  console.log(`   Current: ${currentRunPath.split('/').pop()}`);
+  console.log(`   Current: ${currentRunPath.split("/").pop()}`);
   console.log(`   Baseline: ${baselineRunPaths.length} run(s)\n`);
 
   const current = loadRun(currentRunPath);
-  const baseline = baselineRunPaths.map(p => loadRun(p));
+  const baseline = baselineRunPaths.map((p) => loadRun(p));
 
   if (checkSuitePassRateZeroTripwire(current)) {
     const reason = `every task in the current run (${current.length} task(s)) scored a 0 pass rate — see the 2026-06-19 Zod-4 "0 useful evals" named incident`;
     console.error(`🚨 TRIPWIRE (suite-pass-rate-zero): ${reason}`);
-    tripwires.push({ type: 'suite-pass-rate-zero', message: reason });
+    tripwires.push({ type: "suite-pass-rate-zero", message: reason });
     recordFailure({
-      source: 'RegressionAlert',
+      source: "RegressionAlert",
       error: `suite pass rate zero: ${reason}`,
-      context: { suite, step: 'passRateZeroTripwire', run: currentRunPath },
+      context: { suite, step: "passRateZeroTripwire", run: currentRunPath },
     });
     await sendAlert(`Eval regression check: ${suite} — every task scored 0 pass rate this run`, {
       key: `regression-alert-zero-pass-rate:${suite}`,
-      tier: 'page',
+      tier: "page",
       cooldownMs: 12 * 3600_000,
     });
   }
 
   const candidates = detectRegressionCandidates(current, baseline, threshold);
 
-  console.log(`🔍 Cheap trigger: ${candidates.length} candidate(s) crossed the ${(threshold * 100).toFixed(0)}% threshold\n`);
+  console.log(
+    `🔍 Cheap trigger: ${candidates.length} candidate(s) crossed the ${(threshold * 100).toFixed(0)}% threshold\n`,
+  );
 
   const regressions: RegressionAlertEntry[] = [];
   const dismissed: DismissedCandidate[] = [];
@@ -663,22 +684,24 @@ export async function cmdCheck(
         baseline_score: candidate.baseline_score,
         delta: candidate.delta,
         severity: candidate.raw_severity,
-        verdict_source: 'raw-fallback',
+        verdict_source: "raw-fallback",
         reasoning: marker,
       });
       continue;
     }
 
     if (verdictResult.verdict.regression) {
-      const severity = verdictResult.verdict.severity === 'noise' ? 'warning' : verdictResult.verdict.severity;
-      console.log(`🔴 ${candidate.task_id}: judge confirmed regression (${severity}) — ${verdictResult.verdict.reasoning}`);
+      const severity = verdictResult.verdict.severity === "noise" ? "warning" : verdictResult.verdict.severity;
+      console.log(
+        `🔴 ${candidate.task_id}: judge confirmed regression (${severity}) — ${verdictResult.verdict.reasoning}`,
+      );
       regressions.push({
         task_id: candidate.task_id,
         current_score: candidate.current_score,
         baseline_score: candidate.baseline_score,
         delta: candidate.delta,
         severity,
-        verdict_source: 'llm',
+        verdict_source: "llm",
         reasoning: verdictResult.verdict.reasoning,
       });
     } else {
@@ -694,8 +717,8 @@ export async function cmdCheck(
   }
 
   const sortedRegressions = sortRegressions(regressions);
-  const criticalCount = sortedRegressions.filter(r => r.severity === 'critical').length;
-  const warningCount = sortedRegressions.filter(r => r.severity === 'warning').length;
+  const criticalCount = sortedRegressions.filter((r) => r.severity === "critical").length;
+  const warningCount = sortedRegressions.filter((r) => r.severity === "warning").length;
 
   console.log(`\n🔍 Regression Detection:`);
   console.log(`   Total regressions: ${sortedRegressions.length}`);
@@ -708,7 +731,7 @@ export async function cmdCheck(
   } else {
     console.log(`❌ Regressions Detected:\n`);
     for (const regression of sortedRegressions) {
-      const icon = regression.severity === 'critical' ? '🔴' : '⚠️';
+      const icon = regression.severity === "critical" ? "🔴" : "⚠️";
       console.log(`${icon} ${regression.task_id}`);
       console.log(`   Current:  ${regression.current_score.toFixed(3)}`);
       console.log(`   Baseline: ${regression.baseline_score.toFixed(3)}`);
@@ -745,7 +768,7 @@ export async function cmdCheck(
 async function main() {
   const args = Bun.argv.slice(2);
 
-  if (args.length === 0 || args.includes('--help')) {
+  if (args.length === 0 || args.includes("--help")) {
     console.log(`
 Regression Alert - Detect score regressions in eval runs
 
@@ -766,27 +789,29 @@ Examples:
 
   const command = args[0];
 
-  if (command !== 'check') {
+  if (command !== "check") {
     console.error(`❌ Unknown command: ${command}`);
     console.error(`   Valid commands: check`);
     process.exit(1);
   }
 
   if (args.length < 2) {
-    console.error('❌ check requires a suite name');
+    console.error("❌ check requires a suite name");
     process.exit(1);
   }
 
   const suite = args[1]!;
 
-  const lastIdx = args.indexOf('--last');
+  const lastIdx = args.indexOf("--last");
   const last = lastIdx !== -1 && args[lastIdx + 1] ? parseInt(args[lastIdx + 1]!, 10) : DEFAULT_LAST;
 
-  const thresholdIdx = args.indexOf('--threshold');
-  const threshold = thresholdIdx !== -1 && args[thresholdIdx + 1] ? parseFloat(args[thresholdIdx + 1]!) : DEFAULT_THRESHOLD;
+  const thresholdIdx = args.indexOf("--threshold");
+  const threshold =
+    thresholdIdx !== -1 && args[thresholdIdx + 1] ? parseFloat(args[thresholdIdx + 1]!) : DEFAULT_THRESHOLD;
 
-  const maxAgeIdx = args.indexOf('--max-age-hours');
-  const maxAgeHours = maxAgeIdx !== -1 && args[maxAgeIdx + 1] ? parseFloat(args[maxAgeIdx + 1]!) : DEFAULT_MAX_AGE_HOURS;
+  const maxAgeIdx = args.indexOf("--max-age-hours");
+  const maxAgeHours =
+    maxAgeIdx !== -1 && args[maxAgeIdx + 1] ? parseFloat(args[maxAgeIdx + 1]!) : DEFAULT_MAX_AGE_HOURS;
 
   try {
     const report = await cmdCheck(suite, last, threshold, { maxAgeHours });

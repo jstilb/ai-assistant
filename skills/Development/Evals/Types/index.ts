@@ -17,35 +17,19 @@ export {
   GraderConfigSchema,
   TaskSchema,
   EvalSuiteSchema,
-} from './schemas.ts';
+} from "./schemas.ts";
 // `import type` (not a bare `export type ... from`) so these names are also
 // bound locally — GraderResult below references GraderType directly, which
 // a re-export-only statement does not make available in this module's own
 // scope.
-import type {
-  GraderType,
-  EvalDomain,
-  EvalType,
-  GraderConfig,
-  Task,
-  EvalSuite,
-  MetricConfig,
-} from './schemas.ts';
-export type {
-  GraderType,
-  EvalDomain,
-  EvalType,
-  GraderConfig,
-  Task,
-  EvalSuite,
-  MetricConfig,
-};
+import type { GraderType, EvalDomain, EvalType, GraderConfig, Task, EvalSuite, MetricConfig } from "./schemas.ts";
+export type { GraderType, EvalDomain, EvalType, GraderConfig, Task, EvalSuite, MetricConfig };
 
 // =============================================================================
 // TASK DEFINITION
 // =============================================================================
 
-export type TaskStatus = 'pending' | 'running' | 'passed' | 'failed' | 'error' | 'infra_failure';
+export type TaskStatus = "pending" | "running" | "passed" | "failed" | "error" | "infra_failure";
 
 // 'exec_error' = generic bucket for a machine-authored structured error
 // signal (non-zero exitCode, or a stream-json result event's is_error:true)
@@ -54,7 +38,7 @@ export type TaskStatus = 'pending' | 'running' | 'passed' | 'failed' | 'error' |
 // longer assigned by TrialRunner's classifier (see evals-rebuild slice A2 —
 // classification is now exitCode/stderr/result-event based only, never a
 // check of agent output text/length).
-export type InfraFailureType = 'rate_limit' | 'timeout' | 'auth_error' | 'exec_error' | 'empty_response';
+export type InfraFailureType = "rate_limit" | "timeout" | "auth_error" | "exec_error" | "empty_response";
 
 // Task, GraderType, and GraderConfig are defined in Types/schemas.ts and
 // re-exported at the top of this file.
@@ -66,19 +50,19 @@ export type InfraFailureType = 'rate_limit' | 'timeout' | 'auth_error' | 'exec_e
 // Code-based grader params
 export interface StringMatchParams {
   patterns: string[];
-  mode: 'all' | 'any' | 'none_match';
+  mode: "all" | "any" | "none_match";
   case_sensitive?: boolean;
 }
 
 export interface RegexMatchParams {
   patterns: string[];
-  mode: 'all' | 'any' | 'none_match';
+  mode: "all" | "any" | "none_match";
   flags?: string;
 }
 
 export interface BinaryTestsParams {
   test_files: string[];
-  test_command?: string;  // Default: appropriate for language
+  test_command?: string; // Default: appropriate for language
   timeout_ms?: number;
 }
 
@@ -91,17 +75,17 @@ export interface BinaryTestsParams {
 export interface ToolCallsParams {
   required?: { tool: string; params?: Record<string, unknown> }[];
   forbidden?: string[];
-  sequence?: string[];  // Tools must be called in this order
+  sequence?: string[]; // Tools must be called in this order
   max_calls?: number;
 }
 
 // Model-based grader params
 export interface LLMRubricParams {
-  rubric: string;  // Path to rubric file or inline content
+  rubric: string; // Path to rubric file or inline content
   assertions?: string[];
   judge_model?: string;
   reasoning_first?: boolean;
-  scale?: '1-5' | '1-10' | 'pass-fail';
+  scale?: "1-5" | "1-10" | "pass-fail";
 }
 
 export interface NaturalLanguageAssertParams {
@@ -138,7 +122,7 @@ export interface Transcript {
 
 export interface Turn {
   index: number;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   tool_call?: ToolCall;
   timestamp: string;
@@ -202,7 +186,7 @@ export interface GraderResult {
   grader_type: GraderType;
   weight: number;
 
-  score: number;  // 0-1
+  score: number; // 0-1
   passed: boolean;
 
   // Detailed output
@@ -271,4 +255,3 @@ export interface EvalRun {
 // =============================================================================
 
 /** Human review status including queue-specific states */
-

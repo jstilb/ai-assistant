@@ -3,24 +3,24 @@
  * Run actual test files and check pass/fail
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult, BinaryTestsParams } from '../../Types/index.ts';
-import { $ } from 'bun';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult, BinaryTestsParams } from "../../Types/index.ts";
+import { $ } from "bun";
 
 export class BinaryTestsGrader extends BaseGrader {
-  type = 'binary_tests' as const;
-  category = 'code_based' as const;
+  type = "binary_tests" as const;
+  category = "code_based" as const;
   // grade() only runs test_files against context.working_dir — never touches
   // context.output or context.transcript.
   readsOutput = false;
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as BinaryTestsParams;
+    const params = this.config.params as unknown as BinaryTestsParams; // config.params is untyped YAML; validated below
 
     if (!params?.test_files?.length) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'No test files configured',
+        reasoning: "No test files configured",
       });
     }
 
@@ -41,7 +41,7 @@ export class BinaryTestsGrader extends BaseGrader {
         // expands to one word per element.
         const argv = command.trim().split(/\s+/);
 
-        const result = await $`cd ${workingDir} && timeout ${Math.ceil(timeout/1000)} ${argv} ${testFile}`
+        const result = await $`cd ${workingDir} && timeout ${Math.ceil(timeout / 1000)} ${argv} ${testFile}`
           .quiet()
           .nothrow();
 
@@ -49,20 +49,20 @@ export class BinaryTestsGrader extends BaseGrader {
         results.push({
           file: testFile,
           passed,
-          output: result.stdout.toString().slice(-500),  // Last 500 chars
+          output: result.stdout.toString().slice(-500), // Last 500 chars
           error: passed ? undefined : result.stderr.toString().slice(-500),
         });
       } catch (e) {
         results.push({
           file: testFile,
           passed: false,
-          output: '',
+          output: "",
           error: String(e),
         });
       }
     }
 
-    const passCount = results.filter(r => r.passed).length;
+    const passCount = results.filter((r) => r.passed).length;
     const score = passCount / params.test_files.length;
     const passed = passCount === params.test_files.length;
 
@@ -76,13 +76,13 @@ export class BinaryTestsGrader extends BaseGrader {
   }
 
   private detectTestCommand(file: string): string {
-    if (file.endsWith('.py')) return 'python -m pytest';
-    if (file.endsWith('.ts')) return 'bun test';
-    if (file.endsWith('.js')) return 'node --test';
-    if (file.endsWith('.go')) return 'go test';
-    if (file.endsWith('.rs')) return 'cargo test --';
-    return 'bun test';  // Default
+    if (file.endsWith(".py")) return "python -m pytest";
+    if (file.endsWith(".ts")) return "bun test";
+    if (file.endsWith(".js")) return "node --test";
+    if (file.endsWith(".go")) return "go test";
+    if (file.endsWith(".rs")) return "cargo test --";
+    return "bun test"; // Default
   }
 }
 
-registerGrader('binary_tests', BinaryTestsGrader);
+registerGrader("binary_tests", BinaryTestsGrader);

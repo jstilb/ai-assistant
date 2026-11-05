@@ -32,14 +32,12 @@
  */
 
 import { inference } from "../../../../lib/core/Inference.ts";
-import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
-import { join, dirname } from "path";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
 const CRITERIA_VERSION = 1;
-const KAYA_HOME = getKayaHome();
 const OUTPUT_PATH = join(import.meta.dir, "../Data/golden/verifier-accuracy-golden.jsonl");
 
 const isDryRun = process.argv.includes("--dry-run");
@@ -183,8 +181,7 @@ const VERIFIER_CASES: VerifierCase[] = [
     isc_total: 1,
     concerns: [],
     transcript_snippet: null,
-    expected_reasoning:
-      "PASS is clearly justified: 1/1 ISC rows verified, zero concerns. Clean execution record.",
+    expected_reasoning: "PASS is clearly justified: 1/1 ISC rows verified, zero concerns. Clean execution record.",
   },
   {
     id: "mlo1t7q7-cbbeyk",
@@ -205,8 +202,7 @@ const VERIFIER_CASES: VerifierCase[] = [
     isc_total: 8,
     concerns: [],
     transcript_snippet: null,
-    expected_reasoning:
-      "PASS is clearly justified: 8/8 ISC rows verified, no concerns. Strong positive signal.",
+    expected_reasoning: "PASS is clearly justified: 8/8 ISC rows verified, no concerns. Strong positive signal.",
   },
 
   // ── Category E: PASS with Tier-2/3 infra errors but full ISC (justified) ──
@@ -338,7 +334,7 @@ const VERIFIER_CASES: VerifierCase[] = [
     isc_total: 10,
     concerns: [
       "Low spec alignment: 1/1 requirements unaddressed",
-      "Unaddressed: \"**Intelligence**\"",
+      'Unaddressed: "**Intelligence**"',
       "Low code density: 698 insertions across 3326 files (0.2 lines/file avg) — possible skeleton/stub implementation",
       "Automation/SKILL.md sub-skills table references 'Automation/ContextManager/SKILL.md' but ContextManager was kept at flat path — documentation inconsistency",
       "ISC-5/ISC-6/ISC-7 hook import integrity not directly verified via commandRan=true verification commands",
@@ -373,9 +369,7 @@ const VERIFIER_CASES: VerifierCase[] = [
     verdict: "PASS",
     isc_verified: 0,
     isc_total: 28,
-    concerns: [
-      "Pre-dates AutonomousWork verification fixes; verified manually",
-    ],
+    concerns: ["Pre-dates AutonomousWork verification fixes; verified manually"],
     transcript_snippet: null,
     expected_reasoning:
       "PASS with 0/28 ISC verified is technically very low coverage. However, the single concern explicitly states this pre-dates AW verification fixes and was manually verified. Without evidence contradicting that, the manual-verify explanation makes the verdict justified for its era.",
@@ -494,8 +488,7 @@ interface PhaseL_Case {
 const PHASE_L_CASES: PhaseL_Case[] = [
   {
     id: "phase-l-mnt5gb50-early-fail",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mnt5gb50-th7itl/run-1781205150817.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mnt5gb50-th7itl/run-1781205150817.json",
     item_id: "mnt5gb50-th7itl",
     verdict: "FAIL",
     scenario_summary:
@@ -512,8 +505,7 @@ const PHASE_L_CASES: PhaseL_Case[] = [
   },
   {
     id: "phase-l-mnt5gb50-final-pass",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mnt5gb50-th7itl/run-1781210954973.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mnt5gb50-th7itl/run-1781210954973.json",
     item_id: "mnt5gb50-th7itl",
     verdict: "PASS",
     scenario_summary:
@@ -526,8 +518,7 @@ const PHASE_L_CASES: PhaseL_Case[] = [
   },
   {
     id: "phase-l-mq4rx6k1-fail",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mq4rx6k1-pz84n8/run-1781195605537.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mq4rx6k1-pz84n8/run-1781195605537.json",
     item_id: "mq4rx6k1-pz84n8",
     verdict: "FAIL",
     scenario_summary:
@@ -542,12 +533,10 @@ const PHASE_L_CASES: PhaseL_Case[] = [
   },
   {
     id: "phase-l-mq4rx6k1-pass",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mq4rx6k1-pz84n8/run-1781197156095.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mq4rx6k1-pz84n8/run-1781197156095.json",
     item_id: "mq4rx6k1-pz84n8",
     verdict: "PASS",
-    scenario_summary:
-      "Subsequent run after URL link issue was addressed. All scenarios pass.",
+    scenario_summary: "Subsequent run after URL link issue was addressed. All scenarios pass.",
     fail_scenarios: [],
     pass_scenarios_count: 6,
     total_scenarios_count: 6,
@@ -556,42 +545,34 @@ const PHASE_L_CASES: PhaseL_Case[] = [
   },
   {
     id: "phase-l-mq4kdqs0-pass",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mq4kdqs0-q0h0ew/run-1781200428660.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mq4kdqs0-q0h0ew/run-1781200428660.json",
     item_id: "mq4kdqs0-q0h0ew",
     verdict: "PASS",
-    scenario_summary:
-      "All scenarios pass. Work item verification with full scenario coverage.",
+    scenario_summary: "All scenarios pass. Work item verification with full scenario coverage.",
     fail_scenarios: [],
     pass_scenarios_count: -1, // unknown, all pass
     total_scenarios_count: -1,
-    expected_reasoning:
-      "PASS is justified: all scenarios pass with no failure evidence.",
+    expected_reasoning: "PASS is justified: all scenarios pass with no failure evidence.",
   },
   {
     id: "phase-l-mq4rx6gg-pass",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/mq4rx6gg-9rwqvj/run-1781195869080.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/mq4rx6gg-9rwqvj/run-1781195869080.json",
     item_id: "mq4rx6gg-9rwqvj",
     verdict: "PASS",
     scenario_summary: "All scenarios pass.",
     fail_scenarios: [],
     pass_scenarios_count: -1,
     total_scenarios_count: -1,
-    expected_reasoning:
-      "PASS is justified: all scenarios pass with no failure evidence.",
+    expected_reasoning: "PASS is justified: all scenarios pass with no failure evidence.",
   },
   {
     id: "phase-l-live-smoke-fail",
-    snapshot_file:
-      "MEMORY/AutonomousWork/live-verification/live-smoke/selfverify-1781579700555.json",
+    snapshot_file: "MEMORY/AutonomousWork/live-verification/live-smoke/selfverify-1781579700555.json",
     item_id: "live-smoke",
     verdict: "FAIL",
     scenario_summary:
       "2 scenarios: ssv1 PASS (bun run ok.ts succeeds), ssv2 FAIL (bun run bad.ts — artifact crashed). This is a smoke test where one scenario is DESIGNED to fail.",
-    fail_scenarios: [
-      "ssv2: FAIL — bun run bad.ts: artifact crashed (intentional negative test case)",
-    ],
+    fail_scenarios: ["ssv2: FAIL — bun run bad.ts: artifact crashed (intentional negative test case)"],
     pass_scenarios_count: 1,
     total_scenarios_count: 2,
     expected_reasoning:
@@ -641,13 +622,9 @@ function serializeVerifierEvidence(c: VerifierCase): string {
     `ISC COVERAGE: ${c.isc_verified ?? "N/A"}/${c.isc_total ?? "N/A"}`,
     "",
     "CONCERNS:",
-    ...(c.concerns.length > 0
-      ? c.concerns.map((cx) => `  - ${cx}`)
-      : ["  (none)"]),
+    ...(c.concerns.length > 0 ? c.concerns.map((cx) => `  - ${cx}`) : ["  (none)"]),
     "",
-    c.transcript_snippet
-      ? `TRANSCRIPT SNIPPET: ${c.transcript_snippet}`
-      : "TRANSCRIPT: not available",
+    c.transcript_snippet ? `TRANSCRIPT SNIPPET: ${c.transcript_snippet}` : "TRANSCRIPT: not available",
     "",
     `QUESTION: Given this evidence, was the verdict ${c.verdict} JUSTIFIED?`,
     `Return exactly: {"justified": "justified"} or {"justified": "unjustified"}`,
@@ -678,7 +655,7 @@ function serializePhaseLEvidence(c: PhaseL_Case): string {
 
 async function ensembleLabel(
   input: string,
-  itemId: string,
+  _itemId: string,
 ): Promise<{ label: string | null; divergent: boolean; votes: Record<string, number> }> {
   const levels = ["fast", "standard", "smart"] as const;
 
@@ -716,6 +693,7 @@ async function ensembleLabel(
   }
 
   const topLabel = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+  if (!topLabel) return { label: null, divergent: true, votes };
   const hasConsensus = topLabel[1] * 2 > voterCount;
 
   if (!hasConsensus) {
@@ -785,8 +763,10 @@ async function resolveLabel(
   // Drift-check: surface ensemble disagreement but keep the curated label.
   if (pinned && driftCheck) {
     const ensembleResult = divergent ? "DIVERGENT" : label;
-    if (pinned.justified !== label || (pinned.divergent !== divergent)) {
-      console.warn(`  ⚠ DRIFT: ${id} ensemble=${ensembleResult} but curated=${pinned.justified}${pinned.divergent ? " (divergent)" : ""} — keeping curated`);
+    if (pinned.justified !== label || pinned.divergent !== divergent) {
+      console.warn(
+        `  ⚠ DRIFT: ${id} ensemble=${ensembleResult} but curated=${pinned.justified}${pinned.divergent ? " (divergent)" : ""} — keeping curated`,
+      );
     }
     return { label: pinned.justified, divergent: pinned.divergent, votes, source: pinned.source };
   }
@@ -807,9 +787,7 @@ async function main() {
       ? "DRIFT-CHECK (ensemble vs curated, keep curated)"
       : `PRESERVE curated labels (${existing.size} found; pass --force-relabel to regenerate)`;
   console.log(`Label policy: ${labelMode}`);
-  console.log(
-    `Cases: ${isLiveOnly ? 0 : VERIFIER_CASES.length} verifier + ${PHASE_L_CASES.length} Phase-L`,
-  );
+  console.log(`Cases: ${isLiveOnly ? 0 : VERIFIER_CASES.length} verifier + ${PHASE_L_CASES.length} Phase-L`);
   console.log();
 
   const entries: GoldenEntry[] = [];
@@ -842,9 +820,7 @@ async function main() {
       }
 
       const { label, divergent, votes, source } = await resolveLabel(c.id, evidence, existing);
-      console.log(
-        `    → ${divergent ? "DIVERGENT" : label} [${source}] (votes: ${JSON.stringify(votes)})`,
-      );
+      console.log(`    → ${divergent ? "DIVERGENT" : label} [${source}] (votes: ${JSON.stringify(votes)})`);
 
       const entry: GoldenEntry = {
         id: c.id,
@@ -932,10 +908,8 @@ async function main() {
   const verifierEntries = entries.filter((e) => e.type === "verifier");
   const phaseLEntries = entries.filter((e) => e.type === "phase-l");
 
-  const countJustified = (arr: GoldenEntry[]) =>
-    arr.filter((e) => e.justified === "justified").length;
-  const countUnjustified = (arr: GoldenEntry[]) =>
-    arr.filter((e) => e.justified === "unjustified").length;
+  const countJustified = (arr: GoldenEntry[]) => arr.filter((e) => e.justified === "justified").length;
+  const countUnjustified = (arr: GoldenEntry[]) => arr.filter((e) => e.justified === "unjustified").length;
   const countDivergent = (arr: GoldenEntry[]) => arr.filter((e) => e.divergent).length;
 
   const verdictDist = entries.reduce(

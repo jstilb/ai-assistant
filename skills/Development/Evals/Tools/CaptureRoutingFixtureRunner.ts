@@ -26,14 +26,14 @@
 // eval-only call site (one adapter = hypothetical seam; see
 // skills/Development/ImproveCodebaseArchitecture/LANGUAGE.md).
 // cross-skill-allowed: eval-only live exercise of the production classifier
-import { classify } from '../../../Productivity/LifeOS/Capture/Router.ts';
+import { classify } from "../../../Productivity/LifeOS/Capture/Router.ts";
 import {
   loadFixturesJsonl,
   buildSummary,
   writeSummary,
   parseFixtureRunnerArgs,
   type FixtureResult,
-} from './FixtureRunnerShared.ts';
+} from "./FixtureRunnerShared.ts";
 
 interface Expected {
   acceptableLabels: string[];
@@ -62,12 +62,12 @@ export async function runCaptureRoutingFixtures(fixturesPath: string): Promise<F
       // persisted as a real 0 — FixtureAccuracy only emits
       // fixture_infra_error when a majority of fixtures carry infra_error.
       infraError = String(e);
-      actual = { label: 'CLASSIFY_ERROR', confidence: 0, rationale: infraError };
+      actual = { label: "CLASSIFY_ERROR", confidence: 0, rationale: infraError };
     }
     const correct = infraError === undefined && fx.expected.acceptableLabels.includes(actual.label);
     results.push({ ...fx, actual, correct, ...(infraError === undefined ? {} : { infra_error: infraError }) });
     console.log(
-      `  [${correct ? 'OK  ' : 'FAIL'}] ${fx.id} (${fx.category}): expected ${fx.expected.acceptableLabels.join('|')}, got ${actual.label} (conf ${actual.confidence.toFixed(2)})`,
+      `  [${correct ? "OK  " : "FAIL"}] ${fx.id} (${fx.category}): expected ${fx.expected.acceptableLabels.join("|")}, got ${actual.label} (conf ${actual.confidence.toFixed(2)})`,
     );
   }
 
@@ -78,8 +78,10 @@ if (import.meta.main) {
   const { fixtures, out } = parseFixtureRunnerArgs(process.argv.slice(2));
   console.log(`[CaptureRoutingFixtureRunner] Loading fixtures from ${fixtures}`);
   const results = await runCaptureRoutingFixtures(fixtures);
-  const summary = buildSummary('capture_routing_fixtures', results);
+  const summary = buildSummary("capture_routing_fixtures", results);
   writeSummary(out, summary);
-  console.log(`\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`);
+  console.log(
+    `\nAccuracy: ${(summary.accuracy * 100).toFixed(1)}% (${summary.correct}/${summary.total}) — written to ${out}`,
+  );
   process.exit(0);
 }

@@ -4,25 +4,25 @@
  * Manage capability vs regression suites
  */
 
-import type { EvalSuite, EvalType, Task } from '../Types/index.ts';
-import { EvalSuiteSchema } from '../Types/schemas.ts';
-import { findTaskFile } from './shared/TaskUtils.ts';
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, readFileSync } from 'fs';
-import { join, basename } from 'path';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { parseArgs } from 'util';
+import type { EvalSuite, EvalType } from "../Types/index.ts";
+import { EvalSuiteSchema } from "../Types/schemas.ts";
+import { findTaskFile } from "./shared/TaskUtils.ts";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parseArgs } from "node:util";
 
-const EVALS_DIR = join(import.meta.dir, '..');
-const SUITES_DIR = join(EVALS_DIR, 'Suites');
-const RESULTS_DIR = join(EVALS_DIR, 'Results');
+const EVALS_DIR = join(import.meta.dir, "..");
+const SUITES_DIR = join(EVALS_DIR, "Suites");
+const RESULTS_DIR = join(EVALS_DIR, "Results");
 
 /**
  * Ensure directories exist
  */
 function ensureDirs(): void {
   if (!existsSync(SUITES_DIR)) mkdirSync(SUITES_DIR, { recursive: true });
-  if (!existsSync(join(SUITES_DIR, 'Capability'))) mkdirSync(join(SUITES_DIR, 'Capability'));
-  if (!existsSync(join(SUITES_DIR, 'Regression'))) mkdirSync(join(SUITES_DIR, 'Regression'));
+  if (!existsSync(join(SUITES_DIR, "Capability"))) mkdirSync(join(SUITES_DIR, "Capability"));
+  if (!existsSync(join(SUITES_DIR, "Regression"))) mkdirSync(join(SUITES_DIR, "Regression"));
   if (!existsSync(RESULTS_DIR)) mkdirSync(RESULTS_DIR, { recursive: true });
 }
 
@@ -37,7 +37,7 @@ export function createSuite(
     domain?: string;
     pass_threshold?: number;
     tasks?: string[];
-  }
+  },
 ): EvalSuite {
   ensureDirs();
 
@@ -45,13 +45,13 @@ export function createSuite(
     name,
     description,
     type,
-    domain: options?.domain as any,
+    domain: options?.domain as EvalSuite["domain"],
     tasks: options?.tasks ?? [],
-    pass_threshold: options?.pass_threshold ?? (type === 'regression' ? 0.95 : 0.70),
+    pass_threshold: options?.pass_threshold ?? (type === "regression" ? 0.95 : 0.7),
     created_at: new Date().toISOString(),
   };
 
-  const dir = type === 'capability' ? 'Capability' : 'Regression';
+  const dir = type === "capability" ? "Capability" : "Regression";
   const filePath = join(SUITES_DIR, dir, `${name}.yaml`);
 
   writeFileSync(filePath, stringifyYaml(suite));
@@ -102,9 +102,7 @@ export function parseSuiteYaml(rawYamlText: string, sourcePath: string): EvalSui
 
   const result = EvalSuiteSchema.safeParse(raw);
   if (!result.success) {
-    const formatted = result.error.issues
-      .map(i => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('\n');
+    const formatted = result.error.issues.map((i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
     throw new Error(`invalid suite ${sourcePath}:\n${formatted}`);
   }
 
@@ -117,7 +115,7 @@ export function parseSuiteYaml(rawYamlText: string, sourcePath: string): EvalSui
     if (!findTaskFile(taskId)) {
       throw new Error(
         `suite "${suite.name}" (${sourcePath}) references unknown task id "${taskId}" — ` +
-        `no UseCases/**/*.yaml file declares id: ${taskId}.`
+          `no UseCases/**/*.yaml file declares id: ${taskId}.`,
       );
     }
   }
@@ -133,14 +131,14 @@ export function loadSuite(name: string): EvalSuite | null {
 
   // Check all known suite type directories, then the root Suites directory.
   const candidatePaths = [
-    join(SUITES_DIR, 'Capability', `${name}.yaml`),
-    join(SUITES_DIR, 'Regression', `${name}.yaml`),
+    join(SUITES_DIR, "Capability", `${name}.yaml`),
+    join(SUITES_DIR, "Regression", `${name}.yaml`),
     join(SUITES_DIR, `${name}.yaml`),
   ];
   const filePath = candidatePaths.find(existsSync);
   if (!filePath) return null;
 
-  return parseSuiteYaml(readFileSync(filePath, 'utf-8'), filePath);
+  return parseSuiteYaml(readFileSync(filePath, "utf-8"), filePath);
 }
 
 /**
@@ -176,10 +174,10 @@ export function listSuites(type?: EvalType): EvalSuite[] {
   const scanDir = (dirPath: string) => {
     if (!existsSync(dirPath)) return;
     for (const file of readdirSync(dirPath)) {
-      if (!file.endsWith('.yaml')) continue;
+      if (!file.endsWith(".yaml")) continue;
       const filePath = join(dirPath, file);
       if (!statSync(filePath).isFile()) continue;
-      const suite = parseSuiteYaml(readFileSync(filePath, 'utf-8'), filePath);
+      const suite = parseSuiteYaml(readFileSync(filePath, "utf-8"), filePath);
       if (seen.has(suite.name)) continue;
       seen.add(suite.name);
       suites.push(suite);
@@ -187,10 +185,10 @@ export function listSuites(type?: EvalType): EvalSuite[] {
   };
 
   scanDir(SUITES_DIR);
-  scanDir(join(SUITES_DIR, 'Capability'));
-  scanDir(join(SUITES_DIR, 'Regression'));
+  scanDir(join(SUITES_DIR, "Capability"));
+  scanDir(join(SUITES_DIR, "Regression"));
 
-  return type ? suites.filter(s => s.type === type) : suites;
+  return type ? suites.filter((s) => s.type === type) : suites;
 }
 
 /**
@@ -204,7 +202,7 @@ export function addTaskToSuite(suiteName: string, taskId: string): boolean {
     suite.tasks.push(taskId);
     suite.updated_at = new Date().toISOString();
 
-    const dir = suite.type === 'capability' ? 'Capability' : 'Regression';
+    const dir = suite.type === "capability" ? "Capability" : "Regression";
     const filePath = join(SUITES_DIR, dir, `${suiteName}.yaml`);
     writeFileSync(filePath, stringifyYaml(suite));
   }
@@ -218,26 +216,26 @@ export function addTaskToSuite(suiteName: string, taskId: string): boolean {
 export function formatSuiteSummary(suite: EvalSuite): string {
   const lines: string[] = [];
 
-  const typeIcon = suite.type === 'capability' ? '🎯' : '🔒';
+  const typeIcon = suite.type === "capability" ? "🎯" : "🔒";
   lines.push(`## ${typeIcon} ${suite.name}`);
-  lines.push('');
+  lines.push("");
   lines.push(`**Type:** ${suite.type}`);
   lines.push(`**Description:** ${suite.description}`);
   if (suite.domain) lines.push(`**Domain:** ${suite.domain}`);
   lines.push(`**Tasks:** ${suite.tasks.length}`);
   lines.push(`**Pass Threshold:** ${(suite.pass_threshold ?? 0.75) * 100}%`);
-  lines.push('');
+  lines.push("");
 
   if (suite.tasks.length > 0) {
-    lines.push('');
-    lines.push('### Tasks');
-    lines.push('');
+    lines.push("");
+    lines.push("### Tasks");
+    lines.push("");
     for (const task of suite.tasks) {
       lines.push(`- ${task}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // CLI interface
@@ -245,10 +243,10 @@ if (import.meta.main) {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      type: { type: 'string', short: 't', default: 'capability' },
-      description: { type: 'string', short: 'd' },
-      domain: { type: 'string' },
-      help: { type: 'boolean', short: 'h' },
+      type: { type: "string", short: "t", default: "capability" },
+      description: { type: "string", short: "d" },
+      domain: { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
@@ -281,35 +279,30 @@ Examples:
   }
 
   switch (command) {
-    case 'create': {
+    case "create": {
       if (!args[0] || !values.description) {
         console.error('Usage: create <name> -d "description"');
         process.exit(1);
       }
-      const suite = createSuite(
-        args[0],
-        values.type as EvalType,
-        values.description,
-        { domain: values.domain }
-      );
+      const suite = createSuite(args[0], values.type as EvalType, values.description, { domain: values.domain });
       console.log(`Created suite: ${suite.name} (${suite.type})`);
       break;
     }
 
-    case 'list': {
+    case "list": {
       const type = args[0] as EvalType | undefined;
       const suites = listSuites(type);
-      console.log(`\n${type ? type.charAt(0).toUpperCase() + type.slice(1) : 'All'} Suites:\n`);
+      console.log(`\n${type ? type.charAt(0).toUpperCase() + type.slice(1) : "All"} Suites:\n`);
       for (const suite of suites) {
-        const icon = suite.type === 'capability' ? '🎯' : '🔒';
+        const icon = suite.type === "capability" ? "🎯" : "🔒";
         console.log(`  ${icon} ${suite.name} (${suite.tasks.length} tasks)`);
       }
       break;
     }
 
-    case 'show': {
+    case "show": {
       if (!args[0]) {
-        console.error('Usage: show <name>');
+        console.error("Usage: show <name>");
         process.exit(1);
       }
       const suite = loadSuite(args[0]);
@@ -317,13 +310,13 @@ Examples:
         console.error(`Suite not found: ${args[0]}`);
         process.exit(1);
       }
-      console.log('\n' + formatSuiteSummary(suite));
+      console.log("\n" + formatSuiteSummary(suite));
       break;
     }
 
-    case 'add-task': {
+    case "add-task": {
       if (!args[0] || !args[1]) {
-        console.error('Usage: add-task <suite> <task>');
+        console.error("Usage: add-task <suite> <task>");
         process.exit(1);
       }
       if (addTaskToSuite(args[0], args[1])) {

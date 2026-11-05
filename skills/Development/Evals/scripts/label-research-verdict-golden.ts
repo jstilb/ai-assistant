@@ -29,15 +29,15 @@
  *   bun skills/Development/Evals/scripts/label-research-verdict-golden.ts --dry-run
  */
 
-import { inference } from "../../../../lib/core/Inference.ts";
+import { ENSEMBLE_LEVELS, ensembleVote } from "./EnsembleVote.ts";
 // cross-skill-allowed: eval-only read of the canonical pipeline.db spec-pipeline rows (no lib/interfaces read seam for pipeline items yet)
 import { getRepoForQueuesDir } from "../../../Automation/QueueRouter/Tools/PipelineFacade.ts";
 // cross-skill-allowed: eval-only read of the canonical pipeline.db spec-pipeline rows (no lib/interfaces read seam for pipeline items yet)
 import { pipelineItemToQueueItem } from "../../../Automation/QueueRouter/Tools/lib/vocabulary.ts";
 // cross-skill-allowed: eval-only read of the canonical pipeline.db spec-pipeline rows (no lib/interfaces read seam for pipeline items yet)
 import { defaultPipelineDbPath } from "../../../Automation/QueueRouter/Tools/PipelineDB.ts";
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
-import { join, dirname } from "path";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 // ============================================================================
 // Config
@@ -80,14 +80,14 @@ interface PipelineItem {
   verdictFromPipeline: string;
   artifactPath: string;
   verdictReason: string;
-  input: string;        // what we actually label (artifact text or fallback)
+  input: string; // what we actually label (artifact text or fallback)
   inputSource: "artifact" | "fallback";
 }
 
 interface SyntheticCase {
   itemId: string;
   title: string;
-  input: string;        // research findings text
+  input: string; // research findings text
   origin: "synthetic";
 }
 
@@ -96,11 +96,9 @@ interface SyntheticCase {
 // ============================================================================
 
 function loadRealRows(): PipelineItem[] {
-  let items;
+  let items: ReturnType<typeof pipelineItemToQueueItem>[];
   try {
-    items = getRepoForQueuesDir()
-      .list({ queue: "spec-pipeline", includeArchived: true })
-      .map(pipelineItemToQueueItem);
+    items = getRepoForQueuesDir().list({ queue: "spec-pipeline", includeArchived: true }).map(pipelineItemToQueueItem);
   } catch (err) {
     console.warn(`[warn] could not read spec-pipeline rows from ${defaultPipelineDbPath()}: ${err}`);
     return [];
@@ -560,8 +558,7 @@ VERDICT: defer`,
 // Ensemble labeler
 // ============================================================================
 
-type InferenceLevel = "fast" | "standard" | "smart";
-const LEVELS: InferenceLevel[] = ["fast", "standard", "smart"];
+const LEVELS = ENSEMBLE_LEVELS;
 
 interface EnsembleResult {
   label: string | null;
@@ -570,53 +567,13 @@ interface EnsembleResult {
 }
 
 async function ensembleLabel(input: string): Promise<EnsembleResult> {
-  const rawResults = await Promise.all(
-    LEVELS.map((level) =>
-      inference({
-        systemPrompt: RESEARCH_SYSTEM_PROMPT,
-        userPrompt: input,
-        level,
-        expectJson: true,
-        retries: 2,
-      })
-    )
-  );
-
-  const votes: Record<string, number> = {};
-  let voterCount = 0;
-
-  for (const result of rawResults) {
-    const raw =
-      result.success && result.parsed != null
-        ? (result.parsed as Record<string, unknown>)[CANDIDATE_FIELD]
-        : undefined;
-
-    if (typeof raw === "string" && VALID_VERDICTS.has(raw)) {
-      votes[raw] = (votes[raw] ?? 0) + 1;
-      voterCount++;
-    }
-  }
-
-  if (voterCount === 0) {
-    return { label: null, divergent: true, votes };
-  }
-
-  let topLabel: string | undefined;
-  let topCount = 0;
-  for (const [label, count] of Object.entries(votes)) {
-    if (count > topCount) {
-      topCount = count;
-      topLabel = label;
-    }
-  }
-
-  const hasMajority = topLabel !== undefined && topCount * 2 > voterCount;
-
-  if (hasMajority && topLabel !== undefined) {
-    return { label: topLabel, divergent: false, votes };
-  }
-
-  return { label: null, divergent: true, votes };
+  const vote = await ensembleVote({
+    systemPrompt: RESEARCH_SYSTEM_PROMPT,
+    userPrompt: input,
+    candidateField: CANDIDATE_FIELD,
+    validLabels: VALID_VERDICTS,
+  });
+  return vote;
 }
 
 // ============================================================================
@@ -659,7 +616,9 @@ const allCases: LabelableCase[] = [
 const totalCalls = allCases.length * LEVELS.length;
 
 console.log(`\n=== Research Verdict Golden Labeler ===`);
-console.log(`Real pipeline rows:  ${realRows.length} (${artifactCount} artifact, ${fallbackCount} fallback) from ${defaultPipelineDbPath()}`);
+console.log(
+  `Real pipeline rows:  ${realRows.length} (${artifactCount} artifact, ${fallbackCount} fallback) from ${defaultPipelineDbPath()}`,
+);
 const realVerdictCounts = realRows.reduce<Record<string, number>>((acc, r) => {
   acc[r.verdictFromPipeline] = (acc[r.verdictFromPipeline] ?? 0) + 1;
   return acc;
@@ -673,9 +632,9 @@ console.log(`Mode:                ${isDryRun ? "DRY-RUN (no LLM calls)" : "LIVE"
 
 if (isDryRun) {
   console.log("Cases (dry-run):");
-  allCases.forEach((c, i) =>
-    console.log(`  ${i + 1}. [${c.origin}] ${c.itemId} — ${c.title.slice(0, 60)}`)
-  );
+  allCases.forEach((c, i) => {
+    console.log(`  ${i + 1}. [${c.origin}] ${c.itemId} — ${c.title.slice(0, 60)}`);
+  });
   process.exit(0);
 }
 
@@ -690,8 +649,9 @@ console.log("Labeling cases...\n");
 
 for (let i = 0; i < allCases.length; i++) {
   const c = allCases[i];
+  if (!c) continue;
   process.stdout.write(
-    `[${i + 1}/${allCases.length}] [${c.origin}] ${c.itemId.slice(0, 20)} — ${c.title.slice(0, 50)}${c.title.length > 50 ? "…" : ""} `
+    `[${i + 1}/${allCases.length}] [${c.origin}] ${c.itemId.slice(0, 20)} — ${c.title.slice(0, 50)}${c.title.length > 50 ? "…" : ""} `,
   );
 
   try {
@@ -712,7 +672,7 @@ for (let i = 0; i < allCases.length; i++) {
           ...(c.inputSource ? { inputSource: c.inputSource } : {}),
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     } else {
       consensusCount++;
@@ -729,7 +689,7 @@ for (let i = 0; i < allCases.length; i++) {
           ...(c.inputSource ? { inputSource: c.inputSource } : {}),
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     }
   } catch (err) {
@@ -748,7 +708,7 @@ for (let i = 0; i < allCases.length; i++) {
         ...(c.inputSource ? { inputSource: c.inputSource } : {}),
         labeled_at: labeledAt,
         criteria_version: CRITERIA_VERSION,
-      })
+      }),
     );
   }
 }

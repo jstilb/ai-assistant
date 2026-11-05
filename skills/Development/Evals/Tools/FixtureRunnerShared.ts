@@ -17,8 +17,8 @@
  * script.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 /** One fixture line from a Data/golden/*-fixtures.jsonl file. */
 export interface Fixture<TExpected> {
@@ -71,8 +71,11 @@ export function loadFixturesJsonl<TExpected>(path: string): Fixture<TExpected>[]
   if (!existsSync(path)) {
     throw new Error(`Fixture file not found: ${path}`);
   }
-  const raw = readFileSync(path, 'utf-8');
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const raw = readFileSync(path, "utf-8");
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   return lines.map((line, i) => {
     let obj: unknown;
     try {
@@ -81,15 +84,15 @@ export function loadFixturesJsonl<TExpected>(path: string): Fixture<TExpected>[]
       throw new Error(`Fixture file ${path}: line ${i + 1} is not valid JSON: ${e}`);
     }
     const rec = obj as Record<string, unknown>;
-    if (typeof rec.id !== 'string' || typeof rec.input !== 'string' || !('expected' in rec)) {
+    if (typeof rec.id !== "string" || typeof rec.input !== "string" || !("expected" in rec)) {
       throw new Error(`Fixture file ${path}: line ${i + 1} missing required fields (id, input, expected)`);
     }
     return {
       id: rec.id,
-      category: typeof rec.category === 'string' ? rec.category : 'uncategorized',
+      category: typeof rec.category === "string" ? rec.category : "uncategorized",
       input: rec.input,
       expected: rec.expected as TExpected,
-      notes: typeof rec.notes === 'string' ? rec.notes : undefined,
+      notes: typeof rec.notes === "string" ? rec.notes : undefined,
     };
   });
 }
@@ -99,7 +102,7 @@ export function buildSummary<TExpected, TActual>(
   task: string,
   results: FixtureResult<TExpected, TActual>[],
 ): FixtureRunSummary<TExpected, TActual> {
-  const correct = results.filter(r => r.correct).length;
+  const correct = results.filter((r) => r.correct).length;
   const total = results.length;
   return {
     task,
@@ -114,7 +117,7 @@ export function buildSummary<TExpected, TActual>(
 /** Write the summary to `outPath`, creating parent directories as needed. */
 export function writeSummary(outPath: string, summary: FixtureRunSummary<unknown, unknown>): void {
   mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, JSON.stringify(summary, null, 2), 'utf-8');
+  writeFileSync(outPath, JSON.stringify(summary, null, 2), "utf-8");
 }
 
 /** Parse `--fixtures <path> --out <path>` from argv (shared CLI shape). */
@@ -122,11 +125,11 @@ export function parseFixtureRunnerArgs(argv: string[]): { fixtures: string; out:
   let fixtures: string | undefined;
   let out: string | undefined;
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--fixtures') fixtures = argv[++i];
-    else if (argv[i] === '--out') out = argv[++i];
+    if (argv[i] === "--fixtures") fixtures = argv[++i];
+    else if (argv[i] === "--out") out = argv[++i];
   }
   if (!fixtures || !out) {
-    throw new Error('Usage: --fixtures <path.jsonl> --out <path.json>');
+    throw new Error("Usage: --fixtures <path.jsonl> --out <path.json>");
   }
   return { fixtures, out };
 }

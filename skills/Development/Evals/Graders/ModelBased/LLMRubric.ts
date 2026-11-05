@@ -15,15 +15,15 @@
  * this grader no longer does its own 1-5/1-10 -> 0-1 arithmetic.
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderResult, LLMRubricParams } from '../../Types/index.ts';
-import { inference, type InferenceLevel } from '../../../../../lib/core/Inference';
-import { readFileSync, existsSync } from 'fs';
-import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from '../JudgeProtocol.ts';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult, LLMRubricParams } from "../../Types/index.ts";
+import { inference, type InferenceLevel } from "../../../../../lib/core/Inference.ts";
+import { readFileSync, existsSync } from "node:fs";
+import { judgeInference, judgeResponseFormatInstruction, type InferenceFn } from "../JudgeProtocol.ts";
 
 export class LLMRubricGrader extends BaseGrader {
-  type = 'llm_rubric' as const;
-  category = 'model_based' as const;
+  type = "llm_rubric" as const;
+  category = "model_based" as const;
   // buildUserPrompt() puts context.output (and context.transcript.tool_calls)
   // directly into the judge prompt.
   readsOutput = true;
@@ -37,31 +37,28 @@ export class LLMRubricGrader extends BaseGrader {
 
   async grade(context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
-    const params = this.config.params as LLMRubricParams;
+    const params = this.config.params as unknown as LLMRubricParams; // config.params is untyped YAML; validated below
 
     // Load rubric
     let rubric = params.rubric;
     if (existsSync(params.rubric)) {
-      rubric = readFileSync(params.rubric, 'utf-8');
+      rubric = readFileSync(params.rubric, "utf-8");
     }
 
-    const scale = params.scale ?? '1-5';
+    const scale = params.scale ?? "1-5";
     // Map model preference to inference level (default to standard/Sonnet)
     const levelMap: Record<string, InferenceLevel> = {
-      'claude-haiku-4-5-20251001': 'fast',
-      'claude-sonnet-4-20250514': 'standard',
-      'claude-opus-4-20250514': 'smart',
+      "claude-haiku-4-5-20251001": "fast",
+      "claude-sonnet-4-20250514": "standard",
+      "claude-opus-4-20250514": "smart",
     };
-    const level: InferenceLevel = levelMap[params.judge_model ?? ''] ?? 'standard';
+    const level: InferenceLevel = levelMap[params.judge_model ?? ""] ?? "standard";
 
     // Build prompt
     const systemPrompt = this.buildSystemPrompt(scale, params.assertions);
     const userPrompt = this.buildUserPrompt(rubric, params.assertions, context);
 
-    const judged = await judgeInference(
-      { systemPrompt, userPrompt, level, timeout: 60000 },
-      this.inferenceFn,
-    );
+    const judged = await judgeInference({ systemPrompt, userPrompt, level, timeout: 60000 }, this.inferenceFn);
 
     // Fail loud: inference failure OR schema-invalid/non-JSON response both
     // surface here as an explicit score-0 grader error — never a silent
@@ -76,9 +73,7 @@ export class LLMRubricGrader extends BaseGrader {
       });
     }
 
-    const assertion_results = params.assertions?.length
-      ? judged.assertion_results?.map(r => r.passed)
-      : undefined;
+    const assertion_results = params.assertions?.length ? judged.assertion_results?.map((r) => r.passed) : undefined;
 
     // Pass bar: score >= 0.5 for every scale (this was already true of the
     // pre-migration rubricScoreToPassed — both its 'pass-fail' and
@@ -99,9 +94,12 @@ export class LLMRubricGrader extends BaseGrader {
 
   private buildSystemPrompt(scale: string, assertions?: string[]): string {
     const scaleInstructions = {
-      '1-5': 'Judge the output on a 1 (very poor) to 5 (excellent) quality scale internally, then report it normalized to the shared 0.0-1.0 "score" field below (1->0.0, 5->1.0, linear in between).',
-      '1-10': 'Judge the output on a 1 (very poor) to 10 (excellent) quality scale internally, then report it normalized to the shared 0.0-1.0 "score" field below (1->0.0, 10->1.0, linear in between).',
-      'pass-fail': 'Determine if the output PASSES or FAILS the criteria. Report "score" as exactly 1.0 for PASS or exactly 0.0 for FAIL.',
+      "1-5":
+        'Judge the output on a 1 (very poor) to 5 (excellent) quality scale internally, then report it normalized to the shared 0.0-1.0 "score" field below (1->0.0, 5->1.0, linear in between).',
+      "1-10":
+        'Judge the output on a 1 (very poor) to 10 (excellent) quality scale internally, then report it normalized to the shared 0.0-1.0 "score" field below (1->0.0, 10->1.0, linear in between).',
+      "pass-fail":
+        'Determine if the output PASSES or FAILS the criteria. Report "score" as exactly 1.0 for PASS or exactly 0.0 for FAIL.',
     }[scale];
 
     return `You are an expert evaluator assessing AI-generated output against quality criteria.
@@ -113,11 +111,7 @@ ${judgeResponseFormatInstruction({ withAssertions: Boolean(assertions?.length) }
 Be objective and fair. Consider both strengths and weaknesses.`;
   }
 
-  private buildUserPrompt(
-    rubric: string,
-    assertions: string[] | undefined,
-    context: GraderContext
-  ): string {
+  private buildUserPrompt(rubric: string, assertions: string[] | undefined, context: GraderContext): string {
     let prompt = `## Evaluation Rubric
 
 ${rubric}
@@ -133,7 +127,7 @@ ${context.output}
 
 For each assertion, determine if it is TRUE or FALSE and include it in "assertion_results", one entry per assertion, in this order, with "assertion" set to the exact text:
 
-${assertions.map((a, i) => `${i + 1}. ${a}`).join('\n')}
+${assertions.map((a, i) => `${i + 1}. ${a}`).join("\n")}
 `;
     }
 
@@ -154,7 +148,7 @@ ${context.reference}
         const paramsStr = JSON.stringify(tc.params).slice(0, 200);
         prompt += `### ${tc.name}(${paramsStr})\n`;
         if (tc.result) {
-          const resultStr = (typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result)).slice(0, 500);
+          const resultStr = (typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result)).slice(0, 500);
           prompt += `Result: ${resultStr}\n\n`;
         }
         if (tc.error) {
@@ -172,4 +166,4 @@ Evaluate the output against the rubric and provide your assessment.`;
   }
 }
 
-registerGrader('llm_rubric', LLMRubricGrader);
+registerGrader("llm_rubric", LLMRubricGrader);

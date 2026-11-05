@@ -21,10 +21,10 @@
  *   bun skills/Development/Evals/scripts/label-isc-quality-golden.ts --dry-run   # print corpus, no LLM calls
  */
 
-import { inference } from "../../../../lib/core/Inference.ts";
+import { ENSEMBLE_LEVELS, ensembleVote } from "./EnsembleVote.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
-import { join, dirname } from "path";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 // ============================================================================
 // Config
@@ -81,9 +81,7 @@ function extractISCContent(specPath: string): string | null {
         const section = match[1].trim();
         if (section.length > 50) {
           // Truncate to MAX_ISC_CHARS
-          return section.length > MAX_ISC_CHARS
-            ? section.slice(0, MAX_ISC_CHARS) + "\n... [truncated]"
-            : section;
+          return section.length > MAX_ISC_CHARS ? section.slice(0, MAX_ISC_CHARS) + "\n... [truncated]" : section;
         }
       }
     }
@@ -332,8 +330,7 @@ function buildCorpus(): CorpusEntry[] {
 // Ensemble labeler
 // ============================================================================
 
-type InferenceLevel = "fast" | "standard" | "smart";
-const LEVELS: InferenceLevel[] = ["fast", "standard", "smart"];
+const LEVELS = ENSEMBLE_LEVELS;
 
 interface EnsembleResult {
   specId: string;
@@ -343,55 +340,13 @@ interface EnsembleResult {
 }
 
 async function ensembleLabel(specId: string, iscContent: string): Promise<EnsembleResult> {
-  const rawResults = await Promise.all(
-    LEVELS.map((level) =>
-      inference({
-        systemPrompt: ISC_SYSTEM_PROMPT,
-        userPrompt: iscContent,
-        level,
-        expectJson: true,
-        retries: 2,
-      })
-    )
-  );
-
-  // Tally votes
-  const votes: Record<string, number> = {};
-  let voterCount = 0;
-
-  for (const result of rawResults) {
-    const raw =
-      result.success && result.parsed != null
-        ? (result.parsed as Record<string, unknown>)[CANDIDATE_FIELD]
-        : undefined;
-
-    if (typeof raw === "string" && VALID_QUALITIES.has(raw)) {
-      votes[raw] = (votes[raw] ?? 0) + 1;
-      voterCount++;
-    }
-  }
-
-  if (voterCount === 0) {
-    return { specId, label: null, divergent: true, votes };
-  }
-
-  // Simple majority: top vote must have >50% of voter count
-  let topLabel: string | undefined;
-  let topCount = 0;
-  for (const [label, count] of Object.entries(votes)) {
-    if (count > topCount) {
-      topCount = count;
-      topLabel = label;
-    }
-  }
-
-  const hasMajority = topLabel !== undefined && topCount * 2 > voterCount;
-
-  if (hasMajority && topLabel !== undefined) {
-    return { specId, label: topLabel, divergent: false, votes };
-  }
-
-  return { specId, label: null, divergent: true, votes };
+  const vote = await ensembleVote({
+    systemPrompt: ISC_SYSTEM_PROMPT,
+    userPrompt: iscContent,
+    candidateField: CANDIDATE_FIELD,
+    validLabels: VALID_QUALITIES,
+  });
+  return { specId, ...vote };
 }
 
 // ============================================================================
@@ -412,11 +367,9 @@ console.log(`Mode: ${isDryRun ? "DRY-RUN (no LLM calls)" : "LIVE"}\n`);
 
 if (isDryRun) {
   console.log("Corpus (dry-run):");
-  corpus.forEach((c, i) =>
-    console.log(
-      `  ${i + 1}. [${c.real ? "REAL" : "SYNTHETIC"}] ${c.specId} (hint: ${c.expectedHint ?? "?"})`
-    )
-  );
+  corpus.forEach((c, i) => {
+    console.log(`  ${i + 1}. [${c.real ? "REAL" : "SYNTHETIC"}] ${c.specId} (hint: ${c.expectedHint ?? "?"})`);
+  });
   process.exit(0);
 }
 
@@ -436,9 +389,11 @@ const grilledResults: Record<string, string | null> = {};
 console.log("Labeling cases...\n");
 
 for (let i = 0; i < corpus.length; i++) {
-  const { specId, real, iscContent, expectedHint } = corpus[i];
+  const entry = corpus[i];
+  if (!entry) continue;
+  const { specId, real, iscContent, expectedHint } = entry;
   process.stdout.write(
-    `[${i + 1}/${corpus.length}] [${real ? "REAL" : "SYNTHETIC"}] ${specId.slice(0, 50)}${specId.length > 50 ? "…" : ""} `
+    `[${i + 1}/${corpus.length}] [${real ? "REAL" : "SYNTHETIC"}] ${specId.slice(0, 50)}${specId.length > 50 ? "…" : ""} `,
   );
 
   try {
@@ -458,7 +413,7 @@ for (let i = 0; i < corpus.length; i++) {
           source: "ensemble",
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     } else {
       consensusCount++;
@@ -474,7 +429,9 @@ for (let i = 0; i < corpus.length; i++) {
         grilledResults[specId] = quality;
       }
 
-      process.stdout.write(`→ ${quality.toUpperCase()}${expectedHint && expectedHint !== quality ? ` (MISMATCH: expected ${expectedHint})` : ""}\n`);
+      process.stdout.write(
+        `→ ${quality.toUpperCase()}${expectedHint && expectedHint !== quality ? ` (MISMATCH: expected ${expectedHint})` : ""}\n`,
+      );
       lines.push(
         JSON.stringify({
           specId,
@@ -484,7 +441,7 @@ for (let i = 0; i < corpus.length; i++) {
           source: "ensemble",
           labeled_at: labeledAt,
           criteria_version: CRITERIA_VERSION,
-        })
+        }),
       );
     }
   } catch (err) {
@@ -502,7 +459,7 @@ for (let i = 0; i < corpus.length; i++) {
         source: "ensemble",
         labeled_at: labeledAt,
         criteria_version: CRITERIA_VERSION,
-      })
+      }),
     );
   }
 }

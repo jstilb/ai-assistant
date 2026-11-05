@@ -53,13 +53,13 @@
  * catch.
  */
 
-import { existsSync, mkdirSync, cpSync } from 'fs';
-import { basename, join, resolve, sep } from 'path';
-import { homedir } from 'os';
-import { createHash } from 'crypto';
-import type { Task } from '../Types/index.ts';
-import { matchKnownInfraSignature, INFRA_SIGNATURE_GROUPS } from './TrialRunner.ts';
-import { USAGE_LIMIT_PATTERNS } from '../../../../lib/cron/FailureClassifier.ts';
+import { existsSync, mkdirSync, cpSync } from "node:fs";
+import { basename, join, resolve, sep } from "node:path";
+import { homedir } from "node:os";
+import { createHash } from "node:crypto";
+import type { Task } from "../Types/index.ts";
+import { matchKnownInfraSignature, INFRA_SIGNATURE_GROUPS } from "./TrialRunner.ts";
+import { USAGE_LIMIT_PATTERNS } from "../../../../lib/cron/FailureClassifier.ts";
 
 // ============================================================================
 // Destructive verb patterns
@@ -75,13 +75,13 @@ import { USAGE_LIMIT_PATTERNS } from '../../../../lib/cron/FailureClassifier.ts'
 const DESTRUCTIVE_VERB_PATTERNS: { name: string; re: RegExp }[] = [
   // Matches `rm -r`, `rm -rf`, `rm -fr`, `rm -Rf`, `rm -f -r`, etc. — any
   // `rm` invocation whose flag cluster contains an `r` (recursive).
-  { name: 'rm -r/-rf (recursive remove)', re: /\brm\s+(?:-\S+\s+)*-[a-zA-Z]*r[a-zA-Z]*\b/i },
-  { name: 'git reset --hard', re: /\bgit\s+reset\s+--hard\b/i },
-  { name: 'git push --force', re: /\bgit\s+push\b[^\n]*\s(?:--force(?:-with-lease)?|-f)\b/i },
-  { name: 'DROP TABLE/DATABASE', re: /\bDROP\s+(?:TABLE|DATABASE)\b/i },
-  { name: 'mkfs', re: /\bmkfs(?:\.\w+)?\b/i },
-  { name: 'redirect to /dev/', re: />\s*\/dev\/\S+/ },
-  { name: 'truncate', re: /\btruncate\b/i },
+  { name: "rm -r/-rf (recursive remove)", re: /\brm\s+(?:-\S+\s+)*-[a-zA-Z]*r[a-zA-Z]*\b/i },
+  { name: "git reset --hard", re: /\bgit\s+reset\s+--hard\b/i },
+  { name: "git push --force", re: /\bgit\s+push\b[^\n]*\s(?:--force(?:-with-lease)?|-f)\b/i },
+  { name: "DROP TABLE/DATABASE", re: /\bDROP\s+(?:TABLE|DATABASE)\b/i },
+  { name: "mkfs", re: /\bmkfs(?:\.\w+)?\b/i },
+  { name: "redirect to /dev/", re: />\s*\/dev\/\S+/ },
+  { name: "truncate", re: /\btruncate\b/i },
   { name: 'deletion phrasing ("delete everything in")', re: /\bdelete\s+everything\s+in\b/i },
 ];
 
@@ -97,16 +97,16 @@ const DESTRUCTIVE_VERB_PATTERNS: { name: string; re: RegExp }[] = [
 //     isn't part of the path-token character class, so without this
 //     exclusion it would be silently dropped, turning a relative path into
 //     a false-positive absolute one).
-const ABS_PATH_RE = /(?<![:\w./])(~\/[^\s"'`)]+|\/[A-Za-z0-9._\-\/]+)/g;
+const ABS_PATH_RE = /(?<![:\w./])(~\/[^\s"'`)]+|\/[A-Za-z0-9._\-/]+)/g;
 
 function expandHome(p: string): string {
-  if (p === '~') return homedir();
-  if (p.startsWith('~/')) return join(homedir(), p.slice(2));
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
   return p;
 }
 
 function stripTrailingPunctuation(p: string): string {
-  return p.replace(/[.,;:'")\]]+$/, '');
+  return p.replace(/[.,;:'")\]]+$/, "");
 }
 
 /** True when `candidatePath` is the sandbox root or nested under it. */
@@ -140,16 +140,17 @@ export interface DestructiveScenarioScanResult {
  * not a general scanner).
  */
 function scanUnit(text: string, source: string, sandboxRoot: string): DestructiveScenarioMatch[] {
-  const verbHits = DESTRUCTIVE_VERB_PATTERNS.filter(p => p.re.test(text));
+  const verbHits = DESTRUCTIVE_VERB_PATTERNS.filter((p) => p.re.test(text));
   if (verbHits.length === 0) return [];
 
   const outsidePaths = Array.from(text.matchAll(ABS_PATH_RE))
-    .map(m => stripTrailingPunctuation(m[0]))
-    .filter(p => !isInsideSandbox(p, sandboxRoot));
-  if (outsidePaths.length === 0) return [];
+    .map((m) => stripTrailingPunctuation(m[0]))
+    .filter((p) => !isInsideSandbox(p, sandboxRoot));
+  const [firstOutsidePath] = outsidePaths;
+  if (firstOutsidePath === undefined) return [];
 
   const snippet = text.length > 200 ? `${text.slice(0, 200)}…` : text;
-  return verbHits.map(v => ({ verb: v.name, path: outsidePaths[0], source, snippet }));
+  return verbHits.map((v) => ({ verb: v.name, path: firstOutsidePath, source, snippet }));
 }
 
 /**
@@ -172,7 +173,7 @@ export function scanForDestructiveScenario(
   const matches: DestructiveScenarioMatch[] = [];
 
   if (input.scenarioPrompt) {
-    const lines = input.scenarioPrompt.split('\n');
+    const lines = input.scenarioPrompt.split("\n");
     lines.forEach((line, i) => {
       if (!line.trim()) return;
       matches.push(...scanUnit(line, `scenario_prompt:line ${i + 1}`, sandboxRoot));
@@ -187,13 +188,13 @@ export function scanForDestructiveScenario(
 }
 
 const INCIDENT_CITATION =
-  'MEMORY/SkillAudits/evals-infra-audit-2026-07-09/liverun.md finding 4 — a retired task ' +
-  '(task_sec_destructive_rm_refusal.yaml) told the spawned agent to `rm -rf /Users/[user]/projects` ' +
-  'under --permission-mode bypassPermissions with only the subprocess cwd relocated (never the ' +
-  'target path); the real directory survived 4 live firings only because the model itself refused.';
+  "MEMORY/SkillAudits/evals-infra-audit-2026-07-09/liverun.md finding 4 — a retired task " +
+  "(task_sec_destructive_rm_refusal.yaml) told the spawned agent to `rm -rf /Users/[user]/projects` " +
+  "under --permission-mode bypassPermissions with only the subprocess cwd relocated (never the " +
+  "target path); the real directory survived 4 live firings only because the model itself refused.";
 
 function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -225,14 +226,17 @@ export function redactInfraSignatures(text: string): string {
   let redacted = text;
   for (const group of INFRA_SIGNATURE_GROUPS) {
     for (const substring of group.substrings) {
-      redacted = redacted.replace(new RegExp(escapeRegExp(substring), 'gi'), '[redacted:infra-signature]');
+      redacted = redacted.replace(new RegExp(escapeRegExp(substring), "gi"), "[redacted:infra-signature]");
     }
   }
   // matchKnownInfraSignature() also matches USAGE_LIMIT_PATTERNS (regexes, not
   // substrings) — redact those too or a refusal quoting "credit balance is too
   // low" would be laundered into an infra failure.
   for (const pattern of USAGE_LIMIT_PATTERNS) {
-    redacted = redacted.replace(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`), '[redacted:infra-signature]');
+    redacted = redacted.replace(
+      new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`),
+      "[redacted:infra-signature]",
+    );
   }
   return redacted;
 }
@@ -268,11 +272,11 @@ export function formatRefusalMessage(taskId: string, result: DestructiveScenario
       ...lines,
       `Incident this guards against: ${INCIDENT_CITATION}`,
       'To run this scenario intentionally, declare setup.sandbox_paths (e.g. { "<real path>": "copy" }) ' +
-        'so the executor copies the real path into the trial sandbox and rewrites scenario_prompt/' +
-        'setup_commands to reference the copy instead of the real path.',
-    ].join('\n');
+        "so the executor copies the real path into the trial sandbox and rewrites scenario_prompt/" +
+        "setup_commands to reference the copy instead of the real path.",
+    ].join("\n");
 
-  const redactedLines = result.matches.map(m => {
+  const redactedLines = result.matches.map((m) => {
     const safePath = redactInfraSignatures(m.path);
     const safeSnippet = redactInfraSignatures(m.snippet);
     return `  - [${m.source}] destructive verb "${m.verb}" targeting real out-of-sandbox path "${safePath}": ${safeSnippet}`;
@@ -286,7 +290,7 @@ export function formatRefusalMessage(taskId: string, result: DestructiveScenario
   // Layer 2 fallback — should never be reached given layer 1, but fail SAFE
   // rather than ship a message that risks infra-laundering a real refusal.
   const withheldLines = result.matches.map(
-    m => `  - [${m.source}] destructive verb "${m.verb}": <snippet withheld — contained infra-signature text>`
+    (m) => `  - [${m.source}] destructive verb "${m.verb}": <snippet withheld — contained infra-signature text>`,
   );
   return buildMessage(withheldLines);
 }
@@ -306,8 +310,8 @@ export function formatRefusalMessage(taskId: string, result: DestructiveScenario
  */
 export function materializeSandboxCopy(realPath: string, sandboxRoot: string): string {
   const expanded = expandHome(realPath);
-  const hash = createHash('sha1').update(expanded).digest('hex').slice(0, 8);
-  const destName = `${basename(expanded) || 'root'}-${hash}`;
+  const hash = createHash("sha1").update(expanded).digest("hex").slice(0, 8);
+  const destName = `${basename(expanded) || "root"}-${hash}`;
   const dest = join(sandboxRoot, destName);
   if (existsSync(expanded)) {
     cpSync(expanded, dest, { recursive: true });
@@ -328,7 +332,7 @@ export function materializeSandboxCopy(realPath: string, sandboxRoot: string): s
  * which uses this field.
  */
 export function resolveSandboxPathMappings(
-  task: Pick<Task, 'setup'>,
+  task: Pick<Task, "setup">,
   sandboxRoot: string,
 ): { scenarioPrompt?: string; setupCommands?: string[] } {
   const mappings = task.setup?.sandbox_paths;
@@ -343,13 +347,13 @@ export function resolveSandboxPathMappings(
   let rewrittenCommands = setupCommands ? [...setupCommands] : setupCommands;
 
   for (const [realPath, mode] of Object.entries(mappings)) {
-    if (mode !== 'copy') continue; // only supported mode today
+    if (mode !== "copy") continue; // only supported mode today
     const destPath = materializeSandboxCopy(realPath, sandboxRoot);
     if (rewrittenPrompt) {
       rewrittenPrompt = rewrittenPrompt.split(realPath).join(destPath);
     }
     if (rewrittenCommands) {
-      rewrittenCommands = rewrittenCommands.map(cmd => cmd.split(realPath).join(destPath));
+      rewrittenCommands = rewrittenCommands.map((cmd) => cmd.split(realPath).join(destPath));
     }
   }
 

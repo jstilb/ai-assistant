@@ -48,8 +48,8 @@
 
 // cross-skill-allowed: evals-only live exercise of the production
 // MemoryStore.search() — the exact function this eval-net exists to measure.
-import { memoryStore } from '../../../../lib/core/MemoryStore.ts';
-import { recallAtK, reciprocalRank, mean } from './RetrievalMetrics.ts';
+import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
+import { recallAtK, reciprocalRank, mean } from "./RetrievalMetrics.ts";
 import {
   loadFixturesJsonl,
   buildSummary,
@@ -57,7 +57,7 @@ import {
   parseFixtureRunnerArgs,
   type FixtureResult,
   type FixtureRunSummary,
-} from './FixtureRunnerShared.ts';
+} from "./FixtureRunnerShared.ts";
 
 /** k cutoffs recall is reported at. 10 is the headline (see UseCase YAML for rationale); 5 is reported alongside for context. */
 const RECALL_K_VALUES = [5, 10] as const;
@@ -103,7 +103,7 @@ export async function runRetrievalQualityFixtures(fixturesPath: string): Promise
     // want the FULL ranked (timestamp-sorted) candidate list so recall@k can
     // be computed at multiple k values and MRR can look past k entirely.
     const matches = await memoryStore.search({ fullText: fx.input });
-    const retrievedIds = matches.map(m => m.id);
+    const retrievedIds = matches.map((m) => m.id);
     const relevantIds = fx.expected.relevant_ids;
 
     const recallAt5 = recallAtK(retrievedIds, relevantIds, 5);
@@ -122,8 +122,8 @@ export async function runRetrievalQualityFixtures(fixturesPath: string): Promise
 
     results.push({ ...fx, actual, correct });
     console.log(
-      `  [${correct ? 'HIT ' : 'MISS'}] ${fx.id}: recall@5=${recallAt5.toFixed(2)} recall@10=${recallAt10.toFixed(2)} ` +
-      `RR=${rr.toFixed(3)} (${relevantIds.length} relevant, ${retrievedIds.length} retrieved) — "${fx.input.slice(0, 60)}${fx.input.length > 60 ? '...' : ''}"`,
+      `  [${correct ? "HIT " : "MISS"}] ${fx.id}: recall@5=${recallAt5.toFixed(2)} recall@10=${recallAt10.toFixed(2)} ` +
+        `RR=${rr.toFixed(3)} (${relevantIds.length} relevant, ${retrievedIds.length} retrieved) — "${fx.input.slice(0, 60)}${fx.input.length > 60 ? "..." : ""}"`,
     );
   }
 
@@ -134,11 +134,11 @@ if (import.meta.main) {
   const { fixtures, out } = parseFixtureRunnerArgs(process.argv.slice(2));
   console.log(`[RetrievalQualityFixtureRunner] Loading fixtures from ${fixtures}`);
   const results = await runRetrievalQualityFixtures(fixtures);
-  const baseSummary = buildSummary('retrieval_quality_fixtures', results);
+  const baseSummary = buildSummary("retrieval_quality_fixtures", results);
 
-  const recall5s = results.map(r => r.actual.recall_at_5);
-  const recall10s = results.map(r => r.actual.recall_at_10);
-  const rrs = results.map(r => r.actual.reciprocal_rank);
+  const recall5s = results.map((r) => r.actual.recall_at_5);
+  const recall10s = results.map((r) => r.actual.recall_at_10);
+  const rrs = results.map((r) => r.actual.reciprocal_rank);
 
   const summary: RetrievalQualitySummary = {
     ...baseSummary,

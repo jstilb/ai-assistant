@@ -17,9 +17,9 @@
  *   bun skills/Development/Evals/scripts/label-router-golden.ts --dry-run   # print captures, no LLM calls
  */
 
-import { inference } from "../../../../lib/core/Inference.ts";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import { ENSEMBLE_LEVELS, ensembleVote } from "./EnsembleVote.ts";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 // ============================================================================
 // Config
@@ -60,12 +60,7 @@ Return: {"disposition": "<one-of-enum>"}`;
 
 const CANDIDATE_FIELD = "disposition";
 
-const VALID_DISPOSITIONS = new Set([
-  "autonomous",
-  "needs-jm",
-  "personal-todo",
-  "drop",
-]);
+const VALID_DISPOSITIONS = new Set(["autonomous", "needs-jm", "personal-todo", "drop"]);
 
 // ============================================================================
 // Capture corpus (≥30 cases)
@@ -151,8 +146,7 @@ const CAPTURES: string[] = [
 // Ensemble labeler
 // ============================================================================
 
-type InferenceLevel = "fast" | "standard" | "smart";
-const LEVELS: InferenceLevel[] = ["fast", "standard", "smart"];
+const LEVELS = ENSEMBLE_LEVELS;
 
 interface EnsembleResult {
   capture: string;
@@ -162,55 +156,13 @@ interface EnsembleResult {
 }
 
 async function ensembleLabel(capture: string): Promise<EnsembleResult> {
-  // Run all three levels in parallel
-  const rawResults = await Promise.all(
-    LEVELS.map((level) =>
-      inference({
-        systemPrompt: ROUTING_SYSTEM_PROMPT,
-        userPrompt: capture,
-        level,
-        expectJson: true,
-        retries: 2,
-      })
-    )
-  );
-
-  // Tally votes
-  const votes: Record<string, number> = {};
-  let voterCount = 0;
-
-  for (const result of rawResults) {
-    const raw = result.success && result.parsed != null
-      ? (result.parsed as Record<string, unknown>)[CANDIDATE_FIELD]
-      : undefined;
-
-    if (typeof raw === "string" && VALID_DISPOSITIONS.has(raw)) {
-      votes[raw] = (votes[raw] ?? 0) + 1;
-      voterCount++;
-    }
-  }
-
-  if (voterCount === 0) {
-    return { capture, label: null, divergent: true, votes };
-  }
-
-  // Simple majority: top vote must have >50% of voter count
-  let topLabel: string | undefined;
-  let topCount = 0;
-  for (const [label, count] of Object.entries(votes)) {
-    if (count > topCount) {
-      topCount = count;
-      topLabel = label;
-    }
-  }
-
-  const hasMajority = topLabel !== undefined && topCount * 2 > voterCount;
-
-  if (hasMajority && topLabel !== undefined) {
-    return { capture, label: topLabel, divergent: false, votes };
-  }
-
-  return { capture, label: null, divergent: true, votes };
+  const vote = await ensembleVote({
+    systemPrompt: ROUTING_SYSTEM_PROMPT,
+    userPrompt: capture,
+    candidateField: CANDIDATE_FIELD,
+    validLabels: VALID_DISPOSITIONS,
+  });
+  return { capture, ...vote };
 }
 
 // ============================================================================
@@ -227,7 +179,9 @@ console.log(`Mode: ${isDryRun ? "DRY-RUN (no LLM calls)" : "LIVE"}\n`);
 
 if (isDryRun) {
   console.log("Captures (dry-run):");
-  CAPTURES.forEach((c, i) => console.log(`  ${i + 1}. ${c}`));
+  CAPTURES.forEach((c, i) => {
+    console.log(`  ${i + 1}. ${c}`);
+  });
   process.exit(0);
 }
 
@@ -242,6 +196,7 @@ console.log("Labeling captures...\n");
 
 for (let i = 0; i < CAPTURES.length; i++) {
   const capture = CAPTURES[i];
+  if (capture === undefined) continue;
   process.stdout.write(`[${i + 1}/${CAPTURES.length}] ${capture.slice(0, 60)}${capture.length > 60 ? "…" : ""} `);
 
   try {
@@ -250,41 +205,47 @@ for (let i = 0; i < CAPTURES.length; i++) {
     if (result.divergent) {
       divergentCount++;
       process.stdout.write(`→ DIVERGENT (votes: ${JSON.stringify(result.votes)})\n`);
-      lines.push(JSON.stringify({
-        capture,
-        disposition: null,
-        divergent: true,
-        votes: result.votes,
-        source: "ensemble",
-        labeled_at: labeledAt,
-        criteria_version: CRITERIA_VERSION,
-      }));
+      lines.push(
+        JSON.stringify({
+          capture,
+          disposition: null,
+          divergent: true,
+          votes: result.votes,
+          source: "ensemble",
+          labeled_at: labeledAt,
+          criteria_version: CRITERIA_VERSION,
+        }),
+      );
     } else {
       consensusCount++;
       const disposition = result.label!;
       distributionMap[disposition] = (distributionMap[disposition] ?? 0) + 1;
       process.stdout.write(`→ ${disposition}\n`);
-      lines.push(JSON.stringify({
-        capture,
-        disposition,
-        source: "ensemble",
-        labeled_at: labeledAt,
-        criteria_version: CRITERIA_VERSION,
-      }));
+      lines.push(
+        JSON.stringify({
+          capture,
+          disposition,
+          source: "ensemble",
+          labeled_at: labeledAt,
+          criteria_version: CRITERIA_VERSION,
+        }),
+      );
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     divergentCount++;
     process.stdout.write(`→ ERROR: ${msg}\n`);
-    lines.push(JSON.stringify({
-      capture,
-      disposition: null,
-      divergent: true,
-      error: msg,
-      source: "ensemble",
-      labeled_at: labeledAt,
-      criteria_version: CRITERIA_VERSION,
-    }));
+    lines.push(
+      JSON.stringify({
+        capture,
+        disposition: null,
+        divergent: true,
+        error: msg,
+        source: "ensemble",
+        labeled_at: labeledAt,
+        criteria_version: CRITERIA_VERSION,
+      }),
+    );
   }
 }
 

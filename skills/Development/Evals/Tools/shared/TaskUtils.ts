@@ -23,12 +23,12 @@
  * SuiteManager.ts always has).
  */
 
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { parse as parseYaml } from 'yaml';
+import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 
-const EVALS_DIR = join(import.meta.dir, '../..');
-export const USECASES_DIR = join(EVALS_DIR, 'UseCases');
+const EVALS_DIR = join(import.meta.dir, "../..");
+export const USECASES_DIR = join(EVALS_DIR, "UseCases");
 
 /**
  * Recursively collect every `.yaml` file under `root`, at any depth.
@@ -56,7 +56,7 @@ function collectYamlFiles(root: string): string[] {
     }
     if (isDir) {
       files.push(...collectYamlFiles(fullPath));
-    } else if (entry.endsWith('.yaml')) {
+    } else if (entry.endsWith(".yaml")) {
       files.push(fullPath);
     }
   }
@@ -82,18 +82,18 @@ function buildTaskIndex(useCasesDir: string): Map<string, string> {
   for (const filePath of collectYamlFiles(useCasesDir)) {
     let parsed: unknown;
     try {
-      parsed = parseYaml(readFileSync(filePath, 'utf-8'));
+      parsed = parseYaml(readFileSync(filePath, "utf-8"));
     } catch {
       continue; // malformed YAML — not this index's concern, skip
     }
     const id = (parsed as { id?: unknown } | null)?.id;
-    if (typeof id !== 'string' || !id) continue;
+    if (typeof id !== "string" || !id) continue;
 
     const existing = index.get(id);
     if (existing) {
       throw new Error(
         `Duplicate task id "${id}": both ${existing} and ${filePath} declare it. ` +
-        `Task ids must be unique across UseCases/ — rename one of the two files' id field.`
+          `Task ids must be unique across UseCases/ — rename one of the two files' id field.`,
       );
     }
     index.set(id, filePath);

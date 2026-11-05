@@ -29,9 +29,9 @@
  * absent or empty run pass.
  */
 
-import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
-import type { GraderConfig, GraderResult } from '../../Types/index.ts';
-import { existsSync, readFileSync } from 'fs';
+import { BaseGrader, registerGrader, type GraderContext } from "../Base.ts";
+import type { GraderResult } from "../../Types/index.ts";
+import { existsSync, readFileSync } from "node:fs";
 
 export interface FixtureAccuracyParams {
   /** Path to the JSON summary written by a live fixture-runner script. */
@@ -48,12 +48,14 @@ interface FixtureRunRecord {
 }
 
 function isFixtureRunRecord(v: unknown): v is FixtureRunRecord {
-  if (!v || typeof v !== 'object') return false;
+  if (!v || typeof v !== "object") return false;
   const r = v as Record<string, unknown>;
-  return typeof r.accuracy === 'number'
-    && typeof r.total === 'number'
-    && typeof r.correct === 'number'
-    && Array.isArray(r.results);
+  return (
+    typeof r.accuracy === "number" &&
+    typeof r.total === "number" &&
+    typeof r.correct === "number" &&
+    Array.isArray(r.results)
+  );
 }
 
 /**
@@ -65,26 +67,26 @@ function isFixtureRunRecord(v: unknown): v is FixtureRunRecord {
  * output-text sniffing.
  */
 function isInfraErroredFixture(r: unknown): boolean {
-  if (!r || typeof r !== 'object') return false;
+  if (!r || typeof r !== "object") return false;
   const err = (r as Record<string, unknown>).infra_error;
-  return typeof err === 'string' && err.length > 0;
+  return typeof err === "string" && err.length > 0;
 }
 
 export class FixtureAccuracyGrader extends BaseGrader {
-  type = 'fixture_accuracy' as const;
-  category = 'code_based' as const;
+  type = "fixture_accuracy" as const;
+  category = "code_based" as const;
   // Reads only params.record_path (a file setup_commands already wrote) —
   // never context.output or context.transcript. See module docblock (H2 guard).
   readsOutput = false;
 
-  async grade(context: GraderContext): Promise<GraderResult> {
+  async grade(_context: GraderContext): Promise<GraderResult> {
     const start = performance.now();
     const params = (this.config.params ?? {}) as FixtureAccuracyParams;
     const minAccuracy = params.min_accuracy ?? 0.8;
 
     if (!params.record_path) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'fixture_accuracy grader: no record_path configured',
+        reasoning: "fixture_accuracy grader: no record_path configured",
       });
     }
 
@@ -97,7 +99,7 @@ export class FixtureAccuracyGrader extends BaseGrader {
 
     let raw: string;
     try {
-      raw = readFileSync(params.record_path, 'utf-8');
+      raw = readFileSync(params.record_path, "utf-8");
     } catch (e) {
       return this.createResult(0, false, performance.now() - start, {
         reasoning: `record not readable: ${e}`,
@@ -117,14 +119,14 @@ export class FixtureAccuracyGrader extends BaseGrader {
 
     if (!isFixtureRunRecord(parsed)) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'record missing required fields (accuracy: number, total: number, correct: number, results: array)',
+        reasoning: "record missing required fields (accuracy: number, total: number, correct: number, results: array)",
         details: { record_path: params.record_path, record: parsed },
       });
     }
 
     if (parsed.total === 0) {
       return this.createResult(0, false, performance.now() - start, {
-        reasoning: 'record has 0 fixtures — no behavioral signal, cannot pass on an empty run',
+        reasoning: "record has 0 fixtures — no behavioral signal, cannot pass on an empty run",
         details: { record_path: params.record_path },
       });
     }
@@ -173,4 +175,4 @@ export class FixtureAccuracyGrader extends BaseGrader {
   }
 }
 
-registerGrader('fixture_accuracy', FixtureAccuracyGrader);
+registerGrader("fixture_accuracy", FixtureAccuracyGrader);

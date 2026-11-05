@@ -45,27 +45,27 @@
  * FreshnessGuard.ts).
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { z } from 'zod';
-import { findSuiteRuns, loadRun } from './shared/ResultsUtils.ts';
-import { inference, extractJson, type InferenceLevel, type InferenceResult } from '../../../../lib/core/Inference.ts';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
-import { sendAlert } from '../../../../lib/core/AlertGate.ts';
-import { recordFailure } from '../../../../lib/core/FailureLog.ts';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { findSuiteRuns, loadRun } from "./shared/ResultsUtils.ts";
+import { inference, extractJson, type InferenceLevel, type InferenceResult } from "../../../../lib/core/Inference.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { sendAlert } from "../../../../lib/core/AlertGate.ts";
+import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
 const DEFAULT_WINDOW_DAYS = 7;
-const DIGEST_LEVEL: InferenceLevel = 'standard';
+const DIGEST_LEVEL: InferenceLevel = "standard";
 /** Narrative-only flagging threshold for the prompt's "notable_deltas"
  *  section — independent of RegressionAlert.ts's own trigger (these are two
  *  separately-invocable CLI tools; sharing the literal constant isn't worth
  *  coupling their modules together, per this file's own precedent of
  *  duplicating small store-contract constants rather than importing them). */
-const NOTABLE_DELTA_THRESHOLD = 0.10;
+const NOTABLE_DELTA_THRESHOLD = 0.1;
 /** Trailing consecutive 0-pass-rate runs, within the window, before a task
  *  is flagged to the judge as a candidate "silent-red streak" — the failure
  *  class that let kaya_router_disposition_golden run red for ~10 nights
@@ -73,13 +73,13 @@ const NOTABLE_DELTA_THRESHOLD = 0.10;
 const ZERO_PASS_STREAK_FLOOR = 2;
 
 const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const RESULTS_SUFFIX = '-results.jsonl';
+const RESULTS_SUFFIX = "-results.jsonl";
 
 // Duplicated from shared/ResultsUtils.ts's opaque run-id contract
 // ("<filePath>::<timestamp>", documented on findSuiteRuns/loadRun) — not
 // exported there, so re-declared here rather than reaching into that
 // module's internals. Same convention RegressionAlert.ts uses.
-const RUN_ID_SEPARATOR = '::';
+const RUN_ID_SEPARATOR = "::";
 function extractRunTimestamp(runId: string): string {
   const idx = runId.lastIndexOf(RUN_ID_SEPARATOR);
   return idx === -1 ? runId : runId.slice(idx + RUN_ID_SEPARATOR.length);
@@ -90,13 +90,13 @@ function extractRunTimestamp(runId: string): string {
 // evalsStoreRoot(), so a test pinning KAYA_HOME after this module loads
 // still targets its sandbox.
 function evalsStoreRoot(): string {
-  return join(getKayaHome(), 'MEMORY', 'VALIDATION', 'evals');
+  return join(getKayaHome(), "MEMORY", "VALIDATION", "evals");
 }
 function lastSuiteRunDir(): string {
-  return join(evalsStoreRoot(), 'last-suite-run');
+  return join(evalsStoreRoot(), "last-suite-run");
 }
 function digestsDir(): string {
-  return join(evalsStoreRoot(), 'digests');
+  return join(evalsStoreRoot(), "digests");
 }
 
 // =============================================================================
@@ -134,7 +134,7 @@ export interface SuiteWindowSummary {
 // rather than trusting the PRODUCER's compile-time TS types).
 const SuiteSummaryTaskSchema = z.object({
   task_id: z.string(),
-  status: z.enum(['passed', 'failed', 'infra_skipped', 'error', 'not_found']),
+  status: z.enum(["passed", "failed", "infra_skipped", "error", "not_found"]),
   mean_score: z.number(),
   pass: z.boolean(),
   pass_rate: z.number(),
@@ -183,9 +183,19 @@ export function computeZeroPassStreak(pointsAsc: TaskSeriesPoint[]): number {
 
 export function computeTaskTrend(suite: string, taskId: string, pointsAsc: TaskSeriesPoint[]): TaskTrend {
   if (pointsAsc.length === 0) {
-    return { suite, task_id: taskId, n_points: 0, first_score: 0, last_score: 0, delta: 0, min_score: 0, max_score: 0, trailing_zero_pass_streak: 0 };
+    return {
+      suite,
+      task_id: taskId,
+      n_points: 0,
+      first_score: 0,
+      last_score: 0,
+      delta: 0,
+      min_score: 0,
+      max_score: 0,
+      trailing_zero_pass_streak: 0,
+    };
   }
-  const scores = pointsAsc.map(p => p.mean_score);
+  const scores = pointsAsc.map((p) => p.mean_score);
   const first = scores[0]!;
   const last = scores[scores.length - 1]!;
   return {
@@ -211,8 +221,8 @@ export function listDateDirsInWindow(root: string, windowDays: number, nowMs: nu
   if (!existsSync(root)) return [];
   const cutoffStr = new Date(nowMs - windowDays * 24 * 3600_000).toISOString().slice(0, 10);
   return readdirSync(root, { withFileTypes: true })
-    .filter(e => e.isDirectory() && DATE_DIR_PATTERN.test(e.name) && e.name >= cutoffStr)
-    .map(e => e.name)
+    .filter((e) => e.isDirectory() && DATE_DIR_PATTERN.test(e.name) && e.name >= cutoffStr)
+    .map((e) => e.name)
     .sort();
 }
 
@@ -241,7 +251,7 @@ export function listSuiteNamesInDateDirs(root: string, dateDirs: string[]): stri
  *  read the same way RegressionAlert.ts reads it. */
 export function buildSuiteWindowSummary(suite: string, cutoffIso: string): SuiteWindowSummary {
   const allRunIds = findSuiteRuns(suite); // desc (most-recent-first)
-  const inWindow = allRunIds.filter(id => extractRunTimestamp(id) >= cutoffIso);
+  const inWindow = allRunIds.filter((id) => extractRunTimestamp(id) >= cutoffIso);
   const asc = [...inWindow].reverse(); // chronological, oldest first
 
   const perTask = new Map<string, TaskSeriesPoint[]>();
@@ -276,14 +286,14 @@ export function readLastSuiteRunSnapshots(): LastSuiteRunEntry[] {
 
   const entries: LastSuiteRunEntry[] = [];
   for (const file of readdirSync(dir)) {
-    if (!file.endsWith('.json')) continue;
-    const suite = file.slice(0, -'.json'.length);
+    if (!file.endsWith(".json")) continue;
+    const suite = file.slice(0, -".json".length);
     const path = join(dir, file);
     try {
-      const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+      const parsed = JSON.parse(readFileSync(path, "utf-8"));
       const validated = SuiteSummaryFileSchema.safeParse(parsed);
       if (!validated.success) {
-        const msg = `schema validation failed: ${validated.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')}`;
+        const msg = `schema validation failed: ${validated.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")}`;
         console.warn(`[EvalHealthDigest] Skipping ${path}: ${msg}`);
         entries.push({ suite, data: null, parseError: msg });
         continue;
@@ -361,15 +371,26 @@ function buildDigestUserPrompt(opts: {
   suites: SuiteWindowSummary[];
   lastSuiteRuns: LastSuiteRunEntry[];
 }): string {
-  const notableDeltas = opts.suites.flatMap(s =>
+  const notableDeltas = opts.suites.flatMap((s) =>
     s.tasks
-      .filter(t => t.delta <= -NOTABLE_DELTA_THRESHOLD)
-      .map(t => ({ suite: s.suite, task_id: t.task_id, first_score: t.first_score, last_score: t.last_score, delta: t.delta }))
+      .filter((t) => t.delta <= -NOTABLE_DELTA_THRESHOLD)
+      .map((t) => ({
+        suite: s.suite,
+        task_id: t.task_id,
+        first_score: t.first_score,
+        last_score: t.last_score,
+        delta: t.delta,
+      })),
   );
-  const silentRedStreaks = opts.suites.flatMap(s =>
+  const silentRedStreaks = opts.suites.flatMap((s) =>
     s.tasks
-      .filter(t => t.trailing_zero_pass_streak >= ZERO_PASS_STREAK_FLOOR)
-      .map(t => ({ suite: s.suite, task_id: t.task_id, trailing_zero_pass_streak: t.trailing_zero_pass_streak, n_points: t.n_points }))
+      .filter((t) => t.trailing_zero_pass_streak >= ZERO_PASS_STREAK_FLOOR)
+      .map((t) => ({
+        suite: s.suite,
+        task_id: t.task_id,
+        trailing_zero_pass_streak: t.trailing_zero_pass_streak,
+        n_points: t.n_points,
+      })),
   );
 
   return JSON.stringify(
@@ -380,7 +401,7 @@ function buildDigestUserPrompt(opts: {
       suites: opts.suites,
       notable_deltas: notableDeltas,
       silent_red_streaks: silentRedStreaks,
-      last_suite_run_snapshots: opts.lastSuiteRuns.map(e => ({
+      last_suite_run_snapshots: opts.lastSuiteRuns.map((e) => ({
         suite: e.suite,
         // B3: was `ok` — it only meant "the snapshot file parsed", and the 10-17
         // digest read it as "the suite passed" while 9 of 11 tasks scored 0.
@@ -390,7 +411,7 @@ function buildDigestUserPrompt(opts: {
       })),
     },
     null,
-    2
+    2,
   );
 }
 
@@ -427,7 +448,7 @@ export async function generateDigest(opts: GenerateDigestOptions = {}): Promise<
     throw new Error(
       `EvalHealthDigest: eval results store (${root}) does not exist at all — ` +
         `the nightly pipeline has apparently never persisted a single suite run ` +
-        `(see MEMORY/SkillAudits/evals-infra-audit-2026-07-09/nightly.md finding 1)`
+        `(see MEMORY/SkillAudits/evals-infra-audit-2026-07-09/nightly.md finding 1)`,
     );
   }
 
@@ -436,7 +457,7 @@ export async function generateDigest(opts: GenerateDigestOptions = {}): Promise<
 
   const dateDirs = listDateDirsInWindow(root, windowDays, nowMs);
   const suiteNames = listSuiteNamesInDateDirs(root, dateDirs);
-  const suites = suiteNames.map(name => buildSuiteWindowSummary(name, windowStart));
+  const suites = suiteNames.map((name) => buildSuiteWindowSummary(name, windowStart));
   const lastSuiteRuns = readLastSuiteRunSnapshots();
 
   const userPrompt = buildDigestUserPrompt({ windowDays, windowStart, windowEnd, suites, lastSuiteRuns });
@@ -452,17 +473,17 @@ export async function generateDigest(opts: GenerateDigestOptions = {}): Promise<
   });
 
   if (!result.success) {
-    throw new Error(`EvalHealthDigest: inference failed: ${result.error ?? 'unknown error'}`);
+    throw new Error(`EvalHealthDigest: inference failed: ${result.error ?? "unknown error"}`);
   }
 
   const parsedRaw = result.parsed ?? extractJson(result.output);
   if (parsedRaw === undefined) {
-    throw new Error('EvalHealthDigest: judge response was not valid JSON (expected {headline, digest})');
+    throw new Error("EvalHealthDigest: judge response was not valid JSON (expected {headline, digest})");
   }
 
   const validated = DigestResponseSchema.safeParse(parsedRaw);
   if (!validated.success) {
-    const issues = validated.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    const issues = validated.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
     throw new Error(`EvalHealthDigest: judge response failed schema validation: ${issues}`);
   }
 
@@ -488,20 +509,20 @@ export function writeDigestFile(result: DigestResult, nowMs: number): string {
   const dir = digestsDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const filePath = join(dir, `${dateStr}.md`);
-  writeFileSync(filePath, `# Eval Health Digest — ${dateStr}\n\n${result.digest}\n`, 'utf-8');
+  writeFileSync(filePath, `# Eval Health Digest — ${dateStr}\n\n${result.digest}\n`, "utf-8");
   return filePath;
 }
 
 async function main() {
   const args = Bun.argv.slice(2);
-  const daysIdx = args.indexOf('--days');
+  const daysIdx = args.indexOf("--days");
   const windowDays = daysIdx !== -1 && args[daysIdx + 1] ? parseInt(args[daysIdx + 1]!, 10) : DEFAULT_WINDOW_DAYS;
 
   try {
     const result = await generateDigest({ windowDays });
 
     console.log(`\n=== Eval Health Digest (${result.windowStart} → ${result.windowEnd}) ===`);
-    console.log(`Suites covered: ${result.suitesCovered.length > 0 ? result.suitesCovered.join(', ') : '(none)'}\n`);
+    console.log(`Suites covered: ${result.suitesCovered.length > 0 ? result.suitesCovered.join(", ") : "(none)"}\n`);
     console.log(`Headline: ${result.headline}\n`);
     console.log(result.digest);
     console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
@@ -510,18 +531,18 @@ async function main() {
     console.log(`[EvalHealthDigest] wrote ${filePath}`);
 
     const alertResult = await sendAlert(`${result.headline}\n\n${result.digest}`, {
-      key: 'eval-health-weekly-digest',
-      tier: 'digest',
+      key: "eval-health-weekly-digest",
+      tier: "digest",
     });
     console.log(`[EvalHealthDigest] AlertGate result: ${alertResult}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\n❌ ${message}\n`);
-    recordFailure({ source: 'EvalHealthDigest', error: err, context: { step: 'main' } });
+    recordFailure({ source: "EvalHealthDigest", error: err, context: { step: "main" } });
     // Awaited (T2-01): process.exit(1) immediately follows — without the
     // await, the delivery attempt would be truncated before it could even
     // start, on the highest-urgency (page-tier crash) alert in this file.
-    await sendAlert(`Eval health digest failed: ${message}`, { key: 'eval-health-digest-crash', tier: 'page' });
+    await sendAlert(`Eval health digest failed: ${message}`, { key: "eval-health-digest-crash", tier: "page" });
     process.exit(1);
   }
 }
