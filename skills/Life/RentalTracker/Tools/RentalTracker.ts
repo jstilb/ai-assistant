@@ -23,9 +23,9 @@
  *
  * @module RentalTracker
  */
-import { createHash } from "crypto";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { sendAlert, type AlertResult } from "../../../../lib/core/AlertGate.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
 import { inference } from "../../../../lib/core/Inference.ts";
@@ -33,10 +33,35 @@ import { inArea, walkMinutes } from "./Geo.ts";
 import { extractFeatures, keywordFeatures, mergeStructured, type InferenceFn } from "./Extract.ts";
 import { isExceptional, scoreListing } from "./Score.ts";
 import {
-  defaultFetcher, enrichCraigslist, enrichRedfin, searchCraigslist, searchRedfin, sleep, type Fetcher,
+  defaultFetcher,
+  enrichCraigslist,
+  enrichRedfin,
+  searchCraigslist,
+  searchRedfin,
+  sleep,
+  type Fetcher,
 } from "./Sources.ts";
-import { expire, groupDuplicates, loadState, mergeDecisionsFromDisk, prune, reconcile, saveState, setDecision, statePath, type ReconcileResult } from "./Store.ts";
-import type { Decision, RawListing, RunSummary, SourceName, StoredListing, TrackerConfig, TrackerState } from "./types.ts";
+import {
+  expire,
+  groupDuplicates,
+  loadState,
+  mergeDecisionsFromDisk,
+  prune,
+  reconcile,
+  saveState,
+  setDecision,
+  statePath,
+  type ReconcileResult,
+} from "./Store.ts";
+import type {
+  Decision,
+  RawListing,
+  RunSummary,
+  SourceName,
+  StoredListing,
+  TrackerConfig,
+  TrackerState,
+} from "./types.ts";
 
 export const CONFIG_PATH = join(import.meta.dir, "..", "config", "ocean-beach.json");
 
@@ -63,7 +88,10 @@ export interface ScanReport extends RunSummary {
 }
 
 function hashContent(l: StoredListing): string {
-  return createHash("sha1").update(`${l.title}\n${l.text ?? ""}`).digest("hex").slice(0, 16);
+  return createHash("sha1")
+    .update(`${l.title}\n${l.text ?? ""}`)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<ScanReport> {
@@ -74,8 +102,17 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
   const path = opts.statePath ?? statePath();
   const state = loadState(path);
   const summary: ScanReport = {
-    at: now.toISOString(), ok: true, sources: {}, newListings: 0, expired: 0, extracted: 0,
-    extractionFallbacks: 0, alerted: [], durationMs: 0, exceptional: [], activeCount: 0,
+    at: now.toISOString(),
+    ok: true,
+    sources: {},
+    newListings: 0,
+    expired: 0,
+    extracted: 0,
+    extractionFallbacks: 0,
+    alerted: [],
+    durationMs: 0,
+    exceptional: [],
+    activeCount: 0,
   };
   const searchers: Record<SourceName, () => Promise<RawListing[]>> = {
     craigslist: () => searchCraigslist(cfg, fetcher),
@@ -91,7 +128,9 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
       const local = hits.filter((h) => inArea(h.lat, h.lon, cfg.geo));
       rec = reconcile(state, source, local, true, cfg, now);
       summary.sources[source] = { ok: true, hits: hits.length, inArea: local.length };
-      log(`${source}: ${hits.length} hits, ${local.length} in Ocean Beach, ${rec.newIds.length} new, ${rec.expiredIds.length} expired`);
+      log(
+        `${source}: ${hits.length} hits, ${local.length} in Ocean Beach, ${rec.newIds.length} new, ${rec.expiredIds.length} expired`,
+      );
     } catch (err) {
       const msg = (err as Error).message;
       rec = reconcile(state, source, [], false, cfg, now);
@@ -161,11 +200,15 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
 
   // 4. feature extraction for new / changed listings
   const needs = active()
-    .filter((l) => l.detailFetchedAt && (!l.features || l.features.extractor !== "llm" || l.contentHash !== hashContent(l)))
+    .filter((l) => l.detailFetchedAt && (l.features?.extractor !== "llm" || l.contentHash !== hashContent(l)))
     .filter((l) => l.price <= cfg.criteria.maxPrice)
     .slice(0, cfg.extraction.maxListingsPerRun);
   if (needs.length) {
-    const ex = await extractFeatures(needs, { ...cfg.extraction, useLlm: opts.useLlm !== false }, opts.infer ?? inference);
+    const ex = await extractFeatures(
+      needs,
+      { ...cfg.extraction, useLlm: opts.useLlm !== false },
+      opts.infer ?? inference,
+    );
     for (const l of needs) {
       const f = ex.features.get(l.id)!;
       l.features = mergeStructured(f, l.structured);
@@ -174,8 +217,14 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
     summary.extracted = needs.length - ex.fallbacks;
     summary.extractionFallbacks = ex.fallbacks;
     if (ex.errors.length) {
-      logFailure("RentalTracker", new Error(ex.errors[0]), { phase: "extract", failedBatches: ex.errors.length, fallbacks: ex.fallbacks });
-      log(`extraction: ${ex.errors.length} batch(es) failed — ${ex.fallbacks} listing(s) on keyword fallback (flagged on the board)`);
+      logFailure("RentalTracker", new Error(ex.errors[0]), {
+        phase: "extract",
+        failedBatches: ex.errors.length,
+        fallbacks: ex.fallbacks,
+      });
+      log(
+        `extraction: ${ex.errors.length} batch(es) failed — ${ex.fallbacks} listing(s) on keyword fallback (flagged on the board)`,
+      );
     }
     log(`extraction: ${summary.extracted} via LLM, ${ex.fallbacks} via keywords`);
   }
@@ -193,7 +242,8 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
   const fresh: StoredListing[] = [];
   for (const [primary, members] of groups) {
     const p = byId[primary];
-    if (members.some((m) => byId[m].alertedAt || byId[m].decision === "rejected")) continue;
+    if (!p) continue; // group primaries come from state.listings, so this is an invariant guard
+    if (members.some((m) => byId[m]?.alertedAt || byId[m]?.decision === "rejected")) continue;
     if (isExceptional(p.score!, p.features!, cfg)) fresh.push(p);
   }
   fresh.sort((a, b) => b.score!.total - a.score!.total);
@@ -205,12 +255,20 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
       key: "rental-tracker:ob-exceptional",
       tier: "page",
       cooldownMs: 10 * 60_000,
-      fingerprint: fresh.map((l) => l.id).sort().join(","),
+      fingerprint: fresh
+        .map((l) => l.id)
+        .sort()
+        .join(","),
     });
     summary.alertResult = result;
     // 'spooled' = deferred to the digest (quiet hours / throttle) — still delivered, so it counts.
     if (result === "paged" || result === "spooled") {
-      for (const l of fresh) for (const m of groups.get(l.id) ?? [l.id]) byId[m].alertedAt = now.toISOString();
+      for (const l of fresh) {
+        for (const m of groups.get(l.id) ?? [l.id]) {
+          const member = byId[m];
+          if (member) member.alertedAt = now.toISOString();
+        }
+      }
       summary.alerted = fresh.map((l) => l.id);
     }
     log(`alert: ${fresh.length} exceptional → ${result}`);
@@ -230,8 +288,19 @@ export async function scan(cfg: TrackerConfig, opts: ScanOptions = {}): Promise<
 // Formatting
 // ============================================================================
 
-export const LAUNDRY_LABEL: Record<string, string> = { in_unit: "W/D in unit", on_site: "laundry on site", none: "no laundry", unknown: "laundry ?" };
-export const KIND_LABEL: Record<string, string> = { house: "house", duplex_cottage: "cottage/duplex", condo_townhome: "condo/townhome", apartment: "apartment", unknown: "" };
+export const LAUNDRY_LABEL: Record<string, string> = {
+  in_unit: "W/D in unit",
+  on_site: "laundry on site",
+  none: "no laundry",
+  unknown: "laundry ?",
+};
+export const KIND_LABEL: Record<string, string> = {
+  house: "house",
+  duplex_cottage: "cottage/duplex",
+  condo_townhome: "condo/townhome",
+  apartment: "apartment",
+  unknown: "",
+};
 
 export function bedsLabel(l: StoredListing): string {
   const b = l.beds === null ? "?" : l.bedsMax && l.bedsMax !== l.beds ? `${l.beds}-${l.bedsMax}` : String(l.beds);
@@ -243,7 +312,7 @@ export function featureBits(l: StoredListing): string[] {
   if (!f) return [];
   const bits: string[] = [];
   bits.push(f.dishwasher === "yes" ? "dishwasher" : f.dishwasher === "no" ? "NO dishwasher" : "dishwasher ?");
-  bits.push(LAUNDRY_LABEL[f.laundry]);
+  bits.push(LAUNDRY_LABEL[f.laundry] ?? "laundry ?");
   if (f.yard === "private") bits.push("private yard");
   if (f.ac === "yes") bits.push("A/C");
   if (f.kitchen === "large") bits.push("big kitchen");
@@ -258,10 +327,15 @@ export function oneLine(l: StoredListing): string {
 
 export function formatAlert(list: StoredListing[], cfg: TrackerConfig): string {
   const shown = list.slice(0, cfg.alerts.maxPerMessage);
-  const lines = [`🏖️ Ocean Beach rental${list.length > 1 ? `s — ${list.length} exceptional` : " — exceptional listing"}`];
+  const lines = [
+    `🏖️ Ocean Beach rental${list.length > 1 ? `s — ${list.length} exceptional` : " — exceptional listing"}`,
+  ];
   for (const [i, l] of shown.entries()) {
     const s = l.score!;
-    const near = s.newportMi <= s.voltaireMi ? `Newport ${walkMinutes(s.newportMi)} min` : `Voltaire ${walkMinutes(s.voltaireMi)} min`;
+    const near =
+      s.newportMi <= s.voltaireMi
+        ? `Newport ${walkMinutes(s.newportMi)} min`
+        : `Voltaire ${walkMinutes(s.voltaireMi)} min`;
     lines.push(
       "",
       `${i + 1}) ${oneLine(l)}`,
@@ -289,10 +363,18 @@ export function boardRows(state: TrackerState, opts: { includeExpired?: boolean 
   const rows: BoardRow[] = [];
   for (const [primary, members] of groups) {
     const p = state.listings[primary];
-    rows.push({ ...p, dupes: members.slice(1).map((m) => state.listings[m]).map((d) => ({ id: d.id, source: d.source, url: d.url, price: d.price })) });
+    if (!p) continue; // group primaries come from state.listings, so this is an invariant guard
+    rows.push({
+      ...p,
+      dupes: members.slice(1).flatMap((m) => {
+        const d = state.listings[m];
+        return d ? [{ id: d.id, source: d.source, url: d.url, price: d.price }] : [];
+      }),
+    });
   }
   if (opts.includeExpired) {
-    for (const l of Object.values(state.listings)) if (l.status === "expired" && l.score) rows.push({ ...l, dupes: [] });
+    for (const l of Object.values(state.listings))
+      if (l.status === "expired" && l.score) rows.push({ ...l, dupes: [] });
   }
   return rows.sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0));
 }
@@ -319,7 +401,9 @@ async function main(argv: string[]): Promise<number> {
     });
     if (json) console.log(JSON.stringify(r, null, 2));
     else {
-      console.log(`[rentals] ${r.activeCount} active · ${r.newListings} new · ${r.expired} expired · ${r.exceptional.length} exceptional${r.alertResult ? ` (alert: ${r.alertResult})` : ""} · ${(r.durationMs / 1000).toFixed(0)}s`);
+      console.log(
+        `[rentals] ${r.activeCount} active · ${r.newListings} new · ${r.expired} expired · ${r.exceptional.length} exceptional${r.alertResult ? ` (alert: ${r.alertResult})` : ""} · ${(r.durationMs / 1000).toFixed(0)}s`,
+      );
       for (const e of r.exceptional) console.log(`  ★ ${e.line}`);
     }
     // Loud failure for the cron ledger: every source failed = nothing scanned.
@@ -339,7 +423,9 @@ async function main(argv: string[]): Promise<number> {
     }
     for (const r of rows) {
       const s = r.score!;
-      console.log(`${String(s.total).padStart(3)}  $${String(r.price).padEnd(5)} ${bedsLabel(r).padEnd(9)} beach ${s.beachMi.toFixed(2)}mi  walk ${s.walkMi.toFixed(2)}mi  ${featureBits(r).join(", ")}${r.decision !== "new" ? `  [${r.decision}]` : ""}`);
+      console.log(
+        `${String(s.total).padStart(3)}  $${String(r.price).padEnd(5)} ${bedsLabel(r).padEnd(9)} beach ${s.beachMi.toFixed(2)}mi  walk ${s.walkMi.toFixed(2)}mi  ${featureBits(r).join(", ")}${r.decision !== "new" ? `  [${r.decision}]` : ""}`,
+      );
       console.log(`     ${r.address || r.title}  —  ${r.id}`);
       console.log(`     ${r.url}${r.dupes.length ? `  (+${r.dupes.length} dup)` : ""}`);
     }
@@ -347,7 +433,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (cmd === "show") {
-    const l = state.listings[args[0]];
+    const l = args[0] ? state.listings[args[0]] : undefined;
     if (!l) {
       console.error(`no listing ${args[0]}`);
       return 1;
@@ -358,6 +444,10 @@ async function main(argv: string[]): Promise<number> {
 
   if (cmd === "decide") {
     const [id, decision, ...note] = args;
+    if (!id || !decision) {
+      console.error("usage: decide <id> <decision> [note...]");
+      return 1;
+    }
     const l = setDecision(state, id, decision as Decision, note.length ? note.join(" ") : undefined);
     saveState(state);
     console.log(`${l.id} → ${l.decision}${l.note ? ` (${l.note})` : ""}`);
@@ -386,7 +476,11 @@ async function main(argv: string[]): Promise<number> {
     return -1; // keep running
   }
 
-  console.log(readFileSync(import.meta.path, "utf-8").match(/\* CLI:[\s\S]*?\n \*\n/)?.[0].replace(/^ \* ?/gm, "") ?? "see file header");
+  console.log(
+    readFileSync(import.meta.path, "utf-8")
+      .match(/\* CLI:[\s\S]*?\n \*\n/)?.[0]
+      .replace(/^ \* ?/gm, "") ?? "see file header",
+  );
   return cmd === "help" ? 0 : 1;
 }
 

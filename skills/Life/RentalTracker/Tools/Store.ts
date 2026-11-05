@@ -15,8 +15,8 @@
  *
  * @module RentalTracker/Store
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { runtimeDir } from "../../../../lib/core/KayaHome.ts";
 import { haversineMi } from "./Geo.ts";
 import type { Decision, RawListing, SourceName, StoredListing, TrackerConfig, TrackerState } from "./types.ts";
@@ -32,7 +32,8 @@ export function emptyState(): TrackerState {
 export function loadState(path = statePath()): TrackerState {
   if (!existsSync(path)) return emptyState();
   const parsed = JSON.parse(readFileSync(path, "utf-8")) as TrackerState;
-  if (parsed?.version !== 1 || typeof parsed.listings !== "object") throw new Error(`RentalTracker: unrecognized state file ${path}`);
+  if (parsed?.version !== 1 || typeof parsed.listings !== "object")
+    throw new Error(`RentalTracker: unrecognized state file ${path}`);
   parsed.runs ??= [];
   return parsed;
 }
@@ -56,7 +57,14 @@ export interface ReconcileResult {
  * Merge one source's scan into state. `hits` must be the COMPLETE in-area result
  * set of a successful scan of `source`; pass `scanOk=false` to only age listings.
  */
-export function reconcile(state: TrackerState, source: SourceName, hits: RawListing[], scanOk: boolean, cfg: TrackerConfig, now = new Date()): ReconcileResult {
+export function reconcile(
+  state: TrackerState,
+  source: SourceName,
+  hits: RawListing[],
+  scanOk: boolean,
+  cfg: TrackerConfig,
+  now = new Date(),
+): ReconcileResult {
   const iso = now.toISOString();
   const res: ReconcileResult = { newIds: [], changedIds: [], expiredIds: [] };
   const seen = new Set<string>();
@@ -94,13 +102,20 @@ export function reconcile(state: TrackerState, source: SourceName, hits: RawList
       }
       // search-level fields refresh every scan; detail-level fields (text/structured/features) persist
       Object.assign(prev, {
-        title: h.title, price, beds: keepPlan ? prev.beds : h.beds,
+        title: h.title,
+        price,
+        beds: keepPlan ? prev.beds : h.beds,
         bedsMax: keepPlan ? prev.bedsMax : h.bedsMax,
         meta: { ...prev.meta, ...h.meta },
-        lat: h.lat, lon: h.lon, url: h.url, photo: h.photo ?? prev.photo,
+        lat: h.lat,
+        lon: h.lon,
+        url: h.url,
+        photo: h.photo ?? prev.photo,
         address: prev.address && prev.address.length > (h.address?.length ?? 0) ? prev.address : h.address,
         postedAt: h.postedAt ?? prev.postedAt,
-        lastSeenAt: iso, missedScans: 0, status: "active",
+        lastSeenAt: iso,
+        missedScans: 0,
+        status: "active",
       });
       if (reactivated) {
         delete prev.expiredAt;
@@ -118,7 +133,8 @@ export function reconcile(state: TrackerState, source: SourceName, hits: RawList
   const maxAge = cfg.expiry.maxAgeDays[source];
   for (const l of Object.values(state.listings)) {
     if (l.source !== source || l.status !== "active") continue;
-    if (maxAge && l.postedAt && now.getTime() - Date.parse(l.postedAt) > maxAge * DAY) expire(l, `stale (posted > ${maxAge}d ago)`, iso, res);
+    if (maxAge && l.postedAt && now.getTime() - Date.parse(l.postedAt) > maxAge * DAY)
+      expire(l, `stale (posted > ${maxAge}d ago)`, iso, res);
   }
   return res;
 }
@@ -134,7 +150,11 @@ export function expire(l: StoredListing, reason: string, iso: string, res?: Reco
 export function prune(state: TrackerState, cfg: TrackerConfig, now = new Date()): number {
   let n = 0;
   for (const [id, l] of Object.entries(state.listings)) {
-    if (l.status === "expired" && l.expiredAt && now.getTime() - Date.parse(l.expiredAt) > cfg.expiry.keepExpiredDays * DAY) {
+    if (
+      l.status === "expired" &&
+      l.expiredAt &&
+      now.getTime() - Date.parse(l.expiredAt) > cfg.expiry.keepExpiredDays * DAY
+    ) {
       delete state.listings[id];
       n++;
     }
@@ -167,10 +187,12 @@ export function isDuplicate(a: StoredListing, b: StoredListing): boolean {
  * (primary = best score, then a decision-bearing one, then the oldest).
  */
 export function groupDuplicates(listings: StoredListing[]): Map<string, string[]> {
-  const sorted = [...listings].sort((a, b) =>
-    (b.score?.total ?? 0) - (a.score?.total ?? 0) ||
-    Number(b.decision !== "new") - Number(a.decision !== "new") ||
-    a.firstSeenAt.localeCompare(b.firstSeenAt));
+  const sorted = [...listings].sort(
+    (a, b) =>
+      (b.score?.total ?? 0) - (a.score?.total ?? 0) ||
+      Number(b.decision !== "new") - Number(a.decision !== "new") ||
+      a.firstSeenAt.localeCompare(b.firstSeenAt),
+  );
   const groups = new Map<string, string[]>();
   const assigned = new Set<string>();
   for (const p of sorted) {

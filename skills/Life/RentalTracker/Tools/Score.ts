@@ -27,27 +27,52 @@ export function priceScore(price: number, c: TrackerConfig["criteria"], pts: num
 }
 
 export function scoreListing(l: RawListing, f: Features, cfg: TrackerConfig): ScoreBreakdown {
-  const w = cfg.scoring;
+  // A missing weight used to yield NaN scores silently; fail visibly instead.
+  const w = (key: string): number => {
+    const v = cfg.scoring[key];
+    if (v === undefined) throw new Error(`RentalTracker: scoring weight "${key}" missing from config`);
+    return v;
+  };
   const c = cfg.criteria;
   const prox = proximity(l.lat, l.lon, cfg.geo);
   const parts: Record<string, number> = {};
 
-  parts.price = priceScore(l.price, c, w.price);
-  parts.beach = ramp(prox.beachMi, w.beachFullMi, w.beachZeroMi, w.beach);
-  parts.walk = ramp(prox.walkMi, w.walkFullMi, w.walkZeroMi, w.walk);
-  parts.laundry = f.laundry === "in_unit" ? w.laundryInUnit : f.laundry === "on_site" ? w.laundryOnSite : f.laundry === "unknown" ? w.laundryUnknown : 0;
+  parts.price = priceScore(l.price, c, w("price"));
+  parts.beach = ramp(prox.beachMi, w("beachFullMi"), w("beachZeroMi"), w("beach"));
+  parts.walk = ramp(prox.walkMi, w("walkFullMi"), w("walkZeroMi"), w("walk"));
+  parts.laundry =
+    f.laundry === "in_unit"
+      ? w("laundryInUnit")
+      : f.laundry === "on_site"
+        ? w("laundryOnSite")
+        : f.laundry === "unknown"
+          ? w("laundryUnknown")
+          : 0;
 
   const isHouse = f.propertyKind === "house" || f.propertyKind === "duplex_cottage";
-  parts.houseYard = isHouse && f.yard === "private" ? w.houseWithYard
-    : f.yard === "private" ? w.privateYardOnly
-      : isHouse ? w.houseNoYard
-        : f.yard === "shared" ? w.sharedYard : 0;
+  parts.houseYard =
+    isHouse && f.yard === "private"
+      ? w("houseWithYard")
+      : f.yard === "private"
+        ? w("privateYardOnly")
+        : isHouse
+          ? w("houseNoYard")
+          : f.yard === "shared"
+            ? w("sharedYard")
+            : 0;
 
-  parts.kitchen = f.kitchen === "large" ? w.kitchenLarge : f.kitchen === "average" ? w.kitchenAverage : f.kitchen === "unknown" ? w.kitchenUnknown : 0;
-  parts.ac = f.ac === "yes" ? w.ac : 0;
-  if (f.dishwasher === "unknown") parts.dishwasher = -w.dishwasherUnknownPenalty;
-  if (f.scamRisk === "medium") parts.scam = -w.scamPenaltyMedium;
-  if (f.scamRisk === "high") parts.scam = -w.scamPenaltyHigh;
+  parts.kitchen =
+    f.kitchen === "large"
+      ? w("kitchenLarge")
+      : f.kitchen === "average"
+        ? w("kitchenAverage")
+        : f.kitchen === "unknown"
+          ? w("kitchenUnknown")
+          : 0;
+  parts.ac = f.ac === "yes" ? w("ac") : 0;
+  if (f.dishwasher === "unknown") parts.dishwasher = -w("dishwasherUnknownPenalty");
+  if (f.scamRisk === "medium") parts.scam = -w("scamPenaltyMedium");
+  if (f.scamRisk === "high") parts.scam = -w("scamPenaltyHigh");
 
   const reasons: string[] = [];
   if (l.price > c.maxPrice) reasons.push(`over budget ($${l.price})`);
@@ -55,7 +80,7 @@ export function scoreListing(l: RawListing, f: Features, cfg: TrackerConfig): Sc
   if (c.dishwasherRequired && f.dishwasher === "no") reasons.push("no dishwasher");
   if (!inArea(l.lat, l.lon, cfg.geo)) reasons.push("outside Ocean Beach");
 
-  for (const k of Object.keys(parts)) parts[k] = Math.round(parts[k] * 10) / 10;
+  for (const k of Object.keys(parts)) parts[k] = Math.round((parts[k] ?? 0) * 10) / 10;
   const total = Math.max(0, Math.min(100, Math.round(Object.values(parts).reduce((a, b) => a + b, 0))));
   return {
     total,

@@ -21,21 +21,29 @@ export function haversineMi(a: LatLon, b: LatLon): number {
 /** Distance in miles from p to segment ab (local equirectangular projection — fine at neighborhood scale). */
 export function pointToSegmentMi(p: LatLon, a: LatLon, b: LatLon): number {
   const kx = Math.cos(rad(p[0]));
-  const ax = (a[1] - p[1]) * kx, ay = a[0] - p[0];
-  const bx = (b[1] - p[1]) * kx, by = b[0] - p[0];
-  const dx = bx - ax, dy = by - ay;
+  const ax = (a[1] - p[1]) * kx,
+    ay = a[0] - p[0];
+  const bx = (b[1] - p[1]) * kx,
+    by = b[0] - p[0];
+  const dx = bx - ax,
+    dy = by - ay;
   const len2 = dx * dx + dy * dy;
   let t = len2 === 0 ? 0 : -(ax * dx + ay * dy) / len2;
   t = Math.max(0, Math.min(1, t));
-  const cx = ax + t * dx, cy = ay + t * dy;
+  const cx = ax + t * dx,
+    cy = ay + t * dy;
   // convert the projected offset back to a lat/lon and measure exactly
   return haversineMi(p, [p[0] + cy, p[1] + cx / kx]);
 }
 
 export function distanceToPolylineMi(p: LatLon, line: LatLon[]): number {
-  if (line.length === 1) return haversineMi(p, line[0]);
+  const first = line[0];
+  if (line.length === 1 && first) return haversineMi(p, first);
   let best = Infinity;
-  for (let i = 0; i < line.length - 1; i++) best = Math.min(best, pointToSegmentMi(p, line[i], line[i + 1]));
+  for (const [i, a] of line.entries()) {
+    const b = line[i + 1];
+    if (b) best = Math.min(best, pointToSegmentMi(p, a, b));
+  }
   return best;
 }
 

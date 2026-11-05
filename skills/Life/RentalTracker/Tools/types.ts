@@ -29,8 +29,21 @@ export interface TrackerConfig {
   alerts: { minScore: number; maxPerMessage: number };
   expiry: { missedScans: number; maxAgeDays: Record<string, number>; keepExpiredDays: number };
   sources: {
-    craigslist: { enabled: boolean; postal: string; searchDistanceMi: number; maxDetailFetchesPerRun: number; detailDelayMs: number };
-    redfin: { enabled: boolean; regionId: number; regionType: number; market: string; maxDetailFetchesPerRun: number; detailDelayMs: number };
+    craigslist: {
+      enabled: boolean;
+      postal: string;
+      searchDistanceMi: number;
+      maxDetailFetchesPerRun: number;
+      detailDelayMs: number;
+    };
+    redfin: {
+      enabled: boolean;
+      regionId: number;
+      regionType: number;
+      market: string;
+      maxDetailFetchesPerRun: number;
+      detailDelayMs: number;
+    };
   };
   extraction: { batchSize: number; concurrency: number; maxListingsPerRun: number; timeoutMs: number };
 }
@@ -39,19 +52,19 @@ export type SourceName = "craigslist" | "redfin";
 
 /** One search hit, before detail enrichment. */
 export interface RawListing {
-  id: string;            // "<source>:<native id>"
+  id: string; // "<source>:<native id>"
   source: SourceName;
   url: string;
   title: string;
-  price: number;         // lowest eligible monthly rent
-  beds: number | null;   // lowest eligible bed count
+  price: number; // lowest eligible monthly rent
+  beds: number | null; // lowest eligible bed count
   bedsMax?: number | null;
   baths?: number | null;
   sqft?: number | null;
   lat: number;
   lon: number;
   address?: string;
-  postedAt?: string;     // ISO
+  postedAt?: string; // ISO
   photo?: string;
   /** Free text the extractor reads (description + attributes + amenities). */
   text?: string;

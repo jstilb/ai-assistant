@@ -36,7 +36,19 @@ export const FEATURE_SCHEMA = {
           highlights: { type: "array", items: { type: "string" } },
           concerns: { type: "array", items: { type: "string" } },
         },
-        required: ["id", "dishwasher", "laundry", "ac", "propertyKind", "yard", "kitchen", "scamRisk", "summary", "highlights", "concerns"],
+        required: [
+          "id",
+          "dishwasher",
+          "laundry",
+          "ac",
+          "propertyKind",
+          "yard",
+          "kitchen",
+          "scamRisk",
+          "summary",
+          "highlights",
+          "concerns",
+        ],
       },
     },
   },
@@ -66,13 +78,15 @@ function clip(s: string | undefined, n: number): string {
 
 export function buildBatchPrompt(batch: RawListing[]): string {
   return batch
-    .map((l) => [
-      `### id: ${l.id}`,
-      `title: ${clip(l.title, 200)}`,
-      `price: $${l.price}/mo · beds: ${l.beds ?? "?"}${l.bedsMax && l.bedsMax !== l.beds ? `-${l.bedsMax}` : ""} · baths: ${l.baths ?? "?"} · sqft: ${l.sqft ?? "?"}`,
-      `address: ${l.address ?? "?"}`,
-      `text: ${clip(l.text, 3500)}`,
-    ].join("\n"))
+    .map((l) =>
+      [
+        `### id: ${l.id}`,
+        `title: ${clip(l.title, 200)}`,
+        `price: $${l.price}/mo · beds: ${l.beds ?? "?"}${l.bedsMax && l.bedsMax !== l.beds ? `-${l.bedsMax}` : ""} · baths: ${l.baths ?? "?"} · sqft: ${l.sqft ?? "?"}`,
+        `address: ${l.address ?? "?"}`,
+        `text: ${clip(l.text, 3500)}`,
+      ].join("\n"),
+    )
     .join("\n\n");
 }
 
@@ -87,17 +101,19 @@ const ENUMS: Record<string, readonly string[]> = {
 };
 
 /** Validate one model row; returns null when it isn't usable. */
-export function coerceFeatures(row: any): Omit<Features, "extractor"> | null {
-  if (!row || typeof row !== "object") return null;
-  const out: any = {};
+export function coerceFeatures(input: unknown): Omit<Features, "extractor"> | null {
+  if (!input || typeof input !== "object") return null;
+  const row = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
   for (const [k, allowed] of Object.entries(ENUMS)) {
-    if (!allowed.includes(row[k])) return null;
-    out[k] = row[k];
+    const v = row[k];
+    if (typeof v !== "string" || !allowed.includes(v)) return null;
+    out[k] = v;
   }
   out.summary = clip(String(row.summary ?? ""), 160);
   out.highlights = Array.isArray(row.highlights) ? row.highlights.map(String).slice(0, 3) : [];
   out.concerns = Array.isArray(row.concerns) ? row.concerns.map(String).slice(0, 3) : [];
-  return out;
+  return out as Omit<Features, "extractor">;
 }
 
 // ----------------------------------------------------------------------------
@@ -108,21 +124,53 @@ export function keywordFeatures(l: RawListing): Features {
   const t = `${l.title}\n${l.text ?? ""}`.toLowerCase();
   const dishwasher = /\bno dish ?washer\b/.test(t) ? "no" : /dish ?washer/.test(t) ? "yes" : "unknown";
   const laundry =
-    /(w\/d|washer( ?(&|and|\/) ?|\s)dryer|laundry)[^.\n]{0,25}in[- ]?unit|in[- ]?unit (w\/d|washer|laundry)/.test(t) ? "in_unit"
-      : /no laundry/.test(t) ? "none"
-        : /(on[- ]site|shared|coin|community|common) laundry|laundry (room|on[- ]site|facilit|in (the )?(bldg|building|garage))/.test(t) ? "on_site"
+    /(w\/d|washer( ?(&|and|\/) ?|\s)dryer|laundry)[^.\n]{0,25}in[- ]?unit|in[- ]?unit (w\/d|washer|laundry)/.test(t)
+      ? "in_unit"
+      : /no laundry/.test(t)
+        ? "none"
+        : /(on[- ]site|shared|coin|community|common) laundry|laundry (room|on[- ]site|facilit|in (the )?(bldg|building|garage))/.test(
+              t,
+            )
+          ? "on_site"
           : "unknown";
-  const ac = /\bno (a\/c|ac|air)\b/.test(t) ? "no" : /air condition|\ba\/c\b|central air|mini[- ]split/.test(t) ? "yes" : "unknown";
-  const propertyKind =
-    /\b(single[- ]family|detached) (home|house)\b|\bhouse for rent\b|\bentire house\b/.test(t) ? "house"
-      : /\b(duplex|cottage|bungalow|granny flat|adu|guest house|casita)\b/.test(t) ? "duplex_cottage"
-        : /\b(condo|townhome|townhouse)\b/.test(t) ? "condo_townhome"
-          : /\b(apartment|unit #|complex|community features)\b/.test(t) ? "apartment" : "unknown";
-  const yard = /\b(private|fenced|own|large)\s+(back)?yard\b|\bbackyard\b/.test(t) ? "private" : /\bshared (back)?yard\b/.test(t) ? "shared" : "unknown";
-  const kitchen = /\b(large|spacious|big|chef'?s|gourmet|huge) kitchen\b|kitchen island/.test(t) ? "large" : /\b(galley|small|compact) kitchen|kitchenette/.test(t) ? "small" : "unknown";
-  const scamRisk = /wire (the )?money|western union|out of the country|keys? (will be )?(mailed|shipped)|zelle .{0,20}before/.test(t) ? "high" : /furnished|short[- ]term|vacation rental|sublet|sublease/.test(t) ? "medium" : "low";
+  const ac = /\bno (a\/c|ac|air)\b/.test(t)
+    ? "no"
+    : /air condition|\ba\/c\b|central air|mini[- ]split/.test(t)
+      ? "yes"
+      : "unknown";
+  const propertyKind = /\b(single[- ]family|detached) (home|house)\b|\bhouse for rent\b|\bentire house\b/.test(t)
+    ? "house"
+    : /\b(duplex|cottage|bungalow|granny flat|adu|guest house|casita)\b/.test(t)
+      ? "duplex_cottage"
+      : /\b(condo|townhome|townhouse)\b/.test(t)
+        ? "condo_townhome"
+        : /\b(apartment|unit #|complex|community features)\b/.test(t)
+          ? "apartment"
+          : "unknown";
+  const yard = /\b(private|fenced|own|large)\s+(back)?yard\b|\bbackyard\b/.test(t)
+    ? "private"
+    : /\bshared (back)?yard\b/.test(t)
+      ? "shared"
+      : "unknown";
+  const kitchen = /\b(large|spacious|big|chef'?s|gourmet|huge) kitchen\b|kitchen island/.test(t)
+    ? "large"
+    : /\b(galley|small|compact) kitchen|kitchenette/.test(t)
+      ? "small"
+      : "unknown";
+  const scamRisk =
+    /wire (the )?money|western union|out of the country|keys? (will be )?(mailed|shipped)|zelle .{0,20}before/.test(t)
+      ? "high"
+      : /furnished|short[- ]term|vacation rental|sublet|sublease/.test(t)
+        ? "medium"
+        : "low";
   return {
-    dishwasher, laundry, ac, propertyKind, yard, kitchen, scamRisk,
+    dishwasher,
+    laundry,
+    ac,
+    propertyKind,
+    yard,
+    kitchen,
+    scamRisk,
     summary: clip(l.title, 140),
     highlights: [],
     concerns: [],
@@ -169,6 +217,7 @@ export async function extractFeatures(
     const worker = async () => {
       while (next < batches.length) {
         const batch = batches[next++];
+        if (!batch) continue;
         const res = await infer({
           systemPrompt: SYSTEM_PROMPT,
           userPrompt: `Extract features for these ${batch.length} listings.\n\n${buildBatchPrompt(batch)}`,
@@ -181,7 +230,7 @@ export async function extractFeatures(
           errors.push(res.error ?? "inference failed");
           continue;
         }
-        const rows = (res.parsed as any)?.listings;
+        const rows = (res.parsed as { listings?: unknown } | null | undefined)?.listings;
         if (!Array.isArray(rows)) {
           errors.push("inference returned no listings[]");
           continue;

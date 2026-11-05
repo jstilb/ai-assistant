@@ -19,9 +19,11 @@ import { DECISIONS, loadState, saveState, setDecision } from "./Store.ts";
 import type { Decision } from "./types.ts";
 
 export const RENTALS_API_HELP = {
-  about: "Ocean Beach rental tracker — ranked listings (Craigslist + Redfin) scored against Jm's criteria. Same data as the /rentals page.",
+  about:
+    "Ocean Beach rental tracker — ranked listings (Craigslist + Redfin) scored against Jm's criteria. Same data as the /rentals page.",
   read: {
-    "GET /api/rentals": "{rows[], runs[], criteria} — rows are de-duplicated active listings, best first. ?expired=1 adds expired ones.",
+    "GET /api/rentals":
+      "{rows[], runs[], criteria} — rows are de-duplicated active listings, best first. ?expired=1 adds expired ones.",
     "GET /api/rentals/help": "this document",
   },
   write: {
@@ -32,7 +34,11 @@ export const RENTALS_API_HELP = {
 } as const;
 
 function esc(s: unknown): string {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function boardData(includeExpired: boolean) {
@@ -86,7 +92,7 @@ table.bd{border-collapse:collapse;margin-top:4px} table.bd td{padding:1px 8px 1p
 `;
 
 // Client-side renderer: everything below runs in the browser against window.__DATA.
-const CLIENT_JS = String.raw`
+const CLIENT_JS = `
 const D = window.__DATA;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -205,14 +211,26 @@ function renderPage(data: ReturnType<typeof boardData>): string {
   const last = data.runs[data.runs.length - 1];
   const activeRows = data.rows.filter((r) => r.status === "active");
   const warns: string[] = [];
-  if (!last) warns.push("No scan has run yet — run <code>bun skills/Life/RentalTracker/Tools/RentalTracker.ts scan</code>.");
+  if (!last)
+    warns.push("No scan has run yet — run <code>bun skills/Life/RentalTracker/Tools/RentalTracker.ts scan</code>.");
   else {
-    for (const [src, s] of Object.entries(last.sources)) if (!s.ok) warns.push(`Last scan: <b>${esc(src)}</b> failed — ${esc(s.error)}. Its listings were kept as-is (nothing expired).`);
-    if (Date.now() - Date.parse(last.at) > 8 * 3600_000) warns.push(`Last scan was ${esc(new Date(last.at).toLocaleString())} — the scheduled job may not be running.`);
-    if (last.extractionFallbacks) warns.push(`${last.extractionFallbacks} listing(s) were read by keyword fallback (LLM extraction failed) — marked "keyword-read".`);
+    for (const [src, s] of Object.entries(last.sources))
+      if (!s.ok)
+        warns.push(
+          `Last scan: <b>${esc(src)}</b> failed — ${esc(s.error)}. Its listings were kept as-is (nothing expired).`,
+        );
+    if (Date.now() - Date.parse(last.at) > 8 * 3600_000)
+      warns.push(`Last scan was ${esc(new Date(last.at).toLocaleString())} — the scheduled job may not be running.`);
+    if (last.extractionFallbacks)
+      warns.push(
+        `${last.extractionFallbacks} listing(s) were read by keyword fallback (LLM extraction failed) — marked "keyword-read".`,
+      );
   }
-  const lastTxt = last ? new Date(last.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never";
-  const sel = (f: string, opts: [string, string][]) => `<select data-f="${f}">${opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`;
+  const lastTxt = last
+    ? new Date(last.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "never";
+  const sel = (f: string, opts: [string, string][]) =>
+    `<select data-f="${f}">${opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`;
   const tg = (f: string, l: string) => `<label class="tg"><input type="checkbox" data-f="${f}">${l}</label>`;
   // </script> can't appear inside the inline JSON — escape the slash.
   const json = JSON.stringify(data).replace(/<\//g, "<\\/");
@@ -222,11 +240,39 @@ function renderPage(data: ReturnType<typeof boardData>): string {
 <span class="muted small">${activeRows.length} active · ${activeRows.filter((r) => r.score?.eligible).length} meet the must-haves · last scan ${esc(lastTxt)} · alert at ≥ ${data.alertMinScore}</span>
 <span class="small"><a href="/">← dashboard</a> · <a href="/api/rentals/help">API</a></span></div>
 <div class="filters">
-${sel("view", [["active", "Active (must-haves)"], ["all", "All active"], ["shortlist", "⭐ Shortlist"], ["contacted", "✉ Contacted"], ["toured", "🏠 Toured"], ["rejected", "✗ Rejected"], ["expired", "Expired"]])}
-${sel("sort", [["score", "Sort: best fit"], ["price", "Sort: price"], ["newest", "Sort: newest"], ["beach", "Sort: closest to beach"]])}
-${sel("maxPrice", [["3500", "≤ $3,500"], ["3250", "≤ $3,250"], ["3000", "≤ $3,000"], ["2750", "≤ $2,750"], ["2500", "≤ $2,500"]])}
-${sel("beds", [["any", "1–2 BR"], ["1", "1 BR"], ["2", "2 BR"]])}
-${sel("walk", [["any", "Any walk"], ["5", "≤ 5 min to Newport/Voltaire"], ["10", "≤ 10 min"], ["15", "≤ 15 min"]])}
+${sel("view", [
+  ["active", "Active (must-haves)"],
+  ["all", "All active"],
+  ["shortlist", "⭐ Shortlist"],
+  ["contacted", "✉ Contacted"],
+  ["toured", "🏠 Toured"],
+  ["rejected", "✗ Rejected"],
+  ["expired", "Expired"],
+])}
+${sel("sort", [
+  ["score", "Sort: best fit"],
+  ["price", "Sort: price"],
+  ["newest", "Sort: newest"],
+  ["beach", "Sort: closest to beach"],
+])}
+${sel("maxPrice", [
+  ["3500", "≤ $3,500"],
+  ["3250", "≤ $3,250"],
+  ["3000", "≤ $3,000"],
+  ["2750", "≤ $2,750"],
+  ["2500", "≤ $2,500"],
+])}
+${sel("beds", [
+  ["any", "1–2 BR"],
+  ["1", "1 BR"],
+  ["2", "2 BR"],
+])}
+${sel("walk", [
+  ["any", "Any walk"],
+  ["5", "≤ 5 min to Newport/Voltaire"],
+  ["10", "≤ 10 min"],
+  ["15", "≤ 15 min"],
+])}
 ${tg("dw", "✓ dishwasher")}${tg("wd", "W/D in unit")}${tg("yard", "🌿 yard")}${tg("ac", "❄ A/C")}
 <input type="search" data-f="q" placeholder="search…"> <button class="btn" id="reset">reset</button> <span id="count" class="muted small"></span>
 </div></header>
@@ -254,16 +300,23 @@ export async function handleRentalsRoute(req: Request, url: URL): Promise<Respon
     return new Response(renderPage(boardData(true)), { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
   if (req.method === "GET" && path === "/api/rentals/help") return Response.json(RENTALS_API_HELP);
-  if (req.method === "GET" && path === "/api/rentals") return Response.json(boardData(url.searchParams.get("expired") === "1"));
+  if (req.method === "GET" && path === "/api/rentals")
+    return Response.json(boardData(url.searchParams.get("expired") === "1"));
 
   if (req.method !== "POST") return Response.json({ ok: false, error: "method not allowed" }, { status: 405 });
-  if (req.headers.get("x-kaya-rentals") !== "1") return Response.json({ ok: false, error: "missing header x-kaya-rentals: 1" }, { status: 403 });
+  if (req.headers.get("x-kaya-rentals") !== "1")
+    return Response.json({ ok: false, error: "missing header x-kaya-rentals: 1" }, { status: 403 });
 
   if (path === "/api/rentals/decision") {
     const body = await jsonBody(req);
     try {
       const state = loadState();
-      const l = setDecision(state, String(body.id ?? ""), String(body.decision ?? "") as Decision, typeof body.note === "string" ? body.note : undefined);
+      const l = setDecision(
+        state,
+        String(body.id ?? ""),
+        String(body.decision ?? "") as Decision,
+        typeof body.note === "string" ? body.note : undefined,
+      );
       saveState(state);
       return Response.json({ ok: true, listing: { id: l.id, decision: l.decision, note: l.note } });
     } catch (err) {
