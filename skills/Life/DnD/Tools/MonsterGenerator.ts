@@ -1,19 +1,8 @@
 #!/usr/bin/env bun
-/**
- * MonsterGenerator.ts - D&D 5e AI-Powered Monster Generator
- *
- * Generates complete monster stat blocks using AI inference + CR validation.
- * Validates output against CRCalculator and adjusts HP/DPR to fit target CR.
- *
- * @module MonsterGenerator
- * @version 1.0.0
- */
-
-import { join, dirname } from "path";
-import { readFileSync } from "fs";
-import { calculateCR, deriveHitDice, type MonsterStats } from "./CRCalculator";
-import type { Monster } from "./StatBlock";
-import { loadCRTables, loadXPData, type CRTableEntry, type StatsByCR, type CRTables, type XPThresholdData as XPData } from "./shared/DnDData";
+import { calculateCR, deriveHitDice } from "./CRCalculator.ts";
+import type { Monster } from "./StatBlock.ts";
+import { loadCRTables, loadXPData } from "./shared/DnDData.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 // ============================================
 // TYPES
@@ -38,7 +27,13 @@ export interface GeneratedMonsterStats {
   damageResistances?: string[];
   damageImmunities?: string[];
   conditionImmunities?: string[];
-  senses?: { darkvision?: number; blindsight?: number; tremorsense?: number; truesight?: number; passivePerception: number };
+  senses?: {
+    darkvision?: number;
+    blindsight?: number;
+    tremorsense?: number;
+    truesight?: number;
+    passivePerception: number;
+  };
   languages?: string[];
   traits?: Array<{ name: string; description: string }>;
   actions?: Array<{ name: string; description: string }>;
@@ -177,7 +172,9 @@ export function buildMonsterFromStats(stats: GeneratedMonsterStats, cr: number):
 /**
  * Generate monster stats using AI inference (or mock for testing).
  */
-export async function generateMonsterStats(options: GeneratorOptions | GeneratorOptionsInternal): Promise<GeneratedMonsterStats> {
+export async function generateMonsterStats(
+  options: GeneratorOptions | GeneratorOptionsInternal,
+): Promise<GeneratedMonsterStats> {
   const opts = options as GeneratorOptionsInternal;
   const tables = loadCRTables();
   const crEntry = tables.hpByCR.find((e) => e.cr === options.cr);
@@ -221,7 +218,7 @@ Return ONLY valid JSON with these fields:
     rawOutput = await opts._mockInference(prompt);
   } else {
     // Real inference via CORE Inference tool
-    const { inference } = await import("../../../../lib/core/Inference");
+    const { inference } = await import("../../../../lib/core/Inference.ts");
     const result = await inference({
       systemPrompt: "You are a D&D 5e monster designer. Output ONLY valid JSON, no markdown or explanation.",
       userPrompt: prompt,
@@ -299,7 +296,7 @@ Options:
 
   if (crIdx === -1) {
     // Check stdin
-    const input = await Bun.stdin.text();
+    const input = await readStdinText({ trim: false });
     if (input.trim()) {
       try {
         const partial = JSON.parse(input);
@@ -342,15 +339,21 @@ Options:
     });
 
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        monster,
-        crValidation: {
-          targetCR: cr,
-          calculatedCR: crResult.cr,
-          match: crResult.cr === cr,
-          details: crResult.details,
-        },
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            monster,
+            crValidation: {
+              targetCR: cr,
+              calculatedCR: crResult.cr,
+              match: crResult.cr === cr,
+              details: crResult.details,
+            },
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`${monster.name} (CR ${cr})`);
       console.log(`HP: ${monster.hp}, AC: ${monster.ac}, DPR: ${stats.dpr}`);

@@ -15,14 +15,14 @@ import {
   loadMonsters as loadSRDMonsters,
   type XPThresholdData,
   type SRDMonsterEntry,
-} from "./shared/DnDData";
+} from "./shared/DnDData.ts";
 
 // ============================================
 // TYPES
 // ============================================
 
 // EncounterBudget imported from ./shared/DnDData
-export type { EncounterBudget } from "./shared/DnDData";
+export type { EncounterBudget } from "./shared/DnDData.ts";
 
 export interface MonsterEntry {
   name: string;
@@ -116,7 +116,7 @@ export function getMonsterCountMultiplier(monsterCount: number): number {
 export function rateEncounterDifficulty(
   monsters: MonsterEntry[],
   partyLevel: number,
-  partySize: number
+  partySize: number,
 ): EncounterRating {
   const budget = calculateXPBudget(partyLevel, partySize);
 
@@ -182,7 +182,10 @@ const IRREGULAR_PLURALS: Record<string, string> = {
  * Parse a natural language monster list like "2 goblins, 1 bugbear"
  */
 export function parseMonsterList(input: string): Array<{ name: string; count: number }> {
-  const parts = input.split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = input
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const result: Array<{ name: string; count: number }> = [];
 
   for (const part of parts) {
@@ -222,7 +225,7 @@ export function parseMonsterList(input: string): Array<{ name: string; count: nu
 export function suggestMonsters(
   partyLevel: number,
   partySize: number,
-  difficulty: "easy" | "medium" | "hard" | "deadly"
+  difficulty: "easy" | "medium" | "hard" | "deadly",
 ): MonsterSuggestion[] {
   const budget = calculateXPBudget(partyLevel, partySize);
   const targetXP = budget[difficulty];
@@ -272,14 +275,15 @@ export function suggestMonsters(
     // Limit individual monster count to keep encounters manageable
     count = Math.min(count, 6);
 
-    // Check the adjusted XP with multiplier doesn't exceed budget
-    const tentativeTotal = suggestions.reduce((sum, s) => sum + s.xp * s.count, 0) + monsterXP * count;
-    const tentativeTotalMonsters = currentTotalMonsters + count;
-    const multiplier = getMonsterCountMultiplier(tentativeTotalMonsters);
-    const adjustedTotal = Math.round(tentativeTotal * multiplier);
-
     // If adjusted would exceed 1.5x target (allow some flexibility), reduce count
-    while (count > 0 && Math.round((suggestions.reduce((sum, s) => sum + s.xp * s.count, 0) + monsterXP * count) * getMonsterCountMultiplier(currentTotalMonsters + count)) > targetXP * 1.5) {
+    while (
+      count > 0 &&
+      Math.round(
+        (suggestions.reduce((sum, s) => sum + s.xp * s.count, 0) + monsterXP * count) *
+          getMonsterCountMultiplier(currentTotalMonsters + count),
+      ) >
+        targetXP * 1.5
+    ) {
       count--;
     }
 
@@ -351,9 +355,7 @@ Options:
 
     // Resolve each parsed monster to SRD data
     const resolvedMonsters: MonsterEntry[] = parsed.map((p) => {
-      const found = srdMonsters.find(
-        (m) => m.name.toLowerCase() === p.name
-      );
+      const found = srdMonsters.find((m) => m.name.toLowerCase() === p.name);
       if (found) {
         return {
           name: found.name,
@@ -382,9 +384,7 @@ Options:
   }
 
   // Mode 2: Calculate budget and optionally suggest monsters
-  const difficulty = diffIdx !== -1
-    ? args[diffIdx + 1] as "easy" | "medium" | "hard" | "deadly"
-    : "medium";
+  const difficulty = diffIdx !== -1 ? (args[diffIdx + 1] as "easy" | "medium" | "hard" | "deadly") : "medium";
 
   const output: {
     budget: EncounterBudget;
@@ -402,11 +402,7 @@ Options:
     output.suggestedMonsters = suggestMonsters(partyLevel, partySize, difficulty);
     // Rate the suggestion
     if (output.suggestedMonsters.length > 0) {
-      output.suggestedRating = rateEncounterDifficulty(
-        output.suggestedMonsters,
-        partyLevel,
-        partySize
-      );
+      output.suggestedRating = rateEncounterDifficulty(output.suggestedMonsters, partyLevel, partySize);
     }
   }
 
@@ -414,7 +410,9 @@ Options:
     console.log(JSON.stringify(output, null, 2));
   } else {
     console.log(`Party: ${partySize} characters at level ${partyLevel}`);
-    console.log(`XP Budget: Easy=${budget.easy}, Medium=${budget.medium}, Hard=${budget.hard}, Deadly=${budget.deadly}`);
+    console.log(
+      `XP Budget: Easy=${budget.easy}, Medium=${budget.medium}, Hard=${budget.hard}, Deadly=${budget.deadly}`,
+    );
     console.log(`Target: ${difficulty} (${budget[difficulty]} XP)`);
     if (output.suggestedMonsters) {
       console.log(`\nSuggested Encounter:`);
@@ -422,7 +420,9 @@ Options:
         console.log(`  ${s.count}x ${s.name} (CR ${s.cr}, ${s.xp} XP each)`);
       }
       if (output.suggestedRating) {
-        console.log(`  -> Rated: ${output.suggestedRating.difficulty} (${output.suggestedRating.adjustedXP} adjusted XP)`);
+        console.log(
+          `  -> Rated: ${output.suggestedRating.difficulty} (${output.suggestedRating.adjustedXP} adjusted XP)`,
+        );
       }
     }
   }

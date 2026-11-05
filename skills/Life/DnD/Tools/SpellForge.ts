@@ -10,7 +10,8 @@
  * @version 1.0.0
  */
 
-import { loadSpells as loadSRDSpells, type SRDSpellData } from "./shared/DnDData";
+import { loadSpells as loadSRDSpells, type SRDSpellData } from "./shared/DnDData.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 // ============================================
 // TYPES
@@ -87,9 +88,7 @@ export function calculateExpectedDamage(notation: string): number {
   if (!match) return 0;
   const count = parseInt(match[1]);
   const sides = parseInt(match[2]);
-  const mod = match[3]
-    ? (match[3] === "+" ? 1 : -1) * parseInt(match[4])
-    : 0;
+  const mod = match[3] ? (match[3] === "+" ? 1 : -1) * parseInt(match[4]) : 0;
   return count * ((sides + 1) / 2) + mod;
 }
 
@@ -104,9 +103,7 @@ export function findComparableSpells(level: number, school?: string): SRDSpell[]
   const data = loadSpells();
   let spells = data.spells.filter((s) => s.level === level);
   if (school) {
-    const schoolFiltered = spells.filter(
-      (s) => s.school.toLowerCase() === school.toLowerCase()
-    );
+    const schoolFiltered = spells.filter((s) => s.school.toLowerCase() === school.toLowerCase());
     // If school filter gives results, use it; otherwise return all at that level
     if (schoolFiltered.length > 0) {
       spells = schoolFiltered;
@@ -250,7 +247,7 @@ Return ONLY valid JSON:
   if (options._mockInference) {
     rawOutput = await options._mockInference(prompt);
   } else {
-    const { inference } = await import("../../../../lib/core/Inference");
+    const { inference } = await import("../../../../lib/core/Inference.ts");
     const result = await inference({
       systemPrompt: "You are a D&D 5e spell designer. Output ONLY valid JSON, no markdown or explanation.",
       userPrompt: prompt,
@@ -303,9 +300,7 @@ Return ONLY valid JSON:
   const balanceAnalysis = analyzeBalance(spell);
 
   // Find comparable spells
-  const comparableSpells = options.compare !== false
-    ? findComparableSpells(options.level, options.school)
-    : [];
+  const comparableSpells = options.compare !== false ? findComparableSpells(options.level, options.school) : [];
 
   return {
     spell,
@@ -350,7 +345,7 @@ Options:
   const dmgTypeIdx = args.indexOf("--damage-type");
 
   // Check for stdin
-  const stdinText = await Bun.stdin.text();
+  const stdinText = await readStdinText({ trim: false });
   if (stdinText.trim()) {
     try {
       const partial = JSON.parse(stdinText);

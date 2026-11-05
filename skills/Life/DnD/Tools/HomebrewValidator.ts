@@ -10,17 +10,9 @@
  * @version 1.0.0
  */
 
-import { readFileSync } from "fs";
-import {
-  loadCRTables,
-  loadSpells as loadSRDSpells,
-  loadItems as loadSRDItems,
-  type CRTableEntry,
-  type StatsByCR,
-  type SRDSpell,
-  type SRDSpellData,
-  type SRDItemData,
-} from "./shared/DnDData";
+import { readFileSync } from "node:fs";
+import { loadCRTables, loadSpells as loadSRDSpells, type SRDSpell, type SRDSpellData } from "./shared/DnDData.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 // ============================================
 // TYPES
@@ -81,10 +73,6 @@ function loadSpells(): SRDSpellData {
   return loadSRDSpells();
 }
 
-function loadItems(): SRDItemData {
-  return loadSRDItems();
-}
-
 // ============================================
 // DAMAGE PARSING
 // ============================================
@@ -98,9 +86,7 @@ function averageDamage(notation: string): number {
   if (!match) return 0;
   const count = parseInt(match[1]);
   const sides = parseInt(match[2]);
-  const mod = match[3]
-    ? (match[3] === "+" ? 1 : -1) * parseInt(match[4])
-    : 0;
+  const mod = match[3] ? (match[3] === "+" ? 1 : -1) * parseInt(match[4]) : 0;
   return count * ((sides + 1) / 2) + mod;
 }
 
@@ -125,7 +111,9 @@ export function validateMonster(input: MonsterValidationInput): ValidationResult
   if (!crEntry || !statsEntry) {
     return {
       status: "balanced",
-      flags: [{ field: "cr", actual: input.cr, expected: "0-30", deviation: "CR not found in tables", severity: "error" }],
+      flags: [
+        { field: "cr", actual: input.cr, expected: "0-30", deviation: "CR not found in tables", severity: "error" },
+      ],
       suggestions: ["Verify the CR value is between 0 and 30"],
     };
   }
@@ -179,9 +167,13 @@ export function validateMonster(input: MonsterValidationInput): ValidationResult
       severity: Math.abs(dprDeviation) > 0.5 ? "error" : "warning",
     });
     if (dprDeviation > 0) {
-      suggestions.push(`Reduce DPR from ${input.dpr} to ${statsEntry.dprMin}-${statsEntry.dprMax} range for CR ${input.cr}`);
+      suggestions.push(
+        `Reduce DPR from ${input.dpr} to ${statsEntry.dprMin}-${statsEntry.dprMax} range for CR ${input.cr}`,
+      );
     } else {
-      suggestions.push(`Increase DPR from ${input.dpr} to ${statsEntry.dprMin}-${statsEntry.dprMax} range for CR ${input.cr}`);
+      suggestions.push(
+        `Increase DPR from ${input.dpr} to ${statsEntry.dprMin}-${statsEntry.dprMax} range for CR ${input.cr}`,
+      );
     }
   }
 
@@ -285,7 +277,9 @@ export function validateSpell(input: SpellValidationInput): ValidationResult & {
           deviation: `${(((avgDmg - benchmark.mid) / benchmark.mid) * 100).toFixed(0)}%`,
           severity: "error",
         });
-        suggestions.push(`Damage ${input.damage} (avg ${avgDmg}) exceeds level ${input.level} benchmark. Consider reducing to ~${benchmark.mid} avg.`);
+        suggestions.push(
+          `Damage ${input.damage} (avg ${avgDmg}) exceeds level ${input.level} benchmark. Consider reducing to ~${benchmark.mid} avg.`,
+        );
       } else if (avgDmg < benchmark.low * 0.85) {
         flags.push({
           field: "damage",
@@ -294,7 +288,9 @@ export function validateSpell(input: SpellValidationInput): ValidationResult & {
           deviation: `${(((avgDmg - benchmark.mid) / benchmark.mid) * 100).toFixed(0)}%`,
           severity: "warning",
         });
-        suggestions.push(`Damage ${input.damage} (avg ${avgDmg}) is below level ${input.level} benchmark. Consider increasing to ~${benchmark.mid} avg.`);
+        suggestions.push(
+          `Damage ${input.damage} (avg ${avgDmg}) is below level ${input.level} benchmark. Consider increasing to ~${benchmark.mid} avg.`,
+        );
       }
     }
   }
@@ -372,7 +368,9 @@ export function validateItem(input: ItemValidationInput): ValidationResult {
       deviation: `${(((propertyPower - rarityPower) / rarityPower) * 100).toFixed(0)}%`,
       severity: "error",
     });
-    suggestions.push(`Properties are too powerful for ${input.rarity} rarity. Consider upgrading rarity to ${Object.entries(RARITY_POWER).find(([_, v]) => v >= Math.ceil(propertyPower / 1.5))?.[0] || "legendary"} or reducing properties.`);
+    suggestions.push(
+      `Properties are too powerful for ${input.rarity} rarity. Consider upgrading rarity to ${Object.entries(RARITY_POWER).find(([_, v]) => v >= Math.ceil(propertyPower / 1.5))?.[0] || "legendary"} or reducing properties.`,
+    );
   } else if (propertyPower < rarityPower * 0.5 && propertyPower > 0) {
     flags.push({
       field: "properties",
@@ -439,7 +437,7 @@ Item JSON format:
     const filePath = args[fileIdx + 1];
     inputStr = readFileSync(filePath, "utf-8");
   } else {
-    inputStr = await Bun.stdin.text();
+    inputStr = await readStdinText({ trim: false });
   }
 
   if (!inputStr.trim()) {
@@ -479,7 +477,9 @@ Item JSON format:
       if (result.flags.length > 0) {
         console.log("Flags:");
         for (const f of result.flags) {
-          console.log(`  ${f.severity === "error" ? "!!!" : " ! "} ${f.field}: ${f.actual} (expected ${f.expected}, ${f.deviation})`);
+          console.log(
+            `  ${f.severity === "error" ? "!!!" : " ! "} ${f.field}: ${f.actual} (expected ${f.expected}, ${f.deviation})`,
+          );
         }
       }
       if (result.suggestions.length > 0) {

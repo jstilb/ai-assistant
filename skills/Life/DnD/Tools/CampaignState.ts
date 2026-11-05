@@ -11,11 +11,11 @@
  */
 
 import { z } from "zod";
-import { createStateManager, type StateManager } from "../../../../lib/core/StateManager";
-import { getKayaHome } from "../../../../lib/core/KayaHome";
-import { existsSync, readdirSync, mkdirSync, renameSync } from "fs";
-import { join } from "path";
-import { randomUUID } from "crypto";
+import { createStateManager, type StateManager } from "../../../../lib/core/StateManager.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { existsSync, readdirSync, mkdirSync, renameSync } from "node:fs";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 // ============================================
 // CONSTANTS
@@ -187,15 +187,10 @@ function getCampaignManager(campaignId: string, baseDir: string): StateManager<C
 /**
  * Create a new campaign with the given settings.
  */
-export async function createCampaign(
-  settings: CampaignSettings,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<Campaign> {
+export async function createCampaign(settings: CampaignSettings, baseDir: string = CAMPAIGNS_DIR): Promise<Campaign> {
   const requestedId = settings.id?.trim();
   if (requestedId && !/^[a-z0-9][a-z0-9-]*$/.test(requestedId)) {
-    throw new Error(
-      `Invalid campaign id "${requestedId}": use lowercase letters, digits, and hyphens only`
-    );
+    throw new Error(`Invalid campaign id "${requestedId}": use lowercase letters, digits, and hyphens only`);
   }
   const id = requestedId || randomUUID().slice(0, 8);
   const now = new Date().toISOString();
@@ -224,10 +219,7 @@ export async function createCampaign(
 /**
  * Load an existing campaign by ID. Returns null if not found.
  */
-export async function loadCampaign(
-  campaignId: string,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<Campaign | null> {
+export async function loadCampaign(campaignId: string, baseDir: string = CAMPAIGNS_DIR): Promise<Campaign | null> {
   const manager = getCampaignManager(campaignId, baseDir);
   const exists = await manager.exists();
   if (!exists) return null;
@@ -240,7 +232,7 @@ export async function loadCampaign(
     console.error(
       `[CampaignState] Campaign file for "${campaignId}" exists but failed to load (corrupted or invalid): ${
         e instanceof Error ? e.message : e
-      }`
+      }`,
     );
     return null;
   }
@@ -249,10 +241,7 @@ export async function loadCampaign(
 /**
  * Save (update) an existing campaign.
  */
-export async function saveCampaign(
-  campaign: Campaign,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<void> {
+export async function saveCampaign(campaign: Campaign, baseDir: string = CAMPAIGNS_DIR): Promise<void> {
   const manager = getCampaignManager(campaign.id, baseDir);
   await manager.save(campaign);
 }
@@ -260,13 +249,11 @@ export async function saveCampaign(
 /**
  * List all campaigns (summaries).
  */
-export async function listCampaigns(
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<CampaignSummary[]> {
+export async function listCampaigns(baseDir: string = CAMPAIGNS_DIR): Promise<CampaignSummary[]> {
   if (!existsSync(baseDir)) return [];
 
   const files = readdirSync(baseDir).filter(
-    (f) => f.endsWith(".json") && !f.includes(".backup") && !f.includes(".lock")
+    (f) => f.endsWith(".json") && !f.includes(".backup") && !f.includes(".lock"),
   );
 
   const summaries: CampaignSummary[] = [];
@@ -296,7 +283,7 @@ export async function listCampaigns(
 export async function addSession(
   campaignId: string,
   sessionData: SessionData,
-  baseDir: string = CAMPAIGNS_DIR
+  baseDir: string = CAMPAIGNS_DIR,
 ): Promise<Campaign> {
   const campaign = await loadCampaign(campaignId, baseDir);
   if (!campaign) {
@@ -319,10 +306,7 @@ export async function addSession(
   return campaign;
 }
 
-async function requireCampaign(
-  campaignId: string,
-  baseDir: string
-): Promise<Campaign> {
+async function requireCampaign(campaignId: string, baseDir: string): Promise<Campaign> {
   const campaign = await loadCampaign(campaignId, baseDir);
   if (!campaign) {
     throw new Error(`Campaign not found: ${campaignId}`);
@@ -350,7 +334,7 @@ function mergeDefined<T extends object>(base: T, patch: T): T {
 export async function addPartyMember(
   campaignId: string,
   member: PartyMember,
-  baseDir: string = CAMPAIGNS_DIR
+  baseDir: string = CAMPAIGNS_DIR,
 ): Promise<Campaign> {
   const campaign = await requireCampaign(campaignId, baseDir);
   const idx = campaign.partyMembers.findIndex((m) => m.name === member.name);
@@ -366,11 +350,7 @@ export async function addPartyMember(
 /**
  * Add (or replace, by name) an NPC.
  */
-export async function addNPC(
-  campaignId: string,
-  npc: NPC,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<Campaign> {
+export async function addNPC(campaignId: string, npc: NPC, baseDir: string = CAMPAIGNS_DIR): Promise<Campaign> {
   const campaign = await requireCampaign(campaignId, baseDir);
   const idx = campaign.npcs.findIndex((n) => n.name === npc.name);
   if (idx !== -1) {
@@ -388,7 +368,7 @@ export async function addNPC(
 export async function addLocation(
   campaignId: string,
   location: Location,
-  baseDir: string = CAMPAIGNS_DIR
+  baseDir: string = CAMPAIGNS_DIR,
 ): Promise<Campaign> {
   const campaign = await requireCampaign(campaignId, baseDir);
   const idx = campaign.locations.findIndex((l) => l.name === location.name);
@@ -404,11 +384,7 @@ export async function addLocation(
 /**
  * Add (or replace, by name) a quest.
  */
-export async function addQuest(
-  campaignId: string,
-  quest: Quest,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<Campaign> {
+export async function addQuest(campaignId: string, quest: Quest, baseDir: string = CAMPAIGNS_DIR): Promise<Campaign> {
   const campaign = await requireCampaign(campaignId, baseDir);
   const idx = campaign.quests.findIndex((q) => q.name === quest.name);
   if (idx !== -1) {
@@ -426,7 +402,7 @@ export async function addQuest(
 export async function setCurrentLocation(
   campaignId: string,
   location: string,
-  baseDir: string = CAMPAIGNS_DIR
+  baseDir: string = CAMPAIGNS_DIR,
 ): Promise<Campaign> {
   const campaign = await requireCampaign(campaignId, baseDir);
   campaign.currentLocation = location;
@@ -438,15 +414,9 @@ export async function setCurrentLocation(
  * Import a full campaign from a plain object (e.g. parsed seed JSON).
  * Validates against the schema, fills timestamps, and persists under its id.
  */
-export async function importCampaign(
-  data: unknown,
-  baseDir: string = CAMPAIGNS_DIR
-): Promise<Campaign> {
+export async function importCampaign(data: unknown, baseDir: string = CAMPAIGNS_DIR): Promise<Campaign> {
   const now = new Date().toISOString();
-  const raw = (typeof data === "object" && data !== null ? data : {}) as Record<
-    string,
-    unknown
-  >;
+  const raw = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
   const withDefaults = {
     partyMembers: [],
     npcs: [],
@@ -470,10 +440,8 @@ export function renderCampaignSheet(campaign: Campaign): string {
   lines.push(`# ${campaign.name}`);
   const meta: string[] = [];
   if (campaign.setting) meta.push(`**Setting:** ${campaign.setting}`);
-  if (campaign.currentLocation)
-    meta.push(`**Current location:** ${campaign.currentLocation}`);
-  if (campaign.startingLevel != null)
-    meta.push(`**Starting level:** ${campaign.startingLevel}`);
+  if (campaign.currentLocation) meta.push(`**Current location:** ${campaign.currentLocation}`);
+  if (campaign.startingLevel != null) meta.push(`**Starting level:** ${campaign.startingLevel}`);
   meta.push(`**ID:** \`${campaign.id}\``);
   if (meta.length) lines.push("", meta.join("  •  "));
   if (campaign.notes) lines.push("", campaign.notes);
@@ -482,9 +450,7 @@ export function renderCampaignSheet(campaign: Campaign): string {
   if (party.length) {
     lines.push("", "## Party");
     for (const m of party) {
-      const bits = [m.class, m.level != null ? `lvl ${m.level}` : "", m.race]
-        .filter(Boolean)
-        .join(", ");
+      const bits = [m.class, m.level != null ? `lvl ${m.level}` : "", m.race].filter(Boolean).join(", ");
       const player = m.playerName ? ` _(${m.playerName})_` : "";
       lines.push(`- **${m.name}**${player}${bits ? ` — ${bits}` : ""}`);
       if (m.items?.length) lines.push(`  - Items: ${m.items.join(", ")}`);
@@ -498,9 +464,7 @@ export function renderCampaignSheet(campaign: Campaign): string {
     lines.push("", "## Active Quests");
     for (const q of activeQuests) {
       lines.push(
-        `- **${q.name}**${q.givenBy ? ` (from ${q.givenBy})` : ""}${
-          q.description ? ` — ${q.description}` : ""
-        }`
+        `- **${q.name}**${q.givenBy ? ` (from ${q.givenBy})` : ""}${q.description ? ` — ${q.description}` : ""}`,
       );
     }
   }
@@ -515,11 +479,7 @@ export function renderCampaignSheet(campaign: Campaign): string {
     lines.push("", "## NPCs");
     for (const n of campaign.npcs) {
       const tags = [n.location, n.disposition].filter(Boolean).join(", ");
-      lines.push(
-        `- **${n.name}**${tags ? ` (${tags})` : ""}${
-          n.description ? ` — ${n.description}` : ""
-        }`
-      );
+      lines.push(`- **${n.name}**${tags ? ` (${tags})` : ""}${n.description ? ` — ${n.description}` : ""}`);
     }
   }
 
@@ -527,9 +487,7 @@ export function renderCampaignSheet(campaign: Campaign): string {
     lines.push("", "## Locations");
     for (const l of campaign.locations) {
       const mark = l.visited ? "" : " _(unvisited)_";
-      lines.push(
-        `- **${l.name}**${mark}${l.description ? ` — ${l.description}` : ""}`
-      );
+      lines.push(`- **${l.name}**${mark}${l.description ? ` — ${l.description}` : ""}`);
     }
   }
 
@@ -543,10 +501,8 @@ export function renderCampaignSheet(campaign: Campaign): string {
 
   if (campaign.assetLibrary || campaign.homebrewRef) {
     lines.push("", "## References");
-    if (campaign.assetLibrary)
-      lines.push(`- Asset library: ${campaign.assetLibrary}`);
-    if (campaign.homebrewRef)
-      lines.push(`- Homebrew items: ${campaign.homebrewRef}`);
+    if (campaign.assetLibrary) lines.push(`- Asset library: ${campaign.assetLibrary}`);
+    if (campaign.homebrewRef) lines.push(`- Homebrew items: ${campaign.homebrewRef}`);
   }
 
   return lines.join("\n") + "\n";
@@ -619,9 +575,7 @@ All state persisted via StateManager with backup and validation.
         console.log("No campaigns yet. Create one with: create <name> --id <slug>");
       } else {
         for (const c of campaigns) {
-          console.log(
-            `${c.id.padEnd(12)} ${c.name}  (party ${c.partySize}, ${c.sessionCount} sessions)`
-          );
+          console.log(`${c.id.padEnd(12)} ${c.name}  (party ${c.partySize}, ${c.sessionCount} sessions)`);
         }
       }
       break;
@@ -631,11 +585,7 @@ All state persisted via StateManager with backup and validation.
       if (!id) die("campaign ID required");
       const campaign = await loadCampaign(id);
       if (!campaign) die(`Campaign not found: ${id}`);
-      console.log(
-        has("--json")
-          ? JSON.stringify(campaign, null, 2)
-          : renderCampaignSheet(campaign!)
-      );
+      console.log(has("--json") ? JSON.stringify(campaign, null, 2) : renderCampaignSheet(campaign!));
       break;
     }
     case "sheet": {
@@ -660,7 +610,7 @@ All state persisted via StateManager with backup and validation.
       console.log(
         `Imported campaign "${campaign.name}" as id "${campaign.id}" ` +
           `(${campaign.partyMembers.length} party, ${campaign.npcs.length} NPCs, ` +
-          `${campaign.locations.length} locations, ${campaign.quests.length} quests).`
+          `${campaign.locations.length} locations, ${campaign.quests.length} quests).`,
       );
       break;
     }
@@ -676,7 +626,10 @@ All state persisted via StateManager with backup and validation.
         race: flag("--race"),
         playerName: flag("--player"),
         items: itemsRaw
-          ? itemsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+          ? itemsRaw
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
           : undefined,
         image: flag("--image"),
         notes: flag("--notes"),
@@ -752,9 +705,7 @@ All state persisted via StateManager with backup and validation.
         date: date!,
         summary: summary!,
       });
-      console.log(
-        `Session ${number} logged (${updated.sessionLogs.length} sessions total).`
-      );
+      console.log(`Session ${number} logged (${updated.sessionLogs.length} sessions total).`);
       break;
     }
     default:

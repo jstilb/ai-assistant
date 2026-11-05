@@ -9,9 +9,10 @@
  * @version 1.0.0
  */
 
-import { join } from "path";
-import { mkdirSync, existsSync, readFileSync } from "fs";
+import { join } from "node:path";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // TYPES
@@ -126,18 +127,20 @@ export const MonsterFileSchema = z.object({
   cr: z.number(),
   size: z.string().optional(),
   environment: z.string().optional(),
-  traits: z.array(z.object({
-    name: z.string(),
-    description: z.string(),
-  })).optional(),
+  traits: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 type MonsterJsonFile = z.infer<typeof MonsterFileSchema>;
 
 export function parseMonsterFile(monsterJson: MonsterJsonFile): MonsterArtOptions {
-  const description = monsterJson.traits
-    ?.map((t) => t.description)
-    .join(". ");
+  const description = monsterJson.traits?.map((t) => t.description).join(". ");
 
   return {
     name: monsterJson.name,
@@ -153,30 +156,18 @@ export function parseMonsterFile(monsterJson: MonsterJsonFile): MonsterArtOption
 // ART GENERATION (calls Art skill CLI)
 // ============================================
 
-async function generateArt(
-  prompt: string,
-  outputPath: string,
-  imageSize?: string
-): Promise<string> {
+async function generateArt(prompt: string, outputPath: string, imageSize?: string): Promise<string> {
   const dir = join(process.env.HOME!, "Downloads", "dnd-art");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
 
-  const generateScript = join(
-    process.env.HOME!,
-    ".claude",
-    "skills",
-    "Content",
-    "Art",
-    "Tools",
-    "Generate.ts"
-  );
+  const generateScript = join(getKayaHome(), "skills", "Content", "Art", "Tools", "Generate.ts");
 
   if (!existsSync(generateScript)) {
     throw new Error(
       `[MonsterArt] Art skill not found at expected path: ${generateScript}\n` +
-        `Check that the Content/Art skill is installed and the path is correct.`
+        `Check that the Content/Art skill is installed and the path is correct.`,
     );
   }
 
@@ -184,11 +175,16 @@ async function generateArt(
   const args = [
     "run",
     generateScript,
-    "--model", "nano-banana-pro",
-    "--prompt", prompt,
-    "--size", size,
-    "--aspect-ratio", "1:1",
-    "--output", outputPath,
+    "--model",
+    "nano-banana-pro",
+    "--prompt",
+    prompt,
+    "--size",
+    size,
+    "--aspect-ratio",
+    "1:1",
+    "--output",
+    outputPath,
   ];
 
   const proc = Bun.spawn(["bun", ...args], {
@@ -276,12 +272,18 @@ Options:
     const outputPath = getOutputPath(opts.name, isToken);
 
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        prompt,
-        outputPath,
-        options: opts,
-        status: "generating",
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            prompt,
+            outputPath,
+            options: opts,
+            status: "generating",
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`Generating art for ${opts.name}...`);
       console.log(`Style: ${opts.style || "dark fantasy"}`);
@@ -291,21 +293,33 @@ Options:
     const result = await generateArt(prompt, outputPath, opts.imageSize);
 
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        success: true,
-        outputPath: result,
-        prompt,
-        options: opts,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            success: true,
+            outputPath: result,
+            prompt,
+            options: opts,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`Image saved to: ${result}`);
     }
   } catch (e) {
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.error("Error:", e instanceof Error ? e.message : e);
     }

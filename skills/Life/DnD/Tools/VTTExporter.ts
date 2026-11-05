@@ -9,10 +9,10 @@
  * @version 1.0.0
  */
 
-import { join, dirname } from "path";
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
+import { join, dirname } from "node:path";
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { z } from "zod";
-import { renderStatBlock, type Monster } from "./StatBlock";
+import { renderStatBlock, type Monster } from "./StatBlock.ts";
 
 // ============================================
 // TYPES
@@ -26,7 +26,7 @@ export interface MonsterEntry {
 }
 
 // EncounterBudget imported from ./shared/DnDData
-export type { EncounterBudget } from "./shared/DnDData";
+export type { EncounterBudget } from "./shared/DnDData.ts";
 
 /**
  * Zod schema for validating encounter export JSON inputs.
@@ -44,12 +44,14 @@ export const EncounterExportInputSchema = z.object({
     partyLevel: z.number(),
     partySize: z.number(),
   }),
-  monsters: z.array(z.object({
-    name: z.string(),
-    cr: z.number(),
-    xp: z.number(),
-    count: z.number(),
-  })),
+  monsters: z.array(
+    z.object({
+      name: z.string(),
+      cr: z.number(),
+      xp: z.number(),
+      count: z.number(),
+    }),
+  ),
 });
 
 export type EncounterExportInput = z.infer<typeof EncounterExportInputSchema>;
@@ -167,9 +169,7 @@ export function resolveEncounterMonsters(monsters: MonsterEntry[]): ResolvedMons
   const srd = loadSRDMonsters();
 
   return monsters.map((entry) => {
-    const found = srd.find(
-      (m) => m.name.toLowerCase() === entry.name.toLowerCase()
-    );
+    const found = srd.find((m) => m.name.toLowerCase() === entry.name.toLowerCase());
 
     if (found) {
       const statBlock: Monster = {
@@ -351,9 +351,7 @@ Encounter JSON Format:
 
   const format = args[formatIdx + 1];
   const filePath = args[fileIdx + 1];
-  const outputDir = outputIdx !== -1
-    ? args[outputIdx + 1]
-    : join(process.env.HOME!, "Downloads", "dnd-export");
+  const outputDir = outputIdx !== -1 ? args[outputIdx + 1] : join(process.env.HOME!, "Downloads", "dnd-export");
 
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
@@ -370,13 +368,19 @@ Encounter JSON Format:
       writeFileSync(outputPath, JSON.stringify(result, null, 2));
 
       if (jsonOutput) {
-        console.log(JSON.stringify({
-          success: true,
-          format: "foundry",
-          outputPath,
-          actorCount: result.actors.length,
-          difficulty: result.encounter.difficulty,
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              format: "foundry",
+              outputPath,
+              actorCount: result.actors.length,
+              difficulty: result.encounter.difficulty,
+            },
+            null,
+            2,
+          ),
+        );
       } else {
         console.log(`Foundry VTT encounter exported to: ${outputPath}`);
         console.log(`  Actors: ${result.actors.length}`);
@@ -389,12 +393,18 @@ Encounter JSON Format:
       writeFileSync(outputPath, result);
 
       if (jsonOutput) {
-        console.log(JSON.stringify({
-          success: true,
-          format: "roll20",
-          outputPath,
-          characterCount: result.length,
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              format: "roll20",
+              outputPath,
+              characterCount: result.length,
+            },
+            null,
+            2,
+          ),
+        );
       } else {
         console.log(`Roll20 encounter exported to: ${outputPath}`);
         console.log(result);
@@ -405,10 +415,16 @@ Encounter JSON Format:
     }
   } catch (e) {
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.error("Error:", e instanceof Error ? e.message : e);
     }

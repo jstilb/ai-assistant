@@ -8,8 +8,8 @@
  * @module DnDData
  */
 
-import { join, dirname } from "path";
-import { readFileSync } from "fs";
+import { join, dirname } from "node:path";
+import { readFileSync } from "node:fs";
 
 // ============================================
 // INTERFACES
@@ -31,7 +31,7 @@ export interface StatsByCR {
   dprMax: number;
 }
 
-export interface EffectiveHPMultiplier {
+interface EffectiveHPMultiplier {
   crMin: number;
   crMax: number;
   resistances: number;
@@ -51,7 +51,7 @@ export interface EncounterBudget {
 // CR TABLE CACHE
 // ============================================
 
-export interface CRTables {
+interface CRTables {
   hpByCR: CRTableEntry[];
   statsByCR: StatsByCR[];
   effectiveHPMultipliers: { byExpectedCR: EffectiveHPMultiplier[] };
@@ -127,10 +127,8 @@ export function crToString(cr: number): string {
 
 /** All valid D&D 5e CR values per DMG. */
 export const VALID_CRS: readonly number[] = [
-  0, 0.125, 0.25, 0.5,
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-  21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+  0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+  27, 28, 29, 30,
 ] as const;
 
 // ============================================
@@ -170,7 +168,7 @@ export function loadSpells(): SRDSpellData {
 // SRD ITEM DATA
 // ============================================
 
-export interface SRDItem {
+interface SRDItem {
   name: string;
   type: string;
   rarity?: string;
@@ -208,7 +206,7 @@ export interface SRDMonsterEntry {
   alignment?: string;
 }
 
-export interface SRDMonsterData {
+interface SRDMonsterData {
   monsters: SRDMonsterEntry[];
 }
 

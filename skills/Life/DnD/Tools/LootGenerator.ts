@@ -10,8 +10,8 @@
  * @version 1.0.0
  */
 
-import { join, dirname } from "path";
-import { readFileSync } from "fs";
+import { join, dirname } from "node:path";
+import { readFileSync } from "node:fs";
 
 // ============================================
 // TYPES
@@ -100,9 +100,7 @@ export function parseDiceNotation(notation: string): DiceNotation {
   // Handle standard notation: "2d6", "3d8+5", "1d8-1"
   const diceMatch = notation.match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/);
   if (diceMatch) {
-    const mod = diceMatch[3]
-      ? (diceMatch[3] === "+" ? 1 : -1) * parseInt(diceMatch[4])
-      : 0;
+    const mod = diceMatch[3] ? (diceMatch[3] === "+" ? 1 : -1) * parseInt(diceMatch[4]) : 0;
     return {
       count: parseInt(diceMatch[1]),
       sides: parseInt(diceMatch[2]),
@@ -172,7 +170,7 @@ export function rollOnMagicItemTable(table: string): string {
   const items = data.magicItemTables[table];
   if (!items || items.length === 0) {
     console.error(
-      `[LootGenerator] Warning: unknown or empty magic item table "${table}" - returning placeholder loot text instead of a real roll.`
+      `[LootGenerator] Warning: unknown or empty magic item table "${table}" - returning placeholder loot text instead of a real roll.`,
     );
     return `Unknown magic item (table ${table})`;
   }
@@ -276,9 +274,8 @@ export function generateHoardTreasure(cr: number): TreasureResult {
     if (selectedRow) {
       // Gems
       if (selectedRow.gems) {
-        const count = typeof selectedRow.gems.count === "string"
-          ? rollDice(selectedRow.gems.count)
-          : selectedRow.gems.count;
+        const count =
+          typeof selectedRow.gems.count === "string" ? rollDice(selectedRow.gems.count) : selectedRow.gems.count;
         result.gems = {
           count,
           valueEach: selectedRow.gems.value,
@@ -288,9 +285,8 @@ export function generateHoardTreasure(cr: number): TreasureResult {
 
       // Art objects
       if (selectedRow.art) {
-        const count = typeof selectedRow.art.count === "string"
-          ? rollDice(selectedRow.art.count)
-          : selectedRow.art.count;
+        const count =
+          typeof selectedRow.art.count === "string" ? rollDice(selectedRow.art.count) : selectedRow.art.count;
         result.artObjects = {
           count,
           valueEach: selectedRow.art.value,
@@ -300,9 +296,10 @@ export function generateHoardTreasure(cr: number): TreasureResult {
 
       // Magic items
       if (selectedRow.magicItems) {
-        const itemCount = typeof selectedRow.magicItems.count === "string"
-          ? rollDice(selectedRow.magicItems.count)
-          : selectedRow.magicItems.count;
+        const itemCount =
+          typeof selectedRow.magicItems.count === "string"
+            ? rollDice(selectedRow.magicItems.count)
+            : selectedRow.magicItems.count;
         const items: string[] = [];
         for (let i = 0; i < itemCount; i++) {
           items.push(rollOnMagicItemTable(selectedRow.magicItems.table));
@@ -361,7 +358,7 @@ Options:
       console.log(JSON.stringify({ table, items }, null, 2));
     } else {
       console.log(`Magic Item Table ${table}:`);
-      items.forEach((item, idx) => console.log(`  ${idx + 1}. ${item}`));
+      for (const [idx, item] of items.entries()) console.log(`  ${idx + 1}. ${item}`);
     }
     process.exit(0);
   }
@@ -405,11 +402,13 @@ Options:
         console.log(`  Gems: ${r.gems.count}x ${r.gems.valueEach} gp gems (total ${r.gems.totalValue} gp)`);
       }
       if (r.artObjects) {
-        console.log(`  Art: ${r.artObjects.count}x ${r.artObjects.valueEach} gp art objects (total ${r.artObjects.totalValue} gp)`);
+        console.log(
+          `  Art: ${r.artObjects.count}x ${r.artObjects.valueEach} gp art objects (total ${r.artObjects.totalValue} gp)`,
+        );
       }
       if (r.magicItems && r.magicItems.length > 0) {
         console.log(`  Magic Items:`);
-        r.magicItems.forEach((item) => console.log(`    - ${item}`));
+        for (const item of r.magicItems) console.log(`    - ${item}`);
       }
     }
   }

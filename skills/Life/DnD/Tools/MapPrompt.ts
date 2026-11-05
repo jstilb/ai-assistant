@@ -9,8 +9,9 @@
  * @version 1.0.0
  */
 
-import { join, dirname } from "path";
-import { mkdirSync, existsSync, readFileSync } from "fs";
+import { join, dirname } from "node:path";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // TYPES
@@ -99,7 +100,7 @@ export function getTemplatesByType(type: string): MapTemplate[] {
  */
 export function fillTemplateFeatures(
   template: Pick<MapTemplate, "description" | "terrain" | "name" | "type">,
-  features: string[]
+  features: string[],
 ): string {
   const parts: string[] = [];
 
@@ -197,35 +198,28 @@ export function getMapOutputPath(type: string, theme: string): string {
 // MAP GENERATION (calls Art skill CLI)
 // ============================================
 
-async function generateMap(
-  prompt: string,
-  outputPath: string,
-  imageSize?: string
-): Promise<string> {
+async function generateMap(prompt: string, outputPath: string, imageSize?: string): Promise<string> {
   const dir = join(process.env.HOME!, "Downloads", "dnd-maps");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
 
-  const generateScript = join(
-    process.env.HOME!,
-    ".claude",
-    "skills",
-    "Content",
-    "Art",
-    "Tools",
-    "Generate.ts"
-  );
+  const generateScript = join(getKayaHome(), "skills", "Content", "Art", "Tools", "Generate.ts");
 
   const size = imageSize || "2K";
   const args = [
     "run",
     generateScript,
-    "--model", "nano-banana-pro",
-    "--prompt", prompt,
-    "--size", size,
-    "--aspect-ratio", "1:1",
-    "--output", outputPath,
+    "--model",
+    "nano-banana-pro",
+    "--prompt",
+    prompt,
+    "--size",
+    size,
+    "--aspect-ratio",
+    "1:1",
+    "--output",
+    outputPath,
   ];
 
   const proc = Bun.spawn(["bun", ...args], {
@@ -303,12 +297,18 @@ Options:
     const outputPath = getMapOutputPath(opts.type, opts.theme);
 
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        prompt,
-        outputPath,
-        options: opts,
-        status: "generating",
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            prompt,
+            outputPath,
+            options: opts,
+            status: "generating",
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`Generating ${opts.type} map: ${opts.theme}...`);
       console.log(`Prompt: ${prompt}`);
@@ -317,21 +317,33 @@ Options:
     const result = await generateMap(prompt, outputPath, opts.imageSize);
 
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        success: true,
-        outputPath: result,
-        prompt,
-        options: opts,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            success: true,
+            outputPath: result,
+            prompt,
+            options: opts,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(`Map saved to: ${result}`);
     }
   } catch (e) {
     if (jsonOutput) {
-      console.log(JSON.stringify({
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       console.error("Error:", e instanceof Error ? e.message : e);
     }

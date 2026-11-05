@@ -1,19 +1,6 @@
 #!/usr/bin/env bun
-/**
- * CRCalculator.ts - D&D 5e Challenge Rating Calculator
- *
- * Implements the DMG p274-281 CR calculation method:
- * 1. Calculate defensive CR from HP (adjusted for resistances/immunities) and AC
- * 2. Calculate offensive CR from DPR and attack bonus/save DC
- * 3. Average offensive and defensive CR for final result
- *
- * @module CRCalculator
- * @version 1.0.0
- */
-
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { loadCRTables, crToString, type CRTableEntry, type StatsByCR, type EffectiveHPMultiplier, type CRTables } from "./shared/DnDData";
+import { loadCRTables, crToString } from "./shared/DnDData.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 // ============================================
 // TYPES
@@ -68,10 +55,8 @@ export interface CRResult {
 // ============================================
 
 const VALID_CRS: number[] = [
-  0, 0.125, 0.25, 0.5,
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-  21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+  0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+  27, 28, 29, 30,
 ];
 
 function nearestCR(value: number): number {
@@ -134,21 +119,12 @@ export interface HitDiceResult {
  * Derive hit dice expression from HP, size, and CON score.
  * Follows D&D 5e DMG rules for hit dice assignment.
  */
-export function deriveHitDice(
-  hp: number,
-  size: string = "Medium",
-  conScore: number = 10
-): HitDiceResult {
+export function deriveHitDice(hp: number, size: string = "Medium", conScore: number = 10): HitDiceResult {
   const conMod = Math.floor((conScore - 10) / 2);
   const hitDie = SIZE_TO_HIT_DIE[size] ?? 8;
   const avgPerDie = (hitDie + 1) / 2 + conMod;
   const numDice = Math.max(1, Math.round(hp / avgPerDie));
-  const conPart =
-    conMod !== 0
-      ? conMod > 0
-        ? `+${numDice * conMod}`
-        : `${numDice * conMod}`
-      : "";
+  const conPart = conMod !== 0 ? (conMod > 0 ? `+${numDice * conMod}` : `${numDice * conMod}`) : "";
   const hitDiceStr = `${numDice}d${hitDie}${conPart}`;
   return { numDice, hitDie, conModifier: conMod, hitDiceStr };
 }
@@ -218,11 +194,7 @@ function getExpectedSaveDC(cr: number): number {
 /**
  * Get effective HP multiplier based on resistances/immunities
  */
-function getEffectiveHPMultiplier(
-  estimatedCR: number,
-  hasResistances: boolean,
-  hasImmunities: boolean
-): number {
+function getEffectiveHPMultiplier(estimatedCR: number, hasResistances: boolean, hasImmunities: boolean): number {
   const tables = loadCRTables()!;
   let multiplier = 1.0;
 
@@ -260,11 +232,7 @@ export function calculateCR(stats: MonsterStats): CRResult {
   const initialDefCR = findDefensiveCRFromHP(stats.hp);
 
   // Apply HP multipliers for resistances/immunities
-  const hpMultiplier = getEffectiveHPMultiplier(
-    initialDefCR,
-    hasResistances,
-    hasImmunities
-  );
+  const hpMultiplier = getEffectiveHPMultiplier(initialDefCR, hasResistances, hasImmunities);
   effectiveHP = Math.round(stats.hp * hpMultiplier);
 
   // Additional adjustments per DMG guidelines
@@ -299,7 +267,9 @@ export function calculateCR(stats: MonsterStats): CRResult {
   // Every 2 points of AC above/below expected shifts CR by 1 step in the table
   const acAdjustment = Math.floor(acDiff / 2);
   if (acAdjustment !== 0) {
-    details.push(`AC adjustment: ${stats.ac} vs expected ${expectedAC} = ${acAdjustment >= 0 ? "+" : ""}${acAdjustment} steps`);
+    details.push(
+      `AC adjustment: ${stats.ac} vs expected ${expectedAC} = ${acAdjustment >= 0 ? "+" : ""}${acAdjustment} steps`,
+    );
   }
   defensiveCR = shiftCR(defensiveCR, acAdjustment);
   details.push(`Defensive CR (adjusted): ${crToString(defensiveCR)}`);
@@ -316,13 +286,12 @@ export function calculateCR(stats: MonsterStats): CRResult {
   const saveDCDiff = stats.saveDC - expectedSaveDC;
 
   // Use whichever gives the higher adjustment (steps in table)
-  const offensiveAdjustment = Math.max(
-    Math.floor(attackDiff / 2),
-    Math.floor(saveDCDiff / 2)
-  );
+  const offensiveAdjustment = Math.max(Math.floor(attackDiff / 2), Math.floor(saveDCDiff / 2));
 
   if (offensiveAdjustment !== 0) {
-    details.push(`Offensive adjustment: attack ${stats.attackBonus} vs expected ${expectedAttack}, save DC ${stats.saveDC} vs expected ${expectedSaveDC} = ${offensiveAdjustment >= 0 ? "+" : ""}${offensiveAdjustment} steps`);
+    details.push(
+      `Offensive adjustment: attack ${stats.attackBonus} vs expected ${expectedAttack}, save DC ${stats.saveDC} vs expected ${expectedSaveDC} = ${offensiveAdjustment >= 0 ? "+" : ""}${offensiveAdjustment} steps`,
+    );
   }
   offensiveCR = shiftCR(offensiveCR, offensiveAdjustment);
   details.push(`Offensive CR (adjusted): ${crToString(offensiveCR)}`);
@@ -345,7 +314,9 @@ export function calculateCR(stats: MonsterStats): CRResult {
   finalCR = Math.max(0, Math.min(30, finalCR));
   finalCR = nearestCR(finalCR);
 
-  details.push(`Final CR: ${crToString(finalCR)} (average of ${crToString(defensiveCR)} defensive + ${crToString(offensiveCR)} offensive)`);
+  details.push(
+    `Final CR: ${crToString(finalCR)} (average of ${crToString(defensiveCR)} defensive + ${crToString(offensiveCR)} offensive)`,
+  );
 
   return {
     cr: finalCR,
@@ -397,18 +368,29 @@ Input JSON format:
       {
         name: "Adult Red Dragon (CR 17)",
         stats: {
-          hp: 256, ac: 19, attackBonus: 14, dpr: 73, saveDC: 21,
-          resistances: ["fire"], legendaryResistances: 3, flyingSpeed: 80,
+          hp: 256,
+          ac: 19,
+          attackBonus: 14,
+          dpr: 73,
+          saveDC: 21,
+          resistances: ["fire"],
+          legendaryResistances: 3,
+          flyingSpeed: 80,
         },
         expected: 17,
       },
       {
         name: "Tarrasque (CR 30)",
         stats: {
-          hp: 676, ac: 25, attackBonus: 19, dpr: 148, saveDC: 24,
+          hp: 676,
+          ac: 25,
+          attackBonus: 19,
+          dpr: 148,
+          saveDC: 24,
           immunities: ["fire", "poison", "bludgeoning", "piercing", "slashing"],
           conditionImmunities: ["charmed", "frightened", "paralyzed", "poisoned"],
-          legendaryResistances: 5, magicResistance: true,
+          legendaryResistances: 5,
+          magicResistance: true,
           specialTraits: ["reflective_carapace", "siege_monster"],
         },
         expected: 30,
@@ -419,7 +401,9 @@ Input JSON format:
     for (const test of tests) {
       const result = calculateCR(test.stats);
       const ok = result.cr === test.expected;
-      console.log(`${ok ? "PASS" : "FAIL"}: ${test.name} - Got CR ${crToString(result.cr)}, expected CR ${crToString(test.expected)}`);
+      console.log(
+        `${ok ? "PASS" : "FAIL"}: ${test.name} - Got CR ${crToString(result.cr)}, expected CR ${crToString(test.expected)}`,
+      );
       if (!ok) {
         console.log(`  Details:\n  ${result.details.split("\n").join("\n  ")}`);
       }
@@ -430,7 +414,7 @@ Input JSON format:
   }
 
   // Read from stdin
-  const input = await Bun.stdin.text();
+  const input = await readStdinText({ trim: false });
   if (input.trim()) {
     try {
       const stats: MonsterStats = JSON.parse(input);

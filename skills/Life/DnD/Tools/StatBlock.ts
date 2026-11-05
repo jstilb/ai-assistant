@@ -13,7 +13,8 @@
  * @version 1.0.0
  */
 
-import { crToString } from "./shared/DnDData";
+import { crToString } from "./shared/DnDData.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 // ============================================
 // TYPES
@@ -158,11 +159,11 @@ function renderMarkdown(monster: Monster): string {
   lines.push("|:---:|:---:|:---:|:---:|:---:|:---:|");
   lines.push(
     `| ${monster.abilities.str} (${modifierString(monster.abilities.str)}) ` +
-    `| ${monster.abilities.dex} (${modifierString(monster.abilities.dex)}) ` +
-    `| ${monster.abilities.con} (${modifierString(monster.abilities.con)}) ` +
-    `| ${monster.abilities.int} (${modifierString(monster.abilities.int)}) ` +
-    `| ${monster.abilities.wis} (${modifierString(monster.abilities.wis)}) ` +
-    `| ${monster.abilities.cha} (${modifierString(monster.abilities.cha)}) |`
+      `| ${monster.abilities.dex} (${modifierString(monster.abilities.dex)}) ` +
+      `| ${monster.abilities.con} (${modifierString(monster.abilities.con)}) ` +
+      `| ${monster.abilities.int} (${modifierString(monster.abilities.int)}) ` +
+      `| ${monster.abilities.wis} (${modifierString(monster.abilities.wis)}) ` +
+      `| ${monster.abilities.cha} (${modifierString(monster.abilities.cha)}) |`,
   );
   lines.push("");
   lines.push("---");
@@ -177,10 +178,8 @@ function renderMarkdown(monster: Monster): string {
 
   if (monster.damageVulnerabilities?.length)
     lines.push(`**Damage Vulnerabilities** ${monster.damageVulnerabilities.join(", ")}`);
-  if (monster.damageResistances?.length)
-    lines.push(`**Damage Resistances** ${monster.damageResistances.join(", ")}`);
-  if (monster.damageImmunities?.length)
-    lines.push(`**Damage Immunities** ${monster.damageImmunities.join(", ")}`);
+  if (monster.damageResistances?.length) lines.push(`**Damage Resistances** ${monster.damageResistances.join(", ")}`);
+  if (monster.damageImmunities?.length) lines.push(`**Damage Immunities** ${monster.damageImmunities.join(", ")}`);
   if (monster.conditionImmunities?.length)
     lines.push(`**Condition Immunities** ${monster.conditionImmunities.join(", ")}`);
 
@@ -234,7 +233,7 @@ function renderMarkdown(monster: Monster): string {
     lines.push("## Legendary Actions");
     lines.push("");
     lines.push(
-      `The ${monster.name.toLowerCase()} can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn. The ${monster.name.toLowerCase()} regains spent legendary actions at the start of its turn.`
+      `The ${monster.name.toLowerCase()} can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn. The ${monster.name.toLowerCase()} regains spent legendary actions at the start of its turn.`,
     );
     lines.push("");
     for (const action of monster.legendaryActions) {
@@ -259,24 +258,22 @@ function renderText(monster: Monster): string {
   lines.push(`Hit Points ${monster.hp} (${monster.hitDice})`);
   lines.push(`Speed ${formatSpeed(monster.speed)}`);
   lines.push("-----------------------------------------------");
-  lines.push(
-    `STR     DEX     CON     INT     WIS     CHA`
-  );
+  lines.push(`STR     DEX     CON     INT     WIS     CHA`);
   lines.push(
     `${String(monster.abilities.str).padEnd(8)}` +
-    `${String(monster.abilities.dex).padEnd(8)}` +
-    `${String(monster.abilities.con).padEnd(8)}` +
-    `${String(monster.abilities.int).padEnd(8)}` +
-    `${String(monster.abilities.wis).padEnd(8)}` +
-    `${String(monster.abilities.cha)}`
+      `${String(monster.abilities.dex).padEnd(8)}` +
+      `${String(monster.abilities.con).padEnd(8)}` +
+      `${String(monster.abilities.int).padEnd(8)}` +
+      `${String(monster.abilities.wis).padEnd(8)}` +
+      `${String(monster.abilities.cha)}`,
   );
   lines.push(
     `(${modifierString(monster.abilities.str)})`.padEnd(8) +
-    `(${modifierString(monster.abilities.dex)})`.padEnd(8) +
-    `(${modifierString(monster.abilities.con)})`.padEnd(8) +
-    `(${modifierString(monster.abilities.int)})`.padEnd(8) +
-    `(${modifierString(monster.abilities.wis)})`.padEnd(8) +
-    `(${modifierString(monster.abilities.cha)})`
+      `(${modifierString(monster.abilities.dex)})`.padEnd(8) +
+      `(${modifierString(monster.abilities.con)})`.padEnd(8) +
+      `(${modifierString(monster.abilities.int)})`.padEnd(8) +
+      `(${modifierString(monster.abilities.wis)})`.padEnd(8) +
+      `(${modifierString(monster.abilities.cha)})`,
   );
   lines.push("-----------------------------------------------");
 
@@ -288,12 +285,9 @@ function renderText(monster: Monster): string {
 
   if (monster.damageVulnerabilities?.length)
     lines.push(`Damage Vulnerabilities ${monster.damageVulnerabilities.join(", ")}`);
-  if (monster.damageResistances?.length)
-    lines.push(`Damage Resistances ${monster.damageResistances.join(", ")}`);
-  if (monster.damageImmunities?.length)
-    lines.push(`Damage Immunities ${monster.damageImmunities.join(", ")}`);
-  if (monster.conditionImmunities?.length)
-    lines.push(`Condition Immunities ${monster.conditionImmunities.join(", ")}`);
+  if (monster.damageResistances?.length) lines.push(`Damage Resistances ${monster.damageResistances.join(", ")}`);
+  if (monster.damageImmunities?.length) lines.push(`Damage Immunities ${monster.damageImmunities.join(", ")}`);
+  if (monster.conditionImmunities?.length) lines.push(`Condition Immunities ${monster.conditionImmunities.join(", ")}`);
 
   lines.push(`Senses ${formatSenses(monster.senses)}`);
   lines.push(`Languages ${monster.languages?.join(", ") || "--"}`);
@@ -343,13 +337,19 @@ function renderJSON(monster: Monster): string {
 
 function getTokenSize(size: string): number {
   switch (size.toLowerCase()) {
-    case "tiny": return 0.5;
+    case "tiny":
+      return 0.5;
     case "small":
-    case "medium": return 1;
-    case "large": return 2;
-    case "huge": return 3;
-    case "gargantuan": return 4;
-    default: return 1;
+    case "medium":
+      return 1;
+    case "large":
+      return 2;
+    case "huge":
+      return 3;
+    case "gargantuan":
+      return 4;
+    default:
+      return 1;
   }
 }
 
@@ -726,7 +726,7 @@ Formats: markdown (default), text, json, foundry-vtt, roll20
   const formatIdx = args.indexOf("--format");
   const format = (formatIdx !== -1 ? args[formatIdx + 1] : "markdown") as StatBlockFormat;
 
-  const input = await Bun.stdin.text();
+  const input = await readStdinText({ trim: false });
   if (input.trim()) {
     try {
       const monster: Monster = JSON.parse(input);
