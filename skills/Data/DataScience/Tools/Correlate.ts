@@ -37,7 +37,9 @@ async function main(): Promise<void> {
   try {
     let cols = await df.numericColumns();
     if (args.columns) {
-      const requested = String(args.columns).split(",").map((s) => s.trim());
+      const requested = String(args.columns)
+        .split(",")
+        .map((s) => s.trim());
       cols = requested.filter((c) => cols.includes(c));
     }
     if (target && !cols.includes(target)) {
@@ -130,9 +132,7 @@ async function main(): Promise<void> {
       console.log(`| Pair | r | Direction |`);
       console.log(`|------|--:|-----------|`);
       for (const p of strong) {
-        console.log(
-          `| ${p.a} ↔ ${p.b} | ${p.r.toFixed(3)} | ${p.r > 0 ? "positive" : "negative"} |`,
-        );
+        console.log(`| ${p.a} ↔ ${p.b} | ${p.r.toFixed(3)} | ${p.r > 0 ? "positive" : "negative"} |`);
       }
     }
   } finally {

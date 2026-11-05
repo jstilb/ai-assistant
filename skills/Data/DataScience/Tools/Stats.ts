@@ -18,8 +18,8 @@
 /** Log of the gamma function (Lanczos approximation). Valid for x > 0. */
 export function gammaln(x: number): number {
   const cof = [
-    76.18009172947146, -86.50532032941677, 24.01409824083091,
-    -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5,
+    76.18009172947146, -86.50532032941678, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2,
+    -0.5395239384953e-5,
   ];
   let y = x;
   let tmp = x + 5.5;
@@ -29,7 +29,7 @@ export function gammaln(x: number): number {
     y += 1;
     ser += cof[j]! / y;
   }
-  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+  return -tmp + Math.log((2.5066282746310007 * ser) / x);
 }
 
 /** Continued-fraction expansion for the incomplete beta function. */
@@ -71,9 +71,7 @@ function betacf(a: number, b: number, x: number): number {
 export function betai(a: number, b: number, x: number): number {
   if (x <= 0) return 0;
   if (x >= 1) return 1;
-  const bt = Math.exp(
-    gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x),
-  );
+  const bt = Math.exp(gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x));
   if (x < (a + 1) / (a + b + 2)) return (bt * betacf(a, b, x)) / a;
   return 1 - (bt * betacf(b, a, 1 - x)) / b;
 }
@@ -152,10 +150,7 @@ export function erfc(x: number): number {
                     t *
                       (-0.18628806 +
                         t *
-                          (0.27886807 +
-                            t *
-                              (-1.13520398 +
-                                t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))),
+                          (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))),
     );
   return x >= 0 ? ans : 2 - ans;
 }
@@ -171,7 +166,7 @@ export function normalCdf(z: number): number {
 
 /** Two-tailed p-value for a Student-t statistic with `df` degrees of freedom. */
 export function tDistTwoTailedP(t: number, df: number): number {
-  if (!isFinite(t)) return 0;
+  if (!Number.isFinite(t)) return 0;
   if (df <= 0) return NaN;
   return betai(df / 2, 0.5, df / (df + t * t));
 }
@@ -261,7 +256,7 @@ export function describe(xs: number[]): Describe {
   m2 /= n;
   m3 /= n;
   m4 /= n;
-  const skewness = m2 > 0 ? m3 / Math.pow(m2, 1.5) : 0;
+  const skewness = m2 > 0 ? m3 / m2 ** 1.5 : 0;
   const kurtosis = m2 > 0 ? m4 / (m2 * m2) - 3 : 0;
   return {
     n,
@@ -303,13 +298,9 @@ export function welchTTest(a: number[], b: number[]): TestResult {
   const sb = vb / nb;
   const t = (ma - mb) / Math.sqrt(sa + sb);
   // Welch–Satterthwaite degrees of freedom.
-  const df =
-    Math.pow(sa + sb, 2) /
-    (Math.pow(sa, 2) / (na - 1) + Math.pow(sb, 2) / (nb - 1));
+  const df = (sa + sb) ** 2 / (sa ** 2 / (na - 1) + sb ** 2 / (nb - 1));
   // Cohen's d using pooled standard deviation.
-  const pooledSd = Math.sqrt(
-    ((na - 1) * va + (nb - 1) * vb) / (na + nb - 2),
-  );
+  const pooledSd = Math.sqrt(((na - 1) * va + (nb - 1) * vb) / (na + nb - 2));
   const d = pooledSd > 0 ? (ma - mb) / pooledSd : 0;
   return {
     test: "Welch two-sample t-test",
@@ -348,8 +339,8 @@ export function oneWayAnova(groups: number[][]): TestResult {
   let ssWithin = 0;
   for (const g of groups) {
     const gm = mean(g);
-    ssBetween += g.length * Math.pow(gm - grandMean, 2);
-    for (const x of g) ssWithin += Math.pow(x - gm, 2);
+    ssBetween += g.length * (gm - grandMean) ** 2;
+    for (const x of g) ssWithin += (x - gm) ** 2;
   }
   const dfBetween = k - 1;
   const dfWithin = nTotal - k;
@@ -445,10 +436,7 @@ export function chiSquareIndependence(observed: number[][]): TestResult {
 export function invert(matrix: number[][]): number[][] | null {
   const n = matrix.length;
   // Augment [A | I].
-  const a = matrix.map((row, i) => [
-    ...row,
-    ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
-  ]);
+  const a = matrix.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
   for (let col = 0; col < n; col++) {
     // Partial pivot.
     let pivotRow = col;
@@ -517,11 +505,7 @@ export interface LogisticModel {
  * (WITHOUT the intercept column — it is added automatically). `names` are the
  * feature names in column order. Returns full inferential summary.
  */
-export function linearRegression(
-  X: number[][],
-  y: number[],
-  names: string[],
-): LinearModel {
+export function linearRegression(X: number[][], y: number[], names: string[]): LinearModel {
   const n = X.length;
   // Design matrix with leading intercept column.
   const design = X.map((row) => [1, ...row]);
@@ -536,10 +520,10 @@ export function linearRegression(
   // Residuals and sums of squares.
   const yHat = matVec(design, beta);
   let sse = 0;
-  for (let i = 0; i < n; i++) sse += Math.pow(y[i]! - yHat[i]!, 2);
+  for (let i = 0; i < n; i++) sse += (y[i]! - yHat[i]!) ** 2;
   const yMean = mean(y);
   let sst = 0;
-  for (const yi of y) sst += Math.pow(yi - yMean, 2);
+  for (const yi of y) sst += (yi - yMean) ** 2;
   const dfResid = n - p;
   const sigma2 = sse / dfResid;
   const residualStdError = Math.sqrt(sigma2);
@@ -560,7 +544,7 @@ export function linearRegression(
   });
 
   const dfModel = p - 1;
-  const fStatistic = dfModel > 0 ? (rSquared / dfModel) / ((1 - rSquared) / dfResid) : NaN;
+  const fStatistic = dfModel > 0 ? rSquared / dfModel / ((1 - rSquared) / dfResid) : NaN;
   const fPValue = dfModel > 0 ? fDistP(fStatistic, dfModel, dfResid) : NaN;
 
   return {
@@ -612,12 +596,7 @@ function sigmoid(z: number): number {
  * (Newton–Raphson). `y` must be 0/1. Reports Wald z-tests and standard errors
  * from the inverse Fisher information at the solution.
  */
-export function logisticRegression(
-  X: number[][],
-  y: number[],
-  names: string[],
-  maxIter = 50,
-): LogisticModel {
+export function logisticRegression(X: number[][], y: number[], names: string[], maxIter = 50): LogisticModel {
   const n = X.length;
   const design = X.map((row) => [1, ...row]);
   const p = design[0]!.length;

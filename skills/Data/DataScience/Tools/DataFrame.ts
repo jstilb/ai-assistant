@@ -11,7 +11,7 @@
  * with no Python / pandas dependency.
  */
 
-import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBConnection, type DuckDBValue } from "@duckdb/node-api";
 import { existsSync, openSync, readSync, closeSync } from "node:fs";
 import { extname } from "node:path";
 
@@ -36,7 +36,8 @@ export interface ColumnMeta {
   numeric: boolean;
 }
 
-const NUMERIC_TYPE = /\b(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|DECIMAL|NUMERIC|REAL|FLOAT|DOUBLE)\b/i;
+const NUMERIC_TYPE =
+  /\b(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|DECIMAL|NUMERIC|REAL|FLOAT|DOUBLE)\b/i;
 
 /** Reject paths that would break single-quote SQL string literals. */
 function assertSafePath(p: string): void {
@@ -71,17 +72,8 @@ function sniffDbType(path: string): "SQLITE" | "DUCKDB" | null {
  * extension is ambiguous — SQLite and DuckDB both use it); the extension and an
  * explicit override are fallbacks.
  */
-function attachType(
-  ext: string,
-  path: string,
-  override?: "sqlite" | "duckdb",
-): "SQLITE" | "DUCKDB" | null {
-  const isDbLike =
-    ext === ".db" ||
-    ext === ".sqlite" ||
-    ext === ".sqlite3" ||
-    ext === ".duckdb" ||
-    ext === ".ddb";
+function attachType(ext: string, path: string, override?: "sqlite" | "duckdb"): "SQLITE" | "DUCKDB" | null {
+  const isDbLike = ext === ".db" || ext === ".sqlite" || ext === ".sqlite3" || ext === ".duckdb" || ext === ".ddb";
   if (!isDbLike) return null;
   if (override) return override === "sqlite" ? "SQLITE" : "DUCKDB";
   const sniffed = sniffDbType(path);
@@ -121,12 +113,8 @@ export class DataFrame {
 
       if (attach) {
         if (!opts.table) {
-          const listCmd =
-            attach === "SQLITE" ? `sqlite3 '${src}' .tables` : `duckdb '${src}' .tables`;
-          throw new Error(
-            `A ${attach.toLowerCase()} source needs --table <name>. ` +
-              `List tables with: ${listCmd}`,
-          );
+          const listCmd = attach === "SQLITE" ? `sqlite3 '${src}' .tables` : `duckdb '${src}' .tables`;
+          throw new Error(`A ${attach.toLowerCase()} source needs --table <name>. ` + `List tables with: ${listCmd}`);
         }
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(opts.table)) {
           throw new Error(`Invalid --table name: ${opts.table}`);
@@ -189,9 +177,9 @@ export class DataFrame {
    */
   async numericColumn(name: string): Promise<number[]> {
     const q = DataFrame.ident(name);
-    const rows = (await this.all(
-      `SELECT CAST(${q} AS DOUBLE) AS v FROM df WHERE ${q} IS NOT NULL`,
-    )) as Array<{ v: unknown }>;
+    const rows = (await this.all(`SELECT CAST(${q} AS DOUBLE) AS v FROM df WHERE ${q} IS NOT NULL`)) as Array<{
+      v: unknown;
+    }>;
     const out: number[] = [];
     for (const r of rows) {
       const n = Number(r.v);
@@ -203,9 +191,9 @@ export class DataFrame {
   /** Fetch a column's non-null values as strings (for grouping / contingency). */
   async categoryColumn(name: string): Promise<string[]> {
     const q = DataFrame.ident(name);
-    const rows = (await this.all(
-      `SELECT CAST(${q} AS VARCHAR) AS v FROM df WHERE ${q} IS NOT NULL`,
-    )) as Array<{ v: unknown }>;
+    const rows = (await this.all(`SELECT CAST(${q} AS VARCHAR) AS v FROM df WHERE ${q} IS NOT NULL`)) as Array<{
+      v: unknown;
+    }>;
     return rows.map((r) => String(r.v));
   }
 
@@ -217,18 +205,19 @@ export class DataFrame {
   async numericMatrix(names: string[]): Promise<Record<string, number[]>> {
     const quoted = names.map((n) => DataFrame.ident(n));
     const notNull = quoted.map((q) => `${q} IS NOT NULL`).join(" AND ");
-    const selects = names
-      .map((n) => `CAST(${DataFrame.ident(n)} AS DOUBLE) AS ${DataFrame.ident(n)}`)
-      .join(", ");
-    const rows = (await this.all(
-      `SELECT ${selects} FROM df WHERE ${notNull}`,
-    )) as Array<Record<string, unknown>>;
+    const selects = names.map((n) => `CAST(${DataFrame.ident(n)} AS DOUBLE) AS ${DataFrame.ident(n)}`).join(", ");
+    const rows = (await this.all(`SELECT ${selects} FROM df WHERE ${notNull}`)) as Array<Record<string, unknown>>;
     const out: Record<string, number[]> = {};
     for (const n of names) out[n] = [];
     for (const row of rows) {
       const vals = names.map((n) => Number(row[n]));
       if (vals.some((v) => !Number.isFinite(v))) continue;
-      names.forEach((n, i) => out[n]!.push(vals[i]!));
+      for (const [i, n] of names.entries()) {
+        const col = out[n];
+        const v = vals[i];
+        if (col === undefined || v === undefined) throw new Error(`DataFrame: missing column or value for ${n}`);
+        col.push(v);
+      }
     }
     return out;
   }
@@ -236,7 +225,7 @@ export class DataFrame {
   /** Run an arbitrary read query against the loaded data (or `df`). */
   async all(sql: string, params?: Record<string, unknown>): Promise<Record<string, unknown>[]> {
     const reader = params
-      ? await this.conn.runAndReadAll(sql, params)
+      ? await this.conn.runAndReadAll(sql, params as Record<string, DuckDBValue>) // caller-supplied bind values
       : await this.conn.runAndReadAll(sql);
     return reader.getRowObjects() as Record<string, unknown>[];
   }

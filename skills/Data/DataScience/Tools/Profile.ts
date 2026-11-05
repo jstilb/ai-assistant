@@ -62,9 +62,7 @@ async function main(): Promise<void> {
     for (const col of cols) {
       const q = DataFrame.ident(col.name);
       const counts = (
-        await df.all(
-          `SELECT COUNT(${q}) AS non_null, COUNT(DISTINCT ${q}) AS distinct_ct FROM df`,
-        )
+        await df.all(`SELECT COUNT(${q}) AS non_null, COUNT(DISTINCT ${q}) AS distinct_ct FROM df`)
       )[0] as { non_null: unknown; distinct_ct: unknown };
       const nonNull = Number(counts.non_null);
       const distinct = Number(counts.distinct_ct);
@@ -115,10 +113,9 @@ async function main(): Promise<void> {
         // "Likely ID" only makes sense for discrete keys (integers, strings) on
         // a large-enough sample — continuous floats being all-distinct is
         // expected, not noteworthy, and all-distinct on a tiny sample is noise.
-        else if (distinct === rowCount && (isDiscreteKey(col.type) && rowCount >= 20))
+        else if (distinct === rowCount && isDiscreteKey(col.type) && rowCount >= 20)
           prof.flags.push("unique (likely ID)");
-        else if (!col.numeric && distinct / rowCount > 0.9 && rowCount > 20)
-          prof.flags.push("high-cardinality");
+        else if (!col.numeric && distinct / rowCount > 0.9 && rowCount > 20) prof.flags.push("high-cardinality");
         if (prof.outliers && prof.outliers > 0)
           prof.flags.push(`${prof.outliers} outlier${prof.outliers === 1 ? "" : "s"}`);
         if (prof.skewness !== undefined && Math.abs(prof.skewness) > 1)
@@ -187,7 +184,9 @@ function shortType(t: string): string {
 /** A discrete key type is an integer or string (not a continuous float). */
 function isDiscreteKey(type: string): boolean {
   if (/\b(DECIMAL|NUMERIC|REAL|FLOAT|DOUBLE)\b/i.test(type)) return false;
-  return /\b(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|VARCHAR|CHAR|TEXT|UUID)\b/i.test(type);
+  return /\b(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|VARCHAR|CHAR|TEXT|UUID)\b/i.test(
+    type,
+  );
 }
 
 main().catch((err) => {

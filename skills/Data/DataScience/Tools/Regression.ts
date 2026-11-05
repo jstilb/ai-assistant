@@ -33,7 +33,10 @@ async function main(): Promise<void> {
   const target = args.target as string | undefined;
   if (!target) throw new Error("Missing --target <col>");
   if (!args.features) throw new Error("Missing --features a,b,c");
-  const features = String(args.features).split(",").map((s) => s.trim()).filter(Boolean);
+  const features = String(args.features)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (features.length === 0) throw new Error("Provide at least one feature");
 
   const df = await DataFrame.open(loadOptsFromArgs(args));

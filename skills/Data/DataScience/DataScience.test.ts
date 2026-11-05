@@ -181,10 +181,12 @@ test("matrix invert: identity and singular", () => {
   expect(inv).not.toBeNull();
   expect(approx(inv![0]![0]!, 0.5, 1e-12)).toBe(true);
   expect(approx(inv![1]![1]!, 0.25, 1e-12)).toBe(true);
-  expect(invert([
-    [1, 2],
-    [2, 4],
-  ])).toBeNull(); // singular
+  expect(
+    invert([
+      [1, 2],
+      [2, 4],
+    ]),
+  ).toBeNull(); // singular
 });
 
 // ── Regression ───────────────────────────────────────────────────────────────
@@ -229,10 +231,7 @@ test("logistic regression separates a clean boundary", () => {
 test("DataFrame loads a CSV and profiles columns", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ds-test-"));
   const csv = join(dir, "data.csv");
-  writeFileSync(
-    csv,
-    "id,group,value\n1,a,10\n2,a,12\n3,b,20\n4,b,22\n5,b,\n",
-  );
+  writeFileSync(csv, "id,group,value\n1,a,10\n2,a,12\n3,b,20\n4,b,22\n5,b,\n");
   const df = await DataFrame.open({ source: csv });
   try {
     expect(await df.rowCount()).toBe(5);

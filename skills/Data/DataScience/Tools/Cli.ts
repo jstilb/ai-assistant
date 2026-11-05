@@ -36,8 +36,7 @@ export function loadOptsFromArgs(args: Record<string, string | boolean>): {
   dbType?: "sqlite" | "duckdb";
 } {
   const dbTypeRaw = args["db-type"];
-  const dbType =
-    dbTypeRaw === "sqlite" || dbTypeRaw === "duckdb" ? dbTypeRaw : undefined;
+  const dbType = dbTypeRaw === "sqlite" || dbTypeRaw === "duckdb" ? dbTypeRaw : undefined;
   return {
     source: args.source as string | undefined,
     table: args.table as string | undefined,

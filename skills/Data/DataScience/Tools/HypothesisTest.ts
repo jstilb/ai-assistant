@@ -24,14 +24,7 @@
  */
 
 import { DataFrame } from "./DataFrame.ts";
-import {
-  welchTTest,
-  oneSampleTTest,
-  oneWayAnova,
-  pearson,
-  chiSquareIndependence,
-  type TestResult,
-} from "./Stats.ts";
+import { welchTTest, oneSampleTTest, oneWayAnova, pearson, chiSquareIndependence, type TestResult } from "./Stats.ts";
 import { parseArgs, fmtNum, fmtP, printModeError, loadOptsFromArgs } from "./Cli.ts";
 
 async function main(): Promise<void> {
@@ -55,7 +48,9 @@ async function main(): Promise<void> {
         const valueCol = requireArg(args, "value");
         await ensureColumns(df, [groupCol, valueCol]);
         const levels = args.groups
-          ? String(args.groups).split(",").map((s) => s.trim())
+          ? String(args.groups)
+              .split(",")
+              .map((s) => s.trim())
           : await distinctLevels(df, groupCol);
         if (levels.length !== 2) {
           throw new Error(
@@ -132,9 +127,7 @@ async function main(): Promise<void> {
     }
     console.log("");
     if (result.detail) {
-      const parts = Object.entries(result.detail).map(
-        ([k, v]) => `${k}=${typeof v === "number" ? fmtNum(v) : v}`,
-      );
+      const parts = Object.entries(result.detail).map(([k, v]) => `${k}=${typeof v === "number" ? fmtNum(v) : v}`);
       console.log(`_${parts.join("  ·  ")}_\n`);
     }
     console.log(
@@ -167,12 +160,7 @@ async function distinctLevels(df: DataFrame, col: string): Promise<string[]> {
   return rows.map((r) => r.v);
 }
 
-async function valuesForGroup(
-  df: DataFrame,
-  groupCol: string,
-  valueCol: string,
-  level: string,
-): Promise<number[]> {
+async function valuesForGroup(df: DataFrame, groupCol: string, valueCol: string, level: string): Promise<number[]> {
   const g = DataFrame.ident(groupCol);
   const v = DataFrame.ident(valueCol);
   const rows = (await df.all(
