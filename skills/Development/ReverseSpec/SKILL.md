@@ -34,7 +34,7 @@ should tell him what to fix, merge, or delete.
 | skill | `skills/<Cat>/<Name>` (dir) | `docs/specs/skills/<Cat>/<Name>.md` |
 | category | `skills/<Cat>` (its SKILL.md only) | `docs/specs/skills/<Cat>.md` |
 | hook | `hooks/<Name>.hook.ts`, `hooks/<Name>.sh` | `docs/specs/hooks/<Name>.md` |
-| component | `lib/**/<Name>.ts`, `hooks/handlers/*`, `hooks/lib/*`, any file inside a skill | `docs/specs/<path minus extension>.md` |
+| component | `lib/**/<Name>.ts`, `hooks/lib/*`, any file inside a skill | `docs/specs/<path minus extension>.md` |
 | agent | `agents/<Name>.md` | `docs/specs/agents/<Name>.md` |
 | bin | `bin/<name>` | `docs/specs/bin/<name>.md` |
 

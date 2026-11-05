@@ -91,6 +91,10 @@ Rules:
 
 - Update each involved spec's Findings with a back-reference (`see X-00N`) so the per-spec and
   system views agree. This is the only edit CrossSpec makes to individual specs.
+- When a back-reference is a Markdown link, compute the relative path from the spec's own
+  directory to `docs/specs/CROSS-SPEC.md`. The ledger sits in `docs/specs/`, not `docs/`.
+  A spec at `docs/specs/hooks/X.md` links `../CROSS-SPEC.md#x-001`; a spec at
+  `docs/specs/skills/Cat/Y.md` links `../../CROSS-SPEC.md#x-001`. Never link `docs/CROSS-SPEC.md`.
 - Entries marked `needs-jm` are surfaced to Jm in the report as A/B questions. Do **not**
   create LucidTasks or edit code from this workflow; promoting an entry into work is Jm's
   call (via `/queue add` or the AutoMaintenance tech-debt registry).

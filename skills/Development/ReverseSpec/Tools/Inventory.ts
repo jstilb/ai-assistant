@@ -21,10 +21,10 @@
  *   --root <dir> overrides the Kaya home (tests use a temp tree).
  */
 
-import { createHash } from "crypto";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "fs";
-import { basename, dirname, join, relative, sep } from "path";
-import { parseArgs } from "util";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { basename, dirname, join, relative, sep } from "node:path";
+import { parseArgs } from "node:util";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -33,14 +33,7 @@ import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 export type SubjectKind = "skill" | "category" | "hook" | "component" | "agent" | "bin";
 
-export const SUBJECT_KINDS: readonly SubjectKind[] = [
-  "skill",
-  "category",
-  "hook",
-  "component",
-  "agent",
-  "bin",
-];
+export const SUBJECT_KINDS: readonly SubjectKind[] = ["skill", "category", "hook", "component", "agent", "bin"];
 
 export type SpecStatus = "missing" | "current" | "stale" | "invalid";
 
@@ -90,8 +83,22 @@ const SPECS_DIR = "docs/specs";
 const INDEX_FILE = "INDEX.md";
 
 const TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".mjs", ".md", ".sh", ".yaml", ".yml", ".json",
-  ".py", ".txt", ".toml", ".css", ".html", ".jsonl", ".csv",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".md",
+  ".sh",
+  ".yaml",
+  ".yml",
+  ".json",
+  ".py",
+  ".txt",
+  ".toml",
+  ".css",
+  ".html",
+  ".jsonl",
+  ".csv",
 ]);
 
 /** Directories inside a subject that are runtime state / output, not source. */
@@ -138,7 +145,7 @@ export function inferKind(subject: string): SubjectKind | null {
   }
   if (parts[0] === "hooks") {
     if (parts.length === 2 && (s.endsWith(".hook.ts") || s.endsWith(".sh"))) return "hook";
-    return "component"; // hooks/handlers/*, hooks/lib/*
+    return "component"; // hooks/lib/*
   }
   if (parts[0] === "lib") return "component";
   if (parts[0] === "agents" && parts.length === 2) return "agent";
@@ -285,9 +292,7 @@ export function enumerateSubjects(root: string, kinds: readonly SubjectKind[] = 
     if (!cat.isDir || cat.name.startsWith(".")) continue;
     const catRel = `skills/${cat.name}`;
     const catHasSkillMd = existsSync(join(root, catRel, "SKILL.md"));
-    const subs = listDir(root, catRel).filter(
-      (s) => s.isDir && existsSync(join(root, catRel, s.name, "SKILL.md")),
-    );
+    const subs = listDir(root, catRel).filter((s) => s.isDir && existsSync(join(root, catRel, s.name, "SKILL.md")));
     if (catHasSkillMd && subs.length > 0) {
       if (want.has("category")) out.push({ subject: catRel, kind: "category" });
       if (want.has("skill")) for (const s of subs) out.push({ subject: `${catRel}/${s.name}`, kind: "skill" });
@@ -306,10 +311,10 @@ export function enumerateSubjects(root: string, kinds: readonly SubjectKind[] = 
     }
   }
 
-  // components: hooks/handlers/*.ts, hooks/lib/*.ts, lib/**/*.ts
+  // components: hooks/lib/*.ts, lib/**/*.ts
   if (want.has("component")) {
     const rels: string[] = [];
-    for (const d of ["hooks/handlers", "hooks/lib"]) {
+    for (const d of ["hooks/lib"]) {
       for (const e of listDir(root, d)) if (!e.isDir) rels.push(`${d}/${e.name}`);
     }
     walkRel(root, "lib", rels);
@@ -381,7 +386,7 @@ export function inventoryRow(root: string, s: Subject): InventoryRow {
   let fm: SpecFrontmatter | null = null;
   if (specExists) {
     fm = readSpecFrontmatter(root, specPath);
-    if (!fm || !fm.source_hash) status = "invalid";
+    if (!fm?.source_hash) status = "invalid";
     else status = fm.source_hash === hash ? "current" : "stale";
   }
   return {
@@ -469,7 +474,9 @@ export function writeIndex(root: string, today: string = localDate()): string {
 function renderTable(rows: InventoryRow[]): string {
   const lines = ["| Subject | Kind | Status | Files | LOC | Spec |", "|---|---|---|---|---|---|"];
   for (const r of rows) {
-    lines.push(`| ${r.subject} | ${r.kind} | ${r.status} | ${r.files} | ${r.loc} | ${r.specExists ? r.specPath : "—"} |`);
+    lines.push(
+      `| ${r.subject} | ${r.kind} | ${r.status} | ${r.files} | ${r.loc} | ${r.specExists ? r.specPath : "—"} |`,
+    );
   }
   return lines.join("\n");
 }
@@ -543,7 +550,9 @@ function main(): void {
     if (values.json) {
       console.log(JSON.stringify({ ...row, fileList: files }, null, 2));
     } else {
-      console.log(`subject:      ${row.subject}\nkind:         ${row.kind}\nspec:         ${row.specPath} (${row.status})`);
+      console.log(
+        `subject:      ${row.subject}\nkind:         ${row.kind}\nspec:         ${row.specPath} (${row.status})`,
+      );
       console.log(`source_hash:  ${row.currentHash}${row.recordedHash ? `  (recorded ${row.recordedHash})` : ""}`);
       console.log(`files (${files.length}), ${row.loc} LOC:`);
       for (const f of files) console.log(`  ${f}`);
@@ -554,7 +563,9 @@ function main(): void {
   if (cmd === "index") {
     const target = writeIndex(root);
     const rows = inventory(root);
-    console.log(`[Inventory] wrote ${toPosix(relative(root, target))} — ${rows.filter((r) => r.status === "current").length}/${rows.length} current`);
+    console.log(
+      `[Inventory] wrote ${toPosix(relative(root, target))} — ${rows.filter((r) => r.status === "current").length}/${rows.length} current`,
+    );
     return;
   }
 

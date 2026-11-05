@@ -12,9 +12,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   enumerateSubjects,
@@ -26,8 +26,8 @@ import {
   specPathFor,
   subjectFilesFor,
   writeIndex,
-} from "./Inventory";
-import { lintSpecContent, splitSections, tableRows, findAllSpecs, REQUIRED_SECTIONS } from "./SpecLint";
+} from "./Inventory.ts";
+import { lintSpecContent, splitSections, tableRows, findAllSpecs, REQUIRED_SECTIONS } from "./SpecLint.ts";
 
 const ROOT = join(tmpdir(), `reversespec-test-${process.pid}-${Date.now()}`);
 
@@ -37,7 +37,13 @@ function write(rel: string, content: string): void {
   writeFileSync(abs, content, "utf-8");
 }
 
-function goodSpec(subject: string, kind: string, hash: string, files: number, overrides: Partial<Record<string, string>> = {}): string {
+function goodSpec(
+  subject: string,
+  kind: string,
+  hash: string,
+  files: number,
+  overrides: Partial<Record<string, string>> = {},
+): string {
   const sections: Record<string, string> = {
     Summary: "A plain-language summary with no code in it.",
     Purpose: "Exists so callers do not repeat X. Deleting it would reappear across 3 callers.",
@@ -51,7 +57,8 @@ function goodSpec(subject: string, kind: string, hash: string, files: number, ov
     "Evals And Metrics": "- Existing evals: none\n- Proposed: measure accuracy",
     Diagrams: "```mermaid\nclassDiagram\n  Alpha --> Beta\n```\n\n```mermaid\nsequenceDiagram\n  A->>B: go\n```",
     "Rebuild Notes": "Create SKILL.md then Tools/Run.ts.",
-    Findings: "### Improvements\n\nnone found\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found\n\n### Open Questions\n\nnone found",
+    Findings:
+      "### Improvements\n\nnone found\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found\n\n### Open Questions\n\nnone found",
     ...overrides,
   };
   const body = REQUIRED_SECTIONS.map((t) => `## ${t}\n\n${sections[t]}\n`).join("\n");
@@ -113,7 +120,7 @@ describe("inferKind / specPathFor", () => {
     expect(inferKind("skills/Life/Alpha/Tools/Run.ts")).toBe("component");
     expect(inferKind("hooks/Guard.hook.ts")).toBe("hook");
     expect(inferKind("hooks/Task.sh")).toBe("hook");
-    expect(inferKind("hooks/handlers/Handler.ts")).toBe("component");
+    expect(inferKind("hooks/lib/util.ts")).toBe("component");
     expect(inferKind("lib/core/Thing.ts")).toBe("component");
     expect(inferKind("agents/Engineer.md")).toBe("agent");
     expect(inferKind("bin/merge.sh")).toBe("bin");
@@ -136,7 +143,7 @@ describe("enumerateSubjects", () => {
     expect(subjects).toContain("skill:skills/Life/Beta");
     expect(subjects).toContain("hook:hooks/Guard.hook.ts");
     expect(subjects).toContain("hook:hooks/Task.sh");
-    expect(subjects).toContain("component:hooks/handlers/Handler.ts");
+    expect(subjects).not.toContain("component:hooks/handlers/Handler.ts"); // hooks/handlers was deleted; no longer scanned
     expect(subjects).toContain("component:hooks/lib/util.ts");
     expect(subjects).toContain("component:lib/core/Thing.ts");
     expect(subjects).toContain("agent:agents/Engineer.md");
@@ -169,7 +176,12 @@ describe("subjectFilesFor / hashSubject", () => {
     const hook = subjectFilesFor(ROOT, "hooks/Guard.hook.ts").map((f) => f.replace(ROOT + "/", ""));
     expect(hook).toEqual(["hooks/Guard.hook.test.ts", "hooks/Guard.hook.ts"]);
     const comp = subjectFilesFor(ROOT, "lib/core/Thing.ts").map((f) => f.replace(ROOT + "/", ""));
-    expect(comp).toEqual(["lib/core/Thing.extra.test.ts", "lib/core/Thing.help.md", "lib/core/Thing.test.ts", "lib/core/Thing.ts"]);
+    expect(comp).toEqual([
+      "lib/core/Thing.extra.test.ts",
+      "lib/core/Thing.help.md",
+      "lib/core/Thing.test.ts",
+      "lib/core/Thing.ts",
+    ]);
     const bin = subjectFilesFor(ROOT, "bin/merge.sh").map((f) => f.replace(ROOT + "/", ""));
     expect(bin).toEqual(["bin/__tests__/merge.test.ts", "bin/merge.sh", "bin/merge.test.sh"]);
   });
@@ -258,38 +270,56 @@ describe("SpecLint", () => {
   it("fails on missing frontmatter keys, wrong kind, bad status, wrong path, missing subject", () => {
     const { hash, files } = hashSubject(ROOT, subject);
     const base = goodSpec(subject, "skill", hash, files.length);
-    expect(lint(base.replace("confidence: medium\n", "")).issues.map((i) => i.message)).toContain("frontmatter: missing `confidence`");
+    expect(lint(base.replace("confidence: medium\n", "")).issues.map((i) => i.message)).toContain(
+      "frontmatter: missing `confidence`",
+    );
     expect(lint(base.replace("kind: skill", "kind: hook")).errors).toBeGreaterThan(0);
     expect(lint(base.replace("status: draft", "status: final")).errors).toBeGreaterThan(0);
-    expect(lintSpecContent(ROOT, "docs/specs/wrong/Place.md", base).issues.some((i) => /canonical path/.test(i.message))).toBe(true);
-    expect(lint(goodSpec("skills/Life/Ghost", "skill", "abc", 1)).issues.some((i) => /does not exist on disk/.test(i.message))).toBe(true);
+    expect(
+      lintSpecContent(ROOT, "docs/specs/wrong/Place.md", base).issues.some((i) => /canonical path/.test(i.message)),
+    ).toBe(true);
+    expect(
+      lint(goodSpec("skills/Life/Ghost", "skill", "abc", 1)).issues.some((i) =>
+        /does not exist on disk/.test(i.message),
+      ),
+    ).toBe(true);
   });
 
   it("fails on a missing, empty, duplicated, or out-of-order section", () => {
     const { hash, files } = hashSubject(ROOT, subject);
     const base = goodSpec(subject, "skill", hash, files.length);
-    expect(lint(base.replace("## Purpose\n", "## Goal\n")).issues.map((i) => i.message)).toContain("missing section `## Purpose`");
-    expect(lint(goodSpec(subject, "skill", hash, files.length, { Purpose: "<!-- only a comment -->" })).issues.map((i) => i.message)).toContain(
-      "section `## Purpose` is empty",
+    expect(lint(base.replace("## Purpose\n", "## Goal\n")).issues.map((i) => i.message)).toContain(
+      "missing section `## Purpose`",
     );
+    expect(
+      lint(goodSpec(subject, "skill", hash, files.length, { Purpose: "<!-- only a comment -->" })).issues.map(
+        (i) => i.message,
+      ),
+    ).toContain("section `## Purpose` is empty");
     expect(lint(base + "\n## Summary\n\nagain\n").issues.some((i) => /appears 2 times/.test(i.message))).toBe(true);
-    const swapped = base.replace("## Summary\n", "## TMP\n").replace("## Purpose\n", "## Summary\n").replace("## TMP\n", "## Purpose\n");
+    const swapped = base
+      .replace("## Summary\n", "## TMP\n")
+      .replace("## Purpose\n", "## Summary\n")
+      .replace("## TMP\n", "## Purpose\n");
     expect(lint(swapped).issues.some((i) => /out of order/.test(i.message))).toBe(true);
   });
 
   it("enforces Findings subsections, AC row minimum, and mermaid count", () => {
     const { hash, files } = hashSubject(ROOT, subject);
     const noSub = goodSpec(subject, "skill", hash, files.length, {
-      Findings: "### Improvements\n\nnone found\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found",
+      Findings:
+        "### Improvements\n\nnone found\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found",
     });
     expect(lint(noSub).issues.map((i) => i.message)).toContain("Findings: missing `### Open Questions`");
     const emptySub = goodSpec(subject, "skill", hash, files.length, {
-      Findings: "### Improvements\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found\n\n### Open Questions\n\nnone found",
+      Findings:
+        "### Improvements\n\n### Redundancies\n\nnone found\n\n### Synergies\n\nnone found\n\n### Contradictions\n\nnone found\n\n### Open Questions\n\nnone found",
     });
     expect(lint(emptySub).issues.some((i) => /`### Improvements` is empty/.test(i.message))).toBe(true);
 
     const fewRows = goodSpec(subject, "skill", hash, files.length, {
-      "Acceptance Criteria": "| ID | Criterion | Verification | Status |\n|---|---|---|---|\n| AC1 | a | `x` | observed |",
+      "Acceptance Criteria":
+        "| ID | Criterion | Verification | Status |\n|---|---|---|---|\n| AC1 | a | `x` | observed |",
     });
     expect(lint(fewRows).issues.some((i) => /1 table rows, minimum is 4/.test(i.message))).toBe(true);
 
@@ -322,7 +352,10 @@ describe("SpecLint", () => {
   it("helpers: splitSections ignores headings inside fences; tableRows skips separators", () => {
     const secs = splitSections("---\na: b\n---\n## One\n\n```md\n## NotASection\n```\n\n### Sub\ntext\n");
     expect(secs.map((s) => `${s.level}:${s.title}`)).toEqual(["2:One", "3:Sub"]);
-    expect(tableRows("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |")).toEqual([["1", "2"], ["3", "4"]]);
+    expect(tableRows("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |")).toEqual([
+      ["1", "2"],
+      ["3", "4"],
+    ]);
   });
 
   it("findAllSpecs excludes INDEX.md and CROSS-SPEC.md", () => {

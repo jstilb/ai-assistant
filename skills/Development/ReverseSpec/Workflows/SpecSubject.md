@@ -40,7 +40,7 @@ Read in this order, taking notes keyed by `path:line`:
    - skills: `Commands/<name>.md`, the category `skills/<Cat>/SKILL.md` row, `CONTEXT-MAP.md`,
      `CONTEXT-ROUTING.md`
    - hooks: `settings.json` (event + matcher + timeout), `hooks/README.md` registry row and any
-     flow diagram mentioning it, `hooks/handlers/` if it orchestrates handlers
+     flow diagram mentioning it, `hooks/lib/` if it orchestrates shared helpers
    - components: `grep -rn "from .*<Name>" --include=*.ts` for importers; `bin/` and
      `MEMORY/daemon/cron/jobs*/*.yaml` for CLI callers
    - crons: `grep -rln "<Name>" MEMORY/daemon/cron/jobs* bin/*.sh` and `bin/rebuild-plists.sh`

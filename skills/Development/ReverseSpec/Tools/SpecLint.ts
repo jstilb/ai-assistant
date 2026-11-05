@@ -23,9 +23,9 @@
  * Exit 0 = no errors, 1 = errors, 2 = usage error.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join, relative, sep } from "path";
-import { parseArgs } from "util";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+import { parseArgs } from "node:util";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import {
   SUBJECT_KINDS,
@@ -117,9 +117,11 @@ export function splitSections(content: string): Section[] {
   for (const line of lines) {
     if (/^\s*```/.test(line)) inFence = !inFence;
     const m = !inFence ? line.match(/^(##|###)\s+(.+?)\s*$/) : null;
-    if (m) {
-      current = { title: m[2], level: m[1].length, body: "" };
-      sections.push(current);
+    const [, hashes, heading] = m ?? [];
+    if (m && hashes !== undefined && heading !== undefined) {
+      const section: Section = { title: heading, level: hashes.length, body: "" };
+      current = section;
+      sections.push(section);
     } else if (current) {
       current.body += line + "\n";
     }
@@ -131,9 +133,11 @@ export function splitSections(content: string): Section[] {
 function h2Body(sections: Section[], title: string): string | null {
   const i = sections.findIndex((s) => s.level === 2 && s.title === title);
   if (i === -1) return null;
-  let out = sections[i].body;
-  for (let j = i + 1; j < sections.length && sections[j].level !== 2; j++) {
-    out += `### ${sections[j].title}\n` + sections[j].body;
+  let out = sections[i]?.body ?? "";
+  for (let j = i + 1; j < sections.length; j++) {
+    const sec = sections[j];
+    if (!sec || sec.level === 2) break;
+    out += `### ${sec.title}\n` + sec.body;
   }
   return out;
 }
@@ -148,18 +152,25 @@ function countMermaid(s: string): number {
 
 /** Data rows of the first pipe table in a section (skips header + separator). */
 export function tableRows(body: string): string[][] {
-  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("|"));
+  const lines = body
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("|"));
   if (lines.length < 2) return [];
   const rows: string[][] = [];
   for (const line of lines.slice(1)) {
     if (/^\|\s*:?-+/.test(line)) continue;
-    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
     rows.push(cells);
   }
   return rows;
 }
 
-const REPO_PATH_RE = /`((?:skills|hooks|lib|bin|agents|docs|Commands|USER|MEMORY|plans|tests|servers|jobs)\/[^`\s]+?)(?::\d+(?:-\d+)?)?`/g;
+const REPO_PATH_RE =
+  /`((?:skills|hooks|lib|bin|agents|docs|Commands|USER|MEMORY|plans|tests|servers|jobs)\/[^`\s]+?)(?::\d+(?:-\d+)?)?`/g;
 
 // ============================================================================
 // Lint
@@ -185,17 +196,20 @@ export function lintSpecContent(root: string, specRel: string, content: string):
     if (fm.confidence && !VALID_CONFIDENCE.has(fm.confidence)) {
       err(`frontmatter: confidence \`${fm.confidence}\` must be high|medium|low`);
     }
-    if (fm.generated && !/^\d{4}-\d{2}-\d{2}$/.test(fm.generated)) warn(`frontmatter: generated \`${fm.generated}\` is not YYYY-MM-DD`);
+    if (fm.generated && !/^\d{4}-\d{2}-\d{2}$/.test(fm.generated))
+      warn(`frontmatter: generated \`${fm.generated}\` is not YYYY-MM-DD`);
     if (fm.subject) {
       const subject = toPosix(fm.subject).replace(/\/+$/, "");
       const inferred = inferKind(subject);
       if (inferred === null) err(`frontmatter: subject \`${subject}\` is not a recognised subject path`);
-      else if (fm.kind && inferred !== fm.kind) err(`frontmatter: kind \`${fm.kind}\` but path implies \`${inferred}\``);
+      else if (fm.kind && inferred !== fm.kind)
+        err(`frontmatter: kind \`${fm.kind}\` but path implies \`${inferred}\``);
       if (!existsSync(join(root, subject))) {
         err(`frontmatter: subject \`${subject}\` does not exist on disk`);
       } else {
         const expected = specPathFor(subject);
-        if (expected !== specRel) err(`spec is at \`${specRel}\` but the canonical path for this subject is \`${expected}\``);
+        if (expected !== specRel)
+          err(`spec is at \`${specRel}\` but the canonical path for this subject is \`${expected}\``);
         const { hash, files } = hashSubject(root, subject);
         if (fm.source_hash && fm.source_hash !== hash) {
           warn(`stale: source_hash ${fm.source_hash} ≠ current ${hash} — subject changed since the spec was written`);
@@ -231,12 +245,16 @@ export function lintSpecContent(root: string, specRel: string, content: string):
   // --- Findings subsections --------------------------------------------------
   const findingsIdx = sections.findIndex((s) => s.level === 2 && s.title === "Findings");
   if (findingsIdx !== -1) {
-    const subs = sections.slice(findingsIdx + 1).filter((s) => s.level === 3).map((s) => s.title);
+    const subs = sections
+      .slice(findingsIdx + 1)
+      .filter((s) => s.level === 3)
+      .map((s) => s.title);
     for (const sub of FINDINGS_SUBSECTIONS) {
       if (!subs.includes(sub)) err(`Findings: missing \`### ${sub}\``);
       else {
         const s = sections.find((x) => x.level === 3 && x.title === sub);
-        if (s && stripComments(s.body).trim().length === 0) err(`Findings: \`### ${sub}\` is empty (write "none found")`);
+        if (s && stripComments(s.body).trim().length === 0)
+          err(`Findings: \`### ${sub}\` is empty (write "none found")`);
       }
     }
   }
@@ -250,12 +268,17 @@ export function lintSpecContent(root: string, specRel: string, content: string):
     }
     for (const row of rows) {
       if (row.length < 4) {
-        warn(`Acceptance Criteria: row \`${row[0] ?? "?"}\` has ${row.length} cells, expected ID|Criterion|Verification|Status`);
+        warn(
+          `Acceptance Criteria: row \`${row[0] ?? "?"}\` has ${row.length} cells, expected ID|Criterion|Verification|Status`,
+        );
         continue;
       }
-      const status = row[3].toLowerCase();
-      if (!VALID_AC_STATUS.has(status)) warn(`Acceptance Criteria: row \`${row[0]}\` status \`${row[3]}\` not observed|inferred|unverified`);
-      if (/check (that )?it works/i.test(row[2])) warn(`Acceptance Criteria: row \`${row[0]}\` verification is not concrete`);
+      const [, , verification = "", rawStatus = ""] = row;
+      const status = rawStatus.toLowerCase();
+      if (!VALID_AC_STATUS.has(status))
+        warn(`Acceptance Criteria: row \`${row[0]}\` status \`${rawStatus}\` not observed|inferred|unverified`);
+      if (/check (that )?it works/i.test(verification))
+        warn(`Acceptance Criteria: row \`${row[0]}\` verification is not concrete`);
     }
   }
 
@@ -283,13 +306,17 @@ export function lintSpecContent(root: string, specRel: string, content: string):
   }
 
   // --- leftover template comments -------------------------------------------
-  const leftovers = (content.match(/<!--[\s\S]*?-->/g) ?? []).filter((c) => /^<!--\s*(\d\.|-|Every item|Two parts|Where the subject|Everything a caller|Numbered list|ISC-style|At least two|The "from scratch"|The problem this|3–6 sentences|changes that would|overlap with|things that would|docs vs code|things only Jm)/.test(c));
+  const leftovers = (content.match(/<!--[\s\S]*?-->/g) ?? []).filter((c) =>
+    /^<!--\s*(\d\.|-|Every item|Two parts|Where the subject|Everything a caller|Numbered list|ISC-style|At least two|The "from scratch"|The problem this|3–6 sentences|changes that would|overlap with|things that would|docs vs code|things only Jm)/.test(
+      c,
+    ),
+  );
   if (leftovers.length > 0) warn(`${leftovers.length} template guidance comment(s) left in the spec — delete them`);
 
   // --- referenced repo paths resolve ----------------------------------------
   const seen = new Set<string>();
   for (const m of stripComments(content).matchAll(REPO_PATH_RE)) {
-    const p = m[1].replace(/[),.;:]+$/, "");
+    const p = (m[1] ?? "").replace(/[),.;:]+$/, "");
     if (seen.has(p) || p.includes("*") || p.includes("<") || p.includes("{") || p.includes("[")) continue;
     seen.add(p);
     if (!existsSync(join(root, p))) warn(`referenced path does not exist: \`${p}\``);
@@ -316,7 +343,8 @@ export function findAllSpecs(root: string): string[] {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
       if (e.isDirectory()) walk(p);
-      else if (e.name.endsWith(".md") && e.name !== "INDEX.md" && e.name !== "CROSS-SPEC.md" && e.name !== "README.md") out.push(p);
+      else if (e.name.endsWith(".md") && e.name !== "INDEX.md" && e.name !== "CROSS-SPEC.md" && e.name !== "README.md")
+        out.push(p);
     }
   };
   walk(base);
@@ -339,7 +367,9 @@ function main(): void {
     allowPositionals: true,
   });
   const root = values.root ?? getKayaHome();
-  const targets = values.all ? findAllSpecs(root) : positionals.map((p) => (p.startsWith("/") ? p : join(process.cwd(), p)));
+  const targets = values.all
+    ? findAllSpecs(root)
+    : positionals.map((p) => (p.startsWith("/") ? p : join(process.cwd(), p)));
   if (targets.length === 0) {
     console.error("[SpecLint] no spec files given (pass paths or --all)");
     process.exit(2);
