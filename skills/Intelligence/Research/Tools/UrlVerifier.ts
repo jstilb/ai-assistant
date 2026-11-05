@@ -14,14 +14,15 @@
  *   JSON with verification status for each URL
  */
 
-import { createHTTPClient } from '../../../../lib/core/CachedHTTPClient.ts';
+import { createHTTPClient } from "../../../../lib/core/CachedHTTPClient.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 const client = createHTTPClient({
   defaultTtl: 60,
   maxRetries: 1,
 });
 
-const ALLOWED_SCHEMES = ['https:', 'http:'];
+const ALLOWED_SCHEMES = ["https:", "http:"];
 
 function validateScheme(url: string): { valid: boolean; error?: string } {
   try {
@@ -51,7 +52,7 @@ async function verifyUrl(url: string): Promise<VerificationResult> {
   const result: VerificationResult = {
     url,
     valid: false,
-    verifiedAt: new Date().toISOString()
+    verifiedAt: new Date().toISOString(),
   };
 
   // Step 0: Validate URL scheme before attempting any network request
@@ -65,10 +66,10 @@ async function verifyUrl(url: string): Promise<VerificationResult> {
   try {
     // Step 1: HTTP HEAD request to check status via CachedHTTPClient
     const response = await client.fetch(url, {
-      cache: 'none',
+      cache: "none",
       timeout: 10000,
       retry: 0,
-      headers: { 'Accept': '*/*' }
+      headers: { Accept: "*/*" },
     });
 
     result.httpStatus = response.status;
@@ -79,7 +80,7 @@ async function verifyUrl(url: string): Promise<VerificationResult> {
     } else if (response.status === 405) {
       // Some servers don't support HEAD, try GET via CachedHTTPClient
       const getResponse = await client.fetch(url, {
-        cache: 'none',
+        cache: "none",
         timeout: 15000,
         retry: 0,
       });
@@ -113,39 +114,53 @@ async function verifyBatch(urls: string[]): Promise<VerificationResult[]> {
 // Main execution
 const args = process.argv.slice(2);
 
-if (args.length === 0) {
-  console.error('Usage:');
+const firstArg = args[0];
+
+if (firstArg === undefined) {
+  console.error("Usage:");
   console.error('  bun UrlVerifier.ts "https://example.com"');
   console.error('  echo \'["url1", "url2"]\' | bun UrlVerifier.ts --batch');
   process.exit(1);
 }
 
-if (args[0] === '--batch') {
+if (firstArg === "--batch") {
   // Read URLs from stdin with error handling
-  const input = await Bun.stdin.text();
+  const input = await readStdinText({ trim: false });
   let urls: string[];
   try {
     urls = JSON.parse(input);
     if (!Array.isArray(urls)) {
-      throw new Error('Expected JSON array of URL strings');
+      throw new Error("Expected JSON array of URL strings");
     }
   } catch (error) {
-    console.error(JSON.stringify({
-      error: 'Invalid JSON input for batch mode',
-      detail: error instanceof Error ? error.message : String(error),
-      expected: '["url1", "url2", ...]'
-    }, null, 2));
+    console.error(
+      JSON.stringify(
+        {
+          error: "Invalid JSON input for batch mode",
+          detail: error instanceof Error ? error.message : String(error),
+          expected: '["url1", "url2", ...]',
+        },
+        null,
+        2,
+      ),
+    );
     process.exit(1);
   }
   const results = await verifyBatch(urls);
-  console.log(JSON.stringify({
-    total: urls.length,
-    valid: results.filter(r => r.valid).length,
-    invalid: results.filter(r => !r.valid).length,
-    results
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        total: urls.length,
+        valid: results.filter((r) => r.valid).length,
+        invalid: results.filter((r) => !r.valid).length,
+        results,
+      },
+      null,
+      2,
+    ),
+  );
 } else {
   // Single URL verification
-  const result = await verifyUrl(args[0]);
+  const result = await verifyUrl(firstArg);
   console.log(JSON.stringify(result, null, 2));
 }

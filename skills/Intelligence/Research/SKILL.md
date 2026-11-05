@@ -111,7 +111,7 @@ See `Examples/` for sample outputs:
 ## File Organization
 
 **Scratch (temporary work artifacts):** `~/.claude/MEMORY/WORK/{current_work}/scratch/`
-- Read `~/.claude/MEMORY/STATE/current-work.json` to get the `work_dir` value
+- Read `~/.claude/MEMORY/State/current-work.json` to get the `work_dir` value
 - All iterative work artifacts go in the current work item's scratch/ subdirectory
 - This ties research artifacts to the work item for learning and context
 
