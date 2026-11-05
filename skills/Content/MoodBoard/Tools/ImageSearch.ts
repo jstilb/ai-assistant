@@ -23,7 +23,7 @@
  */
 
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
-import type { ImageCandidate, PinSource, SourceResult } from "./Types.ts";
+import type { ImageCandidate, SourceResult } from "./Types.ts";
 
 const USER_AGENT = "KayaMoodBoard/1.0 (personal moodboard tool)";
 const FETCH_OPTS = {
@@ -79,8 +79,7 @@ export function mapOpenverse(json: OpenverseResponse, query: string): ImageCandi
 
 async function searchOpenverse(query: string, count: number): Promise<ImageCandidate[]> {
   const url =
-    `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}` +
-    `&page_size=${count}&mature=false`;
+    `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}` + `&page_size=${count}&mature=false`;
   const json = await httpClient.fetchJson<OpenverseResponse>(url, FETCH_OPTS);
   return mapOpenverse(json, query);
 }
@@ -207,9 +206,9 @@ async function searchMet(query: string, count: number): Promise<ImageCandidate[]
       batch.map((id) =>
         httpClient.fetchJson<MetObject>(
           `https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`,
-          FETCH_OPTS
-        )
-      )
+          FETCH_OPTS,
+        ),
+      ),
     );
     for (const settled of objects) {
       if (settled.status !== "fulfilled") continue;
@@ -233,7 +232,7 @@ const SEARCHERS: Record<SearchableSource, (q: string, n: number) => Promise<Imag
 
 export async function searchImages(
   query: string,
-  options: { sources?: SearchableSource[]; count?: number } = {}
+  options: { sources?: SearchableSource[]; count?: number } = {},
 ): Promise<SourceResult[]> {
   const sources = options.sources ?? [...SEARCHABLE_SOURCES];
   const count = Math.min(Math.max(options.count ?? 8, 1), 20);
@@ -251,7 +250,7 @@ export async function searchImages(
           candidates: [],
         };
       }
-    })
+    }),
   );
 }
 
@@ -276,7 +275,10 @@ if (import.meta.main) {
 
   const sourcesIdx = args.indexOf("--sources");
   const rawSources = sourcesIdx >= 0 ? (args[sourcesIdx + 1] ?? "") : SEARCHABLE_SOURCES.join(",");
-  const sources = rawSources.split(",").map((s) => s.trim()).filter(isSearchableSource);
+  const sources = rawSources
+    .split(",")
+    .map((s) => s.trim())
+    .filter(isSearchableSource);
   if (sources.length === 0) {
     console.error(`No valid sources in "${rawSources}". Valid: ${SEARCHABLE_SOURCES.join(", ")}`);
     process.exit(1);

@@ -21,8 +21,8 @@
  * @module MoodBoard/BoardStore
  */
 
-import { createHash } from "crypto";
-import { join } from "path";
+import { createHash } from "node:crypto";
+import { join } from "node:path";
 import { z } from "zod";
 import { createStateManager, type StateManager } from "../../../../lib/core/StateManager.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
@@ -61,11 +61,13 @@ export function createBoardStore(path: string = boardsStatePath()): BoardStore {
 // ---------------------------------------------------------------------------
 
 export function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "board";
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "board"
+  );
 }
 
 /** Deterministic 12-char pin id from the image URL — the dedupe key. */
@@ -88,7 +90,7 @@ function findBoard(state: BoardsState, slug: string): Board {
 
 export async function createBoard(
   store: BoardStore,
-  input: { title: string; theme?: string; tags?: string[] }
+  input: { title: string; theme?: string; tags?: string[] },
 ): Promise<Board> {
   const slug = slugify(input.title);
   const now = new Date().toISOString();
@@ -127,7 +129,7 @@ export async function addPins(
   store: BoardStore,
   slug: string,
   candidates: ImageCandidate[],
-  note?: string
+  note?: string,
 ): Promise<AddPinsResult> {
   const parsed = z.array(ImageCandidateSchema).parse(candidates);
   const result: AddPinsResult = { added: [], skippedDuplicates: 0 };
@@ -154,12 +156,7 @@ export async function addPins(
   return result;
 }
 
-export async function setPinNote(
-  store: BoardStore,
-  slug: string,
-  pinId: string,
-  note: string
-): Promise<Pin> {
+export async function setPinNote(store: BoardStore, slug: string, pinId: string, note: string): Promise<Pin> {
   let updatedPin: Pin | undefined;
   await store.update((state) => {
     const board = findBoard(state, slug);
@@ -223,7 +220,10 @@ if (import.meta.main) {
       case "create": {
         const title = args[1];
         if (!title || title.startsWith("--")) throw new Error('create requires a title: create "Fall Fashion"');
-        const tags = getFlag(args, "--tags")?.split(",").map((t) => t.trim()).filter(Boolean);
+        const tags = getFlag(args, "--tags")
+          ?.split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
         const board = await createBoard(store, { title, theme: getFlag(args, "--theme"), tags });
         console.log(jsonOutput ? JSON.stringify(board, null, 2) : `Created board: ${summarizeBoard(board)}`);
         break;
@@ -231,8 +231,8 @@ if (import.meta.main) {
       case "list": {
         const boards = await listBoards(store);
         if (jsonOutput) console.log(JSON.stringify(boards, null, 2));
-        else if (boards.length === 0) console.log("No boards yet. Create one with: create \"<title>\"");
-        else boards.forEach((b) => console.log(summarizeBoard(b)));
+        else if (boards.length === 0) console.log('No boards yet. Create one with: create "<title>"');
+        else for (const b of boards) console.log(summarizeBoard(b));
         break;
       }
       case "show": {
@@ -245,7 +245,9 @@ if (import.meta.main) {
           console.log(summarizeBoard(board));
           for (const p of board.pins) {
             const meta = [p.source, p.creator, p.license].filter(Boolean).join(" · ");
-            console.log(`  [${p.id}] ${p.title || "(untitled)"} — ${meta}${p.note ? `\n         note: ${p.note}` : ""}`);
+            console.log(
+              `  [${p.id}] ${p.title || "(untitled)"} — ${meta}${p.note ? `\n         note: ${p.note}` : ""}`,
+            );
           }
         }
         break;
@@ -276,7 +278,7 @@ if (import.meta.main) {
         console.log(
           jsonOutput
             ? JSON.stringify(result, null, 2)
-            : `Added ${result.added.length} pin(s) to "${slug}" (${result.skippedDuplicates} duplicate(s) skipped)`
+            : `Added ${result.added.length} pin(s) to "${slug}" (${result.skippedDuplicates} duplicate(s) skipped)`,
         );
         break;
       }

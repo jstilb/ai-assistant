@@ -19,9 +19,9 @@
  * @module MoodBoard/BoardRenderer
  */
 
-import { homedir } from "os";
-import { join } from "path";
-import { existsSync, mkdirSync } from "fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import { boardsStatePath, createBoardStore, getBoard } from "./BoardStore.ts";
 import type { Board, Pin } from "./Types.ts";
@@ -67,10 +67,7 @@ function renderPin(pin: Pin, localImages: Record<string, string>): string {
 </figure>`;
 }
 
-export function renderBoardHTML(
-  board: Board,
-  options: { localImages?: Record<string, string> } = {}
-): string {
+export function renderBoardHTML(board: Board, options: { localImages?: Record<string, string> } = {}): string {
   const localImages = options.localImages ?? {};
   const figures = board.pins.map((p) => renderPin(p, localImages)).join("\n");
   const tags = board.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join(" ");
@@ -127,16 +124,16 @@ function extensionFor(url: string, contentType: string | null): string {
     "image/webp": "webp",
     "image/gif": "gif",
   };
-  if (contentType && fromType[contentType.split(";")[0].trim()]) {
-    return fromType[contentType.split(";")[0].trim()];
-  }
+  const mime = contentType?.split(";")[0]?.trim();
+  const byMime = mime ? fromType[mime] : undefined;
+  if (byMime) return byMime;
   const match = url.match(/\.(jpe?g|png|webp|gif)(\?|$)/i);
-  return match ? match[1].toLowerCase().replace("jpeg", "jpg") : "jpg";
+  return match?.[1] ? match[1].toLowerCase().replace("jpeg", "jpg") : "jpg";
 }
 
 export async function downloadImages(
   board: Board,
-  outDir: string
+  outDir: string,
 ): Promise<{ localImages: Record<string, string>; failures: string[] }> {
   const imagesDir = join(outDir, "images");
   mkdirSync(imagesDir, { recursive: true });
@@ -205,7 +202,9 @@ if (import.meta.main) {
     if (args.includes("--download")) {
       const result = await downloadImages(board, outDir);
       localImages = result.localImages;
-      console.log(`Downloaded ${Object.keys(localImages).length}/${board.pins.length} images to ${join(outDir, "images")}`);
+      console.log(
+        `Downloaded ${Object.keys(localImages).length}/${board.pins.length} images to ${join(outDir, "images")}`,
+      );
       for (const failure of result.failures) console.error(`  download failed, hotlinking: ${failure}`);
     }
 
