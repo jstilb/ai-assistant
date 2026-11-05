@@ -92,7 +92,7 @@ function extractInventoryBlock(markdown: string): string | null {
   // Match fenced code block: ```yaml screen-inventory ... ``` (may have trailing spaces)
   const match = markdown.match(/```yaml\s+screen-inventory\s*\n([\s\S]*?)```/);
   if (!match) return null;
-  return match[1];
+  return match[1] ?? null;
 }
 
 /**
@@ -154,7 +154,7 @@ export function parseScreenInventory(markdown: string): ParseResult {
   for (const screen of inventory.screens) {
     if (!screen.states.includes("default")) {
       ruleErrors.push(
-        `Screen "${screen.id}" is missing required state "default". Every screen must include the default state.`
+        `Screen "${screen.id}" is missing required state "default". Every screen must include the default state.`,
       );
     }
   }
@@ -163,9 +163,7 @@ export function parseScreenInventory(markdown: string): ParseResult {
   const seen = new Set<string>();
   for (const screen of inventory.screens) {
     if (seen.has(screen.id)) {
-      ruleErrors.push(
-        `Duplicate screen id "${screen.id}". Screen ids must be unique across the inventory.`
-      );
+      ruleErrors.push(`Duplicate screen id "${screen.id}". Screen ids must be unique across the inventory.`);
     }
     seen.add(screen.id);
   }
@@ -220,10 +218,7 @@ export function statesFor(inventory: ScreenInventory, screenId: string): ScreenS
  * @param specMarkdown The full spec markdown to scan for coverage
  * @returns Array of CoverageGap descriptors — empty means full coverage
  */
-export function coverageGaps(
-  inventory: ScreenInventory,
-  specMarkdown: string
-): CoverageGap[] {
+export function coverageGaps(inventory: ScreenInventory, specMarkdown: string): CoverageGap[] {
   const gaps: CoverageGap[] = [];
 
   // Split the markdown into sections delimited by H2 headings.
@@ -246,7 +241,7 @@ export function coverageGaps(
       if (currentScreenId !== null) {
         sectionMap.set(currentScreenId, currentSectionLines.join("\n"));
       }
-      currentScreenId = sectionMatch[1];
+      currentScreenId = sectionMatch[1] ?? null;
       currentSectionLines = [line];
       continue;
     }
@@ -278,7 +273,7 @@ export function coverageGaps(
       // "### State: <state>" (three # chars, capital S, colon, space, lowercase state name)
       const marker = `### State: ${state}`;
 
-      if (!section || !section.includes(marker)) {
+      if (!section?.includes(marker)) {
         gaps.push({
           screenId: screen.id,
           state,

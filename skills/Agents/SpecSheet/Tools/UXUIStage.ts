@@ -87,10 +87,7 @@ export function shouldRunReview(effort: Effort): boolean {
  *
  * where model = modelForEffort(effort).
  */
-export function planUXUIStage(input: {
-  surface: Surface | undefined;
-  effort: Effort;
-}): StagePlan {
+export function planUXUIStage(input: { surface: Surface | undefined; effort: Effort }): StagePlan {
   if (!shouldRunUXUI(input.surface)) {
     return [];
   }

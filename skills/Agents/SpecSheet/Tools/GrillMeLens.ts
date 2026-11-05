@@ -56,8 +56,7 @@ const LENSES: Record<string, Lens | undefined> = {
   negative_space: {
     name: "Negative Space",
     description: "What was NOT said, avoided, or answered superficially",
-    questionTemplate:
-      "You didn't mention X — was that deliberate or unconsidered?",
+    questionTemplate: "You didn't mention X — was that deliberate or unconsidered?",
   },
   premortem: {
     name: "Pre-mortem",
@@ -92,9 +91,7 @@ const LENSES: Record<string, Lens | undefined> = {
 };
 
 // All lens keys as an array — passed to the LLM so it can pick what fits
-const ALL_LENSES: Lens[] = Object.values(LENSES).filter(
-  (l): l is Lens => l !== undefined
-);
+const ALL_LENSES: Lens[] = Object.values(LENSES).filter((l): l is Lens => l !== undefined);
 
 // ============================================================================
 // Directive Generation (one LLM inference call — selection + generation)
@@ -104,7 +101,7 @@ export async function generateDirectives(
   title: string,
   description: string,
   // type parameter kept for interface compat; LLM infers item nature from content
-  _type: ItemType | "" = ""
+  _type: ItemType | "" = "",
 ): Promise<LensDirective[]> {
   const systemPrompt = `You apply analytical lenses to a task description to generate specific research questions for an autonomous code research agent. The agent has access to Bash, Read, Glob, and Grep tools on a local codebase. Generate concrete, investigable directives — not abstract questions.`;
 
@@ -134,9 +131,7 @@ Return between 3 and 5 items.`;
   });
 
   if (!result.success || !result.parsed) {
-    console.warn(
-      `[GrillMeLens] Inference failed for "${title}": ${result.error ?? "no output"}`
-    );
+    console.warn(`[GrillMeLens] Inference failed for "${title}": ${result.error ?? "no output"}`);
     return [];
   }
 
@@ -144,13 +139,11 @@ Return between 3 and 5 items.`;
   if (!Array.isArray(raw)) return [];
 
   return raw.filter(
-    (
-      item: unknown
-    ): item is { lens: string; directive: string } =>
+    (item: unknown): item is { lens: string; directive: string } =>
       typeof item === "object" &&
       item !== null &&
       typeof (item as Record<string, unknown>).lens === "string" &&
-      typeof (item as Record<string, unknown>).directive === "string"
+      typeof (item as Record<string, unknown>).directive === "string",
   );
 }
 
@@ -165,14 +158,12 @@ if (import.meta.main) {
   const descIdx = args.indexOf("--description");
   const formatIdx = args.indexOf("--format");
 
-  if (titleIdx === -1 || !args[titleIdx + 1]) {
-    console.error(
-      'Usage: bun GrillMeLens.ts --title "..." [--description "..."] [--format text|json]'
-    );
+  const title = args[titleIdx + 1];
+  if (titleIdx === -1 || !title) {
+    console.error('Usage: bun GrillMeLens.ts --title "..." [--description "..."] [--format text|json]');
     process.exit(1);
   }
 
-  const title = args[titleIdx + 1];
   const description = descIdx !== -1 ? (args[descIdx + 1] ?? "") : "";
   const format = formatIdx !== -1 ? args[formatIdx + 1] : "json";
 

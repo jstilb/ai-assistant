@@ -54,9 +54,7 @@ export interface UXStructure {
   screens: UXScreenStructure[];
 }
 
-export type UXStructureResult =
-  | { ok: true; structure: UXStructure }
-  | { ok: false; error: string };
+export type UXStructureResult = { ok: true; structure: UXStructure } | { ok: false; error: string };
 
 // ============================================================================
 // Model extraction (the only reader of the LLM-authored markdown)
@@ -146,7 +144,7 @@ export function computeUXCompleteness(structure: UXStructure): CompletenessResul
     for (const state of screen.declaredStates) {
       if (!wireframes.has(normState(state))) {
         failures.push(
-          `Screen "${screen.id}" is missing a wireframe for declared state "${state}" (add a "### State: ${state}" subsection)`
+          `Screen "${screen.id}" is missing a wireframe for declared state "${state}" (add a "### State: ${state}" subsection)`,
         );
       }
     }
