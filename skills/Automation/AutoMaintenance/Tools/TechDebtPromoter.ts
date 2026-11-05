@@ -12,10 +12,10 @@
  * ISC 7: promoteItem (used by `debt promote <id>`) bypasses the cap.
  */
 
-import { join } from "path";
+import { join } from "node:path";
 // cross-skill-allowed: TechDebtPromoter drives QueueRouter's QueueManager by design; QueueClient.enqueueItem adoption evaluated 2026-07-05 (F4) and REJECTED — this site needs list()×3 (in-flight reads), attachContext(), and queue-pinned add(), none of which the seam carries; splitting one op onto the seam while the import stays for the other three reduces nothing
 import { QueueManager } from "../../QueueRouter/Tools/QueueManager.ts";
-import { TechDebtRegistry, type TechDebtItem } from "./TechDebtRegistry.ts";
+import { TechDebtRegistry } from "./TechDebtRegistry.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 function getDebtFilePath(): string {
@@ -80,19 +80,16 @@ export class TechDebtPromoter {
    */
   async promoteItem(
     itemId: string,
-    opts?: { notes?: string; researchGuidance?: string }
+    opts?: { notes?: string; researchGuidance?: string },
   ): Promise<{ promotedItemId: string }> {
     const item = this.registry.getById(itemId);
     if (!item) {
       throw new Error(`TechDebtPromoter: item "${itemId}" not found in registry`);
     }
 
-    const notes =
-      opts?.notes ??
-      `Tech debt item: ${item.description} (${item.category} in ${item.location})`;
+    const notes = opts?.notes ?? `Tech debt item: ${item.description} (${item.category} in ${item.location})`;
     const researchGuidance =
-      opts?.researchGuidance ??
-      `Research best practices for resolving ${item.category} debt in ${item.location}`;
+      opts?.researchGuidance ?? `Research best practices for resolving ${item.category} debt in ${item.location}`;
 
     // Create spec-pipeline entry
     const newPipelineId = await this.qm.add(
@@ -100,7 +97,7 @@ export class TechDebtPromoter {
         title: `Tech Debt: ${item.description}`,
         description: `Tech debt item from ${item.location}. Category: ${item.category}. ${item.description}`,
       },
-      { queue: "spec-pipeline", source: "tech-debt-promoter" }
+      { queue: "spec-pipeline", source: "tech-debt-promoter" },
     );
 
     // Attach context (notes + researchGuidance) — this also moves item to "researching"

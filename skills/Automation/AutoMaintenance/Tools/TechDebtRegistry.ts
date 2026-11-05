@@ -7,8 +7,8 @@
  * Dedup key: ${location.toLowerCase().trim()}::${category.toLowerCase().trim()}
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 import { inference } from "../../../../lib/core/Inference.ts";
 
@@ -17,9 +17,9 @@ import { inference } from "../../../../lib/core/Inference.ts";
 // ============================================================================
 
 export interface TechDebtScore {
-  severity: number | null;  // 0-100
-  impact: number | null;    // 0-100
-  effort: number | null;    // 0-100
+  severity: number | null; // 0-100
+  impact: number | null; // 0-100
+  effort: number | null; // 0-100
   composite: number | null; // 0-100
 }
 
@@ -38,7 +38,7 @@ export interface TechDebtItem {
 
 // Result summary for rescoreNulls() — see the method doc below for the full
 // contract (idempotency, incremental persistence, limit semantics).
-export interface RescoreNullsResult {
+interface RescoreNullsResult {
   attempted: number;
   rescored: number;
   stillNull: number;
@@ -57,12 +57,16 @@ export interface RescoreNullsResult {
 export function isValidScoreShape(obj: unknown): obj is TechDebtScore {
   if (typeof obj !== "object" || obj === null) return false;
   const o = obj as Record<string, unknown>;
-  const isNullOrNumber = (v: unknown) => v === null || (typeof v === "number" && isFinite(v));
+  const isNullOrNumber = (v: unknown) => v === null || (typeof v === "number" && Number.isFinite(v));
   return (
-    "severity" in o && isNullOrNumber(o.severity) &&
-    "impact" in o && isNullOrNumber(o.impact) &&
-    "effort" in o && isNullOrNumber(o.effort) &&
-    "composite" in o && isNullOrNumber(o.composite)
+    "severity" in o &&
+    isNullOrNumber(o.severity) &&
+    "impact" in o &&
+    isNullOrNumber(o.impact) &&
+    "effort" in o &&
+    isNullOrNumber(o.effort) &&
+    "composite" in o &&
+    isNullOrNumber(o.composite)
   );
 }
 
@@ -79,7 +83,7 @@ export async function scoreTechDebtItem(params: {
   const stubEnv = process.env.KAYA_TECH_DEBT_STUB_SCORE;
   if (stubEnv !== undefined) {
     const parsed = parseInt(stubEnv, 10);
-    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+    if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 100) {
       const composite = parsed;
       const severity = Math.min(100, composite);
       const impact = Math.min(100, composite);
@@ -207,20 +211,19 @@ export class TechDebtRegistry {
     const items = this.readAll();
     const key = this.dedupKey(params.location, params.category);
 
-    const existing = items.find(
-      (i) => i.status === "open" && this.dedupKey(i.location, i.category) === key
-    );
+    const existing = items.find((i) => i.status === "open" && this.dedupKey(i.location, i.category) === key);
     if (existing) {
       return { item: existing, isDuplicate: true };
     }
 
-    const score = params.score !== undefined && isValidScoreShape(params.score)
-      ? params.score
-      : await scoreTechDebtItem({
-          description: params.description,
-          location: params.location,
-          category: params.category,
-        });
+    const score =
+      params.score !== undefined && isValidScoreShape(params.score)
+        ? params.score
+        : await scoreTechDebtItem({
+            description: params.description,
+            location: params.location,
+            category: params.category,
+          });
 
     const newItem: TechDebtItem = {
       id: crypto.randomUUID(),
@@ -341,7 +344,7 @@ export class TechDebtRegistry {
       // whole run instead was proven (adversarial verification, 2026-07-11)
       // to clobber a concurrent add() outright during a long live rescore.
       const target = this.getById(id);
-      if (!target || target.status !== "open" || isValidScoreShape(target.score)) {
+      if (target?.status !== "open" || isValidScoreShape(target.score)) {
         continue; // vanished, closed, or scored by another writer mid-run
       }
       const score = await scoreTechDebtItem({
@@ -361,9 +364,7 @@ export class TechDebtRegistry {
       }
     }
 
-    const remainingNull = this.readAll().filter(
-      (i) => i.status === "open" && !isValidScoreShape(i.score)
-    ).length;
+    const remainingNull = this.readAll().filter((i) => i.status === "open" && !isValidScoreShape(i.score)).length;
 
     return { attempted, rescored, stillNull, remainingNull };
   }

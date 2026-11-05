@@ -1,86 +1,46 @@
 /**
  * PathEnv - Test Suite (TestWriter)
  * ISC Coverage: P-02, P-03
+ *
+ * lib/core/PathEnv.ts exports getCorrectPath() and setupPath(); the older
+ * PathEnv.resolveBun()/resolveClaude()/augmentPath() API this suite targeted no
+ * longer exists, so the suite covers the current API.
  */
 
 import { describe, it, expect } from "bun:test";
-import { existsSync } from "fs";
-import { PathEnv } from "../../../../lib/core/PathEnv";
+import { statSync } from "node:fs";
+import { getCorrectPath, setupPath } from "../../../../lib/core/PathEnv.ts";
 
 describe("PathEnv", () => {
-  describe("resolveBun", () => {
-    it("should resolve bun binary path", () => {
-      // ISC P-02: PathEnv.ts resolves bun binary
-      const bunPath = PathEnv.resolveBun();
-      expect(bunPath).toBeDefined();
-      expect(typeof bunPath).toBe("string");
-      expect(bunPath.length).toBeGreaterThan(0);
-      expect(existsSync(bunPath)).toBe(true);
+  describe("getCorrectPath", () => {
+    it("returns a non-empty colon-separated PATH", () => {
+      const p = getCorrectPath();
+      expect(typeof p).toBe("string");
+      expect(p.length).toBeGreaterThan(0);
     });
 
-    it("should return absolute path", () => {
-      const bunPath = PathEnv.resolveBun();
-      expect(bunPath.startsWith("/")).toBe(true);
-    });
-  });
-
-  describe("resolveClaude", () => {
-    it("should resolve claude binary path", () => {
-      // ISC P-03: PathEnv.ts resolves claude binary
-      const claudePath = PathEnv.resolveClaude();
-      expect(claudePath).toBeDefined();
-      expect(typeof claudePath).toBe("string");
-      expect(claudePath).toBe("/Users/[user]/.local/bin/claude");
-    });
-
-    it("should verify claude binary exists", () => {
-      const claudePath = PathEnv.resolveClaude();
-      expect(existsSync(claudePath)).toBe(true);
-    });
-  });
-
-  describe("resolve", () => {
-    it("should resolve generic binary from known paths", () => {
-      const nodePath = PathEnv.resolve("node");
-      expect(nodePath).toBeDefined();
-      if (nodePath !== null) {
-        expect(existsSync(nodePath)).toBe(true);
+    it("lists only directories that exist", () => {
+      for (const dir of getCorrectPath().split(":")) {
+        expect(statSync(dir).isDirectory()).toBe(true);
       }
     });
 
-    it("should return null for nonexistent binary", () => {
-      const fakePath = PathEnv.resolve("nonexistent-binary-xyz");
-      expect(fakePath).toBeNull();
+    it("lists only absolute paths", () => {
+      for (const dir of getCorrectPath().split(":")) {
+        expect(dir.startsWith("/")).toBe(true);
+      }
     });
   });
 
-  describe("augmentPath", () => {
-    it("should prepend known binary directories to PATH", () => {
-      const originalPath = process.env.PATH;
-      PathEnv.augmentPath();
-
-      const newPath = process.env.PATH!;
-      expect(newPath).toContain("/Users/[user]/.bun/bin");
-      expect(newPath).toContain("/opt/homebrew/bin");
-      expect(newPath).toContain("/Users/[user]/.local/bin");
-      expect(newPath.startsWith("/Users/[user]/.bun/bin")).toBe(true);
-    });
-
-    it("should preserve existing PATH entries", () => {
-      const originalPath = process.env.PATH;
-      PathEnv.augmentPath();
-
-      expect(process.env.PATH).toContain(originalPath);
-    });
-  });
-
-  describe("integration", () => {
-    it("should resolve bun after augmenting PATH", () => {
-      PathEnv.augmentPath();
-      const bunPath = PathEnv.resolveBun();
-
-      expect(bunPath).toBeDefined();
-      expect(existsSync(bunPath)).toBe(true);
+  describe("setupPath", () => {
+    it("sets process.env.PATH to getCorrectPath()", () => {
+      const originalPath = process.env["PATH"];
+      try {
+        setupPath();
+        expect(process.env["PATH"]).toBe(getCorrectPath());
+      } finally {
+        process.env["PATH"] = originalPath;
+      }
     });
   });
 });

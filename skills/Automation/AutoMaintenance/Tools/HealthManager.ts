@@ -8,9 +8,9 @@
  */
 
 import { z } from "zod";
-import { join } from "path";
-import { createStateManager } from "../../../../lib/core/StateManager";
-import { AlertGate, getAlertGate } from "../../../../lib/core/AlertGate.ts";
+import { join } from "node:path";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { type AlertGate, getAlertGate } from "../../../../lib/core/AlertGate.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -28,7 +28,7 @@ export const IssueRecordSchema = z.object({
   resolvedAt: z.number().optional(),
 });
 
-export const HealthStateSchema = z.object({
+const HealthStateSchema = z.object({
   lastRunByTier: z.record(z.string(), z.string()),
   currentStreak: z.record(z.string(), z.number()),
   longestGap: z.record(z.string(), z.string()),
@@ -38,7 +38,7 @@ export const HealthStateSchema = z.object({
   lastUpdated: z.string().optional(),
 });
 
-export type HealthState = z.infer<typeof HealthStateSchema>;
+type HealthState = z.infer<typeof HealthStateSchema>;
 export type IssueRecord = z.infer<typeof IssueRecordSchema>;
 export type IssueKey = string; // format: "{workflow}:{step}:{sha256(finding)[0:8]}"
 
@@ -82,7 +82,7 @@ export function _resetHealthManagerForTest(): void {
 // issuePersistence TTL pruning (Decision G + Bug NEW-1)
 // ============================================================================
 
-const RESOLVED_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days for auto-resolved
+const RESOLVED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days for auto-resolved
 const STALE_MONITORING_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days for monitoring
 
 function pruneIssuePersistence(state: HealthState): HealthState {
@@ -124,7 +124,7 @@ export async function saveHealthState(state: HealthState): Promise<void> {
 }
 
 export async function updateHealthState(
-  fn: (state: HealthState) => HealthState | Promise<HealthState>
+  fn: (state: HealthState) => HealthState | Promise<HealthState>,
 ): Promise<HealthState> {
   return getHealthManager().update(async (state) => pruneIssuePersistence(await fn(state)));
 }
@@ -133,18 +133,11 @@ export async function updateHealthState(
 // Gap and streak logic (migrated from SelfMonitor — thresholds aligned)
 // ============================================================================
 
-export interface GapCheckResult {
+interface GapCheckResult {
   gapDetected: boolean;
   gapHours?: number;
   notificationFired: boolean;
   bypassed?: boolean;
-}
-
-export interface StatusData {
-  lastRunByTier: { [tier: string]: string };
-  currentStreak: { [tier: string]: number };
-  longestGap: { [tier: string]: string };
-  openAlerts: number;
 }
 
 /**
@@ -177,10 +170,11 @@ export async function checkForGaps(
     // morning's 🩺 digest). A >25h maintenance gap is worth knowing about
     // once a day; it is not worth a dedicated interrupt.
     const gate = options.gate ?? getAlertGate();
-    const result = await gate.send(
-      `AutoMaintenance gap: ${Math.round(gapHours)} hours since last ${tier} run`,
-      { key: `automaintenance-gap-${tier}`, tier: "digest", cooldownMs: 24 * 60 * 60 * 1000 },
-    );
+    const result = await gate.send(`AutoMaintenance gap: ${Math.round(gapHours)} hours since last ${tier} run`, {
+      key: `automaintenance-gap-${tier}`,
+      tier: "digest",
+      cooldownMs: 24 * 60 * 60 * 1000,
+    });
     // 'spooled' is the digest-tier success result; 'paged' can no longer occur
     // here. Kept as an explicit set so a future tier change stays honest.
     return { gapDetected: true, gapHours: Math.round(gapHours), notificationFired: result === "spooled" };
@@ -188,37 +182,33 @@ export async function checkForGaps(
   return { gapDetected: false, notificationFired: false };
 }
 
-/**
- * Calculate current streak for a tier.
- * Gap threshold: 25 hours — aligned with checkForGaps (fixes §2.8 misalignment).
- * Previously used Math.round(diffMs/(24h)) === 1 which was inconsistent with 25h gap-detection.
- */
-export function calculateStreak(_tier: string, runs: string[]): number {
-  if (runs.length === 0) return 0;
-  const sorted = runs.map((r) => new Date(r)).sort((a, b) => b.getTime() - a.getTime());
-  let streak = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    const gapHours = (sorted[i - 1].getTime() - sorted[i].getTime()) / (1000 * 60 * 60);
-    if (gapHours <= 25) streak++;
-    else break;
-  }
-  return streak;
-}
-
-export function calculateLongestGap(tier: string, runs: Array<{ tier: string; timestamp: string }>): { days: number; description: string } {
-  const times = runs.filter((r) => r.tier === tier).map((r) => new Date(r.timestamp).getTime()).sort();
+export function calculateLongestGap(
+  tier: string,
+  runs: Array<{ tier: string; timestamp: string }>,
+): { days: number; description: string } {
+  const times = runs
+    .filter((r) => r.tier === tier)
+    .map((r) => new Date(r.timestamp).getTime())
+    .filter((t) => !Number.isNaN(t))
+    .sort((a, b) => a - b);
   if (times.length < 2) return { days: 0, description: "N/A" };
-  let max = 0, start = 0, end = 0;
+  let max = 0,
+    start = 0,
+    end = 0;
   for (let i = 1; i < times.length; i++) {
-    if (times[i] - times[i - 1] > max) { max = times[i] - times[i - 1]; start = times[i - 1]; end = times[i]; }
+    const prev = times[i - 1];
+    const cur = times[i];
+    if (prev === undefined || cur === undefined) continue;
+    if (cur - prev > max) {
+      max = cur - prev;
+      start = prev;
+      end = cur;
+    }
   }
   const days = Math.round(max / (1000 * 60 * 60 * 24));
   const fmt = (ts: number) => new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return { days, description: `${days} days (${fmt(start)} – ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})` };
-}
-
-export function markIssueResolved(state: HealthState, key: IssueKey): HealthState {
-  const record = state.issuePersistence[key];
-  if (!record) return state;
-  return { ...state, issuePersistence: { ...state.issuePersistence, [key]: { ...record, status: "auto-resolved", resolvedAt: Date.now() } } };
+  return {
+    days,
+    description: `${days} days (${fmt(start)} – ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})`,
+  };
 }

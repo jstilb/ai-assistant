@@ -4,8 +4,8 @@
  * Uses Node fs APIs — no execSync shell commands.
  */
 
-import { existsSync, readdirSync, statSync } from "fs";
-import { join } from "path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const KAYA_HOME = getKayaHome();
@@ -24,7 +24,11 @@ export interface SkillsAuditResult {
 
 function findSkills(dir: string, results: string[] = []): string[] {
   let items: string[];
-  try { items = readdirSync(dir); } catch { return results; }
+  try {
+    items = readdirSync(dir);
+  } catch {
+    return results;
+  }
   for (const item of items) {
     const fullPath = join(dir, item);
     try {
@@ -32,7 +36,9 @@ function findSkills(dir: string, results: string[] = []): string[] {
         if (existsSync(join(fullPath, "SKILL.md"))) results.push(fullPath);
         findSkills(fullPath, results);
       }
-    } catch { /* skip inaccessible */ }
+    } catch {
+      /* skip inaccessible */
+    }
   }
   return results;
 }
@@ -50,15 +56,21 @@ export async function runSkillsAudit(): Promise<SkillsAuditResult> {
   }
 
   try {
-    const { validateSkillStructure } = await import("../../../../lib/core/ValidateSkillStructure");
+    const { validateSkillStructure } = await import("../../../../lib/core/ValidateSkillStructure.ts");
     const result = validateSkillStructure(skillsDir);
     if (!result.valid) {
       for (const issue of result.issues) {
-        findings.push({ skill: issue.category || issue.subSkill || "system", issue: `[${issue.rule}] ${issue.message}`, severity: issue.severity });
+        findings.push({
+          skill: issue.category || issue.subSkill || "system",
+          issue: `[${issue.rule}] ${issue.message}`,
+          severity: issue.severity,
+        });
       }
       console.log(`⚠ ${result.summary.errors} structural errors, ${result.summary.warnings} warnings`);
     } else {
-      console.log(`✓ Structural validation passed (${result.summary.categoriesChecked} categories, ${result.summary.subSkillsChecked} sub-skills)`);
+      console.log(
+        `✓ Structural validation passed (${result.summary.categoriesChecked} categories, ${result.summary.subSkillsChecked} sub-skills)`,
+      );
     }
   } catch (err) {
     console.error(`⚠ Structural validation failed to run: ${err instanceof Error ? err.message : err}`);

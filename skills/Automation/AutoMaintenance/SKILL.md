@@ -119,7 +119,7 @@ crontab -l   # should show only the weekly-mon line
 The one surviving raw shell runner exports PATH before invoking bun to
 ensure binaries are found in cron context:
 ```bash
-export PATH="/Users/[user]/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/[user]/.local/bin:$PATH"
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/bin:$PATH"
 ```
 
 | Script | Invokes |

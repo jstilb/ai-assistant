@@ -10,24 +10,19 @@
  *   7 occurrences → CRITICAL
  */
 
-import { createHash } from "crypto";
-import {
-  loadHealthState,
-  saveHealthState,
-  type IssueRecord,
-  type IssueKey,
-} from "./HealthManager";
+import { createHash } from "node:crypto";
+import { loadHealthState, saveHealthState, type IssueRecord, type IssueKey } from "./HealthManager.ts";
 
 export type { IssueRecord, IssueKey };
 
-export interface RecordInput {
+interface RecordInput {
   lastSeen: string;
   type: string;
   finding: string;
   status: "monitoring" | "escalated" | "auto-resolved";
 }
 
-export interface ISCScoreEntry {
+interface ISCScoreEntry {
   date: string;
   pass: number;
   total: number;
@@ -109,9 +104,7 @@ const PURE_NUMERIC_TOKEN = /^\d[\d,]*(?:\.\d+)?\.?$/;
  * guessing) is the correct, principled behavior, not a limitation.
  */
 export function normalizeFindingText(finding: string): string {
-  return finding.replace(/[A-Za-z0-9.,]+/g, (token) =>
-    PURE_NUMERIC_TOKEN.test(token) ? "<N>" : token,
-  );
+  return finding.replace(/[A-Za-z0-9.,]+/g, (token) => (PURE_NUMERIC_TOKEN.test(token) ? "<N>" : token));
 }
 
 export function generateIssueKey(workflow: string, step: string, finding: string): IssueKey {

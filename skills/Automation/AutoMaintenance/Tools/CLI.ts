@@ -60,9 +60,10 @@ async function main(): Promise<void> {
       }
 
       const { item, isDuplicate } = await registry.add({ description, location, category });
-      const scoreDisplay = item.score?.composite !== null && item.score?.composite !== undefined
-        ? String(item.score.composite)
-        : "pending";
+      const scoreDisplay =
+        item.score?.composite !== null && item.score?.composite !== undefined
+          ? String(item.score.composite)
+          : "pending";
 
       if (isDuplicate) {
         console.log(`Existing item ${item.id} (score: ${scoreDisplay})`);
@@ -79,9 +80,8 @@ async function main(): Promise<void> {
         break;
       }
       for (const item of items) {
-        const score = item.score?.composite !== null && item.score?.composite !== undefined
-          ? item.score.composite
-          : "null";
+        const score =
+          item.score?.composite !== null && item.score?.composite !== undefined ? item.score.composite : "null";
         console.log(`${item.id}  ${item.description}  ${item.location}  score:${score}`);
       }
       break;
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 
     case "top": {
       const n = args[1] ? parseInt(args[1], 10) : 10;
-      if (isNaN(n) || n < 1) {
+      if (Number.isNaN(n) || n < 1) {
         console.error("Error: top requires a positive integer N");
         process.exit(1);
       }
@@ -99,9 +99,8 @@ async function main(): Promise<void> {
         break;
       }
       for (const item of items) {
-        const score = item.score?.composite !== null && item.score?.composite !== undefined
-          ? item.score.composite
-          : "null";
+        const score =
+          item.score?.composite !== null && item.score?.composite !== undefined ? item.score.composite : "null";
         console.log(`${item.id}  ${item.description}  ${item.location}  score:${score}`);
       }
       break;
@@ -143,7 +142,7 @@ async function main(): Promise<void> {
       let limit: number;
       if (args[1] !== undefined) {
         limit = parseInt(args[1], 10);
-        if (isNaN(limit) || limit < 1) {
+        if (Number.isNaN(limit) || limit < 1) {
           console.error("Error: rescore requires a positive integer N");
           process.exit(1);
         }
@@ -153,7 +152,7 @@ async function main(): Promise<void> {
 
       const result = await registry.rescoreNulls(limit);
       console.log(
-        `Rescore complete: attempted ${result.attempted}, rescored ${result.rescored}, stillNull ${result.stillNull}, remainingNull ${result.remainingNull}`
+        `Rescore complete: attempted ${result.attempted}, rescored ${result.rescored}, stillNull ${result.stillNull}, remainingNull ${result.remainingNull}`,
       );
       break;
     }

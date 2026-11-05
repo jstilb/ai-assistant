@@ -10,7 +10,22 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, mkdtempSync, rmSync, lstatSync } from "fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  symlinkSync,
+  existsSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+  lstatSync,
+} from "node:fs";
+import { afterAll as afterAllRestoreHome } from "bun:test";
+import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
+
+// Temp KAYA_HOME: these modules write state under the Kaya home (lint: no-live-write-in-test).
+pinKayaHome("kaya-automaintenance-test-");
+afterAllRestoreHome(restoreKayaHome);
 
 // existsSync FOLLOWS symlinks, so it returns false for a dangling one — these
 // tests create deliberately-broken symlinks, so "the link itself exists" must
@@ -23,9 +38,9 @@ function symlinkItselfExists(path: string): boolean {
     return false;
   }
 }
-import { join } from "path";
-import { tmpdir } from "os";
-import { Remediator } from "./Remediator";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { Remediator } from "./Remediator.ts";
 
 let scratchDir: string;
 let TEST_DIR: string;
@@ -52,9 +67,7 @@ describe("Remediator", () => {
       symlinkSync(nonexistentTarget, symlinkPath);
       expect(symlinkItselfExists(symlinkPath)).toBe(true);
 
-      const findings = [
-        { type: "broken_symlink", target: symlinkPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: symlinkPath }];
 
       await Remediator.run(findings, { remediationLogPath: REMEDIATION_LOG });
 
@@ -69,9 +82,7 @@ describe("Remediator", () => {
 
       symlinkSync(nonexistentTarget, symlinkPath);
 
-      const findings = [
-        { type: "broken_symlink", target: symlinkPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: symlinkPath }];
 
       await Remediator.run(findings, { remediationLogPath: REMEDIATION_LOG });
 
@@ -92,9 +103,7 @@ describe("Remediator", () => {
       writeFileSync(targetPath, "test content");
       symlinkSync(targetPath, symlinkPath);
 
-      const findings = [
-        { type: "broken_symlink", target: symlinkPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: symlinkPath }];
 
       await Remediator.run(findings, { remediationLogPath: REMEDIATION_LOG });
 
@@ -113,9 +122,7 @@ describe("Remediator", () => {
       symlinkSync(nonexistentTarget, symlinkPath);
       expect(symlinkItselfExists(symlinkPath)).toBe(true);
 
-      const findings = [
-        { type: "broken_symlink", target: symlinkPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: symlinkPath }];
 
       await Remediator.run(findings, { dryRun: true, remediationLogPath: REMEDIATION_LOG });
 
@@ -129,9 +136,7 @@ describe("Remediator", () => {
 
       symlinkSync(nonexistentTarget, symlinkPath);
 
-      const findings = [
-        { type: "broken_symlink", target: symlinkPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: symlinkPath }];
 
       await Remediator.run(findings, { dryRun: true, remediationLogPath: REMEDIATION_LOG });
 
@@ -148,15 +153,13 @@ describe("Remediator", () => {
       // ISC R-04: Remediation failure escalates to alert
       const protectedPath = "/protected/cannot-remove";
 
-      const findings = [
-        { type: "broken_symlink", target: protectedPath }
-      ];
+      const findings = [{ type: "broken_symlink", target: protectedPath }];
 
       const result = await Remediator.run(findings, { remediationLogPath: REMEDIATION_LOG });
 
       expect(result.failures.length).toBeGreaterThan(0);
-      expect(result.failures[0].target).toBe(protectedPath);
-      expect(result.failures[0].shouldEscalate).toBe(true);
+      expect(result.failures[0]?.target).toBe(protectedPath);
+      expect(result.failures[0]?.shouldEscalate).toBe(true);
     });
   });
 
@@ -170,8 +173,8 @@ describe("Remediator", () => {
           type: "rotate_log",
           target: oldLogPath,
           ageInDays: 15,
-          threshold: 14
-        }
+          threshold: 14,
+        },
       ];
 
       await Remediator.run(findings, { remediationLogPath: REMEDIATION_LOG });

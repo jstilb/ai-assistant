@@ -53,11 +53,11 @@
  * pin+reset dance the way the 2026-07-20 scripts did.
  */
 
-import { mkdirSync } from "fs";
-import { join } from "path";
-import { AlertManager } from "./AlertManager";
-import { HealthTracker } from "./HealthTracker";
-import { _resetHealthManagerForTest } from "./HealthManager";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { AlertManager } from "./AlertManager.ts";
+import { HealthTracker } from "./HealthTracker.ts";
+import { _resetHealthManagerForTest } from "./HealthManager.ts";
 import { AlertGate } from "../../../../lib/core/AlertGate.ts";
 
 export interface RecordedSend {

@@ -10,11 +10,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { readFileSync, existsSync, mkdtempSync, rmSync, statSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { createHash } from "crypto";
-import { makeVerifyHarness, teardownVerifyHarness } from "./VerifyHarness";
+import { readFileSync, existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { makeVerifyHarness, teardownVerifyHarness } from "./VerifyHarness.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -22,12 +22,7 @@ import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 // mtime-identical before and after this whole suite runs.
 // ============================================================================
 
-const LIVE_ALERTS_LOG_PATH = join(
-  defaultKayaHome(),
-  "MEMORY",
-  "AutoMaintenance",
-  "alerts.jsonl"
-);
+const LIVE_ALERTS_LOG_PATH = join(defaultKayaHome(), "MEMORY", "AutoMaintenance", "alerts.jsonl");
 
 function liveAlertsLogSignature(): { mtimeMs: number; hash: string } | null {
   if (!existsSync(LIVE_ALERTS_LOG_PATH)) return null;

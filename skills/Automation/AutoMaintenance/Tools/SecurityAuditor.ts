@@ -23,11 +23,11 @@
  * "unknown" must never render as "clean".
  */
 
-import { join } from "path";
-import { tmpdir } from "os";
-import { execFileSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { getCorrectPath } from "../../../../lib/core/PathEnv";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { getCorrectPath } from "../../../../lib/core/PathEnv.ts";
 import { getKayaHome, kayaHomePath, assertNotLiveHomeUnderTest } from "../../../../lib/core/KayaHome.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
@@ -78,7 +78,10 @@ function escapeRegexLiteral(s: string): string {
 function buildExcludesFile(scanTarget: string): string {
   const base = readFileSync(EXCLUDES_BASE_PATH, "utf-8");
   const anchoredWorktreesExclude = `^${escapeRegexLiteral(scanTarget)}/(\\.claude/)?worktrees/`;
-  const tmpPath = join(tmpdir(), `secretscan-excludes-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  const tmpPath = join(
+    tmpdir(),
+    `secretscan-excludes-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+  );
   writeFileSync(tmpPath, `${base}\n${anchoredWorktreesExclude}\n`, "utf-8");
   return tmpPath;
 }
@@ -111,7 +114,7 @@ export interface SecretScanDeps {
 }
 
 function today(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toISOString().slice(0, 10);
 }
 
 /** Resolved fresh on every call (not a module-load-time constant) so it
@@ -232,7 +235,10 @@ export async function runSecurityAuditCheck(deps: SecretScanDeps = {}): Promise<
       return findings;
     }
 
-    const lines = rawOutput.trim().split("\n").filter((l) => l.length > 0);
+    const lines = rawOutput
+      .trim()
+      .split("\n")
+      .filter((l) => l.length > 0);
     const parsed: ParsedFinding[] = [];
     let parseErrors = 0;
     for (const line of lines) {

@@ -23,8 +23,8 @@
  * reads/writes the healthTracker argument, so an unloaded HealthTracker
  * instance is passed purely to satisfy AlertManager's constructor.
  */
-import { AlertManager } from "../AlertManager";
-import { HealthTracker } from "../HealthTracker";
+import { AlertManager } from "../AlertManager.ts";
+import { HealthTracker } from "../HealthTracker.ts";
 
 const alertManager = new AlertManager(new HealthTracker());
 alertManager.writeAlert(

@@ -24,7 +24,7 @@ Runs in parallel with dependency check.
 - **Broken symlinks** - Scan for symlinks whose targets don't exist using `find -type l ! -exec test -e {} \;`
 - **Disk space** - Check `df -h ~/.claude` usage (WARNING > 85%, CRITICAL > 95%)
 - **Git status** - Check for unexpected dirty state in tracked config files
-- **Cron daemon health** - Verify `com.pai.cron-scheduler` is running via `launchctl list`
+- **Cron daemon health** - Verify `com.kaya.cron-scheduler` is running via `launchctl list`
 
 **Auto-Remediation:**
 - Broken symlinks are queued for removal (only if `lstat` succeeds but `stat` fails)
@@ -45,7 +45,7 @@ Runs in parallel with integrity check.
 ### Step 3: Process Health
 
 **Checks:**
-- Verify key daemons running: `com.pai.cron-scheduler`, `com.pai.telegram-bot`
+- Verify key daemons running: `com.kaya.cron-scheduler`, `com.kaya.telegram-bot`
 - Record status from `launchctl list`
 - Alert if any expected daemon shows exit code != 0
 

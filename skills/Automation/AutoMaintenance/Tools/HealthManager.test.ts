@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { AlertGate } from "../../../../lib/core/AlertGate.ts";
 
 let testHome: string;
@@ -22,12 +22,12 @@ afterEach(() => {
   delete process.env.KAYA_HOME;
   if (existsSync(testHome)) rmSync(testHome, { recursive: true });
   // Reset singleton so next test gets a fresh StateManager with new KAYA_HOME
-  import("./HealthManager").then(m => m._resetHealthManagerForTest());
+  import("./HealthManager.ts").then((m) => m._resetHealthManagerForTest());
 });
 
 describe("HealthManager", () => {
   it("loadHealthState returns defaults when file does not exist", async () => {
-    const { loadHealthState, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
     const state = await loadHealthState();
     expect(state.openAlerts).toBe(0);
@@ -36,7 +36,7 @@ describe("HealthManager", () => {
   });
 
   it("saveHealthState persists and loadHealthState retrieves correctly", async () => {
-    const { loadHealthState, saveHealthState, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, saveHealthState, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();
@@ -51,10 +51,10 @@ describe("HealthManager", () => {
   });
 
   it("updateHealthState applies atomic transform", async () => {
-    const { loadHealthState, updateHealthState, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, updateHealthState, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
-    await updateHealthState(s => ({ ...s, openAlerts: 5 }));
+    await updateHealthState((s) => ({ ...s, openAlerts: 5 }));
 
     _resetHealthManagerForTest();
     const loaded = await loadHealthState();
@@ -62,7 +62,7 @@ describe("HealthManager", () => {
   });
 
   it("issuePersistence is typed — accepts IssueRecord shape", async () => {
-    const { loadHealthState, saveHealthState, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, saveHealthState, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();
@@ -87,10 +87,10 @@ describe("HealthManager", () => {
   });
 
   it("returns defaults gracefully when file is corrupt JSON", async () => {
-    const { writeFileSync } = await import("fs");
+    const { writeFileSync } = await import("node:fs");
     writeFileSync(join(testHome, "MEMORY", "AutoMaintenance", "health-state.json"), "not valid json");
 
-    const { loadHealthState, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
     // Should not throw — returns defaults
     const state = await loadHealthState();
@@ -125,7 +125,10 @@ describe("checkForGaps — AlertGate routing", () => {
     return new AlertGate({
       statePath: join(testHome, "MEMORY", "State", "alert-gate.json"),
       spoolPath: spoolPath(),
-      send: async (message, channel) => { sent.push({ message, channel }); return true; },
+      send: async (message, channel) => {
+        sent.push({ message, channel });
+        return true;
+      },
       now: () => clock.now,
     });
   }
@@ -149,7 +152,7 @@ describe("checkForGaps — AlertGate routing", () => {
   });
 
   it("fires a page once when gap exceeds 25 hours", async () => {
-    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();
@@ -168,7 +171,7 @@ describe("checkForGaps — AlertGate routing", () => {
   });
 
   it("a repeat check spools again but the digest collapses it by key", async () => {
-    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();
@@ -197,7 +200,7 @@ describe("checkForGaps — AlertGate routing", () => {
   });
 
   it("injected gate receives the right key and the digest tier", async () => {
-    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();
@@ -216,7 +219,7 @@ describe("checkForGaps — AlertGate routing", () => {
   });
 
   it("does not fire when force option bypasses the check", async () => {
-    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager");
+    const { loadHealthState, checkForGaps, _resetHealthManagerForTest } = await import("./HealthManager.ts");
     _resetHealthManagerForTest();
 
     const state = await loadHealthState();

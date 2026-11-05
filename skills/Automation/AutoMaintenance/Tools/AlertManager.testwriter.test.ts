@@ -22,16 +22,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "bun:test";
-import { readFileSync, appendFileSync, existsSync, mkdtempSync, mkdirSync, rmSync, statSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { createHash } from "crypto";
-import { spawnSync } from "child_process";
-import { AlertManager, reduceAlertsById, type Alert } from "./AlertManager";
-import { HealthTracker, generateIssueKey } from "./HealthTracker";
-import { _resetHealthManagerForTest } from "./HealthManager";
+import { readFileSync, appendFileSync, existsSync, mkdtempSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { AlertManager, reduceAlertsById, type Alert } from "./AlertManager.ts";
+import { HealthTracker, generateIssueKey } from "./HealthTracker.ts";
+import { _resetHealthManagerForTest } from "./HealthManager.ts";
 import { AlertGate } from "../../../../lib/core/AlertGate.ts";
-import { refireCriticalAlerts } from "./Workflows";
+import { refireCriticalAlerts } from "./Workflows.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -40,12 +40,7 @@ import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 // invariant a forgotten pin/reset would violate.
 // ============================================================================
 
-const LIVE_ALERTS_LOG_PATH = join(
-  defaultKayaHome(),
-  "MEMORY",
-  "AutoMaintenance",
-  "alerts.jsonl"
-);
+const LIVE_ALERTS_LOG_PATH = join(defaultKayaHome(), "MEMORY", "AutoMaintenance", "alerts.jsonl");
 
 function liveAlertsLogSignature(): { mtimeMs: number; hash: string } | null {
   if (!existsSync(LIVE_ALERTS_LOG_PATH)) return null;
@@ -98,7 +93,11 @@ function makeGate(dir: string): AlertGate {
 function readSpool(dir: string): Array<{ key: string; tier: string; message: string }> {
   const p = join(dir, "digest-spool.jsonl");
   if (!existsSync(p)) return [];
-  return readFileSync(p, "utf-8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  return readFileSync(p, "utf-8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
 }
 
 beforeEach(async () => {
@@ -136,14 +135,14 @@ describe("AlertManager", () => {
           step: "secret-scan",
           type: "verified_secret",
           finding: "GitHub token found in config.json",
-          verified: true
-        }
+          verified: true,
+        },
       ];
 
       const result = await alertManager.evaluate(findings, healthTracker);
 
       expect(result.alerts.length).toBeGreaterThan(0);
-      const criticalAlert = result.alerts.find(a => a.severity === "CRITICAL");
+      const criticalAlert = result.alerts.find((a) => a.severity === "CRITICAL");
       expect(criticalAlert).toBeDefined();
       expect(criticalAlert!.finding).toContain("GitHub token");
     });
@@ -155,8 +154,8 @@ describe("AlertManager", () => {
           step: "secret-scan",
           type: "verified_secret",
           finding: "API key found",
-          verified: true
-        }
+          verified: true,
+        },
       ];
 
       const result = await alertManager.evaluate(findings, healthTracker);
@@ -176,8 +175,8 @@ describe("AlertManager", () => {
           step: "secret-scan",
           type: "verified_secret",
           finding: "Secret in file.ts",
-          verified: true
-        }
+          verified: true,
+        },
       ];
 
       await alertManager.evaluate(findings, healthTracker);
@@ -202,16 +201,16 @@ describe("AlertManager", () => {
           type: "potential_secret",
           finding: "200 potential secrets detected",
           verified: false,
-          count: 200
-        }
+          count: 200,
+        },
       ];
 
       const result = await alertManager.evaluate(findings, healthTracker);
 
-      const warningAlert = result.alerts.find(a => a.severity === "WARNING");
+      const warningAlert = result.alerts.find((a) => a.severity === "WARNING");
       expect(warningAlert).toBeDefined();
 
-      const criticalAlert = result.alerts.find(a => a.severity === "CRITICAL");
+      const criticalAlert = result.alerts.find((a) => a.severity === "CRITICAL");
       expect(criticalAlert).toBeUndefined();
 
       // WARNING routes to tier: 'digest' — spooled, never calls the page-tier send fn.
@@ -232,13 +231,13 @@ describe("AlertManager", () => {
           workflow: "weekly-security",
           step: "secret-scan",
           type: "scan_error",
-          finding: "Secret scan FAILED — result UNKNOWN, NOT verified clean: exit status 1"
-        }
+          finding: "Secret scan FAILED — result UNKNOWN, NOT verified clean: exit status 1",
+        },
       ];
 
       const result = await alertManager.evaluate(findings, healthTracker);
 
-      const criticalAlert = result.alerts.find(a => a.severity === "CRITICAL");
+      const criticalAlert = result.alerts.find((a) => a.severity === "CRITICAL");
       expect(criticalAlert).toBeDefined();
       expect(criticalAlert!.finding).toContain("UNKNOWN");
       expect(result.notificationsFired).toBeGreaterThan(0);
@@ -254,13 +253,13 @@ describe("AlertManager", () => {
           workflow: "weekly-security",
           step: "privacy-validation",
           type: "privacy_violation",
-          finding: "14 USER files found in SYSTEM locations"
-        }
+          finding: "14 USER files found in SYSTEM locations",
+        },
       ];
 
       const result = await alertManager.evaluate(findings, healthTracker);
 
-      const warningAlert = result.alerts.find(a => a.severity === "WARNING");
+      const warningAlert = result.alerts.find((a) => a.severity === "WARNING");
       expect(warningAlert).toBeDefined();
       expect(warningAlert!.finding).toContain("USER files");
     });
@@ -279,7 +278,7 @@ describe("AlertManager", () => {
         workflow: "daily",
         step: "test",
         finding: "Critical issue",
-        status: "open" as const
+        status: "open" as const,
       };
 
       const result = await alertManager.refireOpenCriticalAlerts([openAlert]);
@@ -289,7 +288,7 @@ describe("AlertManager", () => {
       // Digest tier (2026-07-31): the re-fire lands in the spool, not on the
       // page channel — Jm still sees it in the daily digest, without a ping.
       expect(sent).toHaveLength(0);
-      expect(readSpool(scratchDir).some(e => e.message.includes("Critical issue"))).toBe(true);
+      expect(readSpool(scratchDir).some((e) => e.message.includes("Critical issue"))).toBe(true);
     });
   });
 
@@ -310,7 +309,7 @@ describe("AlertManager", () => {
       expect(result.refiredCount).toBe(1);
       expect(result.notificationsFired).toBe(1);
       expect(sent).toHaveLength(0);
-      expect(readSpool(scratchDir).some(e => e.message.includes("Disk remediation failed"))).toBe(true);
+      expect(readSpool(scratchDir).some((e) => e.message.includes("Disk remediation failed"))).toBe(true);
     });
 
     it("a dismissed CRITICAL alert is silent (not re-fired)", async () => {
@@ -348,7 +347,7 @@ describe("AlertManager", () => {
       await alertManager.dismissAlert(alertId, "human");
 
       const alerts = alertManager.readAlerts();
-      const dismissedAlert = alerts.find(a => a.id === alertId);
+      const dismissedAlert = alerts.find((a) => a.id === alertId);
 
       if (dismissedAlert) {
         expect(dismissedAlert.status).toBe("dismissed");
@@ -370,7 +369,12 @@ describe("AlertManager", () => {
     // evaluate() so it seeds an (initially empty) entry regardless of
     // whether this scan produced any findings.
     it("resolves a prior issue under workflow W when evaluate(W) is called with zero findings", async () => {
-      const staleFinding = { workflow: "daily", step: "integrity", type: "broken_symlink", finding: "broken_symlink: bin/old-tool" };
+      const staleFinding = {
+        workflow: "daily",
+        step: "integrity",
+        type: "broken_symlink",
+        finding: "broken_symlink: bin/old-tool",
+      };
       const staleKey = generateIssueKey(staleFinding.workflow, staleFinding.step, staleFinding.finding);
       healthTracker.record(staleKey, {
         lastSeen: new Date().toISOString(),
@@ -388,7 +392,12 @@ describe("AlertManager", () => {
     });
 
     it("does NOT resolve an issue under a DIFFERENT workflow on a clean scan", async () => {
-      const otherFinding = { workflow: "weekly-security", step: "secret-scan", type: "potential_secret", finding: "some finding" };
+      const otherFinding = {
+        workflow: "weekly-security",
+        step: "secret-scan",
+        type: "potential_secret",
+        finding: "some finding",
+      };
       const otherKey = generateIssueKey(otherFinding.workflow, otherFinding.step, otherFinding.finding);
       healthTracker.record(otherKey, {
         lastSeen: new Date().toISOString(),
@@ -424,7 +433,7 @@ describe("AlertManager", () => {
         workflow: "daily",
         step: "integrity",
         type: "test_finding",
-        finding: "Test finding message"
+        finding: "Test finding message",
       };
 
       await alertManager.writeAlert(finding, "INFO");
@@ -510,7 +519,10 @@ describe("readAlerts() applies the per-id reduction (A3)", () => {
     const finding = { workflow: "daily", step: "integrity", type: "test_finding", finding: "Some recurring issue" };
     alertManager.writeAlert(finding, "CRITICAL");
 
-    const rawBefore = readFileSync(alertsLogPath, "utf-8").trim().split("\n").filter((l) => l.length > 0);
+    const rawBefore = readFileSync(alertsLogPath, "utf-8")
+      .trim()
+      .split("\n")
+      .filter((l) => l.length > 0);
     expect(rawBefore.length).toBe(1);
     const writtenId = (JSON.parse(rawBefore[0]!) as Alert).id;
 
@@ -520,7 +532,10 @@ describe("readAlerts() applies the per-id reduction (A3)", () => {
     await alertManager.dismissAlert(writtenId, "human");
 
     // Raw file now holds TWO lines for the same id (append-only) ...
-    const rawAfter = readFileSync(alertsLogPath, "utf-8").trim().split("\n").filter((l) => l.length > 0);
+    const rawAfter = readFileSync(alertsLogPath, "utf-8")
+      .trim()
+      .split("\n")
+      .filter((l) => l.length > 0);
     expect(rawAfter.length).toBe(2);
     // ... but the reduced view collapses them to one, dismissed.
     reduced = alertManager.readAlerts();
@@ -602,7 +617,12 @@ describe("writeAlert() issueKey stamping (A3)", () => {
 
 describe("supersede-on-write (A4)", () => {
   it("two consecutive evaluate() runs of the same recurring issue leave exactly ONE open row (the latest); the raw file shows the full audit trail: open, dismissed(system), open", async () => {
-    const finding = { workflow: "daily", step: "integrity", type: "broken_symlink", finding: "broken_symlink: bin/old-tool" };
+    const finding = {
+      workflow: "daily",
+      step: "integrity",
+      type: "broken_symlink",
+      finding: "broken_symlink: bin/old-tool",
+    };
 
     const first = await alertManager.evaluate([finding], healthTracker, "daily");
     const second = await alertManager.evaluate([finding], healthTracker, "daily");
@@ -632,7 +652,14 @@ describe("supersede-on-write (A4)", () => {
   });
 
   it("supersedes WARNING/INFO recurring issues too, not just CRITICAL (ALL severities)", async () => {
-    const finding = { workflow: "weekly-security", step: "secret-scan", type: "potential_secret", finding: "200 potential secrets detected", verified: false, count: 200 };
+    const finding = {
+      workflow: "weekly-security",
+      step: "secret-scan",
+      type: "potential_secret",
+      finding: "200 potential secrets detected",
+      verified: false,
+      count: 200,
+    };
 
     const first = await alertManager.evaluate([finding], healthTracker, "weekly-security");
     expect(first.alerts[0]!.severity).toBe("WARNING");
@@ -651,7 +678,12 @@ describe("supersede-on-write (A4)", () => {
   });
 
   it("legacy rows (no stored issueKey) are NEVER auto-dismissed, even with byte-identical content written twice", () => {
-    const finding = { workflow: "daily", step: "integrity", type: "test_finding", finding: "legacy duplicate content fixture" };
+    const finding = {
+      workflow: "daily",
+      step: "integrity",
+      type: "test_finding",
+      finding: "legacy duplicate content fixture",
+    };
 
     // Two-arg writeAlert() calls — legacy call shape, no issueKey threaded.
     alertManager.writeAlert(finding, "WARNING");
@@ -667,8 +699,18 @@ describe("supersede-on-write (A4)", () => {
 
 describe("resolveAbsent bridge (A4)", () => {
   it("an issue that stops reproducing has its open alert row dismissed (system) after resolveAbsent resolves it; an unrelated still-reproducing issue's CURRENT open row is untouched", async () => {
-    const staleFinding = { workflow: "daily", step: "integrity", type: "broken_symlink", finding: "broken_symlink: bin/old-tool" };
-    const unrelatedFinding = { workflow: "daily", step: "integrity", type: "git_dirty", finding: "3600 modified files" };
+    const staleFinding = {
+      workflow: "daily",
+      step: "integrity",
+      type: "broken_symlink",
+      finding: "broken_symlink: bin/old-tool",
+    };
+    const unrelatedFinding = {
+      workflow: "daily",
+      step: "integrity",
+      type: "git_dirty",
+      finding: "3600 modified files",
+    };
 
     const first = await alertManager.evaluate([staleFinding, unrelatedFinding], healthTracker, "daily");
     const staleAlert = first.alerts.find((a) => a.finding === staleFinding.finding)!;
@@ -678,7 +720,7 @@ describe("resolveAbsent bridge (A4)", () => {
     const second = await alertManager.evaluate([unrelatedFinding], healthTracker, "daily");
     const unrelatedAlertSecond = second.alerts[0]!;
 
-    expect(second.resolvedKeys).toEqual([staleAlert.issueKey]);
+    expect(second.resolvedKeys).toEqual([staleAlert.issueKey!]);
 
     const reduced = alertManager.readAlerts();
 
@@ -697,7 +739,12 @@ describe("resolveAbsent bridge (A4)", () => {
   });
 
   it("a legacy row (no stored issueKey) is NEVER auto-dismissed by the bridge, even though its content matches a resolved issue", async () => {
-    const staleFinding = { workflow: "daily", step: "integrity", type: "broken_symlink", finding: "broken_symlink: bin/legacy-tool" };
+    const staleFinding = {
+      workflow: "daily",
+      step: "integrity",
+      type: "broken_symlink",
+      finding: "broken_symlink: bin/legacy-tool",
+    };
 
     // A legacy row for this exact finding — written with the 2-arg call shape (no issueKey threaded).
     alertManager.writeAlert(staleFinding, "INFO");
@@ -727,7 +774,13 @@ describe("resolveAbsent bridge (A4)", () => {
 describe("id-threading (A4): evaluate()'s returned Alert.id matches the persisted row's id", () => {
   it("every id in evaluate()'s returned alerts exists in the raw alerts.jsonl file", async () => {
     const findings = [
-      { workflow: "daily", step: "integrity", type: "verified_secret", finding: "id-threading fixture A", verified: true },
+      {
+        workflow: "daily",
+        step: "integrity",
+        type: "verified_secret",
+        finding: "id-threading fixture A",
+        verified: true,
+      },
       { workflow: "daily", step: "integrity", type: "git_dirty", finding: "id-threading fixture B" },
     ];
 
@@ -851,7 +904,7 @@ describe("hermetic guard subprocess regressions (Gap A / Gap B, 2026-07-20 incid
     const beforeSig = liveAlertsLogSignature();
     const scratchHome = mkdtempSync(join(tmpdir(), "gap-b-repro-home-"));
 
-    const env = { ...process.env, NODE_ENV: "test", KAYA_HOME: scratchHome };
+    const env: Record<string, string | undefined> = { ...process.env, NODE_ENV: "test", KAYA_HOME: scratchHome };
     delete env.KAYA_VERIFY_SESSION;
 
     let result: ReturnType<typeof spawnSync>;
@@ -874,7 +927,7 @@ describe("hermetic guard subprocess regressions (Gap A / Gap B, 2026-07-20 incid
     // sufficient to trip the new guard even with NODE_ENV completely unset.
     const beforeSig = liveAlertsLogSignature();
 
-    const env = { ...process.env, KAYA_VERIFY_SESSION: "1" };
+    const env: Record<string, string | undefined> = { ...process.env, KAYA_VERIFY_SESSION: "1" };
     delete env.NODE_ENV;
     delete env.KAYA_HOME;
 

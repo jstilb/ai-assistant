@@ -17,8 +17,8 @@
  *   (unset)                              → uses real inference() path
  */
 
-import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
-import { join, relative, extname } from "path";
+import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { join, relative, extname } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { TechDebtRegistry, isValidScoreShape, type TechDebtScore, type TechDebtItem } from "./TechDebtRegistry.ts";
@@ -28,8 +28,8 @@ import { TechDebtRegistry, isValidScoreShape, type TechDebtScore, type TechDebtI
 // ============================================================================
 
 export interface TechDebtAuditFinding {
-  location: string;   // file path relative to KAYA_HOME
-  category: string;   // e.g. "complexity", "workaround", "reliability", "tech-debt"
+  location: string; // file path relative to KAYA_HOME
+  category: string; // e.g. "complexity", "workaround", "reliability", "tech-debt"
   description: string;
   // In-batch scoring (S2) — the scan prompt asks the LLM to score each finding
   // alongside its description, so add() below can skip its own per-entry
@@ -81,7 +81,23 @@ const MAX_LINES_PER_FILE = 200;
 const CIRCUIT_BREAKER_THRESHOLD = 3;
 
 // Extensions/paths to skip — binary, generated, or data files
-const SKIP_EXTENSIONS = new Set([".d.ts", ".map", ".lock", ".jsonl", ".json", ".db", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot"]);
+const SKIP_EXTENSIONS = new Set([
+  ".d.ts",
+  ".map",
+  ".lock",
+  ".jsonl",
+  ".json",
+  ".db",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".svg",
+  ".ico",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".eot",
+]);
 const SKIP_PATH_FRAGMENTS = ["dist/", "node_modules/", ".d.ts", "/.git/"];
 
 // ============================================================================
@@ -196,7 +212,7 @@ async function scanBatch(files: string[], kayaHome: string): Promise<ScanBatchRe
     const truncated = lines.length > MAX_LINES_PER_FILE;
     const body = lines.slice(0, MAX_LINES_PER_FILE).join("\n");
     fileBlocks.push(
-      `### ${rel}${truncated ? ` (first ${MAX_LINES_PER_FILE} of ${lines.length} lines)` : ""}\n\`\`\`\n${body}\n\`\`\``
+      `### ${rel}${truncated ? ` (first ${MAX_LINES_PER_FILE} of ${lines.length} lines)` : ""}\n\`\`\`\n${body}\n\`\`\``,
     );
   }
 
@@ -231,26 +247,32 @@ Base every finding on evidence visible in the provided code — do NOT guess fro
   });
 
   if (!result.success || result.parsed === undefined) {
-    console.warn(`[TechDebtAuditor] batch inference failed: ${result.error ?? "no parsed output"} — ${failedFiles.length} file(s) unscanned`);
+    console.warn(
+      `[TechDebtAuditor] batch inference failed: ${result.error ?? "no parsed output"} — ${failedFiles.length} file(s) unscanned`,
+    );
     return { findings: [], failedFiles };
   }
 
   if (!Array.isArray(result.parsed)) {
-    console.warn(`[TechDebtAuditor] batch inference returned non-array: ${typeof result.parsed} — ${failedFiles.length} file(s) unscanned`);
+    console.warn(
+      `[TechDebtAuditor] batch inference returned non-array: ${typeof result.parsed} — ${failedFiles.length} file(s) unscanned`,
+    );
     return { findings: [], failedFiles };
   }
 
   // Validate and normalize each finding
-  const findings = (result.parsed as unknown[])
-    .filter((item): item is TechDebtAuditFinding => {
-      if (typeof item !== "object" || item === null) return false;
-      const o = item as Record<string, unknown>;
-      return (
-        typeof o["location"] === "string" && o["location"].length > 0 &&
-        typeof o["category"] === "string" && o["category"].length > 0 &&
-        typeof o["description"] === "string" && o["description"].length > 0
-      );
-    });
+  const findings = (result.parsed as unknown[]).filter((item): item is TechDebtAuditFinding => {
+    if (typeof item !== "object" || item === null) return false;
+    const o = item as Record<string, unknown>;
+    return (
+      typeof o["location"] === "string" &&
+      o["location"].length > 0 &&
+      typeof o["category"] === "string" &&
+      o["category"].length > 0 &&
+      typeof o["description"] === "string" &&
+      o["description"].length > 0
+    );
+  });
   return { findings, failedFiles: [] };
 }
 
@@ -279,7 +301,22 @@ function buildReport(opts: {
   openCount?: number;
   totalCount?: number;
 }): string {
-  const { date, newEntries, totalScanned, findings, scanIncomplete, error, failedBatches, totalBatches, failedFiles, circuitBreakerTripped, circuitBreakerSkippedFiles, topOpenItems, openCount, totalCount } = opts;
+  const {
+    date,
+    newEntries,
+    totalScanned,
+    findings,
+    scanIncomplete,
+    error,
+    failedBatches,
+    totalBatches,
+    failedFiles,
+    circuitBreakerTripped,
+    circuitBreakerSkippedFiles,
+    topOpenItems,
+    openCount,
+    totalCount,
+  } = opts;
   const degraded = !scanIncomplete && (failedBatches ?? 0) > 0;
   let r = `# Tech Debt Audit Report — ${date}\n\n`;
 
@@ -294,7 +331,8 @@ function buildReport(opts: {
   } else if (circuitBreakerTripped) {
     const unscannedCount = failedFiles?.length ?? 0;
     r += `## Status: ABORTED — circuit breaker tripped (${unscannedCount} files unscanned)\n\n`;
-    r += `3 consecutive batches each hit a hard inference() failure (empty/error output) — ` +
+    r +=
+      `3 consecutive batches each hit a hard inference() failure (empty/error output) — ` +
       `the scan aborted rather than burning through the remaining batches on a dead connection. ` +
       `${circuitBreakerSkippedFiles?.length ?? 0} file(s) were skipped entirely (never attempted).\n\n`;
   } else if (degraded) {
@@ -356,6 +394,20 @@ function buildReport(opts: {
 // TechDebtAuditor
 // ============================================================================
 
+/** Weekly full-registry dumps kept on disk; older ones are pruned (they are never read back). */
+const REPORT_RETENTION = 4;
+
+function pruneOldReports(reportDir: string, keep = REPORT_RETENTION): void {
+  try {
+    const dated = readdirSync(reportDir)
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+      .sort();
+    for (const f of dated.slice(0, Math.max(0, dated.length - keep))) unlinkSync(join(reportDir, f));
+  } catch (err) {
+    console.error("[TechDebtAuditor] report pruning failed (non-fatal):", err);
+  }
+}
+
 export class TechDebtAuditor {
   async scan(): Promise<AuditScanResult> {
     const kayaHome = getKayaHome();
@@ -395,6 +447,7 @@ export class TechDebtAuditor {
         error: "stub: forced failure",
       });
       writeFileSync(reportPath, report, "utf-8");
+      pruneOldReports(reportDir);
       return { newEntries: 0, totalScanned: 0, reportPath, scanIncomplete: true };
     }
 
@@ -462,8 +515,8 @@ export class TechDebtAuditor {
               // silent cap. This is the sole console line the breaker emits.
               console.error(
                 `[TechDebtAuditor] CIRCUIT BREAKER: ${consecutiveHardFailures} consecutive hard spawn failures ` +
-                `(batch ${i + 1}/${totalBatches}) — aborting scan. ${skippedBatches.length} batch(es) / ` +
-                `${skippedFiles.length} file(s) skipped, never scanned this run: ${skippedFiles.join(', ')}`
+                  `(batch ${i + 1}/${totalBatches}) — aborting scan. ${skippedBatches.length} batch(es) / ` +
+                  `${skippedFiles.length} file(s) skipped, never scanned this run: ${skippedFiles.join(", ")}`,
               );
               break;
             }
@@ -492,9 +545,7 @@ export class TechDebtAuditor {
     let newEntries = 0;
     for (const finding of allFindings) {
       try {
-        const score = finding.score !== undefined && isValidScoreShape(finding.score)
-          ? finding.score
-          : undefined;
+        const score = finding.score !== undefined && isValidScoreShape(finding.score) ? finding.score : undefined;
         const { isDuplicate } = await registry.add({
           description: finding.description,
           location: finding.location,
@@ -535,6 +586,7 @@ export class TechDebtAuditor {
       totalCount,
     });
     writeFileSync(reportPath, report, "utf-8");
+    pruneOldReports(reportDir);
 
     return {
       newEntries,
@@ -553,7 +605,8 @@ export class TechDebtAuditor {
 
 if (import.meta.main) {
   const auditor = new TechDebtAuditor();
-  auditor.scan()
+  auditor
+    .scan()
     .then((result) => {
       console.log(`[TechDebtAuditor] Scan complete.`);
       console.log(`  New entries: ${result.newEntries}`);

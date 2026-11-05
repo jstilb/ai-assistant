@@ -13,12 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readFileSync, statSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { createHash } from "crypto";
-import { HealthTracker, generateIssueKey, normalizeFindingText } from "./HealthTracker";
-import { _resetHealthManagerForTest } from "./HealthManager";
+import { existsSync, mkdirSync, rmSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { HealthTracker, generateIssueKey, normalizeFindingText } from "./HealthTracker.ts";
+import { _resetHealthManagerForTest } from "./HealthManager.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
@@ -27,12 +27,7 @@ import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 // invariant a forgotten pin/reset would violate.
 // ============================================================================
 
-const LIVE_HEALTH_STATE_PATH = join(
-  defaultKayaHome(),
-  "MEMORY",
-  "AutoMaintenance",
-  "health-state.json"
-);
+const LIVE_HEALTH_STATE_PATH = join(defaultKayaHome(), "MEMORY", "AutoMaintenance", "health-state.json");
 
 function liveHealthStateSignature(): { mtimeMs: number; hash: string } | null {
   if (!existsSync(LIVE_HEALTH_STATE_PATH)) return null;
@@ -82,7 +77,7 @@ describe("HealthTracker", () => {
         lastSeen: new Date().toISOString(),
         type: "broken_symlink",
         finding: "bin/canvas-build points to nonexistent target",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       const record = tracker.get(key);
@@ -98,14 +93,14 @@ describe("HealthTracker", () => {
         lastSeen: new Date().toISOString(),
         type: "broken_symlink",
         finding: "bin/canvas-build points to nonexistent target",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       tracker.record(key, {
         lastSeen: new Date().toISOString(),
         type: "broken_symlink",
         finding: "bin/canvas-build points to nonexistent target",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       const record = tracker.get(key);
@@ -122,7 +117,7 @@ describe("HealthTracker", () => {
         lastSeen: new Date().toISOString(),
         type: "test_type",
         finding: "test finding",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       expect(tracker.getSeverity(key)).toBe("INFO");
@@ -137,7 +132,7 @@ describe("HealthTracker", () => {
           lastSeen: new Date().toISOString(),
           type: "test_type",
           finding: "test finding",
-          status: "monitoring"
+          status: "monitoring",
         });
       }
 
@@ -155,7 +150,7 @@ describe("HealthTracker", () => {
           lastSeen: new Date().toISOString(),
           type: "test_type",
           finding: "test finding",
-          status: "monitoring"
+          status: "monitoring",
         });
       }
 
@@ -172,7 +167,7 @@ describe("HealthTracker", () => {
         lastSeen: new Date().toISOString(),
         type: "test_type",
         finding: "test finding",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       tracker.markResolved(key);
@@ -190,7 +185,7 @@ describe("HealthTracker", () => {
         lastSeen: new Date().toISOString(),
         type: "test_type",
         finding: "test finding",
-        status: "monitoring"
+        status: "monitoring",
       });
 
       await tracker.save();
@@ -295,13 +290,28 @@ describe("HealthTracker", () => {
 
     it("occurrences accumulate across scans once the count-only diff no longer mints a new key", () => {
       const key1 = generateIssueKey("daily", "integrity", "3600 modified files");
-      tracker.record(key1, { lastSeen: new Date().toISOString(), type: "git_dirty", finding: "3600 modified files", status: "monitoring" });
+      tracker.record(key1, {
+        lastSeen: new Date().toISOString(),
+        type: "git_dirty",
+        finding: "3600 modified files",
+        status: "monitoring",
+      });
 
       const key2 = generateIssueKey("daily", "integrity", "3550 modified files");
-      tracker.record(key2, { lastSeen: new Date().toISOString(), type: "git_dirty", finding: "3550 modified files", status: "monitoring" });
+      tracker.record(key2, {
+        lastSeen: new Date().toISOString(),
+        type: "git_dirty",
+        finding: "3550 modified files",
+        status: "monitoring",
+      });
 
       const key3 = generateIssueKey("daily", "integrity", "12 modified files");
-      tracker.record(key3, { lastSeen: new Date().toISOString(), type: "git_dirty", finding: "12 modified files", status: "monitoring" });
+      tracker.record(key3, {
+        lastSeen: new Date().toISOString(),
+        type: "git_dirty",
+        finding: "12 modified files",
+        status: "monitoring",
+      });
 
       expect(key1).toBe(key2);
       expect(key2).toBe(key3);
@@ -313,7 +323,12 @@ describe("HealthTracker", () => {
   describe("resolveAbsent — auto-resolve lifecycle (B5 S3b)", () => {
     it("resolves a key that existed in prior state but is absent from the current scan", () => {
       const staleKey = generateIssueKey("daily", "integrity", "broken_symlink: bin/old-tool");
-      tracker.record(staleKey, { lastSeen: new Date().toISOString(), type: "broken_symlink", finding: "broken_symlink: bin/old-tool", status: "monitoring" });
+      tracker.record(staleKey, {
+        lastSeen: new Date().toISOString(),
+        type: "broken_symlink",
+        finding: "broken_symlink: bin/old-tool",
+        status: "monitoring",
+      });
 
       // Current scan reproduced a DIFFERENT finding under the same workflow —
       // staleKey is not among currentKeys, so it should resolve.
@@ -327,7 +342,12 @@ describe("HealthTracker", () => {
 
     it("does NOT resolve a key that IS present in the current scan's findings", () => {
       const key = generateIssueKey("daily", "integrity", "broken_symlink: bin/still-broken");
-      tracker.record(key, { lastSeen: new Date().toISOString(), type: "broken_symlink", finding: "broken_symlink: bin/still-broken", status: "monitoring" });
+      tracker.record(key, {
+        lastSeen: new Date().toISOString(),
+        type: "broken_symlink",
+        finding: "broken_symlink: bin/still-broken",
+        status: "monitoring",
+      });
 
       const resolved = tracker.resolveAbsent("daily", new Set([key]));
 
@@ -337,7 +357,12 @@ describe("HealthTracker", () => {
 
     it("does NOT touch keys belonging to a different workflow", () => {
       const dailyKey = generateIssueKey("daily", "integrity", "broken_symlink: bin/old-tool");
-      tracker.record(dailyKey, { lastSeen: new Date().toISOString(), type: "broken_symlink", finding: "broken_symlink: bin/old-tool", status: "monitoring" });
+      tracker.record(dailyKey, {
+        lastSeen: new Date().toISOString(),
+        type: "broken_symlink",
+        finding: "broken_symlink: bin/old-tool",
+        status: "monitoring",
+      });
 
       // A "weekly-security" scan completes with zero findings — must never
       // resolve a "daily" issue just because it ran.
@@ -349,7 +374,12 @@ describe("HealthTracker", () => {
 
     it("is idempotent — already auto-resolved keys are not re-stamped", () => {
       const key = generateIssueKey("daily", "integrity", "broken_symlink: bin/old-tool");
-      tracker.record(key, { lastSeen: new Date().toISOString(), type: "broken_symlink", finding: "broken_symlink: bin/old-tool", status: "monitoring" });
+      tracker.record(key, {
+        lastSeen: new Date().toISOString(),
+        type: "broken_symlink",
+        finding: "broken_symlink: bin/old-tool",
+        status: "monitoring",
+      });
       tracker.resolveAbsent("daily", new Set());
       const firstResolvedAt = tracker.get(key)!.resolvedAt;
 

@@ -14,14 +14,14 @@
  * - Failures escalate to AlertManager
  */
 
-import { existsSync, lstatSync, statSync, unlinkSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { createAppendLog } from '../../../../lib/core/AppendLog';
-import { defaultKayaHome, assertNotLiveHomeUnderTest } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, lstatSync, statSync, unlinkSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
+import { defaultKayaHome, assertNotLiveHomeUnderTest } from "../../../../lib/core/KayaHome.ts";
 
 // homedir-only original (ignored KAYA_HOME env); defaultKayaHome() preserves real-home
 const KAYA_HOME = defaultKayaHome();
-const REMEDIATION_LOG = join(KAYA_HOME, 'MEMORY', 'AutoMaintenance', 'remediation.jsonl');
+const REMEDIATION_LOG = join(KAYA_HOME, "MEMORY", "AutoMaintenance", "remediation.jsonl");
 
 export interface Finding {
   type: string;
@@ -43,11 +43,12 @@ export interface RemediationOptions {
   remediationLogPath?: string;
 }
 
-export interface RemediationResult {
+interface RemediationResult {
   success: string[];
   failures: Array<{ target: string; error: string; shouldEscalate: boolean }>;
 }
 
+// biome-ignore lint/complexity/noStaticOnlyClass: public namespace API (Remediator.run/...) used by many callers and tests
 export class Remediator {
   /**
    * Run remediation on findings
@@ -62,16 +63,16 @@ export class Remediator {
     const remediationLogPath = options.remediationLogPath ?? REMEDIATION_LOG;
 
     for (const finding of findings) {
-      if (finding.type === 'broken_symlink') {
+      if (finding.type === "broken_symlink") {
         try {
           // Verify symlink is actually broken
-          const isBroken = this.isSymlinkBroken(finding.target);
+          const isBroken = Remediator.isSymlinkBroken(finding.target);
 
           if (!isBroken) {
             // Target exists or not a symlink - escalate as failure
             result.failures.push({
               target: finding.target,
-              error: 'Not a broken symlink (target exists or not a symlink)',
+              error: "Not a broken symlink (target exists or not a symlink)",
               shouldEscalate: true,
             });
             continue;
@@ -82,23 +83,23 @@ export class Remediator {
           }
 
           // Log remediation
-          this.logRemediation(remediationLogPath, !options.remediationLogPath, {
+          Remediator.logRemediation(remediationLogPath, !options.remediationLogPath, {
             timestamp: new Date().toISOString(),
-            workflow: finding.workflow || 'unknown',
-            action: 'removed_symlink',
+            workflow: finding.workflow || "unknown",
+            action: "removed_symlink",
             target: finding.target,
             dryRun,
           });
 
           result.success.push(finding.target);
-        } catch (error: any) {
+        } catch (error: unknown) {
           result.failures.push({
             target: finding.target,
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
             shouldEscalate: true,
           });
         }
-      } else if (finding.type === 'rotate_log') {
+      } else if (finding.type === "rotate_log") {
         try {
           // Check age threshold
           if (finding.ageInDays !== undefined && finding.threshold !== undefined) {
@@ -107,10 +108,10 @@ export class Remediator {
                 unlinkSync(finding.target);
               }
 
-              this.logRemediation(remediationLogPath, !options.remediationLogPath, {
+              Remediator.logRemediation(remediationLogPath, !options.remediationLogPath, {
                 timestamp: new Date().toISOString(),
-                workflow: finding.workflow || 'unknown',
-                action: 'deleted_file',
+                workflow: finding.workflow || "unknown",
+                action: "deleted_file",
                 target: finding.target,
                 dryRun,
               });
@@ -118,10 +119,10 @@ export class Remediator {
               result.success.push(finding.target);
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           result.failures.push({
             target: finding.target,
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
             shouldEscalate: true,
           });
         }
@@ -173,9 +174,9 @@ export class Remediator {
       action: string;
       target: string;
       dryRun: boolean;
-    }
+    },
   ): void {
-    if (isDefaultPath) assertNotLiveHomeUnderTest('Remediator.logRemediation');
+    if (isDefaultPath) assertNotLiveHomeUnderTest("Remediator.logRemediation");
     const dir = dirname(logPath);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -183,7 +184,7 @@ export class Remediator {
     try {
       createAppendLog(logPath).append(entry);
     } catch (error) {
-      console.error('Failed to log remediation:', error);
+      console.error("Failed to log remediation:", error);
     }
   }
 }

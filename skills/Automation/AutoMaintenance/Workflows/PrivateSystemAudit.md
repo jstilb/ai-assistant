@@ -189,11 +189,11 @@ grep "secrets.json" ~/.claude/.gitignore && echo "secrets.json is gitignored"
 This workflow can be scheduled via launchd:
 
 ```xml
-<!-- ~/.claude/launchd/com.pai.system-audit.plist -->
+<!-- ~/.claude/launchd/com.kaya.system-audit.plist -->
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.pai.system-audit</string>
+    <string>com.kaya.system-audit</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/claude</string>

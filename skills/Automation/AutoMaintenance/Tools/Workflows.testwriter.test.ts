@@ -12,24 +12,35 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { buildSecurityReportBody, buildDailyReport, runDismissCommand, parseDismissedBy, buildAlertFindings } from "./Workflows";
-import { AlertManager } from "./AlertManager";
-import { HealthTracker } from "./HealthTracker";
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import {
+  buildSecurityReportBody,
+  buildDailyReport,
+  runDismissCommand,
+  parseDismissedBy,
+  buildAlertFindings,
+} from "./Workflows.ts";
+import { AlertManager } from "./AlertManager.ts";
+import { HealthTracker } from "./HealthTracker.ts";
 import { AlertGate } from "../../../../lib/core/AlertGate.ts";
-import type { SecurityFinding } from "./SecurityAuditor";
-import type { Finding } from "./Remediator";
+import type { SecurityFinding } from "./SecurityAuditor.ts";
+import type { Finding } from "./Remediator.ts";
+import { afterAll as afterAllRestoreHome } from "bun:test";
+import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
+
+// Temp KAYA_HOME: these modules write state under the Kaya home (lint: no-live-write-in-test).
+pinKayaHome("kaya-automaintenance-test-");
+afterAllRestoreHome(restoreKayaHome);
 
 const WORKFLOWS_PATH = join(import.meta.dir, "Workflows.ts");
 // W-02/M-02 (below) verify behavior that 77d1e235f extracted OUT of
 // Workflows.ts into these domain files — Workflows.ts now only calls them.
 const SECURITY_AUDITOR_PATH = join(import.meta.dir, "SecurityAuditor.ts");
 const SKILLS_AUDITOR_PATH = join(import.meta.dir, "SkillsAuditor.ts");
-const SKILL_DIR = join(import.meta.dir, "..");
 const REPO_ROOT = join(import.meta.dir, "../../../..");
 
 describe("Workflows - Source Verification", () => {
@@ -74,7 +85,10 @@ describe("Workflows - Source Verification", () => {
       { type: "disk_warning", target: "/" },
       { type: "git_dirty", target: "repo" },
     ];
-    const remediation = { success: ["disk_warning"], failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }> };
+    const remediation = {
+      success: ["disk_warning"],
+      failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }>,
+    };
     const alerts = { alerts: [{ severity: "WARNING" }] };
     const report = buildDailyReport(findings, remediation, alerts, "12.3", { gapDetected: false }, 42);
 
@@ -229,7 +243,7 @@ describe("parseDismissedBy (A3 — strict --by validation, verify-fixed defect)"
     expect(parseDismissedBy("system")).toBe("system");
   });
 
-  it("rejects an unrecognized value (e.g. a typo like \"robot\") instead of silently coercing to human", () => {
+  it('rejects an unrecognized value (e.g. a typo like "robot") instead of silently coercing to human', () => {
     // Previously `by === "system" ? "system" : "human"` silently coerced
     // ANY unrecognized string to "human". Fixed: only human/system/omitted
     // are valid; anything else is rejected (null), which main() turns into
@@ -296,14 +310,20 @@ describe("buildAlertFindings (A5 — Jm decision 2, 2026-07-22: git_dirty is rep
 // ----------------------------------------------------------------------------
 
 describe("buildAlertFindings -> AlertManager.evaluate() (A5 behavioral)", () => {
-  interface RecordedSend { message: string; channel: string }
+  interface RecordedSend {
+    message: string;
+    channel: string;
+  }
 
   function makeHermeticAlertManagerWithRecorder(dir: string): { alertManager: AlertManager; sent: RecordedSend[] } {
     const sent: RecordedSend[] = [];
     const gate = new AlertGate({
       statePath: join(dir, "alert-gate.json"),
       spoolPath: join(dir, "digest-spool.jsonl"),
-      send: async (message, channel) => { sent.push({ message, channel }); return true; },
+      send: async (message, channel) => {
+        sent.push({ message, channel });
+        return true;
+      },
     });
     const alertManager = new AlertManager(new HealthTracker(), {
       alertsLogPath: join(dir, "alerts.jsonl"),
@@ -356,7 +376,10 @@ describe("buildAlertFindings -> AlertManager.evaluate() (A5 behavioral)", () => 
 describe("buildDailyReport (A5 — Git Repo row unaffected by the alert-path git_dirty filter)", () => {
   it("still renders the Git Repo row with the git_dirty finding's target when one is present", () => {
     const findings: Finding[] = [{ type: "git_dirty", target: "3 modified files" }];
-    const remediation = { success: [], failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }> };
+    const remediation = {
+      success: [],
+      failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }>,
+    };
     const alerts = { alerts: [] as { severity: string }[] };
     const report = buildDailyReport(findings, remediation, alerts, "1.0", { gapDetected: false });
 
@@ -365,7 +388,10 @@ describe("buildDailyReport (A5 — Git Repo row unaffected by the alert-path git
 
   it("renders the Git Repo row clean when no git_dirty finding is present", () => {
     const findings: Finding[] = [];
-    const remediation = { success: [], failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }> };
+    const remediation = {
+      success: [],
+      failures: [] as Array<{ target: string; error: string; shouldEscalate: boolean }>,
+    };
     const alerts = { alerts: [] as { severity: string }[] };
     const report = buildDailyReport(findings, remediation, alerts, "1.0", { gapDetected: false });
 
@@ -381,45 +407,49 @@ describe("buildDailyReport (A5 — Git Repo row unaffected by the alert-path git
 // ============================================================================
 
 describe("Workflows - dead ping deletion (B5 item 4)", () => {
-  it("'Daily maintenance complete' does not appear anywhere in this worktree's .ts sources (excluding this test's own documentation of the deleted string)", () => {
-    // --exclude-dir=worktrees (added 2026-07-22): on the SHARED tree,
-    // REPO_ROOT recursively contains ~80 nested worktree checkouts under
-    // .claude/worktrees/. Measured with the real /usr/bin/grep binary (the
-    // one execFileSync actually invokes — NOT this shell's ugrep-backed
-    // `grep` function/alias, which is much faster and not representative):
-    // WITHOUT this exclude, the shared-tree run took 73-80s (exceeds the
-    // 5s bun default) AND returned 69 real matches — every one a stale,
-    // historically-checked-out worktree copy of Workflows.ts predating the
-    // 2026-07-20 ping deletion, not a live revival. Excluding the
-    // `worktrees` dir name drops shared-tree runtime to ~1-3s and 0 matches,
-    // while still scanning every real (non-nested-worktree) source tree —
-    // proven to still catch a genuine revival: see the manual proof in this
-    // slice's report (planted string in a scratch dir outside any
-    // `worktrees`-named directory was caught by this exact grep
-    // construction; a copy planted inside a `worktrees`-named directory was
-    // correctly skipped).
-    let matches = "";
-    try {
-      matches = execFileSync(
-        "grep",
-        [
-          "-rl",
-          "--include=*.ts",
-          "--exclude-dir=node_modules",
-          "--exclude-dir=.git",
-          "--exclude-dir=worktrees",
-          "--exclude=Workflows.testwriter.test.ts",
-          "Daily maintenance complete",
-          REPO_ROOT,
-        ],
-        { encoding: "utf-8" },
-      );
-    } catch {
-      // grep exits 1 (no matches found) -> execFileSync throws. That's the PASS case.
-      matches = "";
-    }
-    expect(matches.trim()).toBe("");
-  }, { timeout: 30000 }); // belt-and-braces: generous headroom (~10-30x the
+  it(
+    "'Daily maintenance complete' does not appear anywhere in this worktree's .ts sources (excluding this test's own documentation of the deleted string)",
+    () => {
+      // --exclude-dir=worktrees (added 2026-07-22): on the SHARED tree,
+      // REPO_ROOT recursively contains ~80 nested worktree checkouts under
+      // .claude/worktrees/. Measured with the real /usr/bin/grep binary (the
+      // one execFileSync actually invokes — NOT this shell's ugrep-backed
+      // `grep` function/alias, which is much faster and not representative):
+      // WITHOUT this exclude, the shared-tree run took 73-80s (exceeds the
+      // 5s bun default) AND returned 69 real matches — every one a stale,
+      // historically-checked-out worktree copy of Workflows.ts predating the
+      // 2026-07-20 ping deletion, not a live revival. Excluding the
+      // `worktrees` dir name drops shared-tree runtime to ~1-3s and 0 matches,
+      // while still scanning every real (non-nested-worktree) source tree —
+      // proven to still catch a genuine revival: see the manual proof in this
+      // slice's report (planted string in a scratch dir outside any
+      // `worktrees`-named directory was caught by this exact grep
+      // construction; a copy planted inside a `worktrees`-named directory was
+      // correctly skipped).
+      let matches = "";
+      try {
+        matches = execFileSync(
+          "grep",
+          [
+            "-rl",
+            "--include=*.ts",
+            "--exclude-dir=node_modules",
+            "--exclude-dir=.git",
+            "--exclude-dir=worktrees",
+            "--exclude=Workflows.testwriter.test.ts",
+            "Daily maintenance complete",
+            REPO_ROOT,
+          ],
+          { encoding: "utf-8" },
+        );
+      } catch {
+        // grep exits 1 (no matches found) -> execFileSync throws. That's the PASS case.
+        matches = "";
+      }
+      expect(matches.trim()).toBe("");
+    },
+    { timeout: 30000 },
+  ); // belt-and-braces: generous headroom (~10-30x the
   // ~1-3s observed post-fix shared-tree runtime) in case of concurrent
   // worktree-agent disk contention; the exclude-dir fix above is the real
   // fix, this is just a backstop against a slow run failing on timeout
@@ -450,11 +480,16 @@ describe("Workflows - dead ping deletion (B5 item 4)", () => {
 // ============================================================================
 
 describe("Workflows - A6 (N4): orphaned current-work + stale context-file cleanup wired into daily tier", () => {
-  const src = readFileSync(WORKFLOWS_PATH, "utf-8");
+  // Whitespace-normalized so the checks pin the statements, not the formatter's line breaks.
+  const src = readFileSync(WORKFLOWS_PATH, "utf-8").replace(/\s+/g, " ").replace(/\( /g, "(").replace(/,? \)/g, ")");
 
   it("imports cleanOrphanedCurrentWork and cleanStaleContextFiles from MemoryCleanup", () => {
-    expect(src).toMatch(/import\s*\{[^}]*cleanOrphanedCurrentWork[^}]*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/\.\.\/lib\/core\/MemoryCleanup["']/);
-    expect(src).toMatch(/import\s*\{[^}]*cleanStaleContextFiles[^}]*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/\.\.\/lib\/core\/MemoryCleanup["']/);
+    expect(src).toMatch(
+      /import\s*\{[^}]*cleanOrphanedCurrentWork[^}]*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/\.\.\/lib\/core\/MemoryCleanup(?:\.ts)?["']/,
+    );
+    expect(src).toMatch(
+      /import\s*\{[^}]*cleanStaleContextFiles[^}]*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/\.\.\/lib\/core\/MemoryCleanup(?:\.ts)?["']/,
+    );
   });
 
   it("both cleanup calls appear after the cleanWorkDirs call, in source order", () => {
@@ -472,8 +507,10 @@ describe("Workflows - A6 (N4): orphaned current-work + stale context-file cleanu
     // which would prematurely terminate a `[^}]*`-style pattern). Each
     // assertion pins the exact try-open, dryRun-threading, and catch-open text.
     expect(src).toContain("try { const r = await cleanOrphanedCurrentWork(options.dryRun ?? false);");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal source text of Workflows.ts (contains template literals) matched verbatim
     expect(src).toContain("} catch (e) { console.warn(`⚠ orphaned current-work cleanup failed: ${e}`); }");
     expect(src).toContain("try { const r = await cleanStaleContextFiles(options.dryRun ?? false);");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal source text of Workflows.ts (contains template literals) matched verbatim
     expect(src).toContain("} catch (e) { console.warn(`⚠ stale context-file cleanup failed: ${e}`); }");
   });
 
@@ -493,9 +530,15 @@ describe("Workflows - A6 (N4): orphaned current-work + stale context-file cleanu
     // statement apart (its catch no longer immediately follows its own
     // console.log) or inserts real code into the gap — either way this
     // adjacency check fails where the old line-order check did not.
-    const workDirsStmt = "try { const r = await cleanWorkDirs(options.dryRun ?? false); console.log(`✓ WORK/ cleanup: ${r.dirsRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ WORK/ cleanup failed: ${e}`); }";
-    const orphanStmt = "try { const r = await cleanOrphanedCurrentWork(options.dryRun ?? false); console.log(`✓ orphaned current-work cleanup: ${r.filesRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ orphaned current-work cleanup failed: ${e}`); }";
-    const contextStmt = "try { const r = await cleanStaleContextFiles(options.dryRun ?? false); console.log(`✓ stale context-file cleanup: ${r.filesRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ stale context-file cleanup failed: ${e}`); }";
+    const workDirsStmt =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal source text of Workflows.ts (contains template literals) matched verbatim
+      "try { const r = await cleanWorkDirs(options.dryRun ?? false); console.log(`✓ WORK/ cleanup: ${r.dirsRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ WORK/ cleanup failed: ${e}`); }";
+    const orphanStmt =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal source text of Workflows.ts (contains template literals) matched verbatim
+      "try { const r = await cleanOrphanedCurrentWork(options.dryRun ?? false); console.log(`✓ orphaned current-work cleanup: ${r.filesRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ orphaned current-work cleanup failed: ${e}`); }";
+    const contextStmt =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal source text of Workflows.ts (contains template literals) matched verbatim
+      "try { const r = await cleanStaleContextFiles(options.dryRun ?? false); console.log(`✓ stale context-file cleanup: ${r.filesRemoved} removed, ${(r.bytesFreed / 1048576).toFixed(1)} MB freed`); } catch (e) { console.warn(`⚠ stale context-file cleanup failed: ${e}`); }";
 
     const isOnlyWhitespaceOrComments = (text: string): boolean =>
       text.split("\n").every((line) => {

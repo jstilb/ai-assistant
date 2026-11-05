@@ -4,16 +4,22 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { execSync } from "child_process";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { execSync, spawnSync } from "node:child_process";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
-const KAYA_HOME = join(homedir(), ".claude");
-const BIN_DIR = join(KAYA_HOME, "bin");
-const SKILL_MD_PATH = join(KAYA_HOME, "skills", "Automation", "AutoMaintenance", "SKILL.md");
+// Repo-relative: these tests check the checked-in runner scripts and docs,
+// not whatever happens to be installed in the live home directory.
+const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..");
+const BIN_DIR = join(REPO_ROOT, "bin");
+const SKILL_DIR = join(REPO_ROOT, "skills", "Automation", "AutoMaintenance");
+const SKILL_MD_PATH = join(SKILL_DIR, "SKILL.md");
 
-describe("Cron Configuration", () => {
+// Mac-only: reads the live user crontab, which exists only on the installed machine.
+const hasCrontab = process.platform === "darwin" && spawnSync("crontab", ["-l"]).status === 0;
+
+describe.skipIf(!hasCrontab)("Cron Configuration", () => {
   it("should have only the one surviving cron entry (weekly-mon)", () => {
     // ISC I-01 (updated): kaya-daily.sh / the 8am crontab entry for it were
     // removed in C1: daily maintenance now runs solely via the
@@ -41,13 +47,13 @@ describe("Cron Configuration", () => {
     const crontab = execSync("crontab -l", { encoding: "utf-8" });
 
     // All scripts should be in ~/.claude/bin/
-    const entries = crontab.split("\n").filter(line => line.includes("kaya-"));
+    const entries = crontab.split("\n").filter((line) => line.includes("kaya-"));
 
     for (const entry of entries) {
       // The `||` short-circuit was a no-op: expect().toContain() THROWS on a
       // miss rather than returning false, so the left operand's failure was
       // never salvaged by the right. crontab stores the absolute path
-      // (~/.claude/bin/…); accept either form via one boolean.
+      // (<home>/.claude/bin/…); accept either form via one boolean.
       expect(entry.includes("~/.claude/bin/") || entry.includes("/.claude/bin/")).toBe(true);
     }
   });
@@ -65,11 +71,9 @@ describe("Shell Runner Scripts", () => {
   // maintenance-weekly-reports + existing graph-weekly-synthesis;
   // monthly-thu/fri/sat → maintenance-monthly-{workspace,skills,reports}).
   // See MEMORY/daemon/cron/jobs.retired/README.md's dated D1 section.
-  const scripts = [
-    "kaya-weekly-mon.sh"
-  ];
+  const scripts = ["kaya-weekly-mon.sh"];
 
-  scripts.forEach(scriptName => {
+  scripts.forEach((scriptName) => {
     describe(scriptName, () => {
       const scriptPath = join(BIN_DIR, scriptName);
 
@@ -99,6 +103,7 @@ describe("Shell Runner Scripts", () => {
         // "bun" substring inside the `/opt/homebrew/bin/bun` probe in the
         // BUN_BIN definition — which sits ABOVE `export PATH` and made this
         // assertion spuriously fail (241 < 351).
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell text '${BUN_BIN}' searched for in the runner script
         const bunInvocationIndex = scriptContent.indexOf("${BUN_BIN}/bun");
 
         expect(pathExportIndex).toBeGreaterThan(-1);
@@ -118,13 +123,10 @@ describe("Shell Runner Scripts", () => {
 describe("PATH Resolution", () => {
   it("should not produce bun: No such file or directory errors", () => {
     // ISC P-01: No `bun: No such file or directory` in any cron log
-    const logsDir = join(KAYA_HOME, "logs");
+    const logsDir = join(getKayaHome(), "logs");
 
     if (existsSync(logsDir)) {
-      const result = execSync(
-        `grep -r "bun.*No such file" ${logsDir} || echo "NO_ERRORS"`,
-        { encoding: "utf-8" }
-      );
+      const result = execSync(`grep -r "bun.*No such file" ${logsDir} || echo "NO_ERRORS"`, { encoding: "utf-8" });
 
       expect(result.trim()).toBe("NO_ERRORS");
     }
@@ -153,7 +155,7 @@ describe("SKILL.md Documentation", () => {
       "weekly-reports",
       "monthly-workspace",
       "monthly-skills",
-      "monthly-reports"
+      "monthly-reports",
     ];
 
     for (const tier of tiers) {
@@ -165,18 +167,12 @@ describe("SKILL.md Documentation", () => {
 describe("Workflow Documentation", () => {
   it("should describe all 5 check types in daily.md", () => {
     // ISC DOC-03: Workflow docs for daily.md describe all 5 check types
-    const dailyMdPath = join(KAYA_HOME, "skills", "Automation", "AutoMaintenance", "Workflows", "daily.md");
+    const dailyMdPath = join(SKILL_DIR, "Workflows", "daily.md");
 
     if (existsSync(dailyMdPath)) {
       const dailyMd = readFileSync(dailyMdPath, "utf-8");
 
-      const checkTypes = [
-        "integrity",
-        "disk space",
-        "git status",
-        "process health",
-        "dependency versions"
-      ];
+      const checkTypes = ["integrity", "disk space", "git status", "process health", "dependency versions"];
 
       for (const checkType of checkTypes) {
         expect(dailyMd.toLowerCase()).toContain(checkType.toLowerCase());
@@ -188,13 +184,13 @@ describe("Workflow Documentation", () => {
 describe("File Structure", () => {
   it("should have alerts.jsonl file", () => {
     // ISC I-06: alerts.jsonl exists (may be empty)
-    const alertsPath = join(KAYA_HOME, "MEMORY", "AutoMaintenance", "alerts.jsonl");
+    const alertsPath = join(getKayaHome(), "MEMORY", "AutoMaintenance", "alerts.jsonl");
     expect(existsSync(alertsPath) || true).toBe(true); // Will be created on first run
   });
 
   it("should have remediation.jsonl file", () => {
     // ISC I-07: remediation.jsonl exists (may be empty)
-    const remediationPath = join(KAYA_HOME, "MEMORY", "AutoMaintenance", "remediation.jsonl");
+    const remediationPath = join(getKayaHome(), "MEMORY", "AutoMaintenance", "remediation.jsonl");
     expect(existsSync(remediationPath) || true).toBe(true); // Will be created on first run
   });
 });

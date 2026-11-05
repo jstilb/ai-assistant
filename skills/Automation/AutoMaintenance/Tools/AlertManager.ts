@@ -21,17 +21,17 @@
  * - Same finding x7: CRITICAL + daily re-alert
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { createHash, randomUUID } from 'crypto';
-import { AlertGate, getAlertGate, type AlertTier } from '../../../../lib/core/AlertGate.ts';
-import { HealthTracker, generateIssueKey } from './HealthTracker';
-import { createAppendLog } from '../../../../lib/core/AppendLog';
-import { defaultKayaHome, assertNotLiveDefaultUnderTest } from '../../../../lib/core/KayaHome.ts';
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { type AlertGate, getAlertGate, type AlertTier } from "../../../../lib/core/AlertGate.ts";
+import { type HealthTracker, generateIssueKey } from "./HealthTracker.ts";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
+import { defaultKayaHome, assertNotLiveDefaultUnderTest } from "../../../../lib/core/KayaHome.ts";
 
 // homedir-only original (ignored KAYA_HOME env); defaultKayaHome() preserves real-home
 const KAYA_HOME = defaultKayaHome();
-const ALERTS_LOG = join(KAYA_HOME, 'MEMORY', 'AutoMaintenance', 'alerts.jsonl');
+const ALERTS_LOG = join(KAYA_HOME, "MEMORY", "AutoMaintenance", "alerts.jsonl");
 
 export interface Alert {
   id: string;
@@ -49,14 +49,14 @@ export interface Alert {
    */
   issueKey?: string;
   timestamp: string;
-  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  severity: "INFO" | "WARNING" | "CRITICAL";
   workflow: string;
   step: string;
   finding: string;
   firstSeen?: string;
   occurrences?: number;
-  status: 'open' | 'dismissed' | 'auto-resolved';
-  dismissedBy?: 'human' | 'system';
+  status: "open" | "dismissed" | "auto-resolved";
+  dismissedBy?: "human" | "system";
   dismissedAt?: string;
   verified?: boolean;
   count?: number;
@@ -71,7 +71,7 @@ export interface FindingInput {
   count?: number;
 }
 
-export interface EvaluationResult {
+interface EvaluationResult {
   alerts: Alert[];
   notificationsFired: number;
   /** Issue keys auto-resolved this scan (see HealthTracker.resolveAbsent). */
@@ -136,12 +136,10 @@ export function reduceAlertsById(alerts: Alert[]): Alert[] {
 }
 
 export class AlertManager {
-  private healthTracker: HealthTracker;
   private readonly alertsLogPathOverride?: string;
   private readonly gate: AlertGate;
 
-  constructor(healthTracker: HealthTracker, options: AlertManagerOptions = {}) {
-    this.healthTracker = healthTracker;
+  constructor(_healthTracker: HealthTracker, options: AlertManagerOptions = {}) {
     this.alertsLogPathOverride = options.alertsLogPath;
     this.gate = options.gate ?? getAlertGate();
   }
@@ -173,7 +171,7 @@ export class AlertManager {
    * default home (the exact 2026-07-20 incident — Gap B).
    */
   private appendAlertEntry(entry: Alert): void {
-    if (!this.alertsLogPathOverride) assertNotLiveDefaultUnderTest('AlertManager.writeAlert');
+    if (!this.alertsLogPathOverride) assertNotLiveDefaultUnderTest("AlertManager.writeAlert");
     const dir = dirname(this.alertsLogPath);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -181,7 +179,7 @@ export class AlertManager {
     try {
       createAppendLog(this.alertsLogPath).append(entry);
     } catch (error) {
-      console.error('Failed to write alert:', error);
+      console.error("Failed to write alert:", error);
     }
   }
 
@@ -216,7 +214,7 @@ export class AlertManager {
     if (workflow !== undefined) currentKeysByWorkflow.set(workflow, new Set());
 
     for (const finding of findings) {
-      let severity: 'INFO' | 'WARNING' | 'CRITICAL' = 'INFO';
+      let severity: "INFO" | "WARNING" | "CRITICAL" = "INFO";
       const now = new Date().toISOString();
 
       // Generate issue key for persistence tracking
@@ -238,29 +236,29 @@ export class AlertManager {
         lastSeen: now,
         type: finding.type,
         finding: finding.finding,
-        status: 'monitoring',
+        status: "monitoring",
       });
 
       // Classify severity based on type and occurrence
-      if (finding.type === 'verified_secret' && finding.verified === true) {
-        severity = 'CRITICAL';
-      } else if (finding.type === 'scan_error') {
+      if (finding.type === "verified_secret" && finding.verified === true) {
+        severity = "CRITICAL";
+      } else if (finding.type === "scan_error") {
         // The secret scan itself failed to complete (E1 — secret-scan-honest):
         // the result is UNKNOWN, not clean. Page immediately on first
         // occurrence — do not fall through to occurrence-based escalation,
         // which would silently under-alert on a scanner that just started
         // failing (i.e. exactly the class of bug this branch exists to fix).
-        severity = 'CRITICAL';
-      } else if (finding.type === 'potential_secret' && finding.verified === false) {
+        severity = "CRITICAL";
+      } else if (finding.type === "potential_secret" && finding.verified === false) {
         if (finding.count && finding.count >= 100) {
-          severity = 'WARNING';
+          severity = "WARNING";
         } else {
-          severity = 'INFO';
+          severity = "INFO";
         }
-      } else if (finding.type === 'privacy_violation') {
+      } else if (finding.type === "privacy_violation") {
         // Privacy violations are WARNING on first detection per spec (ISC A-07)
         const persistenceSeverity = healthTracker.getSeverity(issueKey);
-        severity = persistenceSeverity === 'CRITICAL' ? 'CRITICAL' : 'WARNING';
+        severity = persistenceSeverity === "CRITICAL" ? "CRITICAL" : "WARNING";
       } else {
         // Use occurrence-based escalation for other types
         severity = healthTracker.getSeverity(issueKey);
@@ -300,12 +298,12 @@ export class AlertManager {
       // Fingerprint is the raw (unnormalized) finding text so a materially
       // different message for the same issue class still breaks the
       // cooldown freeze (ADR-004 / S3a un-freeze-stale-fingerprints pattern).
-      if (severity === 'WARNING' || severity === 'CRITICAL') {
-        const tier: AlertTier = severity === 'CRITICAL' ? 'page' : 'digest';
+      if (severity === "WARNING" || severity === "CRITICAL") {
+        const tier: AlertTier = severity === "CRITICAL" ? "page" : "digest";
         const key = `automaintenance-alert-${issueKey}`;
-        const fingerprint = createHash('sha256').update(finding.finding).digest('hex').slice(0, 12);
+        const fingerprint = createHash("sha256").update(finding.finding).digest("hex").slice(0, 12);
         const result = await this.gate.send(`[${severity}] ${finding.finding}`, { key, tier, fingerprint });
-        if (result !== 'suppressed') notificationsFired++;
+        if (result !== "suppressed") notificationsFired++;
       }
     }
 
@@ -332,10 +330,10 @@ export class AlertManager {
     if (resolvedKeys.length > 0) {
       const resolvedSet = new Set(resolvedKeys);
       const openForResolvedKeys = this.readAlerts().filter(
-        (a) => a.status === 'open' && a.issueKey !== undefined && resolvedSet.has(a.issueKey),
+        (a) => a.status === "open" && a.issueKey !== undefined && resolvedSet.has(a.issueKey),
       );
       for (const row of openForResolvedKeys) {
-        this.dismissAlertEntry(row.id, 'system');
+        this.dismissAlertEntry(row.id, "system");
       }
     }
 
@@ -369,13 +367,11 @@ export class AlertManager {
    * (no key threaded) can never trigger or be caught by this mechanism,
    * even when its content is byte-identical to another legacy row.
    */
-  writeAlert(finding: FindingInput, severity: 'INFO' | 'WARNING' | 'CRITICAL', issueKey?: string): Alert {
+  writeAlert(finding: FindingInput, severity: "INFO" | "WARNING" | "CRITICAL", issueKey?: string): Alert {
     if (issueKey !== undefined) {
-      const openSameIssue = this.readAlerts().filter(
-        (a) => a.status === 'open' && a.issueKey === issueKey,
-      );
+      const openSameIssue = this.readAlerts().filter((a) => a.status === "open" && a.issueKey === issueKey);
       for (const stale of openSameIssue) {
-        this.dismissAlertEntry(stale.id, 'system');
+        this.dismissAlertEntry(stale.id, "system");
       }
     }
 
@@ -387,7 +383,7 @@ export class AlertManager {
       workflow: finding.workflow,
       step: finding.step,
       finding: finding.finding,
-      status: 'open',
+      status: "open",
       verified: finding.verified,
       count: finding.count,
     };
@@ -407,12 +403,12 @@ export class AlertManager {
    * signature), so this extraction is behavior-preserving, not a new code
    * path.
    */
-  private dismissAlertEntry(alertId: string, dismissedBy: 'human' | 'system'): void {
+  private dismissAlertEntry(alertId: string, dismissedBy: "human" | "system"): void {
     const alerts = this.readAlerts();
-    let dismissedAlert = alerts.find(a => a.id === alertId);
+    let dismissedAlert = alerts.find((a) => a.id === alertId);
 
     if (dismissedAlert) {
-      dismissedAlert.status = 'dismissed';
+      dismissedAlert.status = "dismissed";
       dismissedAlert.dismissedBy = dismissedBy;
       dismissedAlert.dismissedAt = new Date().toISOString();
     } else {
@@ -420,11 +416,11 @@ export class AlertManager {
       dismissedAlert = {
         id: alertId,
         timestamp: new Date().toISOString(),
-        severity: 'INFO' as const,
-        workflow: 'manual',
-        step: 'dismiss',
-        finding: 'Dismissed by command',
-        status: 'dismissed' as const,
+        severity: "INFO" as const,
+        workflow: "manual",
+        step: "dismiss",
+        finding: "Dismissed by command",
+        status: "dismissed" as const,
         dismissedBy,
         dismissedAt: new Date().toISOString(),
       };
@@ -437,7 +433,7 @@ export class AlertManager {
   /**
    * Dismiss an alert by ID
    */
-  async dismissAlert(alertId: string, dismissedBy: 'human' | 'system'): Promise<void> {
+  async dismissAlert(alertId: string, dismissedBy: "human" | "system"): Promise<void> {
     this.dismissAlertEntry(alertId, dismissedBy);
   }
 
@@ -457,12 +453,15 @@ export class AlertManager {
     }
 
     try {
-      const content = readFileSync(this.alertsLogPath, 'utf-8');
-      const lines = content.trim().split('\n').filter(l => l.length > 0);
-      const raw: Alert[] = lines.map(line => JSON.parse(line));
+      const content = readFileSync(this.alertsLogPath, "utf-8");
+      const lines = content
+        .trim()
+        .split("\n")
+        .filter((l) => l.length > 0);
+      const raw: Alert[] = lines.map((line) => JSON.parse(line));
       return reduceAlertsById(raw);
     } catch (error) {
-      console.error('Failed to read alerts:', error);
+      console.error("Failed to read alerts:", error);
       return [];
     }
   }
@@ -475,7 +474,7 @@ export class AlertManager {
     let notificationsFired = 0;
 
     for (const alert of openAlerts) {
-      if (alert.severity === 'CRITICAL' && alert.status === 'open') {
+      if (alert.severity === "CRITICAL" && alert.status === "open") {
         // A4 — N1 alert-closure program: prefer the row's STORED issueKey
         // (threaded at write time — see Alert.issueKey's docblock) over
         // recomputing it here. Recomputing was itself a landmine: legacy
@@ -491,7 +490,7 @@ export class AlertManager {
         // of this file).
         const issueKey = alert.issueKey ?? generateIssueKey(alert.workflow, alert.step, alert.finding);
         const key = `automaintenance-alert-${issueKey}`;
-        const fingerprint = createHash('sha256').update(alert.finding).digest('hex').slice(0, 12);
+        const fingerprint = createHash("sha256").update(alert.finding).digest("hex").slice(0, 12);
         // TIER (2026-07-31): 'digest', not 'page'. This is the DAILY RE-FIRE of
         // an ALREADY-OPEN critical — the first occurrence still pages loudly via
         // evaluate()'s own gate.send() (line ~307), which is untouched. Re-paging
@@ -504,8 +503,12 @@ export class AlertManager {
         // alarm to be ignored — the exact failure mode the keychain watcher hit
         // (12 identical pages in 5 days). It stays visible in the daily digest
         // until genuinely closed.
-        const result = await this.gate.send(`[CRITICAL RE-ALERT] ${alert.finding}`, { key, tier: 'digest', fingerprint });
-        if (result !== 'suppressed') {
+        const result = await this.gate.send(`[CRITICAL RE-ALERT] ${alert.finding}`, {
+          key,
+          tier: "digest",
+          fingerprint,
+        });
+        if (result !== "suppressed") {
           notificationsFired++;
           refiredCount++;
         }
