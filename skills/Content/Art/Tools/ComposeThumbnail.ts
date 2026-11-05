@@ -40,10 +40,10 @@ interface CLIArgs {
 // ============================================================================
 
 const DEFAULTS = {
-  titleColor: "#7dcfff",        // Tokyo Night cyan - VIBRANT by default
-  subtitleColor: "#FFFFFF",     // White text for contrast
-  borderColor: "#bb9af7",       // Tokyo Night Vivid Purple
-  font: "Helvetica-Bold",       // System font that actually exists
+  titleColor: "#7dcfff", // Tokyo Night cyan - VIBRANT by default
+  subtitleColor: "#FFFFFF", // White text for contrast
+  borderColor: "#bb9af7", // Tokyo Night Vivid Purple
+  font: "Helvetica-Bold", // System font that actually exists
   headshotPosition: "left" as const,
   output: `${process.env.HOME}/Downloads/yt-thumbnail-${Date.now()}.png`,
 };
@@ -53,16 +53,16 @@ const LAYOUT = {
   height: 720,
   borderWidth: 16,
   // TEXT - BILLBOARD STYLE (large, bold, dominant)
-  titleSize: 100,         // DOMINANT - fills the space
-  subtitleSize: 50,       // Proportionally sized, still readable
-  titleStroke: 4,         // Bold outline for visibility
-  subtitleStroke: 3,      // Visible outline
+  titleSize: 100, // DOMINANT - fills the space
+  subtitleSize: 50, // Proportionally sized, still readable
+  titleStroke: 4, // Bold outline for visibility
+  subtitleStroke: 3, // Visible outline
   textPadding: 6,
   textBoxPadding: 20,
   // Safe zones - headshot and text never overlap
-  headshotMaxWidth: 0.40, // Headshot takes max 40% width
-  textZoneWidth: 0.55,    // Text zone is 55% width (FILLS the space)
-  textZoneGap: 0.05,      // 5% gap between zones
+  headshotMaxWidth: 0.4, // Headshot takes max 40% width
+  textZoneWidth: 0.55, // Text zone is 55% width (FILLS the space)
+  textZoneGap: 0.05, // 5% gap between zones
 };
 
 // Color presets for text (Tokyo Night palette + extras)
@@ -140,7 +140,7 @@ function parseArgs(args: string[]): CLIArgs {
       case "--help":
       case "-h":
         printHelp();
-        process.exit(0);
+        return process.exit(0);
       case "--background":
         result.background = next;
         i++;
@@ -243,20 +243,23 @@ async function runCommand(cmd: string, args: string[]): Promise<string> {
  */
 async function cropToFaceOnly(headshotPath: string, outputPath: string): Promise<void> {
   // Get original dimensions
-  const dimensions = await runCommand("magick", [
-    "identify", "-format", "%wx%h", headshotPath
-  ]);
+  const dimensions = await runCommand("magick", ["identify", "-format", "%wx%h", headshotPath]);
   const [width, height] = dimensions.trim().split("x").map(Number);
 
   // Crop bottom 25% (removes shoulders/body) and zoom 135% into face
   await runCommand("magick", [
     headshotPath,
-    "-gravity", "north",           // Anchor to top (face area)
-    "-crop", `100%x75%+0+0`,       // Crop bottom 25% (shoulders/body)
+    "-gravity",
+    "north", // Anchor to top (face area)
+    "-crop",
+    `100%x75%+0+0`, // Crop bottom 25% (shoulders/body)
     "+repage",
-    "-resize", "135%",             // Zoom into face
-    "-gravity", "center",
-    "-extent", `${width}x${height}`, // Restore original dimensions
+    "-resize",
+    "135%", // Zoom into face
+    "-gravity",
+    "center",
+    "-extent",
+    `${width}x${height}`, // Restore original dimensions
     outputPath,
   ]);
 }
@@ -284,9 +287,12 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
     console.log("   📐 Resizing background to 1280x720...");
     await runCommand("magick", [
       args.background,
-      "-resize", `${LAYOUT.width}x${LAYOUT.height}^`,
-      "-gravity", "center",
-      "-extent", `${LAYOUT.width}x${LAYOUT.height}`,
+      "-resize",
+      `${LAYOUT.width}x${LAYOUT.height}^`,
+      "-gravity",
+      "center",
+      "-extent",
+      `${LAYOUT.width}x${LAYOUT.height}`,
       resizedBg,
     ]);
 
@@ -299,7 +305,7 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
 
     // Calculate headshot height - FULL HEIGHT inside border
     // Face should fill ~95% of vertical space inside the border
-    const headshotHeight = LAYOUT.height - (LAYOUT.borderWidth * 2); // 688px
+    const headshotHeight = LAYOUT.height - LAYOUT.borderWidth * 2; // 688px
 
     // Determine gravity and offset based on position
     let gravity: string;
@@ -326,11 +332,14 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
     await runCommand("magick", [
       resizedBg,
       "(",
-        croppedHeadshot,  // Use cropped headshot (face only)
-        "-resize", `x${headshotHeight}`,
+      croppedHeadshot, // Use cropped headshot (face only)
+      "-resize",
+      `x${headshotHeight}`,
       ")",
-      "-gravity", gravity,
-      "-geometry", geometryOffset,
+      "-gravity",
+      gravity,
+      "-geometry",
+      geometryOffset,
       "-composite",
       withHeadshot,
     ]);
@@ -353,31 +362,65 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
 
       // Create title (WIDE canvas for 100pt BILLBOARD text)
       await runCommand("magick", [
-        "-size", "1400x200",
+        "-size",
+        "1400x200",
         "xc:transparent",
-        "-font", args.font!,
-        "-pointsize", String(LAYOUT.titleSize),
-        "-gravity", "center",
-        "-stroke", "#000000", "-strokewidth", String(LAYOUT.titleStroke), "-fill", "none",
-        "-annotate", "+0+0", args.title,
-        "-stroke", "none", "-fill", titleColorResolved,
-        "-annotate", "+0+0", args.title,
-        "-trim", "+repage",
+        "-font",
+        args.font!,
+        "-pointsize",
+        String(LAYOUT.titleSize),
+        "-gravity",
+        "center",
+        "-stroke",
+        "#000000",
+        "-strokewidth",
+        String(LAYOUT.titleStroke),
+        "-fill",
+        "none",
+        "-annotate",
+        "+0+0",
+        args.title,
+        "-stroke",
+        "none",
+        "-fill",
+        titleColorResolved,
+        "-annotate",
+        "+0+0",
+        args.title,
+        "-trim",
+        "+repage",
         titleWithStroke,
       ]);
 
       // Create subtitle (WIDE canvas for 50pt BILLBOARD text)
       await runCommand("magick", [
-        "-size", "1400x120",
+        "-size",
+        "1400x120",
         "xc:transparent",
-        "-font", args.font!,
-        "-pointsize", String(LAYOUT.subtitleSize),
-        "-gravity", "center",
-        "-stroke", "#000000", "-strokewidth", String(LAYOUT.subtitleStroke), "-fill", "none",
-        "-annotate", "+0+0", args.subtitle,
-        "-stroke", "none", "-fill", subtitleColorResolved,
-        "-annotate", "+0+0", args.subtitle,
-        "-trim", "+repage",
+        "-font",
+        args.font!,
+        "-pointsize",
+        String(LAYOUT.subtitleSize),
+        "-gravity",
+        "center",
+        "-stroke",
+        "#000000",
+        "-strokewidth",
+        String(LAYOUT.subtitleStroke),
+        "-fill",
+        "none",
+        "-annotate",
+        "+0+0",
+        args.subtitle,
+        "-stroke",
+        "none",
+        "-fill",
+        subtitleColorResolved,
+        "-annotate",
+        "+0+0",
+        args.subtitle,
+        "-trim",
+        "+repage",
         subtitleWithStroke,
       ]);
 
@@ -387,8 +430,10 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
       await runCommand("magick", [
         withHeadshot,
         titleWithStroke,
-        "-gravity", "north",
-        "-geometry", "+0+25",
+        "-gravity",
+        "north",
+        "-geometry",
+        "+0+25",
         "-composite",
         withTitle,
       ]);
@@ -397,21 +442,23 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
       await runCommand("magick", [
         withTitle,
         subtitleWithStroke,
-        "-gravity", "south",
-        "-geometry", "+0+25",
+        "-gravity",
+        "south",
+        "-geometry",
+        "+0+25",
         "-composite",
         withText,
       ]);
-
     } else {
       // LEFT or RIGHT: Create text in safe zone (NEVER overlap headshot)
 
       // Calculate text zone center (opposite side from headshot)
       // Position at 62% or 38% of canvas width with generous margins
       // Account for 16px border + compression during final resize
-      const textZoneCenter = args.headshotPosition === "left"
-        ? Math.round(LAYOUT.width * 0.62) // 794px - text on right with generous margin
-        : Math.round(LAYOUT.width * 0.38); // 486px - text on left with generous margin
+      const textZoneCenter =
+        args.headshotPosition === "left"
+          ? Math.round(LAYOUT.width * 0.62) // 794px - text on right with generous margin
+          : Math.round(LAYOUT.width * 0.38); // 486px - text on left with generous margin
 
       // Create title and subtitle with BILLBOARD sizing
       const titleImg = `${outputDir}/.yt-title-${timestamp}.png`;
@@ -420,31 +467,65 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
 
       // Create title - 100pt BILLBOARD text on WIDE canvas (prevents cutoff)
       await runCommand("magick", [
-        "-size", "1400x200",
+        "-size",
+        "1400x200",
         "xc:transparent",
-        "-font", args.font!,
-        "-gravity", "center",
-        "-pointsize", String(LAYOUT.titleSize),
-        "-stroke", "#000000", "-strokewidth", String(LAYOUT.titleStroke), "-fill", "none",
-        "-annotate", "+0+0", args.title,
-        "-stroke", "none", "-fill", titleColorResolved,
-        "-annotate", "+0+0", args.title,
-        "-trim", "+repage",
+        "-font",
+        args.font!,
+        "-gravity",
+        "center",
+        "-pointsize",
+        String(LAYOUT.titleSize),
+        "-stroke",
+        "#000000",
+        "-strokewidth",
+        String(LAYOUT.titleStroke),
+        "-fill",
+        "none",
+        "-annotate",
+        "+0+0",
+        args.title,
+        "-stroke",
+        "none",
+        "-fill",
+        titleColorResolved,
+        "-annotate",
+        "+0+0",
+        args.title,
+        "-trim",
+        "+repage",
         titleImg,
       ]);
 
       // Create subtitle - 50pt BILLBOARD text on WIDE canvas (prevents cutoff)
       await runCommand("magick", [
-        "-size", "1400x120",
+        "-size",
+        "1400x120",
         "xc:transparent",
-        "-font", args.font!,
-        "-gravity", "center",
-        "-pointsize", String(LAYOUT.subtitleSize),
-        "-stroke", "#000000", "-strokewidth", String(LAYOUT.subtitleStroke), "-fill", "none",
-        "-annotate", "+0+0", args.subtitle,
-        "-stroke", "none", "-fill", subtitleColorResolved,
-        "-annotate", "+0+0", args.subtitle,
-        "-trim", "+repage",
+        "-font",
+        args.font!,
+        "-gravity",
+        "center",
+        "-pointsize",
+        String(LAYOUT.subtitleSize),
+        "-stroke",
+        "#000000",
+        "-strokewidth",
+        String(LAYOUT.subtitleStroke),
+        "-fill",
+        "none",
+        "-annotate",
+        "+0+0",
+        args.subtitle,
+        "-stroke",
+        "none",
+        "-fill",
+        subtitleColorResolved,
+        "-annotate",
+        "+0+0",
+        args.subtitle,
+        "-trim",
+        "+repage",
         subtitleImg,
       ]);
 
@@ -462,8 +543,10 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
       await runCommand("magick", [
         withHeadshot,
         titleImg,
-        "-gravity", "north",
-        "-geometry", `+${textZoneCenter - LAYOUT.width/2}+${titleY}`,
+        "-gravity",
+        "north",
+        "-geometry",
+        `+${textZoneCenter - LAYOUT.width / 2}+${titleY}`,
         "-composite",
         withTitle,
       ]);
@@ -472,8 +555,10 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
       await runCommand("magick", [
         withTitle,
         subtitleImg,
-        "-gravity", "north",
-        "-geometry", `+${textZoneCenter - LAYOUT.width/2}+${subtitleY}`,
+        "-gravity",
+        "north",
+        "-geometry",
+        `+${textZoneCenter - LAYOUT.width / 2}+${subtitleY}`,
         "-composite",
         withText,
       ]);
@@ -483,9 +568,12 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
     console.log("   🖼️  Adding border...");
     await runCommand("magick", [
       withText,
-      "-bordercolor", args.borderColor!,
-      "-border", String(LAYOUT.borderWidth),
-      "-resize", `${LAYOUT.width}x${LAYOUT.height}!`,
+      "-bordercolor",
+      args.borderColor!,
+      "-border",
+      String(LAYOUT.borderWidth),
+      "-resize",
+      `${LAYOUT.width}x${LAYOUT.height}!`,
       args.output,
     ]);
 
@@ -494,7 +582,6 @@ async function composeThumbnail(args: CLIArgs): Promise<void> {
     // Verify dimensions
     const identify = await runCommand("magick", ["identify", "-format", "%wx%h", args.output]);
     console.log(`   📏 Dimensions: ${identify.trim()}`);
-
   } finally {
     // Cleanup intermediate files
     for (const file of intermediates) {

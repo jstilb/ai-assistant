@@ -16,7 +16,7 @@ export async function generate(
   prompt: string,
   size: string,
   outputPath: string,
-  options?: GenerateOptions
+  options?: GenerateOptions,
 ): Promise<void> {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
@@ -28,7 +28,9 @@ export async function generate(
   const referenceImages = options?.referenceImages;
 
   if (referenceImages && referenceImages.length > 0) {
-    console.log(`Generating with Nano Banana Pro (Gemini 3 Pro) at ${size} ${aspectRatio} with ${referenceImages.length} reference image(s)...`);
+    console.log(
+      `Generating with Nano Banana Pro (Gemini 3 Pro) at ${size} ${aspectRatio} with ${referenceImages.length} reference image(s)...`,
+    );
   } else {
     console.log(`Generating with Nano Banana Pro (Gemini 3 Pro) at ${size} ${aspectRatio}...`);
   }
@@ -84,9 +86,9 @@ export async function generate(
   let refusalText: string | undefined;
 
   if (response.candidates && response.candidates.length > 0) {
-    const responseParts = response.candidates[0].content.parts;
+    const responseParts = response.candidates[0]?.content?.parts ?? [];
     for (const part of responseParts) {
-      if (part.inlineData && part.inlineData.data) {
+      if (part.inlineData?.data) {
         imageData = part.inlineData.data;
         break;
       }
@@ -103,7 +105,7 @@ export async function generate(
     throw new CLIError(
       refusalText
         ? `No image data returned from Gemini API — model responded with text instead: "${refusalText}"`
-        : "No image data returned from Gemini API"
+        : "No image data returned from Gemini API",
     );
   }
 

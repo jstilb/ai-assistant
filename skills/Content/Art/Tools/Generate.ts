@@ -20,6 +20,7 @@ import * as NanoBananaAdapter from "./Adapters/NanoBananaAdapter.ts";
 import * as NanaBananaProAdapter from "./Adapters/NanaBananaProAdapter.ts";
 import * as GPTImageAdapter from "./Adapters/GPTImageAdapter.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { reserveCalls } from "./SpendCeiling.ts";
 
 // ============================================================================
 // Types
@@ -210,7 +211,7 @@ function parseArgs(argv: string[]): CLIArgs {
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
 
-    if (!flag.startsWith("--")) {
+    if (flag === undefined || !flag.startsWith("--")) {
       throw new CLIError(`Invalid flag: ${flag}. Flags must start with --`);
     }
 
@@ -265,7 +266,7 @@ function parseArgs(argv: string[]): CLIArgs {
         break;
       case "creative-variations": {
         const variations = parseInt(value, 10);
-        if (isNaN(variations) || variations < 1 || variations > 10) {
+        if (Number.isNaN(variations) || variations < 1 || variations > 10) {
           throw new CLIError(`Invalid creative-variations: ${value}. Must be 1-10`);
         }
         parsed.creativeVariations = variations;
@@ -301,7 +302,9 @@ function parseArgs(argv: string[]): CLIArgs {
   }
 
   if (parsed.referenceImages && parsed.referenceImages.length > 14) {
-    throw new CLIError(`Too many reference images: ${parsed.referenceImages.length}. Maximum is 14 total (5 human, 6 object)`);
+    throw new CLIError(
+      `Too many reference images: ${parsed.referenceImages.length}. Maximum is 14 total (5 human, 6 object)`,
+    );
   }
 
   if (parsed.model === "gpt-image-1") {
@@ -313,7 +316,9 @@ function parseArgs(argv: string[]): CLIArgs {
       throw new CLIError(`Invalid size for nano-banana-pro: ${parsed.size}. Must be: ${GEMINI_SIZES.join(", ")}`);
     }
     if (parsed.aspectRatio && !GEMINI_ASPECT_RATIOS.includes(parsed.aspectRatio)) {
-      throw new CLIError(`Invalid aspect-ratio for nano-banana-pro: ${parsed.aspectRatio}. Must be: ${GEMINI_ASPECT_RATIOS.join(", ")}`);
+      throw new CLIError(
+        `Invalid aspect-ratio for nano-banana-pro: ${parsed.aspectRatio}. Must be: ${GEMINI_ASPECT_RATIOS.join(", ")}`,
+      );
     }
     if (!parsed.aspectRatio) {
       parsed.aspectRatio = "16:9";
@@ -332,7 +337,10 @@ function parseArgs(argv: string[]): CLIArgs {
 // ============================================================================
 
 function enhancePromptForTransparency(prompt: string): string {
-  return "CRITICAL: Transparent background (PNG with alpha channel) - NO background color, pure transparency. Object floating in transparent space. " + prompt;
+  return (
+    "CRITICAL: Transparent background (PNG with alpha channel) - NO background color, pure transparency. Object floating in transparent space. " +
+    prompt
+  );
 }
 
 // ============================================================================
@@ -367,9 +375,10 @@ async function main(): Promise<void> {
 
     const args = parseArgs(process.argv);
 
-    const finalPrompt = args.transparent
-      ? enhancePromptForTransparency(args.prompt)
-      : args.prompt;
+    // Money boundary: refuse before any paid call if the daily ceiling would be exceeded.
+    await reserveCalls({ count: args.creativeVariations ?? 1, model: args.model });
+
+    const finalPrompt = args.transparent ? enhancePromptForTransparency(args.prompt) : args.prompt;
 
     if (args.transparent) {
       console.log("🔲 Transparent background mode enabled");
@@ -393,9 +402,7 @@ async function main(): Promise<void> {
       for (let i = 0; i < variationOutputs.length; i += cap) {
         const batch = variationOutputs.slice(i, i + cap);
         console.log(`Generating batch ${Math.floor(i / cap) + 1}: variations ${i + 1}-${i + batch.length}`);
-        await Promise.all(
-          batch.map((varOutput) => generateSingle(args, finalPrompt, varOutput))
-        );
+        await Promise.all(batch.map((varOutput) => generateSingle(args, finalPrompt, varOutput)));
       }
 
       console.log(`\n✅ Generated ${args.creativeVariations} variations`);
@@ -431,4 +438,6 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

@@ -13,7 +13,7 @@ export async function generate(
   prompt: string,
   size: string,
   outputPath: string,
-  options?: GenerateOptions
+  options?: GenerateOptions,
 ): Promise<void> {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
@@ -23,8 +23,8 @@ export async function generate(
   if (options?.transparent) {
     console.warn(
       "⚠️  --transparent was requested but the Flux adapter does not support alpha-channel " +
-      "output — the prompt was prefixed with a transparency instruction, but the model has no " +
-      "way to honor it. Output will NOT have a transparent background."
+        "output — the prompt was prefixed with a transparency instruction, but the model has no " +
+        "way to honor it. Output will NOT have a transparent background.",
     );
   }
 

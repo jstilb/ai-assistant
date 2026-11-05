@@ -19,8 +19,8 @@ async function checkImageMagick(): Promise<void> {
     const detail = error instanceof Error ? error.message : String(error);
     throw new CLIError(
       "ImageMagick not found or not runnable. Install with: brew install imagemagick\n" +
-      "Required for --add-bg and --thumbnail flags.\n" +
-      `Underlying error: ${detail}`
+        "Required for --add-bg and --thumbnail flags.\n" +
+        `Underlying error: ${detail}`,
     );
   }
 }

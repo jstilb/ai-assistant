@@ -15,19 +15,18 @@ import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
  */
 export async function loadEnv(): Promise<void> {
   const kayaDir = getKayaHome();
-  const envPath = resolve(kayaDir, '.env');
+  const envPath = resolve(kayaDir, ".env");
   try {
-    const envContent = await readFile(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
+    const envContent = await readFile(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const eqIndex = trimmed.indexOf('=');
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
       if (eqIndex === -1) continue;
       const key = trimmed.slice(0, eqIndex).trim();
       let value = trimmed.slice(eqIndex + 1).trim();
       // Remove surrounding quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
       // Only set if not already defined (allow overrides from shell)
@@ -36,12 +35,19 @@ export async function loadEnv(): Promise<void> {
       }
     }
   } catch (error) {
-    // Silently continue if .env doesn't exist - rely on shell env vars
+    // A missing .env is expected: rely on shell env vars. Anything else (permissions, I/O)
+    // would silently drop API keys, so surface it.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(`[Art] Could not read ${envPath}: ${(error as Error).message}`);
+    }
   }
 }
 
 export class CLIError extends Error {
-  constructor(message: string, public exitCode: number = 1) {
+  constructor(
+    message: string,
+    public exitCode: number = 1,
+  ) {
     super(message);
     this.name = "CLIError";
   }
