@@ -15,9 +15,6 @@
  *   bun WeatherService.ts --test --json
  */
 
-import { join } from "path";
-import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-
 // Use Kaya CachedHTTPClient for all external API calls. H1 fix #3: this used
 // to be a module-top-level `await import(...)` (top-level await, not inside
 // a function) — the same hazard shape fixed in commit b516a5c8d
@@ -45,7 +42,7 @@ export interface CurrentConditions {
 }
 
 export interface HourlyForecast {
-  time: string;       // "0900", "1200", etc.
+  time: string; // "0900", "1200", etc.
   tempF: number;
   feelsLikeF: number;
   condition: string;
@@ -55,7 +52,7 @@ export interface HourlyForecast {
 }
 
 export interface DayForecast {
-  date: string;        // "2026-02-04"
+  date: string; // "2026-02-04"
   highF: number;
   lowF: number;
   condition: string;
@@ -67,7 +64,7 @@ export interface DayForecast {
 
 export interface WeatherAlert {
   event: string;
-  severity: 'minor' | 'moderate' | 'severe' | 'extreme';
+  severity: "minor" | "moderate" | "severe" | "extreme";
   headline: string;
   description: string;
   expires: string;
@@ -88,32 +85,32 @@ export interface WeatherReport {
 // ============================================================================
 
 const CONDITION_EMOJI: Record<string, string> = {
-  'Sunny': '☀️',
-  'Clear': '🌙',
-  'Partly cloudy': '⛅',
-  'Partly Cloudy': '⛅',
-  'Cloudy': '☁️',
-  'Overcast': '☁️',
-  'Mist': '🌫️',
-  'Fog': '🌫️',
-  'Patchy rain possible': '🌦️',
-  'Patchy rain nearby': '🌦️',
-  'Light rain': '🌧️',
-  'Light rain shower': '🌧️',
-  'Moderate rain': '🌧️',
-  'Heavy rain': '🌧️',
-  'Light drizzle': '🌧️',
-  'Patchy light drizzle': '🌧️',
-  'Thundery outbreaks possible': '⛈️',
-  'Moderate or heavy rain with thunder': '⛈️',
-  'Patchy light rain with thunder': '⛈️',
-  'Snow': '❄️',
-  'Light snow': '❄️',
-  'Heavy snow': '❄️',
-  'Blowing snow': '❄️',
-  'Blizzard': '🌨️',
-  'Moderate or heavy snow showers': '🌨️',
-  'Haze': '🌫️',
+  Sunny: "☀️",
+  Clear: "🌙",
+  "Partly cloudy": "⛅",
+  "Partly Cloudy": "⛅",
+  Cloudy: "☁️",
+  Overcast: "☁️",
+  Mist: "🌫️",
+  Fog: "🌫️",
+  "Patchy rain possible": "🌦️",
+  "Patchy rain nearby": "🌦️",
+  "Light rain": "🌧️",
+  "Light rain shower": "🌧️",
+  "Moderate rain": "🌧️",
+  "Heavy rain": "🌧️",
+  "Light drizzle": "🌧️",
+  "Patchy light drizzle": "🌧️",
+  "Thundery outbreaks possible": "⛈️",
+  "Moderate or heavy rain with thunder": "⛈️",
+  "Patchy light rain with thunder": "⛈️",
+  Snow: "❄️",
+  "Light snow": "❄️",
+  "Heavy snow": "❄️",
+  "Blowing snow": "❄️",
+  Blizzard: "🌨️",
+  "Moderate or heavy snow showers": "🌨️",
+  Haze: "🌫️",
 };
 
 function getConditionEmoji(condition: string): string {
@@ -121,15 +118,15 @@ function getConditionEmoji(condition: string): string {
 
   // Fuzzy match
   const lower = condition.toLowerCase();
-  if (lower.includes('sun') || lower.includes('clear')) return '☀️';
-  if (lower.includes('cloud') || lower.includes('overcast')) return '☁️';
-  if (lower.includes('rain') || lower.includes('drizzle')) return '🌧️';
-  if (lower.includes('thunder') || lower.includes('storm')) return '⛈️';
-  if (lower.includes('snow') || lower.includes('sleet')) return '❄️';
-  if (lower.includes('fog') || lower.includes('mist') || lower.includes('haze')) return '🌫️';
-  if (lower.includes('wind')) return '💨';
+  if (lower.includes("sun") || lower.includes("clear")) return "☀️";
+  if (lower.includes("cloud") || lower.includes("overcast")) return "☁️";
+  if (lower.includes("rain") || lower.includes("drizzle")) return "🌧️";
+  if (lower.includes("thunder") || lower.includes("storm")) return "⛈️";
+  if (lower.includes("snow") || lower.includes("sleet")) return "❄️";
+  if (lower.includes("fog") || lower.includes("mist") || lower.includes("haze")) return "🌫️";
+  if (lower.includes("wind")) return "💨";
 
-  return '🌤️';
+  return "🌤️";
 }
 
 // ============================================================================
@@ -197,9 +194,8 @@ interface NWSAlertResponse {
 // WeatherService Implementation
 // ============================================================================
 
-const KAYA_HOME = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
-const DEFAULT_LOCATION = 'Ocean Beach, San Diego';
-const NWS_ZONE_SD = 'CAZ043';
+const DEFAULT_LOCATION = "Ocean Beach, San Diego";
+const NWS_ZONE_SD = "CAZ043";
 const WTTR_TIMEOUT_MS = 12000;
 const NWS_TIMEOUT_MS = 5000;
 
@@ -210,9 +206,9 @@ async function fetchWttrData(location: string): Promise<WttrResponse> {
   const url = `https://wttr.in/${encodeURIComponent(location)}?format=j1`;
   const response = await httpClient.fetch(url, {
     timeout: WTTR_TIMEOUT_MS,
-    headers: { 'User-Agent': 'Kaya-WeatherService/1.0' },
-    cache: 'memory',
-    ttl: 900,  // 15 min cache for weather data
+    headers: { "User-Agent": "Kaya-WeatherService/1.0" },
+    cache: "memory",
+    ttl: 900, // 15 min cache for weather data
   });
 
   if (!response.ok) {
@@ -231,11 +227,11 @@ async function fetchNWSAlerts(zone: string = NWS_ZONE_SD): Promise<WeatherAlert[
     const response = await httpClient.fetch(url, {
       timeout: NWS_TIMEOUT_MS,
       headers: {
-        'User-Agent': 'Kaya-WeatherService/1.0 (contact@kaya.local)',
-        'Accept': 'application/geo+json',
+        "User-Agent": "Kaya-WeatherService/1.0 (contact@kaya.local)",
+        Accept: "application/geo+json",
       },
-      cache: 'memory',
-      ttl: 300,  // 5 min cache for alerts
+      cache: "memory",
+      ttl: 300, // 5 min cache for alerts
     });
 
     if (!response.ok) {
@@ -243,7 +239,7 @@ async function fetchNWSAlerts(zone: string = NWS_ZONE_SD): Promise<WeatherAlert[
       return [];
     }
 
-    const data = await response.json() as NWSAlertResponse;
+    const data = (await response.json()) as NWSAlertResponse;
 
     if (!data.features || data.features.length === 0) {
       return [];
@@ -251,24 +247,24 @@ async function fetchNWSAlerts(zone: string = NWS_ZONE_SD): Promise<WeatherAlert[
 
     return data.features.map((feature) => {
       const props = feature.properties;
-      const severityMap: Record<string, WeatherAlert['severity']> = {
-        'Minor': 'minor',
-        'Moderate': 'moderate',
-        'Severe': 'severe',
-        'Extreme': 'extreme',
+      const severityMap: Record<string, WeatherAlert["severity"]> = {
+        Minor: "minor",
+        Moderate: "moderate",
+        Severe: "severe",
+        Extreme: "extreme",
       };
 
       return {
-        event: props.event || 'Unknown',
-        severity: severityMap[props.severity] || 'minor',
-        headline: props.headline || '',
-        description: (props.description || '').slice(0, 500),
-        expires: props.expires || '',
+        event: props.event || "Unknown",
+        severity: severityMap[props.severity] || "minor",
+        headline: props.headline || "",
+        description: (props.description || "").slice(0, 500),
+        expires: props.expires || "",
       };
     });
   } catch (error) {
     // NWS is a nice-to-have; fail gracefully
-    console.error('NWS alert fetch failed:', error instanceof Error ? error.message : error);
+    console.error("NWS alert fetch failed:", error instanceof Error ? error.message : error);
     return [];
   }
 }
@@ -278,9 +274,9 @@ async function fetchNWSAlerts(zone: string = NWS_ZONE_SD): Promise<WeatherAlert[
  */
 function parseHourly(wttrHourly: WttrHourly[]): HourlyForecast[] {
   return wttrHourly.map((h) => {
-    const condition = h.weatherDesc?.[0]?.value || 'Unknown';
+    const condition = h.weatherDesc?.[0]?.value || "Unknown";
     return {
-      time: h.time.padStart(4, '0'),
+      time: h.time.padStart(4, "0"),
       tempF: parseInt(h.tempF, 10),
       feelsLikeF: parseInt(h.FeelsLikeF, 10),
       condition,
@@ -296,18 +292,15 @@ function parseHourly(wttrHourly: WttrHourly[]): HourlyForecast[] {
  */
 function parseDayForecast(wttrDay: WttrWeatherDay, includeHourly: boolean = false): DayForecast {
   // Determine dominant condition from hourly data
-  const conditions = wttrDay.hourly.map((h) => h.weatherDesc?.[0]?.value || 'Unknown');
+  const conditions = wttrDay.hourly.map((h) => h.weatherDesc?.[0]?.value || "Unknown");
   const conditionCounts: Record<string, number> = {};
   for (const c of conditions) {
     conditionCounts[c] = (conditionCounts[c] || 0) + 1;
   }
-  const dominantCondition = Object.entries(conditionCounts)
-    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
+  const dominantCondition = Object.entries(conditionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown";
 
   // Calculate max rain chance across all hours
-  const maxRainChance = Math.max(
-    ...wttrDay.hourly.map((h) => parseInt(h.chanceofrain, 10) || 0)
-  );
+  const maxRainChance = Math.max(...wttrDay.hourly.map((h) => parseInt(h.chanceofrain, 10) || 0));
 
   const forecast: DayForecast = {
     date: wttrDay.date,
@@ -332,18 +325,16 @@ function parseDayForecast(wttrDay: WttrWeatherDay, includeHourly: boolean = fals
  * Combines wttr.in (current + forecast) with NWS alerts.
  * Gracefully degrades: if NWS fails, alerts are empty.
  */
-export async function fetchWeatherReport(
-  location: string = DEFAULT_LOCATION
-): Promise<WeatherReport> {
+export async function fetchWeatherReport(location: string = DEFAULT_LOCATION): Promise<WeatherReport> {
   // Fetch wttr.in and NWS alerts in parallel
-  const [wttrData, alerts] = await Promise.all([
-    fetchWttrData(location),
-    fetchNWSAlerts(),
-  ]);
+  const [wttrData, alerts] = await Promise.all([fetchWttrData(location), fetchNWSAlerts()]);
 
   const current = wttrData.current_condition[0];
   const todayWeather = wttrData.weather[0];
-  const condition = current.weatherDesc?.[0]?.value || 'Unknown';
+  if (!current || !todayWeather) {
+    throw new Error(`wttr.in returned no current conditions or forecast for "${location}"`);
+  }
+  const condition = current.weatherDesc?.[0]?.value || "Unknown";
 
   // Build current conditions
   const currentConditions: CurrentConditions = {
@@ -351,7 +342,7 @@ export async function fetchWeatherReport(
     feelsLikeF: parseInt(current.FeelsLikeF, 10),
     humidity: parseInt(current.humidity, 10),
     windMph: parseInt(current.windspeedMiles, 10),
-    windDir: current.winddir16Point || 'N',
+    windDir: current.winddir16Point || "N",
     uvIndex: parseInt(current.uvIndex, 10) || 0,
     condition,
     icon: getConditionEmoji(condition),
@@ -366,8 +357,8 @@ export async function fetchWeatherReport(
   // Extract astronomy data
   const astro = todayWeather.astronomy?.[0];
   const astronomy = {
-    sunrise: astro?.sunrise || 'N/A',
-    sunset: astro?.sunset || 'N/A',
+    sunrise: astro?.sunrise || "N/A",
+    sunset: astro?.sunset || "N/A",
   };
 
   return {
@@ -388,7 +379,7 @@ export async function fetchWeatherReport(
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.includes('--help') || args.includes('-h')) {
+  if (args.includes("--help") || args.includes("-h")) {
     console.log(`
 WeatherService - Rich weather data layer for Kaya
 
@@ -406,13 +397,11 @@ Options:
     return;
   }
 
-  if (args.includes('--test') || args.includes('-t')) {
-    const locIdx = args.indexOf('--location');
-    const location = locIdx !== -1 && args[locIdx + 1]
-      ? args[locIdx + 1]
-      : DEFAULT_LOCATION;
+  if (args.includes("--test") || args.includes("-t")) {
+    const locIdx = args.indexOf("--location");
+    const location = locIdx !== -1 && args[locIdx + 1] ? args[locIdx + 1] : DEFAULT_LOCATION;
 
-    const outputJson = args.includes('--json');
+    const outputJson = args.includes("--json");
 
     console.log(`Fetching weather for: ${location}...\n`);
 
@@ -425,12 +414,12 @@ Options:
       }
 
       // Formatted output
-      console.log('=== WeatherService Test ===\n');
+      console.log("=== WeatherService Test ===\n");
       console.log(`Location: ${report.location}`);
       console.log(`Fetched:  ${report.fetchedAt}`);
       console.log();
 
-      console.log('--- Current Conditions ---');
+      console.log("--- Current Conditions ---");
       console.log(`  ${report.current.icon} ${report.current.condition}`);
       console.log(`  Temperature: ${report.current.tempF}°F (feels like ${report.current.feelsLikeF}°F)`);
       console.log(`  Humidity: ${report.current.humidity}%`);
@@ -438,7 +427,7 @@ Options:
       console.log(`  UV Index: ${report.current.uvIndex}`);
       console.log();
 
-      console.log('--- Today\'s Forecast ---');
+      console.log("--- Today's Forecast ---");
       console.log(`  High: ${report.today.highF}°F  Low: ${report.today.lowF}°F`);
       console.log(`  Condition: ${report.today.icon} ${report.today.condition}`);
       console.log(`  Rain Chance: ${report.today.rainChancePct}%`);
@@ -451,30 +440,31 @@ Options:
       }
       console.log();
 
-      console.log('--- 3-Day Forecast ---');
+      console.log("--- 3-Day Forecast ---");
       for (const day of report.forecast) {
-        console.log(`  ${day.date}: ${day.icon} H ${day.highF}°F / L ${day.lowF}°F  ${day.condition}  Rain: ${day.rainChancePct}%`);
+        console.log(
+          `  ${day.date}: ${day.icon} H ${day.highF}°F / L ${day.lowF}°F  ${day.condition}  Rain: ${day.rainChancePct}%`,
+        );
       }
       console.log();
 
-      console.log('--- Astronomy ---');
+      console.log("--- Astronomy ---");
       console.log(`  Sunrise: ${report.astronomy.sunrise}`);
       console.log(`  Sunset:  ${report.astronomy.sunset}`);
       console.log();
 
       if (report.alerts.length > 0) {
-        console.log('--- Weather Alerts ---');
+        console.log("--- Weather Alerts ---");
         for (const alert of report.alerts) {
           console.log(`  [${alert.severity.toUpperCase()}] ${alert.event}`);
           console.log(`    ${alert.headline}`);
           console.log(`    Expires: ${alert.expires}`);
         }
       } else {
-        console.log('--- No Active Weather Alerts ---');
+        console.log("--- No Active Weather Alerts ---");
       }
-
     } catch (error) {
-      console.error('WeatherService test failed:', error instanceof Error ? error.message : error);
+      console.error("WeatherService test failed:", error instanceof Error ? error.message : error);
       process.exit(1);
     }
   } else {

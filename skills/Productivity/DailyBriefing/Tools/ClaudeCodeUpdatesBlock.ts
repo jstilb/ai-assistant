@@ -27,8 +27,8 @@
  * hermetic — no live network, no live LLM. See the __tests__ counterpart.
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { BlockResult } from "./types.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { inference } from "../../../../lib/core/Inference.ts";
@@ -40,9 +40,7 @@ const BLOCK_NAME = "claudeCodeUpdates";
 
 // Authoritative, well-structured markdown changelog. Kept as an array so the
 // source set can grow (e.g. Anthropic API release notes) without a code change.
-export const DEFAULT_CHANGELOG_URL =
-  "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md";
-const CHANGELOG_HTML_URL = "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md";
+export const DEFAULT_CHANGELOG_URL = "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md";
 
 // On a cold start the changelog holds hundreds of releases. Surface only the
 // newest few so the FIRST briefing isn't a wall of backfill; the rest are
@@ -247,12 +245,7 @@ export function parseAssessment(raw: string): ClaudeCodeUpdateItem[] {
         if (typeof raw !== "object" || raw === null) continue;
         const o = raw as Record<string, unknown>;
         const tier = o.tier === "monumental" || o.tier === "notable" ? o.tier : null;
-        if (
-          typeof o.headline !== "string" ||
-          !o.headline.trim() ||
-          !tier ||
-          typeof o.version !== "string"
-        ) {
+        if (typeof o.headline !== "string" || !o.headline.trim() || !tier || typeof o.version !== "string") {
           continue;
         }
         items.push({
@@ -286,6 +279,7 @@ async function defaultFetchText(url: string, timeoutMs: number): Promise<string 
       clearTimeout(timer);
     }
   } catch {
+    // network down or timeout: the caller treats null as 'no changelog'
     return null;
   }
 }
@@ -304,7 +298,7 @@ function tierRank(tier: UpdateTier): number {
 
 export async function execute(
   config: ClaudeCodeUpdatesConfig = {},
-  deps: ClaudeCodeUpdatesDeps = {}
+  deps: ClaudeCodeUpdatesDeps = {},
 ): Promise<BlockResult> {
   const changelogUrl = config.changelogUrl ?? DEFAULT_CHANGELOG_URL;
   const logPath = config.logPath ?? defaultLogPath();
@@ -381,12 +375,11 @@ export async function execute(
     // Assessed releases → one log record each, carrying their surfaced items.
     for (const entry of toAssess) {
       const items = assessed.filter((i) => i.version === entry.version);
-      const highestTier: UpdateTier | "backfill" =
-        items.some((i) => i.tier === "monumental")
-          ? "monumental"
-          : items.some((i) => i.tier === "notable")
-            ? "notable"
-            : "minor";
+      const highestTier: UpdateTier | "backfill" = items.some((i) => i.tier === "monumental")
+        ? "monumental"
+        : items.some((i) => i.tier === "notable")
+          ? "notable"
+          : "minor";
       records.push({
         version: entry.version,
         seenAt,
@@ -415,8 +408,7 @@ export async function execute(
       .slice(0, maxSurfaced);
 
     const logCount = existing.length + records.length;
-    const monumentalToDate =
-      priorMonumental + records.filter((r) => r.highestTier === "monumental").length;
+    const monumentalToDate = priorMonumental + records.filter((r) => r.highestTier === "monumental").length;
 
     // No markdown rendering — the live path (DataGatherer) reads only .data.
     const markdown = "";

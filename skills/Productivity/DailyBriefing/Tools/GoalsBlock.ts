@@ -8,8 +8,8 @@
  * - Focus recommendations
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { loadTelosGoals } from "../../../../lib/core/TelosGoals.ts";
@@ -86,7 +86,8 @@ async function fetchLiveCommunityStatus(): Promise<{ statusLine: string; current
     const result = await communityStatus();
     if (!result) return null;
     return { statusLine: result.statusLine, currentLine: result.currentLine };
-  } catch {
+  } catch (err) {
+    console.error("[GoalsBlock] community status block failed:", err);
     return null;
   }
 }
@@ -102,7 +103,8 @@ async function discoverCommunityWigGoalId(): Promise<string | null> {
     // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads LifeOS's community-WIG discovery so the override can't pin a retired goal ID (the G38 no-op that survived the Q3 flip)
     const { readCommunityWigLead } = await import("../../LifeOS/Aggregation/CommunityStatus.ts");
     return readCommunityWigLead()?.goalId ?? null;
-  } catch {
+  } catch (err) {
+    console.error("[GoalsBlock] community WIG lead lookup failed:", err);
     return null;
   }
 }
@@ -113,7 +115,7 @@ export async function execute(
     fetchMediaMetric?: typeof fetchLiveMediaMetric;
     fetchCadence?: typeof fetchLiveCommunityStatus;
     discoverCommunityGoalId?: typeof discoverCommunityWigGoalId;
-  } = {}
+  } = {},
 ): Promise<BlockResult> {
   const { maxGoals = 5, maxMissions = 3 } = config;
   const fetchMedia = deps.fetchMediaMetric ?? fetchLiveMediaMetric;
@@ -178,8 +180,9 @@ export async function execute(
 
       for (const match of missionMatches) {
         const id = match[1];
-        const title = match[2].trim();
+        const title = (match[2] ?? "").trim();
         const body = match[3];
+        if (id === undefined || body === undefined) continue;
 
         const focusMatch = body.match(/\*\*Focus:\*\*\s*([^\n]+)/);
 
@@ -208,14 +211,13 @@ export async function execute(
       // Same isWIG preference as the community override below: GOALS.md
       // retains closed quarters' sections, so prefer the active instance.
       const mediaGoal =
-        goals.find((g) => g.id === mediaWig.goalId && g.isWIG)
-        ?? goals.find((g) => g.id === mediaWig.goalId);
+        goals.find((g) => g.id === mediaWig.goalId && g.isWIG) ?? goals.find((g) => g.id === mediaWig.goalId);
       if (!mediaGoal) {
         // wig_status.json names a media WIG that GOALS.md doesn't have —
         // config drift between the two rollover surfaces must be visible.
         if (goals.length > 0) {
           unavailableLiveMetrics.push(
-            `${mediaWig.goalId} media WIG is in wig_status.json but not in GOALS.md — live media metric not shown; reconcile the rollover surfaces`
+            `${mediaWig.goalId} media WIG is in wig_status.json but not in GOALS.md — live media metric not shown; reconcile the rollover surfaces`,
           );
         }
       } else {
@@ -224,7 +226,7 @@ export async function execute(
           mediaGoal.current = liveMedia;
         } else {
           unavailableLiveMetrics.push(
-            `${mediaWig.goalId} media metric (AppUsageTracker events.db) unavailable — showing narrative GOALS.md value, which may be stale`
+            `${mediaWig.goalId} media metric (AppUsageTracker events.db) unavailable — showing narrative GOALS.md value, which may be stale`,
           );
         }
       }
@@ -244,12 +246,11 @@ export async function execute(
     const communityGoalId = await discoverCommunityGoal();
     if (communityGoalId) {
       const communityGoal =
-        goals.find((g) => g.id === communityGoalId && g.isWIG)
-        ?? goals.find((g) => g.id === communityGoalId);
+        goals.find((g) => g.id === communityGoalId && g.isWIG) ?? goals.find((g) => g.id === communityGoalId);
       if (!communityGoal) {
         if (goals.length > 0) {
           unavailableLiveMetrics.push(
-            `${communityGoalId} community WIG is in wig_status.json but not in GOALS.md — live cadence not shown; reconcile the rollover surfaces`
+            `${communityGoalId} community WIG is in wig_status.json but not in GOALS.md — live cadence not shown; reconcile the rollover surfaces`,
           );
         }
       } else {
@@ -259,7 +260,7 @@ export async function execute(
           communityGoal.current = liveCadence.currentLine;
         } else {
           unavailableLiveMetrics.push(
-            `${communityGoalId} community status (LifeOS lead_log) unavailable — showing narrative GOALS.md status, which may be stale`
+            `${communityGoalId} community status (LifeOS lead_log) unavailable — showing narrative GOALS.md status, which may be stale`,
           );
         }
       }

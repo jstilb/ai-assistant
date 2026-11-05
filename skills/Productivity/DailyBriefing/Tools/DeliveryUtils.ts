@@ -13,8 +13,8 @@
  * (below), not TelegramConfig.loadTelegramSecrets() — see that function's docstring.
  */
 
-import { existsSync } from "fs";
-import { join, basename } from "path";
+import { existsSync } from "node:fs";
+import { join, basename } from "node:path";
 import { z } from "zod";
 // cross-skill-allowed: ADR-004 sanctioned Telegram lane — deliberate in-process delivery (S5 migration), see file docstring
 import { sendVoiceBuffer } from "../../../Communication/Telegram/Tools/TelegramClient.ts";
@@ -27,7 +27,14 @@ import { recordOutbound, isTelegramPushEnabled } from "../../../../lib/core/Tele
 const KAYA_HOME = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
 const LIB_CORE = join(KAYA_HOME, "lib", "core");
 const SETTINGS_FILE = join(KAYA_HOME, "settings.json");
-const VOICE_GENERATOR_PATH = join(KAYA_HOME, "skills", "Communication", "VoiceInteraction", "Tools", "VoiceResponseGenerator.ts");
+const VOICE_GENERATOR_PATH = join(
+  KAYA_HOME,
+  "skills",
+  "Communication",
+  "VoiceInteraction",
+  "Tools",
+  "VoiceResponseGenerator.ts",
+);
 
 // ============================================================================
 // Telegram secrets — deliberately NOT TelegramConfig.loadTelegramSecrets()
@@ -53,6 +60,7 @@ async function loadTelegramSecretsSafe(): Promise<TelegramSecrets | null> {
     if (!tg?.bot_token || !tg?.chat_id) return null;
     return { bot_token: tg.bot_token, chat_id: tg.chat_id };
   } catch {
+    // optional secrets file: missing or invalid JSON means Telegram is not configured
     return null;
   }
 }
@@ -83,7 +91,8 @@ export async function loadSettings(): Promise<Record<string, unknown>> {
   try {
     const mgr = await getSettingsManager();
     return await mgr.load();
-  } catch {
+  } catch (err) {
+    console.error("[DeliveryUtils] settings load failed:", err);
     return {};
   }
 }
@@ -119,7 +128,7 @@ async function sendDocumentBuffer(
   buffer: Buffer,
   filename: string,
   chatId: string,
-  botToken: string
+  botToken: string,
 ): Promise<boolean> {
   const formData = new FormData();
   formData.append("chat_id", chatId);
@@ -153,10 +162,10 @@ async function sendDocumentBuffer(
  * the previous subprocess fallback.
  */
 async function generateVoice(text: string, audioPath: string): Promise<void> {
-  const genProc = Bun.spawn(
-    ["bun", VOICE_GENERATOR_PATH, "telegram", text, audioPath],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const genProc = Bun.spawn(["bun", VOICE_GENERATOR_PATH, "telegram", text, audioPath], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const exitCode = await genProc.exited;
   if (exitCode !== 0) throw new Error(`TTS generation failed (exit ${exitCode})`);
 }
@@ -218,7 +227,7 @@ interface TelegramSendMessageResult {
  */
 async function postTelegramSendMessage(
   url: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
 ): Promise<{ response: Response; result: TelegramSendMessageResult }> {
   const response = await httpClient.fetch(url, {
     method: "POST",

@@ -24,8 +24,8 @@
  *   bun BriefingFallback.ts --dry-run   # check + render, but send/write/page nothing
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { gatherBriefingData, type BriefingData } from "./DataGatherer.ts";
 import { deliver } from "./Deliver.ts";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
@@ -74,7 +74,7 @@ export interface FallbackEditorial {
  */
 export function renderFallbackEditorial(
   data: BriefingData,
-  headline = `⚠️ Editorial LLM failed — ${FALLBACK_MARKER} (minimal briefing)`
+  headline = `⚠️ Editorial LLM failed — ${FALLBACK_MARKER} (minimal briefing)`,
 ): FallbackEditorial {
   const lines: string[] = [headline];
 
@@ -118,7 +118,7 @@ export function renderFallbackEditorial(
     lines.push(
       `\n👀 Waiting on you: ${waiting.needsGrillingCount} grilling (oldest ${waiting.needsGrillingOldestAgeDays}d), ` +
         `${waiting.approvalsPendingCount} approvals, ${waiting.pendingApprovalMergesCount} deferred merges, ` +
-        `${waiting.needsJmEscalationsCount} escalations, ${waiting.laneAWaitingCount} Lane-A deliverables`
+        `${waiting.needsJmEscalationsCount} escalations, ${waiting.laneAWaitingCount} Lane-A deliverables`,
     );
   }
 
@@ -191,10 +191,7 @@ export interface BriefingDeliveryCheck {
  * or over-age lock as stale, and this job's retry budget is capped (see
  * daily-briefing.yaml) so the worst case clears well before 07:45.
  */
-export function isPrimaryRunInFlight(
-  locksDir: string = defaultRunLocksDir(),
-  jobId = "daily-briefing",
-): boolean {
+export function isPrimaryRunInFlight(locksDir: string = defaultRunLocksDir(), jobId = "daily-briefing"): boolean {
   return readRunLock(jobId, locksDir) !== null;
 }
 
@@ -217,6 +214,7 @@ export function readPublishedDayPlan(
     const body = readFileSync(path, "utf-8").trim();
     return body.length > 0 ? body : null;
   } catch {
+    // optional input: a missing or unreadable file means nothing to read
     return null;
   }
 }
@@ -258,7 +256,7 @@ if (import.meta.main) {
       console.log(
         `[BriefingFallback] SKIP — briefing for ${date} not delivered yet, but the ` +
           `daily-briefing run still holds a live run lock. The primary owns this slot; ` +
-          `a fallback now would double-deliver and page about a run that has not missed.`
+          `a fallback now would double-deliver and page about a run that has not missed.`,
       );
       process.exit(0);
     }
@@ -268,10 +266,7 @@ if (import.meta.main) {
 
     console.error("[BriefingFallback] Gathering ground truth for the deterministic fallback...");
     const data = await gatherBriefingData();
-    const fallback = renderFallbackEditorial(
-      data,
-      `⚠️ Morning briefing agent run missed — ${FALLBACK_MARKER}`
-    );
+    const fallback = renderFallbackEditorial(data, `⚠️ Morning briefing agent run missed — ${FALLBACK_MARKER}`);
 
     if (dryRun) {
       console.log("[BriefingFallback] --dry-run: would deliver the following (nothing sent, nothing written):");
@@ -296,7 +291,7 @@ if (import.meta.main) {
     // start on this page-tier "briefing missed" alert.
     const pageResult = await sendAlert(
       `⚠️ Daily briefing missed its 06:00 agent run — ${outcome} at ${new Date().toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles" })}. Check MEMORY/daemon/cron/logs/daily-briefing.jsonl for why the agent run failed.`,
-      { key: "briefing-sentinel", tier: "page" }
+      { key: "briefing-sentinel", tier: "page" },
     );
     console.error(`[BriefingFallback] AlertGate page result: ${pageResult}`);
 
@@ -310,7 +305,7 @@ if (import.meta.main) {
     try {
       await sendAlert(
         `🔴 BriefingFallback crashed while trying to deliver the fallback briefing for ${date}: ${err instanceof Error ? err.message : String(err)}`,
-        { key: "briefing-sentinel", tier: "page" }
+        { key: "briefing-sentinel", tier: "page" },
       );
     } catch {
       // AlertGate itself failing must not mask the original error.

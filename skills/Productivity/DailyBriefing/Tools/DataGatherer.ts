@@ -6,8 +6,8 @@
  * No markdown generation. No LLM calls. No interpretation. Just raw data.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads LucidTasks' TaskDB read-only to gather the tasks section
 import { getTaskDB } from "../../LucidTasks/Tools/TaskDB.ts";
@@ -45,7 +45,10 @@ import type { WeatherReport } from "./WeatherService.ts";
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads QueueRouter's queue read-only to gather pending approvals
 import { loadQueueItems } from "../../../Automation/QueueRouter/Tools/QueueManager.ts";
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads QueueRouter's waiting-on-Jm summary read-only
-import { getWaitingOnJm as getWaitingOnJmImpl, type WaitingOnJmSummary } from "../../../Automation/QueueRouter/Tools/WaitingOnJm.ts";
+import {
+  getWaitingOnJm as getWaitingOnJmImpl,
+  type WaitingOnJmSummary,
+} from "../../../Automation/QueueRouter/Tools/WaitingOnJm.ts";
 // cross-skill-allowed: DailyBriefing is the cross-system aggregator by design — reads TechDebtTracker's registry read-only to gather the tech-debt summary block
 import { TechDebtRegistry } from "../../../Automation/AutoMaintenance/Tools/TechDebtRegistry.ts";
 import { execute as executeAutonomousDeliverables } from "./AutonomousDeliverableBlock.ts";
@@ -164,19 +167,28 @@ export interface BriefingData {
   };
 
   strategies: Array<{
-    id: string; name: string; current: number; target: number; gap: number;
+    id: string;
+    name: string;
+    current: number;
+    target: number;
+    gap: number;
   }>;
 
   habits: Array<{
     name: string;
-    avg7: number;   // trailing 7-day consistency % (recent momentum)
-    avg28: number;  // trailing 28-day consistency % (longer-term)
+    avg7: number; // trailing 7-day consistency % (recent momentum)
+    avg28: number; // trailing 28-day consistency % (longer-term)
   }>;
 
   news: {
     articles: Array<{
-      title: string; source: string; url: string; topic: string;
-      body: string; publishedAt: string; score: number;
+      title: string;
+      source: string;
+      url: string;
+      topic: string;
+      body: string;
+      publishedAt: string;
+      score: number;
     }>;
     /** How many items the content store returned (itself bounded at 50). */
     totalFetched: number;
@@ -298,14 +310,10 @@ async function runKayaCli(args: string[], timeoutMs = 15000): Promise<string> {
   });
 
   try {
-    const [stdout, , exitCode] = await Promise.race([
-      Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]),
+    const [stdout, , exitCode] = (await Promise.race([
+      Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]),
       timeout,
-    ]) as [string, string, number];
+    ])) as [string, string, number];
 
     clearTimeout(timer!);
 
@@ -335,7 +343,7 @@ function formatAge(created: string): string {
 async function gatherTasks(warnings: string[], failures: GatherFailure[]): Promise<BriefingData["tasks"]> {
   try {
     const db = getTaskDB();
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().slice(0, 10);
 
     const overdueTasks = db.getOverdueTasks();
 
@@ -485,8 +493,17 @@ async function gatherGoals(warnings: string[], failures: GatherFailure[]): Promi
 // because WigSection.ts doesn't export them — computeReps/computeBinaryShowUp/
 // computeWeeklyEventCount are structurally typed, so a local shape that matches
 // is enough to call them without WigSection.ts exporting a new symbol.
-interface StrategyHabitRow { date: string; habit: string; value: string; notes: string }
-interface StrategyLeadRow { date: string; wig_id: string; count: string }
+interface StrategyHabitRow {
+  date: string;
+  habit: string;
+  value: string;
+  notes: string;
+}
+interface StrategyLeadRow {
+  date: string;
+  wig_id: string;
+  count: string;
+}
 
 /** A wig_status.json G*'s `leads[]`/`lead` entry. Fields are `unknown` on
  *  purpose — every field is re-validated with typeof before use, same defensive
@@ -515,8 +532,10 @@ function defaultQueryHabitRows(): StrategyHabitRow[] {
   const { rows, error } = lifeOSQuery("SELECT date, habit, value, notes FROM habit_log");
   if (error) throw new Error(error);
   return rows.map((r) => ({
-    date: strategiesRowStr(r.date), habit: strategiesRowStr(r.habit),
-    value: strategiesRowStr(r.value), notes: strategiesRowStr(r.notes),
+    date: strategiesRowStr(r.date),
+    habit: strategiesRowStr(r.habit),
+    value: strategiesRowStr(r.value),
+    notes: strategiesRowStr(r.notes),
   }));
 }
 
@@ -524,7 +543,9 @@ function defaultQueryLeadRows(): StrategyLeadRow[] {
   const { rows, error } = lifeOSQuery("SELECT date, wig_id, count FROM lead_log");
   if (error) throw new Error(error);
   return rows.map((r) => ({
-    date: strategiesRowStr(r.date), wig_id: strategiesRowStr(r.wig_id), count: strategiesRowStr(r.count),
+    date: strategiesRowStr(r.date),
+    wig_id: strategiesRowStr(r.wig_id),
+    count: strategiesRowStr(r.count),
   }));
 }
 
@@ -568,7 +589,10 @@ function computeStrategyFromLead(
     const { last7Avg } = helpers.computeReps(habitRows, captureHabit);
     const current = pctOfTarget(last7Avg, rawTarget);
     return {
-      id, target, current, gap: Math.round((current - target) * 10) / 10,
+      id,
+      target,
+      current,
+      gap: Math.round((current - target) * 10) / 10,
       name: `${name} (${last7Avg.toFixed(1)}/day vs target ${rawTarget}/day)`,
     };
   }
@@ -581,7 +605,10 @@ function computeStrategyFromLead(
     const { daysWithShowUp7d } = helpers.computeBinaryShowUp(habitRows, { habit: captureHabit });
     const current = pctOfTarget(daysWithShowUp7d, rawTarget);
     return {
-      id, target, current, gap: Math.round((current - target) * 10) / 10,
+      id,
+      target,
+      current,
+      gap: Math.round((current - target) * 10) / 10,
       name: `${name} (${daysWithShowUp7d}/7 days this week vs target ${rawTarget}/wk)`,
     };
   }
@@ -591,7 +618,10 @@ function computeStrategyFromLead(
     const last7Count = helpers.computeWeeklyEventCount(leadRows, goalId);
     const current = pctOfTarget(last7Count, rawTarget);
     return {
-      id, target, current, gap: Math.round((current - target) * 10) / 10,
+      id,
+      target,
+      current,
+      gap: Math.round((current - target) * 10) / 10,
       name: `${name} (${last7Count} of ${rawTarget} events this week)`,
     };
   }
@@ -623,7 +653,7 @@ export async function gatherStrategies(
     readWigStatus?: () => unknown;
     queryHabitRows?: () => StrategyHabitRow[];
     queryLeadRows?: () => StrategyLeadRow[];
-  } = {}
+  } = {},
 ): Promise<BriefingData["strategies"]> {
   try {
     const readWigStatus = deps.readWigStatus ?? defaultReadWigStatus;
@@ -662,7 +692,9 @@ export async function gatherStrategies(
 
       const leadsToProcess: WigLead[] = Array.isArray(g.leads)
         ? g.leads.filter((l): l is WigLead => typeof l === "object" && l !== null)
-        : (typeof g.lead === "object" && g.lead !== null ? [g.lead as WigLead] : []);
+        : typeof g.lead === "object" && g.lead !== null
+          ? [g.lead as WigLead]
+          : [];
 
       for (const lead of leadsToProcess) {
         const strategy = computeStrategyFromLead(lead, goalId, habitRows, leadRows, warnings, helpers);
@@ -686,16 +718,13 @@ async function gatherHabits(warnings: string[], failures: GatherFailure[]): Prom
     // show both — a recent streak isn't diluted by a sparse month, and vice versa.
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const [rows7, rows28] = await Promise.all([
-      habitConsistency(7, today),
-      habitConsistency(28, today),
-    ]);
-    const byName7 = new Map(rows7.map(r => [r.name, r]));
+    const [rows7, rows28] = await Promise.all([habitConsistency(7, today), habitConsistency(28, today)]);
+    const byName7 = new Map(rows7.map((r) => [r.name, r]));
     // Forward raw percentages only — the editorial LLM derives momentum/health from
     // avg7 vs avg28. The green/yellow/red status thresholds (statusFor in LifeOS)
     // are a code-side judgment the briefing no longer consumes. (habitConsistency's
     // status is left intact for its other consumers: dashboard + evening check-in.)
-    return rows28.map(r28 => {
+    return rows28.map((r28) => {
       const r7 = byName7.get(r28.name);
       return {
         name: r28.name,
@@ -744,7 +773,10 @@ async function gatherNews(warnings: string[], failures: GatherFailure[]): Promis
   }
 }
 
-export async function gatherWeather(warnings: string[], failures: GatherFailure[]): Promise<BriefingData["weather"] | undefined> {
+export async function gatherWeather(
+  warnings: string[],
+  failures: GatherFailure[],
+): Promise<BriefingData["weather"] | undefined> {
   let report: WeatherReport;
   try {
     // Deliberately still a per-call dynamic import, unlike the 13 gatherer
@@ -810,7 +842,7 @@ async function gatherGmail(warnings: string[], failures: GatherFailure[]): Promi
     // with more pages behind it, countIsLowerBound says so honestly.
     const raw = await runKayaCli(
       ["gmail", "search", "is:unread is:important newer_than:1d", "--max", "25", "--json"],
-      15000
+      15000,
     );
     if (!raw) return undefined;
 
@@ -848,10 +880,16 @@ async function gatherGmail(warnings: string[], failures: GatherFailure[]): Promi
   }
 }
 
-async function gatherApprovalQueue(warnings: string[], failures: GatherFailure[]): Promise<BriefingData["approvalQueue"] | undefined> {
+async function gatherApprovalQueue(
+  warnings: string[],
+  failures: GatherFailure[],
+): Promise<BriefingData["approvalQueue"] | undefined> {
   try {
     const allItems = loadQueueItems("approvals") as Array<{
-      id: string; status: string; created: string; priority: number;
+      id: string;
+      status: string;
+      created: string;
+      priority: number;
       payload: { title: string };
     }>;
 
@@ -887,7 +925,7 @@ async function gatherApprovalQueue(warnings: string[], failures: GatherFailure[]
 export async function gatherWaitingOnJm(
   warnings: string[],
   failures: GatherFailure[],
-  deps: { getWaitingOnJm?: (now?: Date) => WaitingOnJmSummary | Promise<WaitingOnJmSummary> } = {}
+  deps: { getWaitingOnJm?: (now?: Date) => WaitingOnJmSummary | Promise<WaitingOnJmSummary> } = {},
 ): Promise<BriefingData["waitingOnJm"]> {
   try {
     const getSummary = deps.getWaitingOnJm ?? getWaitingOnJmImpl;
@@ -981,9 +1019,7 @@ function loadTelosHashState(statePath: string): TelosContentHashState | null {
  * days elapsed since the stored change time. `deps` lets tests point at a
  * fixture STATUS.md/state file without touching module-load-time KAYA_HOME.
  */
-export function gatherTelosStaleness(
-  deps: { statusPath?: string; statePath?: string } = {}
-): number | null {
+export function gatherTelosStaleness(deps: { statusPath?: string; statePath?: string } = {}): number | null {
   try {
     const statusPath = deps.statusPath ?? join(TELOS_DIR, "STATUS.md");
     if (!existsSync(statusPath)) return null;
@@ -1002,7 +1038,8 @@ export function gatherTelosStaleness(
     }
 
     return Math.floor((Date.now() - new Date(prior.lastChangedISO).getTime()) / 86400000);
-  } catch {
+  } catch (err) {
+    console.error("[DataGatherer] days-since-change lookup failed:", err);
     return null;
   }
 }
@@ -1025,7 +1062,9 @@ function gatherFeedback(warnings: string[]): BriefingData["feedback"] | undefine
         const ts = entry.timestamp ?? entry.ts ?? "";
         if (ts && new Date(ts).getTime() > cutoff) entries.push(entry);
         if (ts) lastFeedback = ts;
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
 
     if (entries.length === 0) return { recentUsefulRate: 0, lastFeedback };
@@ -1045,7 +1084,10 @@ function gatherFeedback(warnings: string[]): BriefingData["feedback"] | undefine
 // Tech Debt
 // ============================================================================
 
-export async function gatherTechDebt(warnings: string[], failures: GatherFailure[]): Promise<TechDebtSummary | undefined> {
+export async function gatherTechDebt(
+  warnings: string[],
+  failures: GatherFailure[],
+): Promise<TechDebtSummary | undefined> {
   try {
     const registry = new TechDebtRegistry();
     const top = registry.top(10);
@@ -1070,7 +1112,7 @@ export async function gatherTechDebt(warnings: string[], failures: GatherFailure
 
 async function gatherAutonomousDeliverables(
   warnings: string[],
-  failures: GatherFailure[]
+  failures: GatherFailure[],
 ): Promise<BriefingData["autonomousDeliverables"] | undefined> {
   try {
     const result = await executeAutonomousDeliverables({});
@@ -1095,9 +1137,7 @@ async function gatherAutonomousDeliverables(
       items: data.items ?? [],
     };
   } catch (err) {
-    warnings.push(
-      `autonomousDeliverables: ${err instanceof Error ? err.message : String(err)}`
-    );
+    warnings.push(`autonomousDeliverables: ${err instanceof Error ? err.message : String(err)}`);
     recordFailure(failures, "autonomousDeliverables", err);
     return undefined;
   }
@@ -1112,7 +1152,7 @@ async function gatherAutonomousDeliverables(
  */
 async function gatherClaudeCodeUpdates(
   warnings: string[],
-  failures: GatherFailure[]
+  failures: GatherFailure[],
 ): Promise<ClaudeCodeUpdatesData | undefined> {
   try {
     const result = await executeClaudeCodeUpdates({});
@@ -1156,16 +1196,13 @@ async function gatherClaudeCodeUpdates(
  * targets, or when none of them have anything notable this morning (no
  * cards due/new anywhere, and nothing due to practice anywhere).
  */
-async function gatherLearning(
-  warnings: string[],
-  failures: GatherFailure[]
-): Promise<BriefingData["learning"]> {
+async function gatherLearning(warnings: string[], failures: GatherFailure[]): Promise<BriefingData["learning"]> {
   try {
     const { rows, error } = lifeOSQuery("SELECT * FROM skill_mastery_active");
     if (error) throw new Error(error);
 
     const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
-    const liveRows = rows.filter(r => str(r.phase).trim() !== "");
+    const liveRows = rows.filter((r) => str(r.phase).trim() !== "");
     if (liveRows.length === 0) return undefined;
 
     const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, matches meta.date's convention
@@ -1183,15 +1220,15 @@ async function gatherLearning(
       let cardsDue: number | undefined;
       let cardsNew: number | undefined;
       let cardsUnavailable: boolean | undefined;
-      {
-        try {
-          const due = await anki.recallDue(learningDeckFor(name));
-          cardsDue = due.dueCount;
-          cardsNew = due.newCount;
-        } catch (err) {
-          cardsUnavailable = true;
-          warnings.push(`learning: Anki recallDue unavailable for "${name}" (Anki may be open): ${err instanceof Error ? err.message : String(err)}`);
-        }
+      try {
+        const due = await anki.recallDue(learningDeckFor(name));
+        cardsDue = due.dueCount;
+        cardsNew = due.newCount;
+      } catch (err) {
+        cardsUnavailable = true;
+        warnings.push(
+          `learning: Anki recallDue unavailable for "${name}" (Anki may be open): ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
       // Unit levels for a living plan, "n/M nodes" for an old map; fail-soft: missing/unparseable → no line.
@@ -1212,7 +1249,7 @@ async function gatherLearning(
       });
     }
 
-    const hasSignal = targets.some(t => (t.cardsDue ?? 0) > 0 || (t.cardsNew ?? 0) > 0 || t.dueToPractice === true);
+    const hasSignal = targets.some((t) => (t.cardsDue ?? 0) > 0 || (t.cardsNew ?? 0) > 0 || t.dueToPractice === true);
     if (!hasSignal) return undefined;
 
     return { targets };
@@ -1281,7 +1318,7 @@ export async function withGathererTimeout<T>(
 
 export async function gatherBriefingData(
   config: Record<string, unknown> = {},
-  settings: Record<string, unknown> = {}
+  settings: Record<string, unknown> = {},
 ): Promise<BriefingData> {
   const now = new Date();
   // Local-timezone date, NOT toISOString() — after 17:00 PDT, UTC has already
@@ -1290,7 +1327,10 @@ export async function gatherBriefingData(
   // normal 06:00 window). en-CA locale renders YYYY-MM-DD.
   const date = now.toLocaleDateString("en-CA");
   const dateFormatted = now.toLocaleDateString("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
   const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1326,11 +1366,20 @@ export async function gatherBriefingData(
     claudeCodeUpdates,
     learning,
   ] = await Promise.all([
-    timed("tasks", gatherTasks(warnings, failures),
-      { overdue: [], dueToday: [], nextUp: [], totalActiveCount: 0, overdueTotalCount: 0, dueTodayTotalCount: 0 }),
+    timed("tasks", gatherTasks(warnings, failures), {
+      overdue: [],
+      dueToday: [],
+      nextUp: [],
+      totalActiveCount: 0,
+      overdueTotalCount: 0,
+      dueTodayTotalCount: 0,
+    }),
     timed("calendar", gatherCalendar(warnings, failures), { events: [], fetchError: "calendar gatherer timed out" }),
-    timed("goals", gatherGoals(warnings, failures),
-      { wigs: [], missions: [], currentQuarter: `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}` }),
+    timed("goals", gatherGoals(warnings, failures), {
+      wigs: [],
+      missions: [],
+      currentQuarter: `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}`,
+    }),
     timed("strategies", gatherStrategies(warnings, failures), []),
     timed("habits", gatherHabits(warnings, failures), []),
     timed("news", gatherNews(warnings, failures), { articles: [], totalFetched: 0, totalRecent: 0 }),

@@ -26,10 +26,10 @@
  * until every requested channel completes; successful channels dedupe on retry.
  */
 
-import { parseArgs } from "util";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
+import { parseArgs } from "node:util";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { marked } from "marked";
 import { z } from "zod";
 import {
@@ -159,7 +159,7 @@ async function uploadToDrive(localPath: string, dateStr: string): Promise<string
     const linkOutput = execFileSync("rclone", ["link", drivePath], { encoding: "utf-8", timeout: 10000 });
     const driveLink = linkOutput.trim();
 
-    return driveLink && driveLink.startsWith("http") ? driveLink : null;
+    return driveLink?.startsWith("http") ? driveLink : null;
   } catch (e) {
     console.error("❌ Drive upload failed:", e instanceof Error ? e.message : e);
     return null;
@@ -196,7 +196,7 @@ export interface DeliverResult {
 export async function deliver(
   payload: DeliverPayload,
   opts: { dryRun?: boolean } = {},
-  depOverrides: Partial<DeliverDeps> = {}
+  depOverrides: Partial<DeliverDeps> = {},
 ): Promise<DeliverResult> {
   const deps: DeliverDeps = { ...defaultDeps(), ...depOverrides };
   const briefingsDir = join(getKayaHome(), "MEMORY", "BRIEFINGS");
@@ -216,10 +216,13 @@ export async function deliver(
   const pendingPath = `${mdPath}.delivery-pending`;
   const pending = existsSync(pendingPath) ? PendingSchema.parse(JSON.parse(readFileSync(pendingPath, "utf8"))) : null;
   const globalReceipt = readReceipt(globalSentinel);
-  const legacyTier: DeliveryTier = pending?.legacyTier
-    ?? (globalReceipt && globalReceipt !== "legacy" ? globalReceipt.legacyTier : undefined)
-    ?? (existsSync(mdPath) && readFileSync(mdPath, "utf8").split("\n", 1)[0]?.includes("deterministic fallback") ? "fallback" : "full");
-  const receiptTier = (receipt: ReturnType<typeof readReceipt>) => receipt === "legacy" ? legacyTier : receipt?.tier;
+  const legacyTier: DeliveryTier =
+    pending?.legacyTier ??
+    (globalReceipt && globalReceipt !== "legacy" ? globalReceipt.legacyTier : undefined) ??
+    (existsSync(mdPath) && readFileSync(mdPath, "utf8").split("\n", 1)[0]?.includes("deterministic fallback")
+      ? "fallback"
+      : "full");
+  const receiptTier = (receipt: ReturnType<typeof readReceipt>) => (receipt === "legacy" ? legacyTier : receipt?.tier);
   const channelTier = (channel: string) => {
     const receipt = readReceipt(channelSentinel(channel));
     return receiptTier(receipt) ?? (globalReceipt === "legacy" ? legacyTier : undefined);
@@ -239,7 +242,9 @@ export async function deliver(
     console.log(`\n--- WRITTEN (${briefingsDir}/${date}.md + .html + Drive) ---\n${payload.markdown}`);
     if (payload.telegram) {
       const preview = formatTelegramMessage(payload.telegram, null);
-      console.log(`\n--- TELEGRAM [${payload.telegram.length} chars${preview.truncated ? `, WOULD TRUNCATE (${preview.droppedChars} dropped)` : ""}] ---\n${preview.message}`);
+      console.log(
+        `\n--- TELEGRAM [${payload.telegram.length} chars${preview.truncated ? `, WOULD TRUNCATE (${preview.droppedChars} dropped)` : ""}] ---\n${preview.message}`,
+      );
     } else {
       console.log("\n--- TELEGRAM: omitted (channel skipped) ---");
     }
@@ -251,7 +256,10 @@ export async function deliver(
     return result;
   }
 
-  if (tier === "fallback" && (pending || globalTier === "full" || ["telegram", "voice"].some((channel) => channelTier(channel) === "full"))) {
+  if (
+    tier === "fallback" &&
+    (pending || globalTier === "full" || ["telegram", "voice"].some((channel) => channelTier(channel) === "full"))
+  ) {
     result.skipped.push(...channels);
     console.log("Full briefing delivery already started — fallback skipped without replacing its artifact");
     return result;
@@ -341,7 +349,9 @@ export async function deliver(
   }
   writeFileSync(globalSentinel, JSON.stringify({ tier, deliveredAt: new Date().toISOString(), legacyTier }));
   if (tier === "full" && existsSync(pendingPath)) unlinkSync(pendingPath);
-  console.log(`✅ Delivery complete: ${result.delivered.join(", ")}${result.skipped.length ? ` (skipped: ${result.skipped.join(", ")})` : ""}`);
+  console.log(
+    `✅ Delivery complete: ${result.delivered.join(", ")}${result.skipped.length ? ` (skipped: ${result.skipped.join(", ")})` : ""}`,
+  );
   return result;
 }
 

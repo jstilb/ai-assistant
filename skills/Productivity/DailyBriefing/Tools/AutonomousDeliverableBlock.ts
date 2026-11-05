@@ -26,27 +26,22 @@ function extractWikiLink(text: string): string | null {
   return match ? `[[${match[1]}]]` : null;
 }
 
-export async function execute(
-  config: Record<string, unknown> = {}
-): Promise<BlockResult> {
+export async function execute(_config: Record<string, unknown> = {}): Promise<BlockResult> {
   try {
-    const { getTaskDB } = await import(
-      "../../LucidTasks/Tools/TaskDB.ts"
-    );
+    // cross-skill-allowed: DailyBriefing is the cross-system aggregator — reads LucidTasks read-only via the TaskDB sanctioned lane (ADR-030)
+    const { getTaskDB } = await import("../../LucidTasks/Tools/TaskDB.ts");
     const db = getTaskDB();
 
     // Raw SQL — disposition column may not be exposed on the typed API.
     const rows = db
       .getRawDb()
-      .prepare(
-        "SELECT * FROM tasks WHERE disposition='autonomous' AND status='waiting' ORDER BY updated_at DESC"
-      )
+      .prepare("SELECT * FROM tasks WHERE disposition='autonomous' AND status='waiting' ORDER BY updated_at DESC")
       .all() as Array<{
-        id: string;
-        title: string;
-        updated_at: string;
-        [key: string]: unknown;
-      }>;
+      id: string;
+      title: string;
+      updated_at: string;
+      [key: string]: unknown;
+    }>;
 
     if (rows.length === 0) {
       return {
@@ -76,6 +71,7 @@ export async function execute(
           const parsed = JSON.parse(entry.changes) as { text?: string };
           text = parsed.text ?? "";
         } catch {
+          // malformed activity JSON: skip this row
           continue;
         }
 

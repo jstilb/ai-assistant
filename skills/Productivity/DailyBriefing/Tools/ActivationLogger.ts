@@ -9,7 +9,7 @@
  *   { timestamp: ISO-8601, strategyId: string, type: string, message: string }
  */
 
-import { join } from "path";
+import { join } from "node:path";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -48,14 +48,14 @@ if (import.meta.main) {
 
   if (command !== "log") {
     console.error(`Unknown command: ${command ?? "(none)"}`);
-    console.error('Usage: bun ActivationLogger.ts log <strategyId> <type> <message>');
+    console.error("Usage: bun ActivationLogger.ts log <strategyId> <type> <message>");
     process.exit(1);
   }
 
   const message = messageParts.join(" ");
   if (!strategyId || !type || !message) {
     console.error("Missing argument(s).");
-    console.error('Usage: bun ActivationLogger.ts log <strategyId> <type> <message>');
+    console.error("Usage: bun ActivationLogger.ts log <strategyId> <type> <message>");
     process.exit(1);
   }
 

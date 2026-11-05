@@ -104,7 +104,7 @@ export function parseAgendaOutput(stdout: string): ParsedAgenda {
       // Look for time patterns like "7:15", "9:00 AM", etc.
       const timeMatch = cleanLine.match(/(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)/i);
       if (timeMatch) {
-        const timeStr = timeMatch[1].trim();
+        const timeStr = (timeMatch[1] ?? "").trim();
         // Get the title - everything after the time
         const afterTime = cleanLine.slice(cleanLine.indexOf(timeStr) + timeStr.length);
         const title = afterTime.replace(/^[\s\-:]+/, "").trim();
@@ -130,10 +130,10 @@ export function parseAgendaOutput(stdout: string): ParsedAgenda {
         // Charleston" on an Aug 17 query) — passed through like everything
         // else; the editorial LLM decides relevance.
         const allDayMatch = cleanLine.match(
-          /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+(\S.*)$/
+          /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+(\S.*)$/,
         );
         if (allDayMatch) {
-          events.push({ time: "all-day", title: allDayMatch[1].trim() });
+          events.push({ time: "all-day", title: (allDayMatch[1] ?? "").trim() });
         }
       }
     }
@@ -155,21 +155,14 @@ export function parseAgendaOutput(stdout: string): ParsedAgenda {
   const markdown = "";
 
   // Generate summary
-  const summary = todayEvents.length > 0
-    ? `${todayEvents.length} events today`
-    : "Calendar clear";
+  const summary = todayEvents.length > 0 ? `${todayEvents.length} events today` : "Calendar clear";
 
   return { events: todayEvents, totalParsed: events.length, markdown, summary, formatWarning };
 }
 
-export async function execute(
-  deps: { agendaFn?: typeof agenda } = {}
-): Promise<BlockResult> {
+export async function execute(deps: { agendaFn?: typeof agenda } = {}): Promise<BlockResult> {
   try {
-    const VALID_CALENDARS = [
-      "[user]@gmail.com",
-      "[user-email]",
-    ];
+    const VALID_CALENDARS = ["[user]@gmail.com", "[user-email]"];
 
     // No inner catch here: a gcalcli failure must propagate to the outer catch
     // and return success:false + error, NOT be swallowed into stdout="[]" —
