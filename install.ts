@@ -11,49 +11,56 @@
  *   bun run install.ts --validate   # Only run validation
  */
 
-import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync, chmodSync, chownSync } from 'fs';
-import { join, basename } from 'path';
-import { homedir, userInfo } from 'os';
-import * as readline from 'readline';
-import { execSync } from 'child_process';
+import {
+  existsSync,
+  mkdirSync,
+  cpSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  appendFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import { homedir, userInfo } from "node:os";
+import * as readline from "node:readline";
+import { execSync } from "node:child_process";
 
 // ANSI colors
 const colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  blue: '\x1b[38;2;59;130;246m',
-  green: '\x1b[38;2;34;197;94m',
-  yellow: '\x1b[38;2;234;179;8m',
-  red: '\x1b[38;2;239;68;68m',
-  cyan: '\x1b[38;2;6;182;212m',
-  gray: '\x1b[38;2;100;116;139m',
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  blue: "\x1b[38;2;59;130;246m",
+  green: "\x1b[38;2;34;197;94m",
+  yellow: "\x1b[38;2;234;179;8m",
+  red: "\x1b[38;2;239;68;68m",
+  cyan: "\x1b[38;2;6;182;212m",
+  gray: "\x1b[38;2;100;116;139m",
 };
 
 const c = colors;
 
 // Paths
 const HOME = homedir();
-const CLAUDE_DIR = join(HOME, '.claude');
-const BACKUP_DIR = join(HOME, '.claude-BACKUP');
-const KAYA_RELEASES = join(HOME, '.claude', 'KAYA_RELEASES');
+const CLAUDE_DIR = join(HOME, ".claude");
+const BACKUP_DIR = join(HOME, ".claude-BACKUP");
 // Shell detection for bash/zsh support
-const SHELL = process.env.SHELL || '/bin/zsh';
-const IS_ZSH = SHELL.includes('zsh');
-const SHELL_RC = join(HOME, IS_ZSH ? '.zshrc' : '.bashrc');
-const SHELL_NAME = IS_ZSH ? 'zsh' : 'bash';
-const KITTY_CONFIG_DIR = join(HOME, '.config', 'kitty');
-const KAYA_TERMINAL_DIR = join(CLAUDE_DIR, 'skills', 'CORE', 'USER', 'TERMINAL');
+const SHELL = process.env.SHELL || "/bin/zsh";
+const IS_ZSH = SHELL.includes("zsh");
+const SHELL_RC = join(HOME, IS_ZSH ? ".zshrc" : ".bashrc");
+const KITTY_CONFIG_DIR = join(HOME, ".config", "kitty");
+const KAYA_TERMINAL_DIR = join(CLAUDE_DIR, "skills", "CORE", "USER", "TERMINAL");
 
 // Default voice IDs - ElevenLabs pre-made voices (work with any API key)
 const DEFAULT_VOICES = {
-  male: '21m00Tcm4TlvDq8ikWAM',      // Adam - standard male voice
-  female: 'EXAVITQu4vr4xnSDxMaL',    // Sarah - standard female voice
-  neutral: 'pNInz6obpgDQGcFmaJgB',   // Antoni - neutral voice
+  male: "21m00Tcm4TlvDq8ikWAM", // Adam - standard male voice
+  female: "EXAVITQu4vr4xnSDxMaL", // Sarah - standard female voice
+  neutral: "pNInz6obpgDQGcFmaJgB", // Antoni - neutral voice
 };
 
 // Installation modes
-type InstallMode = 'fresh' | 'update' | 'migrate' | 'merge';
+type InstallMode = "fresh" | "update" | "migrate" | "merge";
 
 interface Config {
   principal: {
@@ -90,12 +97,16 @@ function print(msg: string) {
 }
 
 function printHeader() {
-  print('');
+  print("");
   print(`${c.blue}${c.bold}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${c.reset}`);
-  print(`${c.blue}${c.bold}┃${c.reset}              ${c.cyan}Kaya Installation Wizard${c.reset}                       ${c.blue}${c.bold}┃${c.reset}`);
-  print(`${c.blue}${c.bold}┃${c.reset}       ${c.gray}Personal AI Infrastructure v2.3${c.reset}                     ${c.blue}${c.bold}┃${c.reset}`);
+  print(
+    `${c.blue}${c.bold}┃${c.reset}              ${c.cyan}Kaya Installation Wizard${c.reset}                       ${c.blue}${c.bold}┃${c.reset}`,
+  );
+  print(
+    `${c.blue}${c.bold}┃${c.reset}       ${c.gray}Personal AI Infrastructure v2.3${c.reset}                     ${c.blue}${c.bold}┃${c.reset}`,
+  );
   print(`${c.blue}${c.bold}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${c.reset}`);
-  print('');
+  print("");
 }
 
 function printStep(num: number, total: number, msg: string) {
@@ -104,6 +115,18 @@ function printStep(num: number, total: number, msg: string) {
 
 function printSuccess(msg: string) {
   print(`  ${c.green}✓${c.reset} ${msg}`);
+}
+
+/** Settings read from an existing install. Only the fields the installer reads are typed. */
+interface ExistingSettings {
+  principal?: { name?: string; timezone?: string };
+  daidentity?: { name?: string; voiceId?: string };
+  apiKeys?: { elevenlabs?: string; anthropic?: string };
+  kayaVersion?: string;
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function printWarning(msg: string) {
@@ -121,7 +144,7 @@ function printInfo(msg: string) {
 async function question(prompt: string, defaultValue?: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 
   return new Promise((resolve) => {
@@ -131,28 +154,28 @@ async function question(prompt: string, defaultValue?: string): Promise<string> 
 
     rl.question(displayPrompt, (answer) => {
       rl.close();
-      resolve(answer.trim() || defaultValue || '');
+      resolve(answer.trim() || defaultValue || "");
     });
   });
 }
 
 async function confirm(prompt: string, defaultYes = true): Promise<boolean> {
-  const hint = defaultYes ? '[Y/n]' : '[y/N]';
+  const hint = defaultYes ? "[Y/n]" : "[y/N]";
   const answer = await question(`${prompt} ${c.dim}${hint}${c.reset}`);
 
   if (!answer) return defaultYes;
-  return answer.toLowerCase().startsWith('y');
+  return answer.toLowerCase().startsWith("y");
 }
 
 async function selectOption(prompt: string, options: string[], defaultIndex = 0): Promise<number> {
   print(`${c.cyan}?${c.reset} ${prompt}`);
   for (let i = 0; i < options.length; i++) {
-    const marker = i === defaultIndex ? `${c.cyan}>${c.reset}` : ' ';
+    const marker = i === defaultIndex ? `${c.cyan}>${c.reset}` : " ";
     print(`  ${marker} ${i + 1}. ${options[i]}`);
   }
   const answer = await question(`Enter number`, String(defaultIndex + 1));
   const idx = parseInt(answer) - 1;
-  return (idx >= 0 && idx < options.length) ? idx : defaultIndex;
+  return idx >= 0 && idx < options.length ? idx : defaultIndex;
 }
 
 // ============================================================================
@@ -164,40 +187,39 @@ function getCurrentUser(): { uid: number; gid: number; username: string } {
   return {
     uid: info.uid,
     gid: info.gid,
-    username: info.username
+    username: info.username,
   };
 }
 
 function fixPermissions(targetDir: string): void {
   const user = getCurrentUser();
 
-  print('');
+  print("");
   print(`${c.bold}Fixing permissions for ${user.username}${c.reset}`);
   print(`${c.gray}─────────────────────────────────────────────────${c.reset}`);
 
   try {
     // Use chown -R for recursive ownership change
-    execSync(`chown -R ${user.uid}:${user.gid} "${targetDir}"`, { stdio: 'pipe' });
+    execSync(`chown -R ${user.uid}:${user.gid} "${targetDir}"`, { stdio: "pipe" });
     printSuccess(`Set ownership to ${user.username}`);
 
     // Use chmod -R for directories (755) and files (644) with special handling for executables
     // First, set all to 755 (directories will be correct, files will be executable)
-    execSync(`chmod -R 755 "${targetDir}"`, { stdio: 'pipe' });
-    printSuccess('Set directory permissions (755)');
+    execSync(`chmod -R 755 "${targetDir}"`, { stdio: "pipe" });
+    printSuccess("Set directory permissions (755)");
 
     // Then specifically set .ts, .sh, and hook files to be executable
-    const executablePatterns = ['*.ts', '*.sh', '*.hook.ts'];
+    const executablePatterns = ["*.ts", "*.sh", "*.hook.ts"];
     for (const pattern of executablePatterns) {
       try {
-        execSync(`find "${targetDir}" -name "${pattern}" -exec chmod 755 {} \\;`, { stdio: 'pipe' });
-      } catch (e) {
+        execSync(`find "${targetDir}" -name "${pattern}" -exec chmod 755 {} \\;`, { stdio: "pipe" });
+      } catch {
         // Pattern might not match any files, which is fine
       }
     }
-    printSuccess('Set executable permissions');
-
-  } catch (err: any) {
-    printError(`Permission fix failed: ${err.message}`);
+    printSuccess("Set executable permissions");
+  } catch (err) {
+    printError(`Permission fix failed: ${errMessage(err)}`);
     print(`${c.yellow}You may need to run: sudo chown -R $(whoami) ${targetDir}${c.reset}`);
   }
 }
@@ -208,37 +230,53 @@ function fixPermissions(targetDir: string): void {
 
 function setupShellAlias(): void {
   const aliasLine = `alias kaya='bun run ${CLAUDE_DIR}/lib/core/kaya.ts'`;
-  const marker = '# Kaya alias';
-  const rcFileName = IS_ZSH ? '.zshrc' : '.bashrc';
+  const marker = "# Kaya alias";
+  const rcFileName = IS_ZSH ? ".zshrc" : ".bashrc";
 
   try {
-    let shellRcContent = '';
+    let shellRcContent = "";
     if (existsSync(SHELL_RC)) {
-      shellRcContent = readFileSync(SHELL_RC, 'utf-8');
+      shellRcContent = readFileSync(SHELL_RC, "utf-8");
     }
 
-    // Check if alias already exists
-    if (shellRcContent.includes('alias kaya=')) {
-      // Update existing alias
-      const lines = shellRcContent.split('\n');
-      const updated = lines.map(line => {
-        if (line.includes('alias kaya=')) {
-          return `${marker}\n${aliasLine}`;
-        }
-        return line;
-      });
-      writeFileSync(SHELL_RC, updated.join('\n'));
-      printSuccess(`Updated Kaya alias in ${rcFileName}`);
+    // Drop any legacy `pai` alias block (PAI -> Kaya rename) and any existing
+    // `kaya` alias block, then write a single fresh block. This replaces the old
+    // block instead of adding a second one, and is idempotent.
+    const legacyMarkers = new Set(["# PAI alias", "# PAI", "# Kaya alias"]);
+    const kept: string[] = [];
+    let hadAlias = false;
+    let hadLegacy = false;
+    for (const line of shellRcContent.split("\n")) {
+      const trimmed = line.trim();
+      if (/^alias (pai|kaya)=/.test(trimmed)) {
+        hadAlias = true;
+        if (trimmed.startsWith("alias pai=")) hadLegacy = true;
+        continue;
+      }
+      if (legacyMarkers.has(trimmed)) {
+        if (trimmed === "# PAI alias" || trimmed === "# PAI") hadLegacy = true;
+        continue;
+      }
+      kept.push(line);
+    }
+    const base = kept.join("\n").replace(/\n+$/, "");
+    const block = `${marker}\n${aliasLine}\n`;
+
+    if (hadAlias) {
+      writeFileSync(SHELL_RC, `${base}\n\n${block}`);
+      printSuccess(
+        hadLegacy ? `Migrated legacy "pai" alias to "kaya" in ${rcFileName}` : `Updated Kaya alias in ${rcFileName}`,
+      );
     } else {
       // Add new alias
-      const addition = `\n${marker}\n${aliasLine}\n`;
-      appendFileSync(SHELL_RC, addition);
+      // lint-allow: no-raw-append — appends one alias block to the user's shell rc; rotation would destroy it
+      appendFileSync(SHELL_RC, `\n${block}`);
       printSuccess(`Added Kaya alias to ${rcFileName}`);
     }
 
-    printInfo(`Run "source ~/${rcFileName}" or restart terminal to use "pai" command`);
-  } catch (err: any) {
-    printWarning(`Could not update ${rcFileName}: ${err.message}`);
+    printInfo(`Run "source ~/${rcFileName}" or restart terminal to use "kaya" command`);
+  } catch (err) {
+    printWarning(`Could not update ${rcFileName}: ${errMessage(err)}`);
     printInfo(`Add manually: ${aliasLine}`);
   }
 }
@@ -249,9 +287,9 @@ function setupShellAlias(): void {
 
 function isKittyInstalled(): boolean {
   try {
-    execSync('which kitty', { stdio: 'pipe' });
+    execSync("which kitty", { stdio: "pipe" });
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -259,85 +297,85 @@ function isKittyInstalled(): boolean {
 function isHackNerdFontInstalled(): boolean {
   try {
     // Check if Hack Nerd Font is installed via brew or system fonts
-    const result = execSync('fc-list | grep -i "Hack Nerd"', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    const result = execSync('fc-list | grep -i "Hack Nerd"', { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
     return result.trim().length > 0;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
 
 async function setupKitty(): Promise<boolean> {
   const kittyInstalled = isKittyInstalled();
-  const kittyConfigSource = join(Kaya_TERMINAL_DIR, 'kitty.conf');
-  const backgroundImage = join(Kaya_TERMINAL_DIR, 'ul-circuit-embossed-v5.png');
+  const kittyConfigSource = join(KAYA_TERMINAL_DIR, "kitty.conf");
+  const backgroundImage = join(KAYA_TERMINAL_DIR, "ul-circuit-embossed-v5.png");
 
   if (!kittyInstalled) {
-    printInfo('Kitty terminal not detected');
-    print('');
+    printInfo("Kitty terminal not detected");
+    print("");
     print(`${c.dim}Kitty provides dynamic tab states that show AI activity:${c.reset}`);
     print(`${c.dim}  - Purple: AI is thinking${c.reset}`);
     print(`${c.dim}  - Orange: Actively working${c.reset}`);
     print(`${c.dim}  - Teal: Waiting for input${c.reset}`);
     print(`${c.dim}  - Green: Completed${c.reset}`);
-    print('');
+    print("");
 
-    if (await confirm('Would you like instructions to install Kitty?', false)) {
-      print('');
+    if (await confirm("Would you like instructions to install Kitty?", false)) {
+      print("");
       print(`${c.cyan}To install Kitty terminal:${c.reset}`);
       print(`  ${c.green}brew install --cask kitty${c.reset}`);
       print(`  ${c.green}brew install --cask font-hack-nerd-font${c.reset}`);
-      print('');
+      print("");
       print(`${c.cyan}Then re-run this wizard to configure Kaya for Kitty.${c.reset}`);
-      print('');
+      print("");
     }
     return false;
   }
 
   // Kitty is installed - set up config
-  printSuccess('Kitty terminal detected');
+  printSuccess("Kitty terminal detected");
 
   if (!existsSync(kittyConfigSource)) {
-    printWarning('Kaya Kitty configuration not found');
+    printWarning("Kaya Kitty configuration not found");
     return false;
   }
 
-  if (await confirm('Set up Kaya configuration for Kitty?')) {
+  if (await confirm("Set up Kaya configuration for Kitty?")) {
     try {
       // Create Kitty config directory
       mkdirSync(KITTY_CONFIG_DIR, { recursive: true });
 
       // Check if kitty.conf already exists
-      const kittyConfigDest = join(KITTY_CONFIG_DIR, 'kitty.conf');
+      const kittyConfigDest = join(KITTY_CONFIG_DIR, "kitty.conf");
       if (existsSync(kittyConfigDest)) {
-        if (!await confirm('Existing kitty.conf found. Overwrite?', false)) {
-          printInfo('Keeping existing Kitty configuration');
+        if (!(await confirm("Existing kitty.conf found. Overwrite?", false))) {
+          printInfo("Keeping existing Kitty configuration");
           return true;
         }
       }
 
       // Copy kitty.conf
       cpSync(kittyConfigSource, kittyConfigDest);
-      printSuccess('Copied Kaya Kitty configuration');
+      printSuccess("Copied Kaya Kitty configuration");
 
       // Copy background image if it exists
       if (existsSync(backgroundImage)) {
         // The kitty.conf references the image from KAYA_TERMINAL_DIR, so no copy needed
         // Just verify it's in place
-        printSuccess('Background image available');
+        printSuccess("Background image available");
       }
 
       // Check for Hack Nerd Font
       if (!isHackNerdFontInstalled()) {
-        printWarning('Hack Nerd Font not detected');
+        printWarning("Hack Nerd Font not detected");
         print(`${c.dim}Install with: brew install --cask font-hack-nerd-font${c.reset}`);
       } else {
-        printSuccess('Hack Nerd Font detected');
+        printSuccess("Hack Nerd Font detected");
       }
 
-      printInfo('Restart Kitty to apply new configuration');
+      printInfo("Restart Kitty to apply new configuration");
       return true;
-    } catch (err: any) {
-      printError(`Could not set up Kitty: ${err.message}`);
+    } catch (err) {
+      printError(`Could not set up Kitty: ${errMessage(err)}`);
       return false;
     }
   }
@@ -368,10 +406,10 @@ function findClaudeBackups(): BackupCredentials[] {
     /^\.claude[-_.]?backup$/i,
     /^\.claude[-_.]?old$/i,
     /^\.claude[-_.]?prev$/i,
-    /^\.claude[-_.]?[\d]+$/,  // .claude-20240115 etc
+    /^\.claude[-_.]?[\d]+$/, // .claude-20240115 etc
     /^claude[-_.]?backup/i,
-    /^claude-backup-/i,       // From BackupRestore.ts
-    /^\.claude-BACKUP$/,      // Standard backup location
+    /^claude-backup-/i, // From BackupRestore.ts
+    /^\.claude-BACKUP$/, // Standard backup location
   ];
 
   try {
@@ -381,7 +419,7 @@ function findClaudeBackups(): BackupCredentials[] {
       if (!entry.isDirectory()) continue;
 
       // Check if directory name matches any backup pattern
-      const isBackup = backupPatterns.some(pattern => pattern.test(entry.name));
+      const isBackup = backupPatterns.some((pattern) => pattern.test(entry.name));
       if (!isBackup) continue;
 
       const backupPath = join(HOME, entry.name);
@@ -394,26 +432,26 @@ function findClaudeBackups(): BackupCredentials[] {
       };
 
       // Check for .env file with ElevenLabs key
-      const envPath = join(backupPath, '.env');
+      const envPath = join(backupPath, ".env");
       if (existsSync(envPath)) {
         try {
-          const envContent = readFileSync(envPath, 'utf-8');
+          const envContent = readFileSync(envPath, "utf-8");
 
           // Extract ELEVENLABS_API_KEY
           const keyMatch = envContent.match(/ELEVENLABS_API_KEY=(.+)/);
-          if (keyMatch && keyMatch[1] && keyMatch[1] !== 'your_api_key_here') {
+          if (keyMatch?.[1] && keyMatch[1] !== "your_api_key_here") {
             creds.elevenLabsKey = keyMatch[1].trim();
           }
-        } catch (e) {
+        } catch {
           // Ignore read errors
         }
       }
 
       // Check settings.json for voice ID and names
-      const settingsPath = join(backupPath, 'settings.json');
+      const settingsPath = join(backupPath, "settings.json");
       if (existsSync(settingsPath)) {
         try {
-          const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+          const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 
           if (settings.daidentity?.voiceId) {
             creds.voiceId = settings.daidentity.voiceId;
@@ -424,7 +462,7 @@ function findClaudeBackups(): BackupCredentials[] {
           if (settings.principal?.name) {
             creds.principalName = settings.principal.name;
           }
-        } catch (e) {
+        } catch {
           // Ignore parse errors
         }
       }
@@ -434,7 +472,7 @@ function findClaudeBackups(): BackupCredentials[] {
         backups.push(creds);
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore errors listing home directory
   }
 
@@ -446,11 +484,11 @@ function getMostRecentBackupWithCredentials(): BackupCredentials | null {
   const backups = findClaudeBackups();
 
   // Find the most recent backup with an ElevenLabs key
-  const withKey = backups.find(b => b.elevenLabsKey);
+  const withKey = backups.find((b) => b.elevenLabsKey);
   if (withKey) return withKey;
 
   // Otherwise return most recent with any credentials
-  return backups.length > 0 ? backups[0] : null;
+  return backups[0] ?? null;
 }
 
 // ============================================================================
@@ -468,29 +506,29 @@ function detectExistingInstallation(): MigrationSource | null {
 function scanInstallation(path: string): MigrationSource {
   const source: MigrationSource = {
     path,
-    hasSettings: existsSync(join(path, 'settings.json')),
-    hasUserContent: existsSync(join(path, 'skills', 'CORE', 'USER')),
+    hasSettings: existsSync(join(path, "settings.json")),
+    hasUserContent: existsSync(join(path, "skills", "CORE", "USER")),
     hasPersonalSkills: false,
-    hasAgents: existsSync(join(path, 'agents')),
-    hasMemory: existsSync(join(path, 'MEMORY')),
+    hasAgents: existsSync(join(path, "agents")),
+    hasMemory: existsSync(join(path, "MEMORY")),
   };
 
   // Check for personal skills (_ALLCAPS naming)
-  const skillsDir = join(path, 'skills');
+  const skillsDir = join(path, "skills");
   if (existsSync(skillsDir)) {
     try {
       const skills = readdirSync(skillsDir);
-      source.hasPersonalSkills = skills.some(s => s.startsWith('_') && s === s.toUpperCase());
-    } catch (e) {
-      // Ignore
+      source.hasPersonalSkills = skills.some((s) => s.startsWith("_") && s === s.toUpperCase());
+    } catch {
+      // Advisory detection only: an unreadable skills dir means "no personal skills found".
     }
   }
 
   // Try to detect version
   try {
-    const settings = JSON.parse(readFileSync(join(path, 'settings.json'), 'utf-8'));
+    const settings = JSON.parse(readFileSync(join(path, "settings.json"), "utf-8"));
     source.version = settings.kayaVersion;
-  } catch (e) {
+  } catch {
     // No version detected
   }
 
@@ -499,37 +537,37 @@ function scanInstallation(path: string): MigrationSource {
 
 function determineMode(source: MigrationSource | null, args: string[]): InstallMode {
   // CLI overrides
-  if (args.includes('--fresh')) return 'fresh';
-  if (args.includes('--migrate')) return 'migrate';
-  if (args.includes('--update')) return 'update';
-  if (args.includes('--merge')) return 'merge';
+  if (args.includes("--fresh")) return "fresh";
+  if (args.includes("--migrate")) return "migrate";
+  if (args.includes("--update")) return "update";
+  if (args.includes("--merge")) return "merge";
 
   // Auto-detect
-  if (!source) return 'fresh';
-  if (source.hasUserContent || source.hasPersonalSkills) return 'merge';
-  if (source.hasSettings) return 'migrate';
-  return 'fresh';
+  if (!source) return "fresh";
+  if (source.hasUserContent || source.hasPersonalSkills) return "merge";
+  if (source.hasSettings) return "migrate";
+  return "fresh";
 }
 
 // ============================================================================
 // CONFIGURATION GATHERING
 // ============================================================================
 
-async function gatherConfig(existingSettings?: any): Promise<Config> {
-  print('');
+async function gatherConfig(existingSettings?: ExistingSettings | null): Promise<Config> {
+  print("");
   print(`${c.bold}Configuration${c.reset}`);
   print(`${c.gray}─────────────────────────────────────────────────${c.reset}`);
-  print('');
+  print("");
 
   const config: Config = {
     principal: {
-      name: '',
+      name: "",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
     daidentity: {
-      name: 'Kaya',
-      fullName: 'Kaya - Personal AI Assistant',
-      voiceId: '',
+      name: "Kaya",
+      fullName: "Kaya - Personal AI Assistant",
+      voiceId: "",
     },
     apiKeys: {},
   };
@@ -537,7 +575,7 @@ async function gatherConfig(existingSettings?: any): Promise<Config> {
   // Check for backup credentials from previous .claude installations
   const backupCreds = getMostRecentBackupWithCredentials();
   if (backupCreds) {
-    print('');
+    print("");
     print(`${c.green}Found a previous Kaya installation!${c.reset}`);
     print(`${c.dim}  Location: ${backupCreds.path}${c.reset}`);
     print(`${c.dim}  Modified: ${backupCreds.modifiedTime.toLocaleDateString()}${c.reset}`);
@@ -554,9 +592,9 @@ async function gatherConfig(existingSettings?: any): Promise<Config> {
     if (backupCreds.voiceId) {
       print(`${c.dim}  Voice ID: ${backupCreds.voiceId.substring(0, 8)}...${c.reset}`);
     }
-    print('');
+    print("");
 
-    if (await confirm('Would you like to use these settings from your previous installation?')) {
+    if (await confirm("Would you like to use these settings from your previous installation?")) {
       // Use backup credentials
       if (backupCreds.principalName) {
         config.principal.name = backupCreds.principalName;
@@ -572,91 +610,91 @@ async function gatherConfig(existingSettings?: any): Promise<Config> {
         config.daidentity.voiceId = backupCreds.voiceId;
       }
 
-      printSuccess('Imported settings from backup');
-      print('');
+      printSuccess("Imported settings from backup");
+      print("");
     }
   }
 
   // User name (if not already set from backup)
   if (!config.principal.name) {
-    const defaultName = existingSettings?.principal?.name || '';
-    config.principal.name = await question('What is your name?', defaultName);
+    const defaultName = existingSettings?.principal?.name || "";
+    config.principal.name = await question("What is your name?", defaultName);
   }
 
   // Timezone
   const defaultTz = existingSettings?.principal?.timezone || config.principal.timezone;
-  config.principal.timezone = await question('Your timezone', defaultTz);
+  config.principal.timezone = await question("Your timezone", defaultTz);
 
   // AI name (if not already set from backup)
-  if (config.daidentity.name === 'Kaya') {
-    const defaultAiName = existingSettings?.daidentity?.name || 'Kaya';
-    config.daidentity.name = await question('What would you like to name your AI assistant?', defaultAiName);
+  if (config.daidentity.name === "Kaya") {
+    const defaultAiName = existingSettings?.daidentity?.name || "Kaya";
+    config.daidentity.name = await question("What would you like to name your AI assistant?", defaultAiName);
     config.daidentity.fullName = `${config.daidentity.name} - Personal AI`;
   }
 
   // ElevenLabs voice setup (if not already set from backup)
   if (!config.apiKeys.elevenlabs && !config.daidentity.voiceId) {
-    print('');
+    print("");
     print(`${c.bold}Voice Setup${c.reset}`);
     print(`${c.dim}Kaya can speak to you using ElevenLabs text-to-speech.${c.reset}`);
     print(`${c.dim}This is optional - Kaya works great without it too.${c.reset}`);
-    print('');
+    print("");
 
     // Check if they have voice from existing settings (not backup)
-    const existingVoiceId = existingSettings?.daidentity?.voiceId || '';
+    const existingVoiceId = existingSettings?.daidentity?.voiceId || "";
     if (existingVoiceId) {
       printInfo(`Found existing voice ID: ${existingVoiceId.substring(0, 8)}...`);
-      if (await confirm('Keep your existing voice configuration?')) {
+      if (await confirm("Keep your existing voice configuration?")) {
         config.daidentity.voiceId = existingVoiceId;
-        config.apiKeys.elevenlabs = existingSettings?.apiKeys?.elevenlabs || '';
+        config.apiKeys.elevenlabs = existingSettings?.apiKeys?.elevenlabs || "";
       }
     }
 
     if (!config.daidentity.voiceId) {
       // Human-friendly voice questions
-      if (await confirm('Would you like to set up voice for your AI?', false)) {
-        print('');
+      if (await confirm("Would you like to set up voice for your AI?", false)) {
+        print("");
         print(`${c.cyan}Great! You'll need an ElevenLabs API key.${c.reset}`);
         print(`${c.dim}Get one free at: https://elevenlabs.io${c.reset}`);
-        print('');
+        print("");
 
-        config.apiKeys.elevenlabs = await question('Paste your ElevenLabs API key here');
+        config.apiKeys.elevenlabs = await question("Paste your ElevenLabs API key here");
 
         if (config.apiKeys.elevenlabs) {
-          print('');
+          print("");
           print(`${c.cyan}Now for the voice itself.${c.reset}`);
           print(`${c.dim}You can use one of ElevenLabs' built-in voices, or your own custom voice.${c.reset}`);
-          print('');
+          print("");
 
-          if (await confirm('Do you have a custom voice already set up in ElevenLabs?', false)) {
-            print('');
+          if (await confirm("Do you have a custom voice already set up in ElevenLabs?", false)) {
+            print("");
             print(`${c.dim}You can find your Voice ID in the ElevenLabs dashboard under "Voices"${c.reset}`);
-            config.daidentity.voiceId = await question('What is your Voice ID?');
+            config.daidentity.voiceId = await question("What is your Voice ID?");
           } else {
-            print('');
+            print("");
             print(`${c.dim}No problem! We'll use a default voice. You can change it later in settings.json${c.reset}`);
             // Will use default voice in Step 3
           }
         }
       } else {
-        printInfo('No voice setup - Kaya will be text-only');
+        printInfo("No voice setup - Kaya will be text-only");
       }
     }
   }
 
   // Anthropic API key (usually not needed with Claude Code subscription)
-  print('');
+  print("");
   print(`${c.dim}Anthropic API key is optional if using Claude Code subscription${c.reset}`);
-  const existingAnthropicKey = existingSettings?.apiKeys?.anthropic || '';
+  const existingAnthropicKey = existingSettings?.apiKeys?.anthropic || "";
   if (existingAnthropicKey) {
-    printInfo('Found existing Anthropic API key');
-    if (await confirm('Keep existing Anthropic API key?')) {
+    printInfo("Found existing Anthropic API key");
+    if (await confirm("Keep existing Anthropic API key?")) {
       config.apiKeys.anthropic = existingAnthropicKey;
     }
   }
 
   if (!config.apiKeys.anthropic) {
-    config.apiKeys.anthropic = await question('Anthropic API key (optional, press Enter to skip)');
+    config.apiKeys.anthropic = await question("Anthropic API key (optional, press Enter to skip)");
   }
 
   return config;
@@ -667,14 +705,14 @@ async function gatherConfig(existingSettings?: any): Promise<Config> {
 // ============================================================================
 
 async function extractFromSource(source: MigrationSource): Promise<{
-  settings: any;
+  settings: ExistingSettings | null;
   userContent: string[];
   personalSkills: string[];
   agents: string[];
   memoryState: string[];
 }> {
   const result = {
-    settings: null as any,
+    settings: null as ExistingSettings | null,
     userContent: [] as string[],
     personalSkills: [] as string[],
     agents: [] as string[],
@@ -684,35 +722,35 @@ async function extractFromSource(source: MigrationSource): Promise<{
   // Extract settings
   if (source.hasSettings) {
     try {
-      result.settings = JSON.parse(readFileSync(join(source.path, 'settings.json'), 'utf-8'));
+      result.settings = JSON.parse(readFileSync(join(source.path, "settings.json"), "utf-8")) as ExistingSettings;
     } catch (e) {
-      printWarning('Could not parse existing settings.json');
+      printWarning(`Could not parse existing settings.json: ${errMessage(e)}`);
     }
   }
 
   // Extract USER content paths
   if (source.hasUserContent) {
-    const userDir = join(source.path, 'skills', 'CORE', 'USER');
-    result.userContent = listFilesRecursive(userDir).map(f => f.replace(userDir, ''));
+    const userDir = join(source.path, "skills", "CORE", "USER");
+    result.userContent = listFilesRecursive(userDir).map((f) => f.replace(userDir, ""));
   }
 
   // Extract personal skills
-  const skillsDir = join(source.path, 'skills');
+  const skillsDir = join(source.path, "skills");
   if (existsSync(skillsDir)) {
     const skills = readdirSync(skillsDir);
-    result.personalSkills = skills.filter(s => s.startsWith('_') && s === s.toUpperCase());
+    result.personalSkills = skills.filter((s) => s.startsWith("_") && s === s.toUpperCase());
   }
 
   // Extract agents
   if (source.hasAgents) {
-    const agentsDir = join(source.path, 'agents');
+    const agentsDir = join(source.path, "agents");
     result.agents = readdirSync(agentsDir);
   }
 
   // Extract MEMORY/STATE
-  const stateDir = join(source.path, 'MEMORY', 'STATE');
+  const stateDir = join(source.path, "MEMORY", "STATE");
   if (existsSync(stateDir)) {
-    result.memoryState = listFilesRecursive(stateDir).map(f => f.replace(stateDir, ''));
+    result.memoryState = listFilesRecursive(stateDir).map((f) => f.replace(stateDir, ""));
   }
 
   return result;
@@ -735,7 +773,7 @@ function listFilesRecursive(dir: string, files: string[] = []): string[] {
 }
 
 async function performMigration(source: MigrationSource, targetDir: string): Promise<void> {
-  print('');
+  print("");
   print(`${c.bold}Migrating from ${source.path}${c.reset}`);
   print(`${c.gray}─────────────────────────────────────────────────${c.reset}`);
 
@@ -743,8 +781,8 @@ async function performMigration(source: MigrationSource, targetDir: string): Pro
 
   // Copy USER content
   if (source.hasUserContent) {
-    const srcUser = join(source.path, 'skills', 'CORE', 'USER');
-    const dstUser = join(targetDir, 'skills', 'CORE', 'USER');
+    const srcUser = join(source.path, "skills", "CORE", "USER");
+    const dstUser = join(targetDir, "skills", "CORE", "USER");
 
     if (existsSync(srcUser)) {
       mkdirSync(dstUser, { recursive: true });
@@ -755,8 +793,8 @@ async function performMigration(source: MigrationSource, targetDir: string): Pro
 
   // Copy personal skills
   for (const skill of extracted.personalSkills) {
-    const srcSkill = join(source.path, 'skills', skill);
-    const dstSkill = join(targetDir, 'skills', skill);
+    const srcSkill = join(source.path, "skills", skill);
+    const dstSkill = join(targetDir, "skills", skill);
 
     if (existsSync(srcSkill)) {
       cpSync(srcSkill, dstSkill, { recursive: true });
@@ -766,8 +804,8 @@ async function performMigration(source: MigrationSource, targetDir: string): Pro
 
   // Copy agents
   if (source.hasAgents && extracted.agents.length > 0) {
-    const srcAgents = join(source.path, 'agents');
-    const dstAgents = join(targetDir, 'agents');
+    const srcAgents = join(source.path, "agents");
+    const dstAgents = join(targetDir, "agents");
 
     mkdirSync(dstAgents, { recursive: true });
     cpSync(srcAgents, dstAgents, { recursive: true });
@@ -776,8 +814,8 @@ async function performMigration(source: MigrationSource, targetDir: string): Pro
 
   // Copy MEMORY/STATE
   if (extracted.memoryState.length > 0) {
-    const srcState = join(source.path, 'MEMORY', 'STATE');
-    const dstState = join(targetDir, 'MEMORY', 'STATE');
+    const srcState = join(source.path, "MEMORY", "STATE");
+    const dstState = join(targetDir, "MEMORY", "STATE");
 
     if (existsSync(srcState)) {
       mkdirSync(dstState, { recursive: true });
@@ -793,35 +831,35 @@ async function performMigration(source: MigrationSource, targetDir: string): Pro
 
 function generateSettingsJson(config: Config): string {
   const settings = {
-    "$schema": "https://json.schemastore.org/claude-code-settings.json",
-    "kayaVersion": "2.3",
-    "env": {
-      "KAYA_DIR": CLAUDE_DIR,
-      "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "80000",
-      "BASH_DEFAULT_TIMEOUT_MS": "600000"
+    $schema: "https://json.schemastore.org/claude-code-settings.json",
+    kayaVersion: "2.3",
+    env: {
+      KAYA_DIR: CLAUDE_DIR,
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: "80000",
+      BASH_DEFAULT_TIMEOUT_MS: "600000",
     },
-    "daidentity": {
-      "name": config.daidentity.name || "Kaya",
-      "fullName": config.daidentity.fullName || "Kaya - Personal AI Assistant",
-      "displayName": config.daidentity.name || "Kaya",
-      "color": "#3B82F6",
-      "voiceId": config.daidentity.voiceId || DEFAULT_VOICES.male,
-      "startupCatchphrase": "Kaya here, ready to go."
+    daidentity: {
+      name: config.daidentity.name || "Kaya",
+      fullName: config.daidentity.fullName || "Kaya - Personal AI Assistant",
+      displayName: config.daidentity.name || "Kaya",
+      color: "#3B82F6",
+      voiceId: config.daidentity.voiceId || DEFAULT_VOICES.male,
+      startupCatchphrase: "Kaya here, ready to go.",
     },
-    "principal": config.principal,
-    "pai": {
-      "repoUrl": "github.com/danielmiessler/Kaya",
+    principal: config.principal,
+    kaya: {
+      repoUrl: "github.com/danielmiessler/Kaya",
     },
-    "techStack": {
-      "terminal": "Kitty",
-      "packageManager": "bun",
-      "pythonPackageManager": "uv",
-      "language": "TypeScript",
+    techStack: {
+      terminal: "Kitty",
+      packageManager: "bun",
+      pythonPackageManager: "uv",
+      language: "TypeScript",
     },
     // PERMISSIONS: Pre-configured for smooth operation
     // Security is maintained via "ask" list for dangerous operations
-    "permissions": {
-      "allow": [
+    permissions: {
+      allow: [
         "Bash",
         "Read",
         "Write",
@@ -838,10 +876,10 @@ function generateSettingsJson(config: Config): string {
         "ExitPlanMode",
         "Task",
         "Skill",
-        "mcp__*"
+        "mcp__*",
       ],
-      "deny": [],
-      "ask": [
+      deny: [],
+      ask: [
         // Dangerous filesystem operations
         "Bash(rm -rf /)",
         "Bash(rm -rf /:*)",
@@ -875,66 +913,63 @@ function generateSettingsJson(config: Config): string {
         "Write(~/.claude/settings.json)",
         "Edit(~/.claude/settings.json)",
         "Write(~/.ssh/*)",
-        "Edit(~/.ssh/*)"
+        "Edit(~/.ssh/*)",
       ],
-      "defaultMode": "default"
+      defaultMode: "default",
     },
-    "enableAllProjectMcpServers": true,
-    "enabledMcpjsonServers": [],
+    enableAllProjectMcpServers: true,
+    enabledMcpjsonServers: [],
     // HOOKS: Full hook configuration for Kaya functionality
-    "hooks": {
-      "PreToolUse": [
+    hooks: {
+      PreToolUse: [
         {
-          "matcher": "Bash",
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts" }]
+          matcher: "Bash",
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/SecurityValidator.hook.ts` }],
         },
         {
-          "matcher": "Edit",
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts" }]
+          matcher: "Edit",
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/SecurityValidator.hook.ts` }],
         },
         {
-          "matcher": "Write",
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts" }]
+          matcher: "Write",
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/SecurityValidator.hook.ts` }],
         },
         {
-          "matcher": "Read",
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/SecurityValidator.hook.ts" }]
-        }
+          matcher: "Read",
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/SecurityValidator.hook.ts` }],
+        },
       ],
-      "UserPromptSubmit": [
+      UserPromptSubmit: [
         {
-          "hooks": [
-            { "type": "command", "command": "${KAYA_DIR}/hooks/ExplicitRatingRecord.hook.ts" }
-          ]
-        }
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/ExplicitRatingRecord.hook.ts` }],
+        },
       ],
-      "SessionStart": [
+      SessionStart: [
         {
-          "hooks": [
-            { "type": "command", "command": "${KAYA_DIR}/hooks/LoadContext.hook.ts" }
-          ]
-        }
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/LoadContext.hook.ts` }],
+        },
       ],
-      "SubagentStop": [
+      SubagentStop: [
         {
-          "hooks": [{ "type": "command", "command": "${KAYA_DIR}/hooks/AgentOutputRecord.hook.ts" }]
-        }
-      ]
+          hooks: [{ type: "command", command: `\${KAYA_DIR}/hooks/AgentOutputRecord.hook.ts` }],
+        },
+      ],
     },
-    "statusLine": {
-      "type": "command",
-      "command": "${KAYA_DIR}/statusline-command.sh"
+    statusLine: {
+      type: "command",
+      command: `\${KAYA_DIR}/statusline-command.sh`,
     },
-    "alwaysThinkingEnabled": true,
-    "_docs": {
-      "_overview": "SETTINGS.JSON - Central configuration for Kaya. Works out of the box. Run install wizard to customize.",
-      "_sections": {
-        "daidentity": "AI identity (name, voice). Customize via install wizard.",
-        "principal": "Your identity. Run 'bun run install.ts' to set your name.",
-        "permissions": "Pre-configured for security and usability.",
-        "hooks": "Hook configuration for lifecycle events."
-      }
-    }
+    alwaysThinkingEnabled: true,
+    _docs: {
+      _overview:
+        "SETTINGS.JSON - Central configuration for Kaya. Works out of the box. Run install wizard to customize.",
+      _sections: {
+        daidentity: "AI identity (name, voice). Customize via install wizard.",
+        principal: "Your identity. Run 'bun run install.ts' to set your name.",
+        permissions: "Pre-configured for security and usability.",
+        hooks: "Hook configuration for lifecycle events.",
+      },
+    },
   };
 
   // API keys go in ${KAYA_DIR}/.env, not settings.json
@@ -945,19 +980,19 @@ function generateSettingsJson(config: Config): string {
 
 function createDirectoryStructure(targetDir: string): void {
   const dirs = [
-    'USER',
-    'docs/system',
-    'MEMORY/STATE',
-    'MEMORY/SIGNALS',
-    'MEMORY/CAPTURES',
-    'hooks',
-    'agents',
-    'Plans',
-    'WORK/scratch',
-    'Commands',
-    'tools',
-    'bin',
-    'lib',
+    "USER",
+    "docs/system",
+    "MEMORY/STATE",
+    "MEMORY/SIGNALS",
+    "MEMORY/CAPTURES",
+    "hooks",
+    "agents",
+    "Plans",
+    "WORK/scratch",
+    "Commands",
+    "tools",
+    "bin",
+    "lib",
   ];
 
   for (const dir of dirs) {
@@ -985,74 +1020,74 @@ function validateInstallation(targetDir: string): ValidationResult {
   };
 
   // Check settings.json exists and is valid
-  const settingsPath = join(targetDir, 'settings.json');
+  const settingsPath = join(targetDir, "settings.json");
   if (existsSync(settingsPath)) {
     try {
-      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+      const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       if (settings.principal?.name && settings.daidentity?.name) {
         result.checks.push({
-          name: 'settings.json',
+          name: "settings.json",
           passed: true,
-          message: 'Valid configuration found',
+          message: "Valid configuration found",
         });
       } else {
         result.checks.push({
-          name: 'settings.json',
+          name: "settings.json",
           passed: false,
-          message: 'Missing required fields',
+          message: "Missing required fields",
         });
         result.passed = false;
       }
     } catch (e) {
       result.checks.push({
-        name: 'settings.json',
+        name: "settings.json",
         passed: false,
-        message: 'Invalid JSON',
+        message: `Invalid JSON: ${errMessage(e)}`,
       });
       result.passed = false;
     }
   } else {
     result.checks.push({
-      name: 'settings.json',
+      name: "settings.json",
       passed: false,
-      message: 'File not found',
+      message: "File not found",
     });
     result.passed = false;
   }
 
   // Check required directories
-  const requiredDirs = ['skills', 'MEMORY', 'hooks'];
+  const requiredDirs = ["skills", "MEMORY", "hooks"];
   for (const dir of requiredDirs) {
     const dirPath = join(targetDir, dir);
     if (existsSync(dirPath)) {
       result.checks.push({
         name: `Directory: ${dir}`,
         passed: true,
-        message: 'Exists',
+        message: "Exists",
       });
     } else {
       result.checks.push({
         name: `Directory: ${dir}`,
         passed: false,
-        message: 'Missing',
+        message: "Missing",
       });
       result.passed = false;
     }
   }
 
   // Check CORE skill exists
-  const coreSkill = join(targetDir, 'skills', 'CORE', 'SKILL.md');
+  const coreSkill = join(targetDir, "skills", "CORE", "SKILL.md");
   if (existsSync(coreSkill)) {
     result.checks.push({
-      name: 'CORE skill',
+      name: "CORE skill",
       passed: true,
-      message: 'SKILL.md found',
+      message: "SKILL.md found",
     });
   } else {
     result.checks.push({
-      name: 'CORE skill',
+      name: "CORE skill",
       passed: false,
-      message: 'SKILL.md not found',
+      message: "SKILL.md not found",
     });
     result.passed = false;
   }
@@ -1061,7 +1096,7 @@ function validateInstallation(targetDir: string): ValidationResult {
 }
 
 function printValidationResults(results: ValidationResult): void {
-  print('');
+  print("");
   print(`${c.bold}Validation Results${c.reset}`);
   print(`${c.gray}─────────────────────────────────────────────────${c.reset}`);
 
@@ -1073,7 +1108,7 @@ function printValidationResults(results: ValidationResult): void {
     }
   }
 
-  print('');
+  print("");
   if (results.passed) {
     print(`${c.green}${c.bold}✓ Installation validated successfully${c.reset}`);
   } else {
@@ -1091,7 +1126,7 @@ async function main(): Promise<void> {
   printHeader();
 
   // Validation only mode
-  if (args.includes('--validate')) {
+  if (args.includes("--validate")) {
     const results = validateInstallation(CLAUDE_DIR);
     printValidationResults(results);
     process.exit(results.passed ? 0 : 1);
@@ -1100,43 +1135,46 @@ async function main(): Promise<void> {
   // ================================================================
   // STEP 0: FIX PERMISSIONS (CRITICAL - MUST BE FIRST)
   // ================================================================
-  printStep(0, 8, 'Fixing permissions');
+  printStep(0, 8, "Fixing permissions");
   fixPermissions(CLAUDE_DIR);
 
   // ================================================================
   // Step 1: Detect environment
   // ================================================================
-  printStep(1, 8, 'Detecting environment');
+  printStep(1, 8, "Detecting environment");
 
   const source = detectExistingInstallation();
   const mode = determineMode(source, args);
 
   if (source) {
     printInfo(`Found existing installation at ${source.path}`);
-    if (source.hasSettings) printInfo('  - settings.json present');
-    if (source.hasUserContent) printInfo('  - USER content present');
-    if (source.hasPersonalSkills) printInfo('  - Personal skills present');
-    if (source.hasAgents) printInfo('  - Agent configurations present');
-    if (source.hasMemory) printInfo('  - MEMORY present');
+    if (source.hasSettings) printInfo("  - settings.json present");
+    if (source.hasUserContent) printInfo("  - USER content present");
+    if (source.hasPersonalSkills) printInfo("  - Personal skills present");
+    if (source.hasAgents) printInfo("  - Agent configurations present");
+    if (source.hasMemory) printInfo("  - MEMORY present");
     if (source.version) printInfo(`  - Version: ${source.version}`);
   } else {
-    printInfo('No existing installation detected');
+    printInfo("No existing installation detected");
   }
 
-  print('');
+  print("");
   print(`${c.cyan}Installation mode:${c.reset} ${c.bold}${mode.toUpperCase()}${c.reset}`);
 
   // ================================================================
   // Step 2: Gather configuration
   // ================================================================
-  printStep(2, 8, 'Gathering configuration');
+  printStep(2, 8, "Gathering configuration");
 
-  let existingSettings: any = null;
+  let existingSettings: ExistingSettings | null = null;
   if (source?.hasSettings) {
     try {
-      existingSettings = JSON.parse(readFileSync(join(source.path, 'settings.json'), 'utf-8'));
+      existingSettings = JSON.parse(readFileSync(join(source.path, "settings.json"), "utf-8")) as ExistingSettings;
     } catch (e) {
-      // Ignore
+      // Unreadable settings must be visible: the install continues WITHOUT the existing values.
+      printWarning(
+        `Could not read existing settings.json (${e instanceof Error ? e.message : String(e)}); using defaults`,
+      );
     }
   }
 
@@ -1145,8 +1183,8 @@ async function main(): Promise<void> {
   // ================================================================
   // Step 3: Voice setup
   // ================================================================
-  printStep(3, 8, 'Voice setup');
-  print('');
+  printStep(3, 8, "Voice setup");
+  print("");
 
   let selectedVoiceId = config.daidentity.voiceId || DEFAULT_VOICES.male;
 
@@ -1154,28 +1192,24 @@ async function main(): Promise<void> {
   // Empty string means user intentionally skipped the optional prompt in gatherConfig
   if (config.apiKeys.elevenlabs === undefined) {
     print(`${c.dim}Voice requires ElevenLabs API key (elevenlabs.io)${c.reset}`);
-    config.apiKeys.elevenlabs = await question('ElevenLabs API key');
+    config.apiKeys.elevenlabs = await question("ElevenLabs API key");
   }
 
   // The local terminal voice server (VoiceServer/, port 8888) was removed
   // 2026-09-29, so voices are chosen here without an audible preview.
   if (config.apiKeys.elevenlabs) {
-    if (await confirm('Would you like to change the voice?', false)) {
-      const voiceChoice = await selectOption(
-        'Select voice:',
-        ['Male (current)', 'Female', 'Neutral'],
-        0
-      );
+    if (await confirm("Would you like to change the voice?", false)) {
+      const voiceChoice = await selectOption("Select voice:", ["Male (current)", "Female", "Neutral"], 0);
 
       if (voiceChoice === 1) {
         selectedVoiceId = DEFAULT_VOICES.female;
       } else if (voiceChoice === 2) {
         selectedVoiceId = DEFAULT_VOICES.neutral;
       }
-      printSuccess(`Voice set to ${['male', 'female', 'neutral'][voiceChoice]}`);
+      printSuccess(`Voice set to ${["male", "female", "neutral"][voiceChoice]}`);
     }
   } else {
-    printInfo('Skipping voice - no API key provided');
+    printInfo("Skipping voice - no API key provided");
     selectedVoiceId = DEFAULT_VOICES.male; // Still set default for later
   }
 
@@ -1185,22 +1219,22 @@ async function main(): Promise<void> {
   // ================================================================
   // Step 4: Confirm installation
   // ================================================================
-  printStep(4, 8, 'Confirming installation');
-  print('');
+  printStep(4, 8, "Confirming installation");
+  print("");
   print(`${c.bold}Installation Summary${c.reset}`);
   print(`${c.gray}─────────────────────────────────────────────────${c.reset}`);
   print(`  Mode:        ${mode}`);
   print(`  Target:      ${CLAUDE_DIR}`);
   print(`  User:        ${config.principal.name}`);
   print(`  AI Name:     ${config.daidentity.name}`);
-  print(`  Voice:       ${selectedVoiceId ? 'Configured' : 'Not configured'}`);
-  if (source && (mode === 'migrate' || mode === 'merge')) {
+  print(`  Voice:       ${selectedVoiceId ? "Configured" : "Not configured"}`);
+  if (source && (mode === "migrate" || mode === "merge")) {
     print(`  Migrating:   ${source.path}`);
   }
-  print('');
+  print("");
 
-  if (!await confirm('Proceed with installation?')) {
-    print('');
+  if (!(await confirm("Proceed with installation?"))) {
+    print("");
     print(`${c.yellow}Installation cancelled${c.reset}`);
     process.exit(0);
   }
@@ -1208,20 +1242,20 @@ async function main(): Promise<void> {
   // ================================================================
   // Step 5: Install
   // ================================================================
-  printStep(5, 8, 'Installing Kaya');
-  print('');
+  printStep(5, 8, "Installing Kaya");
+  print("");
 
   // Create directory structure
   createDirectoryStructure(CLAUDE_DIR);
-  printSuccess('Created directory structure');
+  printSuccess("Created directory structure");
 
   // Write settings.json with FULL permissions and hooks
   const settingsJson = generateSettingsJson(config);
-  writeFileSync(join(CLAUDE_DIR, 'settings.json'), settingsJson);
-  printSuccess('Created settings.json with full permissions');
+  writeFileSync(join(CLAUDE_DIR, "settings.json"), settingsJson);
+  printSuccess("Created settings.json with full permissions");
 
   // Perform migration if needed
-  if (source && (mode === 'migrate' || mode === 'merge')) {
+  if (source && (mode === "migrate" || mode === "merge")) {
     await performMigration(source, CLAUDE_DIR);
   }
 
@@ -1231,37 +1265,51 @@ async function main(): Promise<void> {
   // ================================================================
   // Step 6: Setup ZSH alias and terminal
   // ================================================================
-  printStep(6, 8, 'Setting up Kaya command');
+  printStep(6, 8, "Setting up Kaya command");
   setupShellAlias();
 
   // ================================================================
   // Step 7: Kitty terminal setup (optional)
   // ================================================================
-  printStep(7, 8, 'Terminal enhancement (optional)');
-  print('');
+  printStep(7, 8, "Terminal enhancement (optional)");
+  print("");
   await setupKitty();
 
   // ================================================================
   // Step 8: Validate
   // ================================================================
-  printStep(8, 8, 'Validating installation');
+  printStep(8, 8, "Validating installation");
 
   const results = validateInstallation(CLAUDE_DIR);
   printValidationResults(results);
 
   if (results.passed) {
-    print('');
+    print("");
     print(`${c.blue}${c.bold}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}   ${c.green}${c.bold}Kaya v2.3 installed successfully!${c.reset}                         ${c.blue}${c.bold}┃${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}   ${c.cyan}Next steps:${c.reset}                                                 ${c.blue}${c.bold}┃${c.reset}`);
-    const rcFile = IS_ZSH ? '.zshrc' : '.bashrc';
-    print(`${c.blue}${c.bold}┃${c.reset}   1. Run ${c.green}source ~/${rcFile}${c.reset} to enable 'pai' command          ${c.blue}${c.bold}┃${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}   2. Run ${c.green}pai${c.reset} or ${c.green}claude${c.reset} in any directory to start        ${c.blue}${c.bold}┃${c.reset}`);
-    print(`${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`);
+    print(
+      `${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    print(
+      `${c.blue}${c.bold}┃${c.reset}   ${c.green}${c.bold}Kaya v2.3 installed successfully!${c.reset}                         ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    print(
+      `${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    print(
+      `${c.blue}${c.bold}┃${c.reset}   ${c.cyan}Next steps:${c.reset}                                                 ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    const rcFile = IS_ZSH ? ".zshrc" : ".bashrc";
+    print(
+      `${c.blue}${c.bold}┃${c.reset}   1. Run ${c.green}source ~/${rcFile}${c.reset} to enable 'kaya' command         ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    print(
+      `${c.blue}${c.bold}┃${c.reset}   2. Run ${c.green}kaya${c.reset} or ${c.green}claude${c.reset} in any directory to start       ${c.blue}${c.bold}┃${c.reset}`,
+    );
+    print(
+      `${c.blue}${c.bold}┃${c.reset}                                                               ${c.blue}${c.bold}┃${c.reset}`,
+    );
     print(`${c.blue}${c.bold}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${c.reset}`);
-    print('');
+    print("");
   }
 
   process.exit(results.passed ? 0 : 1);

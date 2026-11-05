@@ -85,7 +85,7 @@ The wizard will:
 - Fix permissions automatically (chmod/chown)
 - Ask for your name and preferences
 - Let you choose voice (male/female/neutral)
-- Set up `pai` command alias
+- Set up `kaya` command alias
 - Migrate personal content from backups
 - Validate the installation
 
@@ -152,7 +152,7 @@ If you have an existing `~/.claude/` or `~/.claude-BACKUP/`, the wizard will:
    - USER/ content (personal customizations)
    - Personal skills (_ALLCAPS named)
    - Agent configurations
-   - MEMORY/STATE (work in progress)
+   - MEMORY/State (work in progress)
    - Plans (in-progress plans)
 
 3. **Merge** intelligently:
@@ -211,10 +211,9 @@ After installation, your `~/.claude/` will contain:
 ├── MEMORY/                # Session history & learnings
 ├── hooks/                 # Lifecycle event handlers
 ├── agents/                # Named agent configurations
-├── Plans/                 # Plan mode working files
-├── WORK/                  # Active work sessions
-├── tools/                 # CLI utilities
-└── bin/                   # Executable scripts
+├── plans/                 # Plans, specs and audits
+├── lib/                   # Shared TypeScript libraries
+└── bin/                   # CLI tools and launchd job wrappers
 ```
 
 ---
@@ -275,7 +274,7 @@ bun run install.ts --migrate
 
 After installation:
 
-1. **Run**: `source ~/.zshrc` then use `pai` command from anywhere
+1. **Run**: `source ~/.zshrc` then use `kaya` command from anywhere
 2. **Explore skills**: Ask "What skills do I have?"
 3. **Create personal skills**: Add `_YOURSKILL` directories for private workflows
 4. **Learn the system**: Read `CLAUDE.md` for full documentation

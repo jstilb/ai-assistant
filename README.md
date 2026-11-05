@@ -28,12 +28,10 @@ kaya/
     Productivity/     # LucidTasks, LifeOS, DailyBriefing
     Development/      # Browser and engineering workflows
     ...               # 8 other categories
-  apps/Canvas/        # Kaya desktop surface
   bin/                # CLI tools and launchd job wrappers
   hooks/              # Claude Code lifecycle hooks
   lib/                # Shared TypeScript libraries
   MEMORY/             # File-backed system state and cron manifests
-  Observability/      # Monitoring applications
   KAYASECURITYSYSTEM/ # Security patterns and guidance
 ```
 

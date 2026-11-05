@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck disable=SC2059 # Color variables hold \033 escape text that printf must interpret in its format string; they are fixed constants, never user data.
+# shellcheck disable=SC2154 # model_name, current_dir, duration_ms, cache_*, context_max... are assigned by the eval of the jq key=value output below.
 # ═══════════════════════════════════════════════════════════════════════════════
 # Kaya Status Line
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -39,6 +41,7 @@ LOCATION_CACHE_TTL=3600  # 1 hour (IP rarely changes)
 WEATHER_CACHE_TTL=900    # 15 minutes
 
 # Source .env for API keys
+# shellcheck source=/dev/null
 [ -f "$KAYA_DIR/.env" ] && source "$KAYA_DIR/.env"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,9 +124,15 @@ dir_name=$(basename "$current_dir")
 # COUNT RESOURCES
 # ─────────────────────────────────────────────────────────────────────────────
 
-skills_count=$(ls -d "$KAYA_DIR/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')
-workflows_count=$(ls "$KAYA_DIR/skills"/*/workflows/*.md 2>/dev/null | wc -l | tr -d ' ')
-hooks_count=$(ls "$KAYA_DIR/hooks"/*.ts 2>/dev/null | wc -l | tr -d ' ')
+# Count with globs (nullglob: no match -> empty array -> 0), not `ls | wc`.
+shopt -s nullglob
+_skill_dirs=("$KAYA_DIR/skills"/*/)
+_workflow_files=("$KAYA_DIR/skills"/*/workflows/*.md)
+_hook_files=("$KAYA_DIR/hooks"/*.ts)
+shopt -u nullglob
+skills_count=${#_skill_dirs[@]}
+workflows_count=${#_workflow_files[@]}
+hooks_count=${#_hook_files[@]}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
@@ -181,6 +190,7 @@ KAYA_K='\033[38;2;30;58;138m'         # Navy
 KAYA_A='\033[38;2;59;130;246m'        # Medium blue
 KAYA_Y='\033[38;2;96;165;250m'        # Medium-light blue
 KAYA_A2='\033[38;2;147;197;253m'      # Light blue
+# shellcheck disable=SC2034 # palette entry kept for completeness
 KAYA_LABEL='\033[38;2;100;116;139m'   # Slate for labels
 KAYA_CITY='\033[38;2;147;197;253m'    # Light blue for city
 KAYA_STATE='\033[38;2;100;116;139m'   # Slate for state
@@ -225,9 +235,10 @@ render_context_bar() {
     local filled=$((pct * width / 100))
     [ "$filled" -lt 0 ] && filled=0
 
-    for i in $(seq 1 $width 2>/dev/null); do
+    for i in $(seq 1 "$width" 2>/dev/null); do
         if [ "$i" -le "$filled" ]; then
-            local color=$(get_bucket_color $i $width)
+            local color
+            color=$(get_bucket_color "$i" "$width")
             last_color="$color"
             output="${output}${color}⛁${RESET}"
             [ "$width" -gt 8 ] && output="${output} "
@@ -293,7 +304,13 @@ if [ "$rl_enabled" = "true" ] && { [ "$rl_5pct" != "null" ] || [ "$rl_7pct" != "
 fi
 
 # Color-coded rate limit segment appended to context line; omitted when data absent
-rl_color() { local p=$1; [ "$p" -lt 60 ] && printf '%b' "$RATE_GREEN" || { [ "$p" -lt 80 ] && printf '%b' "$RATE_YELLOW" || printf '%b' "$RATE_RED"; }; }
+rl_color() {
+  local p=$1
+  if [ "$p" -lt 60 ]; then printf '%b' "$RATE_GREEN"
+  elif [ "$p" -lt 80 ]; then printf '%b' "$RATE_YELLOW"
+  else printf '%b' "$RATE_RED"
+  fi
+}
 rate_limit_display() {
   [ "$rl_5pct" = "null" ] && [ "$rl_7pct" = "null" ] && return
   local out=""; [ "$rl_5pct" != "null" ] && out="${out}$(rl_color "$rl_5pct")5h:${rl_5pct}%${RESET}"
@@ -312,11 +329,12 @@ current_time=$(date +"%H:%M")
 # Fetch location from IP (with caching)
 fetch_location() {
     local cache_age=999999
-    [ -f "$LOCATION_CACHE" ] && cache_age=$(($(date +%s) - $(stat -f %m "$LOCATION_CACHE" 2>/dev/null || echo 0)))
+    [ -f "$LOCATION_CACHE" ] && cache_age=$(($(date +%s) - $(stat -c %Y "$LOCATION_CACHE" 2>/dev/null || stat -f %m "$LOCATION_CACHE" 2>/dev/null || echo 0)))
 
     if [ "$cache_age" -gt "$LOCATION_CACHE_TTL" ]; then
         # Fetch fresh location data
-        local loc_data=$(curl -s --max-time 2 "http://ip-api.com/json/?fields=city,regionName,country,lat,lon" 2>/dev/null)
+        local loc_data
+        loc_data=$(curl -s --max-time 2 "http://ip-api.com/json/?fields=city,regionName,country,lat,lon" 2>/dev/null)
         if [ -n "$loc_data" ] && echo "$loc_data" | jq -e '.city' >/dev/null 2>&1; then
             echo "$loc_data" > "$LOCATION_CACHE"
         fi
@@ -333,7 +351,7 @@ fetch_location() {
 # Fetch weather (with caching) using Open-Meteo (free, no API key)
 fetch_weather() {
     local cache_age=999999
-    [ -f "$WEATHER_CACHE" ] && cache_age=$(($(date +%s) - $(stat -f %m "$WEATHER_CACHE" 2>/dev/null || echo 0)))
+    [ -f "$WEATHER_CACHE" ] && cache_age=$(($(date +%s) - $(stat -c %Y "$WEATHER_CACHE" 2>/dev/null || stat -f %m "$WEATHER_CACHE" 2>/dev/null || echo 0)))
 
     if [ "$cache_age" -gt "$WEATHER_CACHE_TTL" ]; then
         # Get lat/lon from location cache
@@ -347,10 +365,13 @@ fetch_weather() {
         lon="${lon:-122.4194}"
 
         # Fetch from Open-Meteo (free, fast, no API key)
-        local weather_json=$(curl -s --max-time 3 "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit" 2>/dev/null)
+        local weather_json
+        weather_json=$(curl -s --max-time 3 "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit" 2>/dev/null)
         if [ -n "$weather_json" ] && echo "$weather_json" | jq -e '.current' >/dev/null 2>&1; then
-            local temp=$(echo "$weather_json" | jq -r '.current.temperature_2m' 2>/dev/null)
-            local code=$(echo "$weather_json" | jq -r '.current.weather_code' 2>/dev/null)
+            local temp
+            temp=$(echo "$weather_json" | jq -r '.current.temperature_2m' 2>/dev/null)
+            local code
+            code=$(echo "$weather_json" | jq -r '.current.weather_code' 2>/dev/null)
             # Map weather codes to conditions
             local condition="Clear"
             case "$code" in
@@ -421,7 +442,10 @@ else
 fi
 
 # Percentage color
-[ "$context_pct" -le 33 ] && pct_color="$EMERALD" || { [ "$context_pct" -le 66 ] && pct_color='\033[38;2;251;191;36m' || pct_color="$ROSE"; }
+if [ "$context_pct" -le 33 ]; then pct_color="$EMERALD"
+elif [ "$context_pct" -le 66 ]; then pct_color='\033[38;2;251;191;36m'
+else pct_color="$ROSE"
+fi
 
 case "$MODE" in
     nano)
@@ -505,7 +529,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     total_changed=$((modified + staged))
 
     # Ahead/behind remote
-    ahead_behind=$(git rev-list --left-right --count HEAD...@{u} 2>/dev/null)
+    ahead_behind=$(git rev-list --left-right --count HEAD...'@{u}' 2>/dev/null)
     if [ -n "$ahead_behind" ]; then
         ahead=$(echo "$ahead_behind" | awk '{print $1}')
         behind=$(echo "$ahead_behind" | awk '{print $2}')
@@ -597,7 +621,7 @@ if [ "$MODE" = "normal" ]; then
     echo ""
 
     # Refresh quote if stale (>30s)
-    quote_age=$(($(date +%s) - $(stat -f %m "$QUOTE_CACHE" 2>/dev/null || echo 0)))
+    quote_age=$(($(date +%s) - $(stat -c %Y "$QUOTE_CACHE" 2>/dev/null || stat -f %m "$QUOTE_CACHE" 2>/dev/null || echo 0)))
     if [ "$quote_age" -gt 30 ] || [ ! -f "$QUOTE_CACHE" ]; then
         if [ -n "${ZENQUOTES_API_KEY:-}" ]; then
             new_quote=$(curl -s --max-time 1 "https://zenquotes.io/api/random/${ZENQUOTES_API_KEY}" 2>/dev/null | \

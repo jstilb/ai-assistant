@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# PAI System .gitignore - Private Repository
+# Kaya .gitignore - Private Repository
 # ═══════════════════════════════════════════════════════════════════════════════
 # This file excludes secrets, credentials, and operational data that should
 # never be committed, even to a private repo.
@@ -10,9 +10,6 @@
 # ─────────────────────────────────────────────────────────────────────────────────
 .env
 .env.*
-.env.local
-.env.production
-.env.development
 *.env
 
 # API Keys & Certificates
@@ -21,38 +18,59 @@
 *.crt
 *.p12
 *.pfx
-*credential*
-*secret*
-!/skills/Automation/AutoMaintenance/Workflows/SecretScanning.md
-*_secret*
-*-secret*
+# Precise secret/credential file names. These were once substring globs
+# (`*secret*`, `*credential*`, `auth*.json`, ...) that silently hid new source
+# files such as SecretInput.ts or credential-input-clients.test.ts.
 *.secret
-api_key*
-apikey*
+*.secrets
+secret.json
+secrets.json
+secrets.*.json
+*-secrets.json
+*_secrets.json
+credentials.json
+credentials.*.json
+.credentials.json
+client_secret*.json
+service-account*.json
+api_key
+api_keys.json
+apikey
+apikeys.json
+auth.json
+oauth.json
+oauth_creds.json
 *token.json
 *tokens.json
-# NOT a secret — a scan-EXCLUDE config file (E1 — secret-scan-honest). The
-# broad `*secret*` pattern above is substring-based and would otherwise
-# swallow it purely because its name contains "secret" (it lists paths to
-# skip during a secret SCAN; it never contains a secret value itself). See
-# SecurityAuditor.ts.
-!skills/Automation/AutoMaintenance/Tools/secretscan-excludes.txt
-
-# PAI Secrets (NEVER COMMIT)
-secrets.json
-
-# OAuth & Auth files
-oauth*.json
+# Safety net: broad substring rules still catch stray secret files on the Mac
+# (untracked credential dumps, exported keys). Source and docs are re-included
+# by extension, so files like SecretInput.ts are never silently hidden.
+*secret*
+*credential*
 auth*.json
+oauth*.json
+api_key*
+!*secret*.ts
+!*Secret*.ts
+!*credential*.ts
+!*Credential*.ts
+!*secret*.md
+!*Secret*.md
+!*credential*.md
+!*Credential*.md
+!*secret*.txt
 .credentials/
-credentials/
+.auth/
+/credentials/
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # OPERATIONAL DATA (Temporary/Regenerable)
 # ─────────────────────────────────────────────────────────────────────────────────
-# Logs and debug output
-logs/
-debug/
+# Logs and debug output (Claude Code root dirs are anchored so nested source
+# dirs named logs/ debug/ are never hidden)
+/logs/
+/debug/
+MEMORY/**/logs/
 *.log
 *.log.*
 
@@ -80,21 +98,21 @@ session-env/
 paste-cache/
 
 # Telemetry and monitoring data
-telemetry/
-statsig/
+/telemetry/
+/statsig/
 
 # Claude Code internal files
 tool-results/
-projects/*/tool-results/
 history.jsonl
 
 # Session-specific todos (ephemeral, regenerated each session)
-todos/
+/todos/
 
 # Claude Code session data (ephemeral, regenerated each session)
-backups/
-file-history/
-projects/
+/backups/
+MEMORY/**/backups/
+/file-history/
+/projects/
 plugins/cache/
 
 # ─────────────────────────────────────────────────────────────────────────────────
@@ -121,27 +139,31 @@ ehthumbs.db
 # NODE/BUN DEPENDENCIES (Regenerable)
 # ─────────────────────────────────────────────────────────────────────────────────
 node_modules/
-**/node_modules/
 .bun/
 bun.lockb
-bun.lock
-**/bun.lock
-**/bun.lockb
-**/*-bun.lock
 *-bun.lock
+# bun.lock is tracked in every project (root and nested) so installs are reproducible.
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # LARGE GENERATED FILES
 # ─────────────────────────────────────────────────────────────────────────────────
 # Bun-compiled bundles (regenerable via bun build)
-skills/UnixCLI/Tools/Sheets.js
 
-# Observability build artifacts
-Observability/*/node_modules/
-Observability/apps/*/node_modules/
-Observability/*/.next/
-Observability/*/dist/
-Observability/apps/*/dist/
+# Build output
+dist/
+/build/
+/apps/*/build/
+.next/
+coverage/
+*.app/
+
+# Merge/patch leftovers and local databases (tracked *.db files are not affected)
+*.orig
+*.rej
+*.sqlite
+*.duckdb
+*.db-wal
+*.db-shm
 
 # Dogfood screenshots — runtime artifacts, pruned daily by launchd
 dogfood-screenshots/
@@ -162,9 +184,9 @@ worktrees/
 # ─────────────────────────────────────────────────────────────────────────────────
 # CACHE FILES (Regenerable)
 # ─────────────────────────────────────────────────────────────────────────────────
-cache/
+/cache/
+MEMORY/**/cache/
 .cache/
-**/.cache/
 *-cache.json
 stats-cache.json
 
@@ -172,14 +194,12 @@ stats-cache.json
 # 2026-03-12 SkillAudit; committed .pyc files found under
 # skills/Development/CreateSkill/Tools/__pycache__/ (fable-audit batch2).
 __pycache__/
-**/__pycache__/
 *.pyc
 
 # ─────────────────────────────────────────────────────────────────────────────────
-# LOCK FILES (Session-specific)
+# CLAUDE CODE IDE INTEGRATION (session-specific lock files; /tasks/ is ignored below)
 # ─────────────────────────────────────────────────────────────────────────────────
-ide/*.lock
-tasks/**/.lock
+/ide/
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # PLUGINS (Fetched from remote, not source)
@@ -194,47 +214,39 @@ plugins/marketplaces/
 # git-tracked via a broad "snapshot runtime state" commit (74cb33e4a, 2026-06-21).
 # The claude binary owns this directory's lifecycle; never delete the on-disk
 # files, only keep them out of version control. Mirrors events.db/Takeout
-# practice above. See plans/audits/fable-audit-infra-cleanup-2026-07-17.md §1.
+# practice above. (Rationale: the 2026-07-17 fable-audit infra-cleanup report, in git history.)
 /daemon/
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # TRANSIENT STATE
 # ─────────────────────────────────────────────────────────────────────────────────
-MEMORY/State/current-work.json
-# N4/A7: per-session/uuid variants of the above (AutoWorkCreation.ts +
-# ResponseCapture.ts write both the global singleton above AND a
-# per-session copy on every call); plus prompt/context session scratch
-# files — none of these were ever matched by the literal line, and their
-# daily accumulation was the N4 git_dirty noise source. See
-# plans/remediation-n1n5/PLAN.md N4.
-MEMORY/State/current-work-*.json
-MEMORY/State/prompt-context-*.json
-MEMORY/State/context-session-*.json
-MEMORY/State/cache/
 MEMORY/VALIDATION/
 MEMORY/daemon/cron/*.backup.json
 # Transient per-job run-lock files (lib/cron/RunLock.ts) — exist only while a
 # wrapper is executing; committing one would snapshot meaningless state.
 MEMORY/daemon/cron/locks/
-# Fixture-net accuracy records (Tools/FixtureRunnerShared.ts's writeSummary()) —
-# regenerated by a live classifier call every eval run (see FixtureAccuracy.ts's
-# docblock: "record_path here is regenerated per run"), not a golden artifact.
-# Was inconsistently tracked (capture-routing.json committed once then
-# perpetually dirty; learning-capture.json/prompt-classification.json never
-# tracked at all) — see MEMORY/SkillAudits/evals-infra-audit-2026-07-09/fixtures.md
-# finding 4. evals-rebuild slice B7.
-MEMORY/EVALS/live-fixture-runs/
+# (MEMORY/EVALS/ — incl. live-fixture-runs/ fixture-net accuracy records — and
+# MEMORY/State/ are ignored wholesale in the RUNTIME CHURN section below.)
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # AUTO-GENERATED PLANS (temp plan mode files with random names)
 # ─────────────────────────────────────────────────────────────────────────────────
+# Matches only DIRECT children of plans/ (adjective-verb-noun.md names written by
+# plan mode). Hand-written plans go in a subdirectory (plans/<topic>/...), which
+# this rule does not touch. See plans/README.md.
 plans/*-*-*.md
+
+# Design-project screenshot iterations (shoot.ts output while building). Commit only
+# the final set and the shots a decision doc links to; build iterations stay local.
+docs/design/**/shots/build-*/
+docs/design/**/shots/iter-*/
+docs/design/**/shots/wip*/
+docs/design/**/shots/tmp*/
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # GENERATED INDEXES & HISTORY
 # ─────────────────────────────────────────────────────────────────────────────────
 skills/skill-index.json
-history/*.jsonl
 
 # ─────────────────════════════════════════════════════════════════════════════════
 # WHAT IS TRACKED (For Reference)
@@ -246,7 +258,6 @@ history/*.jsonl
 # - MEMORY/           (session history, learnings - YOUR BACKUP)
 # - context/          (personal context files - YOUR BACKUP)
 # - plans/            (planning documents)
-# - Observability/    (dashboard code, minus builds)
 # - settings.json     (identity config - no secrets)
 # - CLAUDE.md         (entry point)
 # - install.ts        (setup script)
@@ -254,16 +265,10 @@ history/*.jsonl
 # were stale and silently tracked the live DB — committing a WAL/shm or replacing
 # the .db inode under the always-on BoardServer caused SQLITE_IOERR_VNODE outages).
 skills/Productivity/LucidTasks/Data/*.db
-skills/Productivity/LucidTasks/Data/*.db-wal
-skills/Productivity/LucidTasks/Data/*.db-shm
 # keep the old (now-empty) paths too, harmless if the dir never returns
 skills/LucidTasks/Data/*.db
-skills/LucidTasks/Data/*.db-wal
-skills/LucidTasks/Data/*.db-shm
 # LifeOS SQLite mirror (Phase 1 overhaul — mq5vmjmh-8rf97i)
 skills/Productivity/LifeOS/Data/*.db
-skills/Productivity/LifeOS/Data/*.db-wal
-skills/Productivity/LifeOS/Data/*.db-shm
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # SCREENSHOTS (Browser automation artifacts, large binaries)
@@ -363,6 +368,7 @@ skills/Development/Evals/Results/ablations/*/profiles/
 # `git rm --cached` + staged-set-verified bare commit on main (see
 # ~/.kaya/memory/project_remediation_s1s5_executed_20260721.md).
 MEMORY/daemon/cron/run-ledger.jsonl
+MEMORY/daemon/cron/run-ledger.*.jsonl
 MEMORY/daemon/cron/reconciliation.jsonl
 MEMORY/daemon/cron/logs/
 MEMORY/daemon/message-queue.json
@@ -381,6 +387,7 @@ MEMORY/BRIEFINGS/briefing-voice.ogg
 MEMORY/BRIEFINGS/.sent-*
 MEMORY/DIGESTS/metrics.jsonl
 MEMORY/LEARNING/SIGNALS/*.jsonl
+MEMORY/LEARNING/SIGNALS/*.jsonl.bak-*
 MEMORY/VOICE/voice-events.jsonl
 MEMORY/AUTOINFO/digests/*.json
 MEMORY/Commerce/instacart-last-run.json
@@ -420,14 +427,17 @@ daemon.status.json
 /tasks/
 /chrome/
 /jobs/*
-# jobs/ecbae3ec was deliberately rescued into git (context-pollution audit).
-!/jobs/ecbae3ec/
 /data/pairs.jsonl
 /data/lucidtasks.db
 /tmp/
 # Scratch dumps: undo snapshots (4 MB index copies) and watch-later exports.
 .scratch/context-integrity/undo-*/
-.scratch/youtube-curation/assets/
+# Source (SummarizeSnapshot.ts, runbook, fixtures/) stays tracked; only the large raw dumps are ignored.
+.scratch/youtube-curation/assets/wl-snapshot-*.json
+.scratch/youtube-curation/assets/wl-scrape-*-raw.json
+.scratch/youtube-curation/assets/history-sample-*.json
+!.scratch/youtube-curation/assets/fixtures/
+!.scratch/youtube-curation/assets/fixtures/**
 
 # Claude Code runtime state (2026-10-26 shared-tree sweep): written by the harness, not Kaya
 plugins/plugin-directory-cache-v2.json*
@@ -437,3 +447,49 @@ skills/synced/
 policy-limits.json
 policy-limits.json.stamp.json
 remote-settings.json
+
+# Hygiene sweep (2026-11-04)
+# Pre-migration snapshots: git history keeps them; never re-commit.
+/.backups/
+# Per-test scratch dirs left behind by crashed test runs.
+__test_tmp*/
+# Paths built from an unset env var (e.g. "$UNDEFINED/.cache") — a bug signal, never data.
+/undefined/
+# Empty stderr captures from tool runs.
+*.err
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# RUNTIME STATE UNTRACKED (repo-hygiene sweep, 2026-11-04)
+# ─────────────────────────────────────────────────────────────────────────────────
+# Written by daemons/jobs on every run; all readers tolerate absence (verified).
+# Worktree liveness heartbeats (lib/core/WorktreeManager.ts; legacy in-repo fallback
+# of runtimeDir() — normally ~/.kaya/runtime/locks).
+MEMORY/locks/
+# Telegram bot logs/sessions (outbound ledger, per-session transcripts). context.md stays tracked.
+MEMORY/TELEGRAM/outbound.jsonl*
+MEMORY/TELEGRAM/sessions/
+MEMORY/TELEGRAM/conversations/
+# Daemon runtime state/logs. MEMORY/daemon/cron/manifests/ is live config and stays tracked;
+# s4-applied-labels.jsonl / s4-migration-diff.md are historical migration records and stay tracked.
+MEMORY/daemon/daemon.jsonl*
+MEMORY/daemon/daemon-state.json
+MEMORY/daemon/*.lock
+MEMORY/daemon/*.heartbeat
+# JobSearch dated scan dumps (regenerated by JobScanner; readLatestScanResults only reads <=2 days).
+skills/Commerce/JobSearch/State/scan-results/
+# TechDebtAuditor weekly full-registry dumps (never read back; writer keeps the newest 4 on disk).
+MEMORY/AutoMaintenance/tech-debt/
+# Caches / append logs
+MEMORY/stagehand-cache/
+MEMORY/ACTIVATION/activation-log.jsonl
+# Mac-only runtime data the remote cleanup could not see (found at merge time, 2026-11-04).
+# The old unanchored backups/, logs/, projects/ and history/*.jsonl rules hid these paths.
+/MEMORY/PROJECTS/registry.json
+/USER/TELOS/backups/
+/history/*.jsonl
+/skills/Productivity/LifeOS/Data/backups/
+/skills/Productivity/LifeOS/logs/
+/skills/System/KayaUpgrade/Logs/
+
+# PromptInjectionDefender / SecurityValidator event logs (runtime, per machine)
+MEMORY/SECURITY/
