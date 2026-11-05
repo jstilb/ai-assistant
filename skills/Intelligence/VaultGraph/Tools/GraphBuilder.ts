@@ -19,18 +19,12 @@
  *   bun GraphBuilder.ts --path <from> <to>           # Shortest path
  */
 
-import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
-import { join, relative, dirname, basename, extname } from "path";
+import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
+import { join, relative, dirname, basename, extname } from "node:path";
 import YAML from "yaml";
-import type {
-  GraphNode,
-  GraphEdge,
-  GraphState,
-  GraphStats,
-  GraphBuildOptions,
-  EdgeType,
-  DEFAULT_OBSIDIAN_OPTIONS,
-} from "./types.ts";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { saveGraphState, loadOrRebuildGraphState } from "./KGPersistence.ts";
+import type { GraphNode, GraphEdge, GraphState, GraphStats, GraphBuildOptions, EdgeType } from "./types.ts";
 
 // ============================================
 // MARKDOWN PARSING
@@ -40,11 +34,11 @@ import type {
  * Extract YAML frontmatter from markdown content.
  * Returns parsed object or empty object if no frontmatter.
  */
-function extractFrontmatter(content: string): Record<string, any> {
+function extractFrontmatter(content: string): Record<string, unknown> {
   const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!match) return {};
   try {
-    return YAML.parse(match[1]) || {};
+    return YAML.parse(match[1] ?? "") || {};
   } catch {
     return {};
   }
@@ -65,20 +59,13 @@ function extractWikilinks(content: string): string[] {
   const links: string[] = [];
   // Match [[target]] and [[target|display]] but NOT ![[embeds]]
   const regex = /(?<!!)\[\[([^\]]+?)\]\]/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    let target = match[1];
+  for (const match of content.matchAll(regex)) {
+    let target = match[1] ?? "";
     // Remove display text: [[target|display]] -> target
-    if (target.includes("|")) {
-      target = target.split("|")[0];
-    }
     // Remove heading anchor: [[target#heading]] -> target
-    if (target.includes("#")) {
-      target = target.split("#")[0];
-    }
     // Remove block reference: [[target^block]] -> target
-    if (target.includes("^")) {
-      target = target.split("^")[0];
+    for (const separator of ["|", "#", "^"]) {
+      target = target.split(separator)[0] ?? "";
     }
     if (target.trim()) {
       links.push(target.trim());
@@ -93,12 +80,12 @@ function extractWikilinks(content: string): string[] {
 function extractEmbeds(content: string): string[] {
   const embeds: string[] = [];
   const regex = /!\[\[([^\]]+?)\]\]/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    let target = match[1];
+  for (const match of content.matchAll(regex)) {
+    let target = match[1] ?? "";
     // Remove heading/block anchors
-    if (target.includes("#")) target = target.split("#")[0];
-    if (target.includes("^")) target = target.split("^")[0];
+    for (const separator of ["#", "^"]) {
+      target = target.split(separator)[0] ?? "";
+    }
     target = target.trim();
     // Skip image/media embeds
     if (target && !target.match(/\.(png|jpg|jpeg|gif|svg|webp|mp4|mp3|pdf)$/i)) {
@@ -117,9 +104,8 @@ function extractInlineTags(body: string): string[] {
   // Match #tag but not inside code blocks or links
   // Simple approach: match #word patterns that aren't part of headings
   const regex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/-]*)/gm;
-  let match;
-  while ((match = regex.exec(body)) !== null) {
-    tags.push(match[1].toLowerCase());
+  for (const match of body.matchAll(regex)) {
+    if (match[1]) tags.push(match[1].toLowerCase());
   }
   return [...new Set(tags)];
 }
@@ -130,9 +116,8 @@ function extractInlineTags(body: string): string[] {
 function extractHeadings(body: string): string[] {
   const headings: string[] = [];
   const regex = /^#{2,}\s+(.+)$/gm;
-  let match;
-  while ((match = regex.exec(body)) !== null) {
-    headings.push(match[1].trim());
+  for (const match of body.matchAll(regex)) {
+    if (match[1]) headings.push(match[1].trim());
   }
   return headings;
 }
@@ -142,7 +127,7 @@ function extractHeadings(body: string): string[] {
  */
 function extractTitle(body: string, filename: string): string {
   const match = body.match(/^#\s+(.+)$/m);
-  if (match) return match[1].trim();
+  if (match?.[1]) return match[1].trim();
   // Fallback to filename without extension
   return basename(filename, extname(filename));
 }
@@ -222,12 +207,7 @@ export function parseMarkdownFile(filePath: string, rootPath: string): GraphNode
 /**
  * Recursively find all files matching criteria.
  */
-function findFiles(
-  dir: string,
-  extensions: string[],
-  excludePrefixes: string[],
-  rootPath: string
-): string[] {
+function findFiles(dir: string, extensions: string[], excludePrefixes: string[], rootPath: string): string[] {
   const results: string[] = [];
 
   let entries: string[];
@@ -242,7 +222,7 @@ function findFiles(
     if (excludePrefixes.some((p) => entry.startsWith(p))) continue;
 
     const fullPath = join(dir, entry);
-    let stat;
+    let stat: ReturnType<typeof statSync>;
     try {
       stat = statSync(fullPath);
     } catch {
@@ -295,10 +275,7 @@ function buildLinkResolutionMap(nodes: GraphNode[]): Map<string, string> {
  * Resolve a wikilink target to a node ID.
  * Returns null if the target cannot be resolved (broken link).
  */
-function resolveLink(
-  target: string,
-  resolutionMap: Map<string, string>
-): string | null {
+function resolveLink(target: string, resolutionMap: Map<string, string>): string | null {
   const normalized = target.toLowerCase().trim();
   return resolutionMap.get(normalized) || null;
 }
@@ -311,20 +288,11 @@ function resolveLink(
  * Build a complete knowledge graph from a directory of markdown files.
  */
 export async function buildGraph(options: GraphBuildOptions): Promise<GraphState> {
-  const startTime = Date.now();
-
   // 1. Discover all markdown files
-  const files = findFiles(
-    options.rootPath,
-    options.includeExtensions,
-    options.excludePrefixes,
-    options.rootPath
-  );
+  const files = findFiles(options.rootPath, options.includeExtensions, options.excludePrefixes, options.rootPath);
 
   // 2. Parse all files into nodes
-  const nodes: GraphNode[] = files.map((f) =>
-    parseMarkdownFile(f, options.rootPath)
-  );
+  const nodes: GraphNode[] = files.map((f) => parseMarkdownFile(f, options.rootPath));
 
   // 3. Build link resolution map
   const linkMap = buildLinkResolutionMap(nodes);
@@ -398,18 +366,18 @@ export async function buildGraph(options: GraphBuildOptions): Promise<GraphState
     }
     for (const [_tag, nodeIds] of tagToNodes) {
       if (nodeIds.length < 2 || nodeIds.length > 50) continue; // Skip very common tags
-      for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-          const key = `tag|${nodeIds[i]}|${nodeIds[j]}`;
+      for (const [i, a] of nodeIds.entries()) {
+        for (const b of nodeIds.slice(i + 1)) {
+          const key = `tag|${a}|${b}`;
           if (!edgeSet.has(key)) {
             edges.push({
-              source: nodeIds[i],
-              target: nodeIds[j],
+              source: a,
+              target: b,
               type: "tag",
               weight: 0.3,
             });
             edgeSet.add(key);
-            edgeSet.add(`tag|${nodeIds[j]}|${nodeIds[i]}`);
+            edgeSet.add(`tag|${b}|${a}`);
           }
         }
       }
@@ -426,18 +394,18 @@ export async function buildGraph(options: GraphBuildOptions): Promise<GraphState
     }
     for (const [_folder, nodeIds] of folderToNodes) {
       if (nodeIds.length < 2) continue;
-      for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-          const key = `folder|${nodeIds[i]}|${nodeIds[j]}`;
+      for (const [i, a] of nodeIds.entries()) {
+        for (const b of nodeIds.slice(i + 1)) {
+          const key = `folder|${a}|${b}`;
           if (!edgeSet.has(key)) {
             edges.push({
-              source: nodeIds[i],
-              target: nodeIds[j],
+              source: a,
+              target: b,
               type: "folder",
               weight: 0.2,
             });
             edgeSet.add(key);
-            edgeSet.add(`folder|${nodeIds[j]}|${nodeIds[i]}`);
+            edgeSet.add(`folder|${b}|${a}`);
           }
         }
       }
@@ -456,9 +424,7 @@ export async function buildGraph(options: GraphBuildOptions): Promise<GraphState
   }
 
   // Identify orphan notes: no wikilink inLinks AND no wikilink outLinks
-  const orphans = nodes.filter(
-    (n) => n.outLinks.length === 0 && n.inLinks.length === 0
-  );
+  const orphans = nodes.filter((n) => n.outLinks.length === 0 && n.inLinks.length === 0);
 
   // Connection counts (wikilinks only for most/least connected)
   const connectionCounts = nodes.map((n) => ({
@@ -467,10 +433,7 @@ export async function buildGraph(options: GraphBuildOptions): Promise<GraphState
   }));
   connectionCounts.sort((a, b) => b.connections - a.connections);
 
-  const totalConnections = connectionCounts.reduce(
-    (sum, c) => sum + c.connections,
-    0
-  );
+  const totalConnections = connectionCounts.reduce((sum, c) => sum + c.connections, 0);
 
   const stats: GraphStats = {
     totalNodes: nodes.length,
@@ -487,8 +450,6 @@ export async function buildGraph(options: GraphBuildOptions): Promise<GraphState
     tagCounts,
     folderCounts,
   };
-
-  const buildTimeMs = Date.now() - startTime;
 
   const state: GraphState = {
     version: 1,
@@ -532,7 +493,7 @@ export function findShortestPath(
   state: GraphState,
   fromId: string,
   toId: string,
-  edgeTypes?: EdgeType[]
+  edgeTypes?: EdgeType[],
 ): string[] | null {
   if (fromId === toId) return [fromId];
 
@@ -549,9 +510,7 @@ export function findShortestPath(
 
   // BFS
   const visited = new Set<string>([fromId]);
-  const queue: { nodeId: string; path: string[] }[] = [
-    { nodeId: fromId, path: [fromId] },
-  ];
+  const queue: { nodeId: string; path: string[] }[] = [{ nodeId: fromId, path: [fromId] }];
 
   while (queue.length > 0) {
     const { nodeId, path } = queue.shift()!;
@@ -578,12 +537,10 @@ export function findShortestPath(
 export function extractSubgraph(
   state: GraphState,
   centerId: string,
-  maxDepth: number = 2
+  maxDepth: number = 2,
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const visited = new Set<string>([centerId]);
-  const queue: { nodeId: string; depth: number }[] = [
-    { nodeId: centerId, depth: 0 },
-  ];
+  const queue: { nodeId: string; depth: number }[] = [{ nodeId: centerId, depth: 0 }];
 
   while (queue.length > 0) {
     const { nodeId, depth } = queue.shift()!;
@@ -601,9 +558,7 @@ export function extractSubgraph(
   }
 
   const subNodes = state.nodes.filter((n) => visited.has(n.id));
-  const subEdges = state.edges.filter(
-    (e) => visited.has(e.source) && visited.has(e.target)
-  );
+  const subEdges = state.edges.filter((e) => visited.has(e.source) && visited.has(e.target));
 
   return { nodes: subNodes, edges: subEdges };
 }
@@ -636,9 +591,7 @@ function formatStats(stats: GraphStats): string {
     `Cluster count:      ${stats.clusterCount}`,
     "",
     "Most Connected Notes:",
-    ...stats.mostConnected
-      .slice(0, 5)
-      .map((id, i) => `  ${i + 1}. ${id}`),
+    ...stats.mostConnected.slice(0, 5).map((id, i) => `  ${i + 1}. ${id}`),
     "",
     "Tag Distribution (top 15):",
     ...Object.entries(stats.tagCounts)
@@ -663,16 +616,7 @@ function formatStats(stats: GraphStats): string {
 // CLI
 // ============================================
 
-const DEFAULT_STATE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
-
-import { readFileSync } from "fs";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome";
+const DEFAULT_STATE_PATH = join(defaultKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
 /**
  * Resolve the Obsidian vault path from:
@@ -694,12 +638,17 @@ function getVaultPath(): string {
         return secrets.obsidian_vault;
       }
     }
-  } catch { /* fall through */ }
+  } catch (err) {
+    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
+    console.error(
+      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // 3. No fallback — fail clearly
   throw new Error(
     "OBSIDIAN_VAULT not configured. " +
-    'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json'
+      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
   );
 }
 
@@ -731,9 +680,9 @@ Options:
   }
 
   const rootIdx = args.indexOf("--root");
-  const rootPath = rootIdx >= 0 && args[rootIdx + 1] ? args[rootIdx + 1] : getVaultPath();
+  const rootPath = (rootIdx >= 0 ? args[rootIdx + 1] : undefined) || getVaultPath();
   const outIdx = args.indexOf("--output");
-  const outputPath = outIdx >= 0 && args[outIdx + 1] ? args[outIdx + 1] : DEFAULT_STATE_PATH;
+  const outputPath = (outIdx >= 0 ? args[outIdx + 1] : undefined) || DEFAULT_STATE_PATH;
   const forceRebuild = args.includes("--force-rebuild");
 
   const buildFn = () =>

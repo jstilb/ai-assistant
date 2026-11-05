@@ -20,18 +20,13 @@
  *   bun GapDetector.ts --create <gapIndex>      # Create note for gap
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname, basename } from "path";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { loadTelosGoals as loadTelosGoalsData } from "../../../../lib/core/TelosGoals.ts";
 import { loadGraphState, buildEmptyGraphState } from "./KGPersistence.ts";
-import type {
-  GraphState,
-  GraphNode,
-  KnowledgeGap,
-  NoteTemplate,
-  GapType,
-} from "./types.ts";
+import type { GraphState, KnowledgeGap, NoteTemplate, GapType } from "./types.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // TELOS INTEGRATION
@@ -77,17 +72,12 @@ function loadGapDetectorGoals(): TelosGoal[] {
 /**
  * Find TELOS goals related to a gap.
  */
-function findRelatedGoals(
-  gap: KnowledgeGap,
-  goals: TelosGoal[]
-): string[] {
+function findRelatedGoals(gap: KnowledgeGap, goals: TelosGoal[]): string[] {
   const gapText = `${gap.description} ${gap.suggestion}`.toLowerCase();
   const related: string[] = [];
 
   for (const goal of goals) {
-    const matchScore = goal.keywords.filter((kw) =>
-      gapText.includes(kw)
-    ).length;
+    const matchScore = goal.keywords.filter((kw) => gapText.includes(kw)).length;
     if (matchScore > 0) {
       related.push(`${goal.id}: ${goal.title}`);
     }
@@ -263,12 +253,9 @@ function detectWeakBridges(state: GraphState): KnowledgeGap[] {
 /**
  * Run all gap detection and cross-reference with TELOS goals.
  */
-export function detectGaps(
-  state: GraphState,
-  types?: GapType[]
-): KnowledgeGap[] {
+export function detectGaps(state: GraphState, types?: GapType[]): KnowledgeGap[] {
   const goals = loadGapDetectorGoals();
-  let allGaps: KnowledgeGap[] = [];
+  const allGaps: KnowledgeGap[] = [];
 
   const detectors: Record<GapType, () => KnowledgeGap[]> = {
     orphan: () => detectOrphans(state),
@@ -296,9 +283,7 @@ export function detectGaps(
   // Sort by severity (high first), then by number of related nodes
   const severityOrder = { high: 0, medium: 1, low: 2 };
   allGaps.sort(
-    (a, b) =>
-      severityOrder[a.severity] - severityOrder[b.severity] ||
-      b.relatedNodes.length - a.relatedNodes.length
+    (a, b) => severityOrder[a.severity] - severityOrder[b.severity] || b.relatedNodes.length - a.relatedNodes.length,
   );
 
   return allGaps;
@@ -311,10 +296,7 @@ export function detectGaps(
 /**
  * Generate a template note to fill a detected gap.
  */
-export function generateNoteTemplate(
-  gap: KnowledgeGap,
-  state: GraphState
-): NoteTemplate | null {
+export function generateNoteTemplate(gap: KnowledgeGap, state: GraphState): NoteTemplate | null {
   if (gap.type === "broken_link") {
     // Create the missing note
     const title = gap.description.match(/"([^"]+)"/)?.[1] || "Untitled";
@@ -400,11 +382,7 @@ TODO: Describe the connection.
 /**
  * Infer the best folder for a new note based on referencing notes.
  */
-function inferFolder(
-  title: string,
-  relatedNodes: string[],
-  state: GraphState
-): string {
+function inferFolder(_title: string, relatedNodes: string[], state: GraphState): string {
   const folderCounts = new Map<string, number>();
   for (const nodeId of relatedNodes) {
     const node = state.nodes.find((n) => n.id === nodeId);
@@ -419,11 +397,7 @@ function inferFolder(
 /**
  * Infer tags for a new note based on referencing notes.
  */
-function inferTags(
-  title: string,
-  relatedNodes: string[],
-  state: GraphState
-): string[] {
+function inferTags(_title: string, relatedNodes: string[], state: GraphState): string[] {
   const tagCounts = new Map<string, number>();
   for (const nodeId of relatedNodes) {
     const node = state.nodes.find((n) => n.id === nodeId);
@@ -442,10 +416,7 @@ function inferTags(
 /**
  * Write a note template to the vault.
  */
-export function createNote(
-  template: NoteTemplate,
-  vaultRoot: string
-): string {
+export function createNote(template: NoteTemplate, vaultRoot: string): string {
   const fullPath = join(vaultRoot, template.path);
   const dir = dirname(fullPath);
 
@@ -497,8 +468,7 @@ function formatGaps(gaps: KnowledgeGap[]): string {
 
   for (const [type, typeGaps] of byType) {
     lines.push(`--- ${typeLabels[type] || type} (${typeGaps.length}) ---`);
-    for (let i = 0; i < Math.min(typeGaps.length, 10); i++) {
-      const g = typeGaps[i];
+    for (const g of typeGaps.slice(0, 10)) {
       const severity = g.severity === "high" ? "[!!]" : g.severity === "medium" ? "[!]" : "[ ]";
       lines.push(`  ${severity} ${g.description}`);
       lines.push(`      Suggestion: ${g.suggestion}`);
@@ -519,13 +489,7 @@ function formatGaps(gaps: KnowledgeGap[]): string {
 // CLI
 // ============================================
 
-const DEFAULT_STATE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
+const DEFAULT_STATE_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
 /**
  * Resolve the Obsidian vault path from env var or secrets.json.
@@ -542,11 +506,16 @@ function getVaultPath(): string {
         return secrets.obsidian_vault;
       }
     }
-  } catch { /* fall through */ }
+  } catch (err) {
+    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
+    console.error(
+      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   throw new Error(
     "OBSIDIAN_VAULT not configured. " +
-    'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json'
+      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
   );
 }
 
@@ -617,26 +586,23 @@ Options:
       console.log(`    Tags: ${item!.template.tags.join(", ")}`);
       console.log(`    Gap: ${item!.template.gap.description}`);
     }
-    console.log(
-      `\nUse --create <index> to create a note. Use with caution.`
-    );
+    console.log(`\nUse --create <index> to create a note. Use with caution.`);
     return;
   }
 
   const createIdx = args.indexOf("--create");
   if (createIdx >= 0) {
-    const index = parseInt(args[createIdx + 1]);
+    const index = Number.parseInt(args[createIdx + 1] ?? "", 10);
     const gaps = detectGaps(state);
-    const creatableGaps = gaps.filter(
-      (g) => g.type === "broken_link" || g.type === "weak_bridge"
-    );
+    const creatableGaps = gaps.filter((g) => g.type === "broken_link" || g.type === "weak_bridge");
 
-    if (isNaN(index) || index >= creatableGaps.length) {
+    const gap = Number.isNaN(index) ? undefined : creatableGaps[index];
+    if (!gap) {
       console.error(`Invalid index. Range: 0-${creatableGaps.length - 1}`);
       process.exit(1);
     }
 
-    const template = generateNoteTemplate(creatableGaps[index], state);
+    const template = generateNoteTemplate(gap, state);
     if (!template) {
       console.error("Cannot generate template for this gap type.");
       process.exit(1);

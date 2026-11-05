@@ -12,29 +12,17 @@
  *   bun NoteSummarizer.ts --query "what do I know about X?"  # Query summary
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "node:fs";
 import { loadGraphState, buildEmptyGraphState } from "./KGPersistence.ts";
-import { join, basename } from "path";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome";
-import { spawn } from "child_process";
+import { join, basename } from "node:path";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { spawn } from "node:child_process";
 import type { GraphState, GraphNode, ConceptCluster, SearchResult } from "./types.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
-const INFERENCE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "skills",
-  "CORE",
-  "Tools",
-  "Inference.ts"
-);
+const INFERENCE_PATH = join(getKayaHome(), "lib", "core", "Inference.ts");
 
-const DEFAULT_STATE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
+const DEFAULT_STATE_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
 /**
  * Resolve the Obsidian vault path from env var or secrets.json.
@@ -51,11 +39,16 @@ function getVaultPath(): string {
         return secrets.obsidian_vault;
       }
     }
-  } catch { /* fall through */ }
+  } catch (err) {
+    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
+    console.error(
+      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   throw new Error(
     "OBSIDIAN_VAULT not configured. " +
-    'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json'
+      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
   );
 }
 
@@ -70,9 +63,9 @@ function getVaultPath(): string {
 async function runInference(
   systemPrompt: string,
   userPrompt: string,
-  level: "fast" | "standard" = "fast"
+  level: "fast" | "standard" = "fast",
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const proc = spawn("bun", [INFERENCE_PATH, "--level", level, systemPrompt, userPrompt], {
       timeout: level === "fast" ? 30000 : 60000,
     });
@@ -92,7 +85,10 @@ async function runInference(
       if (code === 0 && stdout.trim()) {
         resolve(stdout.trim());
       } else {
-        // Fall back to local summary
+        // Fall back to local summary, but say why inference was not used
+        console.error(
+          `[NoteSummarizer] inference failed (exit ${code}); using local summary. ${stderr.trim().slice(0, 300)}`,
+        );
         resolve(localSummarize(userPrompt));
       }
     });
@@ -109,9 +105,7 @@ async function runInference(
  */
 function localSummarize(content: string): string {
   const lines = content.split("\n");
-  const headings = lines
-    .filter((l) => l.match(/^#{1,3}\s/))
-    .map((l) => l.replace(/^#+\s+/, "").trim());
+  const headings = lines.filter((l) => l.match(/^#{1,3}\s/)).map((l) => l.replace(/^#+\s+/, "").trim());
 
   const bullets = lines
     .filter((l) => l.match(/^[-*]\s/))
@@ -142,8 +136,8 @@ function localSummarize(content: string): string {
 export async function summarizeNote(
   nodeId: string,
   state: GraphState,
-  vaultRoot: string = DEFAULT_VAULT,
-  useInference: boolean = true
+  vaultRoot: string = getVaultPath(),
+  useInference: boolean = true,
 ): Promise<string> {
   const node = state.nodes.find((n) => n.id === nodeId);
   if (!node) return `Note not found: ${nodeId}`;
@@ -223,11 +217,7 @@ function buildNodeContext(node: GraphNode, state: GraphState): string {
 /**
  * Format a local (non-AI) summary.
  */
-function formatLocalSummary(
-  node: GraphNode,
-  content: string,
-  context: string
-): string {
+function formatLocalSummary(node: GraphNode, content: string, context: string): string {
   const lines: string[] = [
     `# ${node.title}`,
     "",
@@ -253,9 +243,7 @@ function formatLocalSummary(
 
   // Extract first meaningful paragraph
   const body = content.replace(/^---[\s\S]*?---\s*/, "").replace(/^#[^\n]+\n/, "");
-  const firstPara = body
-    .split("\n\n")
-    .find((p) => p.trim().length > 30 && !p.startsWith("#"));
+  const firstPara = body.split("\n\n").find((p) => p.trim().length > 30 && !p.startsWith("#"));
   if (firstPara) {
     lines.push("## Opening");
     lines.push(firstPara.trim().slice(0, 300));
@@ -274,25 +262,31 @@ function formatLocalSummary(
 export async function summarizeCluster(
   clusterId: string,
   state: GraphState,
-  vaultRoot: string = DEFAULT_VAULT,
-  useInference: boolean = true
+  _vaultRoot?: string,
+  useInference: boolean = true,
 ): Promise<string> {
   const cluster = state.clusters.find((c) => c.id === clusterId);
   if (!cluster) return `Cluster not found: ${clusterId}`;
 
   // Collect titles, tags, and brief descriptions
-  const noteDescriptions = cluster.nodes.slice(0, 20).map((nodeId) => {
-    const node = state.nodes.find((n) => n.id === nodeId);
-    if (!node) return "";
-    return `- "${node.title}" (${node.folder}) [${node.tags.slice(0, 3).join(", ")}] - ${node.wordCount} words, ${node.headings.slice(0, 3).join(", ")}`;
-  }).filter(Boolean);
+  const noteDescriptions = cluster.nodes
+    .slice(0, 20)
+    .map((nodeId) => {
+      const node = state.nodes.find((n) => n.id === nodeId);
+      if (!node) return "";
+      return `- "${node.title}" (${node.folder}) [${node.tags.slice(0, 3).join(", ")}] - ${node.wordCount} words, ${node.headings.slice(0, 3).join(", ")}`;
+    })
+    .filter(Boolean);
 
-  const bridgeInfo = cluster.bridgeNotes.length > 0
-    ? `Bridge notes connecting to other clusters: ${cluster.bridgeNotes.map((id) => {
-        const node = state.nodes.find((n) => n.id === id);
-        return node?.title || id;
-      }).join(", ")}`
-    : "No bridge notes to other clusters.";
+  const bridgeInfo =
+    cluster.bridgeNotes.length > 0
+      ? `Bridge notes connecting to other clusters: ${cluster.bridgeNotes
+          .map((id) => {
+            const node = state.nodes.find((n) => n.id === id);
+            return node?.title || id;
+          })
+          .join(", ")}`
+      : "No bridge notes to other clusters.";
 
   if (!useInference) {
     return formatLocalClusterSummary(cluster, noteDescriptions, bridgeInfo, state);
@@ -329,7 +323,7 @@ function formatLocalClusterSummary(
   cluster: ConceptCluster,
   noteDescriptions: string[],
   bridgeInfo: string,
-  state: GraphState
+  _state: GraphState,
 ): string {
   return [
     `# Cluster: ${cluster.label}`,
@@ -356,9 +350,9 @@ function formatLocalClusterSummary(
 export async function answerQuery(
   query: string,
   searchResults: SearchResult[],
-  state: GraphState,
-  vaultRoot: string = DEFAULT_VAULT,
-  useInference: boolean = true
+  _state: GraphState,
+  vaultRoot: string = getVaultPath(),
+  useInference: boolean = true,
 ): Promise<string> {
   if (searchResults.length === 0) {
     return `I couldn't find any notes related to "${query}" in your vault.`;
@@ -392,11 +386,14 @@ export async function answerQuery(
   const userPrompt = `Answer this question about my knowledge vault: "${query}"
 
 Top matching notes:
-${noteContents.map((n, i) =>
-  `${i + 1}. "${n.title}" (${n.folder}) - ${(n.score * 100).toFixed(0)}% match
+${noteContents
+  .map(
+    (n, i) =>
+      `${i + 1}. "${n.title}" (${n.folder}) - ${(n.score * 100).toFixed(0)}% match
    Matched: ${n.matchedTerms.join(", ")}
-   Content preview: ${n.content.slice(0, 400)}`
-).join("\n\n")}
+   Content preview: ${n.content.slice(0, 400)}`,
+  )
+  .join("\n\n")}
 
 Provide:
 1. Direct answer to the question
@@ -414,14 +411,9 @@ Provide:
 
 function formatLocalQueryAnswer(
   query: string,
-  results: { title: string; folder: string; score: number; matchedTerms: string[]; content: string }[]
+  results: { title: string; folder: string; score: number; matchedTerms: string[]; content: string }[],
 ): string {
-  const lines: string[] = [
-    `# What I know about: ${query}`,
-    "",
-    `Found ${results.length} relevant notes:`,
-    "",
-  ];
+  const lines: string[] = [`# What I know about: ${query}`, "", `Found ${results.length} relevant notes:`, ""];
 
   for (const r of results) {
     lines.push(`## ${r.title} (${r.folder})`);

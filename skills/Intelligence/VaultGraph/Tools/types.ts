@@ -69,7 +69,7 @@ export interface GraphEdge {
  *   - semantic: inferred conceptual similarity
  *   - embed: transclusion/embedding reference
  */
-export type EdgeType = 'wikilink' | 'tag' | 'folder' | 'semantic' | 'embed';
+export type EdgeType = "wikilink" | "tag" | "folder" | "semantic" | "embed";
 
 // ============================================
 // GRAPH STATE (Persisted)
@@ -205,12 +205,12 @@ export interface SearchResult {
  * Types of knowledge gaps that can be detected.
  */
 export type GapType =
-  | 'orphan'        // No in/out links
-  | 'broken_link'   // Referenced but nonexistent note
-  | 'stub'          // < 100 words with no outlinks
-  | 'thin_cluster'  // Cluster with < 3 notes
-  | 'missing_topic' // Referenced in multiple notes but has no dedicated note
-  | 'weak_bridge'   // Two clusters with only 1 connection;
+  | "orphan" // No in/out links
+  | "broken_link" // Referenced but nonexistent note
+  | "stub" // < 100 words with no outlinks
+  | "thin_cluster" // Cluster with < 3 notes
+  | "missing_topic" // Referenced in multiple notes but has no dedicated note
+  | "weak_bridge"; // Two clusters with only 1 connection;
 
 /**
  * A detected knowledge gap.
@@ -221,7 +221,7 @@ export interface KnowledgeGap {
   /** Human-readable description */
   description: string;
   /** Severity: how impactful this gap is */
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   /** Node IDs related to this gap */
   relatedNodes: string[];
   /** Suggested action to fill the gap */
@@ -297,9 +297,9 @@ export interface TraversalResult {
  * Note: rootPath is intentionally omitted — callers must supply it via
  * getVaultPath() (env: OBSIDIAN_VAULT) or an explicit --root CLI argument.
  */
-export const DEFAULT_OBSIDIAN_OPTIONS: Omit<GraphBuildOptions, 'rootPath'> = {
-  excludePrefixes: ['.', '_'],
-  includeExtensions: ['.md'],
+export const DEFAULT_OBSIDIAN_OPTIONS: Omit<GraphBuildOptions, "rootPath"> = {
+  excludePrefixes: [".", "_"],
+  includeExtensions: [".md"],
   includeFolderEdges: true,
   includeTagEdges: true,
 };

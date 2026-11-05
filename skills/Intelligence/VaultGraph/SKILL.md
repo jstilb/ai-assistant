@@ -113,7 +113,7 @@ Graph state managed via StateManager. 24-hour TTL. Rebuild with `--rebuild` when
 
 ### Uses
 - **StateManager** - Persists graph state to `MEMORY/State/knowledge-graph.json`
-- **tools/Inference.ts** - AI-powered summarization (no raw API keys)
+- **lib/core/Inference.ts** - AI-powered summarization (no raw API keys)
 - **TELOS Goals** - Cross-references gaps with life goals
 - **Obsidian Vault** - READ ONLY access
 

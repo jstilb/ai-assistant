@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
-import { join } from "path";
+import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
 // Test fixture directory
 const TEST_VAULT = "/tmp/kg-test-vault";
@@ -54,7 +54,7 @@ Classification and regression tasks.
 Clustering and dimensionality reduction.
 
 #advanced #berkeley
-`
+`,
   );
 
   // Note 2: NLP note linking back
@@ -76,7 +76,7 @@ Multi-head attention mechanism.
 ## Applications
 - Machine translation
 - Text generation
-`
+`,
   );
 
   // Note 3: Orphan note (no links)
@@ -87,7 +87,7 @@ Multi-head attention mechanism.
 How to write technical documentation effectively.
 
 This note has no outgoing links and only one incoming link.
-`
+`,
   );
 
   // Note 4: Stub note (short, no outlinks)
@@ -100,7 +100,7 @@ tags: [statistics, data-science]
 # Statistics Overview
 
 Basic statistics concepts.
-`
+`,
   );
 
   // Note 5: Note with broken link
@@ -114,18 +114,12 @@ tags: [nlp, attention]
 
 See [[Nonexistent Note]] for more details.
 Also references [[Data Science/Machine Learning]].
-`
+`,
   );
 
   // Excluded notes (should be ignored)
-  writeFileSync(
-    join(TEST_VAULT, "_private", "Secret.md"),
-    `# Secret Note\nThis should be excluded.`
-  );
-  writeFileSync(
-    join(TEST_VAULT, ".obsidian", "config.md"),
-    `# Config\nThis should be excluded.`
-  );
+  writeFileSync(join(TEST_VAULT, "_private", "Secret.md"), `# Secret Note\nThis should be excluded.`);
+  writeFileSync(join(TEST_VAULT, ".obsidian", "config.md"), `# Config\nThis should be excluded.`);
 
   // Root-level note
   writeFileSync(
@@ -139,7 +133,7 @@ tags: [index, meta]
 - [[Data Science/Machine Learning]]
 - [[NLP/Transformers]]
 - [[Writing/Technical Writing]]
-`
+`,
   );
 }
 
@@ -153,7 +147,7 @@ function cleanupTestVault() {
 }
 
 // Dynamic import for the module under test
-let GraphBuilder: any;
+let GraphBuilder: typeof import("./GraphBuilder.ts");
 
 describe("GraphBuilder", () => {
   beforeAll(async () => {
@@ -169,7 +163,7 @@ describe("GraphBuilder", () => {
     it("extracts frontmatter tags", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.tags).toContain("ml");
       expect(node.tags).toContain("data-science");
@@ -179,7 +173,7 @@ describe("GraphBuilder", () => {
     it("extracts inline tags", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.tags).toContain("advanced");
       expect(node.tags).toContain("berkeley");
@@ -188,7 +182,7 @@ describe("GraphBuilder", () => {
     it("extracts wikilinks as outLinks", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.outLinks).toContain("Neural Networks");
       expect(node.outLinks).toContain("NLP/Transformers");
@@ -198,7 +192,7 @@ describe("GraphBuilder", () => {
     it("extracts embeds", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.embeds).toContain("Data Science/Statistics Overview");
     });
@@ -206,7 +200,7 @@ describe("GraphBuilder", () => {
     it("extracts headings", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.headings).toContain("Supervised Learning");
       expect(node.headings).toContain("Unsupervised Learning");
@@ -215,7 +209,7 @@ describe("GraphBuilder", () => {
     it("extracts aliases from frontmatter", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.aliases).toContain("ML");
     });
@@ -223,7 +217,7 @@ describe("GraphBuilder", () => {
     it("sets correct folder", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.folder).toBe("Data Science");
     });
@@ -231,7 +225,7 @@ describe("GraphBuilder", () => {
     it("sets correct id (relative path)", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.id).toBe("Data Science/Machine Learning.md");
     });
@@ -239,7 +233,7 @@ describe("GraphBuilder", () => {
     it("computes word count", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Data Science", "Machine Learning.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.wordCount).toBeGreaterThan(10);
     });
@@ -247,7 +241,7 @@ describe("GraphBuilder", () => {
     it("handles notes without frontmatter", async () => {
       const node = await GraphBuilder.parseMarkdownFile(
         join(TEST_VAULT, "Writing", "Technical Writing.md"),
-        TEST_VAULT
+        TEST_VAULT,
       );
       expect(node.tags).toEqual([]);
       expect(node.title).toBe("Technical Writing");
@@ -276,7 +270,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const nodeIds = state.nodes.map((n: any) => n.id);
+      const nodeIds = state.nodes.map((n) => n.id);
       expect(nodeIds).not.toContain("_private/Secret.md");
       expect(nodeIds).not.toContain(".obsidian/config.md");
     });
@@ -289,15 +283,11 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const wikilinkEdges = state.edges.filter(
-        (e: any) => e.type === "wikilink"
-      );
+      const wikilinkEdges = state.edges.filter((e) => e.type === "wikilink");
       expect(wikilinkEdges.length).toBeGreaterThan(0);
       // ML -> Transformers edge should exist
       const mlToTransformers = wikilinkEdges.find(
-        (e: any) =>
-          e.source === "Data Science/Machine Learning.md" &&
-          e.target === "NLP/Transformers.md"
+        (e) => e.source === "Data Science/Machine Learning.md" && e.target === "NLP/Transformers.md",
       );
       expect(mlToTransformers).toBeTruthy();
     });
@@ -310,10 +300,8 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const transformers = state.nodes.find(
-        (n: any) => n.id === "NLP/Transformers.md"
-      );
-      expect(transformers.inLinks.length).toBeGreaterThan(0);
+      const transformers = state.nodes.find((n) => n.id === "NLP/Transformers.md");
+      expect(transformers?.inLinks.length).toBeGreaterThan(0);
     });
 
     it("creates embed edges", async () => {
@@ -324,7 +312,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const embedEdges = state.edges.filter((e: any) => e.type === "embed");
+      const embedEdges = state.edges.filter((e) => e.type === "embed");
       expect(embedEdges.length).toBeGreaterThan(0);
     });
 
@@ -336,7 +324,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: true,
       });
-      const tagEdges = state.edges.filter((e: any) => e.type === "tag");
+      const tagEdges = state.edges.filter((e) => e.type === "tag");
       expect(tagEdges.length).toBeGreaterThan(0);
     });
 
@@ -348,7 +336,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: true,
         includeTagEdges: false,
       });
-      const folderEdges = state.edges.filter((e: any) => e.type === "folder");
+      const folderEdges = state.edges.filter((e) => e.type === "folder");
       expect(folderEdges.length).toBeGreaterThan(0);
     });
 
@@ -403,10 +391,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const neighbors = GraphBuilder.getNeighbors(
-        state,
-        "Data Science/Machine Learning.md"
-      );
+      const neighbors = GraphBuilder.getNeighbors(state, "Data Science/Machine Learning.md");
       expect(neighbors.length).toBeGreaterThan(0);
     });
 
@@ -418,11 +403,7 @@ describe("GraphBuilder", () => {
         includeFolderEdges: false,
         includeTagEdges: false,
       });
-      const path = GraphBuilder.findShortestPath(
-        state,
-        "Data Science/Machine Learning.md",
-        "NLP/Transformers.md"
-      );
+      const path = GraphBuilder.findShortestPath(state, "Data Science/Machine Learning.md", "NLP/Transformers.md");
       expect(path).toBeTruthy();
       expect(path!.length).toBeGreaterThanOrEqual(2);
       expect(path![0]).toBe("Data Science/Machine Learning.md");

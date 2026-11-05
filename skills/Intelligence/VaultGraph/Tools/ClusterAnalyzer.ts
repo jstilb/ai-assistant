@@ -19,16 +19,11 @@
  *   bun ClusterAnalyzer.ts --cluster <id>           # Show cluster details
  */
 
-import { existsSync } from "fs";
-import { join } from "path";
-import { loadGraphState, saveGraphState } from "./GraphBuilder";
-import type {
-  GraphState,
-  GraphNode,
-  GraphEdge,
-  ConceptCluster,
-  EdgeType,
-} from "./types.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { loadGraphState, saveGraphState } from "./GraphBuilder.ts";
+import type { GraphState, ConceptCluster, EdgeType } from "./types.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // LABEL PROPAGATION ALGORITHM
@@ -41,7 +36,7 @@ import type {
  */
 function buildAdjacency(
   state: GraphState,
-  edgeTypes: EdgeType[] = ["wikilink", "embed", "tag", "folder"]
+  edgeTypes: EdgeType[] = ["wikilink", "embed", "tag", "folder"],
 ): Map<string, Map<string, number>> {
   const adj = new Map<string, Map<string, number>>();
 
@@ -72,10 +67,7 @@ function buildAdjacency(
  * Run label propagation community detection.
  * Returns a map of nodeId -> clusterId.
  */
-export function labelPropagation(
-  state: GraphState,
-  maxIterations: number = 50
-): Map<string, string> {
+export function labelPropagation(state: GraphState, maxIterations: number = 50): Map<string, string> {
   const adj = buildAdjacency(state);
   const labels = new Map<string, string>();
 
@@ -92,7 +84,12 @@ export function labelPropagation(
     const nodeIds = [...state.nodes.map((n) => n.id)];
     for (let i = nodeIds.length - 1; i > 0; i--) {
       const j = (i * 7 + iter * 13) % (i + 1); // Deterministic pseudo-shuffle
-      [nodeIds[i], nodeIds[j]] = [nodeIds[j], nodeIds[i]];
+      const atI = nodeIds[i];
+      const atJ = nodeIds[j];
+      if (atI !== undefined && atJ !== undefined) {
+        nodeIds[i] = atJ;
+        nodeIds[j] = atI;
+      }
     }
 
     for (const nodeId of nodeIds) {
@@ -103,10 +100,7 @@ export function labelPropagation(
       const labelWeights = new Map<string, number>();
       for (const [neighbor, weight] of neighbors) {
         const neighborLabel = labels.get(neighbor)!;
-        labelWeights.set(
-          neighborLabel,
-          (labelWeights.get(neighborLabel) || 0) + weight
-        );
+        labelWeights.set(neighborLabel, (labelWeights.get(neighborLabel) || 0) + weight);
       }
 
       // Find the most frequent label
@@ -138,10 +132,7 @@ export function labelPropagation(
 /**
  * Convert label map to cluster objects with metadata.
  */
-export function buildClusters(
-  state: GraphState,
-  labels: Map<string, string>
-): ConceptCluster[] {
+export function buildClusters(state: GraphState, labels: Map<string, string>): ConceptCluster[] {
   // Group nodes by label
   const clusterNodes = new Map<string, string[]>();
   for (const [nodeId, label] of labels) {
@@ -177,9 +168,7 @@ export function buildClusters(
         folderCounts.set(node.folder, (folderCounts.get(node.folder) || 0) + 1);
       }
     }
-    const dominantFolder = [...folderCounts.entries()]
-      .sort(([, a], [, b]) => b - a)
-      .map(([f]) => f)[0] || "Mixed";
+    const dominantFolder = [...folderCounts.entries()].sort(([, a], [, b]) => b - a).map(([f]) => f)[0] || "Mixed";
 
     // Generate cluster label from dominant folder and tags
     const label = generateClusterLabel(dominantFolder, sortedTags, nodeIds.length);
@@ -214,16 +203,10 @@ export function buildClusters(
 /**
  * Generate a human-readable cluster label.
  */
-function generateClusterLabel(
-  dominantFolder: string,
-  topTags: string[],
-  size: number
-): string {
+function generateClusterLabel(dominantFolder: string, topTags: string[], size: number): string {
   if (dominantFolder && dominantFolder !== "Mixed") {
-    const tagSuffix =
-      topTags.length > 0 && !dominantFolder.toLowerCase().includes(topTags[0])
-        ? ` (${topTags[0]})`
-        : "";
+    const topTag = topTags[0];
+    const tagSuffix = topTag && !dominantFolder.toLowerCase().includes(topTag) ? ` (${topTag})` : "";
     return `${dominantFolder}${tagSuffix}`;
   }
   if (topTags.length > 0) {
@@ -243,10 +226,7 @@ function generateClusterLabel(
  * A bridge note connects multiple clusters. We detect bridge notes as
  * nodes that have neighbors in 2+ different clusters.
  */
-export function detectBridgeNotes(
-  state: GraphState,
-  clusters: ConceptCluster[]
-): Map<string, string[]> {
+export function detectBridgeNotes(state: GraphState, clusters: ConceptCluster[]): Map<string, string[]> {
   // Build nodeId -> clusterId map
   const nodeToCluster = new Map<string, string>();
   for (const cluster of clusters) {
@@ -289,10 +269,7 @@ export function detectBridgeNotes(
 /**
  * Assign bridge notes to their clusters.
  */
-function assignBridgeNotes(
-  clusters: ConceptCluster[],
-  bridgeNotes: Map<string, string[]>
-): void {
+function assignBridgeNotes(clusters: ConceptCluster[], bridgeNotes: Map<string, string[]>): void {
   for (const cluster of clusters) {
     cluster.bridgeNotes = [];
     for (const [nodeId, connectedClusters] of bridgeNotes) {
@@ -393,13 +370,7 @@ function formatClusters(state: GraphState): string {
 // CLI
 // ============================================
 
-const DEFAULT_STATE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
+const DEFAULT_STATE_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
 async function main() {
   const args = process.argv.slice(2);
@@ -429,7 +400,12 @@ Options:
     process.exit(1);
   }
 
-  let state: GraphState = await loadGraphState(DEFAULT_STATE_PATH);
+  const loadedState = await loadGraphState(DEFAULT_STATE_PATH);
+  if (!loadedState) {
+    console.error("Graph state is unreadable or invalid. Run GraphBuilder --rebuild first.");
+    process.exit(1);
+  }
+  let state: GraphState = loadedState;
 
   if (args.includes("--analyze")) {
     console.log("Running cluster analysis...");

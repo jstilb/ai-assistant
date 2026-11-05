@@ -1,6 +1,8 @@
 {
+  "name": "kaya-vaultgraph-tools",
+  "private": true,
   "dependencies": {
-    "yaml": "^2.8.2",
-    "zod": "^3.24.0"
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
   }
 }

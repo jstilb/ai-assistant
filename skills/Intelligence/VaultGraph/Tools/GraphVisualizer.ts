@@ -19,30 +19,21 @@
  *   bun GraphVisualizer.ts --include-folder-edges       # Include folder co-membership edges
  */
 
-import { existsSync, writeFileSync } from "fs";
-import { join } from "path";
-import { spawn } from "child_process";
-import { loadGraphState } from "./GraphBuilder";
-import { loadSettings } from "../../../../lib/core/ConfigLoader";
-import type { GraphState, GraphNode, GraphEdge, ConceptCluster, EdgeType } from "./types";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { loadGraphState } from "./GraphBuilder.ts";
+import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
+import type { GraphState, ConceptCluster, EdgeType } from "./types.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-const DEFAULT_STATE_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
+const DEFAULT_STATE_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
-const DEFAULT_OUTPUT_PATH = join(
-  process.env.HOME || "~",
-  "Downloads",
-  "knowledge-graph-viz.html"
-);
+const DEFAULT_OUTPUT_PATH = join(process.env.HOME || "~", "Downloads", "knowledge-graph-viz.html");
 
 const DEFAULT_MAX_NODES = 300;
 const DEFAULT_ALLOWED_EDGE_TYPES: EdgeType[] = ["wikilink", "embed"];
@@ -138,7 +129,7 @@ Options:
 
 function filterGraph(
   state: GraphState,
-  options: VisualizerOptions
+  options: VisualizerOptions,
 ): { nodes: VizNode[]; edges: VizEdge[]; clusters: ConceptCluster[] } {
   // Build cluster membership lookup
   const nodeToCluster = new Map<string, string>();
@@ -155,7 +146,7 @@ function filterGraph(
   if (options.folderFilter) {
     const prefix = options.folderFilter.toLowerCase();
     filteredNodes = filteredNodes.filter(
-      (n) => n.folder.toLowerCase() === prefix || n.folder.toLowerCase().startsWith(prefix + "/")
+      (n) => n.folder.toLowerCase() === prefix || n.folder.toLowerCase().startsWith(prefix + "/"),
     );
   }
 
@@ -190,9 +181,7 @@ function filterGraph(
   }
 
   // Sort by connections desc, take top maxNodes
-  filteredNodes.sort(
-    (a, b) => (connectionCounts.get(b.id) || 0) - (connectionCounts.get(a.id) || 0)
-  );
+  filteredNodes.sort((a, b) => (connectionCounts.get(b.id) || 0) - (connectionCounts.get(a.id) || 0));
   filteredNodes = filteredNodes.slice(0, options.maxNodes);
 
   const survivingIds = new Set(filteredNodes.map((n) => n.id));
@@ -211,12 +200,7 @@ function filterGraph(
   // Filter edges: both endpoints must survive AND type must be allowed
   const allowedSet = new Set(options.allowedEdgeTypes);
   const vizEdges: VizEdge[] = state.edges
-    .filter(
-      (e) =>
-        survivingIds.has(e.source) &&
-        survivingIds.has(e.target) &&
-        allowedSet.has(e.type)
-    )
+    .filter((e) => survivingIds.has(e.source) && survivingIds.has(e.target) && allowedSet.has(e.type))
     .map((e) => ({
       source: e.source,
       target: e.target,
@@ -231,9 +215,7 @@ function filterGraph(
       clusterNodeCounts.set(node.cluster, (clusterNodeCounts.get(node.cluster) || 0) + 1);
     }
   }
-  const vizClusters = state.clusters.filter(
-    (c) => (clusterNodeCounts.get(c.id) || 0) >= 2
-  );
+  const vizClusters = state.clusters.filter((c) => (clusterNodeCounts.get(c.id) || 0) >= 2);
 
   return { nodes: vizNodes, edges: vizEdges, clusters: vizClusters };
 }
@@ -246,7 +228,7 @@ function generateHTML(
   nodes: VizNode[],
   edges: VizEdge[],
   clusters: ConceptCluster[],
-  options: VisualizerOptions
+  options: VisualizerOptions,
 ): string {
   const dataBlob = JSON.stringify({ nodes, edges, clusters });
 
@@ -632,6 +614,10 @@ async function main() {
 
   // Validate cluster color mode
   const state = await loadGraphState(options.statePath);
+  if (!state) {
+    console.error(`No graph state at ${options.statePath}. Run --rebuild first.`);
+    process.exit(1);
+  }
 
   if (state.nodes.length === 0) {
     console.error("Graph state is empty. Run --rebuild first.");

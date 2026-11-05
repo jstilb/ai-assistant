@@ -6,10 +6,10 @@
  * Extracted from GraphBuilder.ts to separate persistence concerns.
  */
 
-import { existsSync } from "fs";
+import { existsSync } from "node:fs";
 import { z } from "zod";
-import { createStateManager } from "../../../../lib/core/StateManager";
-import type { GraphState, GraphBuildOptions, GraphStats, GraphNode, GraphEdge } from "./types.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import type { GraphState, GraphStats } from "./types.ts";
 
 // ============================================
 // ZOD SCHEMAS
@@ -103,10 +103,7 @@ export function buildEmptyGraphState(): GraphState {
 /**
  * Save graph state using StateManager.
  */
-export async function saveGraphState(
-  state: GraphState,
-  path: string
-): Promise<void> {
+export async function saveGraphState(state: GraphState, path: string): Promise<void> {
   const manager = createStateManager({
     path,
     schema: GraphStateSchema as z.ZodSchema<GraphState>,
@@ -150,7 +147,7 @@ export async function loadGraphState(path: string): Promise<GraphState | null> {
 export async function loadOrRebuildGraphState(
   statePath: string,
   buildFn: () => Promise<GraphState>,
-  forceRebuild = false
+  forceRebuild = false,
 ): Promise<GraphState> {
   // Missing state: build fresh
   if (!existsSync(statePath)) {
@@ -173,9 +170,7 @@ export async function loadOrRebuildGraphState(
   const ageHours = (Date.now() - builtAt) / 3_600_000;
 
   if (forceRebuild || ageHours > ttlHours) {
-    console.log(
-      `[KnowledgeGraph] State is ${ageHours.toFixed(1)}h old (TTL: ${ttlHours}h). Rebuilding...`
-    );
+    console.log(`[KnowledgeGraph] State is ${ageHours.toFixed(1)}h old (TTL: ${ttlHours}h). Rebuilding...`);
     const freshState = await buildFn();
     await saveGraphState(freshState, statePath);
     return freshState;

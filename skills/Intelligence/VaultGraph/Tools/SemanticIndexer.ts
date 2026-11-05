@@ -19,46 +19,188 @@
  *   bun SemanticIndexer.ts --related <nodeId>             # Find related notes
  */
 
-import { readFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname, basename } from "path";
-import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome";
-import { createStateManager } from "../../../../lib/core/StateManager";
+import { readFileSync, existsSync } from "node:fs";
+import { join, basename } from "node:path";
+import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
 import { z } from "zod";
 import { loadGraphState, buildEmptyGraphState } from "./KGPersistence.ts";
-import type {
-  GraphState,
-  GraphNode,
-  SemanticIndexState,
-  ConceptIndex,
-  KeywordScore,
-  SearchResult,
-} from "./types.ts";
+import type { GraphState, SemanticIndexState, ConceptIndex, KeywordScore, SearchResult } from "./types.ts";
 
 // ============================================
 // STOPWORDS
 // ============================================
 
 const STOPWORDS = new Set([
-  "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
-  "any", "are", "as", "at", "be", "because", "been", "before", "being", "below",
-  "between", "both", "but", "by", "can", "could", "did", "do", "does", "doing",
-  "down", "during", "each", "few", "for", "from", "further", "get", "got", "had",
-  "has", "have", "having", "he", "her", "here", "hers", "herself", "him",
-  "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself",
-  "just", "know", "let", "like", "ll", "may", "me", "might", "more", "most",
-  "my", "myself", "no", "nor", "not", "now", "of", "off", "on", "once", "only",
-  "or", "other", "our", "ours", "ourselves", "out", "over", "own", "re", "s",
-  "same", "shall", "she", "should", "so", "some", "such", "t", "than", "that",
-  "the", "their", "theirs", "them", "themselves", "then", "there", "these",
-  "they", "this", "those", "through", "to", "too", "under", "until", "up",
-  "use", "used", "using", "ve", "very", "was", "we", "were", "what", "when",
-  "where", "which", "while", "who", "whom", "why", "will", "with", "would",
-  "you", "your", "yours", "yourself", "yourselves",
+  "a",
+  "about",
+  "above",
+  "after",
+  "again",
+  "against",
+  "all",
+  "am",
+  "an",
+  "and",
+  "any",
+  "are",
+  "as",
+  "at",
+  "be",
+  "because",
+  "been",
+  "before",
+  "being",
+  "below",
+  "between",
+  "both",
+  "but",
+  "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "doing",
+  "down",
+  "during",
+  "each",
+  "few",
+  "for",
+  "from",
+  "further",
+  "get",
+  "got",
+  "had",
+  "has",
+  "have",
+  "having",
+  "he",
+  "her",
+  "here",
+  "hers",
+  "herself",
+  "him",
+  "himself",
+  "his",
+  "how",
+  "i",
+  "if",
+  "in",
+  "into",
+  "is",
+  "it",
+  "its",
+  "itself",
+  "just",
+  "know",
+  "let",
+  "like",
+  "ll",
+  "may",
+  "me",
+  "might",
+  "more",
+  "most",
+  "my",
+  "myself",
+  "no",
+  "nor",
+  "not",
+  "now",
+  "of",
+  "off",
+  "on",
+  "once",
+  "only",
+  "or",
+  "other",
+  "our",
+  "ours",
+  "ourselves",
+  "out",
+  "over",
+  "own",
+  "re",
+  "s",
+  "same",
+  "shall",
+  "she",
+  "should",
+  "so",
+  "some",
+  "such",
+  "t",
+  "than",
+  "that",
+  "the",
+  "their",
+  "theirs",
+  "them",
+  "themselves",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "through",
+  "to",
+  "too",
+  "under",
+  "until",
+  "up",
+  "use",
+  "used",
+  "using",
+  "ve",
+  "very",
+  "was",
+  "we",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "who",
+  "whom",
+  "why",
+  "will",
+  "with",
+  "would",
+  "you",
+  "your",
+  "yours",
+  "yourself",
+  "yourselves",
   // Markdown/formatting noise
-  "md", "https", "http", "www", "com", "png", "jpg", "image", "resources",
-  "true", "false", "null", "undefined", "var", "const", "let", "function",
+  "md",
+  "https",
+  "http",
+  "www",
+  "com",
+  "png",
+  "jpg",
+  "image",
+  "resources",
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "var",
+  "const",
+  "let",
+  "function",
   // Common academic words to de-weight
-  "also", "see", "note", "example", "e", "g", "ie", "etc",
+  "also",
+  "see",
+  "note",
+  "example",
+  "e",
+  "g",
+  "ie",
+  "etc",
 ]);
 
 // ============================================
@@ -74,12 +216,53 @@ function simpleStem(word: string): string {
 
   // Order matters: longest suffixes first
   const suffixes = [
-    "ational", "tional", "ization", "fulness", "ousness", "iveness",
-    "ation", "ence", "ance", "ment", "ness", "ible", "able", "tion",
-    "sion", "ical", "ally", "ious", "eous", "ful", "ous", "ive",
-    "ing", "ity", "ism", "ist", "ize", "ise", "ate", "ant", "ent",
-    "ies", "ied", "ing", "est", "ess", "ers", "ler", "ted", "ting",
-    "ed", "ly", "er", "al", "es", "en", "ty",
+    "ational",
+    "tional",
+    "ization",
+    "fulness",
+    "ousness",
+    "iveness",
+    "ation",
+    "ence",
+    "ance",
+    "ment",
+    "ness",
+    "ible",
+    "able",
+    "tion",
+    "sion",
+    "ical",
+    "ally",
+    "ious",
+    "eous",
+    "ful",
+    "ous",
+    "ive",
+    "ing",
+    "ity",
+    "ism",
+    "ist",
+    "ize",
+    "ise",
+    "ate",
+    "ant",
+    "ent",
+    "ies",
+    "ied",
+    "ing",
+    "est",
+    "ess",
+    "ers",
+    "ler",
+    "ted",
+    "ting",
+    "ed",
+    "ly",
+    "er",
+    "al",
+    "es",
+    "en",
+    "ty",
   ];
 
   for (const suffix of suffixes) {
@@ -110,7 +293,7 @@ export function tokenize(text: string): string[] {
     .replace(/\[([^\]]*?)\]\([^)]*?\)/g, "$1") // Markdown links -> just text
     .replace(/<[^>]+>/g, " ") // HTML tags
     .replace(/^#{1,6}\s+/gm, " ") // Heading markers
-    .replace(/[#*_~>`|\\{}()\[\]!]/g, " ") // Special chars
+    .replace(/[#*_~>`|\\{}()[\]!]/g, " ") // Special chars
     .replace(/---+/g, " ") // Horizontal rules
     .replace(/\d+\.\s/g, " ") // Numbered list markers
     .replace(/-\s/g, " ") // Bullet markers
@@ -142,20 +325,18 @@ export function tokenize(text: string): string[] {
 export function extractPhrases(text: string): string[] {
   const cleaned = text
     .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[#*_~>`|\\{}()\[\]!]/g, " ")
+    .replace(/[#*_~>`|\\{}()[\]!]/g, " ")
     .replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1")
     .toLowerCase();
 
-  const words = cleaned.split(/\s+/).filter(
-    (w) => w.length >= 2 && !STOPWORDS.has(w.replace(/[^a-z]/g, ""))
-  );
+  const words = cleaned.split(/\s+/).filter((w) => w.length >= 2 && !STOPWORDS.has(w.replace(/[^a-z]/g, "")));
 
   const phrases: string[] = [];
 
   // Bigrams
   for (let i = 0; i < words.length - 1; i++) {
-    const a = words[i].replace(/[^a-z-]/g, "");
-    const b = words[i + 1].replace(/[^a-z-]/g, "");
+    const a = (words[i] ?? "").replace(/[^a-z-]/g, "");
+    const b = (words[i + 1] ?? "").replace(/[^a-z-]/g, "");
     if (a.length >= 2 && b.length >= 2) {
       phrases.push(`${a} ${b}`);
     }
@@ -169,9 +350,9 @@ export function extractPhrases(text: string): string[] {
     .split(/\s+/)
     .filter((w) => w.length >= 2);
   for (let i = 0; i < headingWords.length - 2; i++) {
-    const a = headingWords[i].replace(/[^a-z-]/g, "");
-    const b = headingWords[i + 1].replace(/[^a-z-]/g, "");
-    const c = headingWords[i + 2].replace(/[^a-z-]/g, "");
+    const a = (headingWords[i] ?? "").replace(/[^a-z-]/g, "");
+    const b = (headingWords[i + 1] ?? "").replace(/[^a-z-]/g, "");
+    const c = (headingWords[i + 2] ?? "").replace(/[^a-z-]/g, "");
     if (a.length >= 2 && b.length >= 2 && c.length >= 2) {
       phrases.push(`${a} ${b} ${c}`);
     }
@@ -202,31 +383,9 @@ function computeTF(terms: string[]): Map<string, number> {
 }
 
 /**
- * Compute document frequency across all documents.
- */
-function computeDF(
-  allTerms: Map<string, string[]>[]
-): Record<string, number> {
-  const df: Record<string, number> = Object.create(null);
-  for (const termMap of allTerms) {
-    const seenTerms = new Set<string>();
-    for (const [term] of termMap) {
-      if (!seenTerms.has(term)) {
-        df[term] = (df[term] || 0) + 1;
-        seenTerms.add(term);
-      }
-    }
-  }
-  return df;
-}
-
-/**
  * Build complete semantic index from graph state.
  */
-export function buildIndex(
-  graphState: GraphState,
-  vaultRoot: string
-): SemanticIndexState {
+export function buildIndex(graphState: GraphState, vaultRoot: string): SemanticIndexState {
   const indices: ConceptIndex[] = [];
   const allTermFreqs: Map<string, number>[] = [];
 
@@ -276,8 +435,9 @@ export function buildIndex(
   }
 
   // Step 3: Compute TF-IDF and set keywords
-  for (let i = 0; i < indices.length; i++) {
+  for (const [i, concept] of indices.entries()) {
     const tf = allTermFreqs[i];
+    if (!tf) continue;
     const keywords: KeywordScore[] = [];
 
     for (const [term, tfScore] of tf) {
@@ -292,7 +452,7 @@ export function buildIndex(
 
     // Sort by score descending, keep top 50
     keywords.sort((a, b) => b.score - a.score);
-    indices[i].keywords = keywords.slice(0, 50);
+    concept.keywords = keywords.slice(0, 50);
   }
 
   return {
@@ -316,7 +476,7 @@ export function search(
   query: string,
   indexState: SemanticIndexState,
   graphState: GraphState,
-  limit: number = 20
+  limit: number = 20,
 ): SearchResult[] {
   const queryTerms = tokenize(query);
   const queryPhrases = extractPhrases(query);
@@ -359,10 +519,7 @@ export function search(
       }
       // Partial phrase match
       for (const docPhrase of idx.phrases) {
-        if (
-          docPhrase.includes(queryPhrase) ||
-          queryPhrase.includes(docPhrase)
-        ) {
+        if (docPhrase.includes(queryPhrase) || queryPhrase.includes(docPhrase)) {
           if (!matchedPhrases.includes(docPhrase)) {
             score += 0.5;
             matchedPhrases.push(docPhrase);
@@ -402,7 +559,7 @@ export function findRelated(
   nodeId: string,
   indexState: SemanticIndexState,
   graphState: GraphState,
-  limit: number = 10
+  limit: number = 10,
 ): SearchResult[] {
   const nodeIndex = indexState.indices.find((idx) => idx.nodeId === nodeId);
   if (!nodeIndex) return [];
@@ -439,10 +596,7 @@ const SemanticIndexSchema = z.object({
   totalDocuments: z.number(),
 });
 
-export async function saveIndex(
-  state: SemanticIndexState,
-  path: string
-): Promise<void> {
+export async function saveIndex(state: SemanticIndexState, path: string): Promise<void> {
   const kayaHome = getKayaHome();
   const manager = createStateManager({
     path,
@@ -469,21 +623,9 @@ export async function loadIndex(path: string): Promise<SemanticIndexState> {
 // CLI
 // ============================================
 
-const DEFAULT_GRAPH_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "knowledge-graph.json"
-);
+const DEFAULT_GRAPH_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
-const DEFAULT_INDEX_PATH = join(
-  process.env.HOME || "~",
-  ".claude",
-  "MEMORY",
-  "State",
-  "semantic-index.json"
-);
+const DEFAULT_INDEX_PATH = join(getKayaHome(), "MEMORY", "State", "semantic-index.json");
 
 /**
  * Resolve the Obsidian vault path from env var or secrets.json.
@@ -500,24 +642,25 @@ function getVaultPath(): string {
         return secrets.obsidian_vault;
       }
     }
-  } catch { /* fall through */ }
+  } catch (err) {
+    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
+    console.error(
+      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   throw new Error(
     "OBSIDIAN_VAULT not configured. " +
-    'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json'
+      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
   );
 }
 
 function formatResults(results: SearchResult[]): string {
   if (results.length === 0) return "No results found.";
 
-  const lines: string[] = [
-    `Found ${results.length} results:`,
-    "",
-  ];
+  const lines: string[] = [`Found ${results.length} results:`, ""];
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
+  for (const [i, r] of results.entries()) {
     const score = (r.score * 100).toFixed(0);
     lines.push(`${i + 1}. [${score}%] ${r.title}`);
     lines.push(`   Path: ${r.folder}/${basename(r.nodeId)}`);
@@ -585,9 +728,9 @@ Options:
     }
 
     const limitIdx = args.indexOf("--limit");
-    const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) : 20;
+    const limit = limitIdx >= 0 ? Number.parseInt(args[limitIdx + 1] ?? "", 10) : 20;
 
-    const graphState = await loadGraphState(DEFAULT_GRAPH_PATH);
+    const graphState = (await loadGraphState(DEFAULT_GRAPH_PATH)) ?? buildEmptyGraphState();
     const indexState = await loadIndex(DEFAULT_INDEX_PATH);
 
     const results = search(query, indexState, graphState, limit);
@@ -609,9 +752,9 @@ Options:
     }
 
     const limitIdx = args.indexOf("--limit");
-    const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) : 10;
+    const limit = limitIdx >= 0 ? Number.parseInt(args[limitIdx + 1] ?? "", 10) : 10;
 
-    const graphState = await loadGraphState(DEFAULT_GRAPH_PATH);
+    const graphState = (await loadGraphState(DEFAULT_GRAPH_PATH)) ?? buildEmptyGraphState();
     const indexState = await loadIndex(DEFAULT_INDEX_PATH);
 
     const results = findRelated(nodeId, indexState, graphState, limit);
