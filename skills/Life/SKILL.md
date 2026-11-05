@@ -16,8 +16,8 @@ Personal lifestyle tools — covering cooking and recipes, adventure & travel pl
 | **Cooking** | cooking, recipe, meal plan, what to make, dinner ideas, grocery list, what's in season, substitute, cuisine, meal prep, fermentation, sourdough, kimchi, kombucha, sauerkraut, ferment, recipe search, cooking playlist, ingredients from video | `Life/Cooking/SKILL.md` |
 | **DnD** | d&d, dungeon master, dm, encounter, monster, stat block, campaign, session prep, spell lookup, homebrew, vtt | `Life/DnD/SKILL.md` |
 | **InteriorDesign** | interior design, decorate, room layout, furniture, cozy, color scheme, reading nook, home decor, style room, room analysis, lighting, cozify | `Life/InteriorDesign/SKILL.md` |
-| **RentalTracker** | rental, apartment hunt, ocean beach rentals, OB apartments, places for rent, housing search, rental listings, rental board, shortlist apartment, moving, new place to live | `Life/RentalTracker/SKILL.md` |
-| **RewardEngine** | reward me, claim reward, roll reward, randomized reward, variable reward, incentivize good work, treat myself, i earned a reward, loot box, gamify habits, motivate me | `Life/RewardEngine/SKILL.md` |
+| **RentalTracker** | rental, apartment hunt, ocean beach rentals, ob apartments, places for rent, housing search, rental listings, rental board, shortlist apartment, moving, new place to live | `Life/RentalTracker/SKILL.md` |
+| **RewardEngine** | points, my score, score goal, check off routine, streak bonus, reward me, claim reward, roll reward, randomized reward, variable reward, incentivize good work, treat myself, i earned a reward, loot box, gamify habits, motivate me | `Life/RewardEngine/SKILL.md` |
 | **Telos** | telos, life goals, goal dashboard, projects, dependencies, weekly review, goal progress, books, movies, life direction | `Life/Telos/SKILL.md` |
 
 ## Workflow Routing

@@ -12,7 +12,7 @@ Core infrastructure management — covering system integrity checks, agent monit
 | Sub-Skill | Triggers | Load |
 |-----------|----------|------|
 | **AgentMonitor** | monitor agent, agent performance, agent alerts, live monitoring, watch agents, anomaly detection | `System/AgentMonitor/SKILL.md` |
-| **KayaDashboard** | kaya dashboard, open dashboard, toggle job, turn off cron, run job now, what is kaya doing | `System/KayaDashboard/SKILL.md` |
+| **KayaDashboard** | kaya dashboard, open dashboard, toggle job, turn off cron, run job now, what is kaya doing, system overview | `System/KayaDashboard/SKILL.md` |
 | **KayaUpgrade** | upgrade, improve system, system upgrade, analyze for improvements, check anthropic, new claude features | `System/KayaUpgrade/SKILL.md` |
 | **PublicSync** | sync public repo, mirror to github, push to ai-assistant, public sync, sync skills to github | `System/PublicSync/SKILL.md` |
 

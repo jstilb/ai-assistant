@@ -1,11 +1,11 @@
 ---
 name: Agents
-description: Agent Briefs and spec-pipeline support (screen-inventory parsing, UX/UI structural validation, grill research directives) backing the automated QueueRouter spec-pipeline. USE WHEN agents, multi-agent, the algorithm, optimize, spec-pipeline gating, screen inventory coverage, grill directive generation, OR agent orchestration.
+description: Designer Briefs and spec-pipeline support (screen-inventory parsing, UX/UI structural validation, grill research directives) backing the automated QueueRouter spec-pipeline. USE WHEN agents, multi-agent, the algorithm, optimize, spec-pipeline gating, screen inventory coverage, grill directive generation, OR agent orchestration.
 ---
 
 # Agents
 
-Agent Briefs (`*Brief.md`, loaded by the native `agents/*.md` definitions) and spec sheet generation for new features.
+Designer Briefs (`UIDesignerBrief.md`, `UXDesignerBrief.md`, `DesignerBrief.md`, used by the spec pipeline; the other agent briefs now live in `agents/*.md`) and the SpecSheet support library behind the automated QueueRouter spec-pipeline (the interactive `/specsheet` workflows were retired 2026-07-02).
 
 ## Sub-Skills
 

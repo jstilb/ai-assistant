@@ -9,12 +9,11 @@
 ## Required Knowledge (Pre-load from Skills)
 
 ### Core Foundations
-- **lib/core/CoreStack.md** - Stack preferences and tooling
-- **lib/core/CONSTITUTION.md** - Constitutional principles
+- **USER/TECHSTACKPREFERENCES.md** - Stack preferences and tooling
 
 ---
 
-## Key Design Principles (from CORE)
+## Key Design Principles
 
 These are already loaded via CORE - reference, don't duplicate:
 
