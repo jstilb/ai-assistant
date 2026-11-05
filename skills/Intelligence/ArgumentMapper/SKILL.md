@@ -20,39 +20,39 @@ It also contains an **ownership lineage engine**: given a brand or organization,
 
 ### Map Arguments
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts map "Person Name" "Topic" --depth standard
+bun ~/Desktop/projects/argumentmapper/src/cli.ts map "Person Name" "Topic" --depth standard
 ```
 
 ### Verify Claims
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts verify --input profile.json
+bun ~/Desktop/projects/argumentmapper/src/cli.ts verify --input profile.json
 ```
 
 ### Track Evolution
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts track "Person Name" "Topic" --since 2020
+bun ~/Desktop/projects/argumentmapper/src/cli.ts track "Person Name" "Topic" --since 2020
 ```
 
 ### Search Only
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts search "Person Name" "Topic"
+bun ~/Desktop/projects/argumentmapper/src/cli.ts search "Person Name" "Topic"
 ```
 
 ### List Tracked Pairs
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts list
+bun ~/Desktop/projects/argumentmapper/src/cli.ts list
 ```
 
 ### Ownership Lineage
 
 Resolve a name to candidate entities (CIK / LEI / Wikidata QID). **Ambiguity is surfaced, never guessed** — exits non-zero and picks nothing when a name is ambiguous:
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts ownership resolve "Coca-Cola"
+bun ~/Desktop/projects/argumentmapper/src/cli.ts ownership resolve "Coca-Cola"
 ```
 
 Full lineage — parents, subsidiaries and sister companies in one graph:
 ```bash
-bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts ownership "Instagram" --markdown
+bun ~/Desktop/projects/argumentmapper/src/cli.ts ownership "Instagram" --markdown
 ```
 
 One direction at a time:
@@ -144,13 +144,13 @@ When a user asks who owns, controls or funds something:
 
 ```
 User: "Map Sam Harris's arguments about free will"
--> bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts map "Sam Harris" "free will" --depth standard --markdown
+-> bun ~/Desktop/projects/argumentmapper/src/cli.ts map "Sam Harris" "free will" --depth standard --markdown
 
 User: "Has Paul Graham's position on startups changed?"
--> bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts track "Paul Graham" "startups" --since 2010 --markdown
+-> bun ~/Desktop/projects/argumentmapper/src/cli.ts track "Paul Graham" "startups" --since 2010 --markdown
 
 User: "Verify these claims"
--> bun /Users/[user]/Desktop/projects/argumentmapper/src/cli.ts verify --input profile.json --markdown
+-> bun ~/Desktop/projects/argumentmapper/src/cli.ts verify --input profile.json --markdown
 
 User: "Who actually owns Instagram?"
 -> bun .../src/cli.ts ownership "Instagram" --up --markdown
@@ -172,7 +172,7 @@ User: "Who funds Coca-Cola politically?"
 
 ## Integration
 
-This skill wraps the standalone application at `/Users/[user]/Desktop/projects/argumentmapper/`.
+This skill wraps the standalone application at `~/Desktop/projects/argumentmapper/`.
 
 ## Customization
 

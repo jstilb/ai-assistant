@@ -11,12 +11,12 @@
  *   ARGUMENTMAPPER_PATH=/path/to/argumentmapper bun ArgumentMapperBridge.ts list
  */
 
-import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { parseArgs } from 'util';
-import { createAppendLog, type AppendLog } from '../../../../lib/core/AppendLog.ts';
-import { getKayaHome as resolveKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
+import { getKayaHome as resolveKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================================================
 // Path Resolution
@@ -30,8 +30,8 @@ function getProjectPath(): string {
   const path = process.env.ARGUMENTMAPPER_PATH;
   if (!path) {
     throw new Error(
-      'ARGUMENTMAPPER_PATH env var not set. Set it to the argumentmapper project root.\n' +
-      'Add to secrets.json: { "argumentmapper_path": "/path/to/argumentmapper" }'
+      "ARGUMENTMAPPER_PATH env var not set. Set it to the argumentmapper project root.\n" +
+        'Add to secrets.json: { "argumentmapper_path": "/path/to/argumentmapper" }',
     );
   }
   return path;
@@ -61,9 +61,9 @@ function getAuditLog(filePath: string): AppendLog {
 }
 
 function auditLog(kayaHome: string, entry: Record<string, unknown>): void {
-  const dir = join(kayaHome, 'MEMORY', 'Intelligence');
+  const dir = join(kayaHome, "MEMORY", "Intelligence");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  getAuditLog(join(dir, 'argumentmapper-runs.jsonl')).append(entry);
+  getAuditLog(join(dir, "argumentmapper-runs.jsonl")).append(entry);
 }
 
 // ============================================================================
@@ -71,7 +71,7 @@ function auditLog(kayaHome: string, entry: Record<string, unknown>): void {
 // ============================================================================
 
 function runBridge(projectPath: string, args: string[]): BridgeResult {
-  const cliPath = join(projectPath, 'src', 'cli.ts');
+  const cliPath = join(projectPath, "src", "cli.ts");
 
   if (!existsSync(cliPath)) {
     return {
@@ -82,24 +82,24 @@ function runBridge(projectPath: string, args: string[]): BridgeResult {
 
   try {
     // Use execFileSync with array args — no shell interpolation, no injection risk
-    const output = execFileSync('bun', [cliPath, ...args], {
-      encoding: 'utf-8',
+    const output = execFileSync("bun", [cliPath, ...args], {
+      encoding: "utf-8",
       timeout: 60_000,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     // Parse output
     try {
       return { success: true, data: JSON.parse(output) };
     } catch {
-      return { success: true, data: { type: 'text', content: output } };
+      return { success: true, data: { type: "text", content: output } };
     }
   } catch (e: unknown) {
     const err = e as { status?: number; stderr?: string | Buffer; message?: string };
-    const stderr = typeof err.stderr === 'string' ? err.stderr : err.stderr?.toString() ?? '';
+    const stderr = typeof err.stderr === "string" ? err.stderr : (err.stderr?.toString() ?? "");
 
-    if (err.message?.includes('ETIMEDOUT') || err.message?.includes('timeout')) {
-      return { success: false, error: 'ArgumentMapper timed out after 60s', stderr };
+    if (err.message?.includes("ETIMEDOUT") || err.message?.includes("timeout")) {
+      return { success: false, error: "ArgumentMapper timed out after 60s", stderr };
     }
 
     return {
@@ -119,8 +119,8 @@ async function main(): Promise<void> {
   const { positionals, values } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      help: { type: 'boolean', short: 'h', default: false },
-      json: { type: 'boolean', default: false },
+      help: { type: "boolean", short: "h", default: false },
+      json: { type: "boolean", default: false },
     },
     allowPositionals: true,
     strict: false,
@@ -176,7 +176,7 @@ Environment:
   // Audit
   auditLog(kayaHome, {
     timestamp: new Date().toISOString(),
-    operation: positionals[0] ?? 'unknown',
+    operation: positionals[0] ?? "unknown",
     args: positionals.slice(1),
     durationMs,
     success: result.success,
@@ -184,21 +184,21 @@ Environment:
   });
 
   if (!result.success) {
-    console.error('[ArgumentMapperBridge] Error:', result.error);
+    console.error("[ArgumentMapperBridge] Error:", result.error);
     if (result.stderr) console.error(result.stderr);
     process.exit(result.exitCode ?? 1);
   }
 
   if (values.json) {
     console.log(JSON.stringify(result.data, null, 2));
-  } else if (typeof result.data === 'object' && result.data !== null && 'content' in result.data) {
+  } else if (typeof result.data === "object" && result.data !== null && "content" in result.data) {
     console.log((result.data as { content: string }).content);
   } else {
     console.log(JSON.stringify(result.data, null, 2));
   }
 }
 
-main().catch(err => {
-  console.error('[ArgumentMapperBridge] Fatal:', err);
+main().catch((err) => {
+  console.error("[ArgumentMapperBridge] Fatal:", err);
   process.exit(1);
 });
