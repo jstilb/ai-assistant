@@ -9,9 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { WorkItem } from "./WorkQueue.ts";
 import type { ISCRow } from "./WorkOrchestrator.ts";
 
@@ -105,7 +105,12 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
   // Setup: A (independent), B (independent), C (depends on A + B)
   const itemA = makeItem({ id: "item-a", title: "Build auth module", priority: "high" });
   const itemB = makeItem({ id: "item-b", title: "Create API client", priority: "normal" });
-  const itemC = makeItem({ id: "item-c", title: "Integration tests", priority: "normal", dependencies: ["item-a", "item-b"] });
+  const itemC = makeItem({
+    id: "item-c",
+    title: "Integration tests",
+    priority: "normal",
+    dependencies: ["item-a", "item-b"],
+  });
 
   function createPipeline() {
     const queue = WorkQueue._createForTesting([
@@ -122,8 +127,8 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
     const result = await orch.init();
 
     expect(result.success).toBe(true);
-    expect(result.ready).toBe(2);    // A and B ready
-    expect(result.blocked).toBe(1);  // C blocked
+    expect(result.ready).toBe(2); // A and B ready
+    expect(result.blocked).toBe(1); // C blocked
     expect(result.message).toContain("2 ready");
     expect(result.message).toContain("1 blocked");
   });
@@ -133,7 +138,7 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
     await orch.init();
 
     const batch = await orch.nextBatch(5);
-    const ids = batch.items.map(i => i.id);
+    const ids = batch.items.map((i) => i.id);
 
     expect(ids).toContain("item-a");
     expect(ids).toContain("item-b");
@@ -181,7 +186,7 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
 
     // All rows promoted
     const rows = orch.iscManager.load("item-a");
-    expect(rows.every(r => r.status === "VERIFIED")).toBe(true);
+    expect(rows.every((r) => r.status === "VERIFIED")).toBe(true);
   });
 
   it("Step 7: complete succeeds after verification", async () => {
@@ -190,12 +195,18 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
     orch.started("item-a");
     orch.iscManager.persist("item-a", [{ id: 1, description: "Done", status: "VERIFIED", parallel: false }]);
     queue.setVerification("item-a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier" as const,
+      tiersExecuted: [1, 2],
     });
 
-    const result = await orch.complete("item-a");
+    const result = await orch["complete"]("item-a");
     expect(result.success).toBe(true);
     expect(queue.getItem("item-a")?.status).toBe("completed");
   });
@@ -208,29 +219,41 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
     orch.started("item-a");
     orch.iscManager.persist("item-a", [{ id: 1, description: "Done", status: "VERIFIED", parallel: false }]);
     queue.setVerification("item-a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier" as const,
+      tiersExecuted: [1, 2],
     });
-    await orch.complete("item-a");
+    await orch["complete"]("item-a");
 
     // C still blocked (B pending)
     let batch = await orch.nextBatch(5);
-    expect(batch.items.map(i => i.id)).not.toContain("item-c");
+    expect(batch.items.map((i) => i.id)).not.toContain("item-c");
 
     // Complete B
     orch.started("item-b");
     orch.iscManager.persist("item-b", [{ id: 1, description: "Done", status: "VERIFIED", parallel: false }]);
     queue.setVerification("item-b", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier" as const,
+      tiersExecuted: [1, 2],
     });
-    await orch.complete("item-b");
+    await orch["complete"]("item-b");
 
     // Now C unblocked
     batch = await orch.nextBatch(5);
-    expect(batch.items.map(i => i.id)).toContain("item-c");
+    expect(batch.items.map((i) => i.id)).toContain("item-c");
     expect(batch.blocked).toBe(0);
   });
 
@@ -242,16 +265,22 @@ describe("E2E: Full pipeline with 3-item DAG", () => {
     orch.started("item-a");
     orch.iscManager.persist("item-a", [{ id: 1, description: "Done", status: "VERIFIED", parallel: false }]);
     queue.setVerification("item-a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier" as const,
+      tiersExecuted: [1, 2],
     });
-    await orch.complete("item-a");
+    await orch["complete"]("item-a");
 
     const output = orch.status();
     expect(output).toContain("3 total");
     expect(output).toContain("1 completed");
-    expect(output).toContain("1 ready");   // B is ready
+    expect(output).toContain("1 ready"); // B is ready
     expect(output).toContain("1 blocked"); // C still blocked
   });
 });
@@ -287,7 +316,7 @@ describe("E2E: Safety gates", () => {
     const orch = WorkOrchestrator._createForTesting(queue);
     orch.iscManager.persist("x", [{ id: 1, description: "Work", status: "DONE", parallel: false }]);
 
-    const result = await orch.complete("x");
+    const result = await orch["complete"]("x");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("No verification record");
   });
@@ -297,7 +326,9 @@ describe("E2E: Safety gates", () => {
     const orch = WorkOrchestrator._createForTesting(queue, {
       verifierResult: {
         finalVerdict: "FAIL",
-        tiers: [{ tier: 1, verdict: "FAIL", confidence: 0.2, concerns: ["Paper completion"], costEstimate: 0, latencyMs: 0 }],
+        tiers: [
+          { tier: 1, verdict: "FAIL", confidence: 0.2, concerns: ["Paper completion"], costEstimate: 0, latencyMs: 0 },
+        ],
         tiersSkipped: [],
         totalCost: 0,
         totalLatencyMs: 0,
@@ -331,9 +362,7 @@ describe("E2E: DAG validation", () => {
   });
 
   it("init fails on missing dependency reference", async () => {
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "a", dependencies: ["nonexistent"] }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "a", dependencies: ["nonexistent"] })]);
     const orch = WorkOrchestrator._createForTesting(queue);
 
     const result = await orch.init();
@@ -357,11 +386,11 @@ describe("E2E: Full pipeline with template ISC (previously broken path)", () => 
     // Step 1: prepare — generates template ISC rows
     const prep = await orch.prepare("fix-test", "STANDARD");
     expect(prep.success).toBe(true);
-    expect(prep.iscRows.length).toBe(2);  // Bug 3: was 5, now 2
-    expect(prep.iscRows.every(r => r.status === "PENDING")).toBe(true);
+    expect(prep.iscRows.length).toBe(2); // Bug 3: was 5, now 2
+    expect(prep.iscRows.every((r) => r.status === "PENDING")).toBe(true);
     // Bug 3: no docs/cleanup categories in template rows
-    expect(prep.iscRows.some(r => r.category === "documentation")).toBe(false);
-    expect(prep.iscRows.some(r => r.category === "cleanup")).toBe(false);
+    expect(prep.iscRows.some((r) => (r as { category?: string }).category === "documentation")).toBe(false);
+    expect(prep.iscRows.some((r) => (r as { category?: string }).category === "cleanup")).toBe(false);
 
     // Bug 1: all verification commands must pass the security allowlist
     for (const row of prep.iscRows) {
@@ -370,7 +399,7 @@ describe("E2E: Full pipeline with template ISC (previously broken path)", () => 
     }
 
     // Step 2: markRowsDone — simulate agent completing work
-    const rowIds = prep.iscRows.map(r => r.id);
+    const rowIds = prep.iscRows.map((r) => r.id);
     const markResult = orch.iscManager.markDone("fix-test", rowIds);
     expect(markResult.success).toBe(true);
     expect(markResult.transitioned).toEqual(rowIds);
@@ -391,10 +420,10 @@ describe("E2E: Full pipeline with template ISC (previously broken path)", () => 
     expect(verifyResult.failures).toEqual([]);
     expect(verifyResult.skepticalReview?.finalVerdict).toBe("PASS");
     // All rows promoted to VERIFIED
-    expect(orch.iscManager.load("fix-test").every(r => r.status === "VERIFIED")).toBe(true);
+    expect(orch.iscManager.load("fix-test").every((r) => r.status === "VERIFIED")).toBe(true);
 
     // Step 5: complete — all 3 gates pass
-    const completeResult = await orch.complete("fix-test");
+    const completeResult = await orch["complete"]("fix-test");
     expect(completeResult.success).toBe(true);
     expect(queue.getItem("fix-test")!.status).toBe("completed");
   });
@@ -411,21 +440,36 @@ describe("E2E: phase ordering via explicit dependencies (S5b)", () => {
     // DAG correctly gates: only Phase 1 is ready.
     const queue = WorkQueue._createForTesting([
       makeItem({ id: "lt-p1", title: "LucidTasks Phase 1: Core features", priority: "normal" }),
-      makeItem({ id: "lt-p2", title: "LucidTasks Phase 2: Database schema", priority: "normal", dependencies: ["lt-p1"] }),
-      makeItem({ id: "lt-p3", title: "LucidTasks Phase 3: API endpoints", priority: "normal", dependencies: ["lt-p2"] }),
-      makeItem({ id: "lt-p4", title: "LucidTasks Phase 4: Docs and tests", priority: "normal", dependencies: ["lt-p3"] }),
+      makeItem({
+        id: "lt-p2",
+        title: "LucidTasks Phase 2: Database schema",
+        priority: "normal",
+        dependencies: ["lt-p1"],
+      }),
+      makeItem({
+        id: "lt-p3",
+        title: "LucidTasks Phase 3: API endpoints",
+        priority: "normal",
+        dependencies: ["lt-p2"],
+      }),
+      makeItem({
+        id: "lt-p4",
+        title: "LucidTasks Phase 4: Docs and tests",
+        priority: "normal",
+        dependencies: ["lt-p3"],
+      }),
     ]);
     const orch = WorkOrchestrator._createForTesting(queue);
     const result = await orch.init();
 
     expect(result.success).toBe(true);
-    expect(result.ready).toBe(1);   // Only Phase 1
+    expect(result.ready).toBe(1); // Only Phase 1
     expect(result.blocked).toBe(3); // Phase 2, 3, 4 blocked by explicit deps
 
     const batch = await orch.nextBatch(5);
     expect(batch.items.length).toBe(1);
-    expect(batch.items[0].id).toBe("lt-p1");
-    expect(batch.items.map(i => i.id)).not.toContain("lt-p4");
+    expect(batch.items[0]?.id).toBe("lt-p1");
+    expect(batch.items.map((i) => i.id)).not.toContain("lt-p4");
   });
 
   it("WITHOUT explicit deps, init() does NOT auto-wire — all phases are ready (warn-on-detect only)", async () => {
@@ -442,4 +486,3 @@ describe("E2E: phase ordering via explicit dependencies (S5b)", () => {
     expect(result.ready).toBe(2);
   });
 });
-

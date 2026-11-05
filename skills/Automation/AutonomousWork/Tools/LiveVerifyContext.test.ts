@@ -9,7 +9,9 @@ import { resolveLiveVerifyContext, resolveLiveVerifyMode } from "./LiveVerifyCon
 describe("resolveLiveVerifyContext", () => {
   test("explicit override wins over everything", () => {
     expect(resolveLiveVerifyContext({ KAYA_LIVE_VERIFY_MODE: "explorer", CLAUDECODE: "1" }).mode).toBe("explorer");
-    expect(resolveLiveVerifyContext({ KAYA_LIVE_VERIFY_MODE: "self-verify", KAYA_CRON_JOB_ID: "job-1" }).mode).toBe("self-verify");
+    expect(resolveLiveVerifyContext({ KAYA_LIVE_VERIFY_MODE: "self-verify", KAYA_CRON_JOB_ID: "job-1" }).mode).toBe(
+      "self-verify",
+    );
     expect(resolveLiveVerifyContext({ KAYA_LIVE_VERIFY_MODE: "self_verify" }).mode).toBe("self-verify");
   });
 

@@ -40,23 +40,18 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { execFileSync } from "child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   runDriver,
-  defaultCliRunner,
   BUILDER_ALLOWED_TOOLS,
-  VERIFIER_ALLOWED_TOOLS,
   MAX_ITERATIONS,
-  DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_ITEMS,
   parseMaxItemsArg,
   type CliRunnerFn,
-  type CliResult,
-  type HeadlessWorkDriverDeps,
   type DeferredMergeSweepResult,
 } from "./HeadlessWorkDriver.ts";
 import type { AgentSpawnResult, AgentSpawnOptions } from "../../../../lib/core/AgentSpawner.ts";
@@ -110,7 +105,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env.KAYA_HOME = originalKayaHome;
+  if (originalKayaHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = originalKayaHome;
   rmSync(scratchKayaHome, { recursive: true, force: true });
   rmSync(scratchRepo, { recursive: true, force: true });
 });
@@ -230,8 +226,8 @@ describe("HeadlessWorkDriver — happy path (real CLI subprocess, fake spawner)"
         // real git diff, real `bun test` run) has real evidence to find, exactly
         // like it would for a live agent. Only the LLM call itself is faked.
         const cwd = opts.cwd!;
-        require("fs").writeFileSync(join(cwd, "hwd-deliverable.txt"), "hwd fake deliverable\n");
-        require("fs").writeFileSync(
+        require("node:fs").writeFileSync(join(cwd, "hwd-deliverable.txt"), "hwd fake deliverable\n");
+        require("node:fs").writeFileSync(
           join(cwd, "hwd-deliverable.test.ts"),
           'import { test, expect } from "bun:test";\ntest("hwd deliverable exists", () => { expect(1 + 1).toBe(2); });\n',
         );
@@ -241,14 +237,33 @@ describe("HeadlessWorkDriver — happy path (real CLI subprocess, fake spawner)"
       const stdout = isBuilder
         ? JSON.stringify({ success: true, completedRows: knownIscRowIds, failedRows: [], budgetSpent: 0.01 })
         : JSON.stringify({
-            rows: knownIscRowIds.map((iscId) => ({ iscId, verdict: "PASS", evidence: "fake evidence", linkedTest: "hwd-deliverable.test.ts::hwd deliverable exists", concern: null })),
+            rows: knownIscRowIds.map((iscId) => ({
+              iscId,
+              verdict: "PASS",
+              evidence: "fake evidence",
+              linkedTest: "hwd-deliverable.test.ts::hwd deliverable exists",
+              concern: null,
+            })),
             summary: "all pass (fake)",
             allPass: true,
           });
-      return { success: true, stdout, stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false };
+      return {
+        success: true,
+        stdout,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
+      };
     };
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     const mine = result.itemsProcessed.find((o) => o.itemId === itemId);
@@ -283,7 +298,7 @@ describe("HeadlessWorkDriver — happy path (real CLI subprocess, fake spawner)"
     }
 
     const status = await getItemStatus(itemId);
-    expect(["completed", "pending"]).toContain(status); // pending if retried (reset) or blocked-on-human re-pended a dependency
+    expect(["completed", "pending"] as (string | undefined)[]).toContain(status); // pending if retried (reset) or blocked-on-human re-pended a dependency
   }, 60000);
 });
 
@@ -326,11 +341,25 @@ describe("HeadlessWorkDriver — interactive-session-lock respect (E2)", () => {
       const stdout = isBuilder
         ? JSON.stringify({ success: true, completedRows: knownIscRowIds, failedRows: [], budgetSpent: 0.01 })
         : JSON.stringify({
-            rows: knownIscRowIds.map((iscId) => ({ iscId, verdict: "PASS", evidence: "fake evidence", linkedTest: "hwd-deliverable.test.ts::hwd deliverable exists", concern: null })),
+            rows: knownIscRowIds.map((iscId) => ({
+              iscId,
+              verdict: "PASS",
+              evidence: "fake evidence",
+              linkedTest: "hwd-deliverable.test.ts::hwd deliverable exists",
+              concern: null,
+            })),
             summary: "all pass (fake)",
             allPass: true,
           });
-      return { success: true, stdout, stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false };
+      return {
+        success: true,
+        stdout,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
+      };
     };
 
     // Simulate an active Jm interactive session: fresh interactive-session.lock in the
@@ -343,7 +372,12 @@ describe("HeadlessWorkDriver — interactive-session-lock respect (E2)", () => {
       JSON.stringify({ sessionId: "jm-interactive-test", startedAt: new Date().toISOString(), pid: 1 }),
     );
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     const mine = result.itemsProcessed.find((o) => o.itemId === itemId);
@@ -390,7 +424,11 @@ describe("HeadlessWorkDriver — bounded convergence loop", () => {
         return {
           success: true,
           stdout: JSON.stringify({ success: false, completedRows: [], failedRows: knownIscRowIds, budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       verifierCalls++;
@@ -408,11 +446,20 @@ describe("HeadlessWorkDriver — bounded convergence loop", () => {
       return {
         success: true,
         stdout: JSON.stringify({ rows, summary: `iteration ${iteration} fake failure`, allPass: false }),
-        stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
       };
     };
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(knownIscRowIds.length).toBeGreaterThanOrEqual(2); // precondition for the alternation strategy above
@@ -456,7 +503,11 @@ describe("HeadlessWorkDriver — stall detection", () => {
         return {
           success: true,
           stdout: JSON.stringify({ success: false, completedRows: [], failedRows: knownIscRowIds, budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       verifierCalls++;
@@ -475,11 +526,20 @@ describe("HeadlessWorkDriver — stall detection", () => {
       return {
         success: true,
         stdout: JSON.stringify({ rows, summary: "stalled fake failure", allPass: false }),
-        stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
       };
     };
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(knownIscRowIds.length).toBeGreaterThan(0);
@@ -521,7 +581,12 @@ describe("HeadlessWorkDriver — rate-limit defer path", () => {
       preSpawnGated: true,
     });
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(result.deferred).toBe(true);
@@ -530,7 +595,9 @@ describe("HeadlessWorkDriver — rate-limit defer path", () => {
     expect(mine!.outcome).toBe("deferred");
 
     // Never called retry/fail/mark-done/verify/report-done for the deferred item.
-    const mutatingCalls = cliCalls.filter((a) => ["retry", "fail", "mark-done", "verify", "report-done", "complete"].includes(a[0]));
+    const mutatingCalls = cliCalls.filter((a) =>
+      ["retry", "fail", "mark-done", "verify", "report-done", "complete"].includes(a[0] ?? ""),
+    );
     expect(mutatingCalls).toHaveLength(0);
 
     // Item is left exactly where `started` put it — in_progress — for orphan
@@ -570,13 +637,17 @@ describe("HeadlessWorkDriver — Verifier-side infra defer path", () => {
         // loop from Test C: a successful Builder turn followed by an infra-unavailable
         // Verifier turn (e.g. the rate limit is hit between the two spawns).
         const cwd = opts.cwd!;
-        require("fs").writeFileSync(join(cwd, "hwd-deliverable.txt"), "hwd fake deliverable\n");
+        require("node:fs").writeFileSync(join(cwd, "hwd-deliverable.txt"), "hwd fake deliverable\n");
         git(cwd, ["add", "-A"]);
         git(cwd, ["commit", "-q", "-m", "feat(isc): hwd fake deliverable"]);
         return {
           success: true,
           stdout: JSON.stringify({ success: true, completedRows: knownIscRowIds, failedRows: [], budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       // Verifier turn: infra-unavailable.
@@ -591,7 +662,12 @@ describe("HeadlessWorkDriver — Verifier-side infra defer path", () => {
       };
     };
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(result.deferred).toBe(true);
@@ -603,7 +679,9 @@ describe("HeadlessWorkDriver — Verifier-side infra defer path", () => {
     // commit is NOT a mutating WorkOrchestratorCLI call (it's a direct git operation in
     // the worktree, exactly like a real Builder would make); the item's QUEUE state
     // must still be untouched by any mutating CLI subcommand.
-    const mutatingCalls = cliCalls.filter((a) => ["retry", "fail", "mark-done", "verify", "report-done", "complete"].includes(a[0]));
+    const mutatingCalls = cliCalls.filter((a) =>
+      ["retry", "fail", "mark-done", "verify", "report-done", "complete"].includes(a[0] ?? ""),
+    );
     expect(mutatingCalls).toHaveLength(0);
 
     const status = await getItemStatus(itemId);
@@ -689,20 +767,37 @@ describe("HeadlessWorkDriver — retry-noop telemetry", () => {
         return {
           success: true,
           stdout: JSON.stringify({ success: false, completedRows: [], failedRows: knownIscRowIds, budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       const rows = knownIscRowIds.map((iscId) => ({
-        iscId, verdict: "FAIL" as const, evidence: "fake evidence", linkedTest: null, concern: "always fails",
+        iscId,
+        verdict: "FAIL" as const,
+        evidence: "fake evidence",
+        linkedTest: null,
+        concern: "always fails",
       }));
       return {
         success: true,
         stdout: JSON.stringify({ rows, summary: "always fails (fake)", allPass: false }),
-        stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
       };
     };
 
-    const result = await runDriver({ cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(retryCalled).toBe(true);
@@ -759,7 +854,12 @@ describe("HeadlessWorkDriver — --max-items wiring (E3)", () => {
       throw new Error(`unexpected CLI call in this stub: ${args.join(" ")}`);
     };
 
-    const result = await runDriver({ cliRunner, batchSize: 2, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP });
+    const result = await runDriver({
+      cliRunner,
+      batchSize: 2,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
+    });
 
     expect(result.error).toBeNull();
     expect(capturedNextBatchArg).toBe("2");
@@ -803,24 +903,37 @@ describe("HeadlessWorkDriver — total item cap (E3 fix round)", () => {
         return {
           success: true,
           stdout: JSON.stringify({ success: false, completedRows: [], failedRows: knownIscRowIds, budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       const failing = knownIscRowIds[0];
       const rows = knownIscRowIds.map((iscId) => ({
-        iscId, verdict: iscId === failing ? "FAIL" : "PASS", evidence: "fake evidence",
+        iscId,
+        verdict: iscId === failing ? "FAIL" : "PASS",
+        evidence: "fake evidence",
         linkedTest: iscId === failing ? null : "Fake.test.ts::x::y",
         concern: iscId === failing ? "same fake failure every iteration" : null,
       }));
       return {
         success: true,
         stdout: JSON.stringify({ rows, summary: "stalled fake failure", allPass: false }),
-        stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
       };
     };
 
     const result = await runDriver({
-      cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP,
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
       maxItems: 2,
     });
 
@@ -835,7 +948,7 @@ describe("HeadlessWorkDriver — total item cap (E3 fix round)", () => {
 
     // The 3rd item was never pulled by next-batch at all (pull size itself is
     // trimmed to the remaining cap) — still sitting pending for the NEXT run.
-    const untouchedStatus = await getItemStatus(untouchedIds[0]);
+    const untouchedStatus = await getItemStatus(untouchedIds[0] ?? "");
     expect(untouchedStatus).toBe("pending");
   }, 90000);
 
@@ -862,26 +975,39 @@ describe("HeadlessWorkDriver — total item cap (E3 fix round)", () => {
         return {
           success: true,
           stdout: JSON.stringify({ success: false, completedRows: [], failedRows: knownIscRowIds, budgetSpent: 0.01 }),
-          stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          infraUnavailable: false,
+          preSpawnGated: false,
         };
       }
       const failing = knownIscRowIds[0];
       const rows = knownIscRowIds.map((iscId) => ({
-        iscId, verdict: iscId === failing ? "FAIL" : "PASS", evidence: "fake evidence",
+        iscId,
+        verdict: iscId === failing ? "FAIL" : "PASS",
+        evidence: "fake evidence",
         linkedTest: iscId === failing ? null : "Fake.test.ts::x::y",
         concern: iscId === failing ? "same fake failure every iteration" : null,
       }));
       return {
         success: true,
         stdout: JSON.stringify({ rows, summary: "stalled fake failure", allPass: false }),
-        stderr: "", exitCode: 0, timedOut: false, infraUnavailable: false, preSpawnGated: false,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        infraUnavailable: false,
+        preSpawnGated: false,
       };
     };
 
     // maxItems: 0 -> unlimited. All 3 seeded items get processed in one run —
     // contrast with the maxItems:2 test above, which leaves one item untouched.
     const result = await runDriver({
-      cliRunner, spawnAgentSyncFn, isRateLimitedFn: () => false, deferredMergeSweepFn: NOOP_SWEEP,
+      cliRunner,
+      spawnAgentSyncFn,
+      isRateLimitedFn: () => false,
+      deferredMergeSweepFn: NOOP_SWEEP,
       maxItems: 0,
     });
 

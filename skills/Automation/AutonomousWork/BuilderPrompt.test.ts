@@ -7,51 +7,41 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
-const PROMPT_PATH = join(
-  import.meta.dir,
-  "Prompts",
-  "BuilderPrompt.md"
-);
+const PROMPT_PATH = join(import.meta.dir, "Prompts", "BuilderPrompt.md");
 
 describe("BuilderPrompt.md — TestWriter Tests section (ISC 4032)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("file exists", () => {
     expect(existsSync(PROMPT_PATH)).toBe(true);
   });
 
   it("contains a 'TestWriter Tests' section", () => {
-    const hasSection =
-      content.includes("TestWriter Tests") ||
-      content.includes("TestWriter test");
+    const hasSection = content.includes("TestWriter Tests") || content.includes("TestWriter test");
     expect(hasSection).toBe(true);
   });
 
   it("instructs Builder not to modify TestWriter files", () => {
     const hasNoModify =
-      content.includes("DO NOT modify") ||
-      content.includes("do not modify") ||
-      content.includes("must not modify");
+      content.includes("DO NOT modify") || content.includes("do not modify") || content.includes("must not modify");
     expect(hasNoModify).toBe(true);
   });
 
   it("instructs Builder not to delete TestWriter files", () => {
     const hasNoDelete =
-      content.includes("DO NOT delete") ||
-      content.includes("do not delete") ||
-      content.includes("must not delete");
+      content.includes("DO NOT delete") || content.includes("do not delete") || content.includes("must not delete");
     expect(hasNoDelete).toBe(true);
   });
 
   it("instructs Builder not to rewrite TestWriter test assertions", () => {
     const hasNoRewrite =
-      content.includes("DO NOT rewrite") ||
-      content.includes("do not rewrite") ||
-      content.includes("must not rewrite");
+      content.includes("DO NOT rewrite") || content.includes("do not rewrite") || content.includes("must not rewrite");
     expect(hasNoRewrite).toBe(true);
   });
 
@@ -62,7 +52,9 @@ describe("BuilderPrompt.md — TestWriter Tests section (ISC 4032)", () => {
 
 describe("BuilderPrompt.md — accepts {{TESTWRITER_FILES}} template variable (ISC 6490)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("contains {{TESTWRITER_FILES}} template variable", () => {
     expect(content).toContain("{{TESTWRITER_FILES}}");
@@ -84,7 +76,9 @@ describe("BuilderPrompt.md — accepts {{TESTWRITER_FILES}} template variable (I
 
 describe("BuilderPrompt.md — return JSON includes testwriterConcerns (ISC 8700)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("return JSON schema includes testwriterConcerns field", () => {
     expect(content).toContain("testwriterConcerns");
@@ -107,10 +101,7 @@ describe("BuilderPrompt.md — return JSON includes testwriterConcerns (ISC 8700
     expect(jsonFormIdx).toBeGreaterThan(-1);
     const region = content.slice(jsonFormIdx, jsonFormIdx + 100);
     const isArray =
-      region.includes("[]") ||
-      region.includes("array") ||
-      region.includes("Array") ||
-      region.includes("[");
+      region.includes("[]") || region.includes("array") || region.includes("Array") || region.includes("[");
     expect(isArray).toBe(true);
   });
 });

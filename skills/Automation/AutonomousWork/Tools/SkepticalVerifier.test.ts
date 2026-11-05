@@ -9,13 +9,19 @@
  *   - judge() method replaces old runTier2/runTier3
  */
 
-import { describe, it, expect, mock, spyOn, beforeAll, afterAll } from "bun:test";
-import { SkepticalVerifier, type ItemReviewSummary, type VerificationTier, type InferenceFn, type EvidenceResult } from "./SkepticalVerifier.ts";
-import { writeFileSync, unlinkSync, mkdirSync } from "fs";
-import { join } from "path";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { execSync } from "child_process";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
+import {
+  SkepticalVerifier,
+  type ItemReviewSummary,
+  type VerificationTier,
+  type InferenceFn,
+  type EvidenceResult,
+} from "./SkepticalVerifier.ts";
+import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { execSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,10 +36,23 @@ function makeSummary(overrides: Partial<ItemReviewSummary> = {}): ItemReviewSumm
     priority: "MEDIUM",
     iscRows: [
       { id: 1, description: "Understand existing code", status: "VERIFIED", capability: "analysis.codebase" },
-      { id: 2, description: "Implement retry logic", status: "VERIFIED", capability: "execution.engineer", verification: { method: "test", result: "PASS", commandRan: true } },
-      { id: 3, description: "Add tests", status: "VERIFIED", capability: "execution.testing", verification: { method: "test", result: "PASS", commandRan: true } },
+      {
+        id: 2,
+        description: "Implement retry logic",
+        status: "VERIFIED",
+        capability: "execution.engineer",
+        verification: { method: "test", result: "PASS", commandRan: true },
+      },
+      {
+        id: 3,
+        description: "Add tests",
+        status: "VERIFIED",
+        capability: "execution.testing",
+        verification: { method: "test", result: "PASS", commandRan: true },
+      },
     ],
-    gitDiffStat: " src/http-client.ts | 120 ++++++++++++\n src/http-client.test.ts | 90 ++++++++\n src/retry-config.ts | 50 ++++\n 3 files changed, 260 insertions(+)",
+    gitDiffStat:
+      " src/http-client.ts | 120 ++++++++++++\n src/http-client.test.ts | 90 ++++++++\n src/retry-config.ts | 50 ++++\n 3 files changed, 260 insertions(+)",
     executionLogTail: ["Phase: EXECUTE - Running ISC rows", "Row 1 completed", "Row 2 completed", "Row 3 completed"],
     iterationsUsed: 3,
     ...overrides,
@@ -58,11 +77,13 @@ describe("Tier 1: Code-based verification", () => {
 
   it("flags missing git diff as concern for Phase 2 (no score penalty)", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      gitDiffStat: "",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        gitDiffStat: "",
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("Phase 2 will evaluate contextually"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("Phase 2 will evaluate contextually"))).toBe(true);
     // No score penalty from diff check — confidence may still drop from other checks
     // (e.g. missing test files), but should be higher than old 0.4-penalized value
     expect(result.confidence).toBeGreaterThanOrEqual(0.7);
@@ -70,37 +91,43 @@ describe("Tier 1: Code-based verification", () => {
 
   it("detects low completion ratio", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      iscRows: [
-        { id: 1, description: "Task 1", status: "DONE" },
-        { id: 2, description: "Task 2", status: "EXECUTION_FAILED" },
-        { id: 3, description: "Task 3", status: "SKIPPED" },
-        { id: 4, description: "Task 4", status: "PENDING" },
-      ],
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        iscRows: [
+          { id: 1, description: "Task 1", status: "DONE" },
+          { id: 2, description: "Task 2", status: "EXECUTION_FAILED" },
+          { id: 3, description: "Task 3", status: "SKIPPED" },
+          { id: 4, description: "Task 4", status: "PENDING" },
+        ],
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("completion ratio") || c.includes("Partial completion"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("completion ratio") || c.includes("Partial completion"))).toBe(true);
   });
 
   it("detects failed verification rows", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      iscRows: [
-        { id: 1, description: "Task 1", status: "DONE", verification: { method: "test", result: "PASS" } },
-        { id: 2, description: "Task 2", status: "DONE", verification: { method: "test", result: "FAIL" } },
-      ],
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        iscRows: [
+          { id: 1, description: "Task 1", status: "DONE", verification: { method: "test", result: "PASS" } },
+          { id: 2, description: "Task 2", status: "DONE", verification: { method: "test", result: "FAIL" } },
+        ],
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("failed verification"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("failed verification"))).toBe(true);
   });
 
   it("flags missing git diff for non-TRIVIAL items as Phase 2 concern", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      gitDiffStat: "0 files changed",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        gitDiffStat: "0 files changed",
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("Phase 2 will evaluate contextually"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("Phase 2 will evaluate contextually"))).toBe(true);
   });
 
   // "detects missing test files for engineering work" (Check 6) deleted — Check 6
@@ -109,12 +136,14 @@ describe("Tier 1: Code-based verification", () => {
 
   it("TRIVIAL items skip git diff concern check", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      effort: "TRIVIAL",
-      gitDiffStat: "",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        effort: "TRIVIAL",
+        gitDiffStat: "",
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("Phase 2 will evaluate contextually"))).toBe(false);
+    expect(result.concerns.some((c) => c.includes("Phase 2 will evaluate contextually"))).toBe(false);
   });
 });
 
@@ -153,9 +182,9 @@ describe("Full review flow", () => {
     const result = await verifier.review(makeSummary({ effort: "TRIVIAL" }));
 
     // Tier 1 (deterministic floor) AND the Tier 2 judge both ran.
-    expect(result.tiers.some(t => t.tier === 1)).toBe(true);
-    expect(result.tiers.some(t => t.tier === 2)).toBe(true);
-    expect(result.tiersSkipped.some(s => s.reason.includes("TRIVIAL"))).toBe(false);
+    expect(result.tiers.some((t) => t.tier === 1)).toBe(true);
+    expect(result.tiers.some((t) => t.tier === 2)).toBe(true);
+    expect(result.tiersSkipped.some((s) => s.reason.includes("TRIVIAL"))).toBe(false);
   });
 
   it("healthy item gets PASS from Tier 1 and judge with injectable inference", async () => {
@@ -163,18 +192,18 @@ describe("Full review flow", () => {
       success: true,
       parsed: { verdict: "PASS", confidence: 0.9, concerns: [] },
     });
-    const verifier = new SkepticalVerifier({ skipInferenceForTrivial: false, inferenceFn });
+    const verifier = new SkepticalVerifier({ inferenceFn });
     const summary = makeSummary({ effort: "TRIVIAL" });
 
     const result = await verifier.review(summary);
 
     // Tier 1 PASS (healthy summary)
-    expect(result.tiers[0].tier).toBe(1);
-    expect(result.tiers[0].verdict).toBe("PASS");
+    expect(result.tiers[0]?.tier).toBe(1);
+    expect(result.tiers[0]?.verdict).toBe("PASS");
     // Phase 2 (judge) PASS (injectable inference returned PASS) — tier: 2
     expect(result.tiers.length).toBeGreaterThanOrEqual(2);
-    expect(result.tiers[1].tier).toBe(2);
-    expect(result.tiers[1].verdict).toBe("PASS");
+    expect(result.tiers[1]?.tier).toBe(2);
+    expect(result.tiers[1]?.verdict).toBe("PASS");
   });
 
   it("aggregates concerns from all tiers", async () => {
@@ -183,21 +212,26 @@ describe("Full review flow", () => {
       parsed: { verdict: "PASS", confidence: 0.9, concerns: [] },
     });
     const verifier = new SkepticalVerifier({ inferenceFn });
-    const result = await verifier.review(makeSummary({
-      effort: "TRIVIAL",
-      // Self-reported PASS without commandRan (Check 2b) still surfaces a concern
-      // for TRIVIAL items — unlike the git-diff-emptiness check (Check 3), which
-      // deliberately skips TRIVIAL effort.
-      iscRows: [
-        { id: 1, description: "Implement fix", status: "VERIFIED",
-          verification: { method: "manual", result: "PASS", commandRan: false } },
-      ],
-    }));
+    const result = await verifier.review(
+      makeSummary({
+        effort: "TRIVIAL",
+        // Self-reported PASS without commandRan (Check 2b) still surfaces a concern
+        // for TRIVIAL items — unlike the git-diff-emptiness check (Check 3), which
+        // deliberately skips TRIVIAL effort.
+        iscRows: [
+          {
+            id: 1,
+            description: "Implement fix",
+            status: "VERIFIED",
+            verification: { method: "manual", result: "PASS", commandRan: false },
+          },
+        ],
+      }),
+    );
 
     expect(result.concerns.length).toBeGreaterThan(0);
   });
 });
-
 
 // ---------------------------------------------------------------------------
 // Verdict Computation (2-phase model: last tier wins)
@@ -218,23 +252,17 @@ describe("Verdict computation", () => {
   const verifier = new SkepticalVerifier();
 
   it("Tier 1 only PASS → PASS", () => {
-    const result = verifier.computeVerdictForTesting([
-      makeTier({ tier: 1, verdict: "PASS" }),
-    ]);
+    const result = verifier.computeVerdictForTesting([makeTier({ tier: 1, verdict: "PASS" })]);
     expect(result).toBe("PASS");
   });
 
   it("Tier 1 only FAIL → FAIL", () => {
-    const result = verifier.computeVerdictForTesting([
-      makeTier({ tier: 1, verdict: "FAIL" }),
-    ]);
+    const result = verifier.computeVerdictForTesting([makeTier({ tier: 1, verdict: "FAIL" })]);
     expect(result).toBe("FAIL");
   });
 
   it("Tier 1 only NEEDS_REVIEW → NEEDS_REVIEW", () => {
-    const result = verifier.computeVerdictForTesting([
-      makeTier({ tier: 1, verdict: "NEEDS_REVIEW" }),
-    ]);
+    const result = verifier.computeVerdictForTesting([makeTier({ tier: 1, verdict: "NEEDS_REVIEW" })]);
     expect(result).toBe("NEEDS_REVIEW");
   });
 
@@ -298,7 +326,7 @@ describe("Phase 2: judge() — Mocked inference", () => {
           confidence: 0.85,
           concerns: ["Minor: could add more edge case tests"],
         },
-      })
+      }),
     );
 
     const inferenceFn: InferenceFn = mockInference as unknown as InferenceFn;
@@ -332,8 +360,8 @@ describe("Phase 2: judge() — Mocked inference", () => {
     expect(result.verdict).toBe("NEEDS_REVIEW");
     expect(result.confidence).toBe(0.3);
     // Anti-masking: assert the SPECIFIC concern string for the unparseable path
-    expect(result.concerns.some(c => c.includes("unparseable"))).toBe(true);
-    expect(result.costEstimate).toBe(0.30);
+    expect(result.concerns.some((c) => c.includes("unparseable"))).toBe(true);
+    expect(result.costEstimate).toBe(0.3);
   });
 
   it("handles inference failure gracefully with NEEDS_REVIEW (infrastructure failure)", async () => {
@@ -351,7 +379,7 @@ describe("Phase 2: judge() — Mocked inference", () => {
     expect(result.verdict).toBe("NEEDS_REVIEW");
     expect(result.confidence).toBe(0.0);
     // Anti-masking: assert the SPECIFIC concern string for the failure path
-    expect(result.concerns.some(c => c.includes("unavailable"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("unavailable"))).toBe(true);
     // No real inference call was made, so cost should be 0
     expect(result.costEstimate).toBe(0);
   });
@@ -374,8 +402,11 @@ describe("buildJudgePrompt correctness", () => {
     });
 
     // Access the private method via prototype for testing
-    const prompt = (verifier as unknown as { buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string })
-      .buildJudgePrompt(summary, tier1);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1);
 
     // Verify prompt has the Phase 1 section (not separate Tier 1/Tier 2 sections)
     expect(prompt).toContain("Phase 1 Deterministic Checks");
@@ -396,9 +427,11 @@ describe("buildJudgePrompt correctness", () => {
       commands: [{ cmd: "bun test auth", stdout: "3 tests passed", exitCode: 0, passed: true }],
     };
 
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1, evidence);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1, evidence);
 
     expect(prompt).toContain("Actual Evidence (system-read, not agent-reported)");
     expect(prompt).toContain("/src/auth.ts");
@@ -427,9 +460,9 @@ describe("FM-12: tiersSkipped tracking", () => {
     const result = await verifier.review(makeSummary({ effort: "TRIVIAL" }));
 
     // The old "TRIVIAL effort, no gated categories" skip must NOT exist.
-    expect(result.tiersSkipped.some(s => s.reason === "TRIVIAL effort, no gated categories")).toBe(false);
+    expect(result.tiersSkipped.some((s) => s.reason === "TRIVIAL effort, no gated categories")).toBe(false);
     // The judge tier (tier 2) must have run.
-    expect(result.tiers.some(t => t.tier === 2)).toBe(true);
+    expect(result.tiers.some((t) => t.tier === 2)).toBe(true);
   });
 
   it("STANDARD item with inference → tiersSkipped is empty", async () => {
@@ -453,9 +486,11 @@ describe("FM-12: tiersSkipped tracking", () => {
 describe("FM-7: Targeted spec excerpt selection", () => {
   const getExtractSections = () => {
     const verifier = new SkepticalVerifier();
-    return (verifier as unknown as {
-      extractRelevantSpecSections: (summary: ItemReviewSummary) => string;
-    }).extractRelevantSpecSections.bind(verifier);
+    return (
+      verifier as unknown as {
+        extractRelevantSpecSections: (summary: ItemReviewSummary) => string;
+      }
+    ).extractRelevantSpecSections.bind(verifier);
   };
 
   it("returns empty string when no specContent", () => {
@@ -518,13 +553,15 @@ Set up PostgreSQL with connection pooling.
 
 ## Phase 3: Deployment
 Configure CI/CD pipeline for production.`;
-    const result = extract(makeSummary({
-      specContent: spec,
-      iscRows: [
-        { id: 1, description: "Implement JWT authentication", status: "VERIFIED" },
-        { id: 2, description: "Add OAuth2 token validation", status: "VERIFIED" },
-      ],
-    }));
+    const result = extract(
+      makeSummary({
+        specContent: spec,
+        iscRows: [
+          { id: 1, description: "Implement JWT authentication", status: "VERIFIED" },
+          { id: 2, description: "Add OAuth2 token validation", status: "VERIFIED" },
+        ],
+      }),
+    );
 
     // Authentication section should be prioritized due to ISC overlap
     expect(result).toContain("Authentication");
@@ -541,9 +578,11 @@ ${"x".repeat(5000)}`,
     const tier1 = verifier.runTier1(summary);
 
     // Access private method to check judge prompt
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1);
 
     // Should contain "relevant sections" header (from extractRelevantSpecSections)
     expect(prompt).toContain("relevant sections");
@@ -573,11 +612,10 @@ describe("Inference failure does not propagate upstream verdict", () => {
     // Infrastructure failures return NEEDS_REVIEW (not FAIL) — "unavailable" is infrastructure, not content
     expect(judgment.verdict).toBe("NEEDS_REVIEW");
     // Anti-masking: verify we hit the specific catch path
-    expect(judgment.concerns.some(c => c.includes("unavailable"))).toBe(true);
+    expect(judgment.concerns.some((c) => c.includes("unavailable"))).toBe(true);
     expect(judgment.costEstimate).toBe(0);
   });
 });
-
 
 // ---------------------------------------------------------------------------
 // parseDiffStats: Rename detection and substantial evidence
@@ -588,7 +626,7 @@ describe("parseDiffStats", () => {
 
   it("detects rename-only lines (=> | 0)", () => {
     const stats = verifier.parseDiffStats(
-      " {JobHunter => JobEngine}/State/master-profile.yaml | 0\n {JobHunter => JobEngine}/State/applications.jsonl | 0\n src/scanner.ts | 80 +++\n 3 files changed, 80 insertions(+)"
+      " {JobHunter => JobEngine}/State/master-profile.yaml | 0\n {JobHunter => JobEngine}/State/applications.jsonl | 0\n src/scanner.ts | 80 +++\n 3 files changed, 80 insertions(+)",
     );
     expect(stats.renameCount).toBe(2);
     expect(stats.nonRenameFiles).toBe(1);
@@ -598,7 +636,7 @@ describe("parseDiffStats", () => {
 
   it("substantial evidence: 200+ insertions across 3+ non-rename files", () => {
     const stats = verifier.parseDiffStats(
-      " src/a.ts | 100 +++\n src/b.ts | 100 +++\n src/c.ts | 50 +++\n 3 files changed, 250 insertions(+)"
+      " src/a.ts | 100 +++\n src/b.ts | 100 +++\n src/c.ts | 50 +++\n 3 files changed, 250 insertions(+)",
     );
     expect(stats.substantialEvidence).toBe(true);
   });
@@ -610,7 +648,7 @@ describe("parseDiffStats", () => {
 
   it("renames don't count toward substantial evidence files", () => {
     const stats = verifier.parseDiffStats(
-      " old/a.ts => new/a.ts | 0\n old/b.ts => new/b.ts | 0\n src/c.ts | 60 +++\n 3 files changed, 60 insertions(+)"
+      " old/a.ts => new/a.ts | 0\n old/b.ts => new/b.ts | 0\n src/c.ts | 60 +++\n 3 files changed, 60 insertions(+)",
     );
     expect(stats.renameCount).toBe(2);
     expect(stats.nonRenameFiles).toBe(1);
@@ -635,7 +673,7 @@ describe("H4: substantialEvidence boundary", () => {
   it("substantialEvidence false at 199 insertions / 2 files (below 200/3 threshold)", () => {
     const verifier = new SkepticalVerifier();
     const stats = verifier.parseDiffStats(
-      " src/foo.ts | 100 +++\n src/bar.ts | 99 +++\n 2 files changed, 199 insertions(+)"
+      " src/foo.ts | 100 +++\n src/bar.ts | 99 +++\n 2 files changed, 199 insertions(+)",
     );
     expect(stats.substantialEvidence).toBe(false);
     expect(stats.totalInsertions).toBe(199);
@@ -650,15 +688,27 @@ describe("H4: substantialEvidence boundary", () => {
 describe("H7: self-reported PASS penalty", () => {
   it("flags self-reported PASS rows without commandRan as a concern (informational, not a deterministic failure)", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      iscRows: [
-        { id: 1, description: "Implement feature", status: "VERIFIED", capability: "execution.engineer",
-          verification: { method: "test", result: "PASS", commandRan: false } },
-        { id: 2, description: "Add tests", status: "VERIFIED", capability: "execution.testing",
-          verification: { method: "test", result: "PASS", commandRan: false } },
-      ],
-    }));
-    expect(result.concerns.some(c => c.includes("self-reported PASS"))).toBe(true);
+    const result = verifier.runTier1(
+      makeSummary({
+        iscRows: [
+          {
+            id: 1,
+            description: "Implement feature",
+            status: "VERIFIED",
+            capability: "execution.engineer",
+            verification: { method: "test", result: "PASS", commandRan: false },
+          },
+          {
+            id: 2,
+            description: "Add tests",
+            status: "VERIFIED",
+            capability: "execution.testing",
+            verification: { method: "test", result: "PASS", commandRan: false },
+          },
+        ],
+      }),
+    );
+    expect(result.concerns.some((c) => c.includes("self-reported PASS"))).toBe(true);
     // L1: self-report alone isn't objective ground truth — it's a concern for the
     // Gate-3 judge to weigh, not a Tier-1 deterministic failure (Check 19 owns the
     // hard alarm for zero independent command evidence).
@@ -675,19 +725,23 @@ describe("M10: cross-validation detects fabricated gitDiffStat", () => {
     const verifier = new SkepticalVerifier();
     // Use a temp dir with git init but no real changes between HEAD and HEAD~1
     const tmpDir = mkdtempSync(join(tmpdir(), "m10-"));
-    execSync("git init && git commit --allow-empty -m init && git commit --allow-empty -m second", { cwd: tmpDir });
+    execSync(
+      "git init && git -c user.name=test -c user.email=test@example.com commit --allow-empty -m init && git -c user.name=test -c user.email=test@example.com commit --allow-empty -m second",
+      { cwd: tmpDir },
+    );
 
-    const result = verifier.runTier1(makeSummary({
-      workingDir: tmpDir,
-      gitDiffStat: " src/a.ts | 50 +++\n src/b.ts | 60 +++\n src/c.ts | 70 +++\n src/d.ts | 80 +++\n 4 files changed, 260 insertions(+)",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        workingDir: tmpDir,
+        gitDiffStat:
+          " src/a.ts | 50 +++\n src/b.ts | 60 +++\n src/c.ts | 70 +++\n src/d.ts | 80 +++\n 4 files changed, 260 insertions(+)",
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("Cross-validation failed"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("Cross-validation failed"))).toBe(true);
     rmSync(tmpDir, { recursive: true });
   });
 });
-
-
 
 // ---------------------------------------------------------------------------
 // Check 10: Deployment runtime assertion — DELETED in S2 de-determinize
@@ -698,16 +752,28 @@ describe("Tier 1: Check 10 — Deployment runtime assertion (deleted in S2)", ()
   it("no deployment-runtime-verification concern ever fires (check removed)", () => {
     const verifier = new SkepticalVerifier();
     // Even a row explicitly labeled deployment with only existence-check — no concern from Check 10
-    const result = verifier.runTier1(makeSummary({
-      iscRows: [
-        { id: 1, description: "Implement core feature", status: "VERIFIED", verification: { method: "test", result: "PASS" } },
-        { id: 2, description: "Deploy launchd plist", status: "DONE", verification: { method: "existence", result: "PASS" } },
-      ],
-      gitDiffStat: " deploy/kaya.plist | 20 +++\n src/feature.ts | 40 +++\n 2 files changed",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        iscRows: [
+          {
+            id: 1,
+            description: "Implement core feature",
+            status: "VERIFIED",
+            verification: { method: "test", result: "PASS" },
+          },
+          {
+            id: 2,
+            description: "Deploy launchd plist",
+            status: "DONE",
+            verification: { method: "existence", result: "PASS" },
+          },
+        ],
+        gitDiffStat: " deploy/kaya.plist | 20 +++\n src/feature.ts | 40 +++\n 2 files changed",
+      }),
+    );
 
     // Check 10 is gone — no "runtime verification" concern from Tier 1
-    expect(result.concerns.some(c => c.includes("deployment") && c.includes("runtime verification"))).toBe(false);
+    expect(result.concerns.some((c) => c.includes("deployment") && c.includes("runtime verification"))).toBe(false);
   });
 });
 
@@ -720,15 +786,17 @@ describe("Tier 1: Check 10 — Deployment runtime assertion (deleted in S2)", ()
 describe("Tier 1: Check 12 — Test file change proportionality (deleted in L1)", () => {
   it("no 'testing row ... no test files' concern ever fires (check removed)", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      iscRows: [
-        { id: 1, description: "Implement feature", status: "VERIFIED" },
-        { id: 2, description: "Add tests", status: "DONE", capability: "execution.testing" },
-      ],
-      gitDiffStat: " src/feature.ts | 40 +++\n 1 file changed",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        iscRows: [
+          { id: 1, description: "Implement feature", status: "VERIFIED" },
+          { id: 2, description: "Add tests", status: "DONE", capability: "execution.testing" },
+        ],
+        gitDiffStat: " src/feature.ts | 40 +++\n 1 file changed",
+      }),
+    );
 
-    expect(result.concerns.some(c => c.includes("testing row") && c.includes("no test files"))).toBe(false);
+    expect(result.concerns.some((c) => c.includes("testing row") && c.includes("no test files"))).toBe(false);
   });
 });
 
@@ -743,12 +811,16 @@ describe("ISC row provenance in ItemReviewSummary", () => {
     const summary = makeSummary({
       iscRows: [
         {
-          id: 1, description: "Feature", status: "VERIFIED",
+          id: 1,
+          description: "Feature",
+          status: "VERIFIED",
           source: "EXPLICIT",
           verification: { method: "test", result: "PASS", commandRan: true },
         },
         {
-          id: 2, description: "Test", status: "VERIFIED",
+          id: 2,
+          description: "Test",
+          status: "VERIFIED",
           source: "INFERRED",
           verification: { method: "inferred", result: "PASS", commandRan: false },
         },
@@ -775,7 +847,9 @@ describe("Change 4: gatherEvidence()", () => {
   });
 
   afterAll(() => {
-    try { unlinkSync(tmpFile); } catch {}
+    try {
+      unlinkSync(tmpFile);
+    } catch {}
   });
 
   it("handles non-existent files gracefully (no crash, empty files array)", () => {
@@ -796,16 +870,14 @@ describe("Change 4: gatherEvidence()", () => {
   it("reads real files referenced in ISC row descriptions", () => {
     const verifier = new SkepticalVerifier();
     const summary = makeSummary({
-      iscRows: [
-        { id: 1, description: `Modify ${tmpFile} to add retry logic`, status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: `Modify ${tmpFile} to add retry logic`, status: "VERIFIED" }],
     });
 
     const evidence = verifier.gatherEvidence(summary);
 
     expect(evidence.files.length).toBe(1);
-    expect(evidence.files[0].path).toBe(tmpFile);
-    expect(evidence.files[0].content).toContain("healthCheck");
+    expect(evidence.files[0]?.path).toBe(tmpFile);
+    expect(evidence.files[0]?.content).toContain("healthCheck");
   });
 
   it("caps file reads at 5", () => {
@@ -832,7 +904,9 @@ describe("Change 4: gatherEvidence()", () => {
     const summary = makeSummary({
       iscRows: [
         {
-          id: 1, description: "Check file exists", status: "VERIFIED",
+          id: 1,
+          description: "Check file exists",
+          status: "VERIFIED",
           verification: { method: "existence", result: "PASS", command: "echo test-output-ok" },
         },
       ],
@@ -841,9 +915,9 @@ describe("Change 4: gatherEvidence()", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].cmd).toBe("echo test-output-ok");
-    expect(evidence.commands[0].stdout).toContain("mock-output-for: echo test-output-ok");
-    expect(evidence.commands[0].exitCode).toBe(0);
+    expect(evidence.commands[0]?.cmd).toBe("echo test-output-ok");
+    expect(evidence.commands[0]?.stdout).toContain("mock-output-for: echo test-output-ok");
+    expect(evidence.commands[0]?.exitCode).toBe(0);
   });
 
   it("captures failing command output with non-zero exit code", () => {
@@ -852,7 +926,9 @@ describe("Change 4: gatherEvidence()", () => {
     const summary = makeSummary({
       iscRows: [
         {
-          id: 1, description: "Run failing check", status: "VERIFIED",
+          id: 1,
+          description: "Run failing check",
+          status: "VERIFIED",
           verification: { method: "test", result: "FAIL", command: "test -f /nonexistent/file.xyz" },
         },
       ],
@@ -861,7 +937,7 @@ describe("Change 4: gatherEvidence()", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].exitCode).not.toBe(0);
+    expect(evidence.commands[0]?.exitCode).not.toBe(0);
   });
 
   it("skips rows without verification commands", () => {
@@ -888,9 +964,11 @@ describe("Change 4: formatEvidence() in judge prompt", () => {
       commands: [{ cmd: "bun test auth", stdout: "3 tests passed", exitCode: 0, passed: true }],
     };
 
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1, evidence);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1, evidence);
 
     expect(prompt).toContain("Actual Evidence (system-read, not agent-reported)");
     expect(prompt).toContain("/src/auth.ts");
@@ -905,9 +983,11 @@ describe("Change 4: formatEvidence() in judge prompt", () => {
     const summary = makeSummary();
     const tier1 = verifier.runTier1(summary);
 
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1, undefined);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1, undefined);
 
     expect(prompt).not.toContain("Actual Evidence");
   });
@@ -918,9 +998,11 @@ describe("Change 4: formatEvidence() in judge prompt", () => {
     const tier1 = verifier.runTier1(summary);
     const evidence: EvidenceResult = { files: [], commands: [] };
 
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1, evidence);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1, evidence);
 
     expect(prompt).not.toContain("Actual Evidence");
   });
@@ -936,7 +1018,9 @@ describe("Change 4: Phase 2 (judge) inference receives evidence-enriched prompt"
   });
 
   afterAll(() => {
-    try { unlinkSync(tmpFile); } catch {}
+    try {
+      unlinkSync(tmpFile);
+    } catch {}
   });
 
   it("inferenceFn receives prompt with file evidence from gatherEvidence", async () => {
@@ -948,9 +1032,7 @@ describe("Change 4: Phase 2 (judge) inference receives evidence-enriched prompt"
 
     const verifier = new SkepticalVerifier({ inferenceFn });
     const summary = makeSummary({
-      iscRows: [
-        { id: 1, description: `Modify ${tmpFile} to add retry`, status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: `Modify ${tmpFile} to add retry`, status: "VERIFIED" }],
     });
     const tier1 = verifier.runTier1(summary);
     // Evidence is now gathered in review() and passed to judge — simulate that
@@ -975,7 +1057,9 @@ describe("Change 4: Phase 2 (judge) inference receives evidence-enriched prompt"
     const summary = makeSummary({
       iscRows: [
         {
-          id: 1, description: "Run health check", status: "VERIFIED",
+          id: 1,
+          description: "Run health check",
+          status: "VERIFIED",
           verification: { method: "test", result: "PASS", command: "echo evidence-cmd-output" },
         },
       ],
@@ -1082,7 +1166,10 @@ describe("Diff-based evidence gathering", () => {
     // Create files that would appear in a git diff
     mkdirSync(join(worktreeDir, "skills", "Auth"), { recursive: true });
     writeFileSync(join(worktreeDir, "skills", "Auth", "SKILL.md"), "# Auth Skill\nHandles authentication.\n");
-    writeFileSync(join(worktreeDir, "skills", "Auth", "AuthEngine.ts"), 'export class AuthEngine { login() { return true; } }\n');
+    writeFileSync(
+      join(worktreeDir, "skills", "Auth", "AuthEngine.ts"),
+      "export class AuthEngine { login() { return true; } }\n",
+    );
     mkdirSync(join(worktreeDir, "src"), { recursive: true });
     writeFileSync(join(worktreeDir, "src", "index.ts"), 'console.log("hello");\n');
   });
@@ -1098,20 +1185,18 @@ describe("Diff-based evidence gathering", () => {
       gitDiffStat: ` skills/Auth/SKILL.md | 2 ++
  skills/Auth/AuthEngine.ts | 1 +
  2 files changed, 3 insertions(+)`,
-      iscRows: [
-        { id: 1, description: "Implement auth module", status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: "Implement auth module", status: "VERIFIED" }],
     });
 
     const evidence = verifier.gatherEvidence(summary);
 
     // Should have read files from the diff, even though ISC description has no file paths
     expect(evidence.files.length).toBeGreaterThanOrEqual(1);
-    const authSkill = evidence.files.find(f => f.path === "skills/Auth/SKILL.md");
+    const authSkill = evidence.files.find((f) => f.path === "skills/Auth/SKILL.md");
     expect(authSkill).toBeDefined();
     expect(authSkill!.content).toContain("Auth Skill");
 
-    const authEngine = evidence.files.find(f => f.path === "skills/Auth/AuthEngine.ts");
+    const authEngine = evidence.files.find((f) => f.path === "skills/Auth/AuthEngine.ts");
     expect(authEngine).toBeDefined();
     expect(authEngine!.content).toContain("AuthEngine");
   });
@@ -1124,9 +1209,7 @@ describe("Diff-based evidence gathering", () => {
  skills/Auth/SKILL.md | 2 ++
  src/index.ts | 1 +
  3 files changed, 503 insertions(+)`,
-      iscRows: [
-        { id: 1, description: "Build auth system", status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: "Build auth system", status: "VERIFIED" }],
     });
 
     const evidence = verifier.gatherEvidence(summary);
@@ -1134,7 +1217,7 @@ describe("Diff-based evidence gathering", () => {
     // AuthEngine.ts has most changes, should appear first in diff-based evidence
     const diffFiles = evidence.files;
     expect(diffFiles.length).toBe(3);
-    expect(diffFiles[0].path).toBe("skills/Auth/AuthEngine.ts");
+    expect(diffFiles[0]?.path).toBe("skills/Auth/AuthEngine.ts");
   });
 
   it("does not read diff-based files when no workingDir is set", () => {
@@ -1143,9 +1226,7 @@ describe("Diff-based evidence gathering", () => {
       workingDir: undefined,
       gitDiffStat: ` skills/Auth/SKILL.md | 2 ++
  1 file changed, 2 insertions(+)`,
-      iscRows: [
-        { id: 1, description: "No file paths in this description", status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: "No file paths in this description", status: "VERIFIED" }],
     });
 
     const evidence = verifier.gatherEvidence(summary);
@@ -1168,7 +1249,7 @@ describe("Diff-based evidence gathering", () => {
 
     // deleted-file.ts doesn't exist, should be skipped gracefully
     expect(evidence.files.length).toBe(1);
-    expect(evidence.files[0].path).toBe("skills/Auth/SKILL.md");
+    expect(evidence.files[0]?.path).toBe("skills/Auth/SKILL.md");
   });
 
   it("deduplicates between ISC path references and diff paths", () => {
@@ -1178,17 +1259,13 @@ describe("Diff-based evidence gathering", () => {
       workingDir: worktreeDir,
       gitDiffStat: ` skills/Auth/SKILL.md | 2 ++
  1 file changed, 2 insertions(+)`,
-      iscRows: [
-        { id: 1, description: `Update ${absPath} with docs`, status: "VERIFIED" },
-      ],
+      iscRows: [{ id: 1, description: `Update ${absPath} with docs`, status: "VERIFIED" }],
     });
 
     const evidence = verifier.gatherEvidence(summary);
 
     // File should appear only once, not twice
-    const skillFiles = evidence.files.filter(f =>
-      f.path.includes("SKILL.md")
-    );
+    const skillFiles = evidence.files.filter((f) => f.path.includes("SKILL.md"));
     expect(skillFiles.length).toBe(1);
   });
 
@@ -1201,10 +1278,9 @@ describe("Diff-based evidence gathering", () => {
     }
 
     const verifier = new SkepticalVerifier();
-    const diffLines = Array.from({ length: 12 }, (_, i) =>
-      ` src/file${i}.ts | ${100 - i * 5} ${"+"
-        .repeat(10)}`
-    ).join("\n");
+    const diffLines = Array.from({ length: 12 }, (_, i) => ` src/file${i}.ts | ${100 - i * 5} ${"+".repeat(10)}`).join(
+      "\n",
+    );
 
     const summary = makeSummary({
       workingDir: manyFilesDir,
@@ -1242,7 +1318,9 @@ describe("gatherEvidence() command cwd", () => {
       workingDir: "/tmp/some-worktree",
       iscRows: [
         {
-          id: 1, description: "Check file", status: "VERIFIED",
+          id: 1,
+          description: "Check file",
+          status: "VERIFIED",
           verification: { method: "existence", result: "PASS", command: "ls -la" },
         },
       ],
@@ -1264,7 +1342,9 @@ describe("gatherEvidence() command cwd", () => {
       workingDir: undefined,
       iscRows: [
         {
-          id: 1, description: "Test check", status: "VERIFIED",
+          id: 1,
+          description: "Test check",
+          status: "VERIFIED",
           verification: { method: "test", result: "PASS", command: "echo hello" },
         },
       ],
@@ -1273,7 +1353,7 @@ describe("gatherEvidence() command cwd", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].stdout).toContain("fallback-output");
+    expect(evidence.commands[0]?.stdout).toContain("fallback-output");
   });
 });
 
@@ -1296,10 +1376,10 @@ describe("parseMultiRepoDiffStat", () => {
 
     const sections = verifier.parseMultiRepoDiffStat(diffStat);
     expect(sections.length).toBe(2);
-    expect(sections[0].name).toBe("timeseries-forecasting");
-    expect(sections[0].diffStat).toContain("src/main.py");
-    expect(sections[1].name).toBe("mlops-serving");
-    expect(sections[1].diffStat).toContain("src/app.py");
+    expect(sections[0]?.name).toBe("timeseries-forecasting");
+    expect(sections[0]?.diffStat).toContain("src/main.py");
+    expect(sections[1]?.name).toBe("mlops-serving");
+    expect(sections[1]?.diffStat).toContain("src/app.py");
   });
 
   it("returns empty array for plain (non-multi-repo) diff stat", () => {
@@ -1312,21 +1392,21 @@ describe("parseMultiRepoDiffStat", () => {
     const diffStat = "[only-repo]\n src/foo.ts | 10 ++\n 1 file changed";
     const sections = verifier.parseMultiRepoDiffStat(diffStat);
     expect(sections.length).toBe(1);
-    expect(sections[0].name).toBe("only-repo");
-    expect(sections[0].diffStat).toContain("src/foo.ts");
+    expect(sections[0]?.name).toBe("only-repo");
+    expect(sections[0]?.diffStat).toContain("src/foo.ts");
   });
 });
 
 describe("gatherEvidence with multi-repo repoContexts", () => {
   it("prefixes file paths with repo name when repoContexts present", () => {
-    const tmpDir = require("os").tmpdir();
-    const repoDir = require("path").join(tmpDir, "test-repo-" + Date.now());
-    require("fs").mkdirSync(repoDir, { recursive: true });
+    const tmpDir = require("node:os").tmpdir();
+    const repoDir = require("node:path").join(tmpDir, "test-repo-" + Date.now());
+    require("node:fs").mkdirSync(repoDir, { recursive: true });
 
     // Write a test file in the fake repo dir
-    const testFile = require("path").join(repoDir, "src");
-    require("fs").mkdirSync(testFile, { recursive: true });
-    require("fs").writeFileSync(require("path").join(testFile, "app.py"), "# app content");
+    const testFile = require("node:path").join(repoDir, "src");
+    require("node:fs").mkdirSync(testFile, { recursive: true });
+    require("node:fs").writeFileSync(require("node:path").join(testFile, "app.py"), "# app content");
 
     const verifier = new SkepticalVerifier({ spawnFn: () => ({ stdout: "", exitCode: 0 }) });
 
@@ -1339,20 +1419,20 @@ describe("gatherEvidence with multi-repo repoContexts", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     // The file path should be prefixed with repo name
-    const repoFile = evidence.files.find(f => f.path.startsWith("my-repo/"));
+    const repoFile = evidence.files.find((f) => f.path.startsWith("my-repo/"));
     expect(repoFile).toBeDefined();
 
     // Cleanup
-    require("fs").rmSync(repoDir, { recursive: true, force: true });
+    require("node:fs").rmSync(repoDir, { recursive: true, force: true });
   });
 
   it("single-repo path still works normally when no repoContexts", () => {
-    const tmpDir = require("os").tmpdir();
-    const repoDir = require("path").join(tmpDir, "single-repo-" + Date.now());
-    require("fs").mkdirSync(repoDir, { recursive: true });
-    const srcDir = require("path").join(repoDir, "src");
-    require("fs").mkdirSync(srcDir, { recursive: true });
-    require("fs").writeFileSync(require("path").join(srcDir, "file.ts"), "// content");
+    const tmpDir = require("node:os").tmpdir();
+    const repoDir = require("node:path").join(tmpDir, "single-repo-" + Date.now());
+    require("node:fs").mkdirSync(repoDir, { recursive: true });
+    const srcDir = require("node:path").join(repoDir, "src");
+    require("node:fs").mkdirSync(srcDir, { recursive: true });
+    require("node:fs").writeFileSync(require("node:path").join(srcDir, "file.ts"), "// content");
 
     const verifier = new SkepticalVerifier({ spawnFn: () => ({ stdout: "", exitCode: 0 }) });
 
@@ -1365,11 +1445,11 @@ describe("gatherEvidence with multi-repo repoContexts", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     // Without repoContexts, paths should NOT be prefixed
-    const plainFile = evidence.files.find(f => f.path === "src/file.ts");
+    const plainFile = evidence.files.find((f) => f.path === "src/file.ts");
     expect(plainFile).toBeDefined();
 
     // Cleanup
-    require("fs").rmSync(repoDir, { recursive: true, force: true });
+    require("node:fs").rmSync(repoDir, { recursive: true, force: true });
   });
 });
 
@@ -1380,41 +1460,45 @@ describe("gatherEvidence with multi-repo repoContexts", () => {
 describe("Check 1: disposition-aware completion ratio", () => {
   it("excludes human-required rows from denominator — 3/7 human-required doesn't trigger low-completion", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      effort: "STANDARD",
-      iscRows: [
-        { id: 1, description: "Set up project scaffolding", status: "VERIFIED" },
-        { id: 2, description: "Implement core logic", status: "VERIFIED" },
-        { id: 3, description: "Add tests", status: "VERIFIED" },
-        { id: 4, description: "Write documentation", status: "VERIFIED" },
-        // Human-required rows — PENDING but should not count against completion
-        { id: 5, description: "Publish to PyPI", status: "PENDING", disposition: "human-required" },
-        { id: 6, description: "Deploy to production staging", status: "PENDING", disposition: "human-required" },
-        { id: 7, description: "Record demo video", status: "PENDING", disposition: "human-required" },
-      ],
-      gitDiffStat: " src/main.py | 100 +++\n tests/test_main.py | 50 +++\n 2 files changed, 150 insertions(+)",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        effort: "STANDARD",
+        iscRows: [
+          { id: 1, description: "Set up project scaffolding", status: "VERIFIED" },
+          { id: 2, description: "Implement core logic", status: "VERIFIED" },
+          { id: 3, description: "Add tests", status: "VERIFIED" },
+          { id: 4, description: "Write documentation", status: "VERIFIED" },
+          // Human-required rows — PENDING but should not count against completion
+          { id: 5, description: "Publish to PyPI", status: "PENDING", disposition: "human-required" },
+          { id: 6, description: "Deploy to production staging", status: "PENDING", disposition: "human-required" },
+          { id: 7, description: "Record demo video", status: "PENDING", disposition: "human-required" },
+        ],
+        gitDiffStat: " src/main.py | 100 +++\n tests/test_main.py | 50 +++\n 2 files changed, 150 insertions(+)",
+      }),
+    );
 
     // 4/4 automatable rows done = 100% — should NOT trigger low/partial completion
-    expect(result.concerns.some(c => c.includes("Low completion ratio"))).toBe(false);
-    expect(result.concerns.some(c => c.includes("Partial completion"))).toBe(false);
+    expect(result.concerns.some((c) => c.includes("Low completion ratio"))).toBe(false);
+    expect(result.concerns.some((c) => c.includes("Partial completion"))).toBe(false);
   });
 
   it("still flags low completion when automatable rows are incomplete", () => {
     const verifier = new SkepticalVerifier();
-    const result = verifier.runTier1(makeSummary({
-      effort: "STANDARD",
-      iscRows: [
-        { id: 1, description: "Set up project", status: "VERIFIED" },
-        { id: 2, description: "Implement logic", status: "PENDING" },
-        { id: 3, description: "Add tests", status: "PENDING" },
-        { id: 4, description: "Publish to PyPI", status: "PENDING", disposition: "human-required" },
-      ],
-      gitDiffStat: " src/main.py | 20 +++\n 1 file changed, 20 insertions(+)",
-    }));
+    const result = verifier.runTier1(
+      makeSummary({
+        effort: "STANDARD",
+        iscRows: [
+          { id: 1, description: "Set up project", status: "VERIFIED" },
+          { id: 2, description: "Implement logic", status: "PENDING" },
+          { id: 3, description: "Add tests", status: "PENDING" },
+          { id: 4, description: "Publish to PyPI", status: "PENDING", disposition: "human-required" },
+        ],
+        gitDiffStat: " src/main.py | 20 +++\n 1 file changed, 20 insertions(+)",
+      }),
+    );
 
     // 1/3 automatable rows done = 33% — should trigger low completion
-    expect(result.concerns.some(c => c.includes("Low completion ratio"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("Low completion ratio"))).toBe(true);
   });
 });
 
@@ -1422,8 +1506,6 @@ describe("Check 1: disposition-aware completion ratio", () => {
 // Component D: Check 12 Python test file detection — DELETED with Check 12
 // (L1 de-determinize; see the Check 12 tombstone above)
 // ---------------------------------------------------------------------------
-
-
 
 // ---------------------------------------------------------------------------
 // Component C: gatherEvidence merges rowEvidence into synthetic commands
@@ -1457,11 +1539,11 @@ describe("gatherEvidence: builder evidence merging", () => {
     const evidence = verifier.gatherEvidence(summary);
 
     // Should have synthetic command entries for each rowEvidence.summary
-    const syntheticCmds = evidence.commands.filter(c => c.cmd.startsWith("[builder-evidence"));
+    const syntheticCmds = evidence.commands.filter((c) => c.cmd.startsWith("[builder-evidence"));
     expect(syntheticCmds.length).toBe(2);
-    expect(syntheticCmds[0].stdout).toContain("All 12 tests pass");
-    expect(syntheticCmds[1].stdout).toContain("README updated");
-    expect(syntheticCmds[0].exitCode).toBe(0);
+    expect(syntheticCmds[0]?.stdout).toContain("All 12 tests pass");
+    expect(syntheticCmds[1]?.stdout).toContain("README updated");
+    expect(syntheticCmds[0]?.exitCode).toBe(0);
   });
 
   it("merges rowEvidence.files into file reads", () => {
@@ -1488,7 +1570,7 @@ describe("gatherEvidence: builder evidence merging", () => {
 
     const evidence = verifier.gatherEvidence(summary);
 
-    const featureFile = evidence.files.find(f => f.path === "src/feature.ts");
+    const featureFile = evidence.files.find((f) => f.path === "src/feature.ts");
     expect(featureFile).toBeDefined();
     expect(featureFile!.content).toContain("doThing");
 
@@ -1522,7 +1604,7 @@ describe("gatherEvidence: relative path resolution", () => {
 
     const evidence = verifier.gatherEvidence(summary);
 
-    const archFile = evidence.files.find(f => f.path === "docs/arch.md");
+    const archFile = evidence.files.find((f) => f.path === "docs/arch.md");
     expect(archFile).toBeDefined();
     expect(archFile!.content).toContain("Architecture");
 
@@ -1546,9 +1628,11 @@ describe("buildJudgePrompt: testStrategyContent", () => {
     });
 
     const tier1 = verifier.runTier1(summary);
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1);
 
     expect(prompt).toContain("## Test Strategy");
     expect(prompt).toContain("ISC Test Classification");
@@ -1562,9 +1646,11 @@ describe("buildJudgePrompt: testStrategyContent", () => {
     const summary = makeSummary(); // no testStrategyContent
 
     const tier1 = verifier.runTier1(summary);
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1);
 
     expect(prompt).not.toContain("## Test Strategy");
     expect(prompt).not.toContain("verify that the correct test levels were used");
@@ -1576,9 +1662,11 @@ describe("buildJudgePrompt: testStrategyContent", () => {
     const summary = makeSummary({ testStrategyContent: longContent });
 
     const tier1 = verifier.runTier1(summary);
-    const prompt = (verifier as unknown as {
-      buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
-    }).buildJudgePrompt(summary, tier1);
+    const prompt = (
+      verifier as unknown as {
+        buildJudgePrompt: (s: ItemReviewSummary, t1: VerificationTier, e?: EvidenceResult) => string;
+      }
+    ).buildJudgePrompt(summary, tier1);
 
     expect(prompt).toContain("## Test Strategy");
     // The slice(0, 3000) means at most 3000 chars of the content
@@ -1628,14 +1716,21 @@ describe("Evidence extraction: large markdown files", () => {
     const verifier = new SkepticalVerifier();
     const summary = makeSummary({
       iscRows: [
-        { id: 1, description: "Quality checklist with 8 items, require >=5 completed", status: "DONE", capability: "execution.testing" },
+        {
+          id: 1,
+          description: "Quality checklist with 8 items, require >=5 completed",
+          status: "DONE",
+          capability: "execution.testing",
+        },
       ],
     });
 
     // Use gatherEvidence which internally calls tryReadFile
-    const evidence = (verifier as unknown as {
-      gatherEvidence: (s: ItemReviewSummary) => EvidenceResult;
-    }).gatherEvidence({
+    const evidence = (
+      verifier as unknown as {
+        gatherEvidence: (s: ItemReviewSummary) => EvidenceResult;
+      }
+    ).gatherEvidence({
       ...summary,
       iscRows: [
         { id: 1, description: `Quality checklist at ${filePath}`, status: "DONE", capability: "execution.testing" },
@@ -1643,7 +1738,7 @@ describe("Evidence extraction: large markdown files", () => {
     });
 
     // The checklist section should be in the evidence, not truncated away
-    const allContent = evidence.files.map(f => f.content).join("\n");
+    const allContent = evidence.files.map((f) => f.content).join("\n");
     expect(allContent).toContain("Quality Checklist");
     expect(allContent).toContain("[x] Code review completed");
   });
@@ -1654,15 +1749,17 @@ describe("Evidence extraction: large markdown files", () => {
     writeFileSync(filePath, smallContent);
 
     const verifier = new SkepticalVerifier();
-    const evidence = (verifier as unknown as {
-      gatherEvidence: (s: ItemReviewSummary) => EvidenceResult;
-    }).gatherEvidence(makeSummary({
-      iscRows: [
-        { id: 1, description: `Check ${filePath}`, status: "DONE", capability: "analysis.codebase" },
-      ],
-    }));
+    const evidence = (
+      verifier as unknown as {
+        gatherEvidence: (s: ItemReviewSummary) => EvidenceResult;
+      }
+    ).gatherEvidence(
+      makeSummary({
+        iscRows: [{ id: 1, description: `Check ${filePath}`, status: "DONE", capability: "analysis.codebase" }],
+      }),
+    );
 
-    const allContent = evidence.files.map(f => f.content).join("\n");
+    const allContent = evidence.files.map((f) => f.content).join("\n");
     expect(allContent).toContain("Small File");
     expect(allContent).toContain("Just a few lines.");
   });
@@ -1677,7 +1774,10 @@ describe("Deterministic Floor Principle", () => {
 
   it("T1 FAIL (deterministicFailures present) + T2 PASS → NEEDS_REVIEW", () => {
     const result = verifier.computeVerdictForTesting([
-      { ...makeTier({ tier: 1, verdict: "FAIL" }), deterministicFailures: [{ checkName: "gate-a-test-failure", detail: "Gate A exited non-zero" }] },
+      {
+        ...makeTier({ tier: 1, verdict: "FAIL" }),
+        deterministicFailures: [{ checkName: "gate-a-test-failure", detail: "Gate A exited non-zero" }],
+      },
       makeTier({ tier: 2, verdict: "PASS" }),
     ]);
     expect(result).toBe("NEEDS_REVIEW");
@@ -1685,7 +1785,10 @@ describe("Deterministic Floor Principle", () => {
 
   it("T1 NEEDS_REVIEW (deterministicFailures present) + T2 PASS → NEEDS_REVIEW", () => {
     const result = verifier.computeVerdictForTesting([
-      { ...makeTier({ tier: 1, verdict: "NEEDS_REVIEW" }), deterministicFailures: [{ checkName: "cross-validation", detail: "independent diff shows 0 files" }] },
+      {
+        ...makeTier({ tier: 1, verdict: "NEEDS_REVIEW" }),
+        deterministicFailures: [{ checkName: "cross-validation", detail: "independent diff shows 0 files" }],
+      },
       makeTier({ tier: 2, verdict: "PASS" }),
     ]);
     expect(result).toBe("NEEDS_REVIEW");
@@ -1693,7 +1796,10 @@ describe("Deterministic Floor Principle", () => {
 
   it("T1 FAIL (deterministicFailures present) + T2 FAIL → FAIL (floor not needed, no upgrade)", () => {
     const result = verifier.computeVerdictForTesting([
-      { ...makeTier({ tier: 1, verdict: "FAIL" }), deterministicFailures: [{ checkName: "verification-fail-rate", detail: "2 rows failed" }] },
+      {
+        ...makeTier({ tier: 1, verdict: "FAIL" }),
+        deterministicFailures: [{ checkName: "verification-fail-rate", detail: "2 rows failed" }],
+      },
       makeTier({ tier: 2, verdict: "FAIL" }),
     ]);
     expect(result).toBe("FAIL");
@@ -1701,7 +1807,10 @@ describe("Deterministic Floor Principle", () => {
 
   it("T1 FAIL (deterministicFailures present) + T2 NEEDS_REVIEW → NEEDS_REVIEW (unchanged, floor not triggered)", () => {
     const result = verifier.computeVerdictForTesting([
-      { ...makeTier({ tier: 1, verdict: "FAIL" }), deterministicFailures: [{ checkName: "gate-b-test-failure", detail: "test file exits non-zero" }] },
+      {
+        ...makeTier({ tier: 1, verdict: "FAIL" }),
+        deterministicFailures: [{ checkName: "gate-b-test-failure", detail: "test file exits non-zero" }],
+      },
       makeTier({ tier: 2, verdict: "NEEDS_REVIEW" }),
     ]);
     expect(result).toBe("NEEDS_REVIEW");
@@ -1725,7 +1834,10 @@ describe("Deterministic Floor Principle", () => {
 
   it("Phase1-only with deterministicFailures → verdict stays FAIL (no upgrade to apply)", () => {
     const result = verifier.computeVerdictForTesting([
-      { ...makeTier({ tier: 1, verdict: "FAIL" }), deterministicFailures: [{ checkName: "gate-a-test-failure", detail: "Gate A exited 1" }] },
+      {
+        ...makeTier({ tier: 1, verdict: "FAIL" }),
+        deterministicFailures: [{ checkName: "gate-a-test-failure", detail: "Gate A exited 1" }],
+      },
     ]);
     expect(result).toBe("FAIL");
   });
@@ -1742,7 +1854,9 @@ describe("S3a: SkepticalReviewResult.faultClass — structured fault carrier", (
       success: true,
       parsed: { verdict: "PASS", confidence: 0.9, concerns: [] },
     });
-    const liveVerifyFn = async (_input: import("./LiveVerifier.ts").LiveVerifierInput): Promise<import("./LiveVerifier.ts").LiveVerificationResult> => ({
+    const liveVerifyFn = async (
+      _input: import("./LiveVerifier.ts").LiveVerifierInput,
+    ): Promise<import("./LiveVerifier.ts").LiveVerificationResult> => ({
       surface: "cli",
       effort: "STANDARD",
       verdict: "FAIL",
@@ -1777,7 +1891,9 @@ describe("S3a: SkepticalReviewResult.faultClass — structured fault carrier", (
       success: true,
       parsed: { verdict: "PASS", confidence: 0.9, concerns: [] },
     });
-    const liveVerifyFn = async (_input: import("./LiveVerifier.ts").LiveVerifierInput): Promise<import("./LiveVerifier.ts").LiveVerificationResult> => ({
+    const liveVerifyFn = async (
+      _input: import("./LiveVerifier.ts").LiveVerifierInput,
+    ): Promise<import("./LiveVerifier.ts").LiveVerificationResult> => ({
       surface: "cli",
       effort: "STANDARD",
       verdict: "PASS",

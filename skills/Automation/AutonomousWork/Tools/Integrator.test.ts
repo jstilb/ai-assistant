@@ -13,15 +13,23 @@
  * Tests that call these methods must be async and use await.
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-import { execFileSync } from "child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, unlinkSync, existsSync, utimesSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { describe, it, expect, afterAll } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, unlinkSync, existsSync, utimesSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { Integrator } from "./Integrator.ts";
 import { WorkQueue, type WorkItem, type WorkItemVerification, type WorkItemMetadata } from "./WorkQueue.ts";
 import { worktreesDir, repoSlug } from "../../../../lib/core/WorktreeManager.ts";
 import type { DiskVerifyResult } from "../../../../lib/core/MergeSafety.ts";
+import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+
+// Hermetic: WorkQueue seeding and Integrator write failure logs under KAYA_HOME.
+pinKayaHome("integrator-test-");
+afterAll(async () => {
+  await restoreKayaHome();
+});
 
 // ============================================================================
 // Shared helpers
@@ -162,7 +170,7 @@ describe("Integrator listPendingApproval", () => {
     const wq = WorkQueue._createForTesting([deployItem("a")]);
     const integrator = new Integrator(wq);
     const pending = integrator.listPendingApproval();
-    expect(pending.map(p => p.id)).toEqual(["a"]);
+    expect(pending.map((p) => p.id)).toEqual(["a"]);
   });
 
   it("drops item from pending after approval", () => {
@@ -181,7 +189,6 @@ describe("reconcile() — lock contention", () => {
   it("only one reconcile proceeds when two are called concurrently", async () => {
     // We use two Integrator instances with a temp lock dir
     const tmpDir = mkdtempSync(join(tmpdir(), "integrator-lock-test-"));
-    const lockPath = join(tmpDir, "integrator.lock");
 
     // Override runtimeDir for this test by directly controlling the lock path
     // We'll test the IntegratorFileLock behavior by importing and instantiating it inline
@@ -211,15 +218,12 @@ describe("reconcile() — lock contention", () => {
 
       // Both reconcile with no candidates (no matching branches in empty repo)
       // Use Promise.allSettled so we capture both outcomes
-      const results = await Promise.allSettled([
-        i1.reconcile({}),
-        i2.reconcile({}),
-      ]);
+      const results = await Promise.allSettled([i1.reconcile({}), i2.reconcile({})]);
 
       // Both should settle (not throw unhandled) — at least one should succeed
       // and at most one will get a lock timeout
-      const fulfilled = results.filter(r => r.status === "fulfilled");
-      const rejected = results.filter(r => r.status === "rejected");
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
 
       // With a 30s lock timeout and fast empty-repo operations,
       // both may succeed sequentially. What we verify:
@@ -233,8 +237,10 @@ describe("reconcile() — lock contention", () => {
         }
       }
     } finally {
-      process.env.KAYA_RUNTIME = origRuntime;
-      process.env.KAYA_HOME = origKayaHome;
+      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
+      else process.env.KAYA_RUNTIME = origRuntime;
+      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
+      else process.env.KAYA_HOME = origKayaHome;
     }
   });
 });
@@ -273,18 +279,28 @@ describe("reconcile() — clean merge success path (stubbed)", () => {
 
       // Branch should appear in merged (or failed if worktree creation caused issues)
       // The key assertion is that it's in outcomes
-      const outcome = result.outcomes.find(o => o.branch === "feat/test-reconcile");
+      const outcome = result.outcomes.find((o) => o.branch === "feat/test-reconcile");
       expect(outcome).toBeDefined();
       // If worktree creation or build check fails, it may end up in failed —
       // but the branch WAS processed (outcome exists).
       // We mainly assert the reconcile ran without throwing.
       expect(result.outcomes.length).toBeGreaterThan(0);
     } finally {
-      process.env.KAYA_RUNTIME = origRuntime;
-      process.env.KAYA_HOME = origKayaHome;
+      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
+      else process.env.KAYA_RUNTIME = origRuntime;
+      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
+      else process.env.KAYA_HOME = origKayaHome;
       // Clean up the worktree this reconcile created under the real worktreesDir() + temp repo.
-      try { rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true }); } catch { /* best effort */ }
-      try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
+      try {
+        rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
     }
   });
 });
@@ -328,17 +344,27 @@ describe("reconcile() — conflict path with agent returning failure", () => {
       });
 
       // Agent exited non-zero → branch must land in failed (not merged).
-      const outcome = result.outcomes.find(o => o.branch === "feat/conflict-branch");
+      const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
       expect(outcome).toBeDefined();
       expect(outcome!.status).toBe("failed");
       expect(result.merged).not.toContain("feat/conflict-branch");
       expect(result.failed).toContain("feat/conflict-branch");
     } finally {
-      process.env.KAYA_RUNTIME = origRuntime;
-      process.env.KAYA_HOME = origKayaHome;
+      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
+      else process.env.KAYA_RUNTIME = origRuntime;
+      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
+      else process.env.KAYA_HOME = origKayaHome;
       // Clean up the worktree this reconcile created under the real worktreesDir() + temp repo.
-      try { rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true }); } catch { /* best effort */ }
-      try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
+      try {
+        rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
     }
   });
 });
@@ -450,12 +476,17 @@ describe("Integrator (compat) — mergeCompleted", () => {
 // Interactive session lock compat tests
 
 describe("Integrator (compat) — checkInteractiveSessionLock", () => {
-  const lockDir = join(process.env.HOME!, ".claude", "MEMORY", "STATE");
+  // Hermetic: resolve against the pinned test KAYA_HOME, never the live home.
+  const lockDir = join(getKayaHome(), "MEMORY", "STATE");
   const lockPath = join(lockDir, "interactive-session.lock");
 
   let savedLock: string | null = null;
   const saveLock = () => {
-    try { savedLock = require("fs").readFileSync(lockPath, "utf-8"); } catch { savedLock = null; }
+    try {
+      savedLock = require("node:fs").readFileSync(lockPath, "utf-8");
+    } catch {
+      savedLock = null;
+    }
   };
   const restoreLock = () => {
     if (savedLock) writeFileSync(lockPath, savedLock, "utf-8");
@@ -468,7 +499,9 @@ describe("Integrator (compat) — checkInteractiveSessionLock", () => {
       if (existsSync(lockPath)) unlinkSync(lockPath);
       const mo = new Integrator(WorkQueue._createForTesting([]));
       expect(mo.checkInteractiveSessionLock()).toBeNull();
-    } finally { restoreLock(); }
+    } finally {
+      restoreLock();
+    }
   });
 
   it("returns lock info when lock file exists and is fresh", () => {
@@ -481,7 +514,9 @@ describe("Integrator (compat) — checkInteractiveSessionLock", () => {
       const result = mo.checkInteractiveSessionLock();
       expect(result).not.toBeNull();
       expect(result!.sessionId).toBe("test-123");
-    } finally { restoreLock(); }
+    } finally {
+      restoreLock();
+    }
   });
 
   it("returns null when lock file is stale (> 2h old)", () => {
@@ -494,7 +529,9 @@ describe("Integrator (compat) — checkInteractiveSessionLock", () => {
       utimesSync(lockPath, threeHoursAgo, threeHoursAgo);
       const mo = new Integrator(WorkQueue._createForTesting([]));
       expect(mo.checkInteractiveSessionLock()).toBeNull();
-    } finally { restoreLock(); }
+    } finally {
+      restoreLock();
+    }
   });
 
   it("returns null when lock file is corrupt JSON", () => {
@@ -504,7 +541,9 @@ describe("Integrator (compat) — checkInteractiveSessionLock", () => {
       writeFileSync(lockPath, "not json {{{", "utf-8");
       const mo = new Integrator(WorkQueue._createForTesting([]));
       expect(mo.checkInteractiveSessionLock()).toBeNull();
-    } finally { restoreLock(); }
+    } finally {
+      restoreLock();
+    }
   });
 });
 
@@ -622,7 +661,12 @@ function itemForRepo(repo: string, branch: string): WorkItem {
 }
 
 function fileOnMain(repo: string): boolean {
-  try { git(["cat-file", "-e", "main:_canary/greet.ts"], repo); return true; } catch { return false; }
+  try {
+    git(["cat-file", "-e", "main:_canary/greet.ts"], repo);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe("Integrator (compat) — HEAD guard (mergeItem direct)", () => {
@@ -778,7 +822,9 @@ describe("Integrator (S13) — pr-mode merge-safety wiring to MergeSafety (real 
     const overridable = mo as unknown as GhOverridable;
     // gh "succeeds" (real gh's exact failure mode this closes) but never touches origin at all.
     overridable.ghCreatePr = () => "https://example.invalid/fake/pull/1";
-    overridable.ghAttemptMerge = () => { /* no-op: "merge succeeded" per gh, nothing pushed */ };
+    overridable.ghAttemptMerge = () => {
+      /* no-op: "merge succeeded" per gh, nothing pushed */
+    };
 
     try {
       const res = await mo.mergeItem("pr-1", "pr", { skipSessionLock: true });
@@ -789,8 +835,12 @@ describe("Integrator (S13) — pr-mode merge-safety wiring to MergeSafety (real 
       // origin/main genuinely never advanced — the false-success bug this closes.
       expect(git(["rev-parse", "main"], bareOrigin).trim()).toBe(git(["rev-parse", "main"], repo).trim());
     } finally {
-      try { rmSync(repo, { recursive: true, force: true }); } catch {}
-      try { rmSync(bareOrigin, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(repo, { recursive: true, force: true });
+      } catch {}
+      try {
+        rmSync(bareOrigin, { recursive: true, force: true });
+      } catch {}
     }
   });
 
@@ -813,8 +863,12 @@ describe("Integrator (S13) — pr-mode merge-safety wiring to MergeSafety (real 
       const branchSha = git(["rev-parse", branch], repo).trim();
       expect(git(["rev-parse", "main"], bareOrigin).trim()).toBe(branchSha);
     } finally {
-      try { rmSync(repo, { recursive: true, force: true }); } catch {}
-      try { rmSync(bareOrigin, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(repo, { recursive: true, force: true });
+      } catch {}
+      try {
+        rmSync(bareOrigin, { recursive: true, force: true });
+      } catch {}
     }
   });
 });

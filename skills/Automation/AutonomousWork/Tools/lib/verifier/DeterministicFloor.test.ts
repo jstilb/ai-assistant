@@ -28,8 +28,8 @@ describe("applyDeterministicFloor", () => {
     ];
     const result = applyDeterministicFloor(tiers, "PASS", concerns);
     expect(result).toBe("NEEDS_REVIEW");
-    expect(concerns.some(c => c.includes("DeterministicFloor"))).toBe(true);
-    expect(concerns.some(c => c.includes("gate-a-test-failure"))).toBe(true);
+    expect(concerns.some((c) => c.includes("DeterministicFloor"))).toBe(true);
+    expect(concerns.some((c) => c.includes("gate-a-test-failure"))).toBe(true);
   });
 
   it("passes through when no deterministic failures", () => {

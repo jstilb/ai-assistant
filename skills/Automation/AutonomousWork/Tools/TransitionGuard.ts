@@ -13,11 +13,11 @@
  * 2. If any rows had self-reported PASS without command → cap at NEEDS_REVIEW
  */
 
-import { type WorkQueue, type WorkItem, type WorkStatus, type WorkItemVerification } from "./WorkQueue.ts";
-import { type SkepticalReviewResult } from "./SkepticalVerifier.ts";
+import type { WorkQueue, WorkItem, WorkStatus, WorkItemVerification } from "./WorkQueue.ts";
+import type { SkepticalReviewResult } from "./SkepticalVerifier.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
-import { mkdirSync, existsSync, readFileSync, renameSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, readFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -34,7 +34,7 @@ interface TransitionLog {
 /**
  * ISC 10: Work audit log entry — AppendAuditLog now lives in TransitionGuard.
  */
-export interface WorkAuditEntry {
+interface WorkAuditEntry {
   itemId: string;
   itemTitle: string;
   verdict: string;
@@ -79,7 +79,7 @@ export class TransitionGuard {
     itemId: string,
     verification: WorkItemVerification,
     reviewResult: SkepticalReviewResult,
-    selfReportedPassCount: number = 0
+    selfReportedPassCount: number = 0,
   ): { accepted: boolean; downgraded: boolean; originalVerdict?: string; reason?: string } {
     const item = this.queue.getItem(itemId);
     if (!item) {
@@ -94,7 +94,7 @@ export class TransitionGuard {
     // INVARIANT 1: Phase 2 infra failure → cap at NEEDS_REVIEW
     if (verification.status === "verified" && verification.verdict === "PASS") {
       const tiers = reviewResult.tiers ?? [];
-      const phase2 = tiers.find(t => t.tier === 2);
+      const phase2 = tiers.find((t) => t.tier === 2);
       const phase2InfraFailure = phase2 && phase2.confidence <= 0.3;
       if (phase2InfraFailure) {
         finalVerification = { ...finalVerification, status: "needs_review", verdict: "NEEDS_REVIEW" };
@@ -118,7 +118,7 @@ export class TransitionGuard {
       to: finalVerification.verdict,
       reason,
       tierData: {
-        tiers: (reviewResult.tiers ?? []).map(t => ({ tier: t.tier, verdict: t.verdict, confidence: t.confidence })),
+        tiers: (reviewResult.tiers ?? []).map((t) => ({ tier: t.tier, verdict: t.verdict, confidence: t.confidence })),
         selfReportedPassCount,
       },
     });
@@ -132,7 +132,7 @@ export class TransitionGuard {
    * Requires Phase 1 verdict === "PASS" AND confidence >= 0.8.
    */
   canPromote(reviewResult: SkepticalReviewResult): { allowed: boolean; reason?: string } {
-    const tier1 = (reviewResult.tiers ?? []).find(t => t.tier === 1);
+    const tier1 = (reviewResult.tiers ?? []).find((t) => t.tier === 1);
     if (!tier1) return { allowed: false, reason: "no Tier 1 result" };
     if (tier1.verdict !== "PASS") return { allowed: false, reason: `Tier 1 verdict is ${tier1.verdict}, not PASS` };
     if (tier1.confidence < 0.8) return { allowed: false, reason: `Tier 1 confidence ${tier1.confidence} < 0.8` };
@@ -197,7 +197,10 @@ export class TransitionGuard {
    * Validate audit integrity: scan terminal-state items (completed/failed) against
    * transition-audit.jsonl and report gaps. Non-fatal — returns gap report.
    */
-  validateAuditIntegrity(): { valid: boolean; gaps: Array<{ itemId: string; title: string; status: string; issue: string }> } {
+  validateAuditIntegrity(): {
+    valid: boolean;
+    gaps: Array<{ itemId: string; title: string; status: string; issue: string }>;
+  } {
     const gaps: Array<{ itemId: string; title: string; status: string; issue: string }> = [];
 
     // Load all audit entries
@@ -209,7 +212,9 @@ export class TransitionGuard {
           try {
             const entry = JSON.parse(line) as TransitionLog;
             if (entry.itemId) auditEntries.add(entry.itemId);
-          } catch { /* skip malformed lines */ }
+          } catch {
+            /* skip malformed lines */
+          }
         }
       }
     } catch {
@@ -264,7 +269,7 @@ export class TransitionGuard {
     if (!existsSync(filePath)) return;
     try {
       const content = readFileSync(filePath, "utf-8");
-      const lines = content.split("\n").filter(l => l.trim());
+      const lines = content.split("\n").filter((l) => l.trim());
       if (lines.length < TransitionGuard.MAX_AUDIT_LINES) return;
 
       // Archive: rename to timestamped file, never delete

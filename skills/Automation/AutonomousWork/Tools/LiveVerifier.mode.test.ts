@@ -65,7 +65,8 @@ describe("runLiveVerification engine routing", () => {
         explorerCalled = true;
         return {
           success: true,
-          stdout: '```json\n{"verdict":"PASS","scenarios":[{"id":"s1","kind":"happy","command":"bun run x","verdict":"PASS","exitCode":0}],"summary":"ok"}\n```',
+          stdout:
+            '```json\n{"verdict":"PASS","scenarios":[{"id":"s1","kind":"happy","command":"bun run x","verdict":"PASS","exitCode":0}],"summary":"ok"}\n```',
           stderr: "",
           exitCode: 0,
           timedOut: false,

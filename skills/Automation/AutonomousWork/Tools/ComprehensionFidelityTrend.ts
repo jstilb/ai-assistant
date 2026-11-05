@@ -17,7 +17,7 @@
  *   bun run ComprehensionFidelityTrend.ts            # defaults to the live path
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolveFidelityLogPath, type ComprehensionFidelityRecord } from "./ComprehensionFidelityLog.ts";
 
 type StoredRecord = ComprehensionFidelityRecord & { source?: string; ts?: string };
@@ -53,7 +53,10 @@ export function computeTrend(records: StoredRecord[]): ComprehensionTrendSummary
   const rowCounts = records.map((r) => r.rowCount);
   const specIds = new Set(records.map((r) => r.specId));
   const truncatedCount = records.filter((r) => r.truncated === true).length;
-  const timestamps = records.map((r) => r.ts).filter((t): t is string => typeof t === "string").sort();
+  const timestamps = records
+    .map((r) => r.ts)
+    .filter((t): t is string => typeof t === "string")
+    .sort();
 
   const complexityBreakdown: Record<string, number> = {};
   for (const r of records) {
@@ -64,8 +67,8 @@ export function computeTrend(records: StoredRecord[]): ComprehensionTrendSummary
   return {
     totalRecords: records.length,
     uniqueSpecs: specIds.size,
-    firstTs: timestamps.length > 0 ? timestamps[0] : null,
-    lastTs: timestamps.length > 0 ? timestamps[timestamps.length - 1] : null,
+    firstTs: timestamps[0] ?? null,
+    lastTs: timestamps.at(-1) ?? null,
     avgRowCount: rowCounts.reduce((a, b) => a + b, 0) / rowCounts.length,
     minRowCount: Math.min(...rowCounts),
     maxRowCount: Math.max(...rowCounts),
@@ -114,7 +117,11 @@ function formatHuman(summary: ComprehensionTrendSummary, path: string): string {
     `Window: ${summary.firstTs ?? "n/a"} → ${summary.lastTs ?? "n/a"}`,
     `rowCount avg/min/max: ${summary.avgRowCount.toFixed(2)} / ${summary.minRowCount} / ${summary.maxRowCount}`,
     `Truncated: ${(summary.truncatedRate * 100).toFixed(1)}%`,
-    `Complexity breakdown: ${Object.entries(summary.complexityBreakdown).map(([k, v]) => `${k}=${v}`).join(", ") || "(none)"}`,
+    `Complexity breakdown: ${
+      Object.entries(summary.complexityBreakdown)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ") || "(none)"
+    }`,
   ];
   return lines.join("\n");
 }

@@ -24,8 +24,13 @@
  */
 
 import type { EffortLevel } from "./WorkQueue.ts";
+import type { InferenceLevel } from "../../../../lib/core/Inference.ts";
 import type { FaultClass } from "./WorkOrchestrator.ts";
-import { runLiveVerification as liveVerifyImpl, type LiveVerifierInput, type LiveVerificationResult } from "./LiveVerifier.ts";
+import {
+  runLiveVerification as liveVerifyImpl,
+  type LiveVerifierInput,
+  type LiveVerificationResult,
+} from "./LiveVerifier.ts";
 import { VERIFIER_SCOPE, buildExecutableAllowlist } from "../../../../lib/core/CommandSafety.ts";
 import {
   gatherEvidence as _gatherEvidence,
@@ -60,7 +65,7 @@ export interface VerificationTier {
 export type InferenceFn = (opts: {
   systemPrompt: string;
   userPrompt: string;
-  level: string;
+  level: InferenceLevel;
   expectJson: boolean;
   timeout: number;
 }) => Promise<{ success: boolean; parsed?: unknown; output?: string; error?: string }>;
@@ -104,7 +109,7 @@ export interface ItemReviewSummary {
     status: string;
     category?: string;
     capability?: string;
-    source?: "EXPLICIT" | "INFERRED" | "IMPLICIT";
+    source?: "EXPLICIT" | "INFERRED" | "IMPLICIT" | "RESEARCH";
     disposition?: "automatable" | "human-required" | "deferred";
     rowEvidence?: { files?: string[]; commands?: string[]; summary?: string };
     verification?: {
@@ -117,7 +122,7 @@ export interface ItemReviewSummary {
     };
   }>;
   gitDiffStat: string;
-  diffPathFilter?: string[];   // empty [] = API/external work (no diff expected)
+  diffPathFilter?: string[]; // empty [] = API/external work (no diff expected)
   executionLogTail: string[];
   iterationsUsed: number;
   /** Concerns from the independent adversarial Explore agent (if ran) */
@@ -231,7 +236,7 @@ export interface EvidenceResult {
  * Replace hardcoded 0.30 literals — this is a placeholder until real token
  * measurement is wired in from the inference response.
  */
-export const PHASE_2_COST_ESTIMATE_USD = 0.30;
+export const PHASE_2_COST_ESTIMATE_USD = 0.3;
 
 const DEFAULT_CONFIG: SkepticalVerifierConfig = {};
 
@@ -303,8 +308,8 @@ export class SkepticalVerifier {
     tiers.push(phase2Tier);
     concerns.push(...phase2Tier.concerns);
 
-    const lastTier = tiers[tiers.length - 1];
-    const verdict = _applyDeterministicFloor(tiers, lastTier.verdict, concerns);
+    // phase2Tier was pushed last, so it is the authoritative (last) tier.
+    const verdict = _applyDeterministicFloor(tiers, phase2Tier.verdict, concerns);
     return this.finalize(verdict, tiers, tiersSkipped, concerns, live.livePassed);
   }
 
@@ -369,7 +374,7 @@ export class SkepticalVerifier {
    * @internal Shim — accessed via prototype cast in tests.
    * Delegates to lib/verifier/Judge.ts buildJudgePrompt().
    */
-  private buildJudgePrompt(summary: ItemReviewSummary, phase1: VerificationTier, evidence?: EvidenceResult): string {
+  buildJudgePrompt(summary: ItemReviewSummary, phase1: VerificationTier, evidence?: EvidenceResult): string {
     return _buildJudgePrompt(summary, phase1, evidence, _extractRelevantSpecSections);
   }
 
@@ -424,7 +429,7 @@ export class SkepticalVerifier {
    * @internal Shim — accessed via prototype cast in tests.
    * Delegates to lib/verifier/Tier1.ts extractRelevantSpecSections().
    */
-  private extractRelevantSpecSections(summary: ItemReviewSummary): string {
+  extractRelevantSpecSections(summary: ItemReviewSummary): string {
     return _extractRelevantSpecSections(summary);
   }
 
@@ -446,7 +451,7 @@ export class SkepticalVerifier {
   private applyDeterministicFloor(
     tiers: VerificationTier[],
     verdict: SkepticalReviewResult["finalVerdict"],
-    concerns: string[]
+    concerns: string[],
   ): SkepticalReviewResult["finalVerdict"] {
     return _applyDeterministicFloor(tiers, verdict, concerns);
   }
@@ -456,8 +461,9 @@ export class SkepticalVerifier {
    * In the 2-phase model, the last tier in the array is authoritative.
    */
   computeVerdictForTesting(tiers: VerificationTier[]): SkepticalReviewResult["finalVerdict"] {
-    if (tiers.length === 0) return "NEEDS_REVIEW";
-    const rawVerdict = tiers[tiers.length - 1].verdict;
+    const lastTier = tiers[tiers.length - 1];
+    if (!lastTier) return "NEEDS_REVIEW";
+    const rawVerdict = lastTier.verdict;
     const concerns: string[] = [];
     return this.applyDeterministicFloor(tiers, rawVerdict, concerns);
   }

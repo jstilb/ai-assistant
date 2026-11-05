@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 
 import { WorkQueue, type WorkItem } from "./WorkQueue.ts";
-import { TransitionGuard } from "./TransitionGuard.ts";
-import { parseArgs } from "util";
-import { execFileSync, spawnSync } from "child_process";
-import { existsSync, readFileSync, statSync, mkdirSync, openSync, writeSync, closeSync, unlinkSync } from "fs"; // openSync/writeSync/closeSync used by IntegratorFileLock
-import { join } from "path";
+import { parseArgs } from "node:util";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, statSync, mkdirSync, openSync, writeSync, closeSync, unlinkSync } from "node:fs"; // openSync/writeSync/closeSync used by IntegratorFileLock
+import { join } from "node:path";
 import { getKayaHome, defaultKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
 import { getOrCreateWorktree, gcWorktreeForBranch } from "../../../../lib/core/WorktreeManager.ts";
 import { resolveGuardHooks, buildGuardHookSettings, resolveEnforceTools } from "../../../../lib/core/AgentSpawner.ts";
@@ -94,10 +93,16 @@ class IntegratorFileLock {
       try {
         const content = readFileSync(this.lockPath, "utf-8");
         const lockTime = parseInt(content, 10);
-        if (!isNaN(lockTime) && Date.now() - lockTime > this.timeoutMs * 2) {
-          try { unlinkSync(this.lockPath); } catch { /* race — another process removed it */ }
+        if (!Number.isNaN(lockTime) && Date.now() - lockTime > this.timeoutMs * 2) {
+          try {
+            unlinkSync(this.lockPath);
+          } catch {
+            /* race — another process removed it */
+          }
         }
-      } catch { /* lock vanished between EEXIST and this read */ }
+      } catch {
+        /* lock vanished between EEXIST and this read */
+      }
 
       if (Date.now() - start > this.timeoutMs) {
         throw new Error(`Integrator lock acquisition timeout after ${this.timeoutMs}ms`);
@@ -109,7 +114,11 @@ class IntegratorFileLock {
 
   async release(): Promise<void> {
     if (this.locked && existsSync(this.lockPath)) {
-      try { unlinkSync(this.lockPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(this.lockPath);
+      } catch {
+        /* ignore */
+      }
       this.locked = false;
     }
   }
@@ -130,7 +139,9 @@ function loadOAuthToken(): string | undefined {
       const data = JSON.parse(readFileSync(p, "utf-8"));
       const token = data?.claudeAiOauth?.accessToken ?? data?.access_token;
       if (token) return token as string;
-    } catch { /* corrupt, skip */ }
+    } catch {
+      /* corrupt, skip */
+    }
   }
   return undefined;
 }
@@ -141,11 +152,9 @@ function loadOAuthToken(): string | undefined {
 
 export class Integrator {
   private queue: WorkQueue;
-  private guard: TransitionGuard;
 
   constructor(queue?: WorkQueue) {
     this.queue = queue ?? new WorkQueue();
-    this.guard = new TransitionGuard(this.queue);
   }
 
   // --------------------------------------------------------------------------
@@ -192,13 +201,11 @@ export class Integrator {
         item.status === "completed" &&
         item.verification?.status === "verified" &&
         item.metadata?.worktreeBranch != null &&
-        item.metadata?.mergeStatus !== "merged" // idempotency
+        item.metadata?.mergeStatus !== "merged", // idempotency
     );
 
     // Count already-merged items as skipped
-    result.skipped = items.filter(
-      (item: WorkItem) => item.metadata?.mergeStatus === "merged"
-    ).length;
+    result.skipped = items.filter((item: WorkItem) => item.metadata?.mergeStatus === "merged").length;
 
     // Defer all merges if an interactive session is active
     const batchLock = this.checkInteractiveSessionLock();
@@ -210,7 +217,10 @@ export class Integrator {
 
     for (const item of eligible) {
       if (this.requiresHumanApproval(item)) {
-        this.queue.setMetadata(item.id, { mergeStatus: "pending_approval", mergeReason: "Requires human approval before merge" });
+        this.queue.setMetadata(item.id, {
+          mergeStatus: "pending_approval",
+          mergeReason: "Requires human approval before merge",
+        });
         result.skipped++;
         continue;
       }
@@ -245,7 +255,7 @@ export class Integrator {
             if (!diskResult.clean) {
               throw new Error(
                 `PR merge for '${branch}'${prUrl ? ` (${prUrl})` : ""} not verified as landed ` +
-                `(isAncestor=${diskResult.isAncestor}) — refusing to record 'merged'`
+                  `(isAncestor=${diskResult.isAncestor}) — refusing to record 'merged'`,
               );
             }
 
@@ -259,10 +269,11 @@ export class Integrator {
             if (!md.ok) throw new Error(md.reason);
 
             try {
-              execFileSync("git", ["push", "origin", "HEAD"],
-                { cwd: repoPath, timeout: 60_000, stdio: "pipe" });
-            } catch {
-              console.warn(`[Integrator] Direct merge succeeded but push failed for ${item.title}. Push manually.`);
+              execFileSync("git", ["push", "origin", "HEAD"], { cwd: repoPath, timeout: 60_000, stdio: "pipe" });
+            } catch (err) {
+              console.warn(
+                `[Integrator] Direct merge succeeded but push failed for ${item.title}. Push manually. (${err instanceof Error ? err.message : String(err)})`,
+              );
             }
 
             this.queue.setMetadata(item.id, {
@@ -300,11 +311,19 @@ export class Integrator {
    * Called inline from reportDone() after completion gate passes.
    * Returns immediately without merging if human approval is required.
    */
-  async mergeItem(itemId: string, strategy: MergeStrategy = "pr", opts: { skipSessionLock?: boolean } = {}): Promise<SingleMergeResult> {
+  async mergeItem(
+    itemId: string,
+    strategy: MergeStrategy = "pr",
+    opts: { skipSessionLock?: boolean } = {},
+  ): Promise<SingleMergeResult> {
     return this.withIntegratorLock(() => this._mergeItemCore(itemId, strategy, opts));
   }
 
-  private _mergeItemCore(itemId: string, strategy: MergeStrategy, opts: { skipSessionLock?: boolean }): SingleMergeResult {
+  private _mergeItemCore(
+    itemId: string,
+    strategy: MergeStrategy,
+    opts: { skipSessionLock?: boolean },
+  ): SingleMergeResult {
     const item = this.queue.getItem(itemId);
     if (!item) {
       return { merged: false, reason: `Item ${itemId} not found` };
@@ -330,7 +349,9 @@ export class Integrator {
     if (!opts.skipSessionLock) {
       const sessionLock = this.checkInteractiveSessionLock();
       if (sessionLock) {
-        console.warn(`[Integrator] Deferring merge for "${item.title}" — interactive session ${sessionLock.sessionId} is active`);
+        console.warn(
+          `[Integrator] Deferring merge for "${item.title}" — interactive session ${sessionLock.sessionId} is active`,
+        );
         this.queue.setMetadata(itemId, { mergeStatus: "deferred" });
         return { merged: false, reason: "Deferred: interactive session active" };
       }
@@ -370,7 +391,7 @@ export class Integrator {
         if (!diskResult.clean) {
           throw new Error(
             `PR merge for '${branch}'${prUrl ? ` (${prUrl})` : ""} not verified as landed ` +
-            `(isAncestor=${diskResult.isAncestor}) — refusing to record 'merged'`
+              `(isAncestor=${diskResult.isAncestor}) — refusing to record 'merged'`,
           );
         }
 
@@ -383,7 +404,9 @@ export class Integrator {
         if (wtPathPr) {
           import("../../../../lib/core/WorktreeManager.ts")
             .then(({ markWorktreeMerged }) => markWorktreeMerged(wtPathPr))
-            .catch(() => { /* fail-open */ });
+            .catch(() => {
+              /* fail-open */
+            });
         }
         return { merged: true, prUrl };
       } else {
@@ -397,17 +420,20 @@ export class Integrator {
           return { merged: false, reason: md.reason };
         }
         try {
-          execFileSync("git", ["push", "origin", "HEAD"],
-            { cwd: repoPath, timeout: 60_000, stdio: "pipe" });
-        } catch {
-          console.warn(`[Integrator] Direct merge succeeded but push failed for ${item.title}.`);
+          execFileSync("git", ["push", "origin", "HEAD"], { cwd: repoPath, timeout: 60_000, stdio: "pipe" });
+        } catch (err) {
+          console.warn(
+            `[Integrator] Direct merge succeeded but push failed for ${item.title}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         this.queue.setMetadata(itemId, { mergeStatus: "merged", mergedAt: new Date().toISOString() });
         const wtPath = item.metadata?.worktreePath as string | undefined;
         if (wtPath) {
           import("../../../../lib/core/WorktreeManager.ts")
             .then(({ markWorktreeMerged }) => markWorktreeMerged(wtPath))
-            .catch(() => { /* fail-open */ });
+            .catch(() => {
+              /* fail-open */
+            });
         }
         return { merged: true };
       }
@@ -443,7 +469,11 @@ export class Integrator {
   }
 
   /** Slice 3 — Approve and immediately merge a single item. */
-  async approveAndMerge(itemId: string, strategy: MergeStrategy = "direct", approvedBy: string = "Jm"): Promise<SingleMergeResult> {
+  async approveAndMerge(
+    itemId: string,
+    strategy: MergeStrategy = "direct",
+    approvedBy: string = "Jm",
+  ): Promise<SingleMergeResult> {
     const a = this.approve(itemId, approvedBy);
     if (!a.approved) return { merged: false, reason: a.reason };
     return this.mergeItem(itemId, strategy, { skipSessionLock: true });
@@ -453,19 +483,22 @@ export class Integrator {
    * Slice 3 — Items waiting on a merge approval.
    */
   listPendingApproval(): Array<{ id: string; title: string; branch?: string; reason: string }> {
-    return this.queue.getAllItems()
-      .filter((item) =>
-        item.status === "completed" &&
-        item.verification?.status === "verified" &&
-        item.metadata?.mergeStatus !== "merged" &&
-        item.metadata?.mergeApproved !== true &&
-        this.requiresHumanApproval(item),
+    return this.queue
+      .getAllItems()
+      .filter(
+        (item) =>
+          item.status === "completed" &&
+          item.verification?.status === "verified" &&
+          item.metadata?.mergeStatus !== "merged" &&
+          item.metadata?.mergeApproved !== true &&
+          this.requiresHumanApproval(item),
       )
       .map((item) => ({
         id: item.id,
         title: item.title,
         branch: item.metadata?.worktreeBranch as string | undefined,
-        reason: (item.metadata?.mergeReason as string | undefined) ?? "Requires human approval (settings/secrets/deploy)",
+        reason:
+          (item.metadata?.mergeReason as string | undefined) ?? "Requires human approval (settings/secrets/deploy)",
       }));
   }
 
@@ -477,13 +510,16 @@ export class Integrator {
    */
   async drainApproved(strategy: MergeStrategy = "direct"): Promise<MergeResult> {
     const result: MergeResult = { merged: 0, conflicts: 0, skipped: 0, prUrls: [] };
-    const approved = this.queue.getAllItems().filter((item) =>
-      item.status === "completed" &&
-      item.verification?.status === "verified" &&
-      item.metadata?.mergeApproved === true &&
-      item.metadata?.worktreeBranch != null &&
-      item.metadata?.mergeStatus !== "merged",
-    );
+    const approved = this.queue
+      .getAllItems()
+      .filter(
+        (item) =>
+          item.status === "completed" &&
+          item.verification?.status === "verified" &&
+          item.metadata?.mergeApproved === true &&
+          item.metadata?.worktreeBranch != null &&
+          item.metadata?.mergeStatus !== "merged",
+      );
     for (const item of approved) {
       const r = await this.mergeItem(item.id, strategy, { skipSessionLock: true });
       if (r.merged) {
@@ -508,7 +544,9 @@ export class Integrator {
    * with optional conflict resolution via headless claude -p agent, then fast-forwards
    * main. Only one reconcile runs at a time (global FileLock).
    */
-  async reconcile(opts: { branch?: string; _conflictResolverForTest?: () => { status: number | null } } = {}): Promise<ReconcileResult> {
+  async reconcile(
+    opts: { branch?: string; _conflictResolverForTest?: () => { status: number | null; stderr?: string } } = {},
+  ): Promise<ReconcileResult> {
     const repoRoot = getKayaHome();
     const locksDir = join(runtimeDir(), "locks");
     mkdirSync(locksDir, { recursive: true });
@@ -528,20 +566,29 @@ export class Integrator {
         const branchListOutput = (() => {
           try {
             return execFileSync("git", ["branch", "--format=%(refname:short)"], {
-              cwd: repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+              cwd: repoRoot,
+              encoding: "utf-8",
+              stdio: "pipe",
+              timeout: 10_000,
             }).trim();
           } catch {
             return "";
           }
         })();
 
-        const allBranches = branchListOutput.split("\n").map(b => b.trim()).filter(Boolean);
+        const allBranches = branchListOutput
+          .split("\n")
+          .map((b) => b.trim())
+          .filter(Boolean);
 
         // Branches checked out in active worktrees
         const worktreeListOutput = (() => {
           try {
             return execFileSync("git", ["worktree", "list", "--porcelain"], {
-              cwd: repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+              cwd: repoRoot,
+              encoding: "utf-8",
+              stdio: "pipe",
+              timeout: 10_000,
             });
           } catch {
             return "";
@@ -550,14 +597,14 @@ export class Integrator {
         const activeWorktreeBranches = new Set<string>();
         for (const line of worktreeListOutput.split("\n")) {
           const m = line.match(/^branch refs\/heads\/(.+)$/);
-          if (m) activeWorktreeBranches.add(m[1]);
+          if (m?.[1]) activeWorktreeBranches.add(m[1]);
         }
 
         // Filter: keep matching prefixes, exclude main/master + active worktree branches
         const CANDIDATE_PATTERNS = /^(feature\/work-|worktree-|session\/|feat\/)/;
         const EXCLUDE_BASES = new Set(["main", "master"]);
 
-        candidates = allBranches.filter(b => {
+        candidates = allBranches.filter((b) => {
           if (EXCLUDE_BASES.has(b)) return false;
           if (activeWorktreeBranches.has(b)) return false;
           if (!CANDIDATE_PATTERNS.test(b)) return false;
@@ -565,10 +612,12 @@ export class Integrator {
         });
 
         // Exclude branches already merged into main (is-ancestor)
-        candidates = candidates.filter(b => {
+        candidates = candidates.filter((b) => {
           try {
             execFileSync("git", ["merge-base", "--is-ancestor", b, "main"], {
-              cwd: repoRoot, stdio: "pipe", timeout: 10_000,
+              cwd: repoRoot,
+              stdio: "pipe",
+              timeout: 10_000,
             });
             return false; // exit 0 = already ancestor = skip
           } catch {
@@ -591,17 +640,22 @@ export class Integrator {
       const wtPath = wt.path;
 
       // Bring the integration worktree to main's commit. We CANNOT `git checkout main`
-      // here: main is permanently checked out in the shared tree (~/.claude),
+      // here: main is permanently checked out in the shared tree (the Kaya home),
       // and git forbids the same branch being checked out in two worktrees — that throws
       // "fatal: 'main' is already used by worktree". Instead, hard-reset the temp
       // integration branch (integration/reconcile-tmp) to main's SHA; HEAD stays on the
       // temp branch. main itself is later advanced via `git update-ref` (no checkout).
       const syncIntegrationToMain = (): string => {
         const mainSha = execFileSync("git", ["rev-parse", "main"], {
-          cwd: repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+          cwd: repoRoot,
+          encoding: "utf-8",
+          stdio: "pipe",
+          timeout: 10_000,
         }).trim();
         execFileSync("git", ["reset", "--hard", mainSha], {
-          cwd: wtPath, stdio: "pipe", timeout: 30_000,
+          cwd: wtPath,
+          stdio: "pipe",
+          timeout: 30_000,
         });
         return mainSha;
       };
@@ -631,7 +685,9 @@ export class Integrator {
 
         try {
           execFileSync("git", ["merge", "--no-ff", branch, "-m", `Reconcile: ${branch}`], {
-            cwd: wtPath, stdio: "pipe", timeout: 60_000,
+            cwd: wtPath,
+            stdio: "pipe",
+            timeout: 60_000,
           });
           mergeSucceeded = true;
         } catch {
@@ -639,20 +695,25 @@ export class Integrator {
           const statusOutput = (() => {
             try {
               return execFileSync("git", ["status", "--porcelain"], {
-                cwd: wtPath, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+                cwd: wtPath,
+                encoding: "utf-8",
+                stdio: "pipe",
+                timeout: 10_000,
               });
             } catch {
               return "";
             }
           })();
 
-          const hasConflictMarkers = statusOutput.split("\n").some(
-            line => /^(UU|AA|DD|AU|UA) /.test(line)
-          );
+          const hasConflictMarkers = statusOutput.split("\n").some((line) => /^(UU|AA|DD|AU|UA) /.test(line));
 
           if (!hasConflictMarkers) {
             // Merge failed for non-conflict reasons (e.g., branch doesn't exist)
-            try { execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 }); } catch { /* may not be in a merge state */ }
+            try {
+              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
+            } catch {
+              /* may not be in a merge state */
+            }
             result.failed.push(branch);
             result.outcomes.push({ branch, status: "failed", reason: "Merge failed (non-conflict)" });
             console.error(`[Integrator] FAIL ${branch}: merge failed (non-conflict)`);
@@ -697,9 +758,11 @@ export class Integrator {
           const conflictResolverAllowedTools = "Bash,Read,Edit";
           const conflictResolverArgs: string[] = [
             "-p",
-            "--model", "sonnet",
+            "--model",
+            "sonnet",
             "--dangerously-skip-permissions",
-            "--allowedTools", conflictResolverAllowedTools,
+            "--allowedTools",
+            conflictResolverAllowedTools,
           ];
           if (resolveEnforceTools(undefined, process.env)) {
             conflictResolverArgs.push("--tools", conflictResolverAllowedTools);
@@ -715,15 +778,19 @@ export class Integrator {
           env[AGENT_RUN_ENV_KEY] = runId;
           const agentResult = opts._conflictResolverForTest
             ? opts._conflictResolverForTest()
-            : spawnSync(
-                "claude",
-                conflictResolverArgs,
-                { cwd: wtPath, encoding: "utf-8", timeout: 120_000, env, maxBuffer: 32 * 1024 * 1024 }
-              );
+            : spawnSync("claude", conflictResolverArgs, {
+                cwd: wtPath,
+                encoding: "utf-8",
+                timeout: 120_000,
+                env,
+                maxBuffer: 32 * 1024 * 1024,
+              });
           if (!opts._conflictResolverForTest) {
             const reaped = reapAgentRun(runId);
             if (reaped.length > 0) {
-              console.warn(`[Integrator] conflict resolver left ${reaped.length} process(es) running; ended pids ${reaped.join(", ")}`);
+              console.warn(
+                `[Integrator] conflict resolver left ${reaped.length} process(es) running; ended pids ${reaped.join(", ")}`,
+              );
             }
           }
 
@@ -731,20 +798,25 @@ export class Integrator {
           const postAgentStatus = (() => {
             try {
               return execFileSync("git", ["status", "--porcelain"], {
-                cwd: wtPath, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+                cwd: wtPath,
+                encoding: "utf-8",
+                stdio: "pipe",
+                timeout: 10_000,
               });
             } catch {
               return "";
             }
           })();
 
-          const conflictsRemain = postAgentStatus.split("\n").some(
-            line => /^(UU|AA|DD|AU|UA) /.test(line)
-          );
+          const conflictsRemain = postAgentStatus.split("\n").some((line) => /^(UU|AA|DD|AU|UA) /.test(line));
 
           if (agentResult.status !== 0 || conflictsRemain) {
             // Agent failed or conflicts remain — abort
-            try { execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 }); } catch { /* best effort */ }
+            try {
+              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
+            } catch {
+              /* best effort */
+            }
             result.failed.push(branch);
             result.outcomes.push({
               branch,
@@ -760,14 +832,24 @@ export class Integrator {
           // Agent resolved conflicts — commit
           try {
             execFileSync("git", ["commit", "-m", `Reconcile (conflict resolved): ${branch}`], {
-              cwd: wtPath, stdio: "pipe", timeout: 30_000,
+              cwd: wtPath,
+              stdio: "pipe",
+              timeout: 30_000,
             });
             mergeSucceeded = true;
             conflictResolved = true;
           } catch (e) {
-            try { execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 }); } catch { /* best effort */ }
+            try {
+              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
+            } catch {
+              /* best effort */
+            }
             result.failed.push(branch);
-            result.outcomes.push({ branch, status: "failed", reason: `Could not commit after conflict resolution: ${e instanceof Error ? e.message : String(e)}` });
+            result.outcomes.push({
+              branch,
+              status: "failed",
+              reason: `Could not commit after conflict resolution: ${e instanceof Error ? e.message : String(e)}`,
+            });
             console.error(`[Integrator] FAIL ${branch}: commit after resolution failed`);
             continue;
           }
@@ -779,7 +861,11 @@ export class Integrator {
         const isAnc = this.isAncestor(branch, "HEAD", wtPath);
         if (!isAnc) {
           result.failed.push(branch);
-          result.outcomes.push({ branch, status: "failed", reason: "Branch not ancestor of merge result — integrity check failed" });
+          result.outcomes.push({
+            branch,
+            status: "failed",
+            reason: "Branch not ancestor of merge result — integrity check failed",
+          });
           console.error(`[Integrator] FAIL ${branch}: ancestor verify failed`);
           continue;
         }
@@ -787,9 +873,15 @@ export class Integrator {
         // Non-fatal build check
         let verificationPassed: boolean | undefined;
         try {
-          execFileSync("bun", ["build", "--target=bun", join(repoRoot, "lib/core/KayaHome.ts"), "--outfile=/dev/null"], {
-            cwd: wtPath, timeout: 30_000, stdio: "pipe",
-          });
+          execFileSync(
+            "bun",
+            ["build", "--target=bun", join(repoRoot, "lib/core/KayaHome.ts"), "--outfile=/dev/null"],
+            {
+              cwd: wtPath,
+              timeout: 30_000,
+              stdio: "pipe",
+            },
+          );
           verificationPassed = true;
         } catch {
           verificationPassed = false;
@@ -818,12 +910,14 @@ export class Integrator {
             // Re-sync the integration worktree to the new main and re-merge this branch.
             console.warn(
               `[Integrator] CAS rejected for "${branch}" (attempt ${attempt}/${MAX_CAS_RETRIES}) — ` +
-              `re-syncing to new main and re-merging`
+                `re-syncing to new main and re-merging`,
             );
             try {
               expectedMainSha = syncIntegrationToMain();
               execFileSync("git", ["merge", "--no-ff", branch, "-m", `Reconcile: ${branch}`], {
-                cwd: wtPath, stdio: "pipe", timeout: 60_000,
+                cwd: wtPath,
+                stdio: "pipe",
+                timeout: 60_000,
               });
               // Re-verify ancestry after re-merge (do not re-run the conflict resolver
               // on retry — if this re-merge conflicts, fail the branch loudly)
@@ -846,9 +940,14 @@ export class Integrator {
           const integrationSha = (() => {
             try {
               return execFileSync("git", ["rev-parse", "HEAD"], {
-                cwd: wtPath, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+                cwd: wtPath,
+                encoding: "utf-8",
+                stdio: "pipe",
+                timeout: 10_000,
               }).trim();
-            } catch { return ""; }
+            } catch {
+              return "";
+            }
           })();
 
           if (!integrationSha) {
@@ -861,7 +960,9 @@ export class Integrator {
           try {
             // 4-arg CAS: exits non-zero if refs/heads/main !== expectedMainSha
             execFileSync("git", ["update-ref", "refs/heads/main", integrationSha, expectedMainSha], {
-              cwd: repoRoot, stdio: "pipe", timeout: 10_000,
+              cwd: repoRoot,
+              stdio: "pipe",
+              timeout: 10_000,
             });
             finalOldMainSha = expectedMainSha;
             finalNewMainSha = integrationSha;
@@ -871,9 +972,14 @@ export class Integrator {
             // CAS rejected — re-read current main for the next attempt
             try {
               expectedMainSha = execFileSync("git", ["rev-parse", "main"], {
-                cwd: repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+                cwd: repoRoot,
+                encoding: "utf-8",
+                stdio: "pipe",
+                timeout: 10_000,
               }).trim();
-            } catch { /* ignore — will retry */ }
+            } catch {
+              /* ignore — will retry */
+            }
           }
         }
 
@@ -898,21 +1004,28 @@ export class Integrator {
         // edits to OTHER files in the interactive session are preserved. Only the
         // files actually changed by this merge are touched.
         try {
-          const changedFiles = execFileSync(
-            "git", ["diff", "--name-only", finalOldMainSha, finalNewMainSha],
-            { cwd: repoRoot, encoding: "utf-8", stdio: "pipe", timeout: 15_000 }
-          ).trim().split("\n").filter(Boolean);
+          const changedFiles = execFileSync("git", ["diff", "--name-only", finalOldMainSha, finalNewMainSha], {
+            cwd: repoRoot,
+            encoding: "utf-8",
+            stdio: "pipe",
+            timeout: 15_000,
+          })
+            .trim()
+            .split("\n")
+            .filter(Boolean);
           if (changedFiles.length > 0) {
             // Batch in groups of 100 to stay well within OS ARG_MAX
             const BATCH = 100;
             for (let i = 0; i < changedFiles.length; i += BATCH) {
               execFileSync("git", ["checkout", "HEAD", "--", ...changedFiles.slice(i, i + BATCH)], {
-                cwd: repoRoot, stdio: "pipe", timeout: 30_000,
+                cwd: repoRoot,
+                stdio: "pipe",
+                timeout: 30_000,
               });
             }
             console.log(
               `[Integrator] Synced ${changedFiles.length} file(s) in shared tree ` +
-              `after advancing main to ${finalNewMainSha.slice(0, 8)}`
+                `after advancing main to ${finalNewMainSha.slice(0, 8)}`,
             );
           }
         } catch (wtSyncErr) {
@@ -920,9 +1033,9 @@ export class Integrator {
           // will be correct after the next explicit checkout. Warn loudly.
           console.warn(
             `[Integrator] WARN: main ref advanced to ${finalNewMainSha.slice(0, 8)} ` +
-            `but working-tree sync failed — ` +
-            `run: git -C ${repoRoot} checkout HEAD -- . to fix manually. ` +
-            `(${wtSyncErr instanceof Error ? wtSyncErr.message : String(wtSyncErr)})`
+              `but working-tree sync failed — ` +
+              `run: git -C ${repoRoot} checkout HEAD -- . to fix manually. ` +
+              `(${wtSyncErr instanceof Error ? wtSyncErr.message : String(wtSyncErr)})`,
           );
         }
 
@@ -943,14 +1056,14 @@ export class Integrator {
     // For each successfully merged branch marked gcCandidate, attempt liveness-
     // gated GC of its worktree. Guards: merged + clean + stale + not integrator
     // reuse branch. Any failure is non-fatal and logged; we never block reconcile.
-    const gcCandidates = result.outcomes.filter(o => o.status === "merged" && o.gcCandidate);
+    const gcCandidates = result.outcomes.filter((o) => o.status === "merged" && o.gcCandidate);
     for (const outcome of gcCandidates) {
       try {
         const gcResult = await gcWorktreeForBranch(outcome.branch, repoRoot);
         if (gcResult.removed.length > 0) {
           console.log(`[Integrator] GC removed worktree for "${outcome.branch}": ${gcResult.removed.join(", ")}`);
         } else if (gcResult.skipped.length > 0) {
-          const reasons = gcResult.skipped.map(s => s.reason).join("; ");
+          const reasons = gcResult.skipped.map((s) => s.reason).join("; ");
           console.log(`[Integrator] GC skipped worktree for "${outcome.branch}": ${reasons}`);
         }
         for (const e of gcResult.errors) {
@@ -1000,17 +1113,21 @@ export class Integrator {
 
   private requiresHumanApproval(item: WorkItem): boolean {
     if (item.metadata?.mergeApproved === true) return false;
-    const workType = item.workType ?? item.metadata?.workType as string | undefined;
+    const workType = item.workType ?? (item.metadata?.workType as string | undefined);
     if (workType === "deploy" || workType === "publish") return true;
 
     const affectsSettings = item.metadata?.affectsSettings as boolean | undefined;
     if (affectsSettings) return true;
 
     const iscRows = item.metadata?.iscRows as Array<{ description?: string; source?: string }> | undefined;
-    if (iscRows?.some(r =>
-      /settings\.json|secrets\.json|\.env\b/i.test(r.description ?? "") ||
-      /settings\.json|secrets\.json|\.env\b/i.test(r.source ?? "")
-    )) return true;
+    if (
+      iscRows?.some(
+        (r) =>
+          /settings\.json|secrets\.json|\.env\b/i.test(r.description ?? "") ||
+          /settings\.json|secrets\.json|\.env\b/i.test(r.source ?? ""),
+      )
+    )
+      return true;
 
     return false;
   }
@@ -1031,7 +1148,9 @@ export class Integrator {
           try {
             execFileSync("git", ["rev-parse", "--git-dir"], { cwd: c, timeout: 5_000, stdio: "pipe" });
             return c;
-          } catch { /* not a git repo */ }
+          } catch {
+            /* not a git repo */
+          }
         }
       }
     }
@@ -1053,10 +1172,19 @@ export class Integrator {
   private ghCreatePr(repoPath: string, title: string, branch: string, verifiedCount: number): string {
     const prOutput = execFileSync(
       "gh",
-      ["pr", "create", "--title", `Merge: ${title}`, "--body",
-       `Verified by SkepticalVerifier. ISC rows: ${verifiedCount} verified.`,
-       "--head", branch, "--base", "main"],
-      { cwd: repoPath, timeout: 30_000, stdio: "pipe", encoding: "utf-8" }
+      [
+        "pr",
+        "create",
+        "--title",
+        `Merge: ${title}`,
+        "--body",
+        `Verified by SkepticalVerifier. ISC rows: ${verifiedCount} verified.`,
+        "--head",
+        branch,
+        "--base",
+        "main",
+      ],
+      { cwd: repoPath, timeout: 30_000, stdio: "pipe", encoding: "utf-8" },
     );
     return prOutput.trim().split("\n").pop()?.trim() ?? "";
   }
@@ -1069,14 +1197,18 @@ export class Integrator {
    */
   private ghAttemptMerge(repoPath: string, prUrl: string): void {
     try {
-      execFileSync("gh", ["pr", "merge", prUrl, "--auto", "--merge"],
-        { cwd: repoPath, timeout: 30_000, stdio: "pipe" });
+      execFileSync("gh", ["pr", "merge", prUrl, "--auto", "--merge"], {
+        cwd: repoPath,
+        timeout: 30_000,
+        stdio: "pipe",
+      });
     } catch {
       try {
-        execFileSync("gh", ["pr", "merge", prUrl, "--merge"],
-          { cwd: repoPath, timeout: 30_000, stdio: "pipe" });
-      } catch {
-        console.warn(`[Integrator] PR created but merge failed for ${prUrl}. Merge manually.`);
+        execFileSync("gh", ["pr", "merge", prUrl, "--merge"], { cwd: repoPath, timeout: 30_000, stdio: "pipe" });
+      } catch (err) {
+        console.warn(
+          `[Integrator] PR created but merge failed for ${prUrl}. Merge manually. (${err instanceof Error ? err.message : String(err)})`,
+        );
       }
     }
   }
@@ -1099,21 +1231,32 @@ export class Integrator {
       try {
         execFileSync("git", ["checkout", base], { cwd, timeout: 30_000, stdio: "pipe" });
       } catch (e) {
-        return { ok: false, reason: `refusing to merge into '${current || "?"}' — could not check out base branch '${base}' first: ${e instanceof Error ? e.message : String(e)}` };
+        return {
+          ok: false,
+          reason: `refusing to merge into '${current || "?"}' — could not check out base branch '${base}' first: ${e instanceof Error ? e.message : String(e)}`,
+        };
       }
     }
     const beforeSha = revParseRef(cwd, base);
     try {
-      execFileSync("git", ["merge", "--no-ff", branch, "-m", `Merge verified: ${title}`], { cwd, timeout: 30_000, stdio: "pipe" });
+      execFileSync("git", ["merge", "--no-ff", branch, "-m", `Merge verified: ${title}`], {
+        cwd,
+        timeout: 30_000,
+        stdio: "pipe",
+      });
     } catch (e) {
-      return { ok: false, reason: `git merge --no-ff ${branch} into ${base} failed: ${e instanceof Error ? e.message : String(e)}` };
+      return {
+        ok: false,
+        reason: `git merge --no-ff ${branch} into ${base} failed: ${e instanceof Error ? e.message : String(e)}`,
+      };
     }
     const diskResult = this.verifyDirectMergeLanded(cwd, branch, base, beforeSha);
     if (!diskResult.clean) {
       const dirty = diskResult.diffOutput.trim();
       return {
         ok: false,
-        reason: `merge of '${branch}' into '${base}' did not verify clean (isAncestor=${diskResult.isAncestor}` +
+        reason:
+          `merge of '${branch}' into '${base}' did not verify clean (isAncestor=${diskResult.isAncestor}` +
           `${dirty ? `, working tree diverged from HEAD: ${dirty.slice(0, 300)}` : ""}) — not recording 'merged'`,
       };
     }
@@ -1152,7 +1295,12 @@ export class Integrator {
 
   private currentBranch(cwd: string): string {
     try {
-      return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeout: 10_000, stdio: "pipe", encoding: "utf-8" }).trim();
+      return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+        cwd,
+        timeout: 10_000,
+        stdio: "pipe",
+        encoding: "utf-8",
+      }).trim();
     } catch {
       return "";
     }
@@ -1161,16 +1309,26 @@ export class Integrator {
   private resolveBaseBranch(cwd: string): string {
     for (const b of ["main", "master"]) {
       try {
-        execFileSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${b}`], { cwd, timeout: 10_000, stdio: "pipe" });
+        execFileSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${b}`], {
+          cwd,
+          timeout: 10_000,
+          stdio: "pipe",
+        });
         return b;
-      } catch { /* branch not present */ }
+      } catch {
+        /* branch not present */
+      }
     }
     return this.currentBranch(cwd) || "main";
   }
 
   private isAncestor(ancestor: string, descendant: string, cwd: string): boolean {
     try {
-      execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd, timeout: 10_000, stdio: "pipe" });
+      execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+        cwd,
+        timeout: 10_000,
+        stdio: "pipe",
+      });
       return true;
     } catch {
       return false;
@@ -1181,8 +1339,7 @@ export class Integrator {
     const opts = { encoding: "utf-8" as const, timeout: 10_000, stdio: "pipe" as const, ...(cwd ? { cwd } : {}) };
     try {
       const mergeBase = execFileSync("git", ["merge-base", "HEAD", branch], opts).trim();
-      const result = execFileSync("git", ["merge-tree", mergeBase, "HEAD", branch],
-        { ...opts, timeout: 30_000 });
+      const result = execFileSync("git", ["merge-tree", mergeBase, "HEAD", branch], { ...opts, timeout: 30_000 });
       return result.includes("<<<<<<<");
     } catch {
       return true; // assume conflict on error
@@ -1253,13 +1410,19 @@ if (import.meta.main) {
     if (values.json) {
       console.log(JSON.stringify(reconcileResult, null, 2));
     } else {
-      console.log(`Reconcile: merged ${reconcileResult.merged.length}  failed ${reconcileResult.failed.length}  skipped ${reconcileResult.skipped.length}`);
+      console.log(
+        `Reconcile: merged ${reconcileResult.merged.length}  failed ${reconcileResult.failed.length}  skipped ${reconcileResult.skipped.length}`,
+      );
       for (const o of reconcileResult.outcomes) {
         const flags = [
           o.conflictResolved ? "conflict-resolved" : null,
           o.verificationPassed === false ? "build-warn" : null,
-        ].filter(Boolean).join(",");
-        console.log(`  ${o.status.toUpperCase()} ${o.branch}${flags ? ` (${flags})` : ""}${o.reason ? ` — ${o.reason}` : ""}`);
+        ]
+          .filter(Boolean)
+          .join(",");
+        console.log(
+          `  ${o.status.toUpperCase()} ${o.branch}${flags ? ` (${flags})` : ""}${o.reason ? ` — ${o.reason}` : ""}`,
+        );
       }
     }
     process.exit(reconcileResult.failed.length > 0 ? 1 : 0);
@@ -1275,7 +1438,9 @@ if (import.meta.main) {
     if (values.json) {
       console.log(JSON.stringify(mergeResult, null, 2));
     } else {
-      console.log(`Merged: ${mergeResult.merged}  Conflicts: ${mergeResult.conflicts}  Skipped: ${mergeResult.skipped}`);
+      console.log(
+        `Merged: ${mergeResult.merged}  Conflicts: ${mergeResult.conflicts}  Skipped: ${mergeResult.skipped}`,
+      );
       for (const url of mergeResult.prUrls) console.log(`  ${url}`);
     }
     process.exit(0);
@@ -1296,16 +1461,19 @@ if (import.meta.main) {
 
   if (command === "approve") {
     const id = positionals[1];
-    if (!id) { console.error("Usage: approve <id> [--merge] [--strategy pr|direct] [--by <name>]"); process.exit(1); }
+    if (!id) {
+      console.error("Usage: approve <id> [--merge] [--strategy pr|direct] [--by <name>]");
+      process.exit(1);
+    }
     const strategy = (values.strategy === "pr" ? "pr" : "direct") as MergeStrategy;
     const by = (values.by as string | undefined) ?? "Jm";
-    const result = values.merge
-      ? await integrator.approveAndMerge(id, strategy, by)
-      : integrator.approve(id, by);
+    const result = values.merge ? await integrator.approveAndMerge(id, strategy, by) : integrator.approve(id, by);
     if (values.json) {
       console.log(JSON.stringify(result, null, 2));
     } else if ("merged" in result) {
-      console.log(result.merged ? `${id} → approved + merged` : `${id} → approved but not merged: ${result.reason ?? "?"}`);
+      console.log(
+        result.merged ? `${id} → approved + merged` : `${id} → approved but not merged: ${result.reason ?? "?"}`,
+      );
     } else {
       console.log(result.approved ? `${id} → approved (run 'drain' to merge)` : `Not approved: ${result.reason}`);
     }
@@ -1318,7 +1486,9 @@ if (import.meta.main) {
     if (values.json) {
       console.log(JSON.stringify(drainResult, null, 2));
     } else {
-      console.log(`Drained approved: Merged ${drainResult.merged}  Conflicts ${drainResult.conflicts}  Skipped ${drainResult.skipped}`);
+      console.log(
+        `Drained approved: Merged ${drainResult.merged}  Conflicts ${drainResult.conflicts}  Skipped ${drainResult.skipped}`,
+      );
       for (const url of drainResult.prUrls) console.log(`  ${url}`);
     }
     process.exit(0);

@@ -4,7 +4,7 @@
  * The original fixture BUILDER (which ran the now-deleted regex SpecParser over a
  * curated spec set to produce ground-truth JSON) is RETIRED: parity-against-the-old-
  * parser was replaced by the merit-based eval (comprehension-merit-eval.ts). The 25
- * fixture JSONs in __tests__/fixtures/golden-isc/ remain as a diverse real-spec
+ * fixture JSONs in lib/test/fixtures/golden-isc/ remain as a diverse real-spec
  * corpus the merit eval runs comprehension against. Only the shared types live here.
  */
 

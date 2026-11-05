@@ -28,7 +28,7 @@
 
 export type LiveVerifyMode = "explorer" | "self-verify";
 
-export interface LiveVerifyContextEnv {
+interface LiveVerifyContextEnv {
   KAYA_LIVE_VERIFY_MODE?: string;
   KAYA_CRON_JOB_ID?: string;
   KAYA_AUTONOMOUS?: string;
@@ -72,15 +72,14 @@ export function resolveLiveVerifyContext(
   if (env.CLAUDECODE) {
     return {
       mode: "self-verify",
-      reason: "interactive Claude Code session (CLAUDECODE) — dangerous Explorer spawn is classifier-blocked; using non-dangerous self-verify",
+      reason:
+        "interactive Claude Code session (CLAUDECODE) — dangerous Explorer spawn is classifier-blocked; using non-dangerous self-verify",
     };
   }
 
   return { mode: "self-verify", reason: "non-authorized context — defaulting to non-dangerous self-verify" };
 }
 
-export function resolveLiveVerifyMode(
-  env: LiveVerifyContextEnv = process.env as LiveVerifyContextEnv,
-): LiveVerifyMode {
+export function resolveLiveVerifyMode(env: LiveVerifyContextEnv = process.env as LiveVerifyContextEnv): LiveVerifyMode {
   return resolveLiveVerifyContext(env).mode;
 }

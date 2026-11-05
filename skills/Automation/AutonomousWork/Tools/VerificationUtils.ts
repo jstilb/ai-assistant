@@ -5,8 +5,8 @@
  * No class state — all functions are stateless and exported directly.
  */
 
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Normalize a raw verification command string before execution.
@@ -22,17 +22,15 @@ import { resolve } from "path";
  * Returns the normalized command string, or null if the command should be skipped.
  */
 export function normalizeVerificationCommand(cmd: string, basedir?: string): string | null {
-  if (!cmd || !cmd.trim()) return null;
+  if (!cmd?.trim()) return null;
 
   // Bare 'test' with no arguments always exits 1 — it is not a useful verification command.
   if (cmd.trim() === "test") return null;
 
   const home = process.env.HOME || "";
 
-  // Expand ~/ and bare ~ at path start (e.g. "~/.claude/…" → "~/.claude/…")
-  let normalized = cmd
-    .replace(/~\//g, `${home}/`)
-    .replace(/^~(?=\s|$)/, home);
+  // Expand ~/ and bare ~ at path start (e.g. "~/.claude/…" → "<home>/.claude/…")
+  let normalized = cmd.replace(/~\//g, `${home}/`).replace(/^~(?=\s|$)/, home);
 
   // Replace bare `bun test` (no path args) with safe wrapper that excludes worktrees.
   // Worktree directories contain full repo copies — bun scans them during test discovery,
@@ -49,13 +47,13 @@ export function normalizeVerificationCommand(cmd: string, basedir?: string): str
   // The SkepticalVerifier handles resolution at verify-time when files are guaranteed to exist.
   if (basedir) {
     normalized = normalized.replace(
-      /^(bun\s+(?:run\s+|test\s+)?|node\s+)(\.\/.+|(?!\/)[a-zA-Z][\w./\-]+\.(?:ts|js|mjs))/,
+      /^(bun\s+(?:run\s+|test\s+)?|node\s+)(\.\/.+|(?!\/)[a-zA-Z][\w./-]+\.(?:ts|js|mjs))/,
       (_, prefix, relPath) => {
         const direct = resolve(basedir, relPath);
         if (existsSync(direct)) return `${prefix}${direct}`;
         // Leave relative — SkepticalVerifier resolves at verify-time
         return `${prefix}${relPath}`;
-      }
+      },
     );
   }
 
@@ -68,7 +66,7 @@ export function normalizeVerificationCommand(cmd: string, basedir?: string): str
  * and that do not exist on the filesystem. Ignores flags (starting with "-").
  *
  * This conservative heuristic catches the known failure category — commands like
- * `ls /tmp/pai-public-staging/` — without incorrectly skipping commands that
+ * `ls /tmp/kaya-public-staging/` — without incorrectly skipping commands that
  * test for non-existent files (e.g. `test -f /nonexistent/file` is intentional).
  *
  * Returns the first missing directory path found, or null if all present.
@@ -79,7 +77,7 @@ export function findMissingDirectoryArg(args: string[], cwd?: string): string | 
     // Only flag paths with an explicit trailing slash — unambiguous directory references
     if (!arg.endsWith("/")) continue;
     // Resolve relative paths against the provided cwd (verification context), not process.cwd()
-    const resolved = cwd && !arg.startsWith("/") ? require("path").join(cwd, arg) : arg;
+    const resolved = cwd && !arg.startsWith("/") ? require("node:path").join(cwd, arg) : arg;
     if (!existsSync(resolved)) {
       return resolved;
     }

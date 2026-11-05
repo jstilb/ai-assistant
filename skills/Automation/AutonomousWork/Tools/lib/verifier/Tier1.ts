@@ -18,22 +18,14 @@
  * weigh in context — they no longer move a score or gate Tier 1's own verdict.
  */
 
-import { execFileSync } from "child_process";
-import { CATASTROPHIC_PATTERNS } from "../../VerificationUtils.ts";
-import type {
-  EvidenceResult,
-  ItemReviewSummary,
-  VerificationTier,
-} from "../../../Tools/SkepticalVerifier.ts";
+import { execFileSync } from "node:child_process";
+import type { EvidenceResult, ItemReviewSummary, VerificationTier } from "../../../Tools/SkepticalVerifier.ts";
 
 /**
  * Phase 1 deterministic checks. Pure: takes config-dependent parseDiffStats indirectly
  * via the passed evidence. No class state required.
  */
-export function runTier1(
-  summary: ItemReviewSummary,
-  evidence?: EvidenceResult,
-): VerificationTier {
+export function runTier1(summary: ItemReviewSummary, evidence?: EvidenceResult): VerificationTier {
   const start = performance.now();
   const concerns: string[] = [];
   const deterministicFailures: Array<{ checkName: string; detail: string }> = [];
@@ -41,23 +33,23 @@ export function runTier1(
   // Check 1: Completion ratio — exclude human-required rows. Informational for the
   // Gate-3 judge only: a low ratio is a signal to weigh in context, not by itself
   // objective ground truth that Tier 1 should fail on.
-  const automatableRows = summary.iscRows.filter(r => r.disposition !== "human-required");
+  const automatableRows = summary.iscRows.filter((r) => r.disposition !== "human-required");
   const totalRows = automatableRows.length;
-  const doneRows = automatableRows.filter(
-    r => r.status === "DONE" || r.status === "VERIFIED"
-  ).length;
+  const doneRows = automatableRows.filter((r) => r.status === "DONE" || r.status === "VERIFIED").length;
   const completionRatio = totalRows > 0 ? doneRows / totalRows : 0;
 
   if (completionRatio < 0.5) {
-    concerns.push(`Low completion ratio: ${doneRows}/${totalRows} rows completed (${(completionRatio * 100).toFixed(0)}%)`);
+    concerns.push(
+      `Low completion ratio: ${doneRows}/${totalRows} rows completed (${(completionRatio * 100).toFixed(0)}%)`,
+    );
   } else if (completionRatio < 0.8) {
     concerns.push(`Partial completion: ${doneRows}/${totalRows} rows (${(completionRatio * 100).toFixed(0)}%)`);
   }
 
   // Check 2: Verification pass rate — objective (rows carry real command results).
-  const failedVerification = summary.iscRows.filter(r => r.verification?.result === "FAIL");
+  const failedVerification = summary.iscRows.filter((r) => r.verification?.result === "FAIL");
   if (failedVerification.length > 0) {
-    const detail = `${failedVerification.length} row(s) failed verification: ${failedVerification.map(r => `#${r.id}`).join(", ")}`;
+    const detail = `${failedVerification.length} row(s) failed verification: ${failedVerification.map((r) => `#${r.id}`).join(", ")}`;
     concerns.push(detail);
     deterministicFailures.push({ checkName: "verification-fail-rate", detail });
   }
@@ -66,10 +58,12 @@ export function runTier1(
   // independent proof isn't proof of wrongness, so this stays a concern for the
   // judge — Check 19 below is the hard ground-truth alarm for zero evidence at all.
   const selfReportedPass = summary.iscRows.filter(
-    r => r.verification?.result === "PASS" && !r.verification?.commandRan
+    (r) => r.verification?.result === "PASS" && !r.verification?.commandRan,
   );
   if (selfReportedPass.length > 0) {
-    concerns.push(`${selfReportedPass.length} row(s) self-reported PASS without verification command: ${selfReportedPass.map(r => `#${r.id}`).join(", ")}`);
+    concerns.push(
+      `${selfReportedPass.length} row(s) self-reported PASS without verification command: ${selfReportedPass.map((r) => `#${r.id}`).join(", ")}`,
+    );
   }
 
   const isApiWork = Array.isArray(summary.diffPathFilter) && summary.diffPathFilter.length === 0;
@@ -87,33 +81,43 @@ export function runTier1(
     const repoSections = parseMultiRepoDiffStat(summary.gitDiffStat);
     for (const repo of summary.repoContexts) {
       try {
-        const independentDiff = execFileSync("git", ["diff", "--stat", "-M", "HEAD~1"],
-          { encoding: "utf-8", cwd: repo.cwd, timeout: 5000 }).trim();
-        const independentFiles = independentDiff.split("\n").filter(l => l.includes("|")).length;
-        const repoSection = repoSections.find(s => s.name === repo.name);
-        const reportedFiles = repoSection?.diffStat.split("\n").filter(l => l.includes("|")).length ?? 0;
+        const independentDiff = execFileSync("git", ["diff", "--stat", "-M", "HEAD~1"], {
+          encoding: "utf-8",
+          cwd: repo.cwd,
+          timeout: 5000,
+        }).trim();
+        const independentFiles = independentDiff.split("\n").filter((l) => l.includes("|")).length;
+        const repoSection = repoSections.find((s) => s.name === repo.name);
+        const reportedFiles = repoSection?.diffStat.split("\n").filter((l) => l.includes("|")).length ?? 0;
         if (independentFiles === 0 && reportedFiles > 3 && !isApiWork) {
           const detail = `Cross-validation failed for [${repo.name}]: independent git diff shows 0 files but caller reported ${reportedFiles}`;
           concerns.push(detail);
           deterministicFailures.push({ checkName: "cross-validation", detail });
         }
       } catch (e) {
-        concerns.push(`Evidence degraded: cross-validation git diff failed for [${repo.name}] — ${e instanceof Error ? e.message : "unknown error"}`);
+        concerns.push(
+          `Evidence degraded: cross-validation git diff failed for [${repo.name}] — ${e instanceof Error ? e.message : "unknown error"}`,
+        );
       }
     }
   } else if (summary.workingDir) {
     try {
-      const independentDiff = execFileSync("git", ["diff", "--stat", "-M", "HEAD~1"],
-        { encoding: "utf-8", cwd: summary.workingDir, timeout: 5000 }).trim();
-      const independentFiles = independentDiff.split("\n").filter(l => l.includes("|")).length;
-      const reportedFiles = summary.gitDiffStat?.split("\n").filter(l => l.includes("|")).length ?? 0;
+      const independentDiff = execFileSync("git", ["diff", "--stat", "-M", "HEAD~1"], {
+        encoding: "utf-8",
+        cwd: summary.workingDir,
+        timeout: 5000,
+      }).trim();
+      const independentFiles = independentDiff.split("\n").filter((l) => l.includes("|")).length;
+      const reportedFiles = summary.gitDiffStat?.split("\n").filter((l) => l.includes("|")).length ?? 0;
       if (independentFiles === 0 && reportedFiles > 3 && !isApiWork) {
         const detail = `Cross-validation failed: independent git diff shows 0 files but caller reported ${reportedFiles}`;
         concerns.push(detail);
         deterministicFailures.push({ checkName: "cross-validation", detail });
       }
     } catch (e) {
-      concerns.push(`Evidence degraded: cross-validation git diff failed — ${e instanceof Error ? e.message : "unknown error"}`);
+      concerns.push(
+        `Evidence degraded: cross-validation git diff failed — ${e instanceof Error ? e.message : "unknown error"}`,
+      );
     }
   }
 
@@ -164,9 +168,10 @@ export function runTier1(
     const testFilesInDiff = testFilePattern.test(summary.gitDiffStat);
 
     const hasIscVerifiedTests = summary.iscRows.some(
-      r => r.capability === "execution.testing" &&
-           r.verification?.result === "PASS" &&
-           r.verification?.commandRan === true
+      (r) =>
+        r.capability === "execution.testing" &&
+        r.verification?.result === "PASS" &&
+        r.verification?.commandRan === true,
     );
 
     if (testFilesInDiff && !hasIscVerifiedTests) {
@@ -208,9 +213,14 @@ export function runTier1(
         concerns.push(
           `No builder self-verification transcript for a runnable (${surface}) surface — the builder may not have actually run its work`,
         );
-      } else if (transcript.some(t => t.verdict === "FAIL")) {
-        concerns.push("Builder self-verification recorded a live FAIL — the artifact did not behave as specified when run");
-        deterministicFailures.push({ checkName: "builder-live-fail", detail: "Builder self-verification transcript contains a FAIL entry" });
+      } else if (transcript.some((t) => t.verdict === "FAIL")) {
+        concerns.push(
+          "Builder self-verification recorded a live FAIL — the artifact did not behave as specified when run",
+        );
+        deterministicFailures.push({
+          checkName: "builder-live-fail",
+          detail: "Builder self-verification transcript contains a FAIL entry",
+        });
       }
     }
   }
@@ -259,11 +269,7 @@ export function runTier1(
 /**
  * ISC-aware section extraction: scores markdown sections by keyword overlap.
  */
-export function scoreAndExtractSections(
-  content: string,
-  iscDescriptions: string[],
-  maxChars: number,
-): string {
+export function scoreAndExtractSections(content: string, iscDescriptions: string[], maxChars: number): string {
   const sections = content.split(/(?=^##\s)/m);
 
   const scored: Array<{ text: string; score: number }> = [];
@@ -282,8 +288,8 @@ export function scoreAndExtractSections(
     score += checkboxes;
 
     for (const desc of iscDescriptions) {
-      const descWords = desc.split(/\W+/).filter(w => w.length > 2);
-      const overlapCount = descWords.filter(w => lower.includes(w)).length;
+      const descWords = desc.split(/\W+/).filter((w) => w.length > 2);
+      const overlapCount = descWords.filter((w) => lower.includes(w)).length;
       score += overlapCount;
     }
 
@@ -317,7 +323,7 @@ export function extractRelevantSpecSections(summary: ItemReviewSummary): string 
   if (!summary.specContent) return "";
   return scoreAndExtractSections(
     summary.specContent,
-    summary.iscRows.map(r => r.description.toLowerCase()),
+    summary.iscRows.map((r) => r.description.toLowerCase()),
     3000,
   );
 }
@@ -341,9 +347,9 @@ export function parseDiffStats(diffStat: string): {
   const filesMatch = diffStat.match(/(\d+)\s+file/);
   const deletionMatch = diffStat.match(/(\d+)\s+deletion/);
 
-  const totalInsertions = insertionMatch ? parseInt(insertionMatch[1]) : 0;
-  const totalFiles = filesMatch ? parseInt(filesMatch[1]) : 0;
-  const totalDeletions = deletionMatch ? parseInt(deletionMatch[1]) : 0;
+  const totalInsertions = insertionMatch ? parseInt(insertionMatch[1] ?? "0") : 0;
+  const totalFiles = filesMatch ? parseInt(filesMatch[1] ?? "0") : 0;
+  const totalDeletions = deletionMatch ? parseInt(deletionMatch[1] ?? "0") : 0;
 
   const lines = diffStat.trim().split("\n").filter(Boolean);
   let renameCount = 0;
@@ -373,8 +379,8 @@ export function extractPathsFromDiffStat(diffStat: string): string[] {
     const match = line.match(/^\s*(.+?)\s*\|\s*(\d+)/);
     if (!match) continue;
 
-    const pathPart = match[1].trim();
-    const changeCount = parseInt(match[2], 10);
+    const pathPart = (match[1] ?? "").trim();
+    const changeCount = parseInt(match[2] ?? "0", 10);
 
     let filePath: string;
     if (pathPart.includes("=>")) {
@@ -400,9 +406,7 @@ export function extractPathsFromDiffStat(diffStat: string): string[] {
     pathsWithWeight.push({ path: filePath, weight: changeCount });
   }
 
-  return pathsWithWeight
-    .sort((a, b) => b.weight - a.weight)
-    .map(p => p.path);
+  return pathsWithWeight.sort((a, b) => b.weight - a.weight).map((p) => p.path);
 }
 
 /**
@@ -420,7 +424,7 @@ export function parseMultiRepoDiffStat(diffStat: string): Array<{ name: string; 
       if (currentName !== null) {
         result.push({ name: currentName, diffStat: currentLines.join("\n") });
       }
-      currentName = headerMatch[1];
+      currentName = headerMatch[1] ?? null;
       currentLines = [];
     } else if (currentName !== null) {
       currentLines.push(line);

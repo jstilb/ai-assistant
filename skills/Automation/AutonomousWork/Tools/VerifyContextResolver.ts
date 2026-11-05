@@ -9,10 +9,10 @@
  *                          resolveItemCwd, detectProjectContext
  */
 
-import { existsSync } from "fs";
-import { join } from "path";
-import { execFileSync } from "child_process";
-import type { WorkItem, WorkItemMetadata } from "./WorkQueue.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import type { WorkItem } from "./WorkQueue.ts";
 import type { ProjectContext } from "./SkepticalVerifier.ts";
 import type { VerifyContext, RepoContext } from "./WorkOrchestrator.ts";
 import type { ISCRow } from "./WorkOrchestrator.ts";
@@ -38,12 +38,13 @@ export class VerifyContextResolver {
   resolveVerifyContext(item: WorkItem): VerifyContext {
     const rawRepoContexts = item.metadata?.repoContexts as RepoContext[] | undefined;
     if (Array.isArray(rawRepoContexts) && rawRepoContexts.length > 0) {
-      const validRepos = rawRepoContexts.filter(r => existsSync(r.cwd));
+      const validRepos = rawRepoContexts.filter((r) => existsSync(r.cwd));
       if (validRepos.length >= 2) {
         return { kind: "multi", repos: validRepos };
       }
       if (validRepos.length === 1) {
         const r = validRepos[0];
+        if (!r) throw new Error("unreachable: validRepos has exactly one entry");
         return { kind: "single", cwd: r.cwd, startSha: r.startSha, pathFilter: r.pathFilter };
       }
     }
@@ -60,28 +61,40 @@ export class VerifyContextResolver {
       if (branch) {
         try {
           execFileSync("git", ["worktree", "add", worktreePath, branch], {
-            encoding: "utf-8", timeout: 30000, stdio: ["pipe", "pipe", "pipe"],
+            encoding: "utf-8",
+            timeout: 30000,
+            stdio: ["pipe", "pipe", "pipe"],
           });
           if (existsSync(worktreePath)) {
             return { kind: "single", cwd: worktreePath, startSha, pathFilter };
           }
         } catch (e) {
-          console.warn(`[VerifyContextResolver] Worktree recreation failed for branch "${branch}": ${e instanceof Error ? e.message : String(e)}`);
-          const mergedCwd = item.projectPath && existsSync(item.projectPath)
-            ? item.projectPath
-            : item.outputPath && existsSync(item.outputPath)
-              ? item.outputPath
-              : null;
+          console.warn(
+            `[VerifyContextResolver] Worktree recreation failed for branch "${branch}": ${e instanceof Error ? e.message : String(e)}`,
+          );
+          const mergedCwd =
+            item.projectPath && existsSync(item.projectPath)
+              ? item.projectPath
+              : item.outputPath && existsSync(item.outputPath)
+                ? item.outputPath
+                : null;
           if (mergedCwd) {
             try {
               const merged = execFileSync("git", ["branch", "--merged", "main"], {
-                encoding: "utf-8", timeout: 10000, cwd: mergedCwd, stdio: ["pipe", "pipe", "pipe"],
+                encoding: "utf-8",
+                timeout: 10000,
+                cwd: mergedCwd,
+                stdio: ["pipe", "pipe", "pipe"],
               });
-              if (merged.split("\n").some(b => b.trim() === branch)) {
-                console.warn(`[VerifyContextResolver] Branch "${branch}" already merged to main — verifying against ${mergedCwd}`);
+              if (merged.split("\n").some((b) => b.trim() === branch)) {
+                console.warn(
+                  `[VerifyContextResolver] Branch "${branch}" already merged to main — verifying against ${mergedCwd}`,
+                );
                 return { kind: "single", cwd: mergedCwd, startSha: undefined, pathFilter };
               }
-            } catch { /* git branch check failed */ }
+            } catch {
+              /* git branch check failed */
+            }
           }
         }
       }
@@ -134,7 +147,7 @@ export class VerifyContextResolver {
       return verifyCtx.cwd;
     }
     const cmd = row.verification?.command ?? "";
-    const args = cmd.split(/\s+/).filter(a => !a.startsWith("-") && a.length > 0);
+    const args = cmd.split(/\s+/).filter((a) => !a.startsWith("-") && a.length > 0);
     for (const pathArg of args) {
       for (const repo of verifyCtx.repos) {
         if (existsSync(join(repo.cwd, pathArg))) {
@@ -142,7 +155,7 @@ export class VerifyContextResolver {
         }
       }
     }
-    return verifyCtx.repos[0].cwd;
+    return verifyCtx.repos[0]?.cwd ?? process.cwd();
   }
 
   detectProjectContext(workingDir: string): ProjectContext {
@@ -164,7 +177,11 @@ export class VerifyContextResolver {
       if (existsSync(join(workingDir, "package.json")) || existsSync(join(workingDir, "bun.lockb"))) {
         language = "typescript";
         framework = existsSync(join(workingDir, "bun.lockb")) ? "bun" : "node";
-      } else if (existsSync(join(workingDir, "pyproject.toml")) || existsSync(join(workingDir, "setup.py")) || existsSync(join(workingDir, "requirements.txt"))) {
+      } else if (
+        existsSync(join(workingDir, "pyproject.toml")) ||
+        existsSync(join(workingDir, "setup.py")) ||
+        existsSync(join(workingDir, "requirements.txt"))
+      ) {
         language = "python";
         framework = "pytest";
       } else if (existsSync(join(workingDir, "go.mod"))) {
@@ -184,9 +201,7 @@ export class VerifyContextResolver {
     }
 
     const testPattern: ProjectContext["testPattern"] =
-      language === "python" ? "pytest-style" :
-      language === "typescript" ? "jest-style" :
-      "unknown";
+      language === "python" ? "pytest-style" : language === "typescript" ? "jest-style" : "unknown";
 
     return { language, isKayaSkill, framework, testPattern };
   }

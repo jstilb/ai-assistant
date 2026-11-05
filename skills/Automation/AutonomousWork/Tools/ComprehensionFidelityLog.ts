@@ -16,7 +16,7 @@
  * comprehension — every path returns a boolean and swallows its own errors.
  */
 
-import { join } from "path";
+import { join } from "node:path";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -64,7 +64,7 @@ function getFidelityLog(path: string): AppendLog {
  */
 export function appendComprehensionFidelity(
   record: ComprehensionFidelityRecord,
-  opts: { ts?: string; path?: string } = {}
+  opts: { ts?: string; path?: string } = {},
 ): boolean {
   try {
     const path = opts.path ?? resolveFidelityLogPath();

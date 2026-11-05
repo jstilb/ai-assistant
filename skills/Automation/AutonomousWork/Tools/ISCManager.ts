@@ -92,7 +92,7 @@ export class ISCManager {
 
     const transitioned: number[] = [];
     for (const rowId of rowIds) {
-      const row = rows.find(r => r.id === rowId);
+      const row = rows.find((r) => r.id === rowId);
       if (row && row.status === "PENDING") {
         row.status = "DONE";
         transitioned.push(rowId);
@@ -132,7 +132,7 @@ export class ISCManager {
    * Returns "human-required" for deployment/publishing/external actions.
    * Returns "automatable" for everything else.
    */
-  classifyExecutability(row: ISCRow): "human-required" | "automatable" {
+  classifyExecutability(row: ISCRow): ISCRowExecutability {
     return this._classifyRowExecutability(row.description);
   }
 
@@ -173,7 +173,7 @@ export class ISCManager {
   // Internal helpers
   // --------------------------------------------------------------------------
 
-  private _classifyRowExecutability(_description: string): ISCRowExecutability {
+  private _classifyRowExecutability(_description: string): "automatable" | "human-required" {
     // Default to automatable. The "human-required" decision is made upstream by
     // signals that carry ground truth the LLM emits or the producer fixes:
     //   - the comprehension LLM's per-row `humanRequired` flag (Rule 3: secret

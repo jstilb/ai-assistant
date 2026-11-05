@@ -11,11 +11,11 @@
  * orchestrator — so pure ISC/report call paths never pull it in.
  */
 
-import { existsSync } from "fs";
-import { execFileSync } from "child_process";
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import type { WorkQueue, WorkItem } from "../../WorkQueue.ts";
 
-export type LogCaughtError = (itemId: string, location: string, error: unknown) => void;
+type LogCaughtError = (itemId: string, location: string, error: unknown) => void;
 
 /** Check if a path is a git repo different from Kaya. Returns repo root or null. */
 export function tryResolveGitRoot(candidatePath: string | undefined | null): string | null {
@@ -83,8 +83,8 @@ export function resolveRepoRoot(_queue: WorkQueue, item: WorkItem | undefined): 
   if (root === null) {
     throw new Error(
       `resolveRepoRoot: item ${item.id} declares projectPath/outputPath "${candidatePath}", ` +
-      `but it is not an existing git repository. Refusing to guess the target repo — ` +
-      `fix the item's projectPath, or remove it to target the Kaya repo.`
+        `but it is not an existing git repository. Refusing to guess the target repo — ` +
+        `fix the item's projectPath, or remove it to target the Kaya repo.`,
     );
   }
   return root;
@@ -120,7 +120,9 @@ export async function ensureFeatureBranch(
       try {
         const { removeWorktree } = await import("../../../../../../lib/core/WorktreeManager.ts");
         await removeWorktree(existingPath);
-      } catch { /* best-effort cleanup */ }
+      } catch {
+        /* best-effort cleanup */
+      }
     } else {
       return { branch: existingBranch ?? featureBranch, workingDir: existingPath };
     }
@@ -140,16 +142,14 @@ export async function ensureFeatureBranch(
     return { branch: featureBranch, workingDir: entry.path };
   } catch (e) {
     logCaughtError(itemId, "ensureFeatureBranch.getOrCreateWorktree", e);
-    throw new Error(`ensureFeatureBranch failed for ${itemId}: ${e instanceof Error ? e.message : String(e)}. Caller should use retry(id, error).`);
+    throw new Error(
+      `ensureFeatureBranch failed for ${itemId}: ${e instanceof Error ? e.message : String(e)}. Caller should use retry(id, error).`,
+    );
   }
 }
 
 /** Remove an item's worktree (best-effort — non-blocking on failure, orphan worktree is disk space only). */
-export async function cleanupWorktree(
-  queue: WorkQueue,
-  logCaughtError: LogCaughtError,
-  itemId: string,
-): Promise<void> {
+export async function cleanupWorktree(queue: WorkQueue, logCaughtError: LogCaughtError, itemId: string): Promise<void> {
   const item = queue.getItem(itemId);
   const wtPath = item?.metadata?.worktreePath as string | undefined;
   if (!wtPath) return;

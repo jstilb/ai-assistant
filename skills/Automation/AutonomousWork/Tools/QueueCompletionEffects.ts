@@ -30,16 +30,18 @@ export async function applyCompletionSideEffects(itemId: string): Promise<void> 
     const db = getTaskDB();
     const escTask = db.getTask(`manual-${itemId}`);
     if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
-      const outcome = serializeOutcome(systemOutcome({
-        by: "WorkOrchestrator",
-        headline: "Escalation closed: the queue item finished",
-        noArtifact: `closed by WorkOrchestrator when work-queue item ${itemId} completed`,
-      }));
+      const outcome = serializeOutcome(
+        systemOutcome({
+          by: "WorkOrchestrator",
+          headline: "Escalation closed: the queue item finished",
+          noArtifact: `closed by WorkOrchestrator when work-queue item ${itemId} completed`,
+        }),
+      );
       db.updateTask(`manual-${itemId}`, { status: "done", outcome }, "WorkOrchestrator");
     }
   } catch (e) {
     console.error(
-      `[applyCompletionSideEffects] escalation task close failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : e}`
+      `[applyCompletionSideEffects] escalation task close failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : e}`,
     );
   }
 
@@ -52,12 +54,15 @@ export async function applyCompletionSideEffects(itemId: string): Promise<void> 
     // cross-skill-allowed: reads QueueRouter's approved-work/approvals/spec-pipeline stores for the lucidTaskId carried in payload.context — WorkQueue/QueueRouter share the single-store pipeline design (ADR-003)
     const { loadQueueItems } = await import("../../QueueRouter/Tools/QueueManager.ts");
     const lucidTaskId =
-      (loadQueueItems("approved-work").find((i: { id: string }) => i.id === itemId)
-        ?.payload?.context?.lucidTaskId as string | undefined) ??
-      (loadQueueItems("approvals").find((i: { id: string }) => i.id === itemId)
-        ?.payload?.context?.lucidTaskId as string | undefined) ??
-      (loadQueueItems("spec-pipeline").find((i: { id: string }) => i.id === itemId)
-        ?.payload?.context?.lucidTaskId as string | undefined);
+      (loadQueueItems("approved-work").find((i: { id: string }) => i.id === itemId)?.payload?.context?.lucidTaskId as
+        | string
+        | undefined) ??
+      (loadQueueItems("approvals").find((i: { id: string }) => i.id === itemId)?.payload?.context?.lucidTaskId as
+        | string
+        | undefined) ??
+      (loadQueueItems("spec-pipeline").find((i: { id: string }) => i.id === itemId)?.payload?.context?.lucidTaskId as
+        | string
+        | undefined);
     if (lucidTaskId) {
       // cross-skill-allowed: Lane-A escalation writes LucidTasks tasks by design (07-02 overhaul) — syncs the source LucidTask's status on work-item completion; seam candidate: TaskClient
       const { syncQueueStatus } = await import("../../../Productivity/LucidTasks/Tools/TaskManager.ts");
@@ -65,7 +70,7 @@ export async function applyCompletionSideEffects(itemId: string): Promise<void> 
     }
   } catch (e) {
     console.error(
-      `[applyCompletionSideEffects] LucidTask done-sync failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : e}`
+      `[applyCompletionSideEffects] LucidTask done-sync failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : e}`,
     );
   }
 }

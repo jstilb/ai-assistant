@@ -19,14 +19,14 @@ export interface VerifyPhaseDeps {
   markRowsHumanRequired: (itemId: string, rowIds: number[]) => void;
 }
 
-export interface VerifyPhaseOpts {
+interface VerifyPhaseOpts {
   iscRowIds: number[];
   worktreePath: string | undefined;
   workSurface: "browser" | "cli" | "api" | "integration" | "native";
   specPath: string | undefined;
 }
 
-export interface VerifyPhaseResult {
+interface VerifyPhaseResult {
   phaseNumber: number;
   passed: boolean;
   evidence: string;
@@ -66,14 +66,23 @@ export async function verifyPhase(
   // Graceful skip: item not found
   const item = queue.getItem(itemId);
   if (!item) {
-    return { phaseNumber, passed: true, evidence: `skipped: item ${itemId} not found in queue`, humanVerificationRequired: false };
+    return {
+      phaseNumber,
+      passed: true,
+      evidence: `skipped: item ${itemId} not found in queue`,
+      humanVerificationRequired: false,
+    };
   }
 
   // Graceful skip: no worktree available
-  const worktreePath = opts.worktreePath ??
-    ((item.metadata as WorkItemMetadata)?.worktreePath as string | undefined);
+  const worktreePath = opts.worktreePath ?? ((item.metadata as WorkItemMetadata)?.worktreePath as string | undefined);
   if (!worktreePath) {
-    return { phaseNumber, passed: true, evidence: `skipped: no worktreePath for item ${itemId} phase ${phaseNumber}`, humanVerificationRequired: false };
+    return {
+      phaseNumber,
+      passed: true,
+      evidence: `skipped: no worktreePath for item ${itemId} phase ${phaseNumber}`,
+      humanVerificationRequired: false,
+    };
   }
 
   // Resolve this phase's ISC rows. Prefer the explicit phase rows; fall back to ALL
@@ -120,9 +129,10 @@ export async function verifyPhase(
     };
   }
 
-  const ranSummary = ran.length > 0
-    ? `${ran.length} declared verify command(s) passed (${ran.join(", ")})`
-    : "no runnable verify commands for this phase — deferred to the item-level gates";
+  const ranSummary =
+    ran.length > 0
+      ? `${ran.length} declared verify command(s) passed (${ran.join(", ")})`
+      : "no runnable verify commands for this phase — deferred to the item-level gates";
   return {
     phaseNumber,
     passed: true,

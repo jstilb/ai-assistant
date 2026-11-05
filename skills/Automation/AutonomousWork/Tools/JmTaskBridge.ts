@@ -13,7 +13,7 @@
  *   bun JmTaskBridge.ts list                            # Show all pending human tasks
  */
 
-import { parseArgs } from "util";
+import { parseArgs } from "node:util";
 import { WorkQueue } from "./WorkQueue.ts";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
 
@@ -75,7 +75,7 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
 
     // Find the proxy item in WorkQueue by matching humanTaskRef.lucidTaskId
     const blockedItems = wq.getBlockedItems();
-    const proxy = blockedItems.find(i => i.humanTaskRef?.lucidTaskId === lucidTaskId);
+    const proxy = blockedItems.find((i) => i.humanTaskRef?.lucidTaskId === lucidTaskId);
     if (proxy) {
       proxyItemId = proxy.id;
       // Per-row [Human Action] tasks deliberately carry no queue_item_id (it
@@ -86,7 +86,7 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
 
     // If no proxy found via humanTaskRef, try via queueItemId in the queue context
     if (!proxyItemId && queueItemId) {
-      const proxy2 = blockedItems.find(i => i.humanTaskRef?.queueItemId === queueItemId);
+      const proxy2 = blockedItems.find((i) => i.humanTaskRef?.queueItemId === queueItemId);
       if (proxy2) proxyItemId = proxy2.id;
     }
 
@@ -94,7 +94,7 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
   } else if (queueItemId) {
     // Find the proxy by matching humanTaskRef.queueItemId
     const blockedItems = wq.getBlockedItems();
-    const proxy = blockedItems.find(i => i.humanTaskRef?.queueItemId === queueItemId);
+    const proxy = blockedItems.find((i) => i.humanTaskRef?.queueItemId === queueItemId);
     if (proxy) {
       proxyItemId = proxy.id;
     }
@@ -120,9 +120,10 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
       const { loadQueueItems, saveQueueItems } = await import("../../QueueRouter/Tools/QueueManager.ts");
       const items = loadQueueItems("approved-work");
       const idx = items.findIndex((i: { id: string }) => i.id === proxyItemId);
-      if (idx !== -1 && items[idx].status !== "completed") {
-        items[idx].status = "completed";
-        items[idx].result = { completedAt: new Date().toISOString(), completedBy: "JmTaskBridge" };
+      const target = idx === -1 ? undefined : items[idx];
+      if (target && target.status !== "completed") {
+        target.status = "completed";
+        target.result = { completedAt: new Date().toISOString(), completedBy: "JmTaskBridge" };
         saveQueueItems("approved-work", items);
       }
     } catch (e) {
@@ -133,14 +134,13 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
 
     // Find what items this proxy was blocking
     const allItems = wq.getAllItems();
-    const unblockedItems = allItems.filter(item =>
-      item.dependencies.includes(resolved.id) &&
-      item.status === "pending"
+    const unblockedItems = allItems.filter(
+      (item) => item.dependencies.includes(resolved.id) && item.status === "pending",
     );
     if (unblockedItems.length > 0) {
       // Check if they're now ready (all deps completed)
       for (const item of unblockedItems) {
-        const allDepsMet = item.dependencies.every(depId => {
+        const allDepsMet = item.dependencies.every((depId) => {
           const dep = wq.getItem(depId);
           return dep?.status === "completed";
         });
@@ -166,7 +166,7 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
       if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
         const outcome = await resolveCloseOutcome(
           "Escalation closed: the human action was resolved",
-          `closed by JmTaskBridge when the human action for work item ${queueItemId} was resolved via the resolve command`
+          `closed by JmTaskBridge when the human action for work item ${queueItemId} was resolved via the resolve command`,
         );
         db.updateTask(escTaskId, { status: "done", outcome }, "JmTaskBridge");
         console.log(`Escalation task closed: ${escTaskId}`);
@@ -188,17 +188,12 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
       if (task && task.status !== "done" && task.status !== "cancelled") {
         const outcome = await resolveCloseOutcome(
           "Human action closed: Jm resolved it",
-          `closed by JmTaskBridge when the human action ${lucidTaskId} was resolved via the resolve command`
+          `closed by JmTaskBridge when the human action ${lucidTaskId} was resolved via the resolve command`,
         );
         db.updateTask(lucidTaskId, { status: "done", outcome }, "JmTaskBridge");
         console.log(`Human action task closed: ${lucidTaskId}`);
       }
-      db.logActivity(
-        lucidTaskId,
-        "work_unblocked",
-        JSON.stringify({ proxyItemId, queueItemId }),
-        "bridge"
-      );
+      db.logActivity(lucidTaskId, "work_unblocked", JSON.stringify({ proxyItemId, queueItemId }), "bridge");
       db.close();
     } catch {
       // Non-fatal
@@ -229,7 +224,7 @@ async function cmdList(): Promise<void> {
 
     // Show what this blocks
     const allItems = wq.getAllItems();
-    const blockedBy = allItems.filter(i => i.dependencies.includes(item.id));
+    const blockedBy = allItems.filter((i) => i.dependencies.includes(item.id));
     if (blockedBy.length > 0) {
       console.log(`    Blocks:`);
       for (const blocked of blockedBy) {
@@ -277,7 +272,7 @@ Commands:
         console.error("Either --lucid-task-id or --queue-item-id required");
         process.exit(1);
       }
-      cmdResolve(lucidTaskId, queueItemId).catch(err => {
+      cmdResolve(lucidTaskId, queueItemId).catch((err) => {
         console.error(`Bridge error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
       });
@@ -285,7 +280,7 @@ Commands:
     }
 
     case "list": {
-      cmdList().catch(err => {
+      cmdList().catch((err) => {
         console.error(`List error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
       });

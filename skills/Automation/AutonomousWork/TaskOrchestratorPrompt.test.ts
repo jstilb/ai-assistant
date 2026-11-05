@@ -7,18 +7,16 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
-const PROMPT_PATH = join(
-  import.meta.dir,
-  "Prompts",
-  "TaskOrchestratorPrompt.md"
-);
+const PROMPT_PATH = join(import.meta.dir, "Prompts", "TaskOrchestratorPrompt.md");
 
 describe("TaskOrchestratorPrompt.md — Step 0 TestWriter spawn before Builder loop (ISC 4224)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("file exists", () => {
     expect(existsSync(PROMPT_PATH)).toBe(true);
@@ -51,7 +49,9 @@ describe("TaskOrchestratorPrompt.md — Step 0 TestWriter spawn before Builder l
 
 describe("TaskOrchestratorPrompt.md — WORK_SURFACE template variable (ISC 2960)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("accepts {{WORK_SURFACE}} as a template variable in context", () => {
     expect(content).toContain("{{WORK_SURFACE}}");
@@ -67,17 +67,13 @@ describe("TaskOrchestratorPrompt.md — WORK_SURFACE template variable (ISC 2960
 
 describe("TaskOrchestratorPrompt.md — TestWriter runs exactly once (ISC 2848)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("specifies that TestWriter runs once, not once per iteration", () => {
-    const oncePhrases = [
-      "exactly once",
-      "runs once",
-      "once per item",
-      "not once per iteration",
-      "once, before",
-    ];
-    const hasOncePhrase = oncePhrases.some(p => content.includes(p));
+    const oncePhrases = ["exactly once", "runs once", "once per item", "not once per iteration", "once, before"];
+    const hasOncePhrase = oncePhrases.some((p) => content.includes(p));
     expect(hasOncePhrase).toBe(true);
   });
 
@@ -91,7 +87,9 @@ describe("TaskOrchestratorPrompt.md — TestWriter runs exactly once (ISC 2848)"
 
 describe("TaskOrchestratorPrompt.md — graceful crash handling (ISC 8556)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("handles TestWriter crash by logging a warning", () => {
     const hasCrashHandling =
@@ -122,7 +120,9 @@ describe("TaskOrchestratorPrompt.md — graceful crash handling (ISC 8556)", () 
 
 describe("TaskOrchestratorPrompt.md — stores testWriterCommitSha, passes to Verifier (ISC 7848)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("stores the TestWriter commitSha as testWriterCommitSha", () => {
     expect(content).toContain("testWriterCommitSha");
@@ -149,7 +149,9 @@ describe("TaskOrchestratorPrompt.md — stores testWriterCommitSha, passes to Ve
 
 describe("TaskOrchestratorPrompt.md — return JSON includes testWriterOutput (ISC 5920)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("return JSON schema includes testWriterOutput field", () => {
     expect(content).toContain("testWriterOutput");
@@ -166,7 +168,9 @@ describe("TaskOrchestratorPrompt.md — return JSON includes testWriterOutput (I
 
 describe("TaskOrchestratorPrompt.md — emits trace event after TestWriter completes (ISC 6669)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("emits a trace event using TraceEmitter.ts after TestWriter completes", () => {
     expect(content).toContain("TraceEmitter.ts");

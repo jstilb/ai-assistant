@@ -16,39 +16,41 @@
  * outcome (no silent false PASS), counted separately from silent quality misses.
  *
  * Run:
- *   cd ~/.claude/skills/Automation/AutonomousWork/Tools
+ *   cd $KAYA_HOME/skills/Automation/AutonomousWork/Tools
  *   bun scripts/comprehension-merit-eval.ts            # default ~10 diverse specs
  *   bun scripts/comprehension-merit-eval.ts --all      # all 25 fixture spec paths
  */
 
-import { readFileSync, readdirSync } from "fs";
-import { join, basename } from "path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, basename } from "node:path";
 import type { ComprehendedRow } from "../Types.ts";
+import type { InferenceFn } from "../SkepticalVerifier.ts";
 import type { GoldenFixture } from "./build-golden-fixtures.ts";
+import { GOLDEN_ISC_DIR } from "../../../../../lib/test/fixtures/goldenIsc.ts";
 
-const FIXTURES_DIR = join(import.meta.dir, "..", "__tests__", "fixtures", "golden-isc");
+const FIXTURES_DIR = GOLDEN_ISC_DIR;
 
 // Default diverse subset — spans the failure modes seen in the parity run plus controls.
 const DEFAULT_SUBSET = new Set([
-  "argumentmapper-001-spec",      // was 24->0 (truncation: 19K spec > old 16K cap)
+  "argumentmapper-001-spec", // was 24->0 (truncation: 19K spec > old 16K cap)
   "browser-audit-remediation-2026-03-26", // was 9 "fabrications" — prose verify cells?
-  "path-a-contextmanager-fix-spec",       // was 11->4 undercount
-  "kaya-evals-001-spec",          // was 30->39 overcount
-  "art-audit-remediation-2026-03-26",     // was 13->10 + 5 cmd
-  "mlzhsdw8-g0p8il-spec",         // was 7 cmd mismatches
-  "mlalgpd5-y2h5a8-spec",         // was 14->8 undercount
-  "Agora-spec",                   // control: was MATCH
-  "mqgplvxy-owk3o4-spec",         // control: was MATCH
-  "kaya-dnd-001-spec",            // control
+  "path-a-contextmanager-fix-spec", // was 11->4 undercount
+  "kaya-evals-001-spec", // was 30->39 overcount
+  "art-audit-remediation-2026-03-26", // was 13->10 + 5 cmd
+  "mlzhsdw8-g0p8il-spec", // was 7 cmd mismatches
+  "mlalgpd5-y2h5a8-spec", // was 14->8 undercount
+  "Agora-spec", // control: was MATCH
+  "mqgplvxy-owk3o4-spec", // control: was MATCH
+  "kaya-dnd-001-spec", // control
 ]);
 
 interface JudgeVerdict {
-  completeness: number;      // 0..1 — fraction of the spec's real criteria captured
-  missedCriteria: string[];  // notable criteria the spec has but comprehension dropped
+  completeness: number; // 0..1 — fraction of the spec's real criteria captured
+  missedCriteria: string[]; // notable criteria the spec has but comprehension dropped
   fabricatedCommands: string[]; // commands present in output but NOT in the spec
-  usable: boolean;           // would these rows correctly drive autonomous verification?
+  usable: boolean; // would these rows correctly drive autonomous verification?
   verdict: "USABLE" | "DEGRADED" | "UNUSABLE";
-  inexcusable: string[];     // issues that would cause a false PASS / unverifiable completion
+  inexcusable: string[]; // issues that would cause a false PASS / unverifiable completion
   notes: string;
 }
 
@@ -73,26 +75,39 @@ Rules:
 - Be concrete in "inexcusable": only list things that would actually produce a wrong completion verdict.`;
 
 async function judge(
-  inferenceFn: any,
+  inferenceFn: InferenceFn,
   specContent: string,
   rows: ComprehendedRow[],
-  truncated: boolean
+  truncated: boolean,
 ): Promise<JudgeVerdict | null> {
   const rowsJson = JSON.stringify(
-    rows.map((r) => ({ id: r.id, description: r.description, verifyCommand: r.verifyCommand, humanRequired: r.humanRequired, native: r.native })),
+    rows.map((r) => ({
+      id: r.id,
+      description: r.description,
+      verifyCommand: r.verifyCommand,
+      humanRequired: r.humanRequired,
+      native: r.native,
+    })),
     null,
-    1
+    1,
   );
   const userPrompt =
     `SPEC MARKDOWN:\n\n${specContent.slice(0, 50_000)}\n\n` +
     `========\n\nEXTRACTED ISC ROWS (${rows.length})${truncated ? " [NOTE: spec content was truncated before comprehension]" : ""}:\n\n${rowsJson}\n\n` +
     `Evaluate the extraction on the spec's own terms and return the JSON verdict.`;
 
-  const res = await inferenceFn({ systemPrompt: JUDGE_SYSTEM, userPrompt, level: "smart", expectJson: true, timeout: 180_000 });
+  const res = await inferenceFn({
+    systemPrompt: JUDGE_SYSTEM,
+    userPrompt,
+    level: "smart",
+    expectJson: true,
+    timeout: 180_000,
+  });
   if (!res.success || !res.parsed || typeof res.parsed !== "object") return null;
   // Defensive normalization — the judge LLM occasionally omits a field; never crash the run.
   const raw = res.parsed as Record<string, unknown>;
-  const verdict = raw.verdict === "USABLE" || raw.verdict === "DEGRADED" || raw.verdict === "UNUSABLE" ? raw.verdict : "DEGRADED";
+  const verdict =
+    raw.verdict === "USABLE" || raw.verdict === "DEGRADED" || raw.verdict === "UNUSABLE" ? raw.verdict : "DEGRADED";
   return {
     completeness: typeof raw.completeness === "number" ? raw.completeness : 0,
     missedCriteria: Array.isArray(raw.missedCriteria) ? (raw.missedCriteria as string[]) : [],
@@ -135,7 +150,7 @@ async function main() {
     process.stdout.write(`\n[${slug}] ${fixture.layoutNote} (${specContent.length} chars)\n`);
 
     // Comprehension — a throw is the LOUD BACKSTOP = a SAFE outcome, not a silent miss.
-    let comp;
+    let comp: Awaited<ReturnType<typeof comprehendSpec>>;
     try {
       comp = await comprehendSpec(specContent, { level: "standard" });
     } catch (err) {
@@ -155,7 +170,7 @@ async function main() {
     results.push({ slug, status: v.verdict, v });
     console.log(
       `  rows=${comp.rows.length} truncated=${comp.truncated === true} | verdict=${v.verdict} ` +
-      `completeness=${v.completeness.toFixed(2)} fabricated=${v.fabricatedCommands.length} inexcusable=${v.inexcusable.length}`
+        `completeness=${v.completeness.toFixed(2)} fabricated=${v.fabricatedCommands.length} inexcusable=${v.inexcusable.length}`,
     );
     if (v.fabricatedCommands.length) console.log(`    FABRICATED: ${v.fabricatedCommands.slice(0, 3).join(" | ")}`);
     if (v.inexcusable.length) console.log(`    INEXCUSABLE: ${v.inexcusable.slice(0, 3).join(" | ")}`);

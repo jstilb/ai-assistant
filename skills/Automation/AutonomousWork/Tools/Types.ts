@@ -97,16 +97,6 @@ export interface VerifierReport {
 }
 
 // ============================================================================
-// LoopResult
-// ============================================================================
-
-export type LoopResult =
-  | { converged: true; iterations: number; verifierReport: VerifierReport; needsReview: boolean }
-  | { converged: false; reason: "stall" | "max_iterations"; lastReport: VerifierReport }
-  | { converged: false; reason: "wall_clock_exceeded"; elapsedMs: number; capMs: number; lastReport: VerifierReport | null }
-  | { converged: false; reason: "error"; error: string };
-
-// ============================================================================
 // LLM Spec Comprehension (Phase 4a)
 // ============================================================================
 
@@ -115,8 +105,8 @@ export type LoopResult =
  * The LLM must NOT invent, merge, or split rows — one spec ISC entry = one row.
  */
 export interface ComprehendedRow {
-  id: number;              // Sequential integer starting at 1, preserving spec row order
-  description: string;    // The criterion text verbatim
+  id: number; // Sequential integer starting at 1, preserving spec row order
+  description: string; // The criterion text verbatim
   /** VERBATIM runnable shell command from the spec. null if verify cell is prose with no command. */
   verifyCommand: string | null;
   /** true ONLY if the row inherently needs a human — credential entry, account consent,
@@ -146,7 +136,7 @@ export interface ComprehendedRow {
 export interface ComprehendedPhase {
   number: number;
   name: string;
-  rowIds: number[];  // ids of ComprehendedRow entries that belong to this phase
+  rowIds: number[]; // ids of ComprehendedRow entries that belong to this phase
 }
 
 export interface ComprehendedSpec {

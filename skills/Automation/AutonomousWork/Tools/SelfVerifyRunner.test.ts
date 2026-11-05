@@ -81,18 +81,12 @@ describe("isSelfVerifyCommandSafe", () => {
 
 describe("buildSelfVerifyCommands", () => {
   test("uses caller commands and appends typecheck when tsconfig present", () => {
-    const cmds = buildSelfVerifyCommands(
-      baseInput({ selfVerifyCommands: ["bun run cli --help"] }),
-      () => true,
-    );
+    const cmds = buildSelfVerifyCommands(baseInput({ selfVerifyCommands: ["bun run cli --help"] }), () => true);
     expect(cmds).toEqual(["bun run cli --help", "bunx tsc --noEmit"]);
   });
 
   test("dedupes and skips typecheck when no tsconfig", () => {
-    const cmds = buildSelfVerifyCommands(
-      baseInput({ selfVerifyCommands: ["bun run a", "bun run a"] }),
-      () => false,
-    );
+    const cmds = buildSelfVerifyCommands(baseInput({ selfVerifyCommands: ["bun run a", "bun run a"] }), () => false);
     expect(cmds).toEqual(["bun run a"]);
   });
 });
@@ -119,13 +113,10 @@ describe("runSelfVerify", () => {
 
   test("a failing command → FAIL with real observed output", async () => {
     const { exec } = recordingExec({ "bun run cli": { exitCode: 1, stdout: "", stderr: "boom" } });
-    const res = await runSelfVerify(
-      baseInput({ selfVerifyCommands: ["bun run cli"] }),
-      quietDeps({ exec }),
-    );
+    const res = await runSelfVerify(baseInput({ selfVerifyCommands: ["bun run cli"] }), quietDeps({ exec }));
     expect(res.verdict).toBe("FAIL");
     expect(res.scenariosFailed).toBe(1);
-    expect(res.scenarios[0].observed).toContain("boom");
+    expect(res.scenarios[0]?.observed).toContain("boom");
     expect(res.environmentBlocked).toBe(false);
   });
 
@@ -156,7 +147,7 @@ describe("runSelfVerify", () => {
       quietDeps({ exec, writeTranscript: (path, data) => writes.push({ path, data }) }),
     );
     expect(writes.length).toBe(1);
-    expect(writes[0].path).toContain("selfverify-1000.json");
-    expect(JSON.parse(writes[0].data).engine).toBe("self-verify");
+    expect(writes[0]?.path).toContain("selfverify-1000.json");
+    expect(JSON.parse(writes[0]?.data ?? "").engine).toBe("self-verify");
   });
 });

@@ -151,9 +151,7 @@ function isValidPhase(p: unknown): p is ComprehendedPhase {
   );
 }
 
-function coerceComplexityHint(
-  raw: unknown
-): "trivial" | "standard" | "thorough" {
+function coerceComplexityHint(raw: unknown): "trivial" | "standard" | "thorough" {
   if (raw === "trivial" || raw === "standard" || raw === "thorough") return raw;
   return "standard";
 }
@@ -212,16 +210,11 @@ export interface ComprehendSpecOpts {
  * @returns A ComprehendedSpec with verbatim-extracted rows, complexity hint, and phase map.
  * @throws Error if the LLM returns persistently invalid JSON after one retry.
  */
-export async function comprehendSpec(
-  specContent: string,
-  opts: ComprehendSpecOpts = {}
-): Promise<ComprehendedSpec> {
+export async function comprehendSpec(specContent: string, opts: ComprehendSpecOpts = {}): Promise<ComprehendedSpec> {
   const level = opts.level ?? "standard";
 
   // Lazy-load real inference only when no mock is injected.
-  const inferenceFn: InferenceFn =
-    opts.inferenceFn ??
-    (await import("../../../../lib/core/Inference.ts")).inference;
+  const inferenceFn: InferenceFn = opts.inferenceFn ?? (await import("../../../../lib/core/Inference.ts")).inference;
 
   // Live-source emission gate: only a real LLM call (no injected mock) with a
   // known specId logs to the fidelity monitor. NON-FATAL — never breaks comprehension.
@@ -246,21 +239,22 @@ export async function comprehendSpec(
     wasContentTruncated = true;
     console.warn(
       `[comprehendSpec] WARN: Spec content (${contentForLLM.length} chars) exceeds cap ` +
-      `(${SPEC_CONTENT_MAX_CHARS} chars). Truncating — ISC rows may be incomplete if the ` +
-      `criteria section extends beyond the cap. Investigate oversized specs.`
+        `(${SPEC_CONTENT_MAX_CHARS} chars). Truncating — ISC rows may be incomplete if the ` +
+        `criteria section extends beyond the cap. Investigate oversized specs.`,
     );
     // Find the first ISC/Success Criteria heading and truncate before it
-    const iscMarker = contentForLLM.search(
-      /^#+\s*(ideal state criteria|isc|success criteria|acceptance criteria)/im
-    );
+    const iscMarker = contentForLLM.search(/^#+\s*(ideal state criteria|isc|success criteria|acceptance criteria)/im);
     if (iscMarker > 0 && iscMarker < contentForLLM.length - 1000) {
       // Keep everything from the ISC heading onward, plus a short preamble
       const preamble = contentForLLM.slice(0, 200);
       const iscOnward = contentForLLM.slice(iscMarker);
       contentForLLM = preamble + "\n\n[...preamble truncated for length...]\n\n" + iscOnward;
     } else {
-      contentForLLM = contentForLLM.slice(0, SPEC_CONTENT_MAX_CHARS) +
-        "\n\n[...content truncated at " + SPEC_CONTENT_MAX_CHARS + " chars...]";
+      contentForLLM =
+        contentForLLM.slice(0, SPEC_CONTENT_MAX_CHARS) +
+        "\n\n[...content truncated at " +
+        SPEC_CONTENT_MAX_CHARS +
+        " chars...]";
     }
   }
 
@@ -312,22 +306,24 @@ export async function comprehendSpec(
   const attempt1Coerced = result1.success ? coerceToComprehendedSpec(result1.parsed) : null;
   const attempt2Coerced = result2.success ? coerceToComprehendedSpec(result2.parsed) : null;
   const persistentlyEmpty =
-    (attempt1Coerced !== null && attempt1Coerced.rows.length === 0) &&
-    (attempt2Coerced !== null && attempt2Coerced.rows.length === 0);
+    attempt1Coerced !== null &&
+    attempt1Coerced.rows.length === 0 &&
+    attempt2Coerced !== null &&
+    attempt2Coerced.rows.length === 0;
 
   if (persistentlyEmpty) {
     throw new Error(
       `comprehendSpec: LLM returned 0 ISC rows on both attempts. ` +
-      `A real software spec always has acceptance criteria — 0 rows means the LLM ` +
-      `failed to extract them. This would produce a false PASS with zero verification. ` +
-      `prepare() must fail loud (EXECUTION_FAILED) — fix the spec or comprehension prompt; never silently complete.`
+        `A real software spec always has acceptance criteria — 0 rows means the LLM ` +
+        `failed to extract them. This would produce a false PASS with zero verification. ` +
+        `prepare() must fail loud (EXECUTION_FAILED) — fix the spec or comprehension prompt; never silently complete.`,
     );
   }
 
   const errDetail = result2.error ?? result1.error ?? "no error detail";
   throw new Error(
     `comprehendSpec: LLM returned persistently invalid JSON after retry. ` +
-    `Last error: ${errDetail}. ` +
-    `prepare() must fail loud (EXECUTION_FAILED) — fix the spec or comprehension prompt; never silently complete.`
+      `Last error: ${errDetail}. ` +
+      `prepare() must fail loud (EXECUTION_FAILED) — fix the spec or comprehension prompt; never silently complete.`,
   );
 }

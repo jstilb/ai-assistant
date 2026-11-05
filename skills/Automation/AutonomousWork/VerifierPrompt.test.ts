@@ -7,18 +7,16 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
-const PROMPT_PATH = join(
-  import.meta.dir,
-  "Prompts",
-  "VerifierPrompt.md"
-);
+const PROMPT_PATH = join(import.meta.dir, "Prompts", "VerifierPrompt.md");
 
 describe("VerifierPrompt.md — immutability check step (ISC 6760)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("file exists", () => {
     expect(existsSync(PROMPT_PATH)).toBe(true);
@@ -42,25 +40,23 @@ describe("VerifierPrompt.md — immutability check step (ISC 6760)", () => {
 
   it("uses git -C {{WORKTREE_PATH}} diff {{TESTWRITER_COMMIT_SHA}}..HEAD", () => {
     const hasCommand =
-      content.includes("git -C") &&
-      content.includes("TESTWRITER_COMMIT_SHA") &&
-      content.includes("..HEAD");
+      content.includes("git -C") && content.includes("TESTWRITER_COMMIT_SHA") && content.includes("..HEAD");
     expect(hasCommand).toBe(true);
   });
 
   it("runs the check for each TestWriter file", () => {
     // Should iterate over testwriter files
     const hasPerFile =
-      content.includes("each file") ||
-      content.includes("For each file") ||
-      content.includes("for each");
+      content.includes("each file") || content.includes("For each file") || content.includes("for each");
     expect(hasPerFile).toBe(true);
   });
 });
 
 describe("VerifierPrompt.md — non-empty diff is hard FAIL (ISC 9344)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("specifies that non-empty diff for TestWriter file is a hard FAIL", () => {
     const hasHardFail =
@@ -89,7 +85,9 @@ describe("VerifierPrompt.md — non-empty diff is hard FAIL (ISC 9344)", () => {
 
 describe("VerifierPrompt.md — accepts {{TESTWRITER_FILES}} and {{TESTWRITER_COMMIT_SHA}} (ISC 7900)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("contains {{TESTWRITER_FILES}} template variable", () => {
     expect(content).toContain("{{TESTWRITER_FILES}}");

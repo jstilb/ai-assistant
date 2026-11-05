@@ -67,12 +67,9 @@ export async function recoverOrphanedItems(deps: OrphanRecoveryDeps): Promise<nu
     const createdMs = new Date(createdAt).getTime();
     if (now - createdMs > HUMAN_PENDING_STALE_MS) {
       const daysSince = Math.floor((now - createdMs) / (24 * 60 * 60 * 1000));
-      deps.notifier.emitNeedsReviewNotification(
-        item.id,
-        item.title,
-        "STALE",
-        [`blocked item is ${daysSince} days old — needs Jm attention`]
-      );
+      deps.notifier.emitNeedsReviewNotification(item.id, item.title, "STALE", [
+        `blocked item is ${daysSince} days old — needs Jm attention`,
+      ]);
     }
   }
 
@@ -80,13 +77,13 @@ export async function recoverOrphanedItems(deps: OrphanRecoveryDeps): Promise<nu
     if (item.status !== "in_progress") continue;
 
     // Path 1: Verified but never completed — route through complete() for provenance checks
-    if (
-      item.verification?.status === "verified" &&
-      item.verification.verdict === "PASS"
-    ) {
+    if (item.verification?.status === "verified" && item.verification.verdict === "PASS") {
       const rows = deps.iscManager.load(item.id);
-      if (rows.length > 0 && rows.every(r => r.status === "VERIFIED")) {
-        const completeResult = deps.completeSync(item.id, "Auto-completed by orphan recovery (verified but never completed)");
+      if (rows.length > 0 && rows.every((r) => r.status === "VERIFIED")) {
+        const completeResult = deps.completeSync(
+          item.id,
+          "Auto-completed by orphan recovery (verified but never completed)",
+        );
         if (completeResult.success) {
           recovered++;
         }
@@ -102,7 +99,10 @@ export async function recoverOrphanedItems(deps: OrphanRecoveryDeps): Promise<nu
       if (now - lastEventMs > EVENT_INACTIVITY_THRESHOLD_MS) {
         // Stamp stallReason before transitioning to blocked.
         // Use setItemMetadata if available (real WorkQueue), or setMetadata, or direct mutation (test mocks).
-        const queueWithMeta = deps.queue as { setItemMetadata?: (id: string, meta: Record<string, unknown>) => void; setMetadata?: (id: string, meta: Record<string, unknown>) => void };
+        const queueWithMeta = deps.queue as {
+          setItemMetadata?: (id: string, meta: Record<string, unknown>) => void;
+          setMetadata?: (id: string, meta: Record<string, unknown>) => void;
+        };
         if (typeof queueWithMeta.setItemMetadata === "function") {
           queueWithMeta.setItemMetadata(item.id, { stallReason: "event_inactivity" });
         } else if (typeof queueWithMeta.setMetadata === "function") {
@@ -113,12 +113,9 @@ export async function recoverOrphanedItems(deps: OrphanRecoveryDeps): Promise<nu
           (item.metadata as Record<string, unknown>).stallReason = "event_inactivity";
         }
         deps.queue.updateStatus(item.id, "blocked");
-        deps.notifier.emitNeedsReviewNotification(
-          item.id,
-          item.title,
-          "STALE",
-          [`event-inactivity stall: lastEventAt is ${Math.round((now - lastEventMs) / 60000)}m ago (threshold: ${Math.round(EVENT_INACTIVITY_THRESHOLD_MS / 60000)}m)`]
-        );
+        deps.notifier.emitNeedsReviewNotification(item.id, item.title, "STALE", [
+          `event-inactivity stall: lastEventAt is ${Math.round((now - lastEventMs) / 60000)}m ago (threshold: ${Math.round(EVENT_INACTIVITY_THRESHOLD_MS / 60000)}m)`,
+        ]);
         recovered++;
         continue;
       }
@@ -138,19 +135,22 @@ export async function recoverOrphanedItems(deps: OrphanRecoveryDeps): Promise<nu
     // Routes through retry() for consistent strategy escalation, guard logging, and proxy creation
     if (item.startedAt && item.verification) {
       const startedMs = new Date(item.startedAt).getTime();
-      if (now - startedMs > STALE_THRESHOLD_MS &&
-          (item.verification.status === "needs_review" || item.verification.status === "failed")) {
+      if (
+        now - startedMs > STALE_THRESHOLD_MS &&
+        (item.verification.status === "needs_review" || item.verification.status === "failed")
+      ) {
         const recoveryError = `Orphan recovery: stale >4h with verification.status="${item.verification.status}"`;
         // S3b: derive a STRUCTURED faultClass from item metadata instead of leaving
         // retry() to re-derive it from the prose recoveryError string.
         const meta = item.metadata as WorkItemMetadata | undefined;
         const derivedFault: FaultClass | undefined =
-          (((meta?.environmentBlockCount as number) ?? 0) > 0) ? "environment"
-          : ((meta?.infraErrors?.length ?? 0) > 0) ? "infrastructure"
-          : undefined;
+          ((meta?.environmentBlockCount as number) ?? 0) > 0
+            ? "environment"
+            : (meta?.infraErrors?.length ?? 0) > 0
+              ? "infrastructure"
+              : undefined;
         await deps.retry(item.id, recoveryError, derivedFault);
         recovered++;
-        continue;
       }
     }
   }

@@ -6,9 +6,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TransitionGuard } from "./TransitionGuard.ts";
 import { WorkQueue, type WorkItem, type WorkItemVerification } from "./WorkQueue.ts";
 import type { SkepticalReviewResult } from "./SkepticalVerifier.ts";
@@ -51,7 +51,7 @@ function readAuditEntries(auditPath: string): Array<Record<string, unknown>> {
   try {
     const raw = readFileSync(auditPath, "utf-8").trim();
     if (!raw) return [];
-    return raw.split("\n").map(line => JSON.parse(line) as Record<string, unknown>);
+    return raw.split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
   } catch {
     return [];
   }
@@ -141,9 +141,7 @@ describe("TransitionGuard", () => {
       // Only tier 1 — no higher tiers exist, so the invariant cannot fire
       const reviewResult = makeReviewResult({
         finalVerdict: "PASS",
-        tiers: [
-          { tier: 1, verdict: "PASS", confidence: 0.9, concerns: [], costEstimate: 0.001, latencyMs: 100 },
-        ],
+        tiers: [{ tier: 1, verdict: "PASS", confidence: 0.9, concerns: [], costEstimate: 0.001, latencyMs: 100 }],
       });
 
       const result = guard.setVerification(testItem.id, verification, reviewResult, 0);
@@ -197,9 +195,7 @@ describe("TransitionGuard", () => {
   describe("Promotion gate", () => {
     test("canPromote with tier1 PASS confidence 0.9 → allowed", () => {
       const reviewResult = makeReviewResult({
-        tiers: [
-          { tier: 1, verdict: "PASS", confidence: 0.9, concerns: [], costEstimate: 0.001, latencyMs: 100 },
-        ],
+        tiers: [{ tier: 1, verdict: "PASS", confidence: 0.9, concerns: [], costEstimate: 0.001, latencyMs: 100 }],
       });
 
       const result = guard.canPromote(reviewResult);
@@ -224,9 +220,7 @@ describe("TransitionGuard", () => {
 
     test("canPromote with tier1 PASS confidence 0.6 → rejected (below 0.8)", () => {
       const reviewResult = makeReviewResult({
-        tiers: [
-          { tier: 1, verdict: "PASS", confidence: 0.6, concerns: [], costEstimate: 0.001, latencyMs: 100 },
-        ],
+        tiers: [{ tier: 1, verdict: "PASS", confidence: 0.6, concerns: [], costEstimate: 0.001, latencyMs: 100 }],
       });
 
       const result = guard.canPromote(reviewResult);
@@ -250,7 +244,7 @@ describe("TransitionGuard", () => {
 
       const entries = readAuditEntries(auditPath);
       expect(entries.length).toBeGreaterThanOrEqual(1);
-      expect(entries.some(e => e.itemId === testItem.id)).toBe(true);
+      expect(entries.some((e) => e.itemId === testItem.id)).toBe(true);
     });
 
     test("every updateStatus call produces audit entry", () => {
@@ -259,7 +253,7 @@ describe("TransitionGuard", () => {
       const entries = readAuditEntries(auditPath);
       expect(entries.length).toBeGreaterThanOrEqual(1);
 
-      const entry = entries.find(e => e.action === "status_change");
+      const entry = entries.find((e) => e.action === "status_change");
       expect(entry).toBeDefined();
       expect(entry?.itemId).toBe(testItem.id);
       expect(entry?.to).toBe("in_progress");
@@ -273,7 +267,7 @@ describe("TransitionGuard", () => {
       guard.setVerification(testItem.id, verification, reviewResult, 2);
 
       const entries = readAuditEntries(auditPath);
-      const downgradeEntry = entries.find(e => e.action === "guard_downgrade");
+      const downgradeEntry = entries.find((e) => e.action === "guard_downgrade");
       expect(downgradeEntry).toBeDefined();
       expect(downgradeEntry?.from).toBe("PASS");
       expect(downgradeEntry?.to).toBe("NEEDS_REVIEW");
@@ -286,11 +280,11 @@ describe("TransitionGuard", () => {
       guard.logCaughtError(testItem.id, "SkepticalVerifier.judge", error);
 
       const entries = readAuditEntries(auditPath);
-      const errorEntry = entries.find(e => e.action === "catch_logged");
+      const errorEntry = entries.find((e) => e.action === "catch_logged");
       expect(errorEntry).toBeDefined();
       expect(errorEntry?.itemId).toBe(testItem.id);
       expect(typeof errorEntry?.reason).toBe("string");
-      expect((errorEntry?.reason as string)).toContain("something went wrong in tier 2");
+      expect(errorEntry?.reason as string).toContain("something went wrong in tier 2");
     });
   });
 
@@ -350,12 +344,12 @@ describe("TransitionGuard", () => {
       const result = guard.validateAuditIntegrity();
       expect(result.valid).toBe(false);
       expect(result.gaps.length).toBe(1);
-      expect(result.gaps[0].itemId).toBe("completed-no-audit");
+      expect(result.gaps[0]?.itemId).toBe("completed-no-audit");
     });
 
     test("reports valid when all terminal items have audit entries", () => {
       const auditPath = join(tmpDir, "full-audit.jsonl");
-      const { writeFileSync } = require("fs");
+      const { writeFileSync } = require("node:fs");
       writeFileSync(auditPath, JSON.stringify({ itemId: "audited-item", action: "status_change" }) + "\n");
 
       const queue = WorkQueue._createForTesting([

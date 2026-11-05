@@ -27,19 +27,39 @@
  *   bun run WorkOrchestrator.ts report [--json]       # Structured report: completed/failed/inProgress/blocked/needsReview
  */
 
-import { readFileSync, existsSync, readdirSync } from "fs";
-import { join, isAbsolute } from "path";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { join, isAbsolute } from "node:path";
 import { deriveFollowOnFromSpec, type FollowOnLoop } from "./FollowOnLoops.ts";
-import { WorkQueue, type WorkItem, type WorkItemAttempt, type WorkItemVerification, type WorkItemMetadata, type EffortLevel, type Priority } from "./WorkQueue.ts";
+import {
+  WorkQueue,
+  type WorkItem,
+  type WorkItemAttempt,
+  type WorkItemMetadata,
+  type EffortLevel,
+  type Priority,
+} from "./WorkQueue.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
 import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 // cross-skill-allowed: deliberate observability integration — orchestrator emits workflow/completion/error/decision traces to AgentMonitor's trace pipeline
-import { emitWorkflowStart, emitCompletion, emitError, emitDecision } from "../../../System/AgentMonitor/Tools/TraceEmitter.ts";
+import {
+  emitWorkflowStart,
+  emitCompletion,
+  emitError,
+  emitDecision,
+} from "../../../System/AgentMonitor/Tools/TraceEmitter.ts";
 import { emit as emitTrace } from "../../../../lib/core/UnifiedEventSink.ts";
 import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
 // cross-skill-allowed: deliberate observability integration — orchestrator streams live progress into AgentMonitor's streaming pipeline
-import { startStreamingPipeline, type StreamingPipeline } from "../../../System/AgentMonitor/Tools/StreamingPipeline.ts";
-import { SkepticalVerifier, type ItemReviewSummary, type SkepticalReviewResult, type InferenceFn, type ProjectContext } from "./SkepticalVerifier.ts";
+import {
+  startStreamingPipeline,
+  type StreamingPipeline,
+} from "../../../System/AgentMonitor/Tools/StreamingPipeline.ts";
+import {
+  SkepticalVerifier,
+  type ItemReviewSummary,
+  type SkepticalReviewResult,
+  type InferenceFn,
+} from "./SkepticalVerifier.ts";
 import { TransitionGuard } from "./TransitionGuard.ts";
 // SpecParser retired: comprehension (LLMSpecComprehension) is the sole ISC source.
 // ShadowComprehension retired: comprehension is primary (generateISC), not shadow.
@@ -57,8 +77,17 @@ import { CompletionPipeline, type TechDebtInput } from "./CompletionPipeline.ts"
 import { TechDebtRegistry } from "../../AutoMaintenance/Tools/TechDebtRegistry.ts";
 import { Integrator } from "./Integrator.ts";
 import { extractPathsFromDiffStat as _extractPathsFromDiffStat } from "./lib/verifier/index.ts";
-import { isCatastrophic as isCatastrophicCmd, isProtectedBranch as isProtectedBranchName } from "./lib/orchestrator/CatastrophicGate.ts";
-import { statusReport, categorizeReport, reportMarkdown as reportMarkdownFn, generatePriorWorkSummary as generatePriorWorkSummaryFn, type WorkReport } from "./lib/orchestrator/Reporting.ts";
+import {
+  isCatastrophic as isCatastrophicCmd,
+  isProtectedBranch as isProtectedBranchName,
+} from "./lib/orchestrator/CatastrophicGate.ts";
+import {
+  statusReport,
+  categorizeReport,
+  reportMarkdown as reportMarkdownFn,
+  generatePriorWorkSummary as generatePriorWorkSummaryFn,
+  type WorkReport,
+} from "./lib/orchestrator/Reporting.ts";
 import {
   annotateHumanGatedPhases,
   formatISCTableForAgents as formatISCTableForAgentsFn,
@@ -69,8 +98,6 @@ import {
 } from "./lib/orchestrator/PhaseBookkeeping.ts";
 import { verifyPhase as verifyPhaseFn } from "./lib/orchestrator/Verification.ts";
 import {
-  tryResolveGitRoot as tryResolveGitRootFn,
-  resolveRepoRoot as resolveRepoRootFn,
   ensureFeatureBranch as ensureFeatureBranchFn,
   cleanupWorktree as cleanupWorktreeFn,
 } from "./lib/orchestrator/WorktreeOps.ts";
@@ -88,9 +115,9 @@ import {
  * Used by the verification pipeline to dispatch surface-appropriate checks.
  */
 export type WorkSurface =
-  | "browser"      // UI components: .tsx/.jsx under components/pages/containers + UI keywords in spec
-  | "cli"          // stdin/stdout/argv interfaces: bin/ files or CLI keywords in spec
-  | "api"          // HTTP endpoints/routes: endpoint/route/HTTP method keywords in spec
+  | "browser" // UI components: .tsx/.jsx under components/pages/containers + UI keywords in spec
+  | "cli" // stdin/stdout/argv interfaces: bin/ files or CLI keywords in spec
+  | "api" // HTTP endpoints/routes: endpoint/route/HTTP method keywords in spec
   | "integration"; // Everything else: internal TypeScript, hooks, state, plumbing
 
 export type ISCRowExecutability = "automatable" | "human-required" | "deferred";
@@ -160,7 +187,7 @@ export interface ISCRow {
 export interface PhaseExecutionInfo {
   phaseNumber: number;
   phaseName: string;
-  iscRowIds: number[];          // ISCRow.id values (NOT spec ISCCriterion.number)
+  iscRowIds: number[]; // ISCRow.id values (NOT spec ISCCriterion.number)
   maxIterations: number;
   usedPositionalFallback: boolean;
   /**
@@ -194,9 +221,9 @@ export interface PrepareResult {
 }
 
 export interface RepoContext {
-  name: string;       // "timeseries-forecasting"
-  cwd: string;        // absolute path to repo
-  startSha?: string;  // git SHA at work start
+  name: string; // "timeseries-forecasting"
+  cwd: string; // absolute path to repo
+  startSha?: string; // git SHA at work start
   pathFilter?: string[];
 }
 
@@ -206,6 +233,7 @@ export type VerifyContext =
 
 // CatastrophicAction moved to VerificationUtils.ts — re-export for backward compat
 export type { CatastrophicAction } from "./VerificationUtils.ts";
+import type { CatastrophicAction } from "./VerificationUtils.ts";
 
 // ============================================================================
 // Constants
@@ -254,11 +282,6 @@ export class WorkOrchestrator {
   /** Injectable inference function for Strategy 1.5 (Haiku ISC extraction) */
   private inferenceFn?: InferenceFn;
   private monitorPipeline?: StreamingPipeline;
-  /**
-   * ISC 1: Injectable notifier for notifications — overrides NotificationDispatcher.
-   * Tests inject a mock with a notify(msg) method to assert notification dispatch.
-   */
-  private _injectedNotifier?: { notify: (msg: string) => void; emitNeedsReviewNotification?: () => void };
 
   /**
    * Options-based constructor overload for DI in tests.
@@ -267,25 +290,27 @@ export class WorkOrchestrator {
    */
   constructor(opts: {
     queuePath?: string;
-    notifier?: { notify: (msg: string) => void; emitNeedsReviewNotification?: () => void };
     inferenceFn?: InferenceFn;
   });
   /** Positional constructor — legacy form used by production code and existing tests */
   constructor(queue?: WorkQueue, verifier?: SkepticalVerifier, inferenceFn?: InferenceFn);
   constructor(
-    queueOrOpts?: WorkQueue | {
-      queuePath?: string;
-      notifier?: { notify: (msg: string) => void; emitNeedsReviewNotification?: () => void };
-      inferenceFn?: InferenceFn;
-    },
+    queueOrOpts?:
+      | WorkQueue
+      | {
+          queuePath?: string;
+          inferenceFn?: InferenceFn;
+        },
     verifier?: SkepticalVerifier,
     inferenceFn?: InferenceFn,
   ) {
     // Detect options-object form: has known option keys and is not a WorkQueue instance
     if (queueOrOpts && !(queueOrOpts instanceof WorkQueue) && typeof queueOrOpts === "object") {
-      const opts = queueOrOpts as { queuePath?: string; notifier?: { notify: (msg: string) => void }; inferenceFn?: InferenceFn };
+      const opts = queueOrOpts as {
+        queuePath?: string;
+        inferenceFn?: InferenceFn;
+      };
       this.queue = new WorkQueue(opts.queuePath);
-      this._injectedNotifier = opts.notifier;
       inferenceFn = opts.inferenceFn;
       verifier = undefined;
     } else {
@@ -298,9 +323,12 @@ export class WorkOrchestrator {
     this.iscGenerator = new ISCGenerator(
       this.iscManager,
       (item) => this.verifyCtxResolver.resolveItemCwd(item),
-      (description) => this.iscManager.classifyExecutability({ id: 0, description, status: "PENDING", parallel: false }),
+      (description) =>
+        this.iscManager.classifyExecutability({ id: 0, description, status: "PENDING", parallel: false }),
       this.inferenceFn, // threads injected inferenceFn (e.g. from _createForTesting) into comprehendSpec
-      (itemId, spec) => { this.queue.setMetadata(itemId, { comprehendedSpec: spec }); },
+      (itemId, spec) => {
+        this.queue.setMetadata(itemId, { comprehendedSpec: spec });
+      },
     );
     this.notificationDispatcher = new NotificationDispatcher({
       queue: this.queue,
@@ -312,7 +340,9 @@ export class WorkOrchestrator {
     try {
       techDebtRegistry = new TechDebtRegistry();
     } catch (err) {
-      console.warn(`[WorkOrchestrator] TechDebtRegistry construction failed — debt recording disabled: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(
+        `[WorkOrchestrator] TechDebtRegistry construction failed — debt recording disabled: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     this.completionPipeline = new CompletionPipeline({
@@ -331,7 +361,8 @@ export class WorkOrchestrator {
       // the Integrator's interactive-session-lock defer for EVERY completion — safe
       // when only interactive humans ran report-done, unsafe now that HeadlessWorkDriver
       // runs it unattended nightly. See WorkOrchestratorCLI.ts's --interactive-session flag.
-      mergeItem: (id, skipSessionLock) => new Integrator(this.queue).mergeItem(id, "direct", { skipSessionLock: skipSessionLock ?? false }),
+      mergeItem: (id, skipSessionLock) =>
+        new Integrator(this.queue).mergeItem(id, "direct", { skipSessionLock: skipSessionLock ?? false }),
       emitCompletion: (id, label) => emitCompletion(id, label),
       emitInsight: (insight) => memoryStore.capture(insight).then(() => undefined),
       // evals-rebuild slice C2: AgentMonitor's Phase-1 batch-evaluation pipeline
@@ -344,13 +375,18 @@ export class WorkOrchestrator {
       // silently degrading to a broken import. See CompletionPipeline.ts's
       // emitTraces stage: this fires fire-and-forget with its rejection swallowed,
       // so a no-op is behavior-neutral for every OTHER completion side effect.
-      runEvaluatorPipeline: async () => { /* no-op — see comment above */ },
+      runEvaluatorPipeline: async () => {
+        /* no-op — see comment above */
+      },
       techDebtRegistry,
     });
   }
 
   /** DI constructor for tests — no filesystem, SkepticalVerifier stubbed by default */
-  static _createForTesting(queue: WorkQueue, opts?: { verifierResult?: SkepticalReviewResult; inferenceFn?: InferenceFn }): WorkOrchestrator {
+  static _createForTesting(
+    queue: WorkQueue,
+    opts?: { verifierResult?: SkepticalReviewResult; inferenceFn?: InferenceFn },
+  ): WorkOrchestrator {
     const stubResult: SkepticalReviewResult = opts?.verifierResult ?? {
       finalVerdict: "PASS",
       tiers: [
@@ -385,7 +421,7 @@ export class WorkOrchestrator {
    */
   async readOrchestrationLearnings(
     // Reads process.env.HOME only (ignores KAYA_HOME) → defaultKayaHome() preserves exact behavior.
-    failuresDir: string = join(defaultKayaHome(), "MEMORY", "LEARNING", "FAILURES")
+    failuresDir: string = join(defaultKayaHome(), "MEMORY", "LEARNING", "FAILURES"),
   ): Promise<string> {
     try {
       if (!existsSync(failuresDir)) return "";
@@ -396,9 +432,10 @@ export class WorkOrchestrator {
         .sort()
         .reverse();
 
-      if (dateDirs.length === 0) return "";
+      const newestDate = dateDirs[0];
+      if (newestDate === undefined) return "";
 
-      const mostRecentDir = join(failuresDir, dateDirs[0]);
+      const mostRecentDir = join(failuresDir, newestDate);
       const files = readdirSync(mostRecentDir)
         .filter((f) => f.endsWith(".md"))
         .sort()
@@ -413,7 +450,7 @@ export class WorkOrchestrator {
         // Extract ## Summary section text
         const match = content.match(/## Summary\s*\n+([^\n#][^\n]*)/);
         if (match) {
-          summaries.push(`- ${match[1].trim()}`);
+          summaries.push(`- ${(match[1] ?? "").trim()}`);
         }
       }
 
@@ -443,7 +480,11 @@ export class WorkOrchestrator {
     this.lastRecoveryAt = Date.now();
 
     // Audit integrity check (non-fatal — reports gaps but never blocks init)
-    try { this.guard.validateAuditIntegrity(); } catch (e) { logFailure("WorkOrchestrator:validateAuditIntegrity", e); }
+    try {
+      this.guard.validateAuditIntegrity();
+    } catch (e) {
+      logFailure("WorkOrchestrator:validateAuditIntegrity", e);
+    }
 
     // Reconcile: sync completed/failed work-queue items back to approved-work JSONL
     const reconciled = await this.reconcileApprovedWork();
@@ -451,7 +492,10 @@ export class WorkOrchestrator {
     // Start live monitoring pipeline — zero LLM cost, fail-open
     try {
       this.monitorPipeline = startStreamingPipeline({ dashboard: false, quiet: true });
-    } catch {}
+    } catch (e) {
+      // Fail-open (monitoring is optional) but visible.
+      logFailure("WorkOrchestrator:startStreamingPipeline", e);
+    }
 
     // Load recent failure patterns — non-fatal, prepended to message when present
     const learningsWarning = await this.readOrchestrationLearnings();
@@ -472,7 +516,11 @@ export class WorkOrchestrator {
 
   /** Stop the live monitoring pipeline if running */
   stopMonitoring(): void {
-    try { this.monitorPipeline?.stop(); } catch {}
+    try {
+      this.monitorPipeline?.stop();
+    } catch (e) {
+      logFailure("WorkOrchestrator:stopMonitoring", e);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -482,9 +530,7 @@ export class WorkOrchestrator {
   /**
    * Returns the next batch of ready work items from the queue.
    */
-  async nextBatch(
-    max: number = 5,
-  ): Promise<{ items: WorkItem[]; blocked: number }> {
+  async nextBatch(max: number = 5): Promise<{ items: WorkItem[]; blocked: number }> {
     // Periodic orphan recovery (M4) — every 30 minutes
     if (Date.now() - this.lastRecoveryAt > 30 * 60 * 1000) {
       await this.recoverOrphanedItems();
@@ -501,7 +547,8 @@ export class WorkOrchestrator {
 
   async prepare(itemId: string, effortOverride?: EffortLevel): Promise<PrepareResult> {
     const item = this.queue.getItem(itemId);
-    if (!item) return { success: false, effort: "STANDARD", iscRows: [], maxIterations: 10, error: `Not found: ${itemId}` };
+    if (!item)
+      return { success: false, effort: "STANDARD", iscRows: [], maxIterations: 10, error: `Not found: ${itemId}` };
 
     // Emit trace: prepare-start
     try {
@@ -513,7 +560,9 @@ export class WorkOrchestrator {
         agentId: "executive",
         payload: { phase: "prepare-start", title: item.title },
       });
-    } catch { /* fail-open */ }
+    } catch {
+      /* fail-open */
+    }
 
     // Effort = a single generous DEFAULT cap (iteration + wall-clock), not a
     // keyword-derived tier. Per "determinism must earn its place", caps are plain
@@ -557,7 +606,7 @@ export class WorkOrchestrator {
               phaseNumber: ph.number,
               phaseName: ph.name,
               iscRowIds,
-              maxIterations: Math.max(3, Math.ceil(totalMaxIter * phaseISCCount / totalISCCount)),
+              maxIterations: Math.max(3, Math.ceil((totalMaxIter * phaseISCCount) / totalISCCount)),
               usedPositionalFallback: false,
             };
           })
@@ -579,9 +628,7 @@ export class WorkOrchestrator {
               resumeFromPhase = firstIncomplete.phaseNumber;
             }
             // Collect row IDs from completed phases
-            completedRowIds = phases
-              .filter((p) => completedSet.has(p.phaseNumber))
-              .flatMap((p) => p.iscRowIds);
+            completedRowIds = phases.filter((p) => completedSet.has(p.phaseNumber)).flatMap((p) => p.iscRowIds);
           }
         }
       }
@@ -608,9 +655,7 @@ export class WorkOrchestrator {
       const humanRowDescs = rows
         .filter((r) => humanRowIds.has(r.id) && r.disposition === "human-required")
         .map((r) => `- ${r.description}`);
-      const phaseList = humanGatedPhases
-        .map((p) => `Phase ${p.phaseNumber} (${p.phaseName})`)
-        .join(", ");
+      const phaseList = humanGatedPhases.map((p) => `Phase ${p.phaseNumber} (${p.phaseName})`).join(", ");
       const description =
         `Autonomous work is proceeding on the non-human phases. The following ` +
         `phase(s) need YOU because they require an action Kaya cannot perform ` +
@@ -622,7 +667,9 @@ export class WorkOrchestrator {
         this.queue.setMetadata(itemId, { humanPhaseTaskFiled: true });
       } catch (e) {
         // Non-fatal: don't block prepare on escalation-task filing.
-        console.warn(`[WorkOrchestrator] human-phase task filing failed (non-fatal): ${e instanceof Error ? e.message : e}`);
+        console.warn(
+          `[WorkOrchestrator] human-phase task filing failed (non-fatal): ${e instanceof Error ? e.message : e}`,
+        );
       }
     }
 
@@ -653,7 +700,11 @@ export class WorkOrchestrator {
     }
     this.iscManager.resetToPending(itemId);
     // Emit trace — fail-open (never interrupts orchestration)
-    try { emitWorkflowStart(itemId, "executive", { title: item.title }); } catch {}
+    try {
+      emitWorkflowStart(itemId, "executive", { title: item.title });
+    } catch (e) {
+      logFailure("WorkOrchestrator:emitWorkflowStart", e, { itemId });
+    }
     // Emit trace: agent-spawn — marks the moment the builder agent is dispatched
     try {
       emitTrace({
@@ -662,9 +713,15 @@ export class WorkOrchestrator {
         severity: "debug",
         workflowId: itemId,
         agentId: "executive",
-        payload: { phase: "agent-spawn", title: item.title, worktreePath: (item.metadata as WorkItemMetadata)?.worktreePath },
+        payload: {
+          phase: "agent-spawn",
+          title: item.title,
+          worktreePath: (item.metadata as WorkItemMetadata)?.worktreePath,
+        },
       });
-    } catch { /* fail-open */ }
+    } catch {
+      /* fail-open */
+    }
     return true;
   }
 
@@ -676,28 +733,34 @@ export class WorkOrchestrator {
    * Atomic pipeline: mark rows done → record execution → verify → simulate → complete.
    * This is the ONLY public path to completion for non-TRIVIAL items.
    */
-  async reportDone(itemId: string, agentResults: {
-    completedRowIds: number[];
-    failedRowIds?: number[];
-    adversarialConcerns?: string[];
-    executionLog?: string[];
-    rowEvidence?: Record<number, { files?: string[]; commands?: string[]; summary?: string }>;
-    /** ISC 4: Tech debt the agent introduced during this work — recorded to the registry on completion (maps from CLI --debt-incurred). Flows through to CompletionPipeline.run via agentResults. */
-    debtIncurred?: TechDebtInput[];
-  }, opts: {
-    /**
-     * E2: explicit interactive opt-in to bypass the Integrator's interactive-session-lock
-     * defer on this item's auto-merge. DEFAULT false — the lock stays respected unless a
-     * caller explicitly sets this true. Only WorkOrchestratorCLI's --interactive-session
-     * flag (the attended Orchestrate.md Executive flow, run inside Jm's own interactive
-     * session — see that flag's doc comment) ever sets this true. The unattended
-     * HeadlessWorkDriver never does, so a fresh lock always defers its merges.
-     */
-    skipSessionLock?: boolean;
-  } = {}): Promise<{ success: boolean; reason?: string; skepticalReview?: SkepticalReviewResult; faultClass?: FaultClass }> {
+  async reportDone(
+    itemId: string,
+    agentResults: {
+      completedRowIds: number[];
+      failedRowIds?: number[];
+      adversarialConcerns?: string[];
+      executionLog?: string[];
+      rowEvidence?: Record<number, { files?: string[]; commands?: string[]; summary?: string }>;
+      /** ISC 4: Tech debt the agent introduced during this work — recorded to the registry on completion (maps from CLI --debt-incurred). Flows through to CompletionPipeline.run via agentResults. */
+      debtIncurred?: TechDebtInput[];
+    },
+    opts: {
+      /**
+       * E2: explicit interactive opt-in to bypass the Integrator's interactive-session-lock
+       * defer on this item's auto-merge. DEFAULT false — the lock stays respected unless a
+       * caller explicitly sets this true. Only WorkOrchestratorCLI's --interactive-session
+       * flag (the attended Orchestrate.md Executive flow, run inside Jm's own interactive
+       * session — see that flag's doc comment) ever sets this true. The unattended
+       * HeadlessWorkDriver never does, so a fresh lock always defers its merges.
+       */
+      skipSessionLock?: boolean;
+    } = {},
+  ): Promise<{ success: boolean; reason?: string; skepticalReview?: SkepticalReviewResult; faultClass?: FaultClass }> {
     const itemForMeta = this.queue.getItem(itemId);
     if (!itemForMeta?.metadata?.worktreePath) {
-      console.warn(`[reportDone] WARNING: item ${itemId} has no worktree metadata. Work may have been done in the main repo directory.`);
+      console.warn(
+        `[reportDone] WARNING: item ${itemId} has no worktree metadata. Work may have been done in the main repo directory.`,
+      );
     }
 
     const result = await this.completionPipeline.run(itemId, agentResults, { skipSessionLock: opts.skipSessionLock });
@@ -705,8 +768,13 @@ export class WorkOrchestrator {
     if (result.kind === "completed") {
       // Slice 4: a verified+completed loop refills the queue with its next follow-on
       // loop (sequential — gated on this item). Fail-open: never block completion.
-      try { await this.enqueueNextFollowOn(itemId); }
-      catch (e) { console.warn(`[reportDone] follow-on enqueue failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : String(e)}`); }
+      try {
+        await this.enqueueNextFollowOn(itemId);
+      } catch (e) {
+        console.warn(
+          `[reportDone] follow-on enqueue failed for ${itemId} (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
       return { success: true, skepticalReview: result.skepticalReview };
     }
     if (result.kind === "blocked-on-human") {
@@ -760,8 +828,11 @@ export class WorkOrchestrator {
     if (stubs.length === 0) return { enqueued: false, reason: "no follow-on loops declared" };
 
     const [next, ...rest] = stubs;
+    if (!next) return { enqueued: false, reason: "no follow-on loops declared" };
     const resolvedSpec = next.specPath
-      ? (isAbsolute(next.specPath) ? next.specPath : join(KAYA_HOME, next.specPath))
+      ? isAbsolute(next.specPath)
+        ? next.specPath
+        : join(KAYA_HOME, next.specPath)
       : undefined;
     const epicOrigin = (meta?.epicOriginItemId as string | undefined) ?? itemId;
 
@@ -778,8 +849,14 @@ export class WorkOrchestrator {
     });
 
     this.queue.setMetadata(itemId, { followOnEnqueued: true, nextLoopItemId: newItem.id });
-    console.warn(`[WorkOrchestrator] Enqueued follow-on loop "${next.title}" (${newItem.id}) gated on ${itemId}; ${rest.length} loop(s) remaining in epic.`);
-    try { emitDecision(itemId, "executive", 1); } catch {}
+    console.warn(
+      `[WorkOrchestrator] Enqueued follow-on loop "${next.title}" (${newItem.id}) gated on ${itemId}; ${rest.length} loop(s) remaining in epic.`,
+    );
+    try {
+      emitDecision(itemId, "executive", 1);
+    } catch (e) {
+      logFailure("WorkOrchestrator:emitDecision", e, { itemId });
+    }
     return { enqueued: true, newItemId: newItem.id, remaining: rest.length };
   }
 
@@ -788,7 +865,7 @@ export class WorkOrchestrator {
     const item = this.queue.getItem(itemId);
     if (!item) return { success: false, reason: `Not found: ${itemId}` };
 
-    if (!item.verification || item.verification.status !== "verified") {
+    if (item.verification?.status !== "verified") {
       const detail = item.verification
         ? `Verification status is "${item.verification.status}" (verdict: ${item.verification.verdict}). Run verify first.`
         : "No verification record found. Run verify first.";
@@ -799,21 +876,31 @@ export class WorkOrchestrator {
     const effort = item.effort || "STANDARD";
     if (effort !== "TRIVIAL") {
       if (item.verification.verifiedBy !== "skeptical_verifier") {
-        return { success: false, reason: `Completion blocked: verification was "${item.verification.verifiedBy}", not "skeptical_verifier". Non-TRIVIAL items require pipeline verification.` };
+        return {
+          success: false,
+          reason: `Completion blocked: verification was "${item.verification.verifiedBy}", not "skeptical_verifier". Non-TRIVIAL items require pipeline verification.`,
+        };
       }
-      if (!item.verification.tiersExecuted || !item.verification.tiersExecuted.includes(1)) {
-        return { success: false, reason: `Completion blocked: Tier 1 code checks did not execute. tiersExecuted: [${item.verification.tiersExecuted || []}]` };
+      if (!item.verification.tiersExecuted?.includes(1)) {
+        return {
+          success: false,
+          reason: `Completion blocked: Tier 1 code checks did not execute. tiersExecuted: [${item.verification.tiersExecuted || []}]`,
+        };
       }
     }
 
     // SECONDARY GATE (defense in depth): ISC check if available (in-memory or persisted)
     const rows = this.loadISC(itemId);
     if (rows) {
-      const verified = rows.filter(r => r.status === "VERIFIED").length;
+      const verified = rows.filter((r) => r.status === "VERIFIED").length;
       const iscRate = rows.length > 0 ? verified / rows.length : 0;
       // Emit decision trace with ISC completion rate — fail-open
-      try { emitDecision(itemId, "executive", iscRate); } catch {}
-      const unverified = rows.filter(r => r.status !== "VERIFIED");
+      try {
+        emitDecision(itemId, "executive", iscRate);
+      } catch (e) {
+        logFailure("WorkOrchestrator:emitDecision", e, { itemId });
+      }
+      const unverified = rows.filter((r) => r.status !== "VERIFIED");
       if (unverified.length > 0) {
         return { success: false, reason: `${unverified.length} ISC rows not verified (in-memory check).` };
       }
@@ -873,7 +960,7 @@ export class WorkOrchestrator {
     // 1. Structured faultClass already decided by the verifier (SkepticalReviewResult.faultClass)
     if (faultClass) return faultClass;
     // 2. Source-tagged infrastructure faults (tagged at origin in generateISC/verify)
-    if (failures?.some(f => f.infraFault)) return "infrastructure";
+    if (failures?.some((f) => f.infraFault)) return "infrastructure";
     // 3. Persistent env-block recorded in metadata (survived prior runs)
     if ((((item?.metadata as WorkItemMetadata)?.environmentBlockCount as number) ?? 0) > 0) return "environment";
     // 4. Exact system-emitted sentinel — objective ground-truth (like an exit code), not prose
@@ -888,7 +975,18 @@ export class WorkOrchestrator {
    * prepare() always regenerates ISC fresh on every retry — no preserved-row path.
    * Attempt 3 (cap) → escalate to human via blocked proxy
    */
-  async retry(itemId: string, error?: string, faultClass?: FaultClass): Promise<{ retried: boolean; escalated: boolean; attempt: number; item?: WorkItem; faultClass?: FaultClass; restaged?: boolean }> {
+  async retry(
+    itemId: string,
+    error?: string,
+    faultClass?: FaultClass,
+  ): Promise<{
+    retried: boolean;
+    escalated: boolean;
+    attempt: number;
+    item?: WorkItem;
+    faultClass?: FaultClass;
+    restaged?: boolean;
+  }> {
     const item = this.queue.getItem(itemId);
     if (!item) return { retried: false, escalated: false, attempt: 0 };
 
@@ -907,7 +1005,11 @@ export class WorkOrchestrator {
         lastInfraFault: new Date().toISOString(),
       });
       console.warn(`[WorkOrchestrator] Infrastructure fault for ${itemId} — NOT consuming retry counter: ${error}`);
-      try { emitError(itemId, "executive", `[infra] ${error ?? "infrastructure fault"}`); } catch {}
+      try {
+        emitError(itemId, "executive", `[infra] ${error ?? "infrastructure fault"}`);
+      } catch (e) {
+        logFailure("WorkOrchestrator:emitError", e, { itemId });
+      }
       return { retried: false, escalated: false, attempt: item.attempts?.length ?? 0, faultClass: "infrastructure" };
     }
 
@@ -940,10 +1042,28 @@ export class WorkOrchestrator {
           },
         });
         this.queue.addDependency(itemId, proxy.id);
-        await this.notificationDispatcher.createJmTask(itemId, item.title, `Environment-blocked ${count}× — verification cannot run here. ${error ?? ""}`);
-        this.queue.setMetadata(itemId, { environmentBlockCount: count, lastEnvironmentBlock: new Date().toISOString(), lastEnvironmentBlockReason: error ?? "environment block" });
-        try { emitError(itemId, "executive", `[env-block] persistent (${count}×) — escalated: ${error ?? ""}`); } catch {}
-        return { retried: true, escalated: true, attempt: item.attempts?.length ?? 0, faultClass: "environment", item: this.queue.getItem(itemId) ?? undefined };
+        await this.notificationDispatcher.createJmTask(
+          itemId,
+          item.title,
+          `Environment-blocked ${count}× — verification cannot run here. ${error ?? ""}`,
+        );
+        this.queue.setMetadata(itemId, {
+          environmentBlockCount: count,
+          lastEnvironmentBlock: new Date().toISOString(),
+          lastEnvironmentBlockReason: error ?? "environment block",
+        });
+        try {
+          emitError(itemId, "executive", `[env-block] persistent (${count}×) — escalated: ${error ?? ""}`);
+        } catch (e) {
+          logFailure("WorkOrchestrator:emitError", e, { itemId });
+        }
+        return {
+          retried: true,
+          escalated: true,
+          attempt: item.attempts?.length ?? 0,
+          faultClass: "environment",
+          item: this.queue.getItem(itemId) ?? undefined,
+        };
       }
 
       const cooldownMs = Number(process.env.KAYA_ENV_BLOCK_COOLDOWN_MS ?? 10 * 60 * 1000);
@@ -952,11 +1072,29 @@ export class WorkOrchestrator {
         lastEnvironmentBlock: new Date().toISOString(),
         lastEnvironmentBlockReason: error ?? "environment block",
       });
-      this.guard.logIndirectTransition(itemId, item.status, "pending", `Environment block #${count}: re-staged (cooldown ${cooldownMs}ms) — not a code failure, NOT escalated`);
+      this.guard.logIndirectTransition(
+        itemId,
+        item.status,
+        "pending",
+        `Environment block #${count}: re-staged (cooldown ${cooldownMs}ms) — not a code failure, NOT escalated`,
+      );
       const restaged = this.queue.restagePending(itemId, cooldownMs);
-      console.warn(`[WorkOrchestrator] Environment block for ${itemId} (#${count}) — re-staged to pending, NOT consuming retry counter: ${error}`);
-      try { emitError(itemId, "executive", `[env-block] #${count} re-staged (cooldown ${cooldownMs}ms): ${error ?? ""}`); } catch {}
-      return { retried: restaged !== null, escalated: false, restaged: true, attempt: item.attempts?.length ?? 0, faultClass: "environment", item: this.queue.getItem(itemId) ?? undefined };
+      console.warn(
+        `[WorkOrchestrator] Environment block for ${itemId} (#${count}) — re-staged to pending, NOT consuming retry counter: ${error}`,
+      );
+      try {
+        emitError(itemId, "executive", `[env-block] #${count} re-staged (cooldown ${cooldownMs}ms): ${error ?? ""}`);
+      } catch (e) {
+        logFailure("WorkOrchestrator:emitError", e, { itemId });
+      }
+      return {
+        retried: restaged !== null,
+        escalated: false,
+        restaged: true,
+        attempt: item.attempts?.length ?? 0,
+        faultClass: "environment",
+        item: this.queue.getItem(itemId) ?? undefined,
+      };
     }
 
     const attempts = item.attempts ?? [];
@@ -964,11 +1102,15 @@ export class WorkOrchestrator {
 
     // Determine ISC progress for this attempt
     const rows = this.loadISC(itemId);
-    const iscRowsCompleted = rows?.filter(r => r.status === "DONE" || r.status === "VERIFIED").length ?? 0;
+    const iscRowsCompleted = rows?.filter((r) => r.status === "DONE" || r.status === "VERIFIED").length ?? 0;
     const iscRowsTotal = rows?.length ?? 0;
 
     // Emit error trace — fail-open
-    try { emitError(itemId, "executive", error ?? "Unknown error"); } catch {}
+    try {
+      emitError(itemId, "executive", error ?? "Unknown error");
+    } catch (e) {
+      logFailure("WorkOrchestrator:emitError", e, { itemId });
+    }
 
     // Record attempt — strategy is always "standard" (S4: retry-strategy ladder deleted)
     const attempt: WorkItemAttempt = {
@@ -988,7 +1130,7 @@ export class WorkOrchestrator {
       // recordAttempt resets item to pending (visible to getReadyItems)
       const proxyTitle = `REVIEW: ${item.title} (${attemptNumber} failed attempts)`;
       const attemptSummary = [...attempts, attempt]
-        .map(a => `  Attempt ${a.attemptNumber} (${a.strategy}): ${a.error}`)
+        .map((a) => `  Attempt ${a.attemptNumber} (${a.strategy}): ${a.error}`)
         .join("\n");
 
       const proxy = this.queue.addItem({
@@ -1010,27 +1152,46 @@ export class WorkOrchestrator {
       this.queue.addDependency(itemId, proxy.id);
 
       // Surface in the "Kaya — Needs Jm" LucidTasks project so Jm sees it on the board
-      await this.notificationDispatcher.createJmTask(itemId, item.title, `Failed ${attemptNumber} attempts. Review needed.\n${attemptSummary}`);
+      await this.notificationDispatcher.createJmTask(
+        itemId,
+        item.title,
+        `Failed ${attemptNumber} attempts. Review needed.\n${attemptSummary}`,
+      );
 
       // Now safe to record attempt (resets to pending, but dependency already blocks it)
-      this.guard.logIndirectTransition(itemId, "in_progress", "pending",
-        `Attempt ${attemptNumber}: strategy=${attempt.strategy}`);
+      this.guard.logIndirectTransition(
+        itemId,
+        "in_progress",
+        "pending",
+        `Attempt ${attemptNumber}: strategy=${attempt.strategy}`,
+      );
       this.queue.recordAttempt(itemId, attempt);
 
       // Worktree persists across retries — only complete() and fail() clean up
       // S3b: surface the structured faultClass on the escalation return too.
-      return { retried: true, escalated: true, attempt: attemptNumber, faultClass: effectiveFault, item: this.queue.getItem(itemId) ?? undefined };
+      return {
+        retried: true,
+        escalated: true,
+        attempt: attemptNumber,
+        faultClass: effectiveFault,
+        item: this.queue.getItem(itemId) ?? undefined,
+      };
     }
 
     // Record attempt and reset to pending
-    this.guard.logIndirectTransition(itemId, "in_progress", "pending",
-      `Attempt ${attemptNumber}: strategy=standard`);
+    this.guard.logIndirectTransition(itemId, "in_progress", "pending", `Attempt ${attemptNumber}: strategy=standard`);
     const updated = this.queue.recordAttempt(itemId, attempt);
     if (!updated) return { retried: false, escalated: false, attempt: attemptNumber };
 
     // Worktree persists across retries — only complete() and fail() clean up
     // S3b: surface the structured faultClass so callers (and the CLI/tests) see the classification.
-    return { retried: true, escalated: false, attempt: attemptNumber, faultClass: effectiveFault, item: this.queue.getItem(itemId) ?? undefined };
+    return {
+      retried: true,
+      escalated: false,
+      attempt: attemptNumber,
+      faultClass: effectiveFault,
+      item: this.queue.getItem(itemId) ?? undefined,
+    };
   }
 
   /**
@@ -1055,7 +1216,7 @@ export class WorkOrchestrator {
 
   private async reconcileApprovedWork(): Promise<number> {
     try {
-      const completedItems = this.queue.getAllItems().filter(i => i.status === "completed");
+      const completedItems = this.queue.getAllItems().filter((i) => i.status === "completed");
       for (const item of completedItems) {
         await applyCompletionSideEffects(item.id);
       }
@@ -1075,24 +1236,40 @@ export class WorkOrchestrator {
     if (!item) return { success: false, reason: `Not found: ${itemId}` };
 
     const rows = this.loadISC(itemId);
-    const auditBase = { itemId, itemTitle: item.title, tiersExecuted: item.verification?.tiersExecuted ?? [], verificationCost: item.verification?.verificationCost ?? 0, iscRowSummary: rows?.map(r => `${r.id}:${r.status}`) ?? [] };
+    const auditBase = {
+      itemId,
+      itemTitle: item.title,
+      tiersExecuted: item.verification?.tiersExecuted ?? [],
+      verificationCost: item.verification?.verificationCost ?? 0,
+      iscRowSummary: rows?.map((r) => `${r.id}:${r.status}`) ?? [],
+    };
 
     // G1: Verified status
-    if (!item.verification || item.verification.status !== "verified") {
-      this.guard.appendAuditLog({ ...auditBase, verdict: "FAIL", concerns: ["completeSync G1: no passing verification"], failureReason: "G1" });
+    if (item.verification?.status !== "verified") {
+      this.guard.appendAuditLog({
+        ...auditBase,
+        verdict: "FAIL",
+        concerns: ["completeSync G1: no passing verification"],
+        failureReason: "G1",
+      });
       return { success: false, reason: "No passing verification" };
     }
 
     // G2: Provenance — require skeptical_verifier for non-TRIVIAL
     const effort = item.effort || "STANDARD";
     if (effort !== "TRIVIAL" && item.verification.verifiedBy !== "skeptical_verifier") {
-      this.guard.appendAuditLog({ ...auditBase, verdict: "FAIL", concerns: [`completeSync G2: verifiedBy is "${item.verification.verifiedBy}"`], failureReason: "G2" });
+      this.guard.appendAuditLog({
+        ...auditBase,
+        verdict: "FAIL",
+        concerns: [`completeSync G2: verifiedBy is "${item.verification.verifiedBy}"`],
+        failureReason: "G2",
+      });
       return { success: false, reason: `verifiedBy is "${item.verification.verifiedBy}", not "skeptical_verifier"` };
     }
 
     // G3: Tier 1 execution — non-TRIVIAL must have run Tier 1
     if (effort !== "TRIVIAL") {
-      if (!item.verification.tiersExecuted || !item.verification.tiersExecuted.includes(1)) {
+      if (!item.verification.tiersExecuted?.includes(1)) {
         const reason = `Completion blocked: Tier 1 code checks did not execute. tiersExecuted: [${item.verification.tiersExecuted || []}]`;
         this.guard.appendAuditLog({ ...auditBase, verdict: "FAIL", concerns: [reason], failureReason: "G3" });
         return { success: false, reason };
@@ -1101,7 +1278,7 @@ export class WorkOrchestrator {
 
     // G5: ISC all-VERIFIED (defense-in-depth)
     if (rows) {
-      const unverified = rows.filter(r => r.status !== "VERIFIED");
+      const unverified = rows.filter((r) => r.status !== "VERIFIED");
       if (unverified.length > 0) {
         const reason = `${unverified.length} ISC rows not verified (completeSync check).`;
         this.guard.appendAuditLog({ ...auditBase, verdict: "FAIL", concerns: [reason], failureReason: "G5" });
@@ -1122,7 +1299,9 @@ export class WorkOrchestrator {
 
       // Write-back: sync completion to approved-work JSONL so QueueManager stays in sync
       // Fire-and-forget since completeSync is synchronous; reconcileApprovedWork in init catches misses
-      this.syncCompletionToApprovedWork(itemId).catch(e => this.guard.logCaughtError(itemId, "syncCompletionToApprovedWork", e));
+      this.syncCompletionToApprovedWork(itemId).catch((e) =>
+        this.guard.logCaughtError(itemId, "syncCompletionToApprovedWork", e),
+      );
 
       return { success: true };
     } catch (e) {
@@ -1134,9 +1313,17 @@ export class WorkOrchestrator {
   // Verify: run verification commands (Gate 1 per-row command re-run)
   // --------------------------------------------------------------------------
 
-  async verify(itemId: string): Promise<{ success: boolean; failures: ISCRow[]; skepticalReview?: SkepticalReviewResult }> {
+  async verify(
+    itemId: string,
+  ): Promise<{ success: boolean; failures: ISCRow[]; skepticalReview?: SkepticalReviewResult }> {
     const item = this.queue.getItem(itemId);
-    if (!item) return { success: false, failures: [{ id: -1, description: "Item not found", status: "EXECUTION_FAILED", infraFault: true, parallel: false }] };
+    if (!item)
+      return {
+        success: false,
+        failures: [
+          { id: -1, description: "Item not found", status: "EXECUTION_FAILED", infraFault: true, parallel: false },
+        ],
+      };
 
     // Emit trace: verification-start
     try {
@@ -1148,26 +1335,48 @@ export class WorkOrchestrator {
         agentId: "executive",
         payload: { phase: "verification-start", title: item.title },
       });
-    } catch { /* fail-open */ }
+    } catch {
+      /* fail-open */
+    }
 
     // Circuit breaker (S5c): 3 CONSECUTIVE FAILs → skip verification, signal retry.
     // A plain consecutive-FAIL counter replaces the old JSON.stringify(concerns) content compare —
     // matching identical concern PROSE was a brittle determinism heuristic. Firing at 3 (not 2) is
     // more conservative: it tolerates one differing-but-still-failing run before short-circuiting.
     const verificationHistory = (item.metadata as WorkItemMetadata)?.verificationHistory as
-      Array<{ verdict: string; concerns: string[] }> | undefined;
+      | Array<{ verdict: string; concerns: string[] }>
+      | undefined;
     if (verificationHistory && verificationHistory.length >= 3) {
       const last3 = verificationHistory.slice(-3);
-      if (last3.every(v => v.verdict === "FAIL")) {
+      if (last3.every((v) => v.verdict === "FAIL")) {
         return {
           success: false,
-          failures: [{ id: -1, description: "Circuit breaker: 3 consecutive verification failures — skipping to retry", status: "EXECUTION_FAILED", parallel: false }],
+          failures: [
+            {
+              id: -1,
+              description: "Circuit breaker: 3 consecutive verification failures — skipping to retry",
+              status: "EXECUTION_FAILED",
+              parallel: false,
+            },
+          ],
         };
       }
     }
 
     const rows = this.loadISC(itemId);
-    if (!rows) return { success: false, failures: [{ id: -1, description: "No ISC rows found — run prepare first", status: "EXECUTION_FAILED", infraFault: true, parallel: false }] };
+    if (!rows)
+      return {
+        success: false,
+        failures: [
+          {
+            id: -1,
+            description: "No ISC rows found — run prepare first",
+            status: "EXECUTION_FAILED",
+            infraFault: true,
+            parallel: false,
+          },
+        ],
+      };
 
     // Step 1: Run verification commands on ISC rows (local checks)
     // Sort smoke-priority rows first for fast-fail
@@ -1180,9 +1389,8 @@ export class WorkOrchestrator {
     // Resolve cwd from worktree > outputPath > projectPath > process.cwd()
     const verifyCtx = this.verifyCtxResolver.resolveVerifyContext(item);
     // primaryCwd is used for the summary workingDir and single-repo fallback
-    const primaryCwd = verifyCtx.kind === "single" ? verifyCtx.cwd : verifyCtx.repos[0].cwd;
+    const primaryCwd = verifyCtx.kind === "single" ? verifyCtx.cwd : (verifyCtx.repos[0]?.cwd ?? process.cwd());
     const localFailures: ISCRow[] = [];
-    let smokeCheckFailed = false;
     for (const row of sortedRows) {
       if (row.status === "DONE") {
         if (row.verification) {
@@ -1198,7 +1406,6 @@ export class WorkOrchestrator {
             localFailures.push(row);
             // Smoke fast-fail: if a smoke-priority row fails, skip remaining verification
             if (row.priority === "smoke") {
-              smokeCheckFailed = true;
               break;
             }
           }
@@ -1234,7 +1441,7 @@ export class WorkOrchestrator {
       priority: this.mapPriority(item.priority),
       specPath: item.specPath,
       specContent: item.specPath ? this.readSpecContent(item.specPath, itemId) : undefined,
-      iscRows: rows.map(r => ({
+      iscRows: rows.map((r) => ({
         id: r.id,
         description: r.description,
         status: r.status,
@@ -1242,25 +1449,29 @@ export class WorkOrchestrator {
         source: r.source,
         disposition: r.disposition,
         rowEvidence: r.evidence,
-        verification: r.verification ? {
-          method: r.verification.method,
-          result: r.verification.result,
-          commandRan: r.verification.result !== undefined,
-        } : undefined,
+        verification: r.verification
+          ? {
+              method: r.verification.method,
+              result: r.verification.result,
+              commandRan: r.verification.result !== undefined,
+            }
+          : undefined,
       })),
       gitDiffStat,
       diffPathFilter: verifyCtx.kind === "single" ? verifyCtx.pathFilter : undefined,
       workingDir: primaryCwd,
-      repoContexts: verifyCtx.kind === "multi"
-        ? verifyCtx.repos.map(r => ({ name: r.name, cwd: r.cwd, startSha: r.startSha }))
-        : undefined,
+      repoContexts:
+        verifyCtx.kind === "multi"
+          ? verifyCtx.repos.map((r) => ({ name: r.name, cwd: r.cwd, startSha: r.startSha }))
+          : undefined,
       executionLogTail: (item.metadata?.executionLog as string[] | undefined)?.slice(-20) ?? [],
       iterationsUsed: (item.attempts?.length ?? 0) + 1,
       adversarialConcerns: adversarialConcerns && adversarialConcerns.length > 0 ? adversarialConcerns : undefined,
       projectContext: primaryCwd ? this.verifyCtxResolver.detectProjectContext(primaryCwd) : undefined,
-      testStrategyContent: item.testStrategyPath && existsSync(item.testStrategyPath)
-        ? readFileSync(item.testStrategyPath, "utf-8").slice(0, 3000)
-        : undefined,
+      testStrategyContent:
+        item.testStrategyPath && existsSync(item.testStrategyPath)
+          ? readFileSync(item.testStrategyPath, "utf-8").slice(0, 3000)
+          : undefined,
     };
 
     // Populate testExecutionResults from item metadata (written by the Verifier
@@ -1279,8 +1490,7 @@ export class WorkOrchestrator {
     // independent Explorer agent actually runs the artifact; "no live evidence"
     // is a hard FAIL. Depth/time scale with effort via LIVE_BUDGETS.
     {
-      const liveWorkingDir =
-        ((item.metadata as WorkItemMetadata)?.worktreePath as string | undefined) ?? primaryCwd;
+      const liveWorkingDir = ((item.metadata as WorkItemMetadata)?.worktreePath as string | undefined) ?? primaryCwd;
       if (liveWorkingDir) {
         // Surface for Phase L: producer classification, else the cached metadata
         // value, else a non-native default (the Explorer runs it generically — only
@@ -1329,11 +1539,13 @@ export class WorkOrchestrator {
           totalCost: review.totalCost,
         },
       });
-    } catch { /* fail-open */ }
+    } catch {
+      /* fail-open */
+    }
 
     // Count self-reported PASS rows (H7)
     const selfReportedCount = summary.iscRows.filter(
-      r => r.verification?.result === "PASS" && !r.verification?.commandRan
+      (r) => r.verification?.result === "PASS" && !r.verification?.commandRan,
     ).length;
 
     // Step 3: Process verdict
@@ -1347,24 +1559,37 @@ export class WorkOrchestrator {
       // Persist ISC rows with updated VERIFIED statuses
       this.iscManager.persist(itemId, rows);
       // Persist verification state via guard (validates invariants)
-      const guardResult = this.guard.setVerification(itemId, {
-        status: "verified",
-        verifiedAt: new Date().toISOString(),
-        verdict: "PASS",
-        concerns: review.concerns,
-        iscRowsVerified: rows.filter(r => r.status === "VERIFIED").length,
-        iscRowsTotal: rows.length,
-        verificationCost: review.totalCost,
-        verifiedBy: "skeptical_verifier",
-        tiersExecuted: review.tiers.map(t => t.tier),
-      }, review, selfReportedCount);
+      const guardResult = this.guard.setVerification(
+        itemId,
+        {
+          status: "verified",
+          verifiedAt: new Date().toISOString(),
+          verdict: "PASS",
+          concerns: review.concerns,
+          iscRowsVerified: rows.filter((r) => r.status === "VERIFIED").length,
+          iscRowsTotal: rows.length,
+          verificationCost: review.totalCost,
+          verifiedBy: "skeptical_verifier",
+          tiersExecuted: review.tiers.map((t) => t.tier),
+        },
+        review,
+        selfReportedCount,
+      );
 
       if (guardResult.downgraded) {
         // Guard downgraded the verdict — treat as failure
         // INVARIANT 1 (Phase 2 infra failure, confidence <= 0.3) = infrastructure fault
         // INVARIANT 2 (self-reported PASS without commands) = item fault
         const isInfraDowngrade = guardResult.reason?.includes("infra") || guardResult.reason?.includes("confidence");
-        const failures: ISCRow[] = [{ id: -1, description: `Guard downgraded PASS: ${guardResult.reason}`, status: "EXECUTION_FAILED", infraFault: isInfraDowngrade, parallel: false }];
+        const failures: ISCRow[] = [
+          {
+            id: -1,
+            description: `Guard downgraded PASS: ${guardResult.reason}`,
+            status: "EXECUTION_FAILED",
+            infraFault: isInfraDowngrade,
+            parallel: false,
+          },
+        ];
         return { success: false, failures, skepticalReview: review };
       }
       // Clear verification history on success — no stale failures carried forward.
@@ -1379,20 +1604,26 @@ export class WorkOrchestrator {
     // when higher tiers had infrastructure failures.
 
     // FAIL or unpromotable NEEDS_REVIEW — persist failure state via guard
-    this.guard.setVerification(itemId, {
-      status: review.finalVerdict === "FAIL" ? "failed" : "needs_review",
-      verifiedAt: new Date().toISOString(),
-      verdict: review.finalVerdict,
-      concerns: review.concerns,
-      iscRowsVerified: rows.filter(r => r.status === "VERIFIED").length,
-      iscRowsTotal: rows.length,
-      verificationCost: review.totalCost,
-      verifiedBy: "skeptical_verifier",
-      tiersExecuted: review.tiers.map(t => t.tier),
-    }, review, selfReportedCount);
+    this.guard.setVerification(
+      itemId,
+      {
+        status: review.finalVerdict === "FAIL" ? "failed" : "needs_review",
+        verifiedAt: new Date().toISOString(),
+        verdict: review.finalVerdict,
+        concerns: review.concerns,
+        iscRowsVerified: rows.filter((r) => r.status === "VERIFIED").length,
+        iscRowsTotal: rows.length,
+        verificationCost: review.totalCost,
+        verifiedBy: "skeptical_verifier",
+        tiersExecuted: review.tiers.map((t) => t.tier),
+      },
+      review,
+      selfReportedCount,
+    );
     // Record verification outcome for circuit breaker
-    const existingHistory = ((item.metadata as WorkItemMetadata)?.verificationHistory as
-      Array<{ verdict: string; concerns: string[] }>) ?? [];
+    const existingHistory =
+      ((item.metadata as WorkItemMetadata)?.verificationHistory as Array<{ verdict: string; concerns: string[] }>) ??
+      [];
     existingHistory.push({ verdict: review.finalVerdict, concerns: review.concerns.slice(0, 5) });
     // Keep only last 3 entries to avoid unbounded growth
     const trimmedHistory = existingHistory.slice(-3);
@@ -1400,7 +1631,12 @@ export class WorkOrchestrator {
 
     const failures: ISCRow[] = [];
     for (const concern of review.concerns) {
-      failures.push({ id: -1, description: `Skeptical review: ${concern}`, status: "EXECUTION_FAILED", parallel: false });
+      failures.push({
+        id: -1,
+        description: `Skeptical review: ${concern}`,
+        status: "EXECUTION_FAILED",
+        parallel: false,
+      });
     }
     return { success: false, failures, skepticalReview: review };
   }
@@ -1445,19 +1681,6 @@ export class WorkOrchestrator {
     return ensureFeatureBranchFn(this.queue, (id, loc, e) => this.guard.logCaughtError(id, loc, e), itemId);
   }
 
-  /**
-   * Resolve the git repo root for worktree creation. Delegates to WorktreeOps.ts —
-   * see that module for the resolution-order doc comment.
-   */
-  private resolveRepoRoot(item: WorkItem | undefined): string {
-    return resolveRepoRootFn(this.queue, item);
-  }
-
-  /** Check if a path is a git repo different from Kaya. Returns repo root or null. */
-  private tryResolveGitRoot(candidatePath: string | undefined | null): string | null {
-    return tryResolveGitRootFn(candidatePath);
-  }
-
   // --------------------------------------------------------------------------
   // Worktree cleanup
   // --------------------------------------------------------------------------
@@ -1492,16 +1715,20 @@ export class WorkOrchestrator {
     return this.verifyCtxResolver.resolveRowCwd(row, verifyCtx);
   }
 
-  private classifyRowExecutability(description: string): ISCRowExecutability {
+  /** @internal Not private: tests reach it through a cast. */
+  classifyRowExecutability(description: string): ISCRowExecutability {
     return this.iscManager.classifyExecutability({ id: 0, description, status: "PENDING", parallel: false });
   }
 
   private mapPriority(priority: Priority): ItemReviewSummary["priority"] {
     switch (priority) {
       case "critical":
-      case "high": return "HIGH";
-      case "normal": return "MEDIUM";
-      case "low": return "LOW";
+      case "high":
+        return "HIGH";
+      case "normal":
+        return "MEDIUM";
+      case "low":
+        return "LOW";
     }
   }
 
@@ -1518,10 +1745,7 @@ export class WorkOrchestrator {
 
     const allItems = this.queue.getAllItems();
     const reviewProxies = allItems.filter(
-      (i) =>
-        i.title.startsWith("REVIEW: ") &&
-        i.humanTaskRef?.queueItemId === itemId &&
-        i.status !== "completed"
+      (i) => i.title.startsWith("REVIEW: ") && i.humanTaskRef?.queueItemId === itemId && i.status !== "completed",
     );
 
     for (const proxy of reviewProxies) {
@@ -1546,7 +1770,9 @@ export class WorkOrchestrator {
         this.queue.removeDependency(itemId, proxy.id);
       } catch (e) {
         // Non-fatal — log but don't block report-done
-        console.warn(`[resolveStaleReviewProxies] Failed to resolve proxy ${proxy.id}: ${e instanceof Error ? e.message : String(e)}`);
+        console.warn(
+          `[resolveStaleReviewProxies] Failed to resolve proxy ${proxy.id}: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
   }
@@ -1568,7 +1794,9 @@ export class WorkOrchestrator {
             this.queue.setSpecPath(itemId, fb);
           }
           return content;
-        } catch { /* try next */ }
+        } catch {
+          /* try next */
+        }
       }
       return undefined;
     }
@@ -1646,7 +1874,9 @@ export class WorkOrchestrator {
    * Generate a git summary of prior work in an item's worktree (for PRIOR_WORK context).
    */
   generatePhaseGitSummary(itemId: string): string {
-    return generatePhaseGitSummaryFn(this.queue, itemId, (id, location, e) => this.guard.logCaughtError(id, location, e));
+    return generatePhaseGitSummaryFn(this.queue, itemId, (id, location, e) =>
+      this.guard.logCaughtError(id, location, e),
+    );
   }
 
   // --------------------------------------------------------------------------
@@ -1686,7 +1916,9 @@ export class WorkOrchestrator {
   // --------------------------------------------------------------------------
 
   /** Returns all items in the work queue (for CLI self-heal init logic). */
-  getAllQueueItems() { return this.queue.getAllItems(); }
+  getAllQueueItems() {
+    return this.queue.getAllItems();
+  }
 
   /**
    * Resume a directly-blocked REAL item to `pending` once its human PREREQUISITE
@@ -1708,11 +1940,13 @@ export class WorkOrchestrator {
       const db = getTaskDB();
       const escTask = db.getTask(`manual-${itemId}`);
       if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
-        const outcome = serializeOutcome(systemOutcome({
-          by: "WorkOrchestrator/resumeBlocked",
-          headline: "Escalation closed: the blocked item resumed",
-          noArtifact: `closed by WorkOrchestrator when blocked work-queue item ${itemId} was re-pended (resumeBlocked)`,
-        }));
+        const outcome = serializeOutcome(
+          systemOutcome({
+            by: "WorkOrchestrator/resumeBlocked",
+            headline: "Escalation closed: the blocked item resumed",
+            noArtifact: `closed by WorkOrchestrator when blocked work-queue item ${itemId} was re-pended (resumeBlocked)`,
+          }),
+        );
         db.updateTask(`manual-${itemId}`, { status: "done", outcome }, "WorkOrchestrator/resumeBlocked");
       }
     } catch (e) {

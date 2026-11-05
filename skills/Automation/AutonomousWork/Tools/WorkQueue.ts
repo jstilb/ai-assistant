@@ -24,9 +24,9 @@
  *   bun run WorkQueue.ts item <id>         # Single item detail
  */
 
-import { parseArgs } from "util";
-import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { parseArgs } from "node:util";
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
 import { MEMORY } from "../../../../lib/core/MemoryPaths.ts";
@@ -60,8 +60,8 @@ export class UnrecoverableQueueError extends Error {
   constructor(paths: string[]) {
     super(
       `[WorkQueue] UNRECOVERABLE: all queue files are corrupt and cannot be read. ` +
-      `Attempted: ${paths.join(", ")}. ` +
-      `Manual intervention required — restore from version control or external backup.`
+        `Attempted: ${paths.join(", ")}. ` +
+        `Manual intervention required — restore from version control or external backup.`,
     );
     this.name = "UnrecoverableQueueError";
     this.paths = paths;
@@ -155,7 +155,16 @@ export interface WorkItemMetadata extends Record<string, unknown> {
    *  - "pending_approval": verified-locally, waiting on a human merge approval (Slice 3)
    *  - "approved":         approval granted; eligible for the approval-gated drain
    *  - "merge_started" / "merged" / "conflict" / "deferred" / "skipped" / "failed": lifecycle */
-  mergeStatus?: "pending" | "pending_approval" | "approved" | "merge_started" | "merged" | "conflict" | "deferred" | "failed" | "skipped";
+  mergeStatus?:
+    | "pending"
+    | "pending_approval"
+    | "approved"
+    | "merge_started"
+    | "merged"
+    | "conflict"
+    | "deferred"
+    | "failed"
+    | "skipped";
   /** GitHub PR URL after merge */
   prUrl?: string;
   /** Reason recorded when item was force-merged or auto-merged */
@@ -240,7 +249,7 @@ export interface WorkItem {
   /** Explicit dependency IDs — item cannot start until all are completed */
   dependencies: string[];
   effort?: EffortLevel;
-  workType?: "dev" | "research" | "content" | "mixed";
+  workType?: "dev" | "research" | "content" | "mixed" | "deploy" | "publish";
   source: "approval_queue" | "manual";
   createdAt: string;
   startedAt?: string;
@@ -263,11 +272,13 @@ export interface WorkItem {
   outputPath?: string;
   /** If this is a proxy for a human task, stores the linkage */
   humanTaskRef?: {
-    lucidTaskId?: string;  // optional: not set for retry-escalated proxies
+    lucidTaskId?: string; // optional: not set for retry-escalated proxies
     queueItemId: string;
     guideFilePath: string;
     createdAt: string;
-    attemptHistory?: string;  // failure history from retry escalation
+    attemptHistory?: string; // failure history from retry escalation
+    action?: string; // human action text (ISC row proxies from createHumanProxies)
+    reason?: string; // why the row was routed to a human
   };
   /** Execution surface: browser, native, cli, api, daemon, library, or unspecified.
    * Carries the producer's LLM-classified surface (ADR-0006); consumed by the
@@ -324,17 +335,21 @@ const PRIORITY_ORDER: Record<Priority, number> = {
  */
 function describeWorkStatusExits(fromStage: Stage): string {
   const canonicalAllowed = CANONICAL_TRANSITIONS[fromStage] ?? [];
-  return canonicalAllowed
-    .filter(s => {
-      const ws = Object.entries(WORK_STATUS_TO_STAGE).find(([, stage]) => stage === s)?.[0];
-      return ws !== undefined &&
-        !(fromStage === "partial" && (s === "done" || s === "failed")) &&
-        !(fromStage === "blocked" && s === "in-progress") &&
-        !(fromStage === "needs-review" && s === "done");
-    })
-    .map(s => Object.entries(WORK_STATUS_TO_STAGE).find(([, stage]) => stage === s)?.[0])
-    .filter((s): s is WorkStatus => Boolean(s))
-    .join(", ") || "none";
+  return (
+    canonicalAllowed
+      .filter((s) => {
+        const ws = Object.entries(WORK_STATUS_TO_STAGE).find(([, stage]) => stage === s)?.[0];
+        return (
+          ws !== undefined &&
+          !(fromStage === "partial" && (s === "done" || s === "failed")) &&
+          !(fromStage === "blocked" && s === "in-progress") &&
+          !(fromStage === "needs-review" && s === "done")
+        );
+      })
+      .map((s) => Object.entries(WORK_STATUS_TO_STAGE).find(([, stage]) => stage === s)?.[0])
+      .filter((s): s is WorkStatus => Boolean(s))
+      .join(", ") || "none"
+  );
 }
 
 // ============================================================================
@@ -403,7 +418,7 @@ export class WorkQueue {
     // is stale and must be evicted (both the PipelineRepository AND PipelineDB
     // singletons) so the next getPipelineRepository creates a fresh DB connection.
     if (dbPath !== ":memory:" && !existsSync(dbPath)) {
-      resetPipelineRepository(dbPath);  // evicts _repos + _instances maps
+      resetPipelineRepository(dbPath); // evicts _repos + _instances maps
     }
     this.repo = getPipelineRepository(dbPath);
     this._onRecoveryAlert = opts?.onRecoveryAlert;
@@ -421,7 +436,7 @@ export class WorkQueue {
     wq.repo = new PipelineRepository(":memory:");
     wq._onRecoveryAlert = undefined;
     wq.state = {
-      items: items.map(i => ({ ...i })),
+      items: items.map((i) => ({ ...i })),
       lastUpdated: new Date().toISOString(),
       totalProcessed: 0,
       totalFailed: 0,
@@ -458,14 +473,14 @@ export class WorkQueue {
 
     // S5a: pipeline.db is the sole source — no work-queue.json fallback
     // Load active items from DB
-    const activeRows = this.repo.list({ stage: [
-      "approved", "in-progress", "done", "partial", "failed", "blocked", "needs-review",
-    ]});
+    const activeRows = this.repo.list({
+      stage: ["approved", "in-progress", "done", "partial", "failed", "blocked", "needs-review"],
+    });
     const items = activeRows.map(pipelineItemToWorkItem);
 
     // Reconstruct counters from items (best-effort — counters are advisory)
-    const totalProcessed = items.filter(i => i.status === "completed").length;
-    const totalFailed = items.filter(i => i.status === "failed").length;
+    const totalProcessed = items.filter((i) => i.status === "completed").length;
+    const totalFailed = items.filter((i) => i.status === "failed").length;
 
     return {
       items,
@@ -496,21 +511,6 @@ export class WorkQueue {
     this.repo.upsert(workItemToPipelineParams(item), { mergeMetadata: opts?.mergeMetadata ?? true });
   }
 
-  /** Strip unknown fields from verification objects, keeping only whitelisted keys */
-  private sanitizeVerification(v: WorkItemVerification & Record<string, unknown>): WorkItemVerification {
-    return {
-      status: v.status,
-      verifiedAt: v.verifiedAt,
-      verdict: v.verdict,
-      concerns: v.concerns,
-      iscRowsVerified: v.iscRowsVerified,
-      iscRowsTotal: v.iscRowsTotal,
-      verificationCost: v.verificationCost,
-      verifiedBy: v.verifiedBy,
-      tiersExecuted: v.tiersExecuted,
-    };
-  }
-
   public persist(): void {
     for (const item of this.state.items) {
       this.persistItem(item);
@@ -534,7 +534,7 @@ export class WorkQueue {
     // Skip heartbeat in test mode (_createForTesting sets statePath to "").
     // Heartbeat's purpose is cross-process disk visibility, which is meaningless in unit tests.
     if (!this.statePath) return;
-    const item = this.state.items.find(i => i.id === itemId);
+    const item = this.state.items.find((i) => i.id === itemId);
     if (!item) return;
     const now = new Date().toISOString();
     if (!item.metadata) item.metadata = {};
@@ -551,7 +551,14 @@ export class WorkQueue {
    * and returns the new item's string ID.
    * Convenience for test code and simple callers that don't need full WorkItem fields.
    */
-  add(fields: { title: string; description?: string; priority?: Priority; dependencies?: string[]; source?: WorkItem["source"]; status?: WorkStatus }): string {
+  add(fields: {
+    title: string;
+    description?: string;
+    priority?: Priority;
+    dependencies?: string[];
+    source?: WorkItem["source"];
+    status?: WorkStatus;
+  }): string {
     const item = this.addItem({
       title: fields.title,
       description: fields.description ?? "",
@@ -577,8 +584,9 @@ export class WorkQueue {
 
   /** Resolve an ID to item — exact match first, prefix fallback for truncated IDs */
   private resolveItem(id: string): WorkItem | undefined {
-    return this.state.items.find(i => i.id === id)
-      ?? this.state.items.find(i => i.id.startsWith(id) && id.length >= 8);
+    return (
+      this.state.items.find((i) => i.id === id) ?? this.state.items.find((i) => i.id.startsWith(id) && id.length >= 8)
+    );
   }
 
   getItem(id: string): WorkItem | undefined {
@@ -587,11 +595,13 @@ export class WorkQueue {
   }
 
   getAllItems(): WorkItem[] {
-    return this.state.items.map(i => structuredClone(i));
+    return this.state.items.map((i) => structuredClone(i));
   }
 
   hasWork(): boolean {
-    return this.state.items.some(i => i.status === "pending" || i.status === "in_progress" || i.status === "partial" || i.status === "blocked");
+    return this.state.items.some(
+      (i) => i.status === "pending" || i.status === "in_progress" || i.status === "partial" || i.status === "blocked",
+    );
   }
 
   // --------------------------------------------------------------------------
@@ -632,7 +642,7 @@ export class WorkQueue {
     if (wqExcluded) {
       throw new Error(
         `Illegal transition: "${from}" -> "${status}" for "${item.title}" [${item.id}]. ` +
-        `Allowed from "${from}": [${describeWorkStatusExits(fromStage)}]`
+          `Allowed from "${from}": [${describeWorkStatusExits(fromStage)}]`,
       );
     }
 
@@ -649,13 +659,11 @@ export class WorkQueue {
     // regressing the pre-existing error-priority contract the test suite encodes.
     const isCanonicallyLegal = !!CANONICAL_TRANSITIONS[fromStage]?.includes(toStage);
     if (isCanonicallyLegal && status === "completed") {
-      if (!item.verification || item.verification.status !== "verified") {
+      if (item.verification?.status !== "verified") {
         const reason = item.verification
           ? `verification status is "${item.verification.status}" (verdict: ${item.verification.verdict})`
           : "no verification record exists";
-        throw new Error(
-          `Completion blocked for "${item.title}" [${item.id}]: ${reason}. Run verify first.`
-        );
+        throw new Error(`Completion blocked for "${item.title}" [${item.id}]: ${reason}. Run verify first.`);
       }
 
       // Provenance gate: non-TRIVIAL items require pipeline verification (or human_proxy for humanTaskRef)
@@ -664,7 +672,7 @@ export class WorkQueue {
       if (effort !== "TRIVIAL" && item.verification.verifiedBy !== "skeptical_verifier" && !isHumanProxy) {
         throw new Error(
           `Completion blocked for "${item.title}": verifiedBy is "${item.verification.verifiedBy}". ` +
-          `Non-TRIVIAL items require pipeline verification (or human_proxy for humanTaskRef items).`
+            `Non-TRIVIAL items require pipeline verification (or human_proxy for humanTaskRef items).`,
         );
       }
     }
@@ -699,8 +707,13 @@ export class WorkQueue {
     // "dependencies" is included in the patch — PipelineRepository.transition()'s
     // blobFields set now covers it (slice A4), so it round-trips as JSON like the
     // other blob fields instead of crashing bun:sqlite's binder.
-    const { stage: _stage, created_at: _createdAt, updated_at: _updatedAt, id: _pid, ...patch } =
-      workItemToPipelineParams(next);
+    const {
+      stage: _stage,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      id: _pid,
+      ...patch
+    } = workItemToPipelineParams(next);
     try {
       this.repo.transition(item.id, toStage, {
         patch,
@@ -712,7 +725,7 @@ export class WorkQueue {
       if (msg.includes("illegal transition")) {
         throw new Error(
           `Illegal transition: "${from}" -> "${status}" for "${item.title}" [${item.id}]. ` +
-          `Allowed from "${from}": [${describeWorkStatusExits(fromStage)}]`
+            `Allowed from "${from}": [${describeWorkStatusExits(fromStage)}]`,
         );
       }
       throw err;
@@ -734,7 +747,7 @@ export class WorkQueue {
     if (verification.verifiedBy !== "skeptical_verifier" && !isHumanProxy) {
       throw new Error(
         `setVerification rejected: verifiedBy "${verification.verifiedBy}" is not "skeptical_verifier". ` +
-        `Only the SkepticalVerifier pipeline (or human_proxy for humanTaskRef items) may set verification status.`
+          `Only the SkepticalVerifier pipeline (or human_proxy for humanTaskRef items) may set verification status.`,
       );
     }
 
@@ -818,10 +831,10 @@ export class WorkQueue {
       if (value === undefined) {
         console.error(
           `[WorkQueue] setMetadata(${id}): entries.${key} is undefined — NOT set (previous value, if any, ` +
-          `is unchanged) and NOT deleted. If "${key}" is genuinely inapplicable for this call, omit it ` +
-          `instead of passing undefined (e.g. \`...(value ? { ${key}: value } : {})\`) to avoid this log. ` +
-          `If it should have had a value, the source is likely an unguarded optional missing a \`?? ` +
-          `fallback\`. For an intentional deletion, call deleteMetadata(id, ["${key}"]) instead.`
+            `is unchanged) and NOT deleted. If "${key}" is genuinely inapplicable for this call, omit it ` +
+            `instead of passing undefined (e.g. \`...(value ? { ${key}: value } : {})\`) to avoid this log. ` +
+            `If it should have had a value, the source is likely an unguarded optional missing a \`?? ` +
+            `fallback\`. For an intentional deletion, call deleteMetadata(id, ["${key}"]) instead.`,
         );
         continue;
       }
@@ -839,7 +852,7 @@ export class WorkQueue {
    */
   deleteMetadata(id: string, keys: string[]): void {
     const item = this.resolveItem(id);
-    if (!item || !item.metadata) return;
+    if (!item?.metadata) return;
     for (const key of keys) delete item.metadata[key];
     this.persistItem(item, { mergeMetadata: false });
   }
@@ -871,14 +884,14 @@ export class WorkQueue {
     if (!item) return null;
     if (item.status !== "blocked") {
       throw new Error(
-        `resolveBlocked rejected: item "${item.title}" [${item.id}] status is "${item.status}", expected "blocked"`
+        `resolveBlocked rejected: item "${item.title}" [${item.id}] status is "${item.status}", expected "blocked"`,
       );
     }
 
     if (!item.humanTaskRef) {
       throw new Error(
         `resolveBlocked rejected: item "${item.title}" [${item.id}] has no humanTaskRef. ` +
-        `Only proxy items (with humanTaskRef) can be resolved via resolveBlocked().`
+          `Only proxy items (with humanTaskRef) can be resolved via resolveBlocked().`,
       );
     }
 
@@ -921,13 +934,13 @@ export class WorkQueue {
     if (!item) return null;
     if (item.status !== "blocked") {
       throw new Error(
-        `resumeBlocked rejected: item "${item.title}" [${item.id}] status is "${item.status}", expected "blocked"`
+        `resumeBlocked rejected: item "${item.title}" [${item.id}] status is "${item.status}", expected "blocked"`,
       );
     }
     if (item.humanTaskRef) {
       throw new Error(
         `resumeBlocked rejected: item "${item.title}" [${item.id}] is a human-proxy item (has humanTaskRef). ` +
-        `Use resolveBlocked() to complete the proxy, not resumeBlocked().`
+          `Use resolveBlocked() to complete the proxy, not resumeBlocked().`,
       );
     }
 
@@ -959,14 +972,14 @@ export class WorkQueue {
 
   /** Get all items with status blocked */
   getBlockedItems(): WorkItem[] {
-    return this.state.items.filter(i => i.status === "blocked");
+    return this.state.items.filter((i) => i.status === "blocked");
   }
 
   /** Remove a dependency from an existing item (idempotent) */
   removeDependency(id: string, depId: string): void {
     const item = this.resolveItem(id);
     if (!item) return;
-    item.dependencies = item.dependencies.filter(d => d !== depId);
+    item.dependencies = item.dependencies.filter((d) => d !== depId);
     this.persistItem(item);
   }
 
@@ -1053,11 +1066,6 @@ export class WorkQueue {
   // DAG — explicit dependencies only
   // --------------------------------------------------------------------------
 
-  /** All direct dependency IDs for an item */
-  private getDeps(id: string): string[] {
-    return this.state.items.find(i => i.id === id)?.dependencies ?? [];
-  }
-
   /**
    * Detect cycles using DFS with recursion stack.
    * Returns { hasCycle, cycle? } where cycle is the ID path.
@@ -1111,7 +1119,7 @@ export class WorkQueue {
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
-    const ids = new Set(this.state.items.map(i => i.id));
+    const ids = new Set(this.state.items.map((i) => i.id));
 
     // Missing refs
     for (const item of this.state.items) {
@@ -1146,9 +1154,9 @@ export class WorkQueue {
     for (const item of this.state.items) {
       const match = item.title.match(familyRegex);
       if (!match) continue;
-      const family = match[1].trim();
+      const family = (match[1] ?? "").trim();
       if (!families.has(family)) families.set(family, []);
-      families.get(family)!.push({ item, phase: parseInt(match[2], 10) });
+      families.get(family)!.push({ item, phase: parseInt(match[2] ?? "", 10) });
     }
 
     let warned = 0;
@@ -1156,13 +1164,14 @@ export class WorkQueue {
       if (members.length < 2) continue;
       members.sort((a, b) => a.phase - b.phase);
       for (let i = 1; i < members.length; i++) {
-        const prev = members[i - 1].item;
-        const curr = members[i].item;
+        const prev = members[i - 1]?.item;
+        const curr = members[i]?.item;
+        if (!prev || !curr) continue;
         if (!curr.dependencies.includes(prev.id)) {
           console.warn(
             `[WorkQueue] Phase-named item "${curr.title}" has no explicit dependency on its prior ` +
-            `phase "${prev.title}" (family "${family}"). S5b no longer auto-wires phase order — ` +
-            `add an explicit dependency if this ordering matters.`
+              `phase "${prev.title}" (family "${family}"). S5b no longer auto-wires phase order — ` +
+              `add an explicit dependency if this ordering matters.`,
           );
           warned++;
         }
@@ -1216,7 +1225,9 @@ export class WorkQueue {
     const fiveOver = state.fiveHour !== null && state.fiveHour.usedPercentage > config.pauseThreshold;
     const sevenOver = state.sevenDay !== null && state.sevenDay.usedPercentage > config.pauseThreshold;
     if (fiveOver || sevenOver) {
-      console.warn(`[WorkQueue] Rate limit gate: non-critical item paused (5h=${state.fiveHour?.usedPercentage ?? "n/a"}%, 7d=${state.sevenDay?.usedPercentage ?? "n/a"}%)`);
+      console.warn(
+        `[WorkQueue] Rate limit gate: non-critical item paused (5h=${state.fiveHour?.usedPercentage ?? "n/a"}%, 7d=${state.sevenDay?.usedPercentage ?? "n/a"}%)`,
+      );
       return false;
     }
 
@@ -1225,38 +1236,40 @@ export class WorkQueue {
 
   /** Items whose status is pending and all dependencies are completed */
   getReadyItems(): WorkItem[] {
-    return this.state.items
-      .filter(item => {
-        if (item.status !== "pending") return false;
-        // Retry cooldown gate: skip items still in cooldown window
-        if (item.retryEligibleAfter && new Date(item.retryEligibleAfter) > new Date()) return false;
-        const depsOk = item.dependencies.every(depId => {
-          const dep = this.state.items.find(i => i.id === depId);
-          if (!dep) {
-            console.warn(`[WorkQueue] Item "${item.title}" has missing dependency "${depId}" — permanently blocked`);
-            return false;
-          }
-          return dep.status === "completed";
-        });
-        if (!depsOk) return false;
-        return this.isRateLimitGateOpen(item.priority);
-      })
-      // S5b: priority-only ordering. The title-regex "Phase N" tiebreaker is removed —
-      // explicit dependencies (the depsOk filter above) + the follow-on engine own phase order.
-      .sort((a, b) => PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority]);
+    return (
+      this.state.items
+        .filter((item) => {
+          if (item.status !== "pending") return false;
+          // Retry cooldown gate: skip items still in cooldown window
+          if (item.retryEligibleAfter && new Date(item.retryEligibleAfter) > new Date()) return false;
+          const depsOk = item.dependencies.every((depId) => {
+            const dep = this.state.items.find((i) => i.id === depId);
+            if (!dep) {
+              console.warn(`[WorkQueue] Item "${item.title}" has missing dependency "${depId}" — permanently blocked`);
+              return false;
+            }
+            return dep.status === "completed";
+          });
+          if (!depsOk) return false;
+          return this.isRateLimitGateOpen(item.priority);
+        })
+        // S5b: priority-only ordering. The title-regex "Phase N" tiebreaker is removed —
+        // explicit dependencies (the depsOk filter above) + the follow-on engine own phase order.
+        .sort((a, b) => PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority])
+    );
   }
 
   /** DAG-blocked items: pending but at least one dep not completed */
   getDagBlockedItems(): WorkItem[] {
-    return this.state.items.filter(item => {
+    return this.state.items.filter((item) => {
       if (item.status !== "pending") return false;
       if (item.dependencies.length === 0) return false;
-      return item.dependencies.some(depId => {
-        const dep = this.state.items.find(i => i.id === depId);
+      return item.dependencies.some((depId) => {
+        const dep = this.state.items.find((i) => i.id === depId);
         if (!dep) {
           console.warn(`[WorkQueue] Item "${item.title}" has missing dependency "${depId}" — permanently blocked`);
         }
-        return !dep || dep.status !== "completed";
+        return dep?.status !== "completed";
       });
     });
   }
@@ -1280,14 +1293,16 @@ export class WorkQueue {
   claimParallelBatch(maxItems: number = 5): WorkItem[] {
     // Step 1: Select candidates in-memory (applies rate-limit gate, cooldown, DAG checks)
     const ready = this.getReadyItems();
-    if (ready.length === 0) return [];
+    const first = ready[0];
+    if (!first) return [];
 
     // Build the candidate batch (DAG safety: exclude items sharing a dependency)
-    const candidateBatch: WorkItem[] = [ready[0]];
+    const candidateBatch: WorkItem[] = [first];
     for (let i = 1; i < ready.length && candidateBatch.length < maxItems; i++) {
       const candidate = ready[i];
+      if (!candidate) continue;
       const candidateDeps = new Set(candidate.dependencies);
-      const canAdd = candidateBatch.every(bItem => {
+      const canAdd = candidateBatch.every((bItem) => {
         const bDeps = new Set(bItem.dependencies);
         if (candidateDeps.has(bItem.id) || bDeps.has(candidate.id)) return false;
         for (const d of candidateDeps) {
@@ -1298,7 +1313,7 @@ export class WorkQueue {
       if (canAdd) candidateBatch.push(candidate);
     }
 
-    const candidateIds = candidateBatch.map(i => i.id);
+    const candidateIds = candidateBatch.map((i) => i.id);
 
     // Step 2: Atomically claim the candidates via compare-and-swap in ONE BEGIN IMMEDIATE.
     // claimByIds returns ONLY the ids this process won (concurrent losers get 0 changes → excluded).
@@ -1310,9 +1325,13 @@ export class WorkQueue {
     const claimedItems: WorkItem[] = [];
     for (const row of actuallyClaimedRows) {
       const fresh = pipelineItemToWorkItem(row);
-      const idx = this.state.items.findIndex(i => i.id === row.id);
+      const idx = this.state.items.findIndex((i) => i.id === row.id);
       if (idx >= 0) {
-        this.state.items[idx] = { ...fresh, status: "in_progress", startedAt: row.started_at ?? new Date().toISOString() };
+        this.state.items[idx] = {
+          ...fresh,
+          status: "in_progress",
+          startedAt: row.started_at ?? new Date().toISOString(),
+        };
         claimedItems.push(this.state.items[idx]);
       } else {
         // Item wasn't in in-memory state (cross-process seeded item) — add it
@@ -1336,18 +1355,17 @@ export class WorkQueue {
     const items = this.state.items;
     return {
       total: items.length,
-      pending: items.filter(i => i.status === "pending").length,
-      inProgress: items.filter(i => i.status === "in_progress").length,
-      completed: items.filter(i => i.status === "completed").length,
-      failed: items.filter(i => i.status === "failed").length,
-      partial: items.filter(i => i.status === "partial").length,
-      blocked: items.filter(i => i.status === "blocked").length + this.getDagBlockedItems().length,
+      pending: items.filter((i) => i.status === "pending").length,
+      inProgress: items.filter((i) => i.status === "in_progress").length,
+      completed: items.filter((i) => i.status === "completed").length,
+      failed: items.filter((i) => i.status === "failed").length,
+      partial: items.filter((i) => i.status === "partial").length,
+      blocked: items.filter((i) => i.status === "blocked").length + this.getDagBlockedItems().length,
       ready: this.getReadyItems().length,
       totalProcessed: this.state.totalProcessed,
       totalFailed: this.state.totalFailed,
     };
   }
-
 }
 
 // ============================================================================
@@ -1408,7 +1426,7 @@ Commands:
     }
 
     case "batch": {
-      const n = parseInt(positionals[1]) || 5;
+      const n = parseInt(positionals[1] ?? "") || 5;
       const batch = wq.getParallelBatch(n);
       if (values.json) {
         console.log(JSON.stringify(batch, null, 2));
@@ -1437,7 +1455,10 @@ Commands:
       try {
         const item = wq.updateStatus(id, status, detail);
         if (item) console.log(`${item.id} → ${item.status}`);
-        else { console.error(`Not found: ${id}`); process.exit(1); }
+        else {
+          console.error(`Not found: ${id}`);
+          process.exit(1);
+        }
       } catch (err) {
         console.error(`Blocked: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
@@ -1448,12 +1469,19 @@ Commands:
     case "add": {
       const title = values.title;
       const desc = values.desc || "";
-      const deps = values.deps ? values.deps.split(",").map(s => s.trim()) : [];
+      const deps = values.deps ? values.deps.split(",").map((s) => s.trim()) : [];
       const priority = (values.priority || "normal") as Priority;
       const initialStatus = (values.status as WorkStatus) || undefined;
-      if (!title) { console.error("--title required"); process.exit(1); }
+      if (!title) {
+        console.error("--title required");
+        process.exit(1);
+      }
       const addFields: Parameters<typeof wq.addItem>[0] = {
-        title, description: desc, priority, dependencies: deps, source: "manual",
+        title,
+        description: desc,
+        priority,
+        dependencies: deps,
+        source: "manual",
       };
       if (initialStatus) addFields.status = initialStatus;
       if (values["human-task-ref"]) {
@@ -1518,17 +1546,25 @@ Commands:
       if (values.json) {
         console.log(JSON.stringify(s, null, 2));
       } else {
-        console.log(`Total: ${s.total}  Pending: ${s.pending}  In-Progress: ${s.inProgress}  Completed: ${s.completed}  Failed: ${s.failed}  Blocked: ${s.blocked}  Ready: ${s.ready}`);
+        console.log(
+          `Total: ${s.total}  Pending: ${s.pending}  In-Progress: ${s.inProgress}  Completed: ${s.completed}  Failed: ${s.failed}  Blocked: ${s.blocked}  Ready: ${s.ready}`,
+        );
       }
       break;
     }
 
     case "item": {
       const id = positionals[1];
-      if (!id) { console.error("Usage: item <id>"); process.exit(1); }
+      if (!id) {
+        console.error("Usage: item <id>");
+        process.exit(1);
+      }
       const item = wq.getItem(id);
       if (item) console.log(JSON.stringify(item, null, 2));
-      else { console.error(`Not found: ${id}`); process.exit(1); }
+      else {
+        console.error(`Not found: ${id}`);
+        process.exit(1);
+      }
       break;
     }
 

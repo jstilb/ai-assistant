@@ -6,10 +6,9 @@
  * - runVerificationCommand: resolves paths, expands globs, and executes
  */
 
-import { existsSync } from "fs";
-import { join } from "path";
-import { execFileSync } from "child_process";
-import { globSync } from "glob";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import type { ISCRow } from "./WorkOrchestrator.ts";
 import { normalizeVerificationCommand, findMissingDirectoryArg } from "./VerificationUtils.ts";
 import {
@@ -31,7 +30,13 @@ export class CommandRunner {
   // --------------------------------------------------------------------------
 
   parseVerificationCommand(command: string): { exe: string; args: string[] } | null {
-    if (command.includes("|") || command.includes("&&") || command.includes(";") || command.includes("$(") || command.includes("`")) {
+    if (
+      command.includes("|") ||
+      command.includes("&&") ||
+      command.includes(";") ||
+      command.includes("$(") ||
+      command.includes("`")
+    ) {
       return null;
     }
 
@@ -47,11 +52,18 @@ export class CommandRunner {
 
     for (const char of command) {
       if (inQuote) {
-        if (char === inQuote) { inQuote = null; } else { current += char; }
+        if (char === inQuote) {
+          inQuote = null;
+        } else {
+          current += char;
+        }
       } else if (char === '"' || char === "'") {
         inQuote = char;
       } else if (char === " " || char === "\t") {
-        if (current) { parts.push(current); current = ""; }
+        if (current) {
+          parts.push(current);
+          current = "";
+        }
       } else {
         current += char;
       }
@@ -60,6 +72,7 @@ export class CommandRunner {
     if (parts.length === 0) return null;
 
     const exe = parts[0];
+    if (exe === undefined) return null;
 
     if (exe === "git") {
       const sub = parts[1];
@@ -80,7 +93,9 @@ export class CommandRunner {
     const normalized = normalizeVerificationCommand(row.verification.command);
     if (!normalized) {
       // Bare 'test', empty, or otherwise unusable — defer to Phase 2 judgment without failing
-      console.warn(`[CommandRunner] Skipping unusable verification command: "${row.verification.command}" (row #${row.id})`);
+      console.warn(
+        `[CommandRunner] Skipping unusable verification command: "${row.verification.command}" (row #${row.id})`,
+      );
       return null;
     }
     const parsed = this.parseVerificationCommand(normalized);
@@ -89,7 +104,9 @@ export class CommandRunner {
     // Guard: if the command references a directory path that doesn't exist, skip rather than fail
     const missingDir = findMissingDirectoryArg(parsed.args, cwd);
     if (missingDir) {
-      console.warn(`[CommandRunner] Skipping verification command (directory not found: "${missingDir}"): "${normalized}" (row #${row.id})`);
+      console.warn(
+        `[CommandRunner] Skipping verification command (directory not found: "${missingDir}"): "${normalized}" (row #${row.id})`,
+      );
       return null;
     }
 
@@ -97,11 +114,12 @@ export class CommandRunner {
     if (cwd) {
       for (let i = 0; i < parsed.args.length; i++) {
         const arg = parsed.args[i];
+        if (arg === undefined) continue;
         // Skip flags, patterns, and non-file args
         if (arg.startsWith("-") || /[*?]/.test(arg)) continue;
 
         // For absolute paths: remap main-repo paths to worktree paths if the file was modified there
-        if (arg.startsWith("/") && cwd && cwd.includes("/worktrees/")) {
+        if (arg.startsWith("/") && cwd?.includes("/worktrees/")) {
           const mainRepo = cwd.replace(/\/worktrees\/.*$/, "");
           if (arg.startsWith(mainRepo + "/") && !arg.startsWith(cwd + "/")) {
             const relFromRepo = arg.slice(mainRepo.length + 1);
@@ -117,26 +135,47 @@ export class CommandRunner {
 
         // Direct resolution against cwd
         const direct = join(cwd, arg);
-        if (existsSync(direct)) { parsed.args[i] = direct; continue; }
+        if (existsSync(direct)) {
+          parsed.args[i] = direct;
+          continue;
+        }
 
         // Fallback: search for the file under cwd
         try {
-          const found = execFileSync("find", [cwd, "-path", `*/${arg}`, "-type", "f",
-            "-not", "-path", "*/node_modules/*"],
-            { encoding: "utf-8", timeout: 5000 }).trim().split("\n")[0];
-          if (found) { parsed.args[i] = found; continue; }
-        } catch { /* find failed */ }
+          const found = execFileSync(
+            "find",
+            [cwd, "-path", `*/${arg}`, "-type", "f", "-not", "-path", "*/node_modules/*"],
+            { encoding: "utf-8", timeout: 5000 },
+          )
+            .trim()
+            .split("\n")[0];
+          if (found) {
+            parsed.args[i] = found;
+            continue;
+          }
+        } catch {
+          /* find failed */
+        }
 
         // Fuzzy fallback: try matching just the filename
         const basename = arg.split("/").pop() || arg;
         const stem = basename.replace(/\.test\.ts$/, "").replace(/\.spec\.ts$/, "");
         if (stem !== basename) {
           try {
-            const fuzzy = execFileSync("find", [cwd, "-name", `${stem}*.test.ts`, "-type", "f",
-              "-not", "-path", "*/node_modules/*"],
-              { encoding: "utf-8", timeout: 5000 }).trim().split("\n")[0];
-            if (fuzzy) { parsed.args[i] = fuzzy; continue; }
-          } catch { /* fuzzy find failed */ }
+            const fuzzy = execFileSync(
+              "find",
+              [cwd, "-name", `${stem}*.test.ts`, "-type", "f", "-not", "-path", "*/node_modules/*"],
+              { encoding: "utf-8", timeout: 5000 },
+            )
+              .trim()
+              .split("\n")[0];
+            if (fuzzy) {
+              parsed.args[i] = fuzzy;
+              continue;
+            }
+          } catch {
+            /* fuzzy find failed */
+          }
         }
 
         console.warn(`[CommandRunner] File resolution: "${arg}" not found under ${cwd}`);
@@ -144,9 +183,10 @@ export class CommandRunner {
     }
 
     // Expand glob patterns in args
-    const expandedArgs = parsed.args.flatMap(arg => {
-      if (/[*?\[]/.test(arg)) {
-        const expanded = globSync(arg, { cwd: cwd || process.cwd() });
+    const expandedArgs = parsed.args.flatMap((arg) => {
+      if (/[*?[]/.test(arg)) {
+        // Bun's built-in Glob: the `glob` package was never declared or installed.
+        const expanded = Array.from(new Bun.Glob(arg).scanSync({ cwd: cwd || process.cwd() }));
         return expanded.length > 0 ? expanded : [arg];
       }
       return [arg];
@@ -158,7 +198,10 @@ export class CommandRunner {
     } catch (e: unknown) {
       // OS resource/network errors: treat as infrastructure transient, not a work-item failure.
       // Tag the row at origin so classifyFailure() can route without re-parsing strings.
-      const errOutput = (e as { stderr?: string; stdout?: string })?.stderr ?? (e as { stdout?: string })?.stdout ?? (e instanceof Error ? e.message : String(e));
+      const errOutput =
+        (e as { stderr?: string; stdout?: string })?.stderr ??
+        (e as { stdout?: string })?.stdout ??
+        (e instanceof Error ? e.message : String(e));
       if (
         errOutput.includes("EMFILE") ||
         errOutput.includes("ProcessFdQuotaExceeded") ||
@@ -166,7 +209,9 @@ export class CommandRunner {
         errOutput.includes("ETIMEDOUT") ||
         errOutput.includes("ECONNREFUSED")
       ) {
-        console.warn(`[CommandRunner] Verification hit resource limit (EMFILE) for row #${row.id} — deferring to Phase 2`);
+        console.warn(
+          `[CommandRunner] Verification hit resource limit (EMFILE) for row #${row.id} — deferring to Phase 2`,
+        );
         // S3a: tag at origin so classifyFailure() sees a structured signal instead of reparsing
         row.infraFault = true;
         return null;

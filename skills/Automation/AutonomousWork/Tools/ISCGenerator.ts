@@ -8,7 +8,7 @@
  * - inferVerificationCommand: crude dev default when the comprehension omits a verifyCommand
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { WorkItem } from "./WorkQueue.ts";
 import type { EffortLevel } from "./WorkQueue.ts";
 import type { ISCRow, ISCRowExecutability } from "./WorkOrchestrator.ts";
@@ -20,7 +20,7 @@ import type { ComprehendedSpec, ComprehendedRow } from "./Types.ts";
 
 export class ISCGenerator {
   constructor(
-    private readonly iscManager: ISCManager,
+    _iscManager: ISCManager,
     private readonly resolveItemCwd: (item: WorkItem) => string,
     private readonly classifyExecutability: (description: string) => ISCRowExecutability,
     private readonly inferenceFn?: InferenceFn,
@@ -40,9 +40,10 @@ export class ISCGenerator {
 
         const itemCwd = this.resolveItemCwd(item);
         const rows: ISCRow[] = comprehended.rows.map((row: ComprehendedRow) => {
-          const disposition = (row.humanRequired || row.native)
-            ? "human-required" as ISCRowExecutability
-            : this.classifyExecutability(row.description);
+          const disposition =
+            row.humanRequired || row.native
+              ? ("human-required" as ISCRowExecutability)
+              : this.classifyExecutability(row.description);
 
           // invertExit is the LLM's judgment (comprehension Rule 7): true when the row
           // asserts ABSENCE and the verifyCommand passes by exiting non-zero. Read it
@@ -53,7 +54,7 @@ export class ISCGenerator {
             const normalizedCmd = normalizeVerificationCommand(row.verifyCommand, itemCwd);
             verification = {
               method: "command",
-              command: normalizedCmd,
+              command: normalizedCmd ?? undefined,
               success_criteria: `Verified complete: ${row.description}`,
               ...(invertExit ? { invertExit: true } : {}),
             };
@@ -85,19 +86,23 @@ export class ISCGenerator {
         return rows;
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
-        console.error(`[ISCGenerator] comprehendSpec failed for "${item.specPath}": ${errMsg}. Returning EXECUTION_FAILED row.`);
-        return [{
-          id: 1,
-          description: `ISC generation failed: comprehendSpec error for "${item.specPath}": ${errMsg}`,
-          status: "EXECUTION_FAILED" as const,
-          infraFault: true,
-          parallel: false,
-          source: "INFERRED" as const,
-          verification: {
-            method: "manual",
-            success_criteria: "Spec comprehension must succeed before work can proceed",
+        console.error(
+          `[ISCGenerator] comprehendSpec failed for "${item.specPath}": ${errMsg}. Returning EXECUTION_FAILED row.`,
+        );
+        return [
+          {
+            id: 1,
+            description: `ISC generation failed: comprehendSpec error for "${item.specPath}": ${errMsg}`,
+            status: "EXECUTION_FAILED" as const,
+            infraFault: true,
+            parallel: false,
+            source: "INFERRED" as const,
+            verification: {
+              method: "manual",
+              success_criteria: "Spec comprehension must succeed before work can proceed",
+            },
           },
-        }];
+        ];
       }
     }
 
@@ -108,17 +113,59 @@ export class ISCGenerator {
   templateRows(item: WorkItem, effort: EffortLevel): ISCRow[] {
     const rows: ISCRow[] = [];
     if (item.workType === "dev") {
-      rows.push({ id: 1, description: "Implement core functionality", status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "test", command: "bun test", success_criteria: "Core tests pass" } });
-      rows.push({ id: 2, description: "Add tests and validation", status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "test", command: "bun test", success_criteria: "All tests pass" } });
+      rows.push({
+        id: 1,
+        description: "Implement core functionality",
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "test", command: "bun test", success_criteria: "Core tests pass" },
+      });
+      rows.push({
+        id: 2,
+        description: "Add tests and validation",
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "test", command: "bun test", success_criteria: "All tests pass" },
+      });
     } else if (item.workType === "research") {
-      rows.push({ id: 1, description: "Gather sources and context", status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "manual", success_criteria: "Sources documented" } });
-      rows.push({ id: 2, description: "Synthesize findings", status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "manual", success_criteria: "Synthesis complete" } });
+      rows.push({
+        id: 1,
+        description: "Gather sources and context",
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "manual", success_criteria: "Sources documented" },
+      });
+      rows.push({
+        id: 2,
+        description: "Synthesize findings",
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "manual", success_criteria: "Synthesis complete" },
+      });
     } else {
-      rows.push({ id: 1, description: `Complete: ${item.title}`, status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "manual", success_criteria: "Work completed" } });
+      rows.push({
+        id: 1,
+        description: `Complete: ${item.title}`,
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "manual", success_criteria: "Work completed" },
+      });
     }
 
     if (effort === "THOROUGH" || effort === "DETERMINED") {
-      rows.push({ id: rows.length + 1, description: "Edge case handling and robustness", status: "PENDING", source: "INFERRED", parallel: false, verification: { method: "test", command: "bun test", success_criteria: "Edge cases covered" } });
+      rows.push({
+        id: rows.length + 1,
+        description: "Edge case handling and robustness",
+        status: "PENDING",
+        source: "INFERRED",
+        parallel: false,
+        verification: { method: "test", command: "bun test", success_criteria: "Edge cases covered" },
+      });
     }
 
     return rows;

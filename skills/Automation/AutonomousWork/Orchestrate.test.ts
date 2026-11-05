@@ -8,18 +8,16 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
-const WORKFLOW_PATH = join(
-  import.meta.dir,
-  "Workflows",
-  "Orchestrate.md"
-);
+const WORKFLOW_PATH = join(import.meta.dir, "Workflows", "Orchestrate.md");
 
 describe("Orchestrate.md — passes {{WORK_SURFACE}} to TaskOrchestratorPrompt (ISC 6704)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(WORKFLOW_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(WORKFLOW_PATH, "utf-8");
+  });
 
   it("file exists", () => {
     expect(existsSync(WORKFLOW_PATH)).toBe(true);

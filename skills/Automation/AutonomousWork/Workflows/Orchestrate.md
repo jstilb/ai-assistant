@@ -508,8 +508,8 @@ When an item that declares **follow-on loops** verifies + completes, `report-don
 ```markdown
 ## Follow-On Loops
 
-- Canvas Loop 2 — Multiplayer | spec: apps/Canvas/LOOP2-SPEC.md
-- Canvas Loop 3 — Realtime Sync | spec: apps/Canvas/LOOP3-SPEC.md
+- Foo Loop 2 — Multiplayer | spec: plans/Specs/foo-loop2-spec.md
+- Foo Loop 3 — Realtime Sync | spec: plans/Specs/foo-loop3-spec.md
 ```
 
 This is why the queue no longer empties after Loop 1 of a multi-loop epic. The newly-enqueued loop appears in the next `next-batch` automatically.

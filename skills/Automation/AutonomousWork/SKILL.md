@@ -27,13 +27,11 @@ This skill is the **Spec Executor (Lane B)**: it executes approved spec-pipeline
 
 | Tool | CLI | Purpose |
 |------|-----|---------|
-| `TaskOrchestrator.ts` | (programmatic) | Per-item Builder/Verifier loop: runs Builder Agent and Verifier Agent sequentially, injects structured feedback on FAIL, detects stall, escalates NEEDS_REVIEW |
 | `WorkOrchestrator.ts` | `init`, `next-batch`, `prepare <id>`, `started <id>`, `verify <id>`, `complete <id>`, `fail <id>`, `status` | Queue orchestration, ISC prep, verification pipeline |
 | `WorkQueue.ts` | (programmatic) | Single-file queue with DAG, status transitions |
 | `format-isc-table` | (CLI subcommand) | Format ISC rows for agent prompts |
 | `mark-phase-done` | (CLI subcommand) | Mark a phase complete and advance |
 | `SkepticalVerifier.ts` | (programmatic) | Three-tier independent verification (supplementary post-loop check) |
-| `SpecParser.ts` | (programmatic) | Parse spec markdown into ISC rows |
 
 ## Prompts
 
@@ -298,10 +296,11 @@ Phase L   LIVE EXERCISE (mandatory, ALL tiers) — Explorer actually runs the ar
 Phase 2   Sonnet judgment (only if Phase L passed)
 ```
 
-**Per-surface recipes** (`LiveExerciseRecipes.ts`): cli → run the binary with edge args;
-api → boot + health + curl; browser → Playwright + screenshot Read gate; integration →
-import + call public API; refactor → typecheck + run callers; docs/config → render/lint +
-validate with the real loader; **native → HUMAN_REQUIRED** (no simulator here — never auto-DONE).
+**Per-surface guidance** (there is no recipe table; `LiveVerifier.ts` lets the Explorer choose
+how to exercise the artifact): cli → run the binary with edge args; api → boot + health + curl;
+browser → Playwright + screenshot Read gate; integration → import + call public API;
+refactor → typecheck + run callers; docs/config → render/lint + validate with the real loader;
+**native → HUMAN_REQUIRED** (no simulator here — never auto-DONE).
 
 **Complexity scaling** (`LIVE_BUDGETS`, keyed by effort): exploration depth and time budget
 grow with complexity — TRIVIAL = one real execution (~60s); DETERMINED = 15+ scenarios incl.
@@ -318,9 +317,8 @@ Two quality gate hooks enforce verification at the agent level:
 | Hook | Fires When | Blocks When |
 |------|-----------|-------------|
 | `hooks/TaskCompleted.sh` | Agent marks task complete | Deliverables missing or have FIXME/TODO markers |
-| `hooks/TeammateIdle.sh` | Agent goes idle | Unclaimed/unblocked tasks remain in task list |
 
-These hooks are registered in `settings.json` or team configs.
+This hook is registered in `settings.json` (TaskCompleted).
 
 ---
 
@@ -359,7 +357,6 @@ Use lean variants when: `parallel: true`, `run_in_background: true`, or spawning
 - **Templates/loop.sh** — Ralph loop iteration engine (self-contained)
 - **QueueRouter** — Approval flow, approved-work queue (JSONL source)
 - **WorktreeManager** — Isolation for git-operating agents
-- **hooks/TeammateIdle.sh** — Prevents premature agent idle
 - **hooks/TaskCompleted.sh** — Prevents false task completion
 
 ### Output Locations

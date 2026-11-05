@@ -9,7 +9,7 @@
  * `undefined` for empty) rather than reaching into `this`.
  */
 
-import { execFileSync } from "child_process";
+import { execFileSync } from "node:child_process";
 import type { WorkQueue } from "../../WorkQueue.ts";
 import type { ISCManager } from "../../ISCManager.ts";
 import type { ISCRow, PhaseExecutionInfo } from "../../WorkOrchestrator.ts";

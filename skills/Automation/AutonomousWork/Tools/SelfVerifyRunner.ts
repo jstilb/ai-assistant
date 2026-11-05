@@ -23,9 +23,9 @@
  * than escalating them to the human board (Principle B2 / Slice 2).
  */
 
-import { spawnSync } from "child_process";
-import { mkdirSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   LIVE_BUDGETS,
   type LiveVerifierInput,
@@ -104,10 +104,7 @@ function defaultHasTsconfig(workingDir: string): boolean {
  *      tsconfig is present — a real compile, not a test)
  * Deduped, order-preserving.
  */
-export function buildSelfVerifyCommands(
-  input: LiveVerifierInput,
-  hasTsconfig: (dir: string) => boolean,
-): string[] {
+export function buildSelfVerifyCommands(input: LiveVerifierInput, hasTsconfig: (dir: string) => boolean): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   const push = (c: string) => {
@@ -184,6 +181,7 @@ export async function runSelfVerify(
       break;
     }
     const cmd = safe[i];
+    if (cmd === undefined) break;
     let r: ExecResult;
     try {
       r = exec(cmd, { cwd: input.workingDir, timeoutMs: perCommandTimeout });
@@ -207,7 +205,9 @@ export async function runSelfVerify(
   const scenariosRun = scenarios.length;
   const scenariosPassed = scenarios.filter((s) => s.verdict === "PASS").length;
   const scenariosFailed = scenarios.filter((s) => s.verdict === "FAIL").length;
-  const edgeCasesExplored = scenarios.filter((s) => s.kind === "edge" || s.kind === "error" || s.kind === "chaos").length;
+  const edgeCasesExplored = scenarios.filter(
+    (s) => s.kind === "edge" || s.kind === "error" || s.kind === "chaos",
+  ).length;
 
   // No allowlisted command to run = environment limitation, NOT a code FAIL.
   // Surface it as environmentBlocked so the pipeline re-stages (does not escalate).

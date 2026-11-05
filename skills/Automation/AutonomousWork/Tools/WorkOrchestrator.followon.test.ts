@@ -3,19 +3,32 @@
  * When a loop verifies+completes, the next follow-on loop is auto-enqueued, gated.
  */
 
-import { describe, it, expect } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect, afterAll } from "bun:test";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WorkOrchestrator } from "./WorkOrchestrator.ts";
 import { WorkQueue, type WorkItem, type WorkItemMetadata } from "./WorkQueue.ts";
 import { deriveFollowOnFromSpec, type InferFn, type FollowOnLoop } from "./FollowOnLoops.ts";
 import type { InferenceResult } from "../../../../lib/core/Inference.ts";
+import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
+
+// Hermetic: pin KAYA_HOME to a temp dir so nothing writes to the live home.
+pinKayaHome("auto-test-");
+afterAll(async () => {
+  await restoreKayaHome();
+});
 
 function makeItem(over: Partial<WorkItem> & { id: string }): WorkItem {
   return {
-    title: `Item ${over.id}`, description: "", status: "completed", priority: "normal",
-    dependencies: [], source: "manual", createdAt: new Date().toISOString(), ...over,
+    title: `Item ${over.id}`,
+    description: "",
+    status: "completed",
+    priority: "normal",
+    dependencies: [],
+    source: "manual",
+    createdAt: new Date().toISOString(),
+    ...over,
   };
 }
 
@@ -32,16 +45,19 @@ const NEVER_DERIVE = async (): Promise<FollowOnLoop[]> => {
 
 describe("enqueueNextFollowOn", () => {
   it("enqueues the next loop, gated on the completed item, carrying the remainder (structured wins, no deriveFn call)", async () => {
-    const { orch, queue } = orchWith([makeItem({
-      id: "loop1", title: "Canvas Loop 1",
-      metadata: {
-        followOnLoops: [
-          { title: "Canvas Loop 2", specPath: "/abs/loop2.md" },
-          { title: "Canvas Loop 3" },
-          { title: "Canvas Loop 4" },
-        ],
-      },
-    })]);
+    const { orch, queue } = orchWith([
+      makeItem({
+        id: "loop1",
+        title: "Canvas Loop 1",
+        metadata: {
+          followOnLoops: [
+            { title: "Canvas Loop 2", specPath: "/abs/loop2.md" },
+            { title: "Canvas Loop 3" },
+            { title: "Canvas Loop 4" },
+          ],
+        },
+      }),
+    ]);
 
     // NEVER_DERIVE throws if consulted — proves structured loops short-circuit comprehension.
     const res = await orch.enqueueNextFollowOn("loop1", NEVER_DERIVE);
@@ -64,9 +80,12 @@ describe("enqueueNextFollowOn", () => {
   });
 
   it("is idempotent — a second call does not enqueue a duplicate", async () => {
-    const { orch, queue } = orchWith([makeItem({
-      id: "loop1", metadata: { followOnLoops: [{ title: "Loop 2" }] },
-    })]);
+    const { orch, queue } = orchWith([
+      makeItem({
+        id: "loop1",
+        metadata: { followOnLoops: [{ title: "Loop 2" }] },
+      }),
+    ]);
     const r1 = await orch.enqueueNextFollowOn("loop1", NEVER_DERIVE);
     expect(r1.enqueued).toBe(true);
     const r2 = await orch.enqueueNextFollowOn("loop1", NEVER_DERIVE);
@@ -113,7 +132,8 @@ describe("enqueueNextFollowOn", () => {
       const infer: InferFn = async ({ userPrompt }) => {
         promptSawSpec = userPrompt.includes("KayaScheduler Phase 2 — recurring demand");
         return {
-          success: true, level: "fast",
+          success: true,
+          level: "fast",
           output: JSON.stringify([
             { title: "KayaScheduler Phase 2 — recurring demand", specPath: join(dir, "phase2.md") },
             { title: "KayaScheduler Phase 3 — learning loop" },
@@ -147,7 +167,7 @@ describe("enqueueNextFollowOn", () => {
     writeFileSync(specPath, "# Single-phase spec\n\nDelivers everything in one build.\n");
     try {
       const { orch } = orchWith([makeItem({ id: "solo2", specPath })]);
-      const infer: InferFn = async () => ({ success: true, output: "[]", level: "fast" } as InferenceResult);
+      const infer: InferFn = async () => ({ success: true, output: "[]", level: "fast" }) as InferenceResult;
       const res = await orch.enqueueNextFollowOn("solo2", (sp, c) => deriveFollowOnFromSpec(sp, { ...c, infer }));
       expect(res.enqueued).toBe(false);
     } finally {
@@ -157,17 +177,28 @@ describe("enqueueNextFollowOn", () => {
 
   it("sequential gating: the next loop is NOT ready until the prior loop is completed", async () => {
     // loop1 still in_progress → its follow-on must not be releasable.
-    const { orch, queue } = orchWith([makeItem({
-      id: "loop1", status: "in_progress", metadata: { followOnLoops: [{ title: "Loop 2" }] },
-    })]);
+    const { orch, queue } = orchWith([
+      makeItem({
+        id: "loop1",
+        status: "in_progress",
+        metadata: { followOnLoops: [{ title: "Loop 2" }] },
+      }),
+    ]);
     await orch.enqueueNextFollowOn("loop1");
     const ready = queue.getReadyItems().map((i) => i.title);
     expect(ready).not.toContain("Loop 2"); // dep (loop1) not completed → DAG-blocked
 
     // Once loop1 completes (after verification), the follow-on becomes ready.
     queue.setVerification("loop1", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS", concerns: [],
-      iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0, verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     queue.updateStatus("loop1", "completed");
     expect(queue.getReadyItems().map((i) => i.title)).toContain("Loop 2");

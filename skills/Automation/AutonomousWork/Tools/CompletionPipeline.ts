@@ -27,7 +27,7 @@ import type { NotificationDispatcher } from "./NotificationDispatcher.ts";
 import { memoryStore, type CaptureOptions } from "../../../../lib/core/MemoryStore.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
 // cross-skill-allowed: ISC 4 — completion pipeline self-reports tech debt incurred during a work item (AgentResults.debtIncurred) into TechDebtTracker's registry; seam candidate: DebtRegistry client
-import { TechDebtRegistry } from "../../AutoMaintenance/Tools/TechDebtRegistry.ts";
+import type { TechDebtRegistry } from "../../AutoMaintenance/Tools/TechDebtRegistry.ts";
 
 export interface VerifyResult {
   success: boolean;
@@ -67,7 +67,7 @@ export interface CompletionOpts {
   skipSessionLock?: boolean;
 }
 
-export type CompletionOutcome =
+type CompletionOutcome =
   | {
       kind: "completed";
       mergeStatus: "merged" | "pending_approval" | "skipped";
@@ -95,7 +95,7 @@ export type CompletionOutcome =
  * run() throws an internal error rather than returning this sentinel. Kept in the
  * union so adding a new mid-pipeline stage doesn't require widening the type.
  */
-export interface ContinueLegacy {
+interface ContinueLegacy {
   kind: "continue";
 }
 
@@ -117,7 +117,7 @@ export interface StageCtx {
   mergeStatus?: "merged" | "pending_approval" | "skipped";
 }
 
-export type StageResult =
+type StageResult =
   | { kind: "continue"; ctxPatch?: Partial<StageCtx> }
   | { kind: "terminate"; outcome: CompletionOutcome };
 
@@ -150,7 +150,10 @@ export interface CompletionDeps {
    * stage; only Integrator's own internal setMetadata calls landed, racing uncoordinated
    * with the rest of the pipeline. Test-fixture sync mocks remain valid callers.)
    */
-  mergeItem: (itemId: string, skipSessionLock?: boolean) =>
+  mergeItem: (
+    itemId: string,
+    skipSessionLock?: boolean,
+  ) =>
     | { merged: boolean; prUrl?: string; reason?: string }
     | Promise<{ merged: boolean; prUrl?: string; reason?: string }>;
   /** Slice 8 — agent-monitor completion trace emit (sync, fail-open inside the wrapper). */
@@ -191,13 +194,19 @@ export class CompletionPipeline {
     let ctx = this.buildCtx(itemId, results, opts);
 
     for (let i = 0; i < this.stages.length; i++) {
-      const result = await this.stages[i](ctx, this.deps);
+      const stage = this.stages[i];
+      if (!stage) continue;
+      const result = await stage(ctx, this.deps);
       if (result.kind === "terminate") return result.outcome;
       if (result.ctxPatch) ctx = { ...ctx, ...result.ctxPatch };
       // ISC 3: Stamp heartbeat once after precondition + attachEvidence gate stages both pass,
       // signalling that real work is about to begin. Never stamps on early-reject/no-op paths.
       if (i === 1) {
-        try { this.deps.queue.touchHeartbeat(itemId); } catch { /* fail-open */ }
+        try {
+          this.deps.queue.touchHeartbeat(itemId);
+        } catch {
+          /* fail-open */
+        }
       }
     }
 
@@ -321,7 +330,7 @@ export const recordDebtFromCompletion: CompletionStage = async (ctx, deps) => {
       });
     } catch (err) {
       console.warn(
-        `[recordDebtFromCompletion] Failed to record debt entry for ${entry.location}: ${err instanceof Error ? err.message : String(err)}`
+        `[recordDebtFromCompletion] Failed to record debt entry for ${entry.location}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -402,14 +411,16 @@ export const verifyAndAudit: CompletionStage = async (ctx, deps) => {
 
     deps.notificationDispatcher.emitNeedsReviewNotification(ctx.itemId, itemTitle, failVerdict, failureDescriptions);
 
-    memoryStore.capture({
-      source: "AutonomousWork",
-      type: "learning",
-      title: `Work failed: ${itemTitle}`,
-      content: failureDescriptions.join("; "),
-      tags: ["work-failure", failVerdict.toLowerCase()],
-      metadata: { itemId: ctx.itemId, failureCount: verifyResult.failures.length },
-    }).catch((e) => logFailure("CompletionPipeline:captureFailureLearning", e, { itemId: ctx.itemId }));
+    memoryStore
+      .capture({
+        source: "AutonomousWork",
+        type: "learning",
+        title: `Work failed: ${itemTitle}`,
+        content: failureDescriptions.join("; "),
+        tags: ["work-failure", failVerdict.toLowerCase()],
+        metadata: { itemId: ctx.itemId, failureCount: verifyResult.failures.length },
+      })
+      .catch((e) => logFailure("CompletionPipeline:captureFailureLearning", e, { itemId: ctx.itemId }));
 
     const attemptCount = deps.queue.getItem(ctx.itemId)?.attempts?.length ?? 0;
     if (attemptCount < 2) {
@@ -665,21 +676,29 @@ export const mergeIfPossible: CompletionStage = async (ctx, deps) => {
  *   - skepticalReview from ctx.verifyResult (legacy returns this through; can be undefined).
  */
 export const emitTraces: CompletionStage = (ctx, deps) => {
-  try { deps.emitCompletion(ctx.itemId, "executive"); } catch { /* fail-open */ }
+  try {
+    deps.emitCompletion(ctx.itemId, "executive");
+  } catch {
+    /* fail-open */
+  }
 
   const item = deps.queue.getItem(ctx.itemId);
   const iscRowCount = deps.iscManager.load(ctx.itemId).length;
   const verificationCost = ctx.verifyResult?.skepticalReview?.totalCost ?? 0;
-  deps.emitInsight({
-    source: "AutonomousWork",
-    type: "signal",
-    title: `Work completed: ${item?.title ?? ctx.itemId}`,
-    content: `Verdict: PASS, ISC rows: ${iscRowCount}`,
-    tags: ["work-completion", "pass"],
-    metadata: { itemId: ctx.itemId, iscRowCount, verificationCost },
-  }).catch((e) => logFailure("CompletionPipeline:emitInsight", e, { itemId: ctx.itemId }));
+  deps
+    .emitInsight({
+      source: "AutonomousWork",
+      type: "signal",
+      title: `Work completed: ${item?.title ?? ctx.itemId}`,
+      content: `Verdict: PASS, ISC rows: ${iscRowCount}`,
+      tags: ["work-completion", "pass"],
+      metadata: { itemId: ctx.itemId, iscRowCount, verificationCost },
+    })
+    .catch((e) => logFailure("CompletionPipeline:emitInsight", e, { itemId: ctx.itemId }));
 
-  deps.runEvaluatorPipeline(ctx.itemId).catch((e) => logFailure("CompletionPipeline:runEvaluatorPipeline", e, { itemId: ctx.itemId }));
+  deps
+    .runEvaluatorPipeline(ctx.itemId)
+    .catch((e) => logFailure("CompletionPipeline:runEvaluatorPipeline", e, { itemId: ctx.itemId }));
 
   return {
     kind: "terminate",

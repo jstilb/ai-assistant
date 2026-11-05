@@ -8,9 +8,9 @@
  */
 
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { deriveFollowOnFromSpec, type InferFn } from "./FollowOnLoops.ts";
 import type { InferenceResult } from "../../../../lib/core/Inference.ts";
 
@@ -61,10 +61,12 @@ describe("deriveFollowOnFromSpec", () => {
         // The comprehension MUST receive the actual spec content (not just a path),
         // including the deferred-phase section the spec-generator emits.
         seenPrompt = userPrompt;
-        return ok(JSON.stringify([
-          { title: "KayaScheduler Phase 2 — recurring demand", specPath: "plans/Specs/scheduler-phase2.md" },
-          { title: "KayaScheduler Phase 3 — learning loop" },
-        ]));
+        return ok(
+          JSON.stringify([
+            { title: "KayaScheduler Phase 2 — recurring demand", specPath: "plans/Specs/scheduler-phase2.md" },
+            { title: "KayaScheduler Phase 3 — learning loop" },
+          ]),
+        );
       };
 
       const loops = await deriveFollowOnFromSpec(path, { title: "KayaScheduler", infer });
@@ -92,8 +94,7 @@ describe("deriveFollowOnFromSpec", () => {
   test("tolerates prose / code fences around the JSON", async () => {
     const { dir, path } = writeSpec(MULTI_PHASE_SPEC);
     try {
-      const infer: InferFn = async () =>
-        ok("Here is the remaining work:\n```json\n[{\"title\": \"Phase 2\"}]\n```\n");
+      const infer: InferFn = async () => ok('Here is the remaining work:\n```json\n[{"title": "Phase 2"}]\n```\n');
       expect(await deriveFollowOnFromSpec(path, { infer })).toEqual([{ title: "Phase 2" }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -114,10 +115,12 @@ describe("deriveFollowOnFromSpec", () => {
   test("fails LOUD into [] when inference fails — never invents follow-on", async () => {
     const { dir, path } = writeSpec(MULTI_PHASE_SPEC);
     try {
-      const failed: InferFn = async () => ({ success: false, output: "", level: "fast" } as InferenceResult);
+      const failed: InferFn = async () => ({ success: false, output: "", level: "fast" }) as InferenceResult;
       expect(await deriveFollowOnFromSpec(path, { infer: failed })).toEqual([]);
 
-      const threw: InferFn = async () => { throw new Error("boom"); };
+      const threw: InferFn = async () => {
+        throw new Error("boom");
+      };
       expect(await deriveFollowOnFromSpec(path, { infer: threw })).toEqual([]);
 
       const garbage: InferFn = async () => ok("not json at all");
@@ -129,7 +132,10 @@ describe("deriveFollowOnFromSpec", () => {
 
   test("returns [] for a missing or empty spec without calling the LLM", async () => {
     let called = false;
-    const infer: InferFn = async () => { called = true; return ok("[]"); };
+    const infer: InferFn = async () => {
+      called = true;
+      return ok("[]");
+    };
     expect(await deriveFollowOnFromSpec(undefined, { infer })).toEqual([]);
     expect(await deriveFollowOnFromSpec("/no/such/spec.md", { infer })).toEqual([]);
     expect(called).toBe(false);

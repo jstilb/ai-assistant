@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { gatherEvidence } from "./Evidence.ts";
 import type { ItemReviewSummary } from "../../../Tools/SkepticalVerifier.ts";
 
@@ -62,9 +62,9 @@ describe("gatherEvidence — expectedExitCode support", () => {
     const evidence = gatherEvidence(summary, {});
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].exitCode).toBe(1);
-    expect(evidence.commands[0].expectedExitCode).toBe(1);
-    expect(evidence.commands[0].passed).toBe(true);
+    expect(evidence.commands[0]?.exitCode).toBe(1);
+    expect(evidence.commands[0]?.expectedExitCode).toBe(1);
+    expect(evidence.commands[0]?.passed).toBe(true);
   });
 
   it("default behavior unchanged: command exits 0 with no expectedExitCode is PASS", () => {
@@ -87,9 +87,9 @@ describe("gatherEvidence — expectedExitCode support", () => {
     const evidence = gatherEvidence(summary, {});
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].exitCode).toBe(0);
-    expect(evidence.commands[0].expectedExitCode).toBeUndefined();
-    expect(evidence.commands[0].passed).toBe(true);
+    expect(evidence.commands[0]?.exitCode).toBe(0);
+    expect(evidence.commands[0]?.expectedExitCode).toBeUndefined();
+    expect(evidence.commands[0]?.passed).toBe(true);
   });
 
   it("wrong exit code on positive assertion: command exits 1 with no expectedExitCode is FAIL", () => {
@@ -113,9 +113,9 @@ describe("gatherEvidence — expectedExitCode support", () => {
     const evidence = gatherEvidence(summary, {});
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].exitCode).toBe(1);
-    expect(evidence.commands[0].expectedExitCode).toBe(0);
-    expect(evidence.commands[0].passed).toBe(false);
+    expect(evidence.commands[0]?.exitCode).toBe(1);
+    expect(evidence.commands[0]?.expectedExitCode).toBe(0);
+    expect(evidence.commands[0]?.passed).toBe(false);
   });
 
   it("commandEvidence (Fix #4): shell-operator-blocked commands count as blocked, not executed", () => {
@@ -188,8 +188,8 @@ describe("gatherEvidence — expectedExitCode support", () => {
     const evidence = gatherEvidence(summary, {});
 
     expect(evidence.commands.length).toBe(1);
-    expect(evidence.commands[0].exitCode).toBe(0);
-    expect(evidence.commands[0].expectedExitCode).toBe(1);
-    expect(evidence.commands[0].passed).toBe(false);
+    expect(evidence.commands[0]?.exitCode).toBe(0);
+    expect(evidence.commands[0]?.expectedExitCode).toBe(1);
+    expect(evidence.commands[0]?.passed).toBe(false);
   });
 });

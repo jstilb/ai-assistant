@@ -12,10 +12,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { SkepticalVerifier, type SkepticalReviewResult, type InferenceFn } from "./SkepticalVerifier.ts";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import type { SkepticalReviewResult, InferenceFn } from "./SkepticalVerifier.ts";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { ComprehendedSpec } from "./Types.ts";
 import type { ISCRow, RepoContext, VerifyContext, FaultClass } from "./WorkOrchestrator.ts";
 import type { WorkItem } from "./WorkQueue.ts";
@@ -96,9 +96,7 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 /** Build a mock InferenceFn returning pre-defined responses in sequence. */
-function makeMockInference(
-  responses: Array<{ success: boolean; parsed?: unknown; error?: string }>
-): InferenceFn {
+function makeMockInference(responses: Array<{ success: boolean; parsed?: unknown; error?: string }>): InferenceFn {
   let callCount = 0;
   return async (_opts) => {
     const idx = Math.min(callCount, responses.length - 1);
@@ -143,13 +141,18 @@ function makeDoneRow(id: number, overrides: Partial<ISCRow> = {}): ISCRow {
   });
 }
 
-function createTestOrchestrator(items: WorkItem[] = [], opts?: { verifierResult?: SkepticalReviewResult }): WorkOrchestrator {
+function createTestOrchestrator(
+  items: WorkItem[] = [],
+  opts?: { verifierResult?: SkepticalReviewResult },
+): WorkOrchestrator {
   const queue = WorkQueue._createForTesting(items);
   return WorkOrchestrator._createForTesting(queue, opts);
 }
 
-function createTestOrchestratorWithQueue(items: WorkItem[] = [], opts?: { verifierResult?: SkepticalReviewResult }):
-  { orch: WorkOrchestrator; queue: WorkQueue } {
+function createTestOrchestratorWithQueue(
+  items: WorkItem[] = [],
+  opts?: { verifierResult?: SkepticalReviewResult },
+): { orch: WorkOrchestrator; queue: WorkQueue } {
   const queue = WorkQueue._createForTesting(items);
   const orch = WorkOrchestrator._createForTesting(queue, opts);
   return { orch, queue };
@@ -233,7 +236,8 @@ describe("parseVerificationCommand security", () => {
     it("rejects git reset", () => expect(orch.parseVerificationCommand("git reset --hard HEAD")).toBeNull());
     it("rejects git push", () => expect(orch.parseVerificationCommand("git push origin main")).toBeNull());
     it("rejects git commit", () => expect(orch.parseVerificationCommand('git commit -m "msg"')).toBeNull());
-    it("rejects git config", () => expect(orch.parseVerificationCommand("git config user.email evil@attacker.com")).toBeNull());
+    it("rejects git config", () =>
+      expect(orch.parseVerificationCommand("git config user.email evil@attacker.com")).toBeNull());
     it("rejects git branch -D", () => expect(orch.parseVerificationCommand("git branch -D feature")).toBeNull());
     it("rejects git clean", () => expect(orch.parseVerificationCommand("git clean -fd")).toBeNull());
     it("rejects git with no subcommand", () => expect(orch.parseVerificationCommand("git")).toBeNull());
@@ -266,18 +270,22 @@ describe("verify() ISC row handling", () => {
 
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
-    expect(orch.iscManager.load("a")[0].status).toBe("VERIFIED");
+    expect(orch?.iscManager.load("a")[0]?.status).toBe("VERIFIED");
   });
 
   it("DONE row with failing verification → failure", async () => {
     const orch = createTestOrchestrator([makeItem({ id: "a" })]);
     orch.iscManager.persist("a", [
-      makeRow({ id: 1, status: "DONE", verification: { method: "test", command: "test -f /nonexistent/xyz", success_criteria: "exists" } }),
+      makeRow({
+        id: 1,
+        status: "DONE",
+        verification: { method: "test", command: "test -f /nonexistent/xyz", success_criteria: "exists" },
+      }),
     ]);
 
     const result = await orch.verify("a");
     expect(result.success).toBe(false);
-    expect(result.failures[0].verification?.result).toBe("FAIL");
+    expect(result.failures[0]?.verification?.result).toBe("FAIL");
   });
 
   it("DONE row without verification object → failure (no auto-promote)", async () => {
@@ -305,7 +313,7 @@ describe("verify() ISC row handling", () => {
     // and are handled by the blocked transition in reportDone
     const result = await orch.verify("a");
     // verify passes local checks (no hard failures), SkepticalVerifier runs
-    expect(result.failures.filter(f => f.status === "PENDING").length).toBe(0);
+    expect(result.failures.filter((f) => f.status === "PENDING").length).toBe(0);
   });
 
   it("EXECUTION_FAILED rows count as failures", async () => {
@@ -320,14 +328,14 @@ describe("verify() ISC row handling", () => {
     const orch = createTestOrchestrator([makeItem({ id: "a" })]);
     orch.iscManager.persist("a", [
       makeRow({ id: 1, status: "VERIFIED" }),
-      makeRow({ id: 2, status: "DONE" }),  // no verification object — hard failure
-      makeRow({ id: 3, status: "PENDING" }),  // tolerated — handled as manual by reportDone
+      makeRow({ id: 2, status: "DONE" }), // no verification object — hard failure
+      makeRow({ id: 3, status: "PENDING" }), // tolerated — handled as manual by reportDone
     ]);
 
     const result = await orch.verify("a");
     expect(result.success).toBe(false);
     expect(result.failures.length).toBe(1);
-    expect(result.failures[0].id).toBe(2);
+    expect(result.failures[0]?.id).toBe(2);
   });
 
   it("all DONE with verification → all VERIFIED → success", async () => {
@@ -336,7 +344,7 @@ describe("verify() ISC row handling", () => {
 
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
-    expect(orch.iscManager.load("a").every(r => r.status === "VERIFIED")).toBe(true);
+    expect(orch.iscManager.load("a").every((r) => r.status === "VERIFIED")).toBe(true);
   });
 
   it("returns failure when no ISC rows exist for item", async () => {
@@ -353,7 +361,7 @@ describe("verify() ISC row handling", () => {
 describe("complete() gate", () => {
   it("blocks completion when no verification record exists", async () => {
     const orch = createTestOrchestrator([makeItem({ id: "a" })]);
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("No verification record");
   });
@@ -361,23 +369,35 @@ describe("complete() gate", () => {
   it("allows completion when all ISC rows are VERIFIED and verification passed", async () => {
     const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", status: "in_progress" })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
   });
 
   it("blocks completion when verification status is failed", async () => {
     const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a" })]);
     queue.setVerification("a", {
-      status: "failed", verifiedAt: new Date().toISOString(), verdict: "FAIL",
-      concerns: ["Paper completion"], iscRowsVerified: 0, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "failed",
+      verifiedAt: new Date().toISOString(),
+      verdict: "FAIL",
+      concerns: ["Paper completion"],
+      iscRowsVerified: 0,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("failed");
   });
@@ -385,11 +405,17 @@ describe("complete() gate", () => {
   it("blocks completion when verification status is needs_review", async () => {
     const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a" })]);
     queue.setVerification("a", {
-      status: "needs_review", verifiedAt: new Date().toISOString(), verdict: "NEEDS_REVIEW",
-      concerns: ["Low confidence"], iscRowsVerified: 0, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "needs_review",
+      verifiedAt: new Date().toISOString(),
+      verdict: "NEEDS_REVIEW",
+      concerns: ["Low confidence"],
+      iscRowsVerified: 0,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("needs_review");
   });
@@ -397,19 +423,25 @@ describe("complete() gate", () => {
   it("defense in depth: blocks when persisted passes but in-memory ISC has unverified rows", async () => {
     const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a" })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "DONE" })]);
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("ISC rows not verified");
   });
 
   it("returns failure for unknown item", async () => {
     const orch = createTestOrchestrator([]);
-    const result = await orch.complete("nonexistent");
+    const result = await orch["complete"]("nonexistent");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("Not found");
   });
@@ -421,39 +453,47 @@ describe("complete() gate", () => {
 
 describe("complete() provenance gate", () => {
   it("setVerification rejects verifiedBy: 'manual' — cannot bypass provenance guard", () => {
-    const { queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", effort: "STANDARD" }),
-    ]);
-    expect(() => queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0.02,
-      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [1, 2],
-    })).toThrow('is not "skeptical_verifier"');
+    const { queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", effort: "STANDARD" })]);
+    expect(() =>
+      queue.setVerification("a", {
+        status: "verified",
+        verifiedAt: new Date().toISOString(),
+        verdict: "PASS",
+        concerns: [],
+        iscRowsVerified: 1,
+        iscRowsTotal: 1,
+        verificationCost: 0.02,
+        verifiedBy: "manual" as "skeptical_verifier",
+        tiersExecuted: [1, 2],
+      }),
+    ).toThrow('is not "skeptical_verifier"');
   });
 
   it("complete() rejects items without verification record", async () => {
-    const { orch } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", effort: "TRIVIAL", status: "in_progress" }),
-    ]);
+    const { orch } = createTestOrchestratorWithQueue([makeItem({ id: "a", effort: "TRIVIAL", status: "in_progress" })]);
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("No verification record found");
   });
 
   it("rejects when tiersExecuted does not include Tier 1 for non-TRIVIAL", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", effort: "STANDARD" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", effort: "STANDARD" })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0.02,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0.02,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("Tier 1 code checks did not execute");
   });
@@ -463,13 +503,19 @@ describe("complete() provenance gate", () => {
       makeItem({ id: "a", effort: "STANDARD", status: "in_progress" }),
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
   });
 });
@@ -510,7 +556,7 @@ describe("status transitions", () => {
 
 describe("init", () => {
   it("succeeds with valid queue", async () => {
-    const result = await createTestOrchestrator([makeItem({ id: "a" })]).init(50);
+    const result = await createTestOrchestrator([makeItem({ id: "a" })]).init();
     expect(result.success).toBe(true);
     expect(result.ready).toBe(1);
   });
@@ -526,10 +572,7 @@ describe("init", () => {
   });
 
   it("reports blocked count", async () => {
-    const orch = createTestOrchestrator([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b", dependencies: ["a"] }),
-    ]);
+    const orch = createTestOrchestrator([makeItem({ id: "a" }), makeItem({ id: "b", dependencies: ["a"] })]);
     const result = await orch.init();
     expect(result.success).toBe(true);
     expect(result.ready).toBe(1);
@@ -561,7 +604,7 @@ describe("readOrchestrationLearnings", () => {
     mkdirSync(dateDir, { recursive: true });
     writeFileSync(
       join(dateDir, "20260327-001_failure-abc.md"),
-      "# Failure Capture\n\n## Summary\n\nFailed to complete ISC rows properly\n"
+      "# Failure Capture\n\n## Summary\n\nFailed to complete ISC rows properly\n",
     );
     const orch = createTestOrchestrator();
     const result = await orch.readOrchestrationLearnings(tmpDir);
@@ -576,7 +619,7 @@ describe("readOrchestrationLearnings", () => {
     for (let i = 1; i <= 7; i++) {
       writeFileSync(
         join(dateDir, `2026032700${i}_failure-x${i}.md`),
-        `# Failure\n\n## Summary\n\nFailure number ${i}\n`
+        `# Failure\n\n## Summary\n\nFailure number ${i}\n`,
       );
     }
     const orch = createTestOrchestrator();
@@ -592,13 +635,10 @@ describe("readOrchestrationLearnings", () => {
     const newDir = join(tmpDir, "2026-03-27");
     mkdirSync(oldDir, { recursive: true });
     mkdirSync(newDir, { recursive: true });
-    writeFileSync(
-      join(oldDir, "20260325-001_failure-old.md"),
-      "# Failure\n\n## Summary\n\nOld failure\n"
-    );
+    writeFileSync(join(oldDir, "20260325-001_failure-old.md"), "# Failure\n\n## Summary\n\nOld failure\n");
     writeFileSync(
       join(newDir, "20260327-001_failure-new.md"),
-      "# Failure\n\n## Summary\n\nNew failure from recent date\n"
+      "# Failure\n\n## Summary\n\nNew failure from recent date\n",
     );
     const orch = createTestOrchestrator();
     const result = await orch.readOrchestrationLearnings(tmpDir);
@@ -620,10 +660,7 @@ describe("nextBatch", () => {
   });
 
   it("reports blocked count when items have unmet deps", async () => {
-    const orch = createTestOrchestrator([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b", dependencies: ["a"] }),
-    ]);
+    const orch = createTestOrchestrator([makeItem({ id: "a" }), makeItem({ id: "b", dependencies: ["a"] })]);
     const result = await orch.nextBatch(5);
     expect(result.items.length).toBe(1);
     expect(result.blocked).toBe(1);
@@ -637,17 +674,19 @@ describe("nextBatch", () => {
     ]);
 
     // Force lastRecoveryAt to >30min ago
-    (orch as any).lastRecoveryAt = Date.now() - 31 * 60 * 1000;
+    orch["lastRecoveryAt"] = Date.now() - 31 * 60 * 1000;
 
     const result = await orch.nextBatch(5);
     // "stale" was recovered to pending then immediately claimed by claimParallelBatch
     // Verify recovery happened via metadata (resetToPending sets lastRecovery)
     const staleItem = queue.getItem("stale")!;
-    expect((staleItem.metadata as any)?.lastRecovery).toBeDefined();
-    expect((staleItem.metadata as any)?.lastRecovery?.previousStatus).toBe("in_progress");
+    expect((staleItem.metadata as { lastRecovery?: unknown } | undefined)?.lastRecovery).toBeDefined();
+    expect(
+      (staleItem.metadata as { lastRecovery?: { previousStatus?: string } } | undefined)?.lastRecovery?.previousStatus,
+    ).toBe("in_progress");
     // Both "stale" (recovered→claimed) and "ready" should be in the batch
-    expect(result.items.some(i => i.id === "stale")).toBe(true);
-    expect(result.items.some(i => i.id === "ready")).toBe(true);
+    expect(result.items.some((i) => i.id === "stale")).toBe(true);
+    expect(result.items.some((i) => i.id === "ready")).toBe(true);
   });
 
   // S5b: init() runs its own recovery pass but historically never stamped
@@ -670,7 +709,7 @@ describe("nextBatch", () => {
 
     let recoveryCallsAfterInit = 0;
     const realRecover = orch.recoverOrphanedItems.bind(orch);
-    (orch as any).recoverOrphanedItems = async () => {
+    orch["recoverOrphanedItems"] = async () => {
       recoveryCallsAfterInit++;
       return realRecover();
     };
@@ -680,21 +719,19 @@ describe("nextBatch", () => {
   });
 
   it("nextBatch() DOES re-run recovery once 30+ minutes have elapsed since init() (S5b)", async () => {
-    const { orch } = createTestOrchestratorWithQueue([
-      makeItem({ id: "ready", status: "pending" }),
-    ]);
+    const { orch } = createTestOrchestratorWithQueue([makeItem({ id: "ready", status: "pending" })]);
 
     await orch.init();
 
     let recoveryCallsAfterInit = 0;
     const realRecover = orch.recoverOrphanedItems.bind(orch);
-    (orch as any).recoverOrphanedItems = async () => {
+    orch["recoverOrphanedItems"] = async () => {
       recoveryCallsAfterInit++;
       return realRecover();
     };
 
     // Simulate 30+ minutes elapsing since init()'s recovery stamp
-    (orch as any).lastRecoveryAt = Date.now() - 31 * 60 * 1000;
+    orch["lastRecoveryAt"] = Date.now() - 31 * 60 * 1000;
 
     await orch.nextBatch(5);
     expect(recoveryCallsAfterInit).toBe(1); // periodic gate reopens once stale enough
@@ -735,7 +772,16 @@ describe("iteration constants", () => {
 describe("SkepticalVerifier integration", () => {
   const failResult: SkepticalReviewResult = {
     finalVerdict: "FAIL",
-    tiers: [{ tier: 1, verdict: "FAIL", confidence: 0.2, concerns: ["Paper completion detected"], costEstimate: 0, latencyMs: 0 }],
+    tiers: [
+      {
+        tier: 1,
+        verdict: "FAIL",
+        confidence: 0.2,
+        concerns: ["Paper completion detected"],
+        costEstimate: 0,
+        latencyMs: 0,
+      },
+    ],
     tiersSkipped: [],
     totalCost: 0,
     totalLatencyMs: 0,
@@ -744,7 +790,16 @@ describe("SkepticalVerifier integration", () => {
 
   const needsReviewResult: SkepticalReviewResult = {
     finalVerdict: "NEEDS_REVIEW",
-    tiers: [{ tier: 1, verdict: "NEEDS_REVIEW", confidence: 0.5, concerns: ["Low confidence"], costEstimate: 0, latencyMs: 0 }],
+    tiers: [
+      {
+        tier: 1,
+        verdict: "NEEDS_REVIEW",
+        confidence: 0.5,
+        concerns: ["Low confidence"],
+        costEstimate: 0,
+        latencyMs: 0,
+      },
+    ],
     tiersSkipped: [],
     totalCost: 0,
     totalLatencyMs: 0,
@@ -757,7 +812,7 @@ describe("SkepticalVerifier integration", () => {
 
     const result = await orch.verify("a");
     expect(result.success).toBe(false);
-    expect(result.failures.some(f => f.description.includes("Skeptical review"))).toBe(true);
+    expect(result.failures.some((f) => f.description.includes("Skeptical review"))).toBe(true);
     expect(result.skepticalReview?.finalVerdict).toBe("FAIL");
   });
 
@@ -776,14 +831,18 @@ describe("SkepticalVerifier integration", () => {
 
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
-    expect(orch.iscManager.load("a")[0].status).toBe("VERIFIED");
+    expect(orch?.iscManager.load("a")[0]?.status).toBe("VERIFIED");
   });
 
   it("local command failures short-circuit before SkepticalVerifier runs", async () => {
     // Even with PASS verifier result, a failed local command should fail
     const orch = createTestOrchestrator([makeItem({ id: "a" })]);
     orch.iscManager.persist("a", [
-      makeRow({ id: 1, status: "DONE", verification: { method: "test", command: "test -f /nonexistent/xyz", success_criteria: "exists" } }),
+      makeRow({
+        id: 1,
+        status: "DONE",
+        verification: { method: "test", command: "test -f /nonexistent/xyz", success_criteria: "exists" },
+      }),
     ]);
 
     const result = await orch.verify("a");
@@ -798,7 +857,7 @@ describe("SkepticalVerifier integration", () => {
     await orch.verify("a");
     // Rows should NOT be promoted to VERIFIED
     const rows = orch.iscManager.load("a");
-    expect(rows.every(r => r.status === "DONE")).toBe(true);
+    expect(rows.every((r) => r.status === "DONE")).toBe(true);
   });
 
   it("PASS verdict promotes all DONE rows to VERIFIED", async () => {
@@ -807,7 +866,7 @@ describe("SkepticalVerifier integration", () => {
 
     await orch.verify("a");
     const rows = orch.iscManager.load("a");
-    expect(rows.every(r => r.status === "VERIFIED")).toBe(true);
+    expect(rows.every((r) => r.status === "VERIFIED")).toBe(true);
   });
 
   it("returns concerns from SkepticalVerifier as failure descriptions", async () => {
@@ -815,14 +874,21 @@ describe("SkepticalVerifier integration", () => {
     orch.iscManager.persist("a", [makeDoneRow(1)]);
 
     const result = await orch.verify("a");
-    expect(result.failures.some(f => f.description.includes("Paper completion detected"))).toBe(true);
+    expect(result.failures.some((f) => f.description.includes("Paper completion detected"))).toBe(true);
   });
 
   it("does NOT promote NEEDS_REVIEW to PASS when Tier 1 verdict is NEEDS_REVIEW", async () => {
     const needsReviewT1: SkepticalReviewResult = {
       finalVerdict: "NEEDS_REVIEW",
       tiers: [
-        { tier: 1, verdict: "NEEDS_REVIEW", confidence: 0.6, concerns: ["Low confidence"], costEstimate: 0, latencyMs: 0 },
+        {
+          tier: 1,
+          verdict: "NEEDS_REVIEW",
+          confidence: 0.6,
+          concerns: ["Low confidence"],
+          costEstimate: 0,
+          latencyMs: 0,
+        },
         { tier: 2, verdict: "PASS", confidence: 0.0, concerns: [], costEstimate: 0, latencyMs: 0 },
       ],
       tiersSkipped: [],
@@ -830,14 +896,11 @@ describe("SkepticalVerifier integration", () => {
       totalLatencyMs: 0,
       concerns: ["Low confidence in verification"],
     };
-    const { orch, queue } = createTestOrchestratorWithQueue(
-      [makeItem({ id: "a" })],
-      { verifierResult: needsReviewT1 }
-    );
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a" })], { verifierResult: needsReviewT1 });
     orch.iscManager.persist("a", [makeDoneRow(1), makeDoneRow(2)]);
     await orch.started("a");
 
-    const result = await orch.verify("a");
+    await orch.verify("a");
     const item = queue.getItem("a")!;
     // Guard's canPromote should reject: Tier 1 is NEEDS_REVIEW, not PASS
     expect(item.verification?.verdict).not.toBe("PASS");
@@ -856,9 +919,9 @@ describe("init() — S5b: no phase auto-wiring (ordering via explicit deps)", ()
       makeItem({ id: "p3", title: "LucidTasks Phase 3: Tests" }),
       makeItem({ id: "p4", title: "LucidTasks Phase 4: Docs" }),
     ]);
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.success).toBe(true);
-    expect(result.ready).toBe(4);   // S5b: title-regex auto-wiring removed → all ready
+    expect(result.ready).toBe(4); // S5b: title-regex auto-wiring removed → all ready
     expect(result.blocked).toBe(0);
   });
 
@@ -869,7 +932,7 @@ describe("init() — S5b: no phase auto-wiring (ordering via explicit deps)", ()
       makeItem({ id: "p3", title: "LucidTasks Phase 3: Tests", dependencies: ["p2"] }),
       makeItem({ id: "p4", title: "LucidTasks Phase 4: Docs", dependencies: ["p3"] }),
     ]);
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.success).toBe(true);
     expect(result.ready).toBe(1);
     expect(result.blocked).toBe(3);
@@ -880,21 +943,27 @@ describe("init() — S5b: no phase auto-wiring (ordering via explicit deps)", ()
       makeItem({ id: "p1", title: "LucidTasks Phase 1: Core features" }),
       makeItem({ id: "p2", title: "LucidTasks Phase 2: Database schema" }),
     ]);
-    await orch.init(100);
+    await orch.init();
 
     // Complete Phase 1
     orch.started("p1");
     orch.iscManager.persist("p1", [makeRow({ id: 1, status: "VERIFIED" })]);
     queue.setVerification("p1", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
-    await orch.complete("p1");
+    await orch["complete"]("p1");
 
     const batch = await orch.nextBatch(5);
     expect(batch.items.length).toBe(1);
-    expect(batch.items[0].id).toBe("p2");
+    expect(batch.items[0]?.id).toBe("p2");
   });
 
   it("phase-named items across families are NOT auto-wired (all ready without explicit deps)", async () => {
@@ -904,9 +973,9 @@ describe("init() — S5b: no phase auto-wiring (ordering via explicit deps)", ()
       makeItem({ id: "vm1", title: "VoiceMigration Phase 1: Setup" }),
       makeItem({ id: "vm2", title: "VoiceMigration Phase 2: Impl" }),
     ]);
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.success).toBe(true);
-    expect(result.ready).toBe(4);   // S5b: no auto-wiring → all ready
+    expect(result.ready).toBe(4); // S5b: no auto-wiring → all ready
     expect(result.blocked).toBe(0);
   });
 });
@@ -917,43 +986,43 @@ describe("init() — S5b: no phase auto-wiring (ordering via explicit deps)", ()
 
 describe("ISC persistence", () => {
   it("prepare() persists ISC rows to item metadata", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", workType: "dev" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", workType: "dev" })]);
     await orch.prepare("a", "STANDARD");
     const item = queue.getItem("a")!;
     expect(item.metadata?.iscRows).toBeDefined();
     expect(Array.isArray(item.metadata?.iscRows)).toBe(true);
-    expect((item.metadata?.iscRows as unknown[]).length).toBeGreaterThan(0);
+    expect(((item.metadata?.iscRows ?? []) as unknown[]).length).toBeGreaterThan(0);
   });
 
   it("verify() loads ISC from metadata when in-memory Map is empty (cross-session)", async () => {
     // Simulate: prepare() ran in a prior session and persisted ISC to metadata
     const rows: ISCRow[] = [makeDoneRow(1), makeDoneRow(2)];
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", metadata: { iscRows: rows } }),
-    ]);
+    const { orch } = createTestOrchestratorWithQueue([makeItem({ id: "a", metadata: { iscRows: rows } })]);
     // Do NOT call setItemISC — simulates empty in-memory Map (new process)
 
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
     expect(orch.iscManager.load("a").length).toBeGreaterThan(0);
-    expect(orch.iscManager.load("a").every(r => r.status === "VERIFIED")).toBe(true);
+    expect(orch.iscManager.load("a").every((r) => r.status === "VERIFIED")).toBe(true);
   });
 
   it("complete() loads ISC from metadata for secondary gate (cross-session)", async () => {
     // Item has verification passed but ISC rows have an unverified row in metadata
     const rows: ISCRow[] = [makeRow({ id: 1, status: "DONE" })]; // not VERIFIED
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", metadata: { iscRows: rows } }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", metadata: { iscRows: rows } })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("ISC rows not verified");
   });
@@ -963,25 +1032,29 @@ describe("ISC persistence", () => {
       makeItem({ id: "a", status: "in_progress" }), // no metadata.iscRows, no in-memory ISC
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true); // secondary gate skipped when no ISC found
   });
 
   it("verify() persists VERIFIED statuses back to metadata", async () => {
     const rows: ISCRow[] = [makeDoneRow(1), makeDoneRow(2)];
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", metadata: { iscRows: rows } }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", metadata: { iscRows: rows } })]);
 
     await orch.verify("a");
     const item = queue.getItem("a")!;
     const persisted = item.metadata?.iscRows as ISCRow[];
-    expect(persisted.every(r => r.status === "VERIFIED")).toBe(true);
+    expect(persisted.every((r) => r.status === "VERIFIED")).toBe(true);
   });
 
   it("generatePriorWorkSummary() loads ISC from metadata (cross-session)", () => {
@@ -989,9 +1062,7 @@ describe("ISC persistence", () => {
       makeRow({ id: 1, status: "VERIFIED", description: "Did thing A" }),
       makeRow({ id: 2, status: "DONE", description: "Did thing B" }),
     ];
-    const { orch } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", metadata: { iscRows: rows } }),
-    ]);
+    const { orch } = createTestOrchestratorWithQueue([makeItem({ id: "a", metadata: { iscRows: rows } })]);
 
     const summary = orch.generatePriorWorkSummary(["a"]);
     expect(summary).toContain("Did thing A");
@@ -1017,9 +1088,9 @@ describe("markRowsDone()", () => {
     expect(result.transitioned).toEqual([1, 2]);
 
     const rows = orch.iscManager.load("a");
-    expect(rows[0].status).toBe("DONE");
-    expect(rows[1].status).toBe("DONE");
-    expect(rows[2].status).toBe("PENDING");
+    expect(rows[0]?.status).toBe("DONE");
+    expect(rows[1]?.status).toBe("DONE");
+    expect(rows[2]?.status).toBe("PENDING");
   });
 
   it("skips non-PENDING rows", () => {
@@ -1050,7 +1121,7 @@ describe("markRowsDone()", () => {
 
     const item = queue.getItem("a")!;
     const persisted = item.metadata?.iscRows as ISCRow[];
-    expect(persisted[0].status).toBe("DONE");
+    expect(persisted[0]?.status).toBe("DONE");
   });
 });
 
@@ -1079,10 +1150,7 @@ describe("reportDone() atomic pipeline", () => {
     const item = makeItem({ id: "a", status: "in_progress", effort: "STANDARD", workType: "dev" });
     const orch = createTestOrchestrator([item], { verifierResult: passResult });
     // Set up ISC rows as PENDING (reportDone will mark them done)
-    orch.iscManager.persist("a", [
-      makeDoneRow(1, { status: "PENDING" }),
-      makeDoneRow(2, { status: "PENDING" }),
-    ]);
+    orch.iscManager.persist("a", [makeDoneRow(1, { status: "PENDING" }), makeDoneRow(2, { status: "PENDING" })]);
 
     const result = await orch.reportDone("a", {
       completedRowIds: [1, 2],
@@ -1092,9 +1160,7 @@ describe("reportDone() atomic pipeline", () => {
   });
 
   it("fails when no ISC rows exist", async () => {
-    const orch = createTestOrchestrator([
-      makeItem({ id: "a", status: "in_progress", effort: "STANDARD" }),
-    ]);
+    const orch = createTestOrchestrator([makeItem({ id: "a", status: "in_progress", effort: "STANDARD" })]);
     // No ISC rows set
 
     const result = await orch.reportDone("a", { completedRowIds: [1] });
@@ -1105,7 +1171,9 @@ describe("reportDone() atomic pipeline", () => {
   it("returns skepticalReview when verification fails", async () => {
     const failResult: SkepticalReviewResult = {
       finalVerdict: "FAIL",
-      tiers: [{ tier: 1, verdict: "FAIL", confidence: 0.2, concerns: ["Paper completion"], costEstimate: 0, latencyMs: 0 }],
+      tiers: [
+        { tier: 1, verdict: "FAIL", confidence: 0.2, concerns: ["Paper completion"], costEstimate: 0, latencyMs: 0 },
+      ],
       tiersSkipped: [],
       totalCost: 0,
       totalLatencyMs: 0,
@@ -1113,9 +1181,7 @@ describe("reportDone() atomic pipeline", () => {
     };
     const item = makeItem({ id: "a", status: "in_progress", effort: "STANDARD" });
     const orch = createTestOrchestrator([item], { verifierResult: failResult });
-    orch.iscManager.persist("a", [
-      makeDoneRow(1, { status: "PENDING" }),
-    ]);
+    orch.iscManager.persist("a", [makeDoneRow(1, { status: "PENDING" })]);
 
     const result = await orch.reportDone("a", { completedRowIds: [1] });
     expect(result.success).toBe(false);
@@ -1135,18 +1201,32 @@ describe("prepare() — S5a: no ISC quality gate (weak rows pass through to the 
     // is gone: prepare() succeeds and hands the rows to the always-running judge (Gate 3).
     const payload: ComprehendedSpec = {
       rows: [
-        { id: 1, description: "Make the experience feel delightful", verifyCommand: "", humanRequired: false, native: false },
-        { id: 2, description: "Ensure the overall vibe is right", verifyCommand: "", humanRequired: false, native: false },
+        {
+          id: 1,
+          description: "Make the experience feel delightful",
+          verifyCommand: "",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 2,
+          description: "Ensure the overall vibe is right",
+          verifyCommand: "",
+          humanRequired: false,
+          native: false,
+        },
       ],
       complexityHint: "standard",
       phases: [],
     };
     const queue = WorkQueue._createForTesting([makeItem({ id: "a", workType: "dev" })]);
-    const orch = WorkOrchestrator._createForTesting(queue, { inferenceFn: makeMockInference([{ success: true, parsed: payload }]) });
+    const orch = WorkOrchestrator._createForTesting(queue, {
+      inferenceFn: makeMockInference([{ success: true, parsed: payload }]),
+    });
 
     const result = await orch.prepare("a", "STANDARD");
-    expect(result.success).toBe(true);                 // no quality-gate rejection
-    expect(result.iscRows.length).toBeGreaterThan(0);  // weak rows included, not dropped
+    expect(result.success).toBe(true); // no quality-gate rejection
+    expect(result.iscRows.length).toBeGreaterThan(0); // weak rows included, not dropped
   });
 
   it("passes TRIVIAL items regardless of weak rows", async () => {
@@ -1172,7 +1252,7 @@ describe("prepare() — S5a: no ISC quality gate (weak rows pass through to the 
     const result = await orch.prepare("a", "STANDARD");
     // Dev template rows have "bun test" commands — concrete
     expect(result.success).toBe(true);
-    expect(result.iscRows.every(r => r.verification?.command)).toBe(true);
+    expect(result.iscRows.every((r) => r.verification?.command)).toBe(true);
   });
 });
 
@@ -1183,21 +1263,28 @@ describe("prepare() — S5a: no ISC quality gate (weak rows pass through to the 
 describe("ISC rows use sequential spec numbers as IDs", () => {
   // Phase 5a: IDs now come from ComprehendedRow.id (LLM-assigned, sequential from 1).
   // Tests inject mock inferenceFns so no real LLM is called.
-  const { writeFileSync: writeSpec, mkdtempSync: mkTmp } = require("fs");
-  const { join: joinPath } = require("path");
-  const { tmpdir: osTmpdir } = require("os");
+  const { writeFileSync: writeSpec, mkdtempSync: mkTmp } = require("node:fs");
+  const { join: joinPath } = require("node:path");
+  const { tmpdir: osTmpdir } = require("node:os");
 
   function makeSpecFile(descriptions: string[]): string {
     const dir = mkTmp(joinPath(osTmpdir(), "seq-id-"));
     const specPath = joinPath(dir, "spec.md");
-    writeSpec(specPath, `# Spec\n\n## ISC\n| # | What |\n|---|---|\n${descriptions.map((d, i) => `| ${i+1} | ${d} |`).join("\n")}\n`);
+    writeSpec(
+      specPath,
+      `# Spec\n\n## ISC\n| # | What |\n|---|---|\n${descriptions.map((d, i) => `| ${i + 1} | ${d} |`).join("\n")}\n`,
+    );
     return specPath;
   }
 
   function makeSeqMock(descriptions: string[]): InferenceFn {
     const payload: ComprehendedSpec = {
       rows: descriptions.map((d, i) => ({
-        id: i + 1, description: d, verifyCommand: "echo ok", humanRequired: false, native: false,
+        id: i + 1,
+        description: d,
+        verifyCommand: "echo ok",
+        humanRequired: false,
+        native: false,
       })),
       complexityHint: "standard",
       phases: [],
@@ -1214,9 +1301,9 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
     const result = await orch.prepare("a", "TRIVIAL");
     expect(result.success).toBe(true);
     expect(result.iscRows.length).toBe(3);
-    expect(result.iscRows[0].id).toBe(1);
-    expect(result.iscRows[1].id).toBe(2);
-    expect(result.iscRows[2].id).toBe(3);
+    expect(result.iscRows[0]?.id).toBe(1);
+    expect(result.iscRows[1]?.id).toBe(2);
+    expect(result.iscRows[2]?.id).toBe(3);
   });
 
   it("produces deterministic IDs — same spec yields same IDs", async () => {
@@ -1234,7 +1321,7 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
 
     expect(result1.iscRows.length).toBe(result2.iscRows.length);
     for (let i = 0; i < result1.iscRows.length; i++) {
-      expect(result1.iscRows[i].id).toBe(result2.iscRows[i].id);
+      expect(result1.iscRows[i]?.id).toBe(result2.iscRows[i]?.id);
     }
   });
 
@@ -1244,7 +1331,7 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
     const specPathA = makeSpecFile(descsA);
     const specPathB = makeSpecFile(descsB);
 
-    const queue = WorkQueue._createForTesting([
+    WorkQueue._createForTesting([
       makeItem({ id: "a", specPath: specPathA }),
       makeItem({ id: "b", specPath: specPathB }),
     ]);
@@ -1262,10 +1349,10 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
     const resultA = await orchA.prepare("a", "TRIVIAL");
     const resultB = await orchB.prepare("b", "TRIVIAL");
 
-    expect(resultA.iscRows[0].id).toBe(1);
-    expect(resultA.iscRows[1].id).toBe(2);
-    expect(resultB.iscRows[0].id).toBe(1);
-    expect(resultB.iscRows[1].id).toBe(2);
+    expect(resultA.iscRows[0]?.id).toBe(1);
+    expect(resultA.iscRows[1]?.id).toBe(2);
+    expect(resultB.iscRows[0]?.id).toBe(1);
+    expect(resultB.iscRows[1]?.id).toBe(2);
   });
 
   it("fail-fast when comprehendSpec returns 0 rows (no ISC table)", async () => {
@@ -1283,10 +1370,10 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
 
     const result = await orch.prepare("a", "STANDARD");
     expect(result.iscRows.length).toBe(1);
-    expect(result.iscRows[0].status).toBe("EXECUTION_FAILED");
-    expect(result.iscRows[0].infraFault).toBe(true);
+    expect(result.iscRows[0]?.status).toBe("EXECUTION_FAILED");
+    expect(result.iscRows[0]?.infraFault).toBe(true);
     // Must NOT be a template row
-    expect(result.iscRows[0].description).toMatch(/ISC (generation|extraction) failed/);
+    expect(result.iscRows[0]?.description).toMatch(/ISC (generation|extraction) failed/);
   });
 });
 
@@ -1296,16 +1383,19 @@ describe("ISC rows use sequential spec numbers as IDs", () => {
 
 describe("orphan recovery in init()", () => {
   const passedVerification = {
-    status: "verified" as const, verifiedAt: new Date().toISOString(), verdict: "PASS" as const,
-    concerns: [], iscRowsVerified: 2, iscRowsTotal: 2, verificationCost: 0,
-    verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+    status: "verified" as const,
+    verifiedAt: new Date().toISOString(),
+    verdict: "PASS" as const,
+    concerns: [],
+    iscRowsVerified: 2,
+    iscRowsTotal: 2,
+    verificationCost: 0,
+    verifiedBy: "skeptical_verifier" as const,
+    tiersExecuted: [1, 2],
   };
 
   it("auto-completes verified in_progress items with all VERIFIED ISC", async () => {
-    const verifiedRows: ISCRow[] = [
-      makeRow({ id: 1, status: "VERIFIED" }),
-      makeRow({ id: 2, status: "VERIFIED" }),
-    ];
+    const verifiedRows: ISCRow[] = [makeRow({ id: 1, status: "VERIFIED" }), makeRow({ id: 2, status: "VERIFIED" })];
     const { orch, queue } = createTestOrchestratorWithQueue([
       makeItem({
         id: "a",
@@ -1316,7 +1406,7 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.recovered).toBe(1);
     expect(queue.getItem("a")!.status).toBe("completed");
   });
@@ -1331,7 +1421,7 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.recovered).toBe(1);
     expect(queue.getItem("a")!.status).toBe("pending");
     expect((queue.getItem("a")!.metadata?.lastRecovery as Record<string, unknown>)?.reason).toContain("stale");
@@ -1347,7 +1437,7 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.recovered).toBe(0);
     expect(queue.getItem("a")!.status).toBe("in_progress");
   });
@@ -1367,7 +1457,7 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    await orch.init();
     // Should not auto-complete because not all rows are VERIFIED
     // But it IS stale (>4h) — however it has a verification record, so Path 2 won't trigger either
     expect(queue.getItem("a")!.status).toBe("in_progress");
@@ -1387,15 +1477,12 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    const result = await orch.init();
     expect(result.recovered).toBe(2);
   });
 
   it("G3: refuses auto-complete when tiersExecuted is empty (no Tier 1)", async () => {
-    const verifiedRows: ISCRow[] = [
-      makeRow({ id: 1, status: "VERIFIED" }),
-      makeRow({ id: 2, status: "VERIFIED" }),
-    ];
+    const verifiedRows: ISCRow[] = [makeRow({ id: 1, status: "VERIFIED" }), makeRow({ id: 2, status: "VERIFIED" })];
     const { orch, queue } = createTestOrchestratorWithQueue([
       makeItem({
         id: "a",
@@ -1403,29 +1490,36 @@ describe("orphan recovery in init()", () => {
         effort: "STANDARD",
         startedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
         verification: {
-          status: "verified" as const, verifiedAt: new Date().toISOString(), verdict: "PASS" as const,
-          concerns: [], iscRowsVerified: 2, iscRowsTotal: 2, verificationCost: 0.01,
-          verifiedBy: "skeptical_verifier" as const, tiersExecuted: [], // G3: no Tier 1
+          status: "verified" as const,
+          verifiedAt: new Date().toISOString(),
+          verdict: "PASS" as const,
+          concerns: [],
+          iscRowsVerified: 2,
+          iscRowsTotal: 2,
+          verificationCost: 0.01,
+          verifiedBy: "skeptical_verifier" as const,
+          tiersExecuted: [], // G3: no Tier 1
         },
         metadata: { iscRows: verifiedRows },
       }),
     ]);
 
-    const result = await orch.init(100);
+    await orch.init();
     // Should NOT auto-complete — G3 blocks because Tier 1 never ran
     expect(queue.getItem("a")!.status).toBe("in_progress");
   });
 
   it("G7: refuses auto-complete when ISC coverage is below 80% of spec requirements", async () => {
-    const { writeFileSync, mkdtempSync } = require("fs");
-    const { join } = require("path");
-    const { tmpdir } = require("os");
+    const { writeFileSync, mkdtempSync } = require("node:fs");
+    const { join } = require("node:path");
+    const { tmpdir } = require("node:os");
 
     // Create a spec with 8 requirements
     const dir = mkdtempSync(join(tmpdir(), "orphan-g7-"));
     const specPath = join(dir, "spec.md");
-    const requirements = Array.from({ length: 8 }, (_, i) =>
-      `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`
+    const requirements = Array.from(
+      { length: 8 },
+      (_, i) => `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`,
     ).join("\n");
     writeFileSync(specPath, `# Spec\n\n## Success Criteria\n${requirements}\n`);
 
@@ -1445,15 +1539,21 @@ describe("orphan recovery in init()", () => {
         specPath,
         startedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
         verification: {
-          status: "verified" as const, verifiedAt: new Date().toISOString(), verdict: "PASS" as const,
-          concerns: [], iscRowsVerified: 2, iscRowsTotal: 2, verificationCost: 0.01,
-          verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+          status: "verified" as const,
+          verifiedAt: new Date().toISOString(),
+          verdict: "PASS" as const,
+          concerns: [],
+          iscRowsVerified: 2,
+          iscRowsTotal: 2,
+          verificationCost: 0.01,
+          verifiedBy: "skeptical_verifier" as const,
+          tiersExecuted: [1, 2],
         },
         metadata: { iscRows: verifiedRows },
       }),
     ]);
 
-    const result = await orch.init(100);
+    await orch.init();
     // Should NOT auto-complete — the G5 "all ISC rows VERIFIED" gate blocks it.
     expect(queue.getItem("a")!.status).toBe("in_progress");
   });
@@ -1479,11 +1579,11 @@ describe("orphan recovery in init()", () => {
       }),
     ]);
 
-    const result = await orch.init(100);
+    const result = await orch.init();
     const item = queue.getItem("a")!;
     expect(item.status).toBe("pending"); // reset via recordAttempt
     expect(item.attempts?.length).toBe(1);
-    expect(item.attempts?.[0].error).toContain("needs_review");
+    expect(item?.attempts?.[0]?.error).toContain("needs_review");
     expect(result.recovered).toBeGreaterThanOrEqual(1);
   });
 });
@@ -1508,16 +1608,14 @@ describe("ISC source tagging", () => {
     orch.iscManager.persist("a", []); // Force empty, then generate template rows
     // Access private method indirectly: prepare generates ISC rows
     // For testing, we can verify the ISC rows generated by preparing a dev item
-    const { orch: orch2, queue: queue2 } = createTestOrchestratorWithQueue([
-      makeItem({ id: "b", workType: "dev" }),
-    ]);
+    createTestOrchestratorWithQueue([makeItem({ id: "b", workType: "dev" })]);
     // The prepare method generates ISC, but requires shell. Instead, test templateRows behavior
     // via setItemISC with tagged rows and verify source field exists
     const templateRow = makeRow({ id: 1, source: "INFERRED" as const });
     orch.iscManager.persist("a", [templateRow]);
     const rows = orch.iscManager.load("a");
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].source).toBe("INFERRED");
+    expect(rows[0]?.source).toBe("INFERRED");
   });
 
   it("spec-derived rows default to EXPLICIT source", () => {
@@ -1526,7 +1624,7 @@ describe("ISC source tagging", () => {
     const explicitRow = makeRow({ id: 1, source: "EXPLICIT" as const });
     orch.iscManager.persist("a", [explicitRow]);
     const rows = orch.iscManager.load("a");
-    expect(rows[0].source).toBe("EXPLICIT");
+    expect(rows[0]?.source).toBe("EXPLICIT");
   });
 });
 
@@ -1540,18 +1638,16 @@ describe("verify() summary passthrough", () => {
       makeDoneRow(1, { source: "EXPLICIT" as const }),
       makeDoneRow(2, { source: "INFERRED" as const }),
     ];
-    const { orch } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", metadata: { iscRows: rows } }),
-    ]);
+    const { orch } = createTestOrchestratorWithQueue([makeItem({ id: "a", metadata: { iscRows: rows } })]);
 
     // verify() will try to run verification commands; they may fail but
     // the summary construction still happens. We just need to confirm the method doesn't crash.
-    const result = await orch.verify("a");
+    await orch.verify("a");
     // Source should be preserved on the ISC rows after verification
     const finalRows = orch.iscManager.load("a");
     if (finalRows.length > 0) {
-      const row1 = finalRows.find(r => r.id === 1);
-      const row2 = finalRows.find(r => r.id === 2);
+      const row1 = finalRows.find((r) => r.id === 1);
+      const row2 = finalRows.find((r) => r.id === 2);
       if (row1) expect(row1.source).toBe("EXPLICIT");
       if (row2) expect(row2.source).toBe("INFERRED");
     }
@@ -1563,15 +1659,16 @@ describe("verify() summary passthrough", () => {
 // ---------------------------------------------------------------------------
 
 describe("complete() quaternary gate — requirement coverage", () => {
-  const { writeFileSync, unlinkSync, mkdtempSync } = require("fs");
-  const { join } = require("path");
-  const { tmpdir } = require("os");
+  const { writeFileSync, unlinkSync, mkdtempSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
 
   function makeSpecFile(requirementCount: number): string {
     const dir = mkdtempSync(join(tmpdir(), "quat-gate-"));
     const specPath = join(dir, "spec.md");
-    const requirements = Array.from({ length: requirementCount }, (_, i) =>
-      `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`
+    const requirements = Array.from(
+      { length: requirementCount },
+      (_, i) => `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`,
     ).join("\n");
     writeFileSync(specPath, `# Spec\n\n## Success Criteria\n${requirements}\n`);
     return specPath;
@@ -1579,20 +1676,24 @@ describe("complete() quaternary gate — requirement coverage", () => {
 
   it("blocks completion when ISC rows are unverified (secondary gate)", async () => {
     const specPath = makeSpecFile(8);
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", specPath }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", specPath })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 2, iscRowsTotal: 2, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 2,
+      iscRowsTotal: 2,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [
       makeRow({ id: 1, status: "VERIFIED", source: "INFERRED" as const }),
       makeRow({ id: 2, status: "PENDING", source: "INFERRED" as const }),
     ]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("ISC rows not verified");
     unlinkSync(specPath);
@@ -1603,24 +1704,27 @@ describe("complete() quaternary gate — requirement coverage", () => {
     // INFERRED rows count toward coverage — the gate does not distinguish source type.
     const dir = mkdtempSync(join(tmpdir(), "inferred-gate-"));
     const specPath = join(dir, "spec.md");
-    const rows = Array.from({ length: 5 }, (_, i) =>
-      `| ${i + 1} | Feature ${i + 1} | bun test |`
-    ).join("\n");
+    const rows = Array.from({ length: 5 }, (_, i) => `| ${i + 1} | Feature ${i + 1} | bun test |`).join("\n");
     writeFileSync(specPath, `# Spec\n\n## ISC\n| # | Criterion | Verification |\n|---|---|---|\n${rows}\n`);
 
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", specPath, status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", specPath, status: "in_progress" })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 5, iscRowsTotal: 5, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 5,
+      iscRowsTotal: 5,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
-    orch.iscManager.persist("a", Array.from({ length: 5 }, (_, i) =>
-      makeRow({ id: i + 1, status: "VERIFIED", source: "INFERRED" as const })
-    ));
+    orch.iscManager.persist(
+      "a",
+      Array.from({ length: 5 }, (_, i) => makeRow({ id: i + 1, status: "VERIFIED", source: "INFERRED" as const })),
+    );
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     // 5/5 coverage = 100% — passes the 80% threshold
     expect(result.success).toBe(true);
     unlinkSync(specPath);
@@ -1628,19 +1732,24 @@ describe("complete() quaternary gate — requirement coverage", () => {
 
   it("passes when requirement coverage is adequate with EXPLICIT rows", async () => {
     const specPath = makeSpecFile(4);
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", specPath, status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", specPath, status: "in_progress" })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 4, iscRowsTotal: 4, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 4,
+      iscRowsTotal: 4,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
-    orch.iscManager.persist("a", Array.from({ length: 4 }, (_, i) =>
-      makeRow({ id: i + 1, status: "VERIFIED", source: "EXPLICIT" as const })
-    ));
+    orch.iscManager.persist(
+      "a",
+      Array.from({ length: 4 }, (_, i) => makeRow({ id: i + 1, status: "VERIFIED", source: "EXPLICIT" as const })),
+    );
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
     unlinkSync(specPath);
   });
@@ -1650,13 +1759,19 @@ describe("complete() quaternary gate — requirement coverage", () => {
       makeItem({ id: "a", status: "in_progress" }), // no specPath
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED", source: "INFERRED" as const })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true); // quaternary gate skipped
   });
 
@@ -1665,16 +1780,21 @@ describe("complete() quaternary gate — requirement coverage", () => {
       makeItem({ id: "a", specPath: "/nonexistent/spec.md", status: "in_progress" }),
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED", source: "INFERRED" as const })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true); // gracefully skipped
   });
-
 });
 
 // ---------------------------------------------------------------------------
@@ -1682,32 +1802,33 @@ describe("complete() quaternary gate — requirement coverage", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase 1: generateISC fail-fast and fail-closed", () => {
-  const { writeFileSync, unlinkSync, mkdtempSync } = require("fs");
-  const { join } = require("path");
-  const { tmpdir } = require("os");
+  const { writeFileSync, unlinkSync, mkdtempSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
 
   it("prepare() with comprehendSpec returning 0 rows → single EXECUTION_FAILED row (no template fallback)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "phase1-failfast-"));
     const specPath = join(dir, "empty-isc-spec.md");
-    writeFileSync(specPath, `# My Spec\n\n## Overview\nThis is a general description of the project.\n\n## Background\nSome context about the work.\n`);
+    writeFileSync(
+      specPath,
+      `# My Spec\n\n## Overview\nThis is a general description of the project.\n\n## Background\nSome context about the work.\n`,
+    );
 
     // Inject a mock that returns 0 rows both times → comprehendSpec throws → EXECUTION_FAILED
     const emptyMock = makeMockInference([
       { success: true, parsed: { rows: [], complexityHint: "standard", phases: [] } },
       { success: true, parsed: { rows: [], complexityHint: "standard", phases: [] } },
     ]);
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "a", workType: "dev", specPath }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "a", workType: "dev", specPath })]);
     const orch = WorkOrchestrator._createForTesting(queue, { inferenceFn: emptyMock });
 
     const result = await orch.prepare("a", "STANDARD");
     expect(result.success).toBe(true);
     expect(result.iscRows.length).toBe(1);
-    expect(result.iscRows[0].status).toBe("EXECUTION_FAILED");
-    expect(result.iscRows[0].infraFault).toBe(true);
+    expect(result.iscRows[0]?.status).toBe("EXECUTION_FAILED");
+    expect(result.iscRows[0]?.infraFault).toBe(true);
     // Message must contain the failure signal — either "ISC generation failed" or "ISC extraction failed"
-    expect(result.iscRows[0].description).toMatch(/ISC (generation|extraction) failed/);
+    expect(result.iscRows[0]?.description).toMatch(/ISC (generation|extraction) failed/);
 
     unlinkSync(specPath);
   });
@@ -1717,16 +1838,14 @@ describe("Phase 1: generateISC fail-fast and fail-closed", () => {
     const dir = mkdtempSync(join(tmpdir(), "phase1-throw-"));
 
     // No inferenceFn needed — readFileSync throws before comprehendSpec is called
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "a", workType: "dev", specPath: dir }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "a", workType: "dev", specPath: dir })]);
     const orch = WorkOrchestrator._createForTesting(queue);
 
     const result = await orch.prepare("a", "STANDARD");
     expect(result.success).toBe(true);
     expect(result.iscRows.length).toBe(1);
-    expect(result.iscRows[0].status).toBe("EXECUTION_FAILED");
-    expect(result.iscRows[0].description).toContain("ISC generation failed");
+    expect(result.iscRows[0]?.status).toBe("EXECUTION_FAILED");
+    expect(result.iscRows[0]?.description).toContain("ISC generation failed");
   });
 });
 
@@ -1735,15 +1854,16 @@ describe("Phase 1: generateISC fail-fast and fail-closed", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase 2: Quaternary gate — raised threshold and new sub-checks", () => {
-  const { writeFileSync, unlinkSync, mkdtempSync } = require("fs");
-  const { join } = require("path");
-  const { tmpdir } = require("os");
+  const { writeFileSync, unlinkSync, mkdtempSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
 
   function makeSpecFile(requirementCount: number): string {
     const dir = mkdtempSync(join(tmpdir(), "phase2-gate-"));
     const specPath = join(dir, "spec.md");
-    const requirements = Array.from({ length: requirementCount }, (_, i) =>
-      `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`
+    const requirements = Array.from(
+      { length: requirementCount },
+      (_, i) => `- [ ] Requirement ${i + 1}: Implement feature ${i + 1}`,
     ).join("\n");
     writeFileSync(specPath, `# Spec\n\n## Success Criteria\n${requirements}\n`);
     return specPath;
@@ -1751,27 +1871,31 @@ describe("Phase 2: Quaternary gate — raised threshold and new sub-checks", () 
 
   it("complete() blocked when an ISC row is unverified (secondary gate)", async () => {
     const specPath = makeSpecFile(10);
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", specPath }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "a", specPath })]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 5, iscRowsTotal: 5, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 5,
+      iscRowsTotal: 5,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     // 4 VERIFIED + 1 PENDING → the secondary gate (every row must be VERIFIED) blocks.
     orch.iscManager.persist("a", [
       ...Array.from({ length: 4 }, (_, i) =>
-        makeRow({ id: i + 1, status: "VERIFIED" as const, source: "EXPLICIT" as const })),
+        makeRow({ id: i + 1, status: "VERIFIED" as const, source: "EXPLICIT" as const }),
+      ),
       makeRow({ id: 5, status: "PENDING" as const, source: "EXPLICIT" as const }),
     ]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(false);
     expect(result.reason).toContain("ISC rows not verified");
     unlinkSync(specPath);
   });
-
 });
 
 // ---------------------------------------------------------------------------
@@ -1784,13 +1908,19 @@ describe("complete() allows lower-effort items without Phase 2", () => {
       makeItem({ id: "a", effort: "QUICK", status: "in_progress" }),
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
   });
 });
@@ -1803,27 +1933,34 @@ describe("generateISC wires embeddedCommand", () => {
   // Phase 5a: these tests now verify that verifyCommand from the LLM comprehension
   // maps correctly to verification.method + verification.command on the ISCRow.
   // A mock inferenceFn is injected so no real LLM is called.
-  const { writeFileSync, unlinkSync, mkdtempSync } = require("fs");
-  const { join } = require("path");
-  const { tmpdir } = require("os");
+  const { writeFileSync, unlinkSync, mkdtempSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
 
   it("verifyCommand from comprehension becomes verification.command on ISC row", async () => {
     const dir = mkdtempSync(join(tmpdir(), "embed-cmd-"));
     const specPath = join(dir, "spec.md");
-    writeFileSync(specPath, `# Migration Spec\n\n### 2.1 Success Criteria\n| # | What |\n|---|---|\n| 1 | Zero refs |\n| 2 | CLI works |\n`);
+    writeFileSync(
+      specPath,
+      `# Migration Spec\n\n### 2.1 Success Criteria\n| # | What |\n|---|---|\n| 1 | Zero refs |\n| 2 | CLI works |\n`,
+    );
 
     // LLM comprehension returns the verbatim commands the spec would have had
     const mockPayload: ComprehendedSpec = {
       rows: [
-        { id: 1, description: "Zero refs", verifyCommand: 'grep -ri "asana" skills/', humanRequired: false, native: false },
+        {
+          id: 1,
+          description: "Zero refs",
+          verifyCommand: 'grep -ri "asana" skills/',
+          humanRequired: false,
+          native: false,
+        },
         { id: 2, description: "CLI works", verifyCommand: "bun test skills/LT/", humanRequired: false, native: false },
       ],
       complexityHint: "standard",
       phases: [],
     };
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "ec-test", workType: "dev", specPath }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "ec-test", workType: "dev", specPath })]);
     const orch = WorkOrchestrator._createForTesting(queue, {
       inferenceFn: makeMockInference([{ success: true, parsed: mockPayload }]),
     });
@@ -1831,12 +1968,12 @@ describe("generateISC wires embeddedCommand", () => {
     const result = await orch.prepare("ec-test", "STANDARD");
     expect(result.success).toBe(true);
 
-    const grepRow = result.iscRows.find(r => r.description.includes("Zero refs"));
+    const grepRow = result.iscRows.find((r) => r.description.includes("Zero refs"));
     expect(grepRow).toBeDefined();
     expect(grepRow!.verification?.method).toBe("command");
     expect(grepRow!.verification?.command).toBe('grep -ri "asana" skills/');
 
-    const bunRow = result.iscRows.find(r => r.description.includes("CLI works"));
+    const bunRow = result.iscRows.find((r) => r.description.includes("CLI works"));
     expect(bunRow).toBeDefined();
     expect(bunRow!.verification?.method).toBe("command");
     expect(bunRow!.verification?.command).toBe("bun test skills/LT/");
@@ -1851,15 +1988,11 @@ describe("generateISC wires embeddedCommand", () => {
 
     // LLM sees no runnable command → verifyCommand: null
     const mockPayload: ComprehendedSpec = {
-      rows: [
-        { id: 1, description: "Tests pass", verifyCommand: null, humanRequired: false, native: false },
-      ],
+      rows: [{ id: 1, description: "Tests pass", verifyCommand: null, humanRequired: false, native: false }],
       complexityHint: "standard",
       phases: [],
     };
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "ne-test", workType: "dev", specPath }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "ne-test", workType: "dev", specPath })]);
     const orch = WorkOrchestrator._createForTesting(queue, {
       inferenceFn: makeMockInference([{ success: true, parsed: mockPayload }]),
     });
@@ -1867,7 +2000,7 @@ describe("generateISC wires embeddedCommand", () => {
     const result = await orch.prepare("ne-test", "STANDARD");
     expect(result.success).toBe(true);
 
-    const row = result.iscRows.find(r => r.description.includes("Tests pass"));
+    const row = result.iscRows.find((r) => r.description.includes("Tests pass"));
     expect(row).toBeDefined();
     // verifyCommand was null → method is "inferred", not "command"
     expect(row!.verification?.method).not.toBe("command");
@@ -1885,23 +2018,37 @@ describe("generateISC wires embeddedCommand", () => {
 describe("worktree cleanup on complete/fail", () => {
   it("complete() calls cleanupWorktree for items with worktreePath metadata", async () => {
     const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "a", status: "in_progress", metadata: { worktreePath: "/tmp/fake-worktree", worktreeBranch: "feature-test" } }),
+      makeItem({
+        id: "a",
+        status: "in_progress",
+        metadata: { worktreePath: "/tmp/fake-worktree", worktreeBranch: "feature-test" },
+      }),
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
     // complete() should succeed even if worktree cleanup fails (non-blocking)
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
   });
 
   it("fail() calls cleanupWorktree for items with worktreePath metadata", async () => {
     const orch = createTestOrchestrator([
-      makeItem({ id: "a", status: "in_progress", metadata: { worktreePath: "/tmp/fake-worktree", worktreeBranch: "feature-test" } }),
+      makeItem({
+        id: "a",
+        status: "in_progress",
+        metadata: { worktreePath: "/tmp/fake-worktree", worktreeBranch: "feature-test" },
+      }),
     ]);
 
     // fail() should succeed even if worktree cleanup fails (non-blocking)
@@ -1914,13 +2061,19 @@ describe("worktree cleanup on complete/fail", () => {
       makeItem({ id: "a", status: "in_progress" }), // no worktree metadata
     ]);
     queue.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     orch.iscManager.persist("a", [makeRow({ id: 1, status: "VERIFIED" })]);
 
-    const result = await orch.complete("a");
+    const result = await orch["complete"]("a");
     expect(result.success).toBe(true);
   });
 });
@@ -1946,7 +2099,7 @@ describe("normalizeVerificationCommand", () => {
     });
 
     it("does NOT nullify 'test -f path' command", () => {
-      const result = normalizeVerificationCommand("test -f ~/.claude/CLAUDE.md");
+      const result = normalizeVerificationCommand("test -f /home/example/.claude/CLAUDE.md");
       expect(result).not.toBeNull();
     });
   });
@@ -2007,38 +2160,34 @@ describe("normalizeVerificationCommand", () => {
       // normalizeVerificationCommand only resolves when the target file exists on disk
       const tmpDir = mkdtempSync(join(tmpdir(), "basedir-"));
       writeFileSync(join(tmpDir, "SpecParser.ts"), "// stub");
-      expect(normalizeVerificationCommand("bun run SpecParser.ts", tmpDir))
-        .toBe(`bun run ${tmpDir}/SpecParser.ts`);
+      expect(normalizeVerificationCommand("bun run SpecParser.ts", tmpDir)).toBe(`bun run ${tmpDir}/SpecParser.ts`);
     });
 
     it("resolves ./relative paths against basedir when file exists", () => {
       const tmpDir = mkdtempSync(join(tmpdir(), "basedir-"));
       mkdirSync(join(tmpDir, "src"), { recursive: true });
       writeFileSync(join(tmpDir, "src", "test.ts"), "// stub");
-      expect(normalizeVerificationCommand("bun run ./src/test.ts", tmpDir))
-        .toBe(`bun run ${tmpDir}/src/test.ts`);
+      expect(normalizeVerificationCommand("bun run ./src/test.ts", tmpDir)).toBe(`bun run ${tmpDir}/src/test.ts`);
     });
 
     it("resolves node commands against basedir when file exists", () => {
       const tmpDir = mkdtempSync(join(tmpdir(), "basedir-"));
       writeFileSync(join(tmpDir, "test.js"), "// stub");
-      expect(normalizeVerificationCommand("node test.js", tmpDir))
-        .toBe(`node ${tmpDir}/test.js`);
+      expect(normalizeVerificationCommand("node test.js", tmpDir)).toBe(`node ${tmpDir}/test.js`);
     });
 
     it("does not modify already-absolute paths", () => {
-      expect(normalizeVerificationCommand("bun run /abs/path/test.ts", "/tmp/worktree"))
-        .toBe("bun run /abs/path/test.ts");
+      expect(normalizeVerificationCommand("bun run /abs/path/test.ts", "/tmp/worktree")).toBe(
+        "bun run /abs/path/test.ts",
+      );
     });
 
     it("does not resolve when no basedir provided", () => {
-      expect(normalizeVerificationCommand("bun run SpecParser.ts"))
-        .toBe("bun run SpecParser.ts");
+      expect(normalizeVerificationCommand("bun run SpecParser.ts")).toBe("bun run SpecParser.ts");
     });
 
     it("does not resolve non-script commands", () => {
-      expect(normalizeVerificationCommand("grep -r pattern src/", "/tmp/worktree"))
-        .toBe("grep -r pattern src/");
+      expect(normalizeVerificationCommand("grep -r pattern src/", "/tmp/worktree")).toBe("grep -r pattern src/");
     });
   });
 });
@@ -2054,8 +2203,8 @@ describe("findMissingDirectoryArg", () => {
   });
 
   it("returns the missing directory path when trailing-slash arg does not exist", () => {
-    const result = findMissingDirectoryArg(["ls", "/tmp/pai-public-staging-nonexistent-xyz/"]);
-    expect(result).toBe("/tmp/pai-public-staging-nonexistent-xyz/");
+    const result = findMissingDirectoryArg(["ls", "/tmp/kaya-public-staging-nonexistent-xyz/"]);
+    expect(result).toBe("/tmp/kaya-public-staging-nonexistent-xyz/");
   });
 
   it("does NOT flag paths without trailing slash (conservative: may be file checks)", () => {
@@ -2097,7 +2246,7 @@ describe("runVerificationCommand skips usable commands gracefully", () => {
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
     const rows = orch.iscManager.load("a");
-    expect(rows[0].status).toBe("VERIFIED");
+    expect(rows[0]?.status).toBe("VERIFIED");
   });
 
   it("command referencing non-existent /tmp dir (trailing slash) defers to Tier 2", async () => {
@@ -2108,7 +2257,7 @@ describe("runVerificationCommand skips usable commands gracefully", () => {
         status: "DONE",
         verification: {
           method: "test",
-          command: "ls /tmp/pai-public-staging-nonexistent-xyz/",
+          command: "ls /tmp/kaya-public-staging-nonexistent-xyz/",
           success_criteria: "staging dir exists",
         },
       }),
@@ -2119,12 +2268,11 @@ describe("runVerificationCommand skips usable commands gracefully", () => {
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
     const rows = orch.iscManager.load("a");
-    expect(rows[0].status).toBe("VERIFIED");
+    expect(rows[0]?.status).toBe("VERIFIED");
   });
 
   it("tilde in path is expanded and command executed correctly", async () => {
     // test -d $HOME always succeeds
-    const home = process.env.HOME || "";
     const orch = createTestOrchestrator([makeItem({ id: "a" })]);
     orch.iscManager.persist("a", [
       makeRow({
@@ -2143,7 +2291,7 @@ describe("runVerificationCommand skips usable commands gracefully", () => {
     const result = await orch.verify("a");
     expect(result.success).toBe(true);
     const rows = orch.iscManager.load("a");
-    expect(rows[0].status).toBe("VERIFIED");
+    expect(rows[0]?.status).toBe("VERIFIED");
   });
 });
 
@@ -2174,8 +2322,8 @@ describe("retry()", () => {
     const item = queue.getItem("a")!;
     expect(item.status).toBe("pending");
     expect(item.attempts).toHaveLength(1);
-    expect(item.attempts![0].error).toBe("transient error");
-    expect(item.attempts![0].strategy).toBe("standard");
+    expect(item?.attempts?.[0]?.error).toBe("transient error");
+    expect(item?.attempts?.[0]?.strategy).toBe("standard");
     expect(item.startedAt).toBeUndefined();
   });
 
@@ -2186,13 +2334,15 @@ describe("retry()", () => {
         id: "a",
         status: "in_progress",
         startedAt: new Date().toISOString(),
-        attempts: [{
-          attemptNumber: 1,
-          startedAt: new Date().toISOString(),
-          endedAt: new Date().toISOString(),
-          error: "first error",
-          strategy: "standard" as const,
-        }],
+        attempts: [
+          {
+            attemptNumber: 1,
+            startedAt: new Date().toISOString(),
+            endedAt: new Date().toISOString(),
+            error: "first error",
+            strategy: "standard" as const,
+          },
+        ],
       }),
     ]);
 
@@ -2216,8 +2366,20 @@ describe("retry()", () => {
         status: "in_progress",
         startedAt: new Date().toISOString(),
         attempts: [
-          { attemptNumber: 1, startedAt: "2026-01-01T00:00:00Z", endedAt: "2026-01-01T01:00:00Z", error: "first", strategy: "standard" as const },
-          { attemptNumber: 2, startedAt: "2026-01-01T02:00:00Z", endedAt: "2026-01-01T03:00:00Z", error: "second", strategy: "standard" as const },
+          {
+            attemptNumber: 1,
+            startedAt: "2026-01-01T00:00:00Z",
+            endedAt: "2026-01-01T01:00:00Z",
+            error: "first",
+            strategy: "standard" as const,
+          },
+          {
+            attemptNumber: 2,
+            startedAt: "2026-01-01T02:00:00Z",
+            endedAt: "2026-01-01T03:00:00Z",
+            error: "second",
+            strategy: "standard" as const,
+          },
         ],
       }),
     ]);
@@ -2229,7 +2391,7 @@ describe("retry()", () => {
 
     // Should have created a blocked proxy
     const allItems = queue.getAllItems();
-    const proxy = allItems.find(i => i.title.startsWith("REVIEW:"));
+    const proxy = allItems.find((i) => i.title.startsWith("REVIEW:"));
     expect(proxy).toBeDefined();
     expect(proxy!.status).toBe("blocked");
     expect(proxy!.title).toContain("3 failed attempts");
@@ -2257,8 +2419,8 @@ describe("retry()", () => {
     expect(result.retried).toBe(true);
 
     const item = queue.getItem("a")!;
-    expect(item.attempts![0].iscRowsCompleted).toBe(2); // DONE + VERIFIED
-    expect(item.attempts![0].iscRowsTotal).toBe(3);
+    expect(item?.attempts?.[0]?.iscRowsCompleted).toBe(2); // DONE + VERIFIED
+    expect(item?.attempts?.[0]?.iscRowsTotal).toBe(3);
   });
 });
 
@@ -2279,14 +2441,12 @@ describe("prepare() phase detection", () => {
   // Phase 5a: generateISC now uses LLM comprehension — inject mock inferenceFn so tests
   // don't hit a real LLM. Phase detection reads the comprehension's `phases` (persisted as
   // metadata.comprehendedSpec), so phased specs must return populated `phases` in the mock.
-  const { writeFileSync, unlinkSync, mkdtempSync } = require("fs");
-  const { join } = require("path");
-  const { tmpdir } = require("os");
+  const { writeFileSync, unlinkSync, mkdtempSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
 
   it("returns phases: undefined for items without specPath", async () => {
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "no-spec", workType: "dev" }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "no-spec", workType: "dev" })]);
     // No specPath → Strategy 2 (template) — no LLM called, no inferenceFn needed
     const orch = WorkOrchestrator._createForTesting(queue);
 
@@ -2299,7 +2459,9 @@ describe("prepare() phase detection", () => {
     const dir = mkdtempSync(join(tmpdir(), "phase-detect-"));
     const specPath = join(dir, "spec.md");
     // Build a spec with 2 phases and 8+ ISC rows (parseSpec can extract these for phase detection)
-    writeFileSync(specPath, `# Multi-Phase Spec
+    writeFileSync(
+      specPath,
+      `# Multi-Phase Spec
 
 ## Phase 1: Foundation
 
@@ -2316,19 +2478,68 @@ describe("prepare() phase detection", () => {
 - [ ] Error handling complete
 - [ ] Logging configured
 - [ ] Documentation updated
-`);
+`,
+    );
 
     // Mock returns 8 rows with verify commands so the ISC quality gate passes
     const mockPayload: ComprehendedSpec = {
       rows: [
-        { id: 1, description: "Auth module created", verifyCommand: "bun test src/auth/", humanRequired: false, native: false },
-        { id: 2, description: "JWT validation works", verifyCommand: "bun test src/auth/jwt.test.ts", humanRequired: false, native: false },
-        { id: 3, description: "Session management active", verifyCommand: "bun test src/auth/session.test.ts", humanRequired: false, native: false },
-        { id: 4, description: "Rate limiting configured", verifyCommand: "bun test src/middleware/ratelimit.test.ts", humanRequired: false, native: false },
-        { id: 5, description: "API endpoints created", verifyCommand: "bun test src/api/", humanRequired: false, native: false },
-        { id: 6, description: "Error handling complete", verifyCommand: "bun test src/errors/", humanRequired: false, native: false },
-        { id: 7, description: "Logging configured", verifyCommand: "bun test src/logging/", humanRequired: false, native: false },
-        { id: 8, description: "Documentation updated", verifyCommand: "test -f docs/api.md", humanRequired: false, native: false },
+        {
+          id: 1,
+          description: "Auth module created",
+          verifyCommand: "bun test src/auth/",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 2,
+          description: "JWT validation works",
+          verifyCommand: "bun test src/auth/jwt.test.ts",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 3,
+          description: "Session management active",
+          verifyCommand: "bun test src/auth/session.test.ts",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 4,
+          description: "Rate limiting configured",
+          verifyCommand: "bun test src/middleware/ratelimit.test.ts",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 5,
+          description: "API endpoints created",
+          verifyCommand: "bun test src/api/",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 6,
+          description: "Error handling complete",
+          verifyCommand: "bun test src/errors/",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 7,
+          description: "Logging configured",
+          verifyCommand: "bun test src/logging/",
+          humanRequired: false,
+          native: false,
+        },
+        {
+          id: 8,
+          description: "Documentation updated",
+          verifyCommand: "test -f docs/api.md",
+          humanRequired: false,
+          native: false,
+        },
       ],
       complexityHint: "thorough",
       phases: [
@@ -2336,9 +2547,7 @@ describe("prepare() phase detection", () => {
         { number: 2, name: "Integration", rowIds: [5, 6, 7, 8] },
       ],
     };
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "phased", workType: "dev", specPath }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "phased", workType: "dev", specPath })]);
     const orch = WorkOrchestrator._createForTesting(queue, {
       inferenceFn: makeMockInference([{ success: true, parsed: mockPayload }]),
     });
@@ -2362,7 +2571,9 @@ describe("prepare() phase detection", () => {
   it("returns phases: undefined when spec has < 8 ISC rows", async () => {
     const dir = mkdtempSync(join(tmpdir(), "small-spec-"));
     const specPath = join(dir, "spec.md");
-    writeFileSync(specPath, `# Small Spec
+    writeFileSync(
+      specPath,
+      `# Small Spec
 
 ## Phase 1: Setup
 - [ ] Install deps
@@ -2370,7 +2581,8 @@ describe("prepare() phase detection", () => {
 
 ## Phase 2: Build
 - [ ] Implement
-`);
+`,
+    );
 
     // Mock returns only 3 rows — below phase threshold
     const mockPayload: ComprehendedSpec = {
@@ -2382,9 +2594,7 @@ describe("prepare() phase detection", () => {
       complexityHint: "standard",
       phases: [],
     };
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "small", workType: "dev", specPath }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "small", workType: "dev", specPath })]);
     const orch = WorkOrchestrator._createForTesting(queue, {
       inferenceFn: makeMockInference([{ success: true, parsed: mockPayload }]),
     });
@@ -2401,10 +2611,10 @@ describe("prepare() phase detection", () => {
     const dir = mkdtempSync(join(tmpdir(), "resume-phase-"));
     const specPath = join(dir, "spec.md");
     // Need enough ISC rows to trigger phasing (>= 8)
-    const criteria = Array.from({ length: 10 }, (_, i) =>
-      `- [ ] Criterion ${i + 1} for phase testing`
-    ).join("\n");
-    writeFileSync(specPath, `# Resume Spec
+    const criteria = Array.from({ length: 10 }, (_, i) => `- [ ] Criterion ${i + 1} for phase testing`).join("\n");
+    writeFileSync(
+      specPath,
+      `# Resume Spec
 
 ## Phase 1: Foundation
 
@@ -2415,7 +2625,8 @@ ${criteria.split("\n").slice(0, 5).join("\n")}
 
 ### Criteria
 ${criteria.split("\n").slice(5).join("\n")}
-`);
+`,
+    );
 
     // Mock returns 10 rows
     const mockPayload: ComprehendedSpec = {
@@ -2483,7 +2694,11 @@ describe("started() resets DONE rows to PENDING", () => {
     const item = makeItem({ id: "reset-done-1", status: "pending" });
     const orch = createTestOrchestrator([item]);
     orch.iscManager.persist("reset-done-1", [
-      makeRow({ id: 1, status: "DONE", verification: { method: "test", command: "test -d /tmp", success_criteria: "exists", result: "PASS" } }),
+      makeRow({
+        id: 1,
+        status: "DONE",
+        verification: { method: "test", command: "test -d /tmp", success_criteria: "exists", result: "PASS" },
+      }),
       makeRow({ id: 2, status: "PENDING" }),
       makeRow({ id: 3, status: "VERIFIED" }),
     ]);
@@ -2491,9 +2706,9 @@ describe("started() resets DONE rows to PENDING", () => {
     orch.started("reset-done-1");
 
     const rows = orch.iscManager.load("reset-done-1");
-    expect(rows[0].status).toBe("PENDING");
-    expect(rows[1].status).toBe("PENDING");
-    expect(rows[2].status).toBe("VERIFIED");
+    expect(rows[0]?.status).toBe("PENDING");
+    expect(rows[1]?.status).toBe("PENDING");
+    expect(rows[2]?.status).toBe("VERIFIED");
   });
 
   it("preserves VERIFIED rows on started()", () => {
@@ -2507,22 +2722,26 @@ describe("started() resets DONE rows to PENDING", () => {
     orch.started("reset-done-2");
 
     const rows = orch.iscManager.load("reset-done-2");
-    expect(rows[0].status).toBe("VERIFIED");
-    expect(rows[1].status).toBe("VERIFIED");
+    expect(rows[0]?.status).toBe("VERIFIED");
+    expect(rows[1]?.status).toBe("VERIFIED");
   });
 
   it("clears stale verification.result on reset rows", () => {
     const item = makeItem({ id: "reset-done-3", status: "pending" });
     const orch = createTestOrchestrator([item]);
     orch.iscManager.persist("reset-done-3", [
-      makeRow({ id: 1, status: "DONE", verification: { method: "test", command: "echo ok", success_criteria: "ok", result: "PASS" } }),
+      makeRow({
+        id: 1,
+        status: "DONE",
+        verification: { method: "test", command: "echo ok", success_criteria: "ok", result: "PASS" },
+      }),
     ]);
 
     orch.started("reset-done-3");
 
     const rows = orch.iscManager.load("reset-done-3");
-    expect(rows[0].status).toBe("PENDING");
-    expect(rows[0].verification?.result).toBeUndefined();
+    expect(rows[0]?.status).toBe("PENDING");
+    expect(rows[0]?.verification?.result).toBeUndefined();
   });
 
   it("S4: prepare() never writes _preservedRows — the re-prepare preserve path is deleted", async () => {
@@ -2578,7 +2797,7 @@ describe("runVerificationCommand with invertExit", () => {
       },
     });
     // Access private method via bracket notation for testing
-    const result = (orch as any).commandRunner.runVerificationCommand(row);
+    const result = orch["commandRunner"].runVerificationCommand(row);
     expect(result).toBe(true); // exit 1 + invertExit → PASS
   });
 
@@ -2595,7 +2814,7 @@ describe("runVerificationCommand with invertExit", () => {
         invertExit: true,
       },
     });
-    const result = (orch as any).commandRunner.runVerificationCommand(row);
+    const result = orch["commandRunner"].runVerificationCommand(row);
     expect(result).toBe(false); // exit 0 + invertExit → FAIL
   });
 });
@@ -2653,7 +2872,7 @@ describe("WorkQueue missing dependency detection", () => {
     ]);
     const blocked = queue.getDagBlockedItems();
     expect(blocked.length).toBe(1);
-    expect(blocked[0].id).toBe("dangling-blocked");
+    expect(blocked[0]?.id).toBe("dangling-blocked");
   });
 });
 
@@ -2687,7 +2906,7 @@ describe("Multi-repo verification", () => {
       expect(ctx.kind).toBe("multi");
       if (ctx.kind === "multi") {
         expect(ctx.repos.length).toBe(2);
-        expect(ctx.repos[0].name).toBe("repo-a");
+        expect(ctx.repos[0]?.name).toBe("repo-a");
       }
     });
 
@@ -2707,9 +2926,7 @@ describe("Multi-repo verification", () => {
     });
 
     it("falls through to single-repo logic when all repoContexts cwds are missing", () => {
-      const repos: RepoContext[] = [
-        { name: "gone", cwd: "/nonexistent/totally-gone" },
-      ];
+      const repos: RepoContext[] = [{ name: "gone", cwd: "/nonexistent/totally-gone" }];
       const item = makeItem({
         id: "fallthrough-item",
         metadata: { repoContexts: repos, worktreePath: "/tmp" },
@@ -2737,7 +2954,7 @@ describe("Multi-repo verification", () => {
       const customOrch = createTestOrchestrator();
       customOrch.getGitDiffStat = (ctx: VerifyContext) => {
         if (ctx.kind === "multi") {
-          return ctx.repos.map(r => `[${r.name}]\n src/main.py | 10 +++`).join("\n");
+          return ctx.repos.map((r) => `[${r.name}]\n src/main.py | 10 +++`).join("\n");
         }
         return "1 file changed";
       };
@@ -2806,20 +3023,20 @@ describe("Multi-repo verification", () => {
 // ---------------------------------------------------------------------------
 
 describe("detectProjectContext", () => {
-  const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = require("fs");
-  const { tmpdir } = require("os");
-  const { join } = require("path");
+  const { mkdtempSync, writeFileSync, rmSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const { join } = require("node:path");
 
   function makeOrch(): WorkOrchestrator {
     const queue = new WorkQueue();
-    return new WorkOrchestrator(queue, async () => "mock-inference");
+    return new WorkOrchestrator(queue, undefined, async () => ({ success: true, output: "mock-inference" }));
   }
 
   it("detects TypeScript from package.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "ctx-ts-"));
     writeFileSync(join(dir, "package.json"), "{}");
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(dir);
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(dir);
     expect(ctx.language).toBe("typescript");
     expect(ctx.testPattern).toBe("jest-style");
     rmSync(dir, { recursive: true, force: true });
@@ -2829,7 +3046,7 @@ describe("detectProjectContext", () => {
     const dir = mkdtempSync(join(tmpdir(), "ctx-py-"));
     writeFileSync(join(dir, "pyproject.toml"), "[project]\nname = 'test'");
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(dir);
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(dir);
     expect(ctx.language).toBe("python");
     expect(ctx.testPattern).toBe("pytest-style");
     rmSync(dir, { recursive: true, force: true });
@@ -2839,7 +3056,7 @@ describe("detectProjectContext", () => {
     const dir = mkdtempSync(join(tmpdir(), "ctx-go-"));
     writeFileSync(join(dir, "go.mod"), "module example.com/test");
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(dir);
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(dir);
     expect(ctx.language).toBe("go");
     expect(ctx.framework).toBe("go-test");
     rmSync(dir, { recursive: true, force: true });
@@ -2849,7 +3066,7 @@ describe("detectProjectContext", () => {
     const dir = mkdtempSync(join(tmpdir(), "ctx-rs-"));
     writeFileSync(join(dir, "Cargo.toml"), "[package]\nname = 'test'");
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(dir);
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(dir);
     expect(ctx.language).toBe("rust");
     expect(ctx.framework).toBe("cargo");
     rmSync(dir, { recursive: true, force: true });
@@ -2858,7 +3075,7 @@ describe("detectProjectContext", () => {
   it("returns unknown for empty directory", () => {
     const dir = mkdtempSync(join(tmpdir(), "ctx-empty-"));
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(dir);
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(dir);
     expect(ctx.language).toBe("unknown");
     expect(ctx.isKayaSkill).toBe(false);
     rmSync(dir, { recursive: true, force: true });
@@ -2872,7 +3089,7 @@ describe("detectProjectContext", () => {
     // before this file pinned KAYA_HOME away from the live default).
     const kayaSkillsDir = join(tempHome, "skills");
     const orch = makeOrch();
-    const ctx = (orch as any).verifyCtxResolver.detectProjectContext(join(kayaSkillsDir, "SomeSkill"));
+    const ctx = orch["verifyCtxResolver"].detectProjectContext(join(kayaSkillsDir, "SomeSkill"));
     expect(ctx.isKayaSkill).toBe(true);
   });
 });
@@ -2884,7 +3101,7 @@ describe("detectProjectContext", () => {
 describe("classifyRowExecutability", () => {
   function makeOrch(): WorkOrchestrator {
     const queue = new WorkQueue();
-    return new WorkOrchestrator(queue, async () => "mock-inference");
+    return new WorkOrchestrator(queue, undefined, async () => ({ success: true, output: "mock-inference" }));
   }
 
   // Determinism-residue cleanup: the keyword scanner (classifyHumanRequired) was
@@ -2895,20 +3112,19 @@ describe("classifyRowExecutability", () => {
   // re-derived from the description text here.
   it("returns automatable for ordinary code work", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowExecutability("Implement retry logic with exponential backoff")).toBe("automatable");
+    expect(orch.classifyRowExecutability("Implement retry logic with exponential backoff")).toBe("automatable");
   });
 
   it("no longer keyword-classifies secret entry as human-required (LLM/native lock owns that)", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowExecutability("Add PLAID_SECRET to secrets.json")).toBe("automatable");
+    expect(orch.classifyRowExecutability("Add PLAID_SECRET to secrets.json")).toBe("automatable");
   });
 
   it("no longer keyword-classifies physical/on-device actions as human-required", () => {
     const orch = makeOrch();
-    expect((orch as any).classifyRowExecutability("Run manual test on physical device")).toBe("automatable");
+    expect(orch.classifyRowExecutability("Run manual test on physical device")).toBe("automatable");
   });
 });
-
 
 // ---------------------------------------------------------------------------
 // Smoke-first verification order
@@ -2929,10 +3145,10 @@ describe("Smoke-first verification sort", () => {
       return aPri - bPri;
     });
 
-    expect(sorted[0].id).toBe(2000);
-    expect(sorted[1].id).toBe(4000);
-    expect(sorted[2].id).toBe(1000);
-    expect(sorted[3].id).toBe(3000);
+    expect(sorted[0]?.id).toBe(2000);
+    expect(sorted[1]?.id).toBe(4000);
+    expect(sorted[2]?.id).toBe(1000);
+    expect(sorted[3]?.id).toBe(3000);
   });
 
   it("treats undefined priority same as full", () => {
@@ -2947,8 +3163,8 @@ describe("Smoke-first verification sort", () => {
       return aPri - bPri;
     });
 
-    expect(sorted[0].id).toBe(2000);
-    expect(sorted[1].id).toBe(1000);
+    expect(sorted[0]?.id).toBe(2000);
+    expect(sorted[1]?.id).toBe(1000);
   });
 });
 
@@ -2958,9 +3174,7 @@ describe("Smoke-first verification sort", () => {
 
 describe("FaultClass + retry gating", () => {
   it("retry with faultClass='infrastructure' does NOT call recordAttempt", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "infra-a", status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "infra-a", status: "in_progress" })]);
     const beforeAttempts = queue.getItem("infra-a")?.attempts?.length ?? 0;
 
     const result = await orch.retry("infra-a", "parseSpec threw: bad table format", "infrastructure");
@@ -2972,9 +3186,7 @@ describe("FaultClass + retry gating", () => {
   });
 
   it("retry with faultClass='infrastructure' stores error in metadata.infraErrors", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "infra-b", status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "infra-b", status: "in_progress" })]);
 
     await orch.retry("infra-b", "SkepticalVerifier internal crash", "infrastructure");
 
@@ -2986,9 +3198,7 @@ describe("FaultClass + retry gating", () => {
   });
 
   it("retry with faultClass='item' (default) still calls recordAttempt", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "item-a", status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "item-a", status: "in_progress" })]);
 
     const result = await orch.retry("item-a", "bun test failed: 3 errors");
 
@@ -2999,9 +3209,7 @@ describe("FaultClass + retry gating", () => {
   });
 
   it("retry with faultClass='transient' still consumes retry counter", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "trans-a", status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "trans-a", status: "in_progress" })]);
 
     const result = await orch.retry("trans-a", "EMFILE: too many open files", "transient");
 
@@ -3012,7 +3220,9 @@ describe("FaultClass + retry gating", () => {
 
   it("classifyFailure uses infraFault flag from source-tagged ISCRows", () => {
     const orch = createTestOrchestrator([]);
-    const classify = (orch as unknown as { classifyFailure: (r: string, f?: Array<{ infraFault?: boolean }>) => FaultClass }).classifyFailure.bind(orch);
+    const classify = (
+      orch as unknown as { classifyFailure: (r: string, f?: Array<{ infraFault?: boolean }>) => FaultClass }
+    ).classifyFailure.bind(orch);
 
     // Source-tagged infrastructure fault
     expect(classify("some error", [{ infraFault: true }])).toBe("infrastructure");
@@ -3058,9 +3268,7 @@ describe("03-28 regression: infrastructure fault does not consume retries", () =
   });
 
   it("retry cooldown prevents rapid cycling for item faults", async () => {
-    const { orch, queue } = createTestOrchestratorWithQueue([
-      makeItem({ id: "rapid-1", status: "in_progress" }),
-    ]);
+    const { orch, queue } = createTestOrchestratorWithQueue([makeItem({ id: "rapid-1", status: "in_progress" })]);
 
     // First item fault
     await orch.retry("rapid-1", "test failed");
@@ -3069,7 +3277,7 @@ describe("03-28 regression: infrastructure fault does not consume retries", () =
     expect(item1?.retryEligibleAfter).toBeDefined();
 
     // Should be excluded from getReadyItems due to cooldown
-    expect(queue.getReadyItems().find(i => i.id === "rapid-1")).toBeUndefined();
+    expect(queue.getReadyItems().find((i) => i.id === "rapid-1")).toBeUndefined();
 
     // Verify the cooldown is approximately 60s for attempt 1
     const eligible = new Date(item1!.retryEligibleAfter!).getTime();
@@ -3082,7 +3290,7 @@ describe("03-28 regression: infrastructure fault does not consume retries", () =
     const queue = WorkQueue._createForTesting([
       makeItem({ id: "past-cd", status: "pending", retryEligibleAfter: new Date(Date.now() - 1000).toISOString() }),
     ]);
-    expect(queue.getReadyItems().find(i => i.id === "past-cd")).toBeDefined();
+    expect(queue.getReadyItems().find((i) => i.id === "past-cd")).toBeDefined();
   });
 });
 
@@ -3102,9 +3310,7 @@ describe("WorkOrchestrator nextBatch (ISC 7 — no budget gate)", () => {
 // S5c — verify() circuit breaker is a plain consecutive-FAIL counter (no concern content compare)
 describe("verify() circuit breaker (S5c: 3 consecutive FAILs, no content compare)", () => {
   function seedHistory(history: Array<{ verdict: string; concerns: string[] }>) {
-    const queue = WorkQueue._createForTesting([
-      makeItem({ id: "cb", workType: "dev", status: "in_progress" }),
-    ]);
+    const queue = WorkQueue._createForTesting([makeItem({ id: "cb", workType: "dev", status: "in_progress" })]);
     queue.setMetadata("cb", { verificationHistory: history });
     const orch = WorkOrchestrator._createForTesting(queue);
     return { orch, queue };
@@ -3116,7 +3322,7 @@ describe("verify() circuit breaker (S5c: 3 consecutive FAILs, no content compare
       { verdict: "FAIL", concerns: ["x"] },
     ]);
     const result = await orch.verify("cb");
-    const breaker = result.failures?.find(f => f.description?.includes("Circuit breaker"));
+    const breaker = result.failures?.find((f) => f.description?.includes("Circuit breaker"));
     expect(breaker).toBeUndefined(); // 2 < 3 → breaker does not fire
   });
 
@@ -3128,7 +3334,7 @@ describe("verify() circuit breaker (S5c: 3 consecutive FAILs, no content compare
     ]);
     const result = await orch.verify("cb");
     expect(result.success).toBe(false);
-    const breaker = result.failures?.find(f => f.description?.includes("Circuit breaker: 3 consecutive"));
+    const breaker = result.failures?.find((f) => f.description?.includes("Circuit breaker: 3 consecutive"));
     expect(breaker).toBeDefined();
   });
 
@@ -3139,7 +3345,7 @@ describe("verify() circuit breaker (S5c: 3 consecutive FAILs, no content compare
       { verdict: "PASS", concerns: [] },
     ]);
     const result = await orch.verify("cb");
-    const breaker = result.failures?.find(f => f.description?.includes("Circuit breaker"));
+    const breaker = result.failures?.find((f) => f.description?.includes("Circuit breaker"));
     expect(breaker).toBeUndefined();
   });
 });

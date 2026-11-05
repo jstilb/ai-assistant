@@ -30,13 +30,20 @@ export type WorkSurface = "browser" | "cli" | "api" | "integration" | "native" |
  */
 export function mapProducerSurface(surface: string | undefined): WorkSurface | undefined {
   switch (surface) {
-    case "browser": return "browser";
-    case "cli": return "cli";
-    case "api": return "api";
-    case "native": return "native";
-    case "library": return "integration";
-    case "daemon": return "integration";
-    default: return undefined; // absent/unknown → caller defaults to a non-native surface
+    case "browser":
+      return "browser";
+    case "cli":
+      return "cli";
+    case "api":
+      return "api";
+    case "native":
+      return "native";
+    case "library":
+      return "integration";
+    case "daemon":
+      return "integration";
+    default:
+      return undefined; // absent/unknown → caller defaults to a non-native surface
   }
 }
 

@@ -16,7 +16,7 @@ import { PHASE_2_COST_ESTIMATE_USD } from "../../../Tools/SkepticalVerifier.ts";
 // Signature of extractRelevantSpecSections — injected to avoid circular import.
 type ExtractSpecFn = (summary: ItemReviewSummary) => string;
 
-export interface JudgeOpts {
+interface JudgeOpts {
   /** Injectable inference function — falls back to dynamic import of Inference.ts. */
   inferenceFn?: InferenceFn;
   /** Function that extracts relevant spec sections for the prompt. */
@@ -67,8 +67,7 @@ Respond with ONLY valid JSON (no markdown, no code fences):
   const userPrompt = buildJudgePrompt(summary, phase1, evidence, opts.extractSpecFn);
 
   try {
-    const inferenceFn = opts.inferenceFn
-      ?? (await import("../../../../../../lib/core/Inference.ts")).inference;
+    const inferenceFn = opts.inferenceFn ?? (await import("../../../../../../lib/core/Inference.ts")).inference;
 
     const result = await inferenceFn({
       systemPrompt,
@@ -86,13 +85,12 @@ Respond with ONLY valid JSON (no markdown, no code fences):
         recommendation?: string;
       };
 
-      const verdict = (
+      const verdict =
         parsed.verdict === "PASS" || parsed.verdict === "FAIL" || parsed.verdict === "NEEDS_REVIEW"
-      ) ? parsed.verdict : "NEEDS_REVIEW";
+          ? parsed.verdict
+          : "NEEDS_REVIEW";
 
-      const confidence = typeof parsed.confidence === "number"
-        ? Math.max(0, Math.min(1, parsed.confidence))
-        : 0.5;
+      const confidence = typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5;
 
       const concerns = Array.isArray(parsed.concerns)
         ? parsed.concerns.filter((c): c is string => typeof c === "string")
@@ -146,17 +144,21 @@ export function buildJudgePrompt(
   extractSpecFn: ExtractSpecFn,
 ): string {
   const iscSummary = summary.iscRows
-    .map(r => {
-      const sourceTag = r.disposition === "human-required" ? " [HUMAN-REQUIRED: expected gap]" :
-                        r.source === "INFERRED" ? " [TEMPLATE]" : r.source === "EXPLICIT" ? " [spec-derived]" : "";
+    .map((r) => {
+      const sourceTag =
+        r.disposition === "human-required"
+          ? " [HUMAN-REQUIRED: expected gap]"
+          : r.source === "INFERRED"
+            ? " [TEMPLATE]"
+            : r.source === "EXPLICIT"
+              ? " [spec-derived]"
+              : "";
       const verifyTag = r.verification?.commandRan
         ? ` (command verified: ${r.verification.result})`
         : r.verification?.result
           ? ` (self-reported: ${r.verification.result})`
           : "";
-      const evidenceTag = r.rowEvidence?.summary
-        ? ` [builder-evidence: "${r.rowEvidence.summary.slice(0, 60)}"]`
-        : "";
+      const evidenceTag = r.rowEvidence?.summary ? ` [builder-evidence: "${r.rowEvidence.summary.slice(0, 60)}"]` : "";
       return `  Row #${r.id} [${r.status}]${sourceTag}${evidenceTag} ${r.description}${verifyTag}`;
     })
     .join("\n");
@@ -179,7 +181,7 @@ ${summary.gitDiffStat || "(no changes)"}
 ${logTail || "(no logs)"}
 
 ## Phase 1 Deterministic Checks (${phase1.concerns.length} issue${phase1.concerns.length !== 1 ? "s" : ""} found)
-${phase1.concerns.length > 0 ? phase1.concerns.map(c => `- ${c}`).join("\n") : "All deterministic checks passed — no issues found."}
+${phase1.concerns.length > 0 ? phase1.concerns.map((c) => `- ${c}`).join("\n") : "All deterministic checks passed — no issues found."}
 
 ${summary.specContent ? `## Spec (relevant sections)\n${extractSpecFn(summary)}` : ""}
 ${summary.testStrategyContent ? `## Test Strategy\n${summary.testStrategyContent.slice(0, 3000)}\n\nIf a test strategy is provided, verify that the correct test levels were used (unit vs integration vs e2e) and that smoke-priority items were covered with tests.` : ""}
@@ -202,18 +204,23 @@ export function formatEvidence(evidence?: EvidenceResult): string {
   if (evidence.files.length > 0) {
     parts.push("\n### Files Read");
     for (const file of evidence.files) {
-      parts.push(`\n**${file.path}** (up to 4000 chars, relevant sections prioritized):\n\`\`\`\n${file.content}\n\`\`\``);
+      parts.push(
+        `\n**${file.path}** (up to 4000 chars, relevant sections prioritized):\n\`\`\`\n${file.content}\n\`\`\``,
+      );
     }
   }
 
   if (evidence.commands.length > 0) {
     parts.push("\n### Verification Commands Run");
     for (const cmd of evidence.commands) {
-      const expectedNote = cmd.expectedExitCode !== undefined && cmd.expectedExitCode !== 0
-        ? ` (expected exit ${cmd.expectedExitCode} — negative assertion)`
-        : "";
+      const expectedNote =
+        cmd.expectedExitCode !== undefined && cmd.expectedExitCode !== 0
+          ? ` (expected exit ${cmd.expectedExitCode} — negative assertion)`
+          : "";
       const passedNote = cmd.passed ? " ✓ PASS" : " ✗ FAIL";
-      parts.push(`\n**\`${cmd.cmd}\`** → exit ${cmd.exitCode}${expectedNote}${passedNote}:\n\`\`\`\n${cmd.stdout}\n\`\`\``);
+      parts.push(
+        `\n**\`${cmd.cmd}\`** → exit ${cmd.exitCode}${expectedNote}${passedNote}:\n\`\`\`\n${cmd.stdout}\n\`\`\``,
+      );
     }
   }
 

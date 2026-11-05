@@ -46,10 +46,7 @@ function baseInput(overrides: Partial<LiveVerifierInput> = {}): LiveVerifierInpu
 
 /** Build a fake explorer that returns a fenced JSON block. */
 function fakeExplorer(payload: unknown, opts: Partial<ExplorerRunResult> = {}) {
-  const stdout =
-    "I ran the artifact. Here are the results:\n\n```json\n" +
-    JSON.stringify(payload) +
-    "\n```\n";
+  const stdout = "I ran the artifact. Here are the results:\n\n```json\n" + JSON.stringify(payload) + "\n```\n";
   const calls: Array<{ prompt: string; cwd: string; timeoutMs: number }> = [];
   const fn = (prompt: string, o: { cwd: string; timeoutMs: number }): ExplorerRunResult => {
     calls.push({ prompt, ...o });
@@ -76,8 +73,11 @@ describe("LIVE_BUDGETS", () => {
   test("scenario count and time budget increase monotonically with effort", () => {
     const order = ["TRIVIAL", "QUICK", "STANDARD", "THOROUGH", "DETERMINED"] as const;
     for (let i = 1; i < order.length; i++) {
-      const prev = LIVE_BUDGETS[order[i - 1]];
-      const cur = LIVE_BUDGETS[order[i]];
+      const prevKey = order[i - 1];
+      const curKey = order[i];
+      if (!prevKey || !curKey) throw new Error("order index out of range");
+      const prev = LIVE_BUDGETS[prevKey];
+      const cur = LIVE_BUDGETS[curKey];
       expect(cur.scenarios).toBeGreaterThanOrEqual(prev.scenarios);
       expect(cur.timeBudgetMs).toBeGreaterThanOrEqual(prev.timeBudgetMs);
     }
@@ -133,8 +133,8 @@ describe("buildExplorerPrompt", () => {
 describe("parseExplorerOutput", () => {
   test("extracts the last fenced json block", () => {
     const out =
-      "```json\n{\"scenarios\":[],\"verdict\":\"FAIL\"}\n```\n" +
-      "final answer:\n```json\n{\"scenarios\":[{\"id\":\"s1\",\"kind\":\"happy\",\"verdict\":\"PASS\"}],\"verdict\":\"PASS\"}\n```";
+      '```json\n{"scenarios":[],"verdict":"FAIL"}\n```\n' +
+      'final answer:\n```json\n{"scenarios":[{"id":"s1","kind":"happy","verdict":"PASS"}],"verdict":"PASS"}\n```';
     const parsed = parseExplorerOutput(out);
     expect(parsed?.verdict).toBe("PASS");
     expect(parsed?.scenarios).toHaveLength(1);
@@ -169,9 +169,36 @@ describe("runLiveVerification", () => {
     const explorer = fakeExplorer({
       verdict: "PASS",
       scenarios: [
-        { id: "s1", kind: "happy", description: "greet Alice", command: "greet Alice", expected: "Hello, Alice", observed: "Hello, Alice", exitCode: 0, verdict: "PASS" },
-        { id: "s2", kind: "edge", description: "empty name", command: "greet ''", expected: "usage error", observed: "usage error", exitCode: 1, verdict: "PASS" },
-        { id: "s3", kind: "error", description: "too many args", command: "greet a b", expected: "error", observed: "error", exitCode: 1, verdict: "PASS" },
+        {
+          id: "s1",
+          kind: "happy",
+          description: "greet Alice",
+          command: "greet Alice",
+          expected: "Hello, Alice",
+          observed: "Hello, Alice",
+          exitCode: 0,
+          verdict: "PASS",
+        },
+        {
+          id: "s2",
+          kind: "edge",
+          description: "empty name",
+          command: "greet ''",
+          expected: "usage error",
+          observed: "usage error",
+          exitCode: 1,
+          verdict: "PASS",
+        },
+        {
+          id: "s3",
+          kind: "error",
+          description: "too many args",
+          command: "greet a b",
+          expected: "error",
+          observed: "error",
+          exitCode: 1,
+          verdict: "PASS",
+        },
       ],
     });
     const tx = captureTranscript();
@@ -189,15 +216,23 @@ describe("runLiveVerification", () => {
     expect(result.edgeCasesExplored).toBe(2); // edge + error
     expect(result.noEvidence).toBe(false);
     expect(tx.writes).toHaveLength(1);
-    expect(tx.writes[0].path).toContain("item-123");
-    expect(result.transcriptPath).toBe(tx.writes[0].path);
+    expect(tx.writes[0]?.path).toContain("item-123");
+    expect(result.transcriptPath).toBe(tx.writes[0]?.path);
   });
 
   test("any FAIL scenario → verdict FAIL even if explorer self-reports PASS", async () => {
     const explorer = fakeExplorer({
       verdict: "PASS", // explorer lies/optimistic
       scenarios: [
-        { id: "s1", kind: "happy", description: "greet", expected: "Hello", observed: "TypeError", exitCode: 1, verdict: "FAIL" },
+        {
+          id: "s1",
+          kind: "happy",
+          description: "greet",
+          expected: "Hello",
+          observed: "TypeError",
+          exitCode: 1,
+          verdict: "FAIL",
+        },
       ],
     });
     const result = await runLiveVerification(baseInput(), { runExplorer: explorer.fn, writeTranscript: () => {} });
@@ -243,9 +278,12 @@ describe("runLiveVerification", () => {
 
   test("passes the effort time budget through to the explorer call", async () => {
     const explorer = fakeExplorer({ verdict: "PASS", scenarios: [{ id: "s1", kind: "happy", verdict: "PASS" }] });
-    await runLiveVerification(baseInput({ effort: "TRIVIAL" }), { runExplorer: explorer.fn, writeTranscript: () => {} });
-    expect(explorer.calls[0].timeoutMs).toBe(LIVE_BUDGETS.TRIVIAL.timeBudgetMs);
-    expect(explorer.calls[0].cwd).toBe("/tmp/worktree");
+    await runLiveVerification(baseInput({ effort: "TRIVIAL" }), {
+      runExplorer: explorer.fn,
+      writeTranscript: () => {},
+    });
+    expect(explorer.calls[0]?.timeoutMs).toBe(LIVE_BUDGETS.TRIVIAL.timeBudgetMs);
+    expect(explorer.calls[0]?.cwd).toBe("/tmp/worktree");
   });
 
   // -------------------------------------------------------------------------

@@ -17,13 +17,9 @@ export function applyDeterministicFloor(
   verdict: SkepticalReviewResult["finalVerdict"],
   concerns: string[],
 ): SkepticalReviewResult["finalVerdict"] {
-  const phase1 = tiers.find(t => t.tier === 1);
-  if (
-    phase1?.deterministicFailures !== undefined &&
-    phase1.deterministicFailures.length > 0 &&
-    verdict === "PASS"
-  ) {
-    const failNames = phase1.deterministicFailures.map(f => f.checkName).join(", ");
+  const phase1 = tiers.find((t) => t.tier === 1);
+  if (phase1?.deterministicFailures !== undefined && phase1.deterministicFailures.length > 0 && verdict === "PASS") {
+    const failNames = phase1.deterministicFailures.map((f) => f.checkName).join(", ");
     concerns.push(
       `[DeterministicFloor] Phase 2 verdict capped from PASS to NEEDS_REVIEW: deterministic failures present (${failNames})`,
     );

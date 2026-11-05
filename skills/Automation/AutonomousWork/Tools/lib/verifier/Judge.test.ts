@@ -14,9 +14,7 @@ function makeSummary(overrides: Partial<ItemReviewSummary> = {}): ItemReviewSumm
     description: "Add exponential backoff",
     effort: "STANDARD",
     priority: "MEDIUM",
-    iscRows: [
-      { id: 1, description: "Implement retry", status: "DONE" },
-    ],
+    iscRows: [{ id: 1, description: "Implement retry", status: "DONE" }],
     gitDiffStat: " src/retry.ts | 50 +++++\n 1 file changed, 50 insertions(+)",
     executionLogTail: ["Row 1 completed"],
     iterationsUsed: 1,
@@ -68,7 +66,7 @@ describe("judge() pure function", () => {
 
     expect(result.tier).toBe(2);
     expect(result.verdict).toBe("NEEDS_REVIEW");
-    expect(result.concerns.some(c => c.includes("Phase 2 judgment unavailable"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("Phase 2 judgment unavailable"))).toBe(true);
     expect(result.costEstimate).toBe(0);
   });
 

@@ -19,7 +19,7 @@ import type { ISCRow } from "./WorkOrchestrator.ts";
 // Types
 // ============================================================================
 
-export interface AuditLogEntry {
+interface AuditLogEntry {
   itemId: string;
   itemTitle: string;
   verdict: string;
@@ -87,9 +87,7 @@ export class NotificationDispatcher {
    *  injected-home tests hermetic and reuses one instance per dispatcher. */
   private get notifLog(): AppendLog {
     if (!this._notifLog) {
-      this._notifLog = createAppendLog(
-        memPathUnder(this.kayaHome, "NOTIFICATIONS", "notifications.jsonl"),
-      );
+      this._notifLog = createAppendLog(memPathUnder(this.kayaHome, "NOTIFICATIONS", "notifications.jsonl"));
     }
     return this._notifLog;
   }
@@ -108,7 +106,7 @@ export class NotificationDispatcher {
     itemOrId: WorkItem | string,
     titleOrReason: string,
     verdict?: string,
-    concerns?: string[]
+    concerns?: string[],
   ): void {
     // Hermetic tripwire — MUST be outside the try/catch below (which swallows
     // all errors as "non-critical UX"); inside it the guard would be silenced,
@@ -151,7 +149,7 @@ export class NotificationDispatcher {
       this.gate.spool(
         String(record.message),
         `aw-${record.event}-${typeof itemOrId === "string" ? itemOrId : itemOrId.id}`,
-        "digest"
+        "digest",
       );
     } catch {
       // Acceptable silence: notification is a non-critical UX feature
@@ -173,7 +171,9 @@ export class NotificationDispatcher {
     try {
       // cross-skill-allowed: Lane-A escalation writes LucidTasks tasks by design (07-02 overhaul); seam candidate: TaskClient
       const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
-      const { ensureNeedsJmProject, createOrReopenEscalationTask } = await import("../../../../lib/core/EscalationHelper.ts");
+      const { ensureNeedsJmProject, createOrReopenEscalationTask } = await import(
+        "../../../../lib/core/EscalationHelper.ts"
+      );
       const db = getTaskDB();
       const projectId = ensureNeedsJmProject(db);
       const title = `Manual steps: ${itemTitle}`;
@@ -203,11 +203,7 @@ export class NotificationDispatcher {
    * Called from reportDone step 3c when automated work is verified but manual rows remain.
    * Returns the created proxy IDs so the caller can wire them as dependencies.
    */
-  async createHumanProxies(
-    itemId: string,
-    itemTitle: string,
-    humanRows: ISCRow[]
-  ): Promise<string[]> {
+  async createHumanProxies(itemId: string, itemTitle: string, humanRows: ISCRow[]): Promise<string[]> {
     if (!this.queue) {
       console.warn("[NotificationDispatcher.createHumanProxies] No queue provided — cannot create proxies");
       return [];
@@ -223,13 +219,14 @@ export class NotificationDispatcher {
         try {
           // cross-skill-allowed: Lane-A escalation writes LucidTasks tasks by design (07-02 overhaul); seam candidate: TaskClient
           const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
-          const { ensureNeedsJmProject, buildEscalationStamp, NEEDS_JM_PROJECT_NAME } =
-            await import("../../../../lib/core/EscalationHelper.ts");
+          const { ensureNeedsJmProject, buildEscalationStamp, NEEDS_JM_PROJECT_NAME } = await import(
+            "../../../../lib/core/EscalationHelper.ts"
+          );
           const db = getTaskDB();
           const projectId = ensureNeedsJmProject(db);
-          const specPath = item?.metadata?.specPath as string ?? "N/A";
-          const worktreeBranch = item?.metadata?.worktreeBranch as string ?? "N/A";
-          const prUrl = item?.metadata?.prUrl as string ?? "N/A";
+          const specPath = (item?.metadata?.specPath as string) ?? "N/A";
+          const worktreeBranch = (item?.metadata?.worktreeBranch as string) ?? "N/A";
+          const prUrl = (item?.metadata?.prUrl as string) ?? "N/A";
 
           // Created first so the resolve command below can embed the real task
           // id; on repeat escalations the title+project dedup returns the
@@ -259,7 +256,9 @@ export class NotificationDispatcher {
             "```bash",
             resolveCmd,
             "```",
-          ].filter(Boolean).join("\n");
+          ]
+            .filter(Boolean)
+            .join("\n");
 
           db.updateTask(
             lucidTask.id,
@@ -267,13 +266,15 @@ export class NotificationDispatcher {
               description: richDescription,
               kaya_triage: buildEscalationStamp(NEEDS_JM_PROJECT_NAME, lucidTask.title, richDescription),
             },
-            "system"
+            "system",
           );
           lucidTaskId = lucidTask.id;
           db.close();
         } catch (e) {
           // Non-fatal — continue without LucidTask ID
-          console.warn(`[createHumanProxies] LucidTask creation failed for row #${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+          console.warn(
+            `[createHumanProxies] LucidTask creation failed for row #${row.id}: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
 
         // Step 2: Create HUMAN proxy WorkItem
@@ -287,6 +288,7 @@ export class NotificationDispatcher {
           humanTaskRef: {
             ...(lucidTaskId ? { lucidTaskId } : {}),
             queueItemId: itemId,
+            guideFilePath: item?.specPath || "",
             createdAt: new Date().toISOString(),
             action: row.description,
             reason: `ISC row #${row.id} classified as human-required`,
@@ -297,7 +299,9 @@ export class NotificationDispatcher {
         this.queue.addDependency(itemId, proxy.id);
         proxyIds.push(proxy.id);
       } catch (e) {
-        console.warn(`[createHumanProxies] Failed to create proxy for row #${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+        console.warn(
+          `[createHumanProxies] Failed to create proxy for row #${row.id}: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
 

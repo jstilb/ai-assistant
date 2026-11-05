@@ -8,7 +8,7 @@
 import { describe, it, expect, spyOn, afterEach } from "bun:test";
 import { CommandRunner } from "./CommandRunner.ts";
 import type { ISCRow } from "./WorkOrchestrator.ts";
-import * as childProcess from "child_process";
+import * as childProcess from "node:child_process";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,6 +23,7 @@ function makeRow(overrides: Partial<ISCRow> = {}): ISCRow {
     verification: {
       method: "command",
       command: "bun test foo.test.ts",
+      success_criteria: "exit code 0",
     },
     ...overrides,
   };

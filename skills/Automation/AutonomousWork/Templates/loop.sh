@@ -61,17 +61,14 @@ TEAM_MODE="${TEAM_MODE:-false}"
 # ═══════════════════════════════════════════════════════════════════
 
 if [ "$1" = "plan" ]; then
-  MODE="plan"
   PROMPT_FILE="PROMPT_plan.md"
   MAX_ITERATIONS=${2:-0}
   echo "🔄 Ralph Planning Mode"
 elif [[ "$1" =~ ^[0-9]+$ ]]; then
-  MODE="build"
   PROMPT_FILE="PROMPT_build.md"
   MAX_ITERATIONS=$1
   echo "🔨 Ralph Building Mode (max $MAX_ITERATIONS iterations)"
 else
-  MODE="build"
   PROMPT_FILE="PROMPT_build.md"
   MAX_ITERATIONS=0
   echo "🔨 Ralph Building Mode (unlimited iterations)"
@@ -221,7 +218,7 @@ ${prompt_content}
 {
   "iteration": $iter_num,
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "verdict": "$(echo "$verdict" | sed 's/"/\\"/g')",
+  "verdict": "${verdict//\"/\\\"}",
   "explorer_lines": $(wc -l < "$team_dir/explorer-output.txt"),
   "builder_lines": $(wc -l < "$team_dir/builder-output.txt"),
   "verifier_lines": $(wc -l < "$team_dir/verifier-output.txt")

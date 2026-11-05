@@ -3,10 +3,10 @@
  * for the next eligible run instead of burning the retry counter to a human-board park.
  */
 
-import { describe, it, expect } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect, afterAll } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WorkOrchestrator } from "./WorkOrchestrator.ts";
 import { WorkQueue, type WorkItem, type WorkItemMetadata } from "./WorkQueue.ts";
 // pipeline_items is the ONE store WorkQueue and QueueRouter share (ADR-003). These
@@ -27,11 +27,24 @@ import { getPipelineRepository } from "../../QueueRouter/Tools/PipelineRepositor
 import { queueItemToPipelineParams } from "../../QueueRouter/Tools/lib/vocabulary.ts";
 // cross-skill-allowed: type-only — types makeQueueItemFixture()'s input, the fixture factory that builds the QueueItem literal fed into queueItemToPipelineParams above; erased at runtime, no cross-skill runtime dependency.
 import type { QueueItem } from "../../QueueRouter/Tools/QueueManager.ts";
+import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
+
+// Hermetic: pin KAYA_HOME to a temp dir so nothing writes to the live home.
+pinKayaHome("auto-test-");
+afterAll(async () => {
+  await restoreKayaHome();
+});
 
 function makeItem(over: Partial<WorkItem> & { id: string }): WorkItem {
   return {
-    title: `Item ${over.id}`, description: "", status: "in_progress", priority: "normal",
-    dependencies: [], source: "manual", createdAt: new Date().toISOString(), ...over,
+    title: `Item ${over.id}`,
+    description: "",
+    status: "in_progress",
+    priority: "normal",
+    dependencies: [],
+    source: "manual",
+    createdAt: new Date().toISOString(),
+    ...over,
   };
 }
 
@@ -182,7 +195,11 @@ describe("WorkOrchestrator.retry() environment-block path — cross-writer metad
       const orch = WorkOrchestrator._createForTesting(queue);
 
       const item = queue.addItem({
-        title: "t", description: "", priority: "normal", dependencies: [], source: "manual",
+        title: "t",
+        description: "",
+        priority: "normal",
+        dependencies: [],
+        source: "manual",
         status: "in_progress",
         // Prior environment block: makes classifyFailure() deterministically
         // return "environment" (rule 3: persistent env-block recorded in
@@ -194,11 +211,15 @@ describe("WorkOrchestrator.retry() environment-block path — cross-writer metad
 
       // Simulate QueueRouter's real write shape on the SAME row.
       repo.upsert(
-        queueItemToPipelineParams(makeQueueItemFixture({
-          id: item.id, queue: "approved-work", status: "in_progress",
-          project: { name: "acme-corp", path: "/tmp/acme" },
-        })),
-        { mergeMetadata: true, actor: "QueueRouter-sim" }
+        queueItemToPipelineParams(
+          makeQueueItemFixture({
+            id: item.id,
+            queue: "approved-work",
+            status: "in_progress",
+            project: { name: "acme-corp", path: "/tmp/acme" },
+          }),
+        ),
+        { mergeMetadata: true, actor: "QueueRouter-sim" },
       );
       expect(repo.get(item.id)?.metadata.projectName).toBe("acme-corp"); // sanity
 
@@ -214,7 +235,11 @@ describe("WorkOrchestrator.retry() environment-block path — cross-writer metad
       expect(row?.metadata.environmentBlockCount).toBe(2);
       expect(row?.stage).toBe("approved"); // re-staged to pending (WorkStatus) === approved (Stage)
     } finally {
-      try { rmSync(base, { recursive: true, force: true }); } catch { /* best-effort */ }
+      try {
+        rmSync(base, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
     }
   });
 
@@ -233,18 +258,26 @@ describe("WorkOrchestrator.retry() environment-block path — cross-writer metad
       const orch = WorkOrchestrator._createForTesting(queue);
 
       const item = queue.addItem({
-        title: "t", description: "", priority: "normal", dependencies: [], source: "manual",
+        title: "t",
+        description: "",
+        priority: "normal",
+        dependencies: [],
+        source: "manual",
         status: "in_progress",
         // With cap=2, one more block (count becomes 2) hits the escalate branch (:920-941).
         metadata: { environmentBlockCount: 1 },
       });
 
       repo.upsert(
-        queueItemToPipelineParams(makeQueueItemFixture({
-          id: item.id, queue: "approved-work", status: "in_progress",
-          project: { name: "acme-corp", path: "/tmp/acme" },
-        })),
-        { mergeMetadata: true, actor: "QueueRouter-sim" }
+        queueItemToPipelineParams(
+          makeQueueItemFixture({
+            id: item.id,
+            queue: "approved-work",
+            status: "in_progress",
+            project: { name: "acme-corp", path: "/tmp/acme" },
+          }),
+        ),
+        { mergeMetadata: true, actor: "QueueRouter-sim" },
       );
       expect(repo.get(item.id)?.metadata.projectName).toBe("acme-corp"); // sanity
 
@@ -261,7 +294,11 @@ describe("WorkOrchestrator.retry() environment-block path — cross-writer metad
     } finally {
       if (prevCap === undefined) delete process.env.KAYA_ENV_BLOCK_ESCALATE_CAP;
       else process.env.KAYA_ENV_BLOCK_ESCALATE_CAP = prevCap;
-      try { rmSync(base, { recursive: true, force: true }); } catch { /* best-effort */ }
+      try {
+        rmSync(base, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
     }
   });
 });

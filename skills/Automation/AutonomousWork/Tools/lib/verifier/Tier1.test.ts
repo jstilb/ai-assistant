@@ -47,21 +47,26 @@ describe("runTier1 — zero command evidence alarm (Fix #4)", () => {
 
     const tier = runTier1(summary, evidenceWith({ declared: 1, executed: 0, blocked: 1 }));
 
-    expect(tier.deterministicFailures?.some(f => f.checkName === "zero-command-evidence")).toBe(true);
-    expect(tier.concerns.some(c => c.includes("0 command evidence gathered"))).toBe(true);
+    expect(tier.deterministicFailures?.some((f) => f.checkName === "zero-command-evidence")).toBe(true);
+    expect(tier.concerns.some((c) => c.includes("0 command evidence gathered"))).toBe(true);
   });
 
   it("does NOT fire when at least one verify command executed", () => {
     const summary = makeSummary({
       iscRows: [
-        { id: 1, description: "feature works", status: "DONE", verification: { method: "grep", command: "grep -q x f" } },
+        {
+          id: 1,
+          description: "feature works",
+          status: "DONE",
+          verification: { method: "grep", command: "grep -q x f" },
+        },
       ],
     });
 
     const tier = runTier1(summary, evidenceWith({ declared: 2, executed: 1, blocked: 1 }));
 
-    expect(tier.deterministicFailures?.some(f => f.checkName === "zero-command-evidence") ?? false).toBe(false);
-    expect(tier.concerns.some(c => c.includes("0 command evidence gathered"))).toBe(false);
+    expect(tier.deterministicFailures?.some((f) => f.checkName === "zero-command-evidence") ?? false).toBe(false);
+    expect(tier.concerns.some((c) => c.includes("0 command evidence gathered"))).toBe(false);
   });
 
   it("does NOT fire when no verify commands were declared", () => {
@@ -71,7 +76,7 @@ describe("runTier1 — zero command evidence alarm (Fix #4)", () => {
 
     const tier = runTier1(summary, evidenceWith({ declared: 0, executed: 0, blocked: 0 }));
 
-    expect(tier.deterministicFailures?.some(f => f.checkName === "zero-command-evidence") ?? false).toBe(false);
+    expect(tier.deterministicFailures?.some((f) => f.checkName === "zero-command-evidence") ?? false).toBe(false);
   });
 
   it("DeterministicFloor caps a Phase-2 PASS to NEEDS_REVIEW when zero-command-evidence fired", () => {
@@ -91,6 +96,6 @@ describe("runTier1 — zero command evidence alarm (Fix #4)", () => {
     const finalVerdict = applyDeterministicFloor([tier], "PASS", concerns);
 
     expect(finalVerdict).toBe("NEEDS_REVIEW");
-    expect(concerns.some(c => c.includes("zero-command-evidence"))).toBe(true);
+    expect(concerns.some((c) => c.includes("zero-command-evidence"))).toBe(true);
   });
 });

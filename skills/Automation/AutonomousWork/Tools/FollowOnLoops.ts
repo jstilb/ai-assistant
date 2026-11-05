@@ -23,7 +23,7 @@
  *      spec generator emitted — and return the phases that remain to be built.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync } from "node:fs";
 import { inference, extractJson, type InferenceResult } from "../../../../lib/core/Inference.ts";
 import { logFailure } from "../../../../lib/core/FailureLog.ts";
 
@@ -113,8 +113,7 @@ export async function deriveFollowOnFromSpec(
 
   if (!result.success || !result.output?.trim()) {
     console.warn(
-      `[FollowOnLoops] deriveFollowOnFromSpec got no usable output for ${specPath} ` +
-        `(treating as no follow-on).`,
+      `[FollowOnLoops] deriveFollowOnFromSpec got no usable output for ${specPath} ` + `(treating as no follow-on).`,
     );
     logFailure("FollowOnLoops:deriveFollowOnFromSpec", new Error("no usable inference output"), { specPath });
     return [];
@@ -126,7 +125,9 @@ export async function deriveFollowOnFromSpec(
       `[FollowOnLoops] deriveFollowOnFromSpec output was not a JSON array for ${specPath} ` +
         `(treating as no follow-on).`,
     );
-    logFailure("FollowOnLoops:deriveFollowOnFromSpec", new Error("inference output was not a JSON array"), { specPath });
+    logFailure("FollowOnLoops:deriveFollowOnFromSpec", new Error("inference output was not a JSON array"), {
+      specPath,
+    });
     return [];
   }
 
@@ -137,9 +138,7 @@ export async function deriveFollowOnFromSpec(
     if (typeof o.title !== "string" || !o.title.trim()) continue;
     const title = o.title.trim();
     loops.push(
-      typeof o.specPath === "string" && o.specPath.trim()
-        ? { title, specPath: o.specPath.trim() }
-        : { title },
+      typeof o.specPath === "string" && o.specPath.trim() ? { title, specPath: o.specPath.trim() } : { title },
     );
   }
   return loops;

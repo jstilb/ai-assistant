@@ -85,7 +85,15 @@ export async function runPhaseL(
       costEstimate: 0,
       latencyMs: result.explorationTimeMs,
     };
-    return { ran: true, passed: false, humanRequired: false, tier, concerns, livePassed: false, environmentBlocked: true };
+    return {
+      ran: true,
+      passed: false,
+      humanRequired: false,
+      tier,
+      concerns,
+      livePassed: false,
+      environmentBlocked: true,
+    };
   }
 
   if (result.verdict === "FAIL") {
@@ -94,7 +102,7 @@ export async function runPhaseL(
         "LIVE_VERIFICATION: no live evidence — the artifact was never actually run, so we cannot confirm it works (hard FAIL)",
       );
     }
-    for (const s of result.scenarios.filter(sc => sc.verdict === "FAIL")) {
+    for (const s of result.scenarios.filter((sc) => sc.verdict === "FAIL")) {
       const label = s.description ?? s.command ?? s.id;
       concerns.push(
         `LIVE_FAIL [${s.kind}] ${label}: expected "${s.expected ?? "?"}" but observed "${s.observed ?? "?"}" (exit ${s.exitCode ?? "?"})`,

@@ -88,17 +88,29 @@ function summary(over: Partial<ItemReviewSummary> = {}): ItemReviewSummary {
 
 describe("review() Phase L (Gate 2)", () => {
   test("live FAIL hard-blocks Gate 3 and forces FAIL", async () => {
-    const liveVerifyFn: LiveVerifyFn = async () => liveResult({
-      verdict: "FAIL",
-      scenarios: [{ id: "s1", kind: "happy", description: "run x", expected: "ok", observed: "crash", exitCode: 1, verdict: "FAIL" }],
-      scenariosFailed: 1, scenariosPassed: 0,
-    });
+    const liveVerifyFn: LiveVerifyFn = async () =>
+      liveResult({
+        verdict: "FAIL",
+        scenarios: [
+          {
+            id: "s1",
+            kind: "happy",
+            description: "run x",
+            expected: "ok",
+            observed: "crash",
+            exitCode: 1,
+            verdict: "FAIL",
+          },
+        ],
+        scenariosFailed: 1,
+        scenariosPassed: 0,
+      });
     const verifier = new SkepticalVerifier({ inferenceFn: throwingInference, liveVerifyFn });
     const result = await verifier.review(summary());
     expect(result.finalVerdict).toBe("FAIL");
     expect(result.liveVerificationPassed).toBe(false);
-    expect(result.tiersSkipped.some(s => s.reason.includes("Phase L"))).toBe(true);
-    expect(result.concerns.some(c => c.includes("LIVE_FAIL"))).toBe(true);
+    expect(result.tiersSkipped.some((s) => s.reason.includes("Phase L"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("LIVE_FAIL"))).toBe(true);
   });
 
   test("no live evidence → hard FAIL even though scenarios array is empty", async () => {
@@ -107,7 +119,7 @@ describe("review() Phase L (Gate 2)", () => {
     const verifier = new SkepticalVerifier({ inferenceFn: throwingInference, liveVerifyFn });
     const result = await verifier.review(summary());
     expect(result.finalVerdict).toBe("FAIL");
-    expect(result.concerns.some(c => c.includes("no live evidence"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("no live evidence"))).toBe(true);
   });
 
   test("live PASS → Gate 3 runs and verdict can PASS", async () => {
@@ -123,7 +135,10 @@ describe("review() Phase L (Gate 2)", () => {
   test("no liveVerificationInput → Phase L skipped (backward compatible)", async () => {
     let liveCalled = false;
     const state = { judgeCalled: false };
-    const liveVerifyFn: LiveVerifyFn = async () => { liveCalled = true; return liveResult({}); };
+    const liveVerifyFn: LiveVerifyFn = async () => {
+      liveCalled = true;
+      return liveResult({});
+    };
     const verifier = new SkepticalVerifier({ inferenceFn: recordingPassInference(state), liveVerifyFn });
     const result = await verifier.review(summary({ liveVerificationInput: undefined }));
     expect(liveCalled).toBe(false);
@@ -132,15 +147,20 @@ describe("review() Phase L (Gate 2)", () => {
 
   test("native → HUMAN_REQUIRED does not fail, but flags human-required", async () => {
     const state = { judgeCalled: false };
-    const liveVerifyFn: LiveVerifyFn = async () => liveResult({
-      surface: "native", verdict: "HUMAN_REQUIRED", humanVerificationRequired: true,
-      scenarios: [], scenariosRun: 0, scenariosPassed: 0,
-      warnings: ["native UI requires a human/device check"],
-    });
+    const liveVerifyFn: LiveVerifyFn = async () =>
+      liveResult({
+        surface: "native",
+        verdict: "HUMAN_REQUIRED",
+        humanVerificationRequired: true,
+        scenarios: [],
+        scenariosRun: 0,
+        scenariosPassed: 0,
+        warnings: ["native UI requires a human/device check"],
+      });
     const verifier = new SkepticalVerifier({ inferenceFn: recordingPassInference(state), liveVerifyFn });
     const result = await verifier.review(summary());
     expect(result.finalVerdict).not.toBe("FAIL"); // not a code failure
-    expect(result.concerns.some(c => c.includes("LIVE_VERIFICATION_HUMAN_REQUIRED"))).toBe(true);
+    expect(result.concerns.some((c) => c.includes("LIVE_VERIFICATION_HUMAN_REQUIRED"))).toBe(true);
   });
 });
 
@@ -150,11 +170,13 @@ describe("review() Phase L (Gate 2)", () => {
 
 describe("review() Phase L for TRIVIAL effort", () => {
   test("TRIVIAL items still get a live gate; live FAIL → FAIL", async () => {
-    const liveVerifyFn: LiveVerifyFn = async () => liveResult({
-      verdict: "FAIL",
-      scenarios: [{ id: "s1", kind: "happy", verdict: "FAIL", expected: "a", observed: "b" }],
-      scenariosFailed: 1, scenariosPassed: 0,
-    });
+    const liveVerifyFn: LiveVerifyFn = async () =>
+      liveResult({
+        verdict: "FAIL",
+        scenarios: [{ id: "s1", kind: "happy", verdict: "FAIL", expected: "a", observed: "b" }],
+        scenariosFailed: 1,
+        scenariosPassed: 0,
+      });
     const verifier = new SkepticalVerifier({ inferenceFn: throwingInference, liveVerifyFn });
     const result = await verifier.review(summary({ effort: "TRIVIAL" }));
     expect(result.finalVerdict).toBe("FAIL");
@@ -163,7 +185,10 @@ describe("review() Phase L for TRIVIAL effort", () => {
 
   test("TRIVIAL with no liveVerificationInput skips Phase L (judge still runs — S2)", async () => {
     let liveCalled = false;
-    const liveVerifyFn: LiveVerifyFn = async () => { liveCalled = true; return liveResult({}); };
+    const liveVerifyFn: LiveVerifyFn = async () => {
+      liveCalled = true;
+      return liveResult({});
+    };
     // S2: judge always runs, so a passing inferenceFn is required (no skip for TRIVIAL).
     const passingInference: InferenceFn = async () => ({
       success: true,

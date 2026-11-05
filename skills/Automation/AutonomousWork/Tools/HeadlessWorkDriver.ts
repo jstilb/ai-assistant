@@ -53,11 +53,11 @@
  * budget tracker is added later; call sites (pre-batch, pre-item) don't change.
  */
 
-import { execFileSync } from "child_process";
-import { existsSync, readFileSync, statSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { parseArgs } from "util";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 import { spawnAgentSync, DEFAULT_TIMEOUT_MS } from "../../../../lib/core/AgentSpawner.ts";
 import type { AgentSpawnResult } from "../../../../lib/core/AgentSpawner.ts";
@@ -322,11 +322,11 @@ export function defaultCheckInteractiveSessionLock(): boolean {
  */
 export const defaultDeferredMergeSweep: () => DeferredMergeSweepResult = () => {
   try {
-    const stdout = execFileSync(
-      "bun",
-      [INTEGRATOR_SCRIPT_PATH, "merge", "--strategy", "direct", "--json"],
-      { encoding: "utf-8", maxBuffer: 16 * 1024 * 1024, env: process.env as Record<string, string> },
-    );
+    const stdout = execFileSync("bun", [INTEGRATOR_SCRIPT_PATH, "merge", "--strategy", "direct", "--json"], {
+      encoding: "utf-8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: process.env as Record<string, string>,
+    });
     const json = JSON.parse(stdout) as { merged?: number; conflicts?: number; skipped?: number };
     return { ok: true, merged: json.merged, conflicts: json.conflicts, skipped: json.skipped };
   } catch (e) {
@@ -408,7 +408,8 @@ export function appendRunLog(record: Record<string, unknown>): void {
 function buildFeedbackTable(iteration: number, failRows: VerifierRow[]): string {
   if (failRows.length === 0) return "(none — first iteration)";
   const lines = failRows.map(
-    (r) => `| ${r.iscId} | FAIL | ${(r.concern ?? r.evidence ?? "no detail").replace(/\|/g, "/").replace(/\n/g, " ")} |`,
+    (r) =>
+      `| ${r.iscId} | FAIL | ${(r.concern ?? r.evidence ?? "no detail").replace(/\|/g, "/").replace(/\n/g, " ")} |`,
   );
   return [
     `## Verifier Feedback (Iteration ${iteration})`,
@@ -457,7 +458,11 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
   const allIscRowIds = (prepareJson.iscRows ?? []).map((r) => r.id);
 
   const startedRes = cli(["started", id, "--json"]);
-  const startedJson = startedRes.json as { success?: boolean; worktreePath?: string | null; worktreeError?: string } | null;
+  const startedJson = startedRes.json as {
+    success?: boolean;
+    worktreePath?: string | null;
+    worktreeError?: string;
+  } | null;
   if (!startedJson?.success || !startedJson.worktreePath) {
     const detail = `started/worktree failed: ${startedJson?.worktreeError ?? startedRes.stderr ?? "no worktreePath returned"}`;
     const retryRes = cli(["retry", id, detail]);
@@ -497,17 +502,37 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
         SPEC_CONTENT: specContent,
         TEST_STRATEGY: testStrategy,
         ISC_TABLE: iscTable,
-        TESTWRITER_FILES: "(none — TestWriter step not run by HeadlessWorkDriver; write your own tests per the Test Strategy above.)",
+        TESTWRITER_FILES:
+          "(none — TestWriter step not run by HeadlessWorkDriver; write your own tests per the Test Strategy above.)",
         VERIFIER_FEEDBACK: verifierFeedback,
       });
 
     const builderSpawn: AgentSpawnResult = spawn(
-      { prompt: builderPrompt, model: SPAWN_MODEL, allowedTools: BUILDER_ALLOWED_TOOLS, cwd: worktreePath, timeoutMs: SPAWN_TIMEOUT_MS },
+      {
+        prompt: builderPrompt,
+        model: SPAWN_MODEL,
+        allowedTools: BUILDER_ALLOWED_TOOLS,
+        cwd: worktreePath,
+        timeoutMs: SPAWN_TIMEOUT_MS,
+      },
       {},
     );
     if (builderSpawn.infraUnavailable) {
-      appendRunLog({ event: "defer", itemId: id, turn: "builder", iteration, reason: builderSpawn.preSpawnGated ? "rate-limit-pre-spawn-gate" : "infra-unavailable", stderrSnippet: builderSpawn.stderr.slice(0, 500) });
-      return { itemId: id, outcome: "deferred", iterations: iteration, detail: "Builder spawn infra-unavailable (rate limit or infra pause) — leaving item in_progress for the next driver run." };
+      appendRunLog({
+        event: "defer",
+        itemId: id,
+        turn: "builder",
+        iteration,
+        reason: builderSpawn.preSpawnGated ? "rate-limit-pre-spawn-gate" : "infra-unavailable",
+        stderrSnippet: builderSpawn.stderr.slice(0, 500),
+      });
+      return {
+        itemId: id,
+        outcome: "deferred",
+        iterations: iteration,
+        detail:
+          "Builder spawn infra-unavailable (rate limit or infra pause) — leaving item in_progress for the next driver run.",
+      };
     }
     const builderReport = extractJson<BuilderReport>(builderSpawn.stdout);
 
@@ -515,7 +540,11 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
     let diff = git(worktreePath, ["diff", `${startSha}..HEAD`]);
     if (diff.length > 10000) diff = diff.slice(0, 10000) + "\n[TRUNCATED — full diff available via git]";
     const changedFiles = git(worktreePath, ["diff", "--name-only", `${startSha}..HEAD`]);
-    const builderChanges = [`## git log\n${logLines}`, `## git diff\n${diff}`, `## changed files\n${changedFiles}`].join("\n\n");
+    const builderChanges = [
+      `## git log\n${logLines}`,
+      `## git diff\n${diff}`,
+      `## changed files\n${changedFiles}`,
+    ].join("\n\n");
 
     const verifierPrompt =
       `CRITICAL: All file reads and searches MUST use absolute paths under ${worktreePath}. This is where the Builder wrote its files.\n\n` +
@@ -529,16 +558,36 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
         SPEC_CONTENT: specContent,
         TEST_STRATEGY: testStrategy,
         START_SHA: startSha,
-        PROGRAMMATIC_VERIFICATION_RESULTS: "(none — HeadlessWorkDriver does not pre-run ISC verification commands; rely on Gates A/B.)",
+        PROGRAMMATIC_VERIFICATION_RESULTS:
+          "(none — HeadlessWorkDriver does not pre-run ISC verification commands; rely on Gates A/B.)",
       });
 
     const verifierSpawn: AgentSpawnResult = spawn(
-      { prompt: verifierPrompt, model: SPAWN_MODEL, allowedTools: VERIFIER_ALLOWED_TOOLS, cwd: worktreePath, timeoutMs: SPAWN_TIMEOUT_MS },
+      {
+        prompt: verifierPrompt,
+        model: SPAWN_MODEL,
+        allowedTools: VERIFIER_ALLOWED_TOOLS,
+        cwd: worktreePath,
+        timeoutMs: SPAWN_TIMEOUT_MS,
+      },
       {},
     );
     if (verifierSpawn.infraUnavailable) {
-      appendRunLog({ event: "defer", itemId: id, turn: "verifier", iteration, reason: verifierSpawn.preSpawnGated ? "rate-limit-pre-spawn-gate" : "infra-unavailable", stderrSnippet: verifierSpawn.stderr.slice(0, 500) });
-      return { itemId: id, outcome: "deferred", iterations: iteration, detail: "Verifier spawn infra-unavailable (rate limit or infra pause) — leaving item in_progress for the next driver run." };
+      appendRunLog({
+        event: "defer",
+        itemId: id,
+        turn: "verifier",
+        iteration,
+        reason: verifierSpawn.preSpawnGated ? "rate-limit-pre-spawn-gate" : "infra-unavailable",
+        stderrSnippet: verifierSpawn.stderr.slice(0, 500),
+      });
+      return {
+        itemId: id,
+        outcome: "deferred",
+        iterations: iteration,
+        detail:
+          "Verifier spawn infra-unavailable (rate limit or infra pause) — leaving item in_progress for the next driver run.",
+      };
     }
 
     verifierReport = extractJson<VerifierReport>(verifierSpawn.stdout);
@@ -548,15 +597,33 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
       // (mirrors TaskOrchestratorPrompt.md's "Verifier crashes" error handling).
       const rowIds = allIscRowIds.length > 0 ? allIscRowIds : (builderReport?.completedRows ?? []);
       verifierReport = {
-        rows: rowIds.map((rid) => ({ iscId: rid, verdict: "FAIL" as const, evidence: "Verifier crashed or returned unparseable output.", linkedTest: null, concern: "Verifier crashed" })),
+        rows: rowIds.map((rid) => ({
+          iscId: rid,
+          verdict: "FAIL" as const,
+          evidence: "Verifier crashed or returned unparseable output.",
+          linkedTest: null,
+          concern: "Verifier crashed",
+        })),
         summary: "Verifier crashed or returned unparseable output.",
         allPass: false,
       };
     }
 
-    appendRunLog({ event: "iteration", itemId: id, iteration, builderSuccess: builderReport?.success ?? null, verifierAllPass: verifierReport.allPass, failCount: verifierReport.rows.filter((r) => r.verdict === "FAIL").length });
+    appendRunLog({
+      event: "iteration",
+      itemId: id,
+      iteration,
+      builderSuccess: builderReport?.success ?? null,
+      verifierAllPass: verifierReport.allPass,
+      failCount: verifierReport.rows.filter((r) => r.verdict === "FAIL").length,
+    });
 
-    const currentFailedIds = JSON.stringify(verifierReport.rows.filter((r) => r.verdict === "FAIL").map((r) => r.iscId).sort((a, b) => a - b));
+    const currentFailedIds = JSON.stringify(
+      verifierReport.rows
+        .filter((r) => r.verdict === "FAIL")
+        .map((r) => r.iscId)
+        .sort((a, b) => a - b),
+    );
 
     if (verifierReport.allPass && verifierReport.rows.every((r) => r.verdict === "PASS")) {
       converged = true;
@@ -574,7 +641,10 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
       terminationReason = "max_iterations";
       break;
     }
-    verifierFeedback = buildFeedbackTable(iteration, verifierReport.rows.filter((r) => r.verdict === "FAIL"));
+    verifierFeedback = buildFeedbackTable(
+      iteration,
+      verifierReport.rows.filter((r) => r.verdict === "FAIL"),
+    );
     iteration++;
   }
 
@@ -586,7 +656,14 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
       const detail = `mark-done failed post-convergence: ${markDoneJson?.error ?? markDoneRes.stderr}`;
       const retryRes = cli(["retry", id, detail]);
       const result = finalizeRetry(id, retryRes, detail, iteration, terminationReason);
-      appendRunLog({ event: "item-outcome", itemId: id, step: "mark-done", outcome: result.outcome, detail, iterations: iteration });
+      appendRunLog({
+        event: "item-outcome",
+        itemId: id,
+        step: "mark-done",
+        outcome: result.outcome,
+        detail,
+        iterations: iteration,
+      });
       return result;
     }
 
@@ -596,7 +673,14 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
       const detail = `post-convergence verify failed: ${JSON.stringify(verifyJson?.failures ?? verifyRes.stderr)}`;
       const retryRes = cli(["retry", id, detail]);
       const result = finalizeRetry(id, retryRes, detail, iteration, terminationReason);
-      appendRunLog({ event: "item-outcome", itemId: id, step: "verify", outcome: result.outcome, detail, iterations: iteration });
+      appendRunLog({
+        event: "item-outcome",
+        itemId: id,
+        step: "verify",
+        outcome: result.outcome,
+        detail,
+        iterations: iteration,
+      });
       return result;
     }
 
@@ -607,22 +691,46 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
     const reportDoneJson = reportDoneRes.json as { success?: boolean; reason?: string } | null;
 
     if (reportDoneJson?.success) {
-      const outcome: ItemOutcome["outcome"] = /blocked/i.test(reportDoneJson.reason ?? "") ? "blocked-on-human" : "done";
-      appendRunLog({ event: "item-outcome", itemId: id, step: "report-done", outcome, iterations: iteration, reason: reportDoneJson.reason ?? null });
+      const outcome: ItemOutcome["outcome"] = /blocked/i.test(reportDoneJson.reason ?? "")
+        ? "blocked-on-human"
+        : "done";
+      appendRunLog({
+        event: "item-outcome",
+        itemId: id,
+        step: "report-done",
+        outcome,
+        iterations: iteration,
+        reason: reportDoneJson.reason ?? null,
+      });
       return { itemId: id, outcome, iterations: iteration, terminationReason };
     }
 
     const detail = `report-done rejected: ${reportDoneJson?.reason ?? reportDoneRes.stderr}`;
     const retryRes = cli(["retry", id, detail]);
     const result = finalizeRetry(id, retryRes, detail, iteration, terminationReason);
-    appendRunLog({ event: "item-outcome", itemId: id, step: "report-done", outcome: result.outcome, detail, iterations: iteration });
+    appendRunLog({
+      event: "item-outcome",
+      itemId: id,
+      step: "report-done",
+      outcome: result.outcome,
+      detail,
+      iterations: iteration,
+    });
     return result;
   }
 
   const detail = `${terminationReason}: ${verifierReport?.summary ?? "no verifier report produced"}`;
   const retryRes = cli(["retry", id, detail]);
   const result = finalizeRetry(id, retryRes, detail, iteration, terminationReason);
-  appendRunLog({ event: "item-outcome", itemId: id, step: "converge", outcome: result.outcome, detail, iterations: iteration, terminationReason });
+  appendRunLog({
+    event: "item-outcome",
+    itemId: id,
+    step: "converge",
+    outcome: result.outcome,
+    detail,
+    iterations: iteration,
+    terminationReason,
+  });
   return result;
 }
 
@@ -636,7 +744,13 @@ async function processItem(item: ItemLite, deps: HeadlessWorkDriverDeps): Promis
  * pending, so labeling this "retried" would be a false telemetry claim. "retry-noop"
  * keeps run-log/outcome telemetry honest about what actually happened.
  */
-function finalizeRetry(id: string, retryRes: CliResult, detail: string, iterations?: number, terminationReason?: string): ItemOutcome {
+function finalizeRetry(
+  id: string,
+  retryRes: CliResult,
+  detail: string,
+  iterations?: number,
+  terminationReason?: string,
+): ItemOutcome {
   const retryJson = retryRes.json as { retried?: boolean; escalated?: boolean } | null;
   const outcome: ItemOutcome["outcome"] = retryJson?.escalated
     ? "escalated"

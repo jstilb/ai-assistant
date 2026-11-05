@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterAll, spyOn } from "bun:test";
-import { tmpdir } from "os";
-import { join } from "path";
-import { writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync } from "fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync } from "node:fs";
 
 // ============================================================================
 // KAYA_HOME/KAYA_DIR isolation — set BEFORE any import that reads env at
@@ -69,7 +69,11 @@ afterAll(() => {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
-  try { rmSync(TEST_BASE, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(TEST_BASE, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -100,10 +104,7 @@ describe("WorkQueue.detectCycles()", () => {
   });
 
   it("no cycle for independent items", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b" })]);
     expect(wq.detectCycles().hasCycle).toBe(false);
   });
 
@@ -149,20 +150,15 @@ describe("WorkQueue.validate()", () => {
   });
 
   it("valid for items without dependencies", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b" })]);
     expect(wq.validate().valid).toBe(true);
   });
 
   it("reports missing dependency", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", dependencies: ["nonexistent"] }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", dependencies: ["nonexistent"] })]);
     const result = wq.validate();
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => /missing/i.test(e))).toBe(true);
+    expect(result.errors.some((e) => /missing/i.test(e))).toBe(true);
   });
 
   it("reports cycle as validation error", () => {
@@ -172,7 +168,7 @@ describe("WorkQueue.validate()", () => {
     ]);
     const result = wq.validate();
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => /[Cc]ycle/i.test(e))).toBe(true);
+    expect(result.errors.some((e) => /[Cc]ycle/i.test(e))).toBe(true);
   });
 
   it("passes valid DAG A→B→C", () => {
@@ -191,21 +187,15 @@ describe("WorkQueue.validate()", () => {
 
 describe("WorkQueue.getReadyItems()", () => {
   it("returns all pending items with no deps", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b" })]);
     expect(wq.getReadyItems().length).toBe(2);
   });
 
   it("excludes items with unmet deps", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b", dependencies: ["a"] }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b", dependencies: ["a"] })]);
     const ready = wq.getReadyItems();
     expect(ready.length).toBe(1);
-    expect(ready[0].id).toBe("a");
+    expect(ready[0]?.id).toBe("a");
   });
 
   it("includes items once deps are completed", () => {
@@ -215,7 +205,7 @@ describe("WorkQueue.getReadyItems()", () => {
     ]);
     const ready = wq.getReadyItems();
     expect(ready.length).toBe(1);
-    expect(ready[0].id).toBe("b");
+    expect(ready[0]?.id).toBe("b");
   });
 
   it("excludes non-pending items", () => {
@@ -235,7 +225,7 @@ describe("WorkQueue.getReadyItems()", () => {
       makeItem({ id: "no", priority: "normal" }),
     ]);
     const ready = wq.getReadyItems();
-    expect(ready.map(i => i.id)).toEqual(["cr", "hi", "no", "lo"]);
+    expect(ready.map((i) => i.id)).toEqual(["cr", "hi", "no", "lo"]);
   });
 });
 
@@ -250,11 +240,7 @@ describe("WorkQueue.getParallelBatch()", () => {
   });
 
   it("batches independent items", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b" }),
-      makeItem({ id: "c" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })]);
     expect(wq.getParallelBatch(3).length).toBe(3);
   });
 
@@ -270,11 +256,7 @@ describe("WorkQueue.getParallelBatch()", () => {
   });
 
   it("respects maxItems", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b" }),
-      makeItem({ id: "c" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })]);
     expect(wq.getParallelBatch(2).length).toBe(2);
   });
 });
@@ -285,9 +267,15 @@ describe("WorkQueue.getParallelBatch()", () => {
 
 describe("WorkQueue.updateStatus()", () => {
   const passedVerification = {
-    status: "verified" as const, verifiedAt: new Date().toISOString(), verdict: "PASS" as const,
-    concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-    verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+    status: "verified" as const,
+    verifiedAt: new Date().toISOString(),
+    verdict: "PASS" as const,
+    concerns: [],
+    iscRowsVerified: 1,
+    iscRowsTotal: 1,
+    verificationCost: 0,
+    verifiedBy: "skeptical_verifier" as const,
+    tiersExecuted: [1, 2],
   };
 
   it("transitions pending → in_progress with startedAt", () => {
@@ -339,9 +327,15 @@ describe("WorkQueue.updateStatus()", () => {
   it("throws when completing with failed verification", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "in_progress" })]);
     wq.setVerification("a", {
-      status: "failed", verifiedAt: new Date().toISOString(), verdict: "FAIL",
-      concerns: ["Paper completion"], iscRowsVerified: 0, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "failed",
+      verifiedAt: new Date().toISOString(),
+      verdict: "FAIL",
+      concerns: ["Paper completion"],
+      iscRowsVerified: 0,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     expect(() => wq.updateStatus("a", "completed")).toThrow("failed");
   });
@@ -349,9 +343,15 @@ describe("WorkQueue.updateStatus()", () => {
   it("throws when completing with needs_review verification", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "in_progress" })]);
     wq.setVerification("a", {
-      status: "needs_review", verifiedAt: new Date().toISOString(), verdict: "NEEDS_REVIEW",
-      concerns: ["Low confidence"], iscRowsVerified: 0, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "needs_review",
+      verifiedAt: new Date().toISOString(),
+      verdict: "NEEDS_REVIEW",
+      concerns: ["Low confidence"],
+      iscRowsVerified: 0,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     expect(() => wq.updateStatus("a", "completed")).toThrow("needs_review");
   });
@@ -381,7 +381,16 @@ describe("S5a — WorkQueue.loadFromDb ignores work-queue.json", () => {
     // Write a legacy JSON state file with pending items
     const legacyState = {
       items: [
-        { id: "legacy-item-1", title: "Legacy Task", description: "", status: "pending", priority: "normal", dependencies: [], source: "manual", createdAt: new Date().toISOString() },
+        {
+          id: "legacy-item-1",
+          title: "Legacy Task",
+          description: "",
+          status: "pending",
+          priority: "normal",
+          dependencies: [],
+          source: "manual",
+          createdAt: new Date().toISOString(),
+        },
       ],
       lastUpdated: new Date().toISOString(),
       totalProcessed: 0,
@@ -403,13 +412,10 @@ describe("S5a — WorkQueue.loadFromDb ignores work-queue.json", () => {
 
 describe("WorkQueue.getDagBlockedItems()", () => {
   it("returns items with unmet deps", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a" }),
-      makeItem({ id: "b", dependencies: ["a"] }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a" }), makeItem({ id: "b", dependencies: ["a"] })]);
     const blocked = wq.getDagBlockedItems();
     expect(blocked.length).toBe(1);
-    expect(blocked[0].id).toBe("b");
+    expect(blocked[0]?.id).toBe("b");
   });
 
   it("returns empty when all deps met", () => {
@@ -510,7 +516,7 @@ describe("WorkQueue.getReadyItems() sort (S5b: priority-only)", () => {
     // All ready; the phase-number tiebreaker is gone, so same-priority order is the stable
     // insertion order (NOT phase-sorted to p1,p2,p3).
     const ready = wq.getReadyItems();
-    expect(ready.map(i => i.id)).toEqual(["p3", "p1", "p2"]);
+    expect(ready.map((i) => i.id)).toEqual(["p3", "p1", "p2"]);
   });
 
   it("priority still takes precedence over phase number", () => {
@@ -519,8 +525,8 @@ describe("WorkQueue.getReadyItems() sort (S5b: priority-only)", () => {
       makeItem({ id: "hi", title: "Urgent fix", priority: "high" }),
     ]);
     const ready = wq.getReadyItems();
-    expect(ready[0].id).toBe("hi");
-    expect(ready[1].id).toBe("p1");
+    expect(ready[0]?.id).toBe("hi");
+    expect(ready[1]?.id).toBe("p1");
   });
 });
 
@@ -530,9 +536,7 @@ describe("WorkQueue.getReadyItems() sort (S5b: priority-only)", () => {
 
 describe("WorkQueue.setMetadata()", () => {
   it("merges keys into existing metadata", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { existing: "value" } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { existing: "value" } })]);
     wq.setMetadata("a", { newKey: 42 });
     const item = wq.getItem("a")!;
     expect(item.metadata?.existing).toBe("value");
@@ -546,9 +550,7 @@ describe("WorkQueue.setMetadata()", () => {
   });
 
   it("overwrites existing keys", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { x: 1 } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { x: 1 } })]);
     wq.setMetadata("a", { x: 2 });
     expect(wq.getItem("a")!.metadata?.x).toBe(2);
   });
@@ -574,20 +576,28 @@ describe("WorkQueue.resetToPending()", () => {
 
   it("clears verification on reset", () => {
     const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", status: "in_progress", verification: {
-        status: "needs_review", verifiedAt: new Date().toISOString(), verdict: "NEEDS_REVIEW",
-        concerns: [], iscRowsVerified: 0, iscRowsTotal: 1, verificationCost: 0,
-        verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
-      }}),
+      makeItem({
+        id: "a",
+        status: "in_progress",
+        verification: {
+          status: "needs_review",
+          verifiedAt: new Date().toISOString(),
+          verdict: "NEEDS_REVIEW",
+          concerns: [],
+          iscRowsVerified: 0,
+          iscRowsTotal: 1,
+          verificationCost: 0,
+          verifiedBy: "skeptical_verifier",
+          tiersExecuted: [1, 2],
+        },
+      }),
     ]);
     wq.resetToPending("a", "test");
     expect(wq.getItem("a")!.verification).toBeUndefined();
   });
 
   it("records audit trail in metadata.lastRecovery", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", status: "in_progress" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "in_progress" })]);
     wq.resetToPending("a", "orphan detected");
     const recovery = wq.getItem("a")!.metadata?.lastRecovery as Record<string, unknown>;
     expect(recovery.reason).toBe("orphan detected");
@@ -628,14 +638,14 @@ describe("WorkQueue.setVerification() whitelist", () => {
       verificationCost: 0,
       verifiedBy: "skeptical_verifier" as const,
       tiersExecuted: [],
-      manualVerification: true,  // injected field
+      manualVerification: true, // injected field
       extraField: "should be stripped",
     };
     wq.setVerification("a", injected as never);
     const item = wq.getItem("a")!;
     expect(item.verification).toBeDefined();
-    expect((item.verification as Record<string, unknown>)["manualVerification"]).toBeUndefined();
-    expect((item.verification as Record<string, unknown>)["extraField"]).toBeUndefined();
+    expect((item.verification as unknown as Record<string, unknown>)["manualVerification"]).toBeUndefined();
+    expect((item.verification as unknown as Record<string, unknown>)["extraField"]).toBeUndefined();
   });
 
   it("persists all whitelisted fields correctly", () => {
@@ -672,39 +682,67 @@ describe("WorkQueue.setVerification() whitelist", () => {
 describe("WorkQueue.setVerification() provenance guard", () => {
   it("throws on verifiedBy: 'manual' (fabricated provenance)", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a" })]);
-    expect(() => wq.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
-    })).toThrow('is not "skeptical_verifier"');
+    expect(() =>
+      wq.setVerification("a", {
+        status: "verified",
+        verifiedAt: new Date().toISOString(),
+        verdict: "PASS",
+        concerns: [],
+        iscRowsVerified: 1,
+        iscRowsTotal: 1,
+        verificationCost: 0,
+        verifiedBy: "manual" as "skeptical_verifier",
+        tiersExecuted: [],
+      }),
+    ).toThrow('is not "skeptical_verifier"');
   });
 
   it("throws on verifiedBy: 'agent_report_verification' (fabricated provenance)", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a" })]);
-    expect(() => wq.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "agent_report_verification" as "skeptical_verifier",
-      tiersExecuted: [],
-    })).toThrow('is not "skeptical_verifier"');
+    expect(() =>
+      wq.setVerification("a", {
+        status: "verified",
+        verifiedAt: new Date().toISOString(),
+        verdict: "PASS",
+        concerns: [],
+        iscRowsVerified: 1,
+        iscRowsTotal: 1,
+        verificationCost: 0,
+        verifiedBy: "agent_report_verification" as "skeptical_verifier",
+        tiersExecuted: [],
+      }),
+    ).toThrow('is not "skeptical_verifier"');
   });
 
   it("throws on verifiedBy: 'manual_orchestrator_verification' (fabricated provenance)", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a" })]);
-    expect(() => wq.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual_orchestrator_verification" as "skeptical_verifier",
-      tiersExecuted: [],
-    })).toThrow('is not "skeptical_verifier"');
+    expect(() =>
+      wq.setVerification("a", {
+        status: "verified",
+        verifiedAt: new Date().toISOString(),
+        verdict: "PASS",
+        concerns: [],
+        iscRowsVerified: 1,
+        iscRowsTotal: 1,
+        verificationCost: 0,
+        verifiedBy: "manual_orchestrator_verification" as "skeptical_verifier",
+        tiersExecuted: [],
+      }),
+    ).toThrow('is not "skeptical_verifier"');
   });
 
   it("accepts verifiedBy: 'skeptical_verifier'", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a" })]);
     wq.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0.02,
-      verifiedBy: "skeptical_verifier", tiersExecuted: [1, 2],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0.02,
+      verifiedBy: "skeptical_verifier",
+      tiersExecuted: [1, 2],
     });
     expect(wq.getItem("a")!.verification!.verifiedBy).toBe("skeptical_verifier");
   });
@@ -720,9 +758,15 @@ describe("WorkQueue.updateStatus() provenance guard", () => {
     // Attempt to bypass setVerification guard by mutating getItem() result
     const item = wq.getItem("a")!;
     item.verification = {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verdict: "PASS",
+      concerns: [],
+      iscRowsVerified: 1,
+      iscRowsTotal: 1,
+      verificationCost: 0,
+      verifiedBy: "manual" as "skeptical_verifier",
+      tiersExecuted: [],
     };
     // Clone means internal state is unaffected — completion is blocked
     expect(() => wq.updateStatus("a", "completed")).toThrow("no verification record exists");
@@ -730,11 +774,19 @@ describe("WorkQueue.updateStatus() provenance guard", () => {
 
   it("setVerification rejects verifiedBy: 'manual' for non-TRIVIAL items", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", effort: "STANDARD", status: "in_progress" })]);
-    expect(() => wq.setVerification("a", {
-      status: "verified", verifiedAt: new Date().toISOString(), verdict: "PASS",
-      concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-      verifiedBy: "manual" as "skeptical_verifier", tiersExecuted: [],
-    })).toThrow("not \"skeptical_verifier\"");
+    expect(() =>
+      wq.setVerification("a", {
+        status: "verified",
+        verifiedAt: new Date().toISOString(),
+        verdict: "PASS",
+        concerns: [],
+        iscRowsVerified: 1,
+        iscRowsTotal: 1,
+        verificationCost: 0,
+        verifiedBy: "manual" as "skeptical_verifier",
+        tiersExecuted: [],
+      }),
+    ).toThrow('not "skeptical_verifier"');
   });
 
   it("resolveBlocked throws for items without humanTaskRef", () => {
@@ -743,11 +795,13 @@ describe("WorkQueue.updateStatus() provenance guard", () => {
   });
 
   it("allows humanTaskRef proxy items to complete via resolveBlocked", () => {
-    const wq = WorkQueue._createForTesting([makeItem({
-      id: "a",
-      status: "blocked",
-      humanTaskRef: { queueItemId: "parent-1", guideFilePath: "/tmp/guide.md", createdAt: new Date().toISOString() },
-    })]);
+    const wq = WorkQueue._createForTesting([
+      makeItem({
+        id: "a",
+        status: "blocked",
+        humanTaskRef: { queueItemId: "parent-1", guideFilePath: "/tmp/guide.md", createdAt: new Date().toISOString() },
+      }),
+    ]);
     const updated = wq.resolveBlocked("a", "Resolved by Jm");
     expect(updated?.status).toBe("completed");
     expect(updated?.verification?.verifiedBy).toBe("human_proxy");
@@ -757,12 +811,14 @@ describe("WorkQueue.updateStatus() provenance guard", () => {
   // top-level humanTaskRef) once its human PREREQ clears. Must re-pend (run it),
   // NOT complete it (which would be a false completion for an unbuilt item).
   it("resumeBlocked re-pends a directly-blocked real item and clears stale markers", () => {
-    const wq = WorkQueue._createForTesting([makeItem({
-      id: "a",
-      status: "blocked",
-      metadata: { humanTaskRef: "manual-a", escalationReason: "needs prereq", escalatedAt: "2026-06-14" },
-      startedAt: new Date().toISOString(),
-    })]);
+    const wq = WorkQueue._createForTesting([
+      makeItem({
+        id: "a",
+        status: "blocked",
+        metadata: { humanTaskRef: "manual-a", escalationReason: "needs prereq", escalatedAt: "2026-06-14" },
+        startedAt: new Date().toISOString(),
+      }),
+    ]);
     const updated = wq.resumeBlocked("a", "Prereqs satisfied");
     expect(updated?.status).toBe("pending");
     // Did NOT complete (no false completion)
@@ -776,17 +832,19 @@ describe("WorkQueue.updateStatus() provenance guard", () => {
   });
 
   it("resumeBlocked rejects human-proxy items (use resolveBlocked instead)", () => {
-    const wq = WorkQueue._createForTesting([makeItem({
-      id: "a",
-      status: "blocked",
-      humanTaskRef: { queueItemId: "parent-1", guideFilePath: "/tmp/guide.md", createdAt: new Date().toISOString() },
-    })]);
+    const wq = WorkQueue._createForTesting([
+      makeItem({
+        id: "a",
+        status: "blocked",
+        humanTaskRef: { queueItemId: "parent-1", guideFilePath: "/tmp/guide.md", createdAt: new Date().toISOString() },
+      }),
+    ]);
     expect(() => wq.resumeBlocked("a", "x")).toThrow("is a human-proxy item");
   });
 
   it("resumeBlocked rejects non-blocked items", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "pending" })]);
-    expect(() => wq.resumeBlocked("a", "x")).toThrow("expected \"blocked\"");
+    expect(() => wq.resumeBlocked("a", "x")).toThrow('expected "blocked"');
   });
 
   it("matrix allows blocked → pending", () => {
@@ -811,16 +869,18 @@ describe("verification sanitization on loadState", () => {
     mkdirSync(SANITIZE_DIR, { recursive: true });
 
     const legacyState = {
-      items: [{
-        id: "test-1",
-        title: "Test Item",
-        description: "desc",
-        status: "in_progress",
-        priority: "normal",
-        dependencies: [],
-        source: "manual",
-        createdAt: new Date().toISOString(),
-      }],
+      items: [
+        {
+          id: "test-1",
+          title: "Test Item",
+          description: "desc",
+          status: "in_progress",
+          priority: "normal",
+          dependencies: [],
+          source: "manual",
+          createdAt: new Date().toISOString(),
+        },
+      ],
       lastUpdated: new Date().toISOString(),
       totalProcessed: 0,
       totalFailed: 0,
@@ -849,9 +909,15 @@ describe("verification sanitization on loadState", () => {
 
 describe("transition matrix", () => {
   const passedVerification = {
-    status: "verified" as const, verifiedAt: new Date().toISOString(), verdict: "PASS" as const,
-    concerns: [], iscRowsVerified: 1, iscRowsTotal: 1, verificationCost: 0,
-    verifiedBy: "skeptical_verifier" as const, tiersExecuted: [1, 2],
+    status: "verified" as const,
+    verifiedAt: new Date().toISOString(),
+    verdict: "PASS" as const,
+    concerns: [],
+    iscRowsVerified: 1,
+    iscRowsTotal: 1,
+    verificationCost: 0,
+    verifiedBy: "skeptical_verifier" as const,
+    tiersExecuted: [1, 2],
   };
 
   // --- Invalid transitions (should throw) ---
@@ -1055,9 +1121,9 @@ describe("A3 — updateStatus() atomic transition via repo.transition()", () => 
 
     const rows = eventsFor(wq, "a3-legal");
     expect(rows.length).toBe(1);
-    expect(rows[0].from_stage).toBe("approved");
-    expect(rows[0].to_stage).toBe("in-progress");
-    expect(rows[0].actor).toBe("WorkQueue.updateStatus");
+    expect(rows[0]?.from_stage).toBe("approved");
+    expect(rows[0]?.to_stage).toBe("in-progress");
+    expect(rows[0]?.actor).toBe("WorkQueue.updateStatus");
     expect(dbStage(wq, "a3-legal")).toBe("in-progress");
   });
 
@@ -1108,13 +1174,15 @@ describe("recordAttempt transition matrix", () => {
 
   it("recordAttempt on pending item throws (invalid source state)", () => {
     const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "pending" })]);
-    expect(() => wq.recordAttempt("a", {
-      attemptNumber: 1,
-      startedAt: new Date().toISOString(),
-      endedAt: new Date().toISOString(),
-      error: "test error",
-      strategy: "standard",
-    })).toThrow("Illegal transition");
+    expect(() =>
+      wq.recordAttempt("a", {
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        error: "test error",
+        strategy: "standard",
+      }),
+    ).toThrow("Illegal transition");
   });
 });
 
@@ -1124,9 +1192,7 @@ describe("recordAttempt transition matrix", () => {
 
 describe("getItem / getAllItems immutability", () => {
   it("getItem returns a deep clone — mutations do not affect internal state", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", status: "in_progress" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", status: "in_progress" })]);
 
     const item = wq.getItem("a");
     expect(item).toBeDefined();
@@ -1158,8 +1224,10 @@ describe("getItem / getAllItems immutability", () => {
     ]);
 
     const items = wq.getAllItems();
-    items[0].status = "completed" as WorkStatus;
-    items[0].dependencies.push("injected");
+    const first = items[0];
+    if (!first) throw new Error("expected at least one item");
+    first.status = "completed" as WorkStatus;
+    items[0]?.dependencies.push("injected");
 
     const fresh = wq.getItem("a");
     expect(fresh!.status).toBe("pending");
@@ -1211,9 +1279,7 @@ describe("removeDependency", () => {
 
 describe("setMetadata undefined handling", () => {
   it("logs loudly and skips the key when a value is undefined, instead of deleting or throwing", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { keepMe: "yes", removeMe: "bye" } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { keepMe: "yes", removeMe: "bye" } })]);
 
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -1232,9 +1298,7 @@ describe("setMetadata undefined handling", () => {
   });
 
   it("sets keys when value is defined", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: {} }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: {} })]);
 
     wq.setMetadata("a", { newKey: "hello" });
     const item = wq.getItem("a");
@@ -1248,9 +1312,7 @@ describe("setMetadata undefined handling", () => {
 
 describe("WorkQueue.deleteMetadata()", () => {
   it("deletes the given keys, leaves others untouched", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { keepMe: "yes", removeMe: "bye" } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { keepMe: "yes", removeMe: "bye" } })]);
 
     wq.deleteMetadata("a", ["removeMe"]);
     const item = wq.getItem("a");
@@ -1259,9 +1321,7 @@ describe("WorkQueue.deleteMetadata()", () => {
   });
 
   it("deletes multiple keys in one call", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { a1: 1, a2: 2, a3: 3 } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { a1: 1, a2: 2, a3: 3 } })]);
 
     wq.deleteMetadata("a", ["a1", "a3"]);
     const item = wq.getItem("a");
@@ -1274,9 +1334,7 @@ describe("WorkQueue.deleteMetadata()", () => {
   });
 
   it("is a no-op for a key that doesn't exist (idempotent)", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "a", metadata: { keepMe: "yes" } }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "a", metadata: { keepMe: "yes" } })]);
     wq.deleteMetadata("a", ["neverExisted"]);
     const item = wq.getItem("a");
     expect(item!.metadata).toEqual({ keepMe: "yes" });
@@ -1355,13 +1413,14 @@ describe("WorkItemMetadata type (ISC 8320)", () => {
 
 describe("retryEligibleAfter cooldown", () => {
   it("recordAttempt sets ~60s cooldown for attempt 1", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "cd-1", status: "in_progress" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "cd-1", status: "in_progress" })]);
     const before = Date.now();
     wq.recordAttempt("cd-1", {
-      attemptNumber: 1, startedAt: new Date().toISOString(),
-      endedAt: new Date().toISOString(), error: "fail", strategy: "standard",
+      attemptNumber: 1,
+      startedAt: new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      error: "fail",
+      strategy: "standard",
     });
     const item = wq.getItem("cd-1");
     expect(item?.retryEligibleAfter).toBeDefined();
@@ -1372,13 +1431,14 @@ describe("retryEligibleAfter cooldown", () => {
   });
 
   it("recordAttempt sets ~180s cooldown for attempt 2", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "cd-2", status: "in_progress" }),
-    ]);
+    const wq = WorkQueue._createForTesting([makeItem({ id: "cd-2", status: "in_progress" })]);
     const before = Date.now();
     wq.recordAttempt("cd-2", {
-      attemptNumber: 2, startedAt: new Date().toISOString(),
-      endedAt: new Date().toISOString(), error: "fail", strategy: "standard",
+      attemptNumber: 2,
+      startedAt: new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      error: "fail",
+      strategy: "standard",
     });
     const item = wq.getItem("cd-2");
     const eligible = new Date(item!.retryEligibleAfter!).getTime();
@@ -1389,36 +1449,47 @@ describe("retryEligibleAfter cooldown", () => {
   it("getReadyItems excludes item with future cooldown", () => {
     const wq = WorkQueue._createForTesting([
       makeItem({
-        id: "cd-future", status: "pending",
+        id: "cd-future",
+        status: "pending",
         retryEligibleAfter: new Date(Date.now() + 60_000).toISOString(),
       }),
     ]);
-    expect(wq.getReadyItems().find(i => i.id === "cd-future")).toBeUndefined();
+    expect(wq.getReadyItems().find((i) => i.id === "cd-future")).toBeUndefined();
   });
 
   it("getReadyItems includes item with past cooldown", () => {
     const wq = WorkQueue._createForTesting([
       makeItem({
-        id: "cd-past", status: "pending",
+        id: "cd-past",
+        status: "pending",
         retryEligibleAfter: new Date(Date.now() - 1_000).toISOString(),
       }),
     ]);
-    expect(wq.getReadyItems().find(i => i.id === "cd-past")).toBeDefined();
+    expect(wq.getReadyItems().find((i) => i.id === "cd-past")).toBeDefined();
   });
 
   it("getReadyItems includes item with undefined cooldown (backward compat)", () => {
-    const wq = WorkQueue._createForTesting([
-      makeItem({ id: "cd-none", status: "pending" }),
-    ]);
-    expect(wq.getReadyItems().find(i => i.id === "cd-none")).toBeDefined();
+    const wq = WorkQueue._createForTesting([makeItem({ id: "cd-none", status: "pending" })]);
+    expect(wq.getReadyItems().find((i) => i.id === "cd-none")).toBeDefined();
   });
 
   it("updateStatus('completed') clears retryEligibleAfter", () => {
     const wq = WorkQueue._createForTesting([
       makeItem({
-        id: "cd-clear", status: "in_progress",
+        id: "cd-clear",
+        status: "in_progress",
         retryEligibleAfter: new Date(Date.now() + 60_000).toISOString(),
-        verification: { status: "verified", verdict: "PASS", verifiedBy: "skeptical_verifier", tiersExecuted: [1] },
+        verification: {
+          status: "verified",
+          verifiedAt: new Date().toISOString(),
+          verdict: "PASS",
+          concerns: [],
+          iscRowsVerified: 0,
+          iscRowsTotal: 0,
+          verificationCost: 0,
+          verifiedBy: "skeptical_verifier",
+          tiersExecuted: [1],
+        },
       }),
     ]);
     wq.updateStatus("cd-clear", "completed");
@@ -1488,11 +1559,15 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
     // Simulate QueueRouter's real write shape on the SAME row (real codec +
     // its already-fixed mergeMetadata:true call shape).
     repo.upsert(
-      queueItemToPipelineParams(makeQueueItemFixture({
-        id: item.id, queue: "approved-work", status: "pending",
-        project: { name: "acme-corp", path: "/tmp/acme" },
-      })),
-      { mergeMetadata: true, actor: "QueueRouter-sim" }
+      queueItemToPipelineParams(
+        makeQueueItemFixture({
+          id: item.id,
+          queue: "approved-work",
+          status: "pending",
+          project: { name: "acme-corp", path: "/tmp/acme" },
+        }),
+      ),
+      { mergeMetadata: true, actor: "QueueRouter-sim" },
     );
     expect(repo.get(item.id)?.metadata.projectName).toBe("acme-corp"); // sanity: QueueRouter's write landed
 
@@ -1512,11 +1587,15 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
     const item = wq.addItem({ title: "t", description: "", priority: "normal", dependencies: [], source: "manual" });
 
     repo.upsert(
-      queueItemToPipelineParams(makeQueueItemFixture({
-        id: item.id, queue: "approved-work", status: "pending",
-        project: { name: "acme-corp", path: "/tmp/acme" },
-      })),
-      { mergeMetadata: true, actor: "QueueRouter-sim" }
+      queueItemToPipelineParams(
+        makeQueueItemFixture({
+          id: item.id,
+          queue: "approved-work",
+          status: "pending",
+          project: { name: "acme-corp", path: "/tmp/acme" },
+        }),
+      ),
+      { mergeMetadata: true, actor: "QueueRouter-sim" },
     );
 
     wq.updateStatus(item.id, "in_progress");
@@ -1531,11 +1610,15 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
     const item = wq.addItem({ title: "t", description: "", priority: "normal", dependencies: [], source: "manual" });
 
     repo.upsert(
-      queueItemToPipelineParams(makeQueueItemFixture({
-        id: item.id, queue: "approved-work", status: "pending",
-        project: { name: "acme-corp", path: "/tmp/acme" },
-      })),
-      { mergeMetadata: true, actor: "QueueRouter-sim" }
+      queueItemToPipelineParams(
+        makeQueueItemFixture({
+          id: item.id,
+          queue: "approved-work",
+          status: "pending",
+          project: { name: "acme-corp", path: "/tmp/acme" },
+        }),
+      ),
+      { mergeMetadata: true, actor: "QueueRouter-sim" },
     );
 
     wq.setMetadata(item.id, { workSurface: "cli" });
@@ -1548,16 +1631,24 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
   it("setMetadata logs loudly and skips (not deletes, not throws) an undefined value — round-2 root-cause fix — AND still preserves concurrent QueueRouter metadata", () => {
     const { wq, repo } = makeSharedStore("clobber-setmetadata-loud-skip");
     const item = wq.addItem({
-      title: "t", description: "", priority: "normal", dependencies: [], source: "manual",
+      title: "t",
+      description: "",
+      priority: "normal",
+      dependencies: [],
+      source: "manual",
       metadata: { removeMe: "bye", keepMe: "yes" },
     });
 
     repo.upsert(
-      queueItemToPipelineParams(makeQueueItemFixture({
-        id: item.id, queue: "approved-work", status: "pending",
-        project: { name: "acme-corp", path: "/tmp/acme" },
-      })),
-      { mergeMetadata: true, actor: "QueueRouter-sim" }
+      queueItemToPipelineParams(
+        makeQueueItemFixture({
+          id: item.id,
+          queue: "approved-work",
+          status: "pending",
+          project: { name: "acme-corp", path: "/tmp/acme" },
+        }),
+      ),
+      { mergeMetadata: true, actor: "QueueRouter-sim" },
     );
 
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
@@ -1581,7 +1672,11 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
   it("deleteMetadata() still deletes the key from the raw row (mergeMetadata correctly off for that call)", () => {
     const { wq, repo } = makeSharedStore("clobber-deletemetadata");
     const item = wq.addItem({
-      title: "t", description: "", priority: "normal", dependencies: [], source: "manual",
+      title: "t",
+      description: "",
+      priority: "normal",
+      dependencies: [],
+      source: "manual",
       metadata: { removeMe: "bye", keepMe: "yes" },
     });
 
@@ -1598,7 +1693,11 @@ describe("WorkQueue / QueueRouter shared-store metadata clobber (cross-writer)",
   it("resumeBlocked still deletes humanTaskRef/escalationReason/escalatedAt from the raw row (mergeMetadata correctly off for that call)", () => {
     const { wq, repo } = makeSharedStore("clobber-resumeblocked-delete");
     const item = wq.addItem({
-      title: "t", description: "", priority: "normal", dependencies: [], source: "manual",
+      title: "t",
+      description: "",
+      priority: "normal",
+      dependencies: [],
+      source: "manual",
       status: "blocked",
       metadata: { humanTaskRef: "manual-a", escalationReason: "needs prereq", escalatedAt: "2026-06-14" },
     });

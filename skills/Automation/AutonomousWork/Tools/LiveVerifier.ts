@@ -21,8 +21,8 @@
  * rather than following a per-surface recipe table.
  */
 
-import { mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EffortLevel } from "./WorkQueue.ts";
 import { resolveLiveVerifyContext, type LiveVerifyMode } from "./LiveVerifyContext.ts";
 import { runSelfVerify } from "./SelfVerifyRunner.ts";
@@ -39,15 +39,7 @@ import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
  * set with the non-executable kinds (docs/config/refactor) so the "mandatory for
  * all work" rule has a real live check for every item.
  */
-export type LiveSurface =
-  | "browser"
-  | "cli"
-  | "api"
-  | "integration"
-  | "native"
-  | "docs"
-  | "config"
-  | "refactor";
+export type LiveSurface = "browser" | "cli" | "api" | "integration" | "native" | "docs" | "config" | "refactor";
 
 export type ScenarioKind = "happy" | "edge" | "error" | "chaos";
 
@@ -294,10 +286,9 @@ export function buildExplorerPrompt(input: LiveVerifierInput): string {
 /** Extract and parse the LAST fenced ```json block from the Explorer's stdout. */
 export function parseExplorerOutput(stdout: string): ExplorerPayload | null {
   const fence = /```json\s*([\s\S]*?)```/gi;
-  let match: RegExpExecArray | null;
   let last: string | null = null;
-  while ((match = fence.exec(stdout)) !== null) {
-    last = match[1];
+  for (const match of stdout.matchAll(fence)) {
+    last = match[1] ?? null;
   }
   const candidate = last ?? extractBareObject(stdout);
   if (!candidate) return null;
@@ -459,8 +450,7 @@ export async function runLiveVerification(
   // code. Only a rate-limit/infra signal WITHOUT a timeout — or a pre-spawn gate
   // — counts as environment-blocked; a timeout always falls through to the
   // normal noEvidence hard-FAIL path below (PhaseL.ts noEvidence handling).
-  const environmentBlocked =
-    res.preSpawnGated === true || (res.infraUnavailable === true && res.timedOut !== true);
+  const environmentBlocked = res.preSpawnGated === true || (res.infraUnavailable === true && res.timedOut !== true);
   if (environmentBlocked) {
     warnings.push(
       res.preSpawnGated
@@ -484,9 +474,11 @@ export async function runLiveVerification(
     );
   }
 
-  const scenariosPassed = scenarios.filter(s => s.verdict === "PASS").length;
-  const scenariosFailed = scenarios.filter(s => s.verdict === "FAIL").length;
-  const edgeCasesExplored = scenarios.filter(s => s.kind === "edge" || s.kind === "error" || s.kind === "chaos").length;
+  const scenariosPassed = scenarios.filter((s) => s.verdict === "PASS").length;
+  const scenariosFailed = scenarios.filter((s) => s.verdict === "FAIL").length;
+  const edgeCasesExplored = scenarios.filter(
+    (s) => s.kind === "edge" || s.kind === "error" || s.kind === "chaos",
+  ).length;
 
   // Verdict: no evidence OR any failed scenario OR explorer-declared FAIL → FAIL.
   let verdict: "PASS" | "FAIL";
@@ -513,10 +505,12 @@ export async function runLiveVerification(
   try {
     const dir = join(persistDir, input.itemId);
     transcriptPath = join(dir, `run-${start}.json`);
-    const write = deps.writeTranscript ?? ((p: string, data: string) => {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(p, data, "utf-8");
-    });
+    const write =
+      deps.writeTranscript ??
+      ((p: string, data: string) => {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(p, data, "utf-8");
+      });
     write(transcriptPath, JSON.stringify(transcript, null, 2));
   } catch {
     warnings.push("failed to persist live-verification transcript (non-fatal)");

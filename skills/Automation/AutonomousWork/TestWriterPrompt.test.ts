@@ -7,14 +7,10 @@
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
-const PROMPT_PATH = join(
-  import.meta.dir,
-  "Prompts",
-  "TestWriterPrompt.md"
-);
+const PROMPT_PATH = join(import.meta.dir, "Prompts", "TestWriterPrompt.md");
 
 describe("TestWriterPrompt.md — existence and required sections (ISC 5084)", () => {
   it("file exists at the expected path", () => {
@@ -57,7 +53,9 @@ describe("TestWriterPrompt.md — existence and required sections (ISC 5084)", (
 
 describe("TestWriterPrompt.md — never mock hard rule (ISC 6695)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("contains 'Never mock the component under test' rule", () => {
     const hasMockRule =
@@ -77,7 +75,9 @@ describe("TestWriterPrompt.md — never mock hard rule (ISC 6695)", () => {
 
 describe("TestWriterPrompt.md — surface-specific sections (ISC 3568)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("contains a browser surface section", () => {
     expect(content).toContain("browser");
@@ -110,7 +110,9 @@ describe("TestWriterPrompt.md — surface-specific sections (ISC 3568)", () => {
 
 describe("TestWriterPrompt.md — prohibits running tests after writing (ISC 4720)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("explicitly prohibits running tests after writing them", () => {
     const prohibitsRunning =
@@ -122,27 +124,27 @@ describe("TestWriterPrompt.md — prohibits running tests after writing (ISC 472
   });
 
   it("explains that tests are expected to fail", () => {
-    const failsExpected =
-      content.includes("expected to fail") ||
-      content.includes("Tests must fail");
+    const failsExpected = content.includes("expected to fail") || content.includes("Tests must fail");
     expect(failsExpected).toBe(true);
   });
 });
 
 describe("TestWriterPrompt.md — browser surface prohibits querySelector (ISC 8664)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("explicitly prohibits querySelector in browser surface", () => {
     const prohibitsQuery =
       content.includes("querySelector") &&
       (content.includes("Never querySelector") ||
-       content.includes("Never `querySelector`") ||
-       content.includes("Not acceptable") ||
-       content.toLowerCase().includes("prohibited") ||
-       content.toLowerCase().includes("never") ||
-       content.includes("PROHIBITED"));
-    // querySelector appears in context of prohibition
+        content.includes("Never `querySelector`") ||
+        content.includes("Not acceptable") ||
+        content.toLowerCase().includes("prohibited") ||
+        content.toLowerCase().includes("never") ||
+        content.includes("PROHIBITED"));
+    expect(prohibitsQuery).toBe(true);
     expect(content).toContain("querySelector");
   });
 
@@ -165,7 +167,9 @@ describe("TestWriterPrompt.md — browser surface prohibits querySelector (ISC 8
 
 describe("TestWriterPrompt.md — cli surface black-box spec (ISC 1316)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("cli surface treats CLI as a black box", () => {
     const blackBox =
@@ -176,10 +180,7 @@ describe("TestWriterPrompt.md — cli surface black-box spec (ISC 1316)", () => 
   });
 
   it("cli surface specifies spawning the CLI binary", () => {
-    const spawns =
-      content.includes("spawn") ||
-      content.includes("execa") ||
-      content.includes("child_process");
+    const spawns = content.includes("spawn") || content.includes("execa") || content.includes("child_process");
     expect(spawns).toBe(true);
   });
 
@@ -192,7 +193,9 @@ describe("TestWriterPrompt.md — cli surface black-box spec (ISC 1316)", () => 
 
 describe("TestWriterPrompt.md — testFilesBySurface in output JSON (ISC 2104)", () => {
   let content: string;
-  beforeAll(() => { content = readFileSync(PROMPT_PATH, "utf-8"); });
+  beforeAll(() => {
+    content = readFileSync(PROMPT_PATH, "utf-8");
+  });
 
   it("output JSON includes testFilesBySurface field", () => {
     expect(content).toContain("testFilesBySurface");

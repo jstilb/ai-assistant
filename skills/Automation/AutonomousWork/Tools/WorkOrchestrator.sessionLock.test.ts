@@ -26,16 +26,15 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join as joinPath } from "path";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
 
 const tempHome = mkdtempSync(joinPath(tmpdir(), "wo-sessionlock-test-"));
 const ORIGINAL_KAYA_HOME = process.env.KAYA_HOME;
 process.env.KAYA_HOME = tempHome;
 
-beforeAll(async () => {
-});
+beforeAll(async () => {});
 
 afterAll(async () => {
   if (ORIGINAL_KAYA_HOME === undefined) delete process.env.KAYA_HOME;
@@ -88,7 +87,10 @@ function writeLockFile(ageMs = 0): string {
   const dir = joinPath(tempHome, "MEMORY", "STATE");
   mkdirSync(dir, { recursive: true });
   const lockPath = joinPath(dir, "interactive-session.lock");
-  writeFileSync(lockPath, JSON.stringify({ sessionId: "test-session", startedAt: new Date().toISOString(), pid: 12345 }));
+  writeFileSync(
+    lockPath,
+    JSON.stringify({ sessionId: "test-session", startedAt: new Date().toISOString(), pid: 12345 }),
+  );
   if (ageMs > 0) {
     const past = new Date(Date.now() - ageMs);
     utimesSync(lockPath, past, past);

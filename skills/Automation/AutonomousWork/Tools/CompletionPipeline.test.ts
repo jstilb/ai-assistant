@@ -15,9 +15,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, spyOn } from "bun:test";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join as joinPath } from "path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
 
 const tempHome = mkdtempSync(joinPath(tmpdir(), "cp-test-"));
 const ORIGINAL_KAYA_HOME = process.env.KAYA_HOME;
@@ -41,8 +41,22 @@ afterAll(async () => {
   resetTaskDB({ forgetPath: true });
   rmSync(tempHome, { recursive: true, force: true });
 });
-import { CompletionPipeline, precondition, attachEvidence, markRowsDone, verifyAndAudit, triagePending, commitCompletion, mergeIfPossible, emitTraces, type AgentResults, type CompletionDeps, type StageCtx, type VerifyResult } from "./CompletionPipeline.ts";
-import { WorkQueue, type WorkItem, type WorkItemVerification } from "./WorkQueue.ts";
+import {
+  CompletionPipeline,
+  precondition,
+  attachEvidence,
+  markRowsDone,
+  verifyAndAudit,
+  triagePending,
+  commitCompletion,
+  mergeIfPossible,
+  emitTraces,
+  type AgentResults,
+  type CompletionDeps,
+  type StageCtx,
+  type VerifyResult,
+} from "./CompletionPipeline.ts";
+import { WorkQueue, type WorkItem } from "./WorkQueue.ts";
 import { ISCManager } from "./ISCManager.ts";
 import { TransitionGuard } from "./TransitionGuard.ts";
 import { NotificationDispatcher } from "./NotificationDispatcher.ts";
@@ -63,9 +77,7 @@ const PASS_REVIEW: SkepticalReviewResult = {
 
 const FAIL_REVIEW: SkepticalReviewResult = {
   finalVerdict: "FAIL",
-  tiers: [
-    { tier: 1, verdict: "FAIL", confidence: 0.9, concerns: ["tier 1 concern"], costEstimate: 0, latencyMs: 0 },
-  ],
+  tiers: [{ tier: 1, verdict: "FAIL", confidence: 0.9, concerns: ["tier 1 concern"], costEstimate: 0, latencyMs: 0 }],
   tiersSkipped: [],
   totalCost: 0,
   totalLatencyMs: 0,
@@ -89,25 +101,19 @@ function recordingDispatcher(
 ): { dispatcher: NotificationDispatcher; calls: NotificationCalls } {
   const calls: NotificationCalls = { needsReview: [], jmTask: [], humanProxies: [] };
   const dispatcher = new NotificationDispatcher({ queue });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (dispatcher as any).emitNeedsReviewNotification = (
-    itemId: string,
-    _title: string,
-    verdict: string,
-    concerns: string[],
-  ) => {
-    calls.needsReview.push({ itemId, verdict, concerns });
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (dispatcher as any).createJmTask = async (itemId: string, _title: string, descriptions: string) => {
-    calls.jmTask.push({ itemId, descriptions });
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (dispatcher as any).createHumanProxies = async (itemId: string, _title: string, humanRows: ISCRow[]) => {
-    const ids = proxyIdsToReturn.length > 0 ? proxyIdsToReturn : humanRows.map((r) => `proxy-${itemId}-${r.id}`);
-    calls.humanProxies.push({ itemId, humanRows, returnIds: ids });
-    return ids;
-  };
+  Object.assign(dispatcher, {
+    emitNeedsReviewNotification: (itemId: string, _title: string, verdict: string, concerns: string[]) => {
+      calls.needsReview.push({ itemId, verdict, concerns });
+    },
+    createJmTask: async (itemId: string, _title: string, descriptions: string) => {
+      calls.jmTask.push({ itemId, descriptions });
+    },
+    createHumanProxies: async (itemId: string, _title: string, humanRows: ISCRow[]) => {
+      const ids = proxyIdsToReturn.length > 0 ? proxyIdsToReturn : humanRows.map((r) => `proxy-${itemId}-${r.id}`);
+      calls.humanProxies.push({ itemId, humanRows, returnIds: ids });
+      return ids;
+    },
+  });
   return { dispatcher, calls };
 }
 
@@ -134,12 +140,12 @@ function makeRow(id: number, status: ISCRow["status"]): ISCRow {
 }
 
 interface InsightPayload {
-  source: string;
+  source?: string;
   type: string;
   title: string;
   content: string;
-  tags: string[];
-  metadata: Record<string, unknown>;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 interface SetupOpts {
@@ -174,6 +180,16 @@ const defaultEmitCompletion = (_id: string, _label: string): void => {};
 const defaultEmitInsight = async (_insight: InsightPayload): Promise<void> => {};
 
 const defaultRunEvaluatorPipeline = async (_id: string): Promise<void> => {};
+
+/** No-op later-stage deps for tests whose pipeline run ends before those stages. */
+const defaultTailDeps = {
+  resolveStaleReviewProxies: (_itemId: string): void => {},
+  complete: defaultPassingComplete,
+  mergeItem: defaultMergeItemSkipped,
+  emitCompletion: defaultEmitCompletion,
+  emitInsight: defaultEmitInsight,
+  runEvaluatorPipeline: defaultRunEvaluatorPipeline,
+};
 
 function setup(itemId: string, rows: ISCRow[] | null, opts: SetupOpts = {}) {
   const queue = WorkQueue._createForTesting([makeItem(itemId)]);
@@ -234,10 +250,7 @@ describe("CompletionPipeline.precondition (F-004)", () => {
   });
 
   it("does NOT reject when at least one row is non-EXECUTION_FAILED", async () => {
-    const { pipeline } = setup("b", [
-      makeRow(1, "EXECUTION_FAILED"),
-      makeRow(2, "DONE"),
-    ]);
+    const { pipeline } = setup("b", [makeRow(1, "EXECUTION_FAILED"), makeRow(2, "DONE")]);
 
     const result = await pipeline.run("b", emptyResults);
 
@@ -304,16 +317,14 @@ describe("CompletionPipeline.attachEvidence", () => {
     await pipeline.run("b", { completedRowIds: [1], executionLog: log });
 
     const meta = queue.getItem("b")?.metadata as Record<string, unknown> | undefined;
-    expect((meta?.executionLog as string[]).length).toBe(20);
-    expect((meta?.executionLog as string[])[0]).toBe("step-15");
-    expect((meta?.executionLog as string[])[19]).toBe("step-34");
+    const executionLog = (meta?.executionLog ?? []) as string[];
+    expect(executionLog.length).toBe(20);
+    expect(executionLog[0]).toBe("step-15");
+    expect(executionLog[19]).toBe("step-34");
   });
 
   it("attaches per-row evidence to matching ISC rows", async () => {
-    const { pipeline, iscManager } = setup("c", [
-      makeRow(1, "DONE"),
-      makeRow(2, "DONE"),
-    ]);
+    const { pipeline, iscManager } = setup("c", [makeRow(1, "DONE"), makeRow(2, "DONE")]);
 
     await pipeline.run("c", {
       completedRowIds: [1, 2],
@@ -341,7 +352,7 @@ describe("CompletionPipeline.attachEvidence", () => {
     });
 
     const rows = iscManager.load("d");
-    expect(rows[0].evidence).toBeUndefined();
+    expect(rows[0]?.evidence).toBeUndefined();
   });
 
   it("is a no-op when no evidence fields are provided", async () => {
@@ -375,11 +386,7 @@ describe("CompletionPipeline.markRowsDone", () => {
   // Stage-level direct calls so triagePending (Slice 5) doesn't reject PENDING rows
   // that this test intentionally leaves behind.
   it("transitions specified rows from PENDING to DONE", async () => {
-    const { iscManager, deps } = setup("a", [
-      makeRow(1, "PENDING"),
-      makeRow(2, "PENDING"),
-      makeRow(3, "PENDING"),
-    ]);
+    const { iscManager, deps } = setup("a", [makeRow(1, "PENDING"), makeRow(2, "PENDING"), makeRow(3, "PENDING")]);
     const ctx = makeCtx("a", deps.queue, iscManager, { completedRowIds: [1, 2] });
 
     const result = await markRowsDone(ctx, deps);
@@ -392,10 +399,7 @@ describe("CompletionPipeline.markRowsDone", () => {
   });
 
   it("does not transition DONE or VERIFIED rows", async () => {
-    const { iscManager, deps } = setup("b", [
-      makeRow(1, "VERIFIED"),
-      makeRow(2, "DONE"),
-    ]);
+    const { iscManager, deps } = setup("b", [makeRow(1, "VERIFIED"), makeRow(2, "DONE")]);
     const ctx = makeCtx("b", deps.queue, iscManager, { completedRowIds: [1, 2] });
 
     await markRowsDone(ctx, deps);
@@ -419,10 +423,7 @@ describe("CompletionPipeline.markRowsDone", () => {
   });
 
   it("is a no-op when completedRowIds is empty", async () => {
-    const { iscManager, deps } = setup("d", [
-      makeRow(1, "PENDING"),
-      makeRow(2, "PENDING"),
-    ]);
+    const { iscManager, deps } = setup("d", [makeRow(1, "PENDING"), makeRow(2, "PENDING")]);
     const before = JSON.stringify(iscManager.load("d"));
     const ctx = makeCtx("d", deps.queue, iscManager, { completedRowIds: [] });
 
@@ -454,13 +455,13 @@ describe("CompletionPipeline.verifyAndAudit", () => {
 
   it("on verify failure terminates with rejected, populates skepticalReview, and includes faultClass", async () => {
     let cleanupCalled = false;
-    const failures: ISCRow[] = [
-      { id: 1, description: "missing test", status: "PENDING", parallel: false },
-    ];
+    const failures: ISCRow[] = [{ id: 1, description: "missing test", status: "PENDING", parallel: false }];
     const { dispatcher } = recordingDispatcher(WorkQueue._createForTesting([]));
     const { pipeline } = setup("b", [makeRow(1, "DONE")], {
       verify: async () => ({ success: false, failures, skepticalReview: FAIL_REVIEW }),
-      cleanupWorktree: async () => { cleanupCalled = true; },
+      cleanupWorktree: async () => {
+        cleanupCalled = true;
+      },
       classifyFailure: () => "item",
       notificationDispatcher: dispatcher,
     });
@@ -483,6 +484,7 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     const { dispatcher, calls } = recordingDispatcher(queue);
     const guard = new TransitionGuard(queue, "/dev/null");
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: async () => ({
@@ -500,16 +502,32 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     await pipeline.run("c", { completedRowIds: [1] });
 
     expect(calls.jmTask.length).toBe(1);
-    expect(calls.jmTask[0].itemId).toBe("c");
-    expect(calls.jmTask[0].descriptions).toContain("[FAIL] Verification failed");
-    expect(calls.jmTask[0].descriptions).toContain("- broken assertion");
+    expect(calls.jmTask[0]?.itemId).toBe("c");
+    expect(calls.jmTask[0]?.descriptions).toContain("[FAIL] Verification failed");
+    expect(calls.jmTask[0]?.descriptions).toContain("- broken assertion");
   });
 
   it("does NOT create jm-task when attemptCount >= 2 (escalation handles its own)", async () => {
     const item = makeItem("d");
     item.attempts = [
-      { attemptNumber: 1, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), error: "first", strategy: "standard", iscRowsCompleted: 0, iscRowsTotal: 1 },
-      { attemptNumber: 2, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), error: "second", strategy: "standard", iscRowsCompleted: 0, iscRowsTotal: 1 },
+      {
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        error: "first",
+        strategy: "standard",
+        iscRowsCompleted: 0,
+        iscRowsTotal: 1,
+      },
+      {
+        attemptNumber: 2,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        error: "second",
+        strategy: "standard",
+        iscRowsCompleted: 0,
+        iscRowsTotal: 1,
+      },
     ];
     const queue = WorkQueue._createForTesting([item]);
     const iscManager = new ISCManager(queue);
@@ -517,6 +535,7 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     const { dispatcher, calls } = recordingDispatcher(queue);
     const guard = new TransitionGuard(queue, "/dev/null");
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: async () => ({
@@ -545,7 +564,9 @@ describe("CompletionPipeline.verifyAndAudit", () => {
         failures: [{ id: 1, description: "fail", status: "PENDING", parallel: false }],
         skepticalReview: FAIL_REVIEW,
       }),
-      cleanupWorktree: async (id) => { cleanupCalls.push(id); },
+      cleanupWorktree: async (id) => {
+        cleanupCalls.push(id);
+      },
     });
 
     await pipeline.run("e", { completedRowIds: [1] });
@@ -559,9 +580,11 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     iscManager.persist("f", [makeRow(1, "DONE")]);
     const auditEntries: Array<Record<string, unknown>> = [];
     const guard = new TransitionGuard(queue, "/dev/null");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: async () => ({ success: true, failures: [], skepticalReview: PASS_REVIEW }),
@@ -578,12 +601,9 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     await verifyAndAudit(ctx, deps);
 
     expect(auditEntries.length).toBe(1);
-    expect(auditEntries[0].adversarialConcerns).toEqual([
-      "What about race conditions?",
-      "Could the lock leak?",
-    ]);
-    expect(auditEntries[0].verdict).toBe("PASS");
-    expect(auditEntries[0].iscRowSummary).toEqual(["1:DONE"]);
+    expect(auditEntries[0]?.adversarialConcerns).toEqual(["What about race conditions?", "Could the lock leak?"]);
+    expect(auditEntries[0]?.verdict).toBe("PASS");
+    expect(auditEntries[0]?.iscRowSummary).toEqual(["1:DONE"]);
   });
 
   it("invokes classifyFailure with joined concerns string and failures array", async () => {
@@ -603,8 +623,8 @@ describe("CompletionPipeline.verifyAndAudit", () => {
     const result = await pipeline.run("g", { completedRowIds: [1] });
 
     expect(calls.length).toBe(1);
-    expect(calls[0].concerns).toBe("concern A; concern B");
-    expect(calls[0].failureCount).toBe(2);
+    expect(calls[0]?.concerns).toBe("concern A; concern B");
+    expect(calls[0]?.failureCount).toBe(2);
     expect(result.kind).toBe("rejected");
     if (result.kind !== "rejected") return;
     expect(result.faultClass).toBe("infrastructure");
@@ -616,7 +636,9 @@ describe("CompletionPipeline.resolveStaleProxies", () => {
     const calls: string[] = [];
     // Run the full pipeline through to triagePending continue (no PENDING rows)
     const { pipeline } = setup("a", [makeRow(1, "DONE")], {
-      resolveStaleReviewProxies: (id) => { calls.push(id); },
+      resolveStaleReviewProxies: (id) => {
+        calls.push(id);
+      },
     });
 
     const result = await pipeline.run("a", { completedRowIds: [1] });
@@ -632,7 +654,9 @@ describe("CompletionPipeline.resolveStaleProxies", () => {
       "b",
       [{ id: 1, description: "needs human", status: "PENDING", parallel: false, disposition: "human-required" }],
       {
-        resolveStaleReviewProxies: (id) => { calls.push(id); },
+        resolveStaleReviewProxies: (id) => {
+          calls.push(id);
+        },
         notificationDispatcher: dispatcher,
       },
     );
@@ -696,6 +720,7 @@ describe("CompletionPipeline.triagePending", () => {
     const { dispatcher, calls } = recordingDispatcher(queue, ["proxy-c-2"]);
     const guard = new TransitionGuard(queue, "/dev/null");
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -729,6 +754,7 @@ describe("CompletionPipeline.triagePending", () => {
     const { dispatcher } = recordingDispatcher(queue, ["proxy-d-1", "proxy-d-2"]);
     const guard = new TransitionGuard(queue, "/dev/null");
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -762,9 +788,11 @@ describe("CompletionPipeline.triagePending", () => {
     const { dispatcher } = recordingDispatcher(queue, ["proxy-e-2"]);
     const guard = new TransitionGuard(queue, "/dev/null");
     const auditEntries: Array<Record<string, unknown>> = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -781,21 +809,21 @@ describe("CompletionPipeline.triagePending", () => {
     // Two entries: one from verifyAndAudit (PASS verdict, post-verify), one from triagePending (human-required summary)
     expect(auditEntries.length).toBe(2);
     const triageEntry = auditEntries[1];
-    expect(triageEntry.verdict).toBe("PASS");
-    expect((triageEntry.concerns as string[])[0]).toContain("1 human-required row(s) remain: #2");
-    expect((triageEntry.concerns as string[])[0]).toContain("Created 1 HUMAN proxies");
-    expect(triageEntry.iscRowSummary).toEqual(["1:VERIFIED", "2:PENDING"]);
+    expect(triageEntry?.verdict).toBe("PASS");
+    const triageConcerns = (triageEntry?.concerns ?? []) as string[];
+    expect(triageConcerns[0]).toContain("1 human-required row(s) remain: #2");
+    expect(triageConcerns[0]).toContain("Created 1 HUMAN proxies");
+    expect(triageEntry?.iscRowSummary).toEqual(["1:VERIFIED", "2:PENDING"]);
   });
 
   it("does not invoke createHumanProxies when only incomplete-automatable rows are pending", async () => {
     const queue = WorkQueue._createForTesting([makeItem("f")]);
     const iscManager = new ISCManager(queue);
-    iscManager.persist("f", [
-      { id: 1, description: "should be done", status: "PENDING", parallel: false },
-    ]);
+    iscManager.persist("f", [{ id: 1, description: "should be done", status: "PENDING", parallel: false }]);
     const { dispatcher, calls } = recordingDispatcher(queue);
     const guard = new TransitionGuard(queue, "/dev/null");
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -833,8 +861,9 @@ describe("CompletionPipeline.commitCompletion", () => {
     iscManager.persist("a", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }]);
     const auditEntries: Array<Record<string, unknown>> = [];
     const guard = new TransitionGuard(queue, "/dev/null");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const { fn, calls } = recordingComplete({ success: true });
     const deps: CompletionDeps = {
       queue,
@@ -859,7 +888,7 @@ describe("CompletionPipeline.commitCompletion", () => {
     expect(calls).toEqual(["a"]);
     // verifyAndAudit emits one PASS entry on success; commitCompletion emits none on success
     expect(auditEntries.length).toBe(1);
-    expect(auditEntries[0].verdict).toBe("PASS");
+    expect(auditEntries[0]?.verdict).toBe("PASS");
   });
 
   it("on complete failure terminates rejected with FAIL + faultClass=item + skepticalReview", async () => {
@@ -887,10 +916,12 @@ describe("CompletionPipeline.commitCompletion", () => {
     ]);
     const auditEntries: Array<Record<string, unknown>> = [];
     const guard = new TransitionGuard(queue, "/dev/null");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const { fn } = recordingComplete({ success: false, reason: "spec parsing error" });
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -908,14 +939,14 @@ describe("CompletionPipeline.commitCompletion", () => {
     // Two audit entries: verifyAndAudit (PASS), commitCompletion (FAIL)
     expect(auditEntries.length).toBe(2);
     const failEntry = auditEntries[1];
-    expect(failEntry.verdict).toBe("FAIL");
-    expect(failEntry.itemId).toBe("c");
-    expect(failEntry.itemTitle).toBe("Item c");
-    expect(failEntry.concerns).toEqual(["Completion gate rejected: spec parsing error"]);
-    expect(failEntry.tiersExecuted).toEqual([1, 2]);
-    expect(failEntry.verificationCost).toBe(0.01);
-    expect(failEntry.iscRowSummary).toEqual(["1:VERIFIED", "2:DONE"]);
-    expect(failEntry.failureReason).toBe("spec parsing error");
+    expect(failEntry?.verdict).toBe("FAIL");
+    expect(failEntry?.itemId).toBe("c");
+    expect(failEntry?.itemTitle).toBe("Item c");
+    expect(failEntry?.concerns).toEqual(["Completion gate rejected: spec parsing error"]);
+    expect(failEntry?.tiersExecuted).toEqual([1, 2]);
+    expect(failEntry?.verificationCost).toBe(0.01);
+    expect(failEntry?.iscRowSummary).toEqual(["1:VERIFIED", "2:DONE"]);
+    expect(failEntry?.failureReason).toBe("spec parsing error");
   });
 
   it("does NOT append a commit-completion audit entry on success", async () => {
@@ -924,8 +955,9 @@ describe("CompletionPipeline.commitCompletion", () => {
     iscManager.persist("d", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }]);
     const auditEntries: Array<Record<string, unknown>> = [];
     const guard = new TransitionGuard(queue, "/dev/null");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const { fn } = recordingComplete({ success: true });
     const deps: CompletionDeps = {
       queue,
@@ -948,7 +980,7 @@ describe("CompletionPipeline.commitCompletion", () => {
 
     // Only the verifyAndAudit PASS entry, no commit-completion entry on success
     expect(auditEntries.length).toBe(1);
-    expect(auditEntries[0].verdict).toBe("PASS");
+    expect(auditEntries[0]?.verdict).toBe("PASS");
   });
 
   it("uses an empty iscRowSummary when no ISC rows exist (defensive)", async () => {
@@ -957,10 +989,12 @@ describe("CompletionPipeline.commitCompletion", () => {
     const iscManager = new ISCManager(queue);
     const auditEntries: Array<Record<string, unknown>> = [];
     const guard = new TransitionGuard(queue, "/dev/null");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (guard as any).appendAuditLog = (entry: Record<string, unknown>) => { auditEntries.push(entry); };
+    guard["appendAuditLog"] = (entry) => {
+      auditEntries.push({ ...entry });
+    };
     const { fn } = recordingComplete({ success: false, reason: "no rows somehow" });
     const deps: CompletionDeps = {
+      ...defaultTailDeps,
       queue,
       iscManager,
       verify: defaultPassingVerify,
@@ -984,7 +1018,7 @@ describe("CompletionPipeline.commitCompletion", () => {
 
     expect((result as { kind: string }).kind).toBe("terminate");
     expect(auditEntries.length).toBe(1);
-    expect(auditEntries[0].iscRowSummary).toEqual([]);
+    expect(auditEntries[0]?.iscRowSummary).toEqual([]);
   });
 
   it("uses an undefined reason gracefully when complete returns no reason", async () => {
@@ -1026,9 +1060,13 @@ describe("CompletionPipeline.mergeIfPossible", () => {
   // production auto-merge — the hottest completion path in the file. Regression: a
   // direct-strategy ("no prUrl on the result") completion must emit ZERO console.error.
   it("on merged === true with NO prUrl (the real 'direct' strategy shape) writes mergeStatus alone and emits ZERO console.error", async () => {
-    const { pipeline, queue } = setup("f-direct", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }], {
-      mergeItem: () => ({ merged: true }), // exactly Integrator.ts:409's direct-success return — no prUrl key
-    });
+    const { pipeline, queue } = setup(
+      "f-direct",
+      [{ id: 1, description: "row", status: "VERIFIED", parallel: false }],
+      {
+        mergeItem: () => ({ merged: true }), // exactly Integrator.ts:409's direct-success return — no prUrl key
+      },
+    );
 
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -1080,7 +1118,9 @@ describe("CompletionPipeline.mergeIfPossible", () => {
 
   it("on thrown exception logs warning and still terminates completed with mergeStatus 'skipped'", async () => {
     const { pipeline, queue } = setup("d", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }], {
-      mergeItem: () => { throw new Error("gh CLI exploded"); },
+      mergeItem: () => {
+        throw new Error("gh CLI exploded");
+      },
     });
 
     const result = await pipeline.run("d", { completedRowIds: [] });
@@ -1093,10 +1133,13 @@ describe("CompletionPipeline.mergeIfPossible", () => {
   });
 
   it("ctx.mergeStatus from the stage carries forward into emitTraces' completed outcome", async () => {
-    let capturedMergeStatus: "merged" | "pending_approval" | "skipped" | undefined;
-    const { queue, iscManager, deps } = setup("e", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }], {
-      mergeItem: () => ({ merged: true, prUrl: "https://example.com/pr" }),
-    });
+    const { queue, iscManager, deps } = setup(
+      "e",
+      [{ id: 1, description: "row", status: "VERIFIED", parallel: false }],
+      {
+        mergeItem: () => ({ merged: true, prUrl: "https://example.com/pr" }),
+      },
+    );
     const ctx: StageCtx = {
       itemId: "e",
       item: queue.getItem("e"),
@@ -1109,7 +1152,7 @@ describe("CompletionPipeline.mergeIfPossible", () => {
     const mergeResult = await mergeIfPossible(ctx, deps);
     expect(mergeResult.kind).toBe("continue");
     if (mergeResult.kind !== "continue") return;
-    capturedMergeStatus = mergeResult.ctxPatch?.mergeStatus;
+    const capturedMergeStatus = mergeResult.ctxPatch?.mergeStatus;
     expect(capturedMergeStatus).toBe("merged");
 
     const ctxAfterMerge: StageCtx = { ...ctx, ...(mergeResult.ctxPatch ?? {}) };
@@ -1128,7 +1171,7 @@ describe("CompletionPipeline.mergeIfPossible", () => {
   // argument — DEFAULT false (lock-respecting) unless the caller (an explicit
   // interactive opt-in) sets it true.
   it("forwards ctx.opts.skipSessionLock:true to deps.mergeItem's second argument", async () => {
-    let captured: boolean | undefined | "not-called" = "not-called";
+    let captured = "not-called" as boolean | undefined | "not-called"; // assigned in a callback, so avoid control-flow narrowing to the initial value
     const { pipeline } = setup("g", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }], {
       mergeItem: ((_id: string, skipSessionLock?: boolean) => {
         captured = skipSessionLock;
@@ -1142,7 +1185,7 @@ describe("CompletionPipeline.mergeIfPossible", () => {
   });
 
   it("forwards ctx.opts.skipSessionLock:undefined (no opts) to deps.mergeItem — never silently defaults to true", async () => {
-    let captured: boolean | undefined | "not-called" = "not-called";
+    let captured = "not-called" as boolean | undefined | "not-called"; // assigned in a callback, so avoid control-flow narrowing to the initial value
     const { pipeline } = setup("h", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }], {
       mergeItem: ((_id: string, skipSessionLock?: boolean) => {
         captured = skipSessionLock;
@@ -1165,9 +1208,15 @@ describe("CompletionPipeline.emitTraces", () => {
       completionCalls,
       insightCalls,
       evaluatorCalls,
-      emitCompletion: (id: string, label: string) => { completionCalls.push({ id, label }); },
-      emitInsight: async (insight: InsightPayload) => { insightCalls.push(insight); },
-      runEvaluatorPipeline: async (id: string) => { evaluatorCalls.push(id); },
+      emitCompletion: (id: string, label: string) => {
+        completionCalls.push({ id, label });
+      },
+      emitInsight: async (insight: InsightPayload) => {
+        insightCalls.push(insight);
+      },
+      runEvaluatorPipeline: async (id: string) => {
+        evaluatorCalls.push(id);
+      },
     };
   }
 
@@ -1185,8 +1234,8 @@ describe("CompletionPipeline.emitTraces", () => {
     expect(rec.completionCalls.length).toBe(1);
     expect(rec.completionCalls[0]).toEqual({ id: "a", label: "executive" });
     expect(rec.insightCalls.length).toBe(1);
-    expect(rec.insightCalls[0].source).toBe("AutonomousWork");
-    expect(rec.insightCalls[0].tags).toEqual(["work-completion", "pass"]);
+    expect(rec.insightCalls[0]?.source).toBe("AutonomousWork");
+    expect(rec.insightCalls[0]?.tags).toEqual(["work-completion", "pass"]);
     expect(rec.evaluatorCalls).toEqual(["a"]);
   });
 
@@ -1214,7 +1263,9 @@ describe("CompletionPipeline.emitTraces", () => {
   });
 
   it("completed outcome carries skepticalReview from ctx.verifyResult", async () => {
-    const { queue, iscManager, deps } = setup("d", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }]);
+    const { queue, iscManager, deps } = setup("d", [
+      { id: 1, description: "row", status: "VERIFIED", parallel: false },
+    ]);
     const ctx: StageCtx = {
       itemId: "d",
       item: queue.getItem("d"),
@@ -1235,7 +1286,9 @@ describe("CompletionPipeline.emitTraces", () => {
   });
 
   it("completed outcome carries ctx.mergeStatus through to the terminal", async () => {
-    const { queue, iscManager, deps } = setup("e", [{ id: 1, description: "row", status: "VERIFIED", parallel: false }]);
+    const { queue, iscManager, deps } = setup("e", [
+      { id: 1, description: "row", status: "VERIFIED", parallel: false },
+    ]);
     const ctx: StageCtx = {
       itemId: "e",
       item: queue.getItem("e"),
