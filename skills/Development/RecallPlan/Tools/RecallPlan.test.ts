@@ -7,9 +7,9 @@
  * skills/Automation/QueueRouter/Tools/SingleStorePath.test.ts.
  */
 
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdtempSync, rmSync, writeFileSync, utimesSync } from "fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { listPlans, resolvePlan, extractTitleAndExcerpt, DEFAULT_PLANS_DIR } from "./RecallPlan.ts";
 
@@ -108,7 +108,9 @@ describe("listPlans", () => {
 
   test("assigns 1-based sequential index matching sort order", () => {
     const plans = listPlans(TEST_DIR, 10);
-    plans.forEach((p, i) => expect(p.index).toBe(i + 1));
+    plans.forEach((p, i) => {
+      expect(p.index).toBe(i + 1);
+    });
   });
 
   test("derives readable title from H1, and title-cased filename when absent", () => {
@@ -155,9 +157,7 @@ describe("resolvePlan", () => {
   });
 
   test("resolves by unique case-insensitive substring against filename or title", () => {
-    expect(resolvePlan(TEST_DIR, "IRIDESCENT").file).toBe(
-      "create-a-plan-to-iridescent-treehouse.md",
-    );
+    expect(resolvePlan(TEST_DIR, "IRIDESCENT").file).toBe("create-a-plan-to-iridescent-treehouse.md");
     expect(resolvePlan(TEST_DIR, "oldest").file).toBe("create-a-plan-to-oldest-plan.md");
   });
 

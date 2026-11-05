@@ -24,9 +24,9 @@
  * @version 1.0.0
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from "fs";
-import { join, basename } from "path";
-import { kayaHomePath } from "../../../../lib/core/KayaHome";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, basename } from "node:path";
+import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 
 export interface PlanSummary {
   /** 1-based position in the deterministic (mtime desc) ordering */
@@ -81,7 +81,7 @@ export function extractTitleAndExcerpt(
   let title = fallbackTitle;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? "").trim();
     if (line.startsWith("# ")) {
       title = line.replace(/^#+\s*/, "").trim();
       titleIdx = i;
@@ -94,7 +94,7 @@ export function extractTitleAndExcerpt(
   // excerpt reaches the actual prose instead of coming back empty.
   const bodyLines: string[] = [];
   for (let i = titleIdx + 1; i < lines.length && bodyLines.length < excerptLines; i++) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? "").trim();
     if (line.length === 0) continue;
     if (line.startsWith("#")) continue; // skip sub-headings, keep scanning
     bodyLines.push(line);
@@ -109,10 +109,7 @@ export function extractTitleAndExcerpt(
 }
 
 /** List the most recent plans in a directory, newest first. */
-export function listPlans(
-  plansDir: string = DEFAULT_PLANS_DIR,
-  limit: number = DEFAULT_LIMIT,
-): PlanSummary[] {
+export function listPlans(plansDir: string = DEFAULT_PLANS_DIR, limit: number = DEFAULT_LIMIT): PlanSummary[] {
   if (!existsSync(plansDir)) return [];
 
   const entries = readdirSync(plansDir, { withFileTypes: true })
@@ -129,10 +126,7 @@ export function listPlans(
 
   return top.map((entry, i) => {
     const content = readFileSync(entry.path, "utf-8");
-    const { title, excerpt } = extractTitleAndExcerpt(
-      content,
-      filenameFallbackTitle(entry.file),
-    );
+    const { title, excerpt } = extractTitleAndExcerpt(content, filenameFallbackTitle(entry.file));
     const date = new Date(entry.mtimeMs).toISOString().slice(0, 10);
     return {
       index: i + 1,
@@ -181,16 +175,18 @@ export function resolvePlan(
 
   // 3) case-insensitive substring match against filename or title
   const needle = selector.toLowerCase();
-  const matches = plans.filter(
-    (p) => p.file.toLowerCase().includes(needle) || p.title.toLowerCase().includes(needle),
-  );
+  const matches = plans.filter((p) => p.file.toLowerCase().includes(needle) || p.title.toLowerCase().includes(needle));
 
-  if (matches.length === 1) return matches[0];
+  const [onlyMatch] = matches;
+  if (matches.length === 1 && onlyMatch) return onlyMatch;
   if (matches.length === 0) {
     throw new Error(`No plan matched "${selector}" in ${plansDir}`);
   }
 
-  const names = matches.slice(0, 8).map((m) => `  #${m.index} ${m.file}`).join("\n");
+  const names = matches
+    .slice(0, 8)
+    .map((m) => `  #${m.index} ${m.file}`)
+    .join("\n");
   throw new Error(
     `Ambiguous selector "${selector}" — matched ${matches.length} plans:\n${names}\nUse the numeric index or a more specific name.`,
   );
@@ -233,12 +229,13 @@ function parseFlags(args: string[]): Flags {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+    if (arg === undefined) continue;
     if (arg === "--dir") {
       dir = args[++i];
     } else if (arg === "--limit") {
-      limit = parseInt(args[++i], 10);
+      limit = parseInt(args[++i] ?? "", 10);
     } else if (arg === "--lines") {
-      lines = parseInt(args[++i], 10);
+      lines = parseInt(args[++i] ?? "", 10);
     } else if (arg === "--json") {
       json = true;
     } else if (arg === "-h" || arg === "--help") {
@@ -255,10 +252,7 @@ function parseFlags(args: string[]): Flags {
 function formatList(plans: PlanSummary[]): string {
   if (plans.length === 0) return "No plans found.";
   return plans
-    .map(
-      (p) =>
-        `#${p.index}  ${p.date}  ${p.title}\n      ${p.file}\n      ${p.excerpt || "(no excerpt)"}`,
-    )
+    .map((p) => `#${p.index}  ${p.date}  ${p.title}\n      ${p.file}\n      ${p.excerpt || "(no excerpt)"}`)
     .join("\n\n");
 }
 
@@ -285,8 +279,7 @@ if (import.meta.main) {
       }
       const plan = resolvePlan(plansDir, selector);
       const content = readFileSync(plan.path, "utf-8");
-      const body =
-        lines && lines > 0 ? content.split("\n").slice(0, lines).join("\n") : content;
+      const body = lines && lines > 0 ? content.split("\n").slice(0, lines).join("\n") : content;
 
       if (json) {
         console.log(JSON.stringify({ ...plan, content: body }, null, 2));
