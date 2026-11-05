@@ -1,122 +1,70 @@
 ---
 name: ProactiveEngine
-description: Proactive contact and scheduled automation system. USE WHEN scheduling proactive tasks, setting up cron jobs, creating proactive behaviors, evening summaries, periodic checks, or managing automated outreach.
+description: Create, list, test and disable scheduled jobs, and send proactive outreach. USE WHEN scheduling proactive tasks, setting up cron jobs, creating proactive behaviors, evening summaries, periodic checks, or managing automated outreach.
 ---
 # ProactiveEngine
 
-Enables Kaya to reach out proactively rather than only responding. Provides scheduled automation, periodic checks, and intelligent outreach based on time, events, or conditions.
+Kaya reaches out on a schedule instead of only answering. This skill is a short procedure for scheduled jobs and proactive messages. It has no code of its own.
+
+launchd is the only scheduler (`docs/decisions/005-launchd-is-the-only-scheduler.md`). The old daemon and its port and host settings no longer exist.
+
+For job internals read `lib/cron/README.md` and `MEMORY/daemon/cron/manifests/README.md`. For system health jobs use `AutoMaintenance`.
 
 ## Voice Notification
 
-→ Use `notifySync()` from `lib/core/NotificationService.ts`
+Use `notifySync()` from `lib/core/NotificationService.ts`.
 
-## Workflow Routing
+## How a job runs
 
-| Workflow | Trigger | File |
-|----------|---------|------|
-| **ManageCronJobs** | "set up cron", "schedule task", "daily briefing", "create automation" | `Workflows/ManageCronJobs.md` |
-| **SendProactiveMessage** | "send briefing", "notify me about", "check in on" | `Workflows/SendProactiveMessage.md` |
+1. A launchd plist `~/Library/LaunchAgents/com.kaya.cron.<id>.plist` fires at the schedule.
+2. The plist runs `bin/run-cron-job.ts <id>`.
+3. The runner reads `MEMORY/daemon/cron/manifests/<id>.yaml`. The field `enabled:` gates the run.
+4. The runner routes the output (`silent`, `voice`, `text`, `push`, `both`, `discord`, `telegram`) through MessageQueue and AlertGate.
 
-## Quick Reference
+A manifest without a plist does not run. The schema is `lib/cron/JobSpec.ts` (`JobSpecSchema`).
 
-- **Cron jobs** stored at: `~/.claude/MEMORY/daemon/cron/jobs/*.yaml`
-- **Job format**: id, schedule (cron syntax), type (isolated/main), task, output, enabled
-- **Output channels**: voice, text, both, push, discord, silent
+## Create a job
 
-**Full Documentation:**
-- Architecture: Read `Architecture.md` in this skill directory
-- Cron Jobs: Read `CronJobs.md` in this skill directory
-- Best Practices: Read `BestPractices.md` in this skill directory
+1. Write `MEMORY/daemon/cron/jobs/<id>.yaml`. This is the staging folder. Create it if it does not exist.
 
-## Examples
-
-### Create a Daily Standup Cron Job
-
-```
-User: "Schedule a daily standup summary at 10 AM"
-
-1. Create YAML file at ~/.claude/MEMORY/daemon/cron/jobs/daily-standup.yaml:
-   id: daily-standup
-   schedule: "0 10 * * *"
-   type: isolated
-   task: |
-     Generate daily standup summary:
-     - What I accomplished yesterday
-     - What I'm planning today
-     - Any blockers or concerns
-   output: voice
-   enabled: true
-   wakeMode: schedule
-
-2. Validate: bun ~/.claude/bin/lint-jobs-manifest.ts
-3. Confirm: "Daily standup scheduled for 10 AM via voice."
+```yaml
+id: daily-standup
+schedule: "0 10 * * *"
+type: isolated
+task: |
+  Summarize what I did yesterday, what is planned today, and any blockers.
+output: voice
+enabled: true
 ```
 
-### List All Cron Jobs
+2. Preview: `bun bin/migrate-crons-to-launchd.ts --plan`
+3. Install: `bun bin/migrate-crons-to-launchd.ts --apply --only <id>`. This writes the plist, loads it, and moves the yaml to `manifests/`.
+4. Validate: `bun bin/lint-jobs-manifest.ts`
+5. Tell Jm the schedule and the output channel.
 
-```
-User: "List my cron jobs"
+For a script job, use `execute: {command, args}` instead of `task:`.
 
-Run: ls ~/.claude/MEMORY/daemon/cron/manifests/*.yaml
+## List jobs
 
-Read each yaml for ID, schedule, enabled status, output mode, and task preview.
-```
+- Defined: `ls MEMORY/daemon/cron/manifests/*.yaml`
+- Loaded: `launchctl list | grep com.kaya.cron`
+- Ran: `MEMORY/daemon/cron/run-ledger.jsonl`
 
-### Test a Job Manually
+## Test a job
 
-```
-User: "Test my evening summary job"
+Run `bun bin/run-cron-job.ts <id>`. The job runs now and sends its output to its channel.
 
-Run: bun ~/.claude/bin/run-cron-job.ts evening-summary
+## Disable a job
 
-Executes the job immediately and routes output to its configured channel.
-Reports success/failure and execution duration.
-```
+1. Set `enabled: false` in `manifests/<id>.yaml`.
+2. To stop the trigger as well, run `launchctl bootout gui/$UID/com.kaya.cron.<id>`.
+3. To retire the job for good, move the yaml to `MEMORY/daemon/cron/jobs.retired/` and remove the plist.
 
-### Check Scheduler Status
+If you change a schedule, edit the yaml and run `bun bin/migrate-crons-to-launchd.ts --regen --only <id>`.
 
-```
-User: "Is the cron scheduler running?"
+## Proactive outreach
 
-Run: launchctl list | grep com.kaya.cron
-
-Scheduling runs entirely via launchd (no in-process daemon) — this lists
-every loaded job's plist and PID (if currently running).
-```
-
-## Customization
-
-| Setting | Location | Default |
-|---------|----------|---------|
-| **Jobs directory** | `~/.claude/MEMORY/daemon/cron/jobs/` | Auto-created on first use |
-| **Logs directory** | `~/.claude/MEMORY/daemon/cron/logs/` | Auto-created on first use |
-| **Daemon port** | `settings.json` → `daemon.port` | `18000` |
-| **Daemon host** | `settings.json` → `daemon.host` | `localhost` |
-| **Output channels** | Per-job `output` field | `voice` |
-
-Output channel options: `voice`, `text`, `both`, `push`, `discord`, `silent`
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CLAUDE_PATH` | Path to the `claude` binary | `~/.local/bin/claude` (via `PathEnv.resolveClaude()`) |
-| `KAYA_HOME` | Kaya home directory | `~/.claude` |
-| `CRON_CONCURRENCY` | Number of parallel jobs for `run-all` | `3` |
-
-**Note:** `KAYA_HOME` is the canonical env var for the Kaya home directory in all ProactiveEngine files.
-
-## Integration
-
-### Uses
-- **Voice Server**: TTS delivery of briefings
-- **NotificationService**: Multi-channel routing
-- **Memory System**: Context for personalized content
-
-### Feeds Into
-- **User experience**: Proactive assistance
-- **Memory System**: Logs of proactive outreach
-
----
-
-**Last Updated:** 2026-02-06
+- Add an `output:` channel to a job. Use `silent` if the job must not message Jm.
+- For a one-off message from code, call `notifySync()`.
+- For voice pings that are due, use `skills/Communication/VoiceInteraction/Tools/ProactivePinger.ts`.
+- Respect the contact rules in the `kaya` skill about when Kaya may message Jm.
