@@ -1,10 +1,10 @@
-import { cn } from "@/lib/utils"
-import type { Recommendation } from "@/lib/report-data"
-import { ArrowRight, Clock, Zap } from "lucide-react"
+import { cn } from "@/lib/utils";
+import type { Recommendation } from "@/lib/report-data";
+import { ArrowRight, Clock, Zap } from "lucide-react";
 
 interface RecommendationCardProps {
-  recommendation: Recommendation
-  index: number
+  recommendation: Recommendation;
+  index: number;
 }
 
 const priorityConfig = {
@@ -23,14 +23,11 @@ const priorityConfig = {
     label: "Long-term",
     className: "bg-primary/10 text-primary border-primary/20",
   },
-}
+};
 
-export function RecommendationCard({
-  recommendation,
-  index,
-}: RecommendationCardProps) {
-  const config = priorityConfig[recommendation.priority]
-  const Icon = config.icon
+export function RecommendationCard({ recommendation, index }: RecommendationCardProps) {
+  const config = priorityConfig[recommendation.priority];
+  const Icon = config.icon;
 
   return (
     <div className="finding-card">
@@ -42,7 +39,7 @@ export function RecommendationCard({
         <span
           className={cn(
             "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border",
-            config.className
+            config.className,
           )}
         >
           <Icon className="h-3 w-3" />
@@ -51,5 +48,5 @@ export function RecommendationCard({
       </div>
       <p className="text-foreground ml-8">{recommendation.description}</p>
     </div>
-  )
+  );
 }

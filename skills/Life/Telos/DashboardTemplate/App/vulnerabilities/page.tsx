@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Shield, AlertTriangle } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Shield, AlertTriangle } from "lucide-react";
 
 export default function VulnerabilitiesPage() {
   // TODO: Load your vulnerabilities data
@@ -37,10 +37,7 @@ export default function VulnerabilitiesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-[#f52a65]">
-              {/* TODO: Critical count */}
-              X
-            </p>
+            <p className="text-3xl font-bold text-[#f52a65]">{/* TODO: Critical count */}X</p>
           </CardContent>
         </Card>
 
@@ -49,10 +46,7 @@ export default function VulnerabilitiesPage() {
             <CardTitle className="text-sm">High</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-[#f0a020]">
-              {/* TODO: High count */}
-              X
-            </p>
+            <p className="text-3xl font-bold text-[#f0a020]">{/* TODO: High count */}X</p>
           </CardContent>
         </Card>
 
@@ -61,10 +55,7 @@ export default function VulnerabilitiesPage() {
             <CardTitle className="text-sm">Medium</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-[#2e7de9]">
-              {/* TODO: Medium count */}
-              X
-            </p>
+            <p className="text-3xl font-bold text-[#2e7de9]">{/* TODO: Medium count */}X</p>
           </CardContent>
         </Card>
 
@@ -120,5 +111,5 @@ export default function VulnerabilitiesPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

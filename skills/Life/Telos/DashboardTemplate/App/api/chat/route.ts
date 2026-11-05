@@ -1,27 +1,21 @@
-import { NextResponse } from "next/server"
-import { getTelosContext } from "@/lib/telos-data"
+import { NextResponse } from "next/server";
+import { getTelosContext } from "@/lib/telos-data";
 
 export async function POST(request: Request) {
   try {
-    const { message } = await request.json()
+    const { message } = await request.json();
 
     if (!message) {
-      return NextResponse.json(
-        { error: "Message is required" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "API key not configured" },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: "API key not configured" }, { status: 500 });
     }
 
     // Load all TELOS context
-    const telosContext = getTelosContext()
+    const telosContext = getTelosContext();
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -50,27 +44,24 @@ When answering questions:
           },
         ],
       }),
-    })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("API Error:", errorText)
-      throw new Error(`API request failed: ${response.statusText}`)
+      const errorText = await response.text();
+      console.error("API Error:", errorText);
+      throw new Error(`API request failed: ${response.statusText}`);
     }
 
-    const data = await response.json()
-    const assistantMessage = data.content[0]?.text
+    const data = await response.json();
+    const assistantMessage = data.content[0]?.text;
 
     if (!assistantMessage) {
-      throw new Error("No response from API")
+      throw new Error("No response from API");
     }
 
-    return NextResponse.json({ response: assistantMessage })
+    return NextResponse.json({ response: assistantMessage });
   } catch (error) {
-    console.error("Error in chat API:", error)
-    return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 500 }
-    )
+    console.error("Error in chat API:", error);
+    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
   }
 }

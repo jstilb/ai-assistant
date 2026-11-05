@@ -1,9 +1,9 @@
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 interface SectionProps {
-  title: string
-  children: React.ReactNode
-  className?: string
+  title: string;
+  children: React.ReactNode;
+  className?: string;
 }
 
 export function Section({ title, children, className }: SectionProps) {
@@ -12,5 +12,5 @@ export function Section({ title, children, className }: SectionProps) {
       <h2>{title}</h2>
       {children}
     </section>
-  )
+  );
 }

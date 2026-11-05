@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingDown } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrendingDown } from "lucide-react";
 
 export default function OverviewPage() {
   // TODO: Load your project metrics data
@@ -47,8 +47,8 @@ export default function OverviewPage() {
           <CardContent className="pt-6">
             <p className="text-lg text-gray-700 leading-relaxed">
               {/* TODO: Add your executive summary text */}
-              Your executive summary goes here. Describe your project's achievements,
-              key performance indicators, and strategic value.
+              Your executive summary goes here. Describe your project's achievements, key performance indicators, and
+              strategic value.
             </p>
           </CardContent>
         </Card>
@@ -61,9 +61,7 @@ export default function OverviewPage() {
           {/* Metric 1 - TODO: Replace with your data */}
           <Card className="border-l-4 border-l-[#33b579] hover:shadow-xl transition-shadow">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Metric 1 Name
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Metric 1 Name</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -143,5 +141,5 @@ export default function OverviewPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

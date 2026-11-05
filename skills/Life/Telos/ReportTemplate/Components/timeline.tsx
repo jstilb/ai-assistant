@@ -1,7 +1,7 @@
-import type { TimelinePhase } from "@/lib/report-data"
+import type { TimelinePhase } from "@/lib/report-data";
 
 interface TimelineProps {
-  phases: TimelinePhase[]
+  phases: TimelinePhase[];
 }
 
 export function Timeline({ phases }: TimelineProps) {
@@ -12,11 +12,9 @@ export function Timeline({ phases }: TimelineProps) {
           <div className="timeline-phase">{phase.phase}</div>
           <div className="timeline-title">{phase.title}</div>
           <div className="timeline-description">{phase.description}</div>
-          <div className="text-xs text-primary font-medium mt-1">
-            {phase.duration}
-          </div>
+          <div className="text-xs text-primary font-medium mt-1">{phase.duration}</div>
         </div>
       ))}
     </div>
-  )
+  );
 }

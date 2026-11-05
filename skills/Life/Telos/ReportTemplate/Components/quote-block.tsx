@@ -1,7 +1,7 @@
 interface QuoteBlockProps {
-  quote: string
-  attribution: string
-  role?: string
+  quote: string;
+  attribution: string;
+  role?: string;
 }
 
 export function QuoteBlock({ quote, attribution, role }: QuoteBlockProps) {
@@ -13,5 +13,5 @@ export function QuoteBlock({ quote, attribution, role }: QuoteBlockProps) {
         {role && <span className="text-muted">, {role}</span>}
       </p>
     </div>
-  )
+  );
 }

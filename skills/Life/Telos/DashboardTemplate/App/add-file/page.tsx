@@ -1,99 +1,109 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, Table, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Upload, FileText, Table, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface UploadedFile {
-  name: string
-  type: string
-  status: "success" | "error" | "uploading"
-  message?: string
+  name: string;
+  type: string;
+  status: "success" | "error" | "uploading";
+  message?: string;
 }
 
 export default function AddFilePage() {
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [isDragging, setIsDragging] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
+    e.preventDefault();
+    setIsDragging(true);
+  };
 
   const handleDragLeave = () => {
-    setIsDragging(false)
-  }
+    setIsDragging(false);
+  };
 
   const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
+    e.preventDefault();
+    setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files)
-    await processFiles(files)
-  }
+    const files = Array.from(e.dataTransfer.files);
+    await processFiles(files);
+  };
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
-    const files = Array.from(e.target.files)
-    await processFiles(files)
-  }
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    await processFiles(files);
+  };
 
   const processFiles = async (files: File[]) => {
     for (const file of files) {
       // Validate file type
-      if (!file.name.endsWith('.md') && !file.name.endsWith('.csv')) {
-        setUploadedFiles(prev => [...prev, {
-          name: file.name,
-          type: file.name.split('.').pop() || '',
-          status: "error",
-          message: "Only .md and .csv files are allowed"
-        }])
-        continue
+      if (!file.name.endsWith(".md") && !file.name.endsWith(".csv")) {
+        setUploadedFiles((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            type: file.name.split(".").pop() || "",
+            status: "error",
+            message: "Only .md and .csv files are allowed",
+          },
+        ]);
+        continue;
       }
 
       // Add uploading status
-      setUploadedFiles(prev => [...prev, {
-        name: file.name,
-        type: file.name.split('.').pop() || '',
-        status: "uploading"
-      }])
+      setUploadedFiles((prev) => [
+        ...prev,
+        {
+          name: file.name,
+          type: file.name.split(".").pop() || "",
+          status: "uploading",
+        },
+      ]);
 
       // Upload file
       try {
-        const formData = new FormData()
-        formData.append('file', file)
+        const formData = new FormData();
+        formData.append("file", file);
 
-        const response = await fetch('/api/upload', {
-          method: 'POST',
+        const response = await fetch("/api/upload", {
+          method: "POST",
           body: formData,
-        })
+        });
 
         if (!response.ok) {
-          throw new Error('Upload failed')
+          throw new Error("Upload failed");
         }
 
-        const data = await response.json()
+        const data = await response.json();
 
         // Update status to success
-        setUploadedFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === "uploading"
-            ? { ...f, status: "success" as const, message: data.message }
-            : f
-        ))
+        setUploadedFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name && f.status === "uploading"
+              ? { ...f, status: "success" as const, message: data.message }
+              : f,
+          ),
+        );
 
         // Trigger a custom event to notify sidebar to refresh
-        window.dispatchEvent(new CustomEvent('telosFileUploaded', { detail: { filename: file.name } }))
-      } catch (error) {
+        window.dispatchEvent(new CustomEvent("telosFileUploaded", { detail: { filename: file.name } }));
+      } catch (_error) {
         // Update status to error
-        setUploadedFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === "uploading"
-            ? { ...f, status: "error" as const, message: "Upload failed" }
-            : f
-        ))
+        setUploadedFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name && f.status === "uploading"
+              ? { ...f, status: "error" as const, message: "Upload failed" }
+              : f,
+          ),
+        );
       }
     }
-  }
+  };
 
   return (
     <div className="p-8">
@@ -102,9 +112,7 @@ export default function AddFilePage() {
           <Upload className="h-10 w-10 mr-3 text-[#2e7de9]" />
           Add File
         </h1>
-        <p className="text-lg text-gray-600">
-          Upload .md or .csv files to add them to your TELOS dashboard
-        </p>
+        <p className="text-lg text-gray-600">Upload .md or .csv files to add them to your TELOS dashboard</p>
       </div>
 
       <div className="grid gap-6 max-w-4xl">
@@ -120,19 +128,16 @@ export default function AddFilePage() {
               onDrop={handleDrop}
               className={`
                 border-2 border-dashed rounded-lg p-12 text-center transition-all
-                ${isDragging
-                  ? 'border-[#2e7de9] bg-[#2e7de9]/5'
-                  : 'border-gray-300 hover:border-[#2e7de9] hover:bg-gray-50'
+                ${
+                  isDragging
+                    ? "border-[#2e7de9] bg-[#2e7de9]/5"
+                    : "border-gray-300 hover:border-[#2e7de9] hover:bg-gray-50"
                 }
               `}
             >
               <Upload className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium text-gray-900 mb-2">
-                Drag and drop files here
-              </p>
-              <p className="text-sm text-gray-500 mb-4">
-                or click to browse
-              </p>
+              <p className="text-lg font-medium text-gray-900 mb-2">Drag and drop files here</p>
+              <p className="text-sm text-gray-500 mb-4">or click to browse</p>
               <input
                 type="file"
                 id="file-upload"
@@ -164,51 +169,32 @@ export default function AddFilePage() {
             <CardContent>
               <div className="space-y-3">
                 {uploadedFiles.map((file, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                  >
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      {file.type === 'md' ? (
+                      {file.type === "md" ? (
                         <FileText className="h-8 w-8 text-[#2e7de9]" />
                       ) : (
                         <Table className="h-8 w-8 text-[#33b579]" />
                       )}
                       <div>
                         <p className="font-medium text-gray-900">{file.name}</p>
-                        {file.message && (
-                          <p className="text-sm text-gray-600">{file.message}</p>
-                        )}
+                        {file.message && <p className="text-sm text-gray-600">{file.message}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge
                         variant={
-                          file.status === "success"
-                            ? "default"
-                            : file.status === "error"
-                            ? "destructive"
-                            : "secondary"
+                          file.status === "success" ? "default" : file.status === "error" ? "destructive" : "secondary"
                         }
                         className={
-                          file.status === "success"
-                            ? "bg-[#33b579]"
-                            : file.status === "uploading"
-                            ? "bg-gray-500"
-                            : ""
+                          file.status === "success" ? "bg-[#33b579]" : file.status === "uploading" ? "bg-gray-500" : ""
                         }
                       >
                         {file.type.toUpperCase()}
                       </Badge>
-                      {file.status === "success" && (
-                        <CheckCircle className="h-6 w-6 text-[#33b579]" />
-                      )}
-                      {file.status === "error" && (
-                        <XCircle className="h-6 w-6 text-[#f52a65]" />
-                      )}
-                      {file.status === "uploading" && (
-                        <Loader2 className="h-6 w-6 text-[#2e7de9] animate-spin" />
-                      )}
+                      {file.status === "success" && <CheckCircle className="h-6 w-6 text-[#33b579]" />}
+                      {file.status === "error" && <XCircle className="h-6 w-6 text-[#f52a65]" />}
+                      {file.status === "uploading" && <Loader2 className="h-6 w-6 text-[#2e7de9] animate-spin" />}
                     </div>
                   </div>
                 ))}
@@ -265,5 +251,5 @@ export default function AddFilePage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

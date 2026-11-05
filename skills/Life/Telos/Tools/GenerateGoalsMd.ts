@@ -16,7 +16,7 @@
  * validation lives in lib/core/TelosGoals.ts and fails loud.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import {
   parseGoalsModel,
   renderGoalsMd,

@@ -1,34 +1,34 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { MessageSquare, Send, Bot, User } from "lucide-react"
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { MessageSquare, Send, Bot, User } from "lucide-react";
 
 interface Message {
-  role: "user" | "assistant"
-  content: string
-  timestamp: Date
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
 }
 
 export default function AskPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       role: "user",
       content: input.trim(),
       timestamp: new Date(),
-    }
+    };
 
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
     try {
       const response = await fetch("/api/chat", {
@@ -39,33 +39,33 @@ export default function AskPage() {
         body: JSON.stringify({
           message: userMessage.content,
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to get response")
+        throw new Error("Failed to get response");
       }
 
-      const data = await response.json()
+      const data = await response.json();
 
       const assistantMessage: Message = {
         role: "assistant",
         content: data.response,
         timestamp: new Date(),
-      }
+      };
 
-      setMessages((prev) => [...prev, assistantMessage])
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Error:", error);
       const errorMessage: Message = {
         role: "assistant",
         content: "Sorry, I encountered an error. Please try again.",
         timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="p-8">
@@ -74,9 +74,7 @@ export default function AskPage() {
           <MessageSquare className="h-10 w-10 mr-3 text-[#2e7de9]" />
           Ask AI
         </h1>
-        <p className="text-lg text-gray-600">
-          Chat with Claude Haiku 4.5 to get instant answers
-        </p>
+        <p className="text-lg text-gray-600">Chat with Claude Haiku 4.5 to get instant answers</p>
       </div>
 
       <Card className="border-l-4 border-l-[#2e7de9] max-w-4xl mx-auto">
@@ -100,12 +98,7 @@ export default function AskPage() {
               </div>
             ) : (
               messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-3 ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
+                <div key={index} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   {message.role === "assistant" && (
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 rounded-full bg-[#2e7de9] flex items-center justify-center">
@@ -115,21 +108,11 @@ export default function AskPage() {
                   )}
                   <div
                     className={`rounded-lg px-4 py-3 max-w-[80%] ${
-                      message.role === "user"
-                        ? "bg-[#2e7de9] text-white"
-                        : "bg-white border border-gray-200"
+                      message.role === "user" ? "bg-[#2e7de9] text-white" : "bg-white border border-gray-200"
                     }`}
                   >
-                    <div className="text-sm whitespace-pre-wrap">
-                      {message.content}
-                    </div>
-                    <div
-                      className={`text-xs mt-2 ${
-                        message.role === "user"
-                          ? "text-blue-100"
-                          : "text-gray-500"
-                      }`}
-                    >
+                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                    <div className={`text-xs mt-2 ${message.role === "user" ? "text-blue-100" : "text-gray-500"}`}>
                       {message.timestamp.toLocaleTimeString()}
                     </div>
                   </div>
@@ -183,5 +166,5 @@ export default function AskPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -3,104 +3,105 @@
 // Replace placeholder content with actual analysis results
 
 export interface Finding {
-  id: string
-  title: string
-  description: string
-  evidence: string
-  source: string
-  severity: "critical" | "high" | "medium" | "low"
+  id: string;
+  title: string;
+  description: string;
+  evidence: string;
+  source: string;
+  severity: "critical" | "high" | "medium" | "low";
 }
 
 export interface Recommendation {
-  id: string
-  title: string
-  description: string
-  priority: "immediate" | "short-term" | "long-term"
+  id: string;
+  title: string;
+  description: string;
+  priority: "immediate" | "short-term" | "long-term";
 }
 
 export interface TimelinePhase {
-  phase: string
-  title: string
-  description: string
-  duration: string
+  phase: string;
+  title: string;
+  description: string;
+  duration: string;
 }
 
 export interface ReportData {
   // Meta
-  clientName: string
-  reportTitle: string
-  reportDate: string
-  classification: string
+  clientName: string;
+  reportTitle: string;
+  reportDate: string;
+  classification: string;
 
   // Executive Summary
   executiveSummary: {
-    context: string
+    context: string;
     methodology: {
-      interviewCount: number
-      roles: string[]
-    }
-    keyFindings: string[]
-    primaryRecommendation: string
-    expectedOutcomes: string[]
-  }
+      interviewCount: number;
+      roles: string[];
+    };
+    keyFindings: string[];
+    primaryRecommendation: string;
+    expectedOutcomes: string[];
+  };
 
   // Situation Assessment (from Opening Context)
   situationAssessment: {
-    currentState: string
-    clientAsk: string
-    whyNow: string
-  }
+    currentState: string;
+    clientAsk: string;
+    whyNow: string;
+  };
 
   // Key Findings (from Evidence section)
-  findings: Finding[]
+  findings: Finding[];
 
   // Risk Analysis (from Stakes section)
   riskAnalysis: {
-    existentialRisks: string[]
-    competitiveThreats: string[]
-    timelinePressures: string
-  }
+    existentialRisks: string[];
+    competitiveThreats: string[];
+    timelinePressures: string;
+  };
 
   // The Pivot - Strategic Opportunity
   strategicOpportunity: {
-    goodNews: string
-    requirements: string[]
-  }
+    goodNews: string;
+    requirements: string[];
+  };
 
   // Recommendations (from Requirements section)
-  recommendations: Recommendation[]
+  recommendations: Recommendation[];
 
   // Vision (from Vision section)
   targetState: {
-    description: string
-    keyCapabilities: string[]
-    successMetrics: string[]
-  }
+    description: string;
+    keyCapabilities: string[];
+    successMetrics: string[];
+  };
 
   // Implementation Roadmap
-  roadmap: TimelinePhase[]
+  roadmap: TimelinePhase[];
 
   // Call to Action (from Close section)
   callToAction: {
-    immediateSteps: string[]
-    decisionPoints: string[]
-    commitmentRequired: string
-  }
+    immediateSteps: string[];
+    decisionPoints: string[];
+    commitmentRequired: string;
+  };
 }
 
 // Default placeholder data - replace with actual TELOS analysis
 export const reportData: ReportData = {
   clientName: "[CLIENT NAME]",
   reportTitle: "Strategic Assessment & Transformation Roadmap",
-  reportDate: new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+  reportDate: new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   }),
   classification: "CONFIDENTIAL",
 
   executiveSummary: {
-    context: "This report presents findings from our comprehensive TELOS analysis of [CLIENT], conducted to assess strategic readiness and identify transformation opportunities.",
+    context:
+      "This report presents findings from our comprehensive TELOS analysis of [CLIENT], conducted to assess strategic readiness and identify transformation opportunities.",
     methodology: {
       interviewCount: 0, // Replace with actual interview count
       roles: [
@@ -116,11 +117,7 @@ export const reportData: ReportData = {
       "Finding 3 - Replace with actual finding",
     ],
     primaryRecommendation: "Based on our analysis, [PRIMARY RECOMMENDATION HERE]",
-    expectedOutcomes: [
-      "Expected outcome 1",
-      "Expected outcome 2",
-      "Expected outcome 3",
-    ],
+    expectedOutcomes: ["Expected outcome 1", "Expected outcome 2", "Expected outcome 3"],
   },
 
   situationAssessment: {
@@ -142,22 +139,14 @@ export const reportData: ReportData = {
   ],
 
   riskAnalysis: {
-    existentialRisks: [
-      "Replace with existential risks from TELOS Stakes section",
-    ],
-    competitiveThreats: [
-      "Replace with competitive threats",
-    ],
+    existentialRisks: ["Replace with existential risks from TELOS Stakes section"],
+    competitiveThreats: ["Replace with competitive threats"],
     timelinePressures: "Replace with timeline pressures and urgency factors",
   },
 
   strategicOpportunity: {
     goodNews: "Replace with the pivot - the good news that there IS a solution",
-    requirements: [
-      "Requirement 1 - what 'all the way' means",
-      "Requirement 2",
-      "Requirement 3",
-    ],
+    requirements: ["Requirement 1 - what 'all the way' means", "Requirement 2", "Requirement 3"],
   },
 
   recommendations: [
@@ -172,16 +161,8 @@ export const reportData: ReportData = {
 
   targetState: {
     description: "Replace with the vision description from TELOS",
-    keyCapabilities: [
-      "Capability 1 enabled by the vision",
-      "Capability 2",
-      "Capability 3",
-    ],
-    successMetrics: [
-      "Success metric 1",
-      "Success metric 2",
-      "Success metric 3",
-    ],
+    keyCapabilities: ["Capability 1 enabled by the vision", "Capability 2", "Capability 3"],
+    successMetrics: ["Success metric 1", "Success metric 2", "Success metric 3"],
   },
 
   roadmap: [
@@ -206,14 +187,8 @@ export const reportData: ReportData = {
   ],
 
   callToAction: {
-    immediateSteps: [
-      "Immediate next step 1",
-      "Immediate next step 2",
-    ],
-    decisionPoints: [
-      "Decision point 1 requiring leadership approval",
-      "Decision point 2",
-    ],
+    immediateSteps: ["Immediate next step 1", "Immediate next step 2"],
+    decisionPoints: ["Decision point 1 requiring leadership approval", "Decision point 2"],
     commitmentRequired: "Replace with what courage/commitment is required from the Close section",
   },
-}
+};

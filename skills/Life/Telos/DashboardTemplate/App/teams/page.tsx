@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Users } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Users } from "lucide-react";
 
 export default function TeamsPage() {
   // TODO: Load your teams data
@@ -85,7 +85,9 @@ export default function TeamsPage() {
               <div>
                 <p className="text-sm text-gray-600 mb-2">Active Projects</p>
                 {/* TODO: Map over project IDs */}
-                <Badge variant="secondary" className="mr-1">P001</Badge>
+                <Badge variant="secondary" className="mr-1">
+                  P001
+                </Badge>
                 <Badge variant="secondary">P002</Badge>
               </div>
             </div>
@@ -93,5 +95,5 @@ export default function TeamsPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

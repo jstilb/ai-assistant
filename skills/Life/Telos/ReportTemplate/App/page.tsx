@@ -1,15 +1,15 @@
-import { CoverPage } from "@/components/cover-page"
-import { Section } from "@/components/section"
-import { Callout } from "@/components/callout"
-import { Exhibit } from "@/components/exhibit"
-import { FindingCard } from "@/components/finding-card"
-import { RecommendationCard } from "@/components/recommendation-card"
-import { Timeline } from "@/components/timeline"
-import { reportData } from "@/lib/report-data"
-import { AlertTriangle, Target, Lightbulb, CheckCircle2 } from "lucide-react"
+import { CoverPage } from "@/components/cover-page";
+import { Section } from "@/components/section";
+import { Callout } from "@/components/callout";
+import { Exhibit } from "@/components/exhibit";
+import { FindingCard } from "@/components/finding-card";
+import { RecommendationCard } from "@/components/recommendation-card";
+import { Timeline } from "@/components/timeline";
+import { reportData } from "@/lib/report-data";
+import { AlertTriangle, Target, Lightbulb, CheckCircle2 } from "lucide-react";
 
 export default function ReportPage() {
-  const data = reportData
+  const data = reportData;
 
   return (
     <div>
@@ -37,7 +37,9 @@ export default function ReportPage() {
                 <p className="text-sm font-semibold text-foreground mb-2">Roles Interviewed:</p>
                 <div className="grid grid-cols-2 gap-1">
                   {data.executiveSummary.methodology.roles.map((role, i) => (
-                    <p key={i} className="text-sm text-muted">{role}</p>
+                    <p key={i} className="text-sm text-muted">
+                      {role}
+                    </p>
                   ))}
                 </div>
               </div>
@@ -55,9 +57,7 @@ export default function ReportPage() {
             </ul>
           </Exhibit>
 
-          <Callout label="Primary Recommendation">
-            {data.executiveSummary.primaryRecommendation}
-          </Callout>
+          <Callout label="Primary Recommendation">{data.executiveSummary.primaryRecommendation}</Callout>
 
           <h3 className="text-lg font-semibold mt-6 mb-3">Expected Outcomes</h3>
           <ul className="space-y-2">
@@ -96,9 +96,8 @@ export default function ReportPage() {
         {/* Key Findings */}
         <Section title="Key Findings">
           <p className="text-muted mb-6">
-            Our analysis identified {data.findings.length} significant findings
-            that require attention. Each finding is supported by evidence
-            gathered during our assessment.
+            Our analysis identified {data.findings.length} significant findings that require attention. Each finding is
+            supported by evidence gathered during our assessment.
           </p>
 
           <div className="space-y-4">
@@ -138,18 +137,14 @@ export default function ReportPage() {
 
             <div>
               <h3 className="text-lg font-semibold mb-2">Timeline Pressures</h3>
-              <p className="text-foreground">
-                {data.riskAnalysis.timelinePressures}
-              </p>
+              <p className="text-foreground">{data.riskAnalysis.timelinePressures}</p>
             </div>
           </div>
         </Section>
 
         {/* Strategic Opportunity (The Pivot) */}
         <Section title="Strategic Opportunity">
-          <Callout label="The Good News">
-            {data.strategicOpportunity.goodNews}
-          </Callout>
+          <Callout label="The Good News">{data.strategicOpportunity.goodNews}</Callout>
 
           <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center gap-2">
             <Lightbulb className="h-5 w-5 text-accent" />
@@ -157,10 +152,7 @@ export default function ReportPage() {
           </h3>
           <ul className="space-y-3">
             {data.strategicOpportunity.requirements.map((req, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-3 p-3 bg-accent/5 rounded-lg border border-accent/20"
-              >
+              <li key={i} className="flex items-start gap-3 p-3 bg-accent/5 rounded-lg border border-accent/20">
                 <span className="text-accent font-bold">{i + 1}.</span>
                 <span>{req}</span>
               </li>
@@ -171,17 +163,12 @@ export default function ReportPage() {
         {/* Recommendations */}
         <Section title="Strategic Recommendations">
           <p className="text-muted mb-6">
-            Based on our analysis, we recommend the following actions prioritized
-            by urgency and impact.
+            Based on our analysis, we recommend the following actions prioritized by urgency and impact.
           </p>
 
           <div className="space-y-4">
             {data.recommendations.map((rec, index) => (
-              <RecommendationCard
-                key={rec.id}
-                recommendation={rec}
-                index={index}
-              />
+              <RecommendationCard key={rec.id} recommendation={rec} index={index} />
             ))}
           </div>
         </Section>
@@ -193,10 +180,7 @@ export default function ReportPage() {
           <Exhibit number={5} title="Key Capabilities Enabled">
             <div className="grid md:grid-cols-3 gap-4">
               {data.targetState.keyCapabilities.map((capability, i) => (
-                <div
-                  key={i}
-                  className="p-4 bg-success/5 rounded-lg border border-success/20 text-center"
-                >
+                <div key={i} className="p-4 bg-success/5 rounded-lg border border-success/20 text-center">
                   <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
                   <span className="font-medium">{capability}</span>
                 </div>
@@ -218,8 +202,7 @@ export default function ReportPage() {
         {/* Implementation Roadmap */}
         <Section title="Implementation Roadmap">
           <p className="text-muted mb-6">
-            The transformation should be executed in phases, with clear
-            milestones and decision points.
+            The transformation should be executed in phases, with clear milestones and decision points.
           </p>
 
           <Exhibit number={6} title="Phased Implementation Plan">
@@ -252,24 +235,17 @@ export default function ReportPage() {
               ))}
             </ul>
 
-            <Callout label="Commitment Required">
-              {data.callToAction.commitmentRequired}
-            </Callout>
+            <Callout label="Commitment Required">{data.callToAction.commitmentRequired}</Callout>
           </div>
         </Section>
 
         {/* Footer */}
         <div className="mt-12 pt-8 border-t border-border text-center text-sm text-muted">
-          <p className="font-semibold text-foreground mb-1">
-            {data.classification}
-          </p>
-          <p>
-            This report was prepared for {data.clientName} and contains
-            confidential information.
-          </p>
+          <p className="font-semibold text-foreground mb-1">{data.classification}</p>
+          <p>This report was prepared for {data.clientName} and contains confidential information.</p>
           <p className="mt-2">{data.reportDate}</p>
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,8 +1,8 @@
 interface ExhibitProps {
-  number: number | string
-  title: string
-  source?: string
-  children: React.ReactNode
+  number: number | string;
+  title: string;
+  source?: string;
+  children: React.ReactNode;
 }
 
 export function Exhibit({ number, title, source, children }: ExhibitProps) {
@@ -17,5 +17,5 @@ export function Exhibit({ number, title, source, children }: ExhibitProps) {
       </div>
       <div className="exhibit-content">{children}</div>
     </div>
-  )
+  );
 }
