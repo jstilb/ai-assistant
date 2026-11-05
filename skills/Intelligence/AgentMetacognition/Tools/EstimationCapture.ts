@@ -23,8 +23,8 @@
  * `lucidtasks stats` remains the live, DB-scoped view of the same data.
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 
@@ -117,13 +117,19 @@ async function main(): Promise<void> {
   }
 
   const allRows = [...existing, ...fresh];
-  console.log(JSON.stringify({
-    appended: fresh.length,
-    totalRows: allRows.length,
-    medianRatio: medianRatio(allRows.map(r => r.ratio)),
-    asOf: new Date().toISOString(),
-    ledger: SIGNAL_FILE,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        appended: fresh.length,
+        totalRows: allRows.length,
+        medianRatio: medianRatio(allRows.map((r) => r.ratio)),
+        asOf: new Date().toISOString(),
+        ledger: SIGNAL_FILE,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 if (import.meta.main) {

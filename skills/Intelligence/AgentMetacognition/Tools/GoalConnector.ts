@@ -26,9 +26,9 @@
  *   bun run GoalConnector.ts --goal G28 --json
  */
 
-import { parseArgs } from "util";
-import { existsSync } from "fs";
-import * as path from "path";
+import { parseArgs } from "node:util";
+import { existsSync } from "node:fs";
+import * as path from "node:path";
 import { z } from "zod";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { loadTelosGoals, renderSupportsLabel } from "../../../../lib/core/TelosGoals.ts";
@@ -48,7 +48,6 @@ export type GoalInferenceFn = (opts: InferenceOptions) => Promise<InferenceResul
 const CLAUDE_DIR = getKayaHome();
 const TELOS_DIR = path.join(CLAUDE_DIR, "USER", "TELOS");
 const MISSIONS_FILE = path.join(TELOS_DIR, "MISSIONS.md");
-const STRATEGIES_FILE = path.join(TELOS_DIR, "LEAD-MEASURES.md");
 
 // ============================================================================
 // Types
@@ -172,7 +171,6 @@ export function parseMissions(content: string): Mission[] {
   const lines = content.split("\n");
 
   let currentMission: Partial<Mission> | null = null;
-  let currentField = "";
 
   for (const line of lines) {
     // Parse mission headers
@@ -270,32 +268,36 @@ export async function loadTelosContext(): Promise<TelosContext> {
 }
 
 // Zod schema for goal connection inference result
-const GoalConnectionInferenceSchema = z.array(z.object({
-  goalId: z.string(),
-  relevanceScore: z.number().min(0).max(1),
-  reason: z.string(),
-}));
+const GoalConnectionInferenceSchema = z.array(
+  z.object({
+    goalId: z.string(),
+    relevanceScore: z.number().min(0).max(1),
+    reason: z.string(),
+  }),
+);
 
 export async function connectToGoals(
   text: string,
   context?: TelosContext,
   opts?: { inferenceFn?: GoalInferenceFn },
 ): Promise<GoalConnection[]> {
-  const ctx = context || await loadTelosContext();
+  const ctx = context || (await loadTelosContext());
   if (ctx.goals.length === 0) return [];
 
   // Try LLM inference first. The inference dependency is injectable via
   // opts.inferenceFn so callers (tests) can force the deterministic keyword
   // fallback below instead of making a live, non-deterministic LLM call.
   try {
-    const inference = opts?.inferenceFn ?? (await import('../../../../lib/core/Inference.ts')).inference;
+    const inference = opts?.inferenceFn ?? (await import("../../../../lib/core/Inference.ts")).inference;
 
     // Build compact goal manifest for the prompt
-    const goalManifest = ctx.goals.map(g => {
-      const missionId = g.supports.split(" ")[0];
-      const mission = ctx.missions.find(m => m.id === missionId);
-      return `${g.id}: ${g.title} (${missionId}: ${mission?.name || 'Unknown'})`;
-    }).join('\n');
+    const goalManifest = ctx.goals
+      .map((g) => {
+        const missionId = g.supports.split(" ")[0];
+        const mission = ctx.missions.find((m) => m.id === missionId);
+        return `${g.id}: ${g.title} (${missionId}: ${mission?.name || "Unknown"})`;
+      })
+      .join("\n");
 
     const result = await inference({
       systemPrompt: `You are a personal goal alignment analyzer. Given text and a list of life goals, identify which goals are relevant.
@@ -306,7 +308,7 @@ ${goalManifest}
 Return JSON array only: [{ "goalId": "G28", "relevanceScore": 0.85, "reason": "brief explanation" }]
 Return empty array [] if no goals are relevant. Score 0.0-1.0. Max 5 goals.`,
       userPrompt: text,
-      level: 'standard',
+      level: "standard",
       expectJson: true,
       timeout: 30000,
     });
@@ -315,11 +317,11 @@ Return empty array [] if no goals are relevant. Score 0.0-1.0. Max 5 goals.`,
       const parsed = GoalConnectionInferenceSchema.safeParse(result.parsed);
       if (parsed.success && parsed.data.length > 0) {
         return parsed.data
-          .map(item => {
-            const goal = ctx.goals.find(g => g.id === item.goalId);
+          .map((item) => {
+            const goal = ctx.goals.find((g) => g.id === item.goalId);
             if (!goal) return null;
             const missionId = goal.supports.split(" ")[0];
-            const mission = ctx.missions.find(m => m.id === missionId);
+            const mission = ctx.missions.find((m) => m.id === missionId);
             return {
               goalId: item.goalId,
               goalTitle: goal.title,
@@ -380,9 +382,9 @@ function _connectToGoalsKeyword(text: string, ctx: TelosContext): GoalConnection
   // Mission-level fallback
   for (const mission of ctx.missions) {
     const missionKeywords = MISSION_KEYWORDS[mission.id] || [];
-    const matchedKeywords = missionKeywords.filter(kw => textLower.includes(kw.toLowerCase()));
+    const matchedKeywords = missionKeywords.filter((kw) => textLower.includes(kw.toLowerCase()));
 
-    if (matchedKeywords.length > 0 && !connections.some(c => c.missionId === mission.id)) {
+    if (matchedKeywords.length > 0 && !connections.some((c) => c.missionId === mission.id)) {
       const firstGoal = ctx.goals.find((g) => g.supports.startsWith(mission.id));
       if (firstGoal) {
         connections.push({
@@ -402,22 +404,22 @@ function _connectToGoalsKeyword(text: string, ctx: TelosContext): GoalConnection
 }
 
 export async function getGoal(id: string, context?: TelosContext): Promise<Goal | undefined> {
-  const ctx = context || await loadTelosContext();
+  const ctx = context || (await loadTelosContext());
   return ctx.goals.find((g) => g.id === id);
 }
 
 export async function getMission(id: string, context?: TelosContext): Promise<Mission | undefined> {
-  const ctx = context || await loadTelosContext();
+  const ctx = context || (await loadTelosContext());
   return ctx.missions.find((m) => m.id === id);
 }
 
 export async function getGoalsByMission(missionId: string, context?: TelosContext): Promise<Goal[]> {
-  const ctx = context || await loadTelosContext();
+  const ctx = context || (await loadTelosContext());
   return ctx.goals.filter((g) => g.supports.startsWith(missionId));
 }
 
 export async function getWIGs(context?: TelosContext): Promise<Goal[]> {
-  const ctx = context || await loadTelosContext();
+  const ctx = context || (await loadTelosContext());
   return ctx.goals.filter((g) => g.isWIG);
 }
 
@@ -607,7 +609,9 @@ Examples:
 
   // Default: show summary
   const ctx = context;
-  console.log(`Missions: ${ctx.missions.length} | Goals: ${ctx.goals.length} | WIGs: ${ctx.goals.filter(g => g.isWIG).length}`);
+  console.log(
+    `Missions: ${ctx.missions.length} | Goals: ${ctx.goals.length} | WIGs: ${ctx.goals.filter((g) => g.isWIG).length}`,
+  );
   console.log(`Use --help for usage information.`);
 }
 

@@ -41,18 +41,38 @@ const SignalClassificationSchema = z.object({
 // --- Deterministic fallback (old keyword logic) ---
 
 const CORRECTION_KEYWORDS: readonly string[] = [
-  "corrected", "correction", "corrects", "wrong", "mistake", "error",
-  "fix", "fixed", "redo", "retry", "incorrect", "bad", "worse",
+  "corrected",
+  "correction",
+  "corrects",
+  "wrong",
+  "mistake",
+  "error",
+  "fix",
+  "fixed",
+  "redo",
+  "retry",
+  "incorrect",
+  "bad",
+  "worse",
 ];
 
 const PRAISE_KEYWORDS: readonly string[] = [
-  "praised", "praise", "great", "excellent", "perfect", "love",
-  "loved", "amazing", "awesome", "well done", "nice", "quick", "helpful",
+  "praised",
+  "praise",
+  "great",
+  "excellent",
+  "perfect",
+  "love",
+  "loved",
+  "amazing",
+  "awesome",
+  "well done",
+  "nice",
+  "quick",
+  "helpful",
 ];
 
-const NEUTRAL_PATTERNS: readonly RegExp[] = [
-  /neutral command/i, /no sentiment/i, /direct task/i, /baseline capture/i,
-];
+const NEUTRAL_PATTERNS: readonly RegExp[] = [/neutral command/i, /no sentiment/i, /direct task/i, /baseline capture/i];
 
 function _classifySignalFallback(summary: string): "correction" | "praise" | "neutral" {
   const lower = summary.toLowerCase();
@@ -67,10 +87,7 @@ export const SignalQualityGate = {
    * Evaluate a signal and return it if it qualifies, or null if it is noise.
    * Mid-band (implicit, rating 4-7) uses LLM inference to classify sentiment.
    */
-  async evaluate(
-    signal: RawSignal,
-    inferenceFn: InferenceFn = defaultInference,
-  ): Promise<QualifiedSignal | null> {
+  async evaluate(signal: RawSignal, inferenceFn: InferenceFn = defaultInference): Promise<QualifiedSignal | null> {
     // Explicit user ratings always qualify regardless of value
     if (signal.source === "explicit") {
       return signal as QualifiedSignal;

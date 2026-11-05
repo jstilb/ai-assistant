@@ -20,9 +20,9 @@
  *   bun run ExternalEnricher.ts --fabric extract_wisdom --content "..."
  */
 
-import { parseArgs } from "util";
-import { existsSync, statSync, readdirSync } from "fs";
-import * as path from "path";
+import { parseArgs } from "node:util";
+import { existsSync, statSync, readdirSync } from "node:fs";
+import * as path from "node:path";
 import { Glob } from "bun";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -149,9 +149,8 @@ function extractTags(content: string): string[] {
 function extractLinks(content: string): string[] {
   const linkPattern = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
   const links: string[] = [];
-  let match;
-  while ((match = linkPattern.exec(content)) !== null) {
-    links.push(match[1]);
+  for (const match of content.matchAll(linkPattern)) {
+    if (match[1]) links.push(match[1]);
   }
   return [...new Set(links)];
 }
@@ -335,7 +334,7 @@ export function buildEnrichedContext(result: EnrichmentResult): string {
 // ============================================================================
 
 async function main() {
-  const { values, positionals } = parseArgs({
+  const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
       search: { type: "string" },
@@ -455,8 +454,8 @@ Examples:
             content: values.content || "(no content provided)",
           },
           null,
-          2
-        )
+          2,
+        ),
       );
     } else {
       console.log(`📜 Fabric Pattern: ${values.fabric}\n`);

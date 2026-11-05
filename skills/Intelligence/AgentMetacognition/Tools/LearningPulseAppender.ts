@@ -59,7 +59,7 @@ export function appendLearningPulse(
     lastRun: string | null;
     qualityRatio: number;
     topPatterns: string[];
-  }
+  },
 ): DailyBriefing {
   return {
     ...briefing,

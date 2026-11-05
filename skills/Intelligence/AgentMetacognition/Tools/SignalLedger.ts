@@ -12,9 +12,9 @@
  * for behavioral rules; Jm applies them).
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import { SignalQualityGate, type RawSignal, type QualifiedSignal } from "./SignalQualityGate";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { SignalQualityGate, type RawSignal, type QualifiedSignal } from "./SignalQualityGate.ts";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 
 export class SignalLedger {
