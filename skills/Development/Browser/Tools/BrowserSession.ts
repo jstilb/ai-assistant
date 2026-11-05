@@ -26,36 +26,36 @@
  *   POST /stop         - Stop server
  */
 
-import { z } from 'zod'
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
-import { hostname, userInfo } from 'node:os'
-import { join } from 'node:path'
-import { PlaywrightBrowser } from '../index.ts'
-import { createStateManager } from '../../../../lib/core/StateManager.ts'
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts'
-import { SessionStateSchema, BROWSER_CDP_PORT } from './types.ts'
+import { z } from "zod";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { hostname, userInfo } from "node:os";
+import { join } from "node:path";
+import { PlaywrightBrowser } from "../index.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { SessionStateSchema, BROWSER_CDP_PORT } from "./types.ts";
 
 const CONFIG = {
   port: parseInt(process.env.BROWSER_PORT || String(BROWSER_CDP_PORT)),
   cdpInternalPort: 9223, // Chrome's internal CDP debugging port for WebSocket proxying
-  headless: process.env.BROWSER_HEADLESS === 'true',
+  headless: process.env.BROWSER_HEADLESS === "true",
   viewport: {
-    width: parseInt(process.env.BROWSER_WIDTH || '1920'),
-    height: parseInt(process.env.BROWSER_HEIGHT || '1080')
+    width: parseInt(process.env.BROWSER_WIDTH || "1920"),
+    height: parseInt(process.env.BROWSER_HEIGHT || "1080"),
   },
-  stateFile: '/tmp/browser-session.json',
-  idleTimeout: 30 * 60 * 1000 // 30 minutes
-}
+  stateFile: "/tmp/browser-session.json",
+  idleTimeout: 30 * 60 * 1000, // 30 minutes
+};
 
-const browser = new PlaywrightBrowser()
-const sessionId = crypto.randomUUID().slice(0, 8)
+const browser = new PlaywrightBrowser();
+const sessionId = crypto.randomUUID().slice(0, 8);
 // Random session token — prevents CSRF from cross-origin requests.
 // Browse.ts reads this from the session state file and includes it as
 // X-Session-Token on every request.
-const sessionToken = crypto.randomUUID()
-const startedAt = new Date().toISOString()
-let lastActivity = Date.now()
-let pendingTracePath: string | null = null
+const sessionToken = crypto.randomUUID();
+const startedAt = new Date().toISOString();
+let lastActivity = Date.now();
+let pendingTracePath: string | null = null;
 
 // ============================================
 // CDP WEBSOCKET PROXY
@@ -63,8 +63,8 @@ let pendingTracePath: string | null = null
 
 // Track upstream CDP WebSocket connections per client
 // Keys are client WebSocket data objects (set via server.upgrade)
-const cdpUpstreams = new Map<number, WebSocket>()
-let cdpClientIdCounter = 0
+const cdpUpstreams = new Map<number, WebSocket>();
+let cdpClientIdCounter = 0;
 
 /**
  * Get Chrome's CDP WebSocket debugger URL from its /json/version endpoint.
@@ -74,10 +74,10 @@ async function getCdpWebSocketUrl(): Promise<string> {
   // Native fetch required: querying Chrome's local CDP endpoint (localhost WebSocket protocol, not an external API)
   const res = await fetch(`http://127.0.0.1:${CONFIG.cdpInternalPort}/json/version`, {
     signal: AbortSignal.timeout(2000),
-  })
-  const info = await res.json() as { webSocketDebuggerUrl: string }
+  });
+  const info = (await res.json()) as { webSocketDebuggerUrl: string };
   // Chrome sometimes returns ws://0.0.0.0:port/... — normalize to 127.0.0.1
-  return info.webSocketDebuggerUrl.replace('0.0.0.0', '127.0.0.1')
+  return info.webSocketDebuggerUrl.replace("0.0.0.0", "127.0.0.1");
 }
 
 // ============================================
@@ -86,31 +86,31 @@ async function getCdpWebSocketUrl(): Promise<string> {
 // NOT security-grade — same-user processes can still access key derivation.
 // ============================================
 
-const STATE_IV_LENGTH = 16
+const STATE_IV_LENGTH = 16;
 
 /**
  * Derive a stable per-machine key from hostname + uid.
  * NOT cryptographically strong — prevents casual reads only.
  */
 function deriveStateKey(): Buffer {
-  const salt = hostname() + String(userInfo().uid)
-  return createHash('sha256').update(salt).digest()
+  const salt = hostname() + String(userInfo().uid);
+  return createHash("sha256").update(salt).digest();
 }
 
 function encryptState(data: string): Buffer {
-  const key = deriveStateKey()
-  const iv = randomBytes(STATE_IV_LENGTH)
-  const cipher = createCipheriv('aes-256-cbc', key, iv)
-  const encrypted = Buffer.concat([cipher.update(data, 'utf-8'), cipher.final()])
-  return Buffer.concat([iv, encrypted]) // prepend IV for decryption
+  const key = deriveStateKey();
+  const iv = randomBytes(STATE_IV_LENGTH);
+  const cipher = createCipheriv("aes-256-cbc", key, iv);
+  const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
+  return Buffer.concat([iv, encrypted]); // prepend IV for decryption
 }
 
 function decryptState(buf: Buffer): string {
-  const key = deriveStateKey()
-  const iv = buf.subarray(0, STATE_IV_LENGTH)
-  const encrypted = buf.subarray(STATE_IV_LENGTH)
-  const decipher = createDecipheriv('aes-256-cbc', key, iv)
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf-8')
+  const key = deriveStateKey();
+  const iv = buf.subarray(0, STATE_IV_LENGTH);
+  const encrypted = buf.subarray(STATE_IV_LENGTH);
+  const decipher = createDecipheriv("aes-256-cbc", key, iv);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf-8");
 }
 
 // ============================================
@@ -122,9 +122,9 @@ const BrowserSaveSchema = z.object({
   url: z.string(),
   savedAt: z.string(),
   cookies: z.string(),
-  localStorage: z.record(z.string()),
-  sessionStorage: z.record(z.string()),
-})
+  localStorage: z.record(z.string(), z.string()),
+  sessionStorage: z.record(z.string(), z.string()),
+});
 
 // ============================================
 // STATE MANAGEMENT (aligned with Browse.ts - uses StateManager)
@@ -138,14 +138,14 @@ const stateManager = createStateManager({
   defaults: {
     pid: 0,
     port: 0,
-    sessionId: '',
-    startedAt: '',
+    sessionId: "",
+    startedAt: "",
     headless: true,
-    url: '',
+    url: "",
   },
   backupOnWrite: true,
   lockTimeout: 5000,
-})
+});
 
 async function saveState(): Promise<void> {
   try {
@@ -156,31 +156,35 @@ async function saveState(): Promise<void> {
       sessionToken,
       startedAt,
       headless: CONFIG.headless,
-      url: browser.getUrl()
-    })
+      url: browser.getUrl(),
+    });
   } catch (error) {
-    console.error('Failed to save state:', error)
+    console.error("Failed to save state:", error);
   }
 }
 
 async function cleanup(): Promise<void> {
-  console.log('\nShutting down browser session...')
+  console.log("\nShutting down browser session...");
   try {
-    await browser.close()
-  } catch {}
+    await browser.close();
+  } catch (err) {
+    console.error(`Browser close failed during shutdown: ${err instanceof Error ? err.message : String(err)}`);
+  }
   try {
     // Reset state to defaults to signal session is closed
     await stateManager.save({
       pid: 0,
       port: 0,
-      sessionId: '',
-      startedAt: '',
+      sessionId: "",
+      startedAt: "",
       headless: true,
-      url: '',
-    })
-  } catch {}
-  console.log('Session closed.')
-  process.exit(0)
+      url: "",
+    });
+  } catch (err) {
+    console.error(`Could not reset session state during shutdown: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  console.log("Session closed.");
+  process.exit(0);
 }
 
 // ============================================
@@ -188,96 +192,104 @@ async function cleanup(): Promise<void> {
 // ============================================
 
 function checkIdleTimeout(): void {
-  const idle = Date.now() - lastActivity
+  const idle = Date.now() - lastActivity;
   if (idle > CONFIG.idleTimeout) {
-    console.log(`Idle timeout (${Math.round(idle / 60000)} minutes) - shutting down`)
-    cleanup()
+    console.log(`Idle timeout (${Math.round(idle / 60000)} minutes) - shutting down`);
+    cleanup();
   }
 }
 
 // Check every minute
-setInterval(checkIdleTimeout, 60 * 1000)
+setInterval(checkIdleTimeout, 60 * 1000);
 
 // ============================================
 // RESPONSE HELPERS
 // ============================================
 
+// Request bodies are untyped JSON from the local client; each route validates the fields it uses.
+// biome-ignore lint/suspicious/noExplicitAny: untyped JSON request boundary
+type RequestBody = Record<string, any>;
+
+async function readBody(req: Request): Promise<RequestBody> {
+  return (await req.json()) as RequestBody;
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      'Content-Type': 'application/json',
-    }
-  })
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 function success(data?: unknown): Response {
-  return json({ success: true, data })
+  return json({ success: true, data });
 }
 
 function error(message: string, status = 500): Response {
-  return json({ success: false, error: message }, status)
+  return json({ success: false, error: message }, status);
 }
 
 // ============================================
 // LAUNCH BROWSER
 // ============================================
 
-console.log('Starting browser session...')
-console.log(`  Port: ${CONFIG.port}`)
-console.log(`  CDP internal port: ${CONFIG.cdpInternalPort}`)
-console.log(`  Headless: ${CONFIG.headless}`)
-console.log(`  Viewport: ${CONFIG.viewport.width}x${CONFIG.viewport.height}`)
-console.log(`  Idle timeout: ${CONFIG.idleTimeout / 60000} minutes`)
+console.log("Starting browser session...");
+console.log(`  Port: ${CONFIG.port}`);
+console.log(`  CDP internal port: ${CONFIG.cdpInternalPort}`);
+console.log(`  Headless: ${CONFIG.headless}`);
+console.log(`  Viewport: ${CONFIG.viewport.width}x${CONFIG.viewport.height}`);
+console.log(`  Idle timeout: ${CONFIG.idleTimeout / 60000} minutes`);
 
 try {
   await browser.launch({
     headless: CONFIG.headless,
     viewport: CONFIG.viewport,
     args: [`--remote-debugging-port=${CONFIG.cdpInternalPort}`],
-  })
+  });
 } catch (err) {
-  console.error(`[BrowserSession] Failed to launch browser: ${err instanceof Error ? err.message : String(err)}`)
-  process.exit(1)
+  console.error(`[BrowserSession] Failed to launch browser: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
 }
 
 // ============================================
 // HTTP SERVER
 // ============================================
 
-const server = Bun.serve({
+Bun.serve<{ clientId: number }>({
   port: CONFIG.port,
-  hostname: '127.0.0.1',
+  hostname: "127.0.0.1",
 
   async fetch(req, server) {
-    const url = new URL(req.url)
-    const method = req.method
+    const url = new URL(req.url);
+    const method = req.method;
 
     // Update activity timestamp on every request
-    lastActivity = Date.now()
+    lastActivity = Date.now();
 
     // CDP WebSocket upgrade: proxy to Chrome's internal CDP port
-    if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
-      const clientId = ++cdpClientIdCounter
-      const upgraded = server.upgrade(req, { data: { clientId } })
-      if (upgraded) return undefined
-      return new Response('WebSocket upgrade failed', { status: 400 })
+    if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
+      const clientId = ++cdpClientIdCounter;
+      const upgraded = server.upgrade(req, { data: { clientId } });
+      if (upgraded) return undefined;
+      return new Response("WebSocket upgrade failed", { status: 400 });
     }
 
     // CORS preflight — reject: server is loopback-only, no cross-origin access needed
-    if (method === 'OPTIONS') {
-      return new Response(null, { status: 403 })
+    if (method === "OPTIONS") {
+      return new Response(null, { status: 403 });
     }
 
     try {
       // Session token validation — skip for /health endpoint only
-      if (url.pathname !== '/health') {
-        const providedToken = req.headers.get('x-session-token')
+      if (url.pathname !== "/health") {
+        const providedToken = req.headers.get("x-session-token");
         if (providedToken !== sessionToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Invalid session token' }), {
+          return new Response(JSON.stringify({ success: false, error: "Invalid session token" }), {
             status: 401,
-            headers: { 'Content-Type': 'application/json' }
-          })
+            headers: { "Content-Type": "application/json" },
+          });
         }
       }
       // ========================================
@@ -285,22 +297,22 @@ const server = Bun.serve({
       // ========================================
 
       // Full diagnostics - errors, warnings, failed requests, stats
-      if (url.pathname === '/diagnostics' && method === 'GET') {
-        const allLogs = browser.getConsoleLogs()
-        const errors = allLogs.filter(l => l.type === 'error')
-        const warnings = allLogs.filter(l => l.type === 'warning')
+      if (url.pathname === "/diagnostics" && method === "GET") {
+        const allLogs = browser.getConsoleLogs();
+        const errors = allLogs.filter((l) => l.type === "error");
+        const warnings = allLogs.filter((l) => l.type === "warning");
 
-        const networkLogs = browser.getNetworkLogs({ type: 'response' })
+        const networkLogs = browser.getNetworkLogs({ type: "response" });
         const failedRequests = networkLogs
-          .filter(l => l.status && l.status >= 400)
-          .map(l => ({
+          .filter((l) => l.status && l.status >= 400)
+          .map((l) => ({
             url: l.url,
             method: l.method,
             status: l.status!,
-            statusText: l.statusText
-          }))
+            statusText: l.statusText,
+          }));
 
-        const stats = browser.getNetworkStats()
+        const stats = browser.getNetworkStats();
 
         return success({
           errors,
@@ -308,26 +320,26 @@ const server = Bun.serve({
           failedRequests,
           stats,
           pageTitle: await browser.getTitle(),
-          pageUrl: browser.getUrl()
-        })
+          pageUrl: browser.getUrl(),
+        });
       }
 
       // Console logs
-      if (url.pathname === '/console' && method === 'GET') {
-        const typeParam = url.searchParams.get('type')
-        const validTypes = ['all', 'error', 'warning', 'log', 'info', 'debug'] as const
-        type ConsoleType = typeof validTypes[number]
-        const type = validTypes.includes(typeParam as ConsoleType) ? (typeParam as ConsoleType) : undefined
-        const limit = parseInt(url.searchParams.get('limit') || '100')
-        const logs = browser.getConsoleLogs({ type, limit })
-        return success(logs)
+      if (url.pathname === "/console" && method === "GET") {
+        const typeParam = url.searchParams.get("type");
+        const validTypes = ["all", "error", "warning", "log", "info", "debug"] as const;
+        type ConsoleType = (typeof validTypes)[number];
+        const type = validTypes.includes(typeParam as ConsoleType) ? (typeParam as ConsoleType) : undefined;
+        const limit = parseInt(url.searchParams.get("limit") || "100");
+        const logs = browser.getConsoleLogs({ type, limit });
+        return success(logs);
       }
 
       // Network logs
-      if (url.pathname === '/network' && method === 'GET') {
-        const limit = parseInt(url.searchParams.get('limit') || '100')
-        const logs = browser.getNetworkLogs({ limit })
-        return success(logs)
+      if (url.pathname === "/network" && method === "GET") {
+        const limit = parseInt(url.searchParams.get("limit") || "100");
+        const logs = browser.getNetworkLogs({ limit });
+        return success(logs);
       }
 
       // ========================================
@@ -335,28 +347,30 @@ const server = Bun.serve({
       // ========================================
 
       // Health check
-      if (url.pathname === '/health' && method === 'GET') {
+      if (url.pathname === "/health" && method === "GET") {
         // Check if CDP is available by pinging Chrome's debugging port
         // Native fetch required: querying Chrome's local CDP endpoint (localhost, not an external API)
-        let cdpAvailable = false
+        let cdpAvailable = false;
         try {
           const cdpRes = await fetch(`http://127.0.0.1:${CONFIG.cdpInternalPort}/json/version`, {
             signal: AbortSignal.timeout(500),
-          })
-          cdpAvailable = cdpRes.ok
-        } catch { /* CDP not available */ }
+          });
+          cdpAvailable = cdpRes.ok;
+        } catch {
+          /* CDP not available */
+        }
 
         return success({
-          status: 'ok',
+          status: "ok",
           sessionId,
           uptime: Date.now() - new Date(startedAt).getTime(),
           cdpAvailable,
           cdpWebSocket: cdpAvailable ? `ws://localhost:${CONFIG.port}` : null,
-        })
+        });
       }
 
       // Session info
-      if (url.pathname === '/session' && method === 'GET') {
+      if (url.pathname === "/session" && method === "GET") {
         return success({
           sessionId,
           startedAt,
@@ -365,243 +379,233 @@ const server = Bun.serve({
           url: browser.getUrl(),
           title: await browser.getTitle(),
           idleTimeout: `${CONFIG.idleTimeout / 60000} minutes`,
-          lastActivity: new Date(lastActivity).toISOString()
-        })
+          lastActivity: new Date(lastActivity).toISOString(),
+        });
       }
 
       // Navigate - CLEARS LOGS for fresh page diagnostics
-      if (url.pathname === '/navigate' && method === 'POST') {
-        const body = await req.json()
-        if (!body.url) return error('url required', 400)
+      if (url.pathname === "/navigate" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.url) return error("url required", 400);
 
         // Clear logs before navigating for clean diagnostic slate
-        browser.getConsoleLogs({ clear: true })
-        browser.clearNetworkLogs()
+        browser.getConsoleLogs({ clear: true });
+        browser.clearNetworkLogs();
 
-        await browser.navigate(body.url, { waitUntil: body.waitUntil || 'networkidle' })
-        await saveState()
+        await browser.navigate(body.url, { waitUntil: body.waitUntil || "networkidle" });
+        await saveState();
 
         return success({
           url: browser.getUrl(),
-          title: await browser.getTitle()
-        })
+          title: await browser.getTitle(),
+        });
       }
 
       // Click
-      if (url.pathname === '/click' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector) return error('selector required', 400)
-        await browser.click(body.selector, { timeout: body.timeout })
-        return success({ clicked: body.selector })
+      if (url.pathname === "/click" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector) return error("selector required", 400);
+        await browser.click(body.selector, { timeout: body.timeout });
+        return success({ clicked: body.selector });
       }
 
       // Fill
-      if (url.pathname === '/fill' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector || body.value === undefined) return error('selector and value required', 400)
-        await browser.fill(body.selector, body.value)
-        return success({ filled: body.selector })
+      if (url.pathname === "/fill" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector || body.value === undefined) return error("selector and value required", 400);
+        await browser.fill(body.selector, body.value);
+        return success({ filled: body.selector });
       }
 
       // Type (character by character)
-      if (url.pathname === '/type' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector || !body.text) return error('selector and text required', 400)
-        await browser.type(body.selector, body.text, body.delay)
-        return success({ typed: body.selector })
+      if (url.pathname === "/type" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector || !body.text) return error("selector and text required", 400);
+        await browser.type(body.selector, body.text, body.delay);
+        return success({ typed: body.selector });
       }
 
       // Screenshot
-      if (url.pathname === '/screenshot' && method === 'POST') {
-        const body = await req.json()
-        const path = body.path || '/tmp/screenshot.png'
+      if (url.pathname === "/screenshot" && method === "POST") {
+        const body = await readBody(req);
+        const path = body.path || "/tmp/screenshot.png";
         await browser.screenshot({
           path,
           fullPage: body.fullPage || false,
-          selector: body.selector
-        })
-        return success({ path })
+          selector: body.selector,
+        });
+        return success({ path });
       }
 
       // Get visible text
-      if (url.pathname === '/text' && method === 'GET') {
-        const selector = url.searchParams.get('selector') || undefined
-        const text = await browser.getVisibleText(selector)
-        return success({ text })
+      if (url.pathname === "/text" && method === "GET") {
+        const selector = url.searchParams.get("selector") || undefined;
+        const text = await browser.getVisibleText(selector);
+        return success({ text });
       }
 
       // Get HTML
-      if (url.pathname === '/html' && method === 'GET') {
-        const selector = url.searchParams.get('selector') || undefined
-        const html = await browser.getVisibleHtml({ selector })
-        return success({ html })
+      if (url.pathname === "/html" && method === "GET") {
+        const selector = url.searchParams.get("selector") || undefined;
+        const html = await browser.getVisibleHtml({ selector });
+        return success({ html });
       }
 
       // Evaluate JavaScript
       // SECURITY: Block cross-origin requests — only allow calls with no Origin header
       // (same process / curl) or an empty/null Origin (direct fetch from loopback).
-      if (url.pathname === '/evaluate' && method === 'POST') {
-        const origin = req.headers.get('origin')
-        if (origin !== null && origin !== '' && origin !== 'null') {
-          return new Response(JSON.stringify({ success: false, error: 'Forbidden: cross-origin /evaluate blocked' }), {
+      if (url.pathname === "/evaluate" && method === "POST") {
+        const origin = req.headers.get("origin");
+        if (origin !== null && origin !== "" && origin !== "null") {
+          return new Response(JSON.stringify({ success: false, error: "Forbidden: cross-origin /evaluate blocked" }), {
             status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          })
+            headers: { "Content-Type": "application/json" },
+          });
         }
-        const body = await req.json()
-        if (!body.script) return error('script required', 400)
-        const result = await browser.evaluate(body.script)
-        return success({ result })
+        const body = await readBody(req);
+        if (!body.script) return error("script required", 400);
+        const result = await browser.evaluate(body.script);
+        return success({ result });
       }
 
       // Wait for selector
-      if (url.pathname === '/wait' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector) return error('selector required', 400)
+      if (url.pathname === "/wait" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector) return error("selector required", 400);
         await browser.waitForSelector(body.selector, {
           state: body.state,
-          timeout: body.timeout
-        })
-        return success({ found: body.selector })
+          timeout: body.timeout,
+        });
+        return success({ found: body.selector });
       }
 
       // Wait for text
-      if (url.pathname === '/wait-text' && method === 'POST') {
-        const body = await req.json()
-        if (!body.text) return error('text required', 400)
+      if (url.pathname === "/wait-text" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.text) return error("text required", 400);
         await browser.waitForText(body.text, {
           state: body.state,
-          timeout: body.timeout
-        })
-        return success({ found: body.text })
+          timeout: body.timeout,
+        });
+        return success({ found: body.text });
       }
 
       // Hover
-      if (url.pathname === '/hover' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector) return error('selector required', 400)
-        await browser.hover(body.selector)
-        return success({ hovered: body.selector })
+      if (url.pathname === "/hover" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector) return error("selector required", 400);
+        await browser.hover(body.selector);
+        return success({ hovered: body.selector });
       }
 
       // Press key
-      if (url.pathname === '/press' && method === 'POST') {
-        const body = await req.json()
-        if (!body.key) return error('key required', 400)
-        await browser.pressKey(body.key, body.selector)
-        return success({ pressed: body.key })
+      if (url.pathname === "/press" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.key) return error("key required", 400);
+        await browser.pressKey(body.key, body.selector);
+        return success({ pressed: body.key });
       }
 
       // Select dropdown
-      if (url.pathname === '/select' && method === 'POST') {
-        const body = await req.json()
-        if (!body.selector || !body.value) return error('selector and value required', 400)
-        await browser.select(body.selector, body.value)
-        return success({ selected: body.value })
+      if (url.pathname === "/select" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.selector || !body.value) return error("selector and value required", 400);
+        await browser.select(body.selector, body.value);
+        return success({ selected: body.value });
       }
 
       // Tabs - list
-      if (url.pathname === '/tabs' && method === 'GET') {
-        const tabs = browser.getTabs()
-        return success({ tabs })
+      if (url.pathname === "/tabs" && method === "GET") {
+        const tabs = browser.getTabs();
+        return success({ tabs });
       }
 
       // Tabs - new
-      if (url.pathname === '/tabs' && method === 'POST') {
-        const body = await req.json()
-        await browser.newTab(body.url)
-        return success({ created: true, url: body.url })
+      if (url.pathname === "/tabs" && method === "POST") {
+        const body = await readBody(req);
+        await browser.newTab(body.url);
+        return success({ created: true, url: body.url });
       }
 
       // Tabs - close
-      if (url.pathname.startsWith('/tabs/') && method === 'DELETE') {
-        const index = parseInt(url.pathname.split('/')[2])
-        if (isNaN(index)) return error('invalid tab index', 400)
-        await browser.switchTab(index)
-        await browser.closeTab()
-        return success({ closed: index })
+      if (url.pathname.startsWith("/tabs/") && method === "DELETE") {
+        const index = Number.parseInt(url.pathname.split("/")[2] ?? "", 10);
+        if (Number.isNaN(index)) return error("invalid tab index", 400);
+        await browser.switchTab(index);
+        await browser.closeTab();
+        return success({ closed: index });
       }
 
       // Tabs - switch
-      if (url.pathname.startsWith('/tabs/') && method === 'POST') {
-        const index = parseInt(url.pathname.split('/')[2])
-        if (isNaN(index)) return error('invalid tab index', 400)
-        await browser.switchTab(index)
-        return success({ switched: index })
+      if (url.pathname.startsWith("/tabs/") && method === "POST") {
+        const index = Number.parseInt(url.pathname.split("/")[2] ?? "", 10);
+        if (Number.isNaN(index)) return error("invalid tab index", 400);
+        await browser.switchTab(index);
+        return success({ switched: index });
       }
 
       // Reload
-      if (url.pathname === '/reload' && method === 'POST') {
-        await browser.reload()
-        return success({ reloaded: true })
+      if (url.pathname === "/reload" && method === "POST") {
+        await browser.reload();
+        return success({ reloaded: true });
       }
 
       // Go back
-      if (url.pathname === '/back' && method === 'POST') {
-        await browser.goBack()
-        return success({ back: true })
+      if (url.pathname === "/back" && method === "POST") {
+        await browser.goBack();
+        return success({ back: true });
       }
 
       // Go forward
-      if (url.pathname === '/forward' && method === 'POST') {
-        await browser.goForward()
-        return success({ forward: true })
+      if (url.pathname === "/forward" && method === "POST") {
+        await browser.goForward();
+        return success({ forward: true });
       }
 
       // Resize viewport
-      if (url.pathname === '/resize' && method === 'POST') {
-        const body = await req.json()
-        if (!body.width || !body.height) return error('width and height required', 400)
-        await browser.resize(body.width, body.height)
-        return success({ width: body.width, height: body.height })
+      if (url.pathname === "/resize" && method === "POST") {
+        const body = await readBody(req);
+        if (!body.width || !body.height) return error("width and height required", 400);
+        await browser.resize(body.width, body.height);
+        return success({ width: body.width, height: body.height });
       }
 
       // Accessibility snapshot - save ARIA tree as YAML
-      if (url.pathname === '/snapshot' && method === 'POST') {
-        const body = await req.json().catch(() => ({}))
-        const timestamp = Date.now()
-        const outputPath = (body as Record<string, string>).path || `/tmp/snapshot-${timestamp}.yaml`
+      if (url.pathname === "/snapshot" && method === "POST") {
+        // A missing or malformed JSON body is allowed here: every field is optional.
+        const body = await readBody(req).catch(() => ({}));
+        const timestamp = Date.now();
+        const outputPath = (body as Record<string, string>).path || `/tmp/snapshot-${timestamp}.yaml`;
 
         // Get ARIA snapshot from Playwright
-        const ariaTree = await browser.getAccessibilityTree()
+        const ariaTree = await browser.getAccessibilityTree();
 
         // Write YAML to disk
-        const { writeFileSync, mkdirSync } = await import('fs')
-        const { dirname } = await import('path')
-        mkdirSync(dirname(outputPath), { recursive: true })
-        writeFileSync(outputPath, ariaTree, 'utf-8')
+        const { writeFileSync, mkdirSync } = await import("node:fs");
+        const { dirname } = await import("node:path");
+        mkdirSync(dirname(outputPath), { recursive: true });
+        writeFileSync(outputPath, ariaTree, "utf-8");
 
-        return success({ path: outputPath, size: ariaTree.length })
+        return success({ path: outputPath, size: ariaTree.length });
       }
 
       // State save - save cookies and storage
-      if (url.pathname === '/state-save' && method === 'POST') {
-        const body = await req.json()
-        const name = (body as Record<string, string>).name
-        if (!name) return error('name required', 400)
+      if (url.pathname === "/state-save" && method === "POST") {
+        const body = await readBody(req);
+        const name = (body as Record<string, string>).name;
+        if (!name) return error("name required", 400);
 
-        const stateDir = join(getKayaHome(), "MEMORY", "browser-states")
-        const statePath = `${stateDir}/${name}.json`
+        const stateDir = join(getKayaHome(), "MEMORY", "browser-states");
+        const statePath = `${stateDir}/${name}.json`;
 
         // Get cookies and localStorage via evaluate
-        const cookies = await browser.evaluate(() => document.cookie)
-        const localStorage = await browser.evaluate(() => {
-          const items: Record<string, string> = {}
-          for (let i = 0; i < window.localStorage.length; i++) {
-            const key = window.localStorage.key(i)
-            if (key) items[key] = window.localStorage.getItem(key) || ''
-          }
-          return items
-        })
-        const sessionStorage = await browser.evaluate(() => {
-          const items: Record<string, string> = {}
-          for (let i = 0; i < window.sessionStorage.length; i++) {
-            const key = window.sessionStorage.key(i)
-            if (key) items[key] = window.sessionStorage.getItem(key) || ''
-          }
-          return items
-        })
-        const currentUrl = browser.getUrl()
+        // Scripts run in the page, so they are strings (the Node side has no DOM types).
+        const dumpStorage = (kind: "localStorage" | "sessionStorage") =>
+          `(() => { const items = {}; const s = window.${kind}; for (let i = 0; i < s.length; i++) { const key = s.key(i); if (key) items[key] = s.getItem(key) || ""; } return items; })()`;
+        const cookies = await browser.evaluate<string>("document.cookie");
+        const localStorage = await browser.evaluate<Record<string, string>>(dumpStorage("localStorage"));
+        const sessionStorage = await browser.evaluate<Record<string, string>>(dumpStorage("sessionStorage"));
+        const currentUrl = browser.getUrl();
 
         const stateData = {
           name,
@@ -610,54 +614,54 @@ const server = Bun.serve({
           cookies,
           localStorage,
           sessionStorage,
-        }
+        };
 
-        const { writeFileSync, mkdirSync, chmodSync } = await import('fs')
-        mkdirSync(stateDir, { recursive: true })
-        const encrypted = encryptState(JSON.stringify(stateData))
-        writeFileSync(statePath, encrypted)
-        chmodSync(statePath, 0o600) // belt-and-suspenders: mode 600
+        const { writeFileSync, mkdirSync, chmodSync } = await import("node:fs");
+        mkdirSync(stateDir, { recursive: true });
+        const encrypted = encryptState(JSON.stringify(stateData));
+        writeFileSync(statePath, encrypted);
+        chmodSync(statePath, 0o600); // belt-and-suspenders: mode 600
 
-        return success({ path: statePath, url: currentUrl })
+        return success({ path: statePath, url: currentUrl });
       }
 
       // State load - restore cookies and storage
-      if (url.pathname === '/state-load' && method === 'POST') {
-        const body = await req.json()
-        const name = (body as Record<string, string>).name
-        if (!name) return error('name required', 400)
+      if (url.pathname === "/state-load" && method === "POST") {
+        const body = await readBody(req);
+        const name = (body as Record<string, string>).name;
+        if (!name) return error("name required", 400);
 
-        const statePath = join(getKayaHome(), "MEMORY", "browser-states", `${name}.json`)
+        const statePath = join(getKayaHome(), "MEMORY", "browser-states", `${name}.json`);
 
-        const { existsSync, readFileSync } = await import('fs')
+        const { existsSync, readFileSync } = await import("node:fs");
         if (!existsSync(statePath)) {
-          return error(`State file not found: ${statePath}`, 404)
+          return error(`State file not found: ${statePath}`, 404);
         }
 
         // Read and decrypt — if file is legacy plaintext, surface a clear error
-        let stateData: z.infer<typeof BrowserSaveSchema>
+        let stateData: z.infer<typeof BrowserSaveSchema>;
         try {
-          const buf = readFileSync(statePath)
-          const rawJson = decryptState(buf)
-          stateData = BrowserSaveSchema.parse(JSON.parse(rawJson))
+          const buf = readFileSync(statePath);
+          const rawJson = decryptState(buf);
+          stateData = BrowserSaveSchema.parse(JSON.parse(rawJson));
         } catch (decryptErr) {
           return error(
             `Failed to decrypt state file "${name}". If this was saved before encryption was added, re-run state-save to update it. Error: ${decryptErr instanceof Error ? decryptErr.message : String(decryptErr)}`,
-            422
-          )
+            422,
+          );
         }
 
         // Navigate to the saved URL first (needed for storage context)
-        if (stateData.url && stateData.url !== 'about:blank') {
-          await browser.navigate(stateData.url, { waitUntil: 'domcontentloaded' })
+        if (stateData.url && stateData.url !== "about:blank") {
+          await browser.navigate(stateData.url, { waitUntil: "domcontentloaded" });
         }
 
         // Restore cookies via evaluate
         if (stateData.cookies) {
-          const cookieParts = stateData.cookies.split('; ')
+          const cookieParts = stateData.cookies.split("; ");
           for (const cookie of cookieParts) {
             if (cookie.trim()) {
-              await browser.evaluate(`document.cookie = ${JSON.stringify(cookie)}`)
+              await browser.evaluate(`document.cookie = ${JSON.stringify(cookie)}`);
             }
           }
         }
@@ -665,59 +669,54 @@ const server = Bun.serve({
         // Restore localStorage
         if (stateData.localStorage) {
           for (const [key, value] of Object.entries(stateData.localStorage)) {
-            await browser.evaluate(
-              `window.localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)})`
-            )
+            await browser.evaluate(`window.localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)})`);
           }
         }
 
         // Restore sessionStorage
         if (stateData.sessionStorage) {
           for (const [key, value] of Object.entries(stateData.sessionStorage)) {
-            await browser.evaluate(
-              `window.sessionStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)})`
-            )
+            await browser.evaluate(`window.sessionStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)})`);
           }
         }
 
         // Reload to apply cookies
-        await browser.reload()
+        await browser.reload();
 
         return success({
           loaded: name,
           url: stateData.url,
           savedAt: stateData.savedAt,
-        })
+        });
       }
 
       // Trace start - begin recording
-      if (url.pathname === '/trace-start' && method === 'POST') {
-        const body = await req.json().catch(() => ({}))
-        pendingTracePath = (body as Record<string, string>).path || `/tmp/trace-${Date.now()}.zip`
-        await browser.startTrace()
-        return success({ tracing: true, path: pendingTracePath })
+      if (url.pathname === "/trace-start" && method === "POST") {
+        const body = await readBody(req).catch(() => ({}));
+        pendingTracePath = (body as Record<string, string>).path || `/tmp/trace-${Date.now()}.zip`;
+        await browser.startTrace();
+        return success({ tracing: true, path: pendingTracePath });
       }
 
       // Trace stop - stop recording and save
-      if (url.pathname === '/trace-stop' && method === 'POST') {
-        const tracePath = pendingTracePath || `/tmp/trace-${Date.now()}.zip`
-        const result = await browser.stopTrace(tracePath)
-        pendingTracePath = null
-        return success(result)
+      if (url.pathname === "/trace-stop" && method === "POST") {
+        const tracePath = pendingTracePath || `/tmp/trace-${Date.now()}.zip`;
+        const result = await browser.stopTrace(tracePath);
+        pendingTracePath = null;
+        return success(result);
       }
 
       // Stop server
-      if (url.pathname === '/stop' && method === 'POST') {
-        setTimeout(() => cleanup(), 100)
-        return success({ stopping: true })
+      if (url.pathname === "/stop" && method === "POST") {
+        setTimeout(() => cleanup(), 100);
+        return success({ stopping: true });
       }
 
-      return error('Not found', 404)
-
+      return error("Not found", 404);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.error('Request error:', message)
-      return error(message)
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Request error:", message);
+      return error(message);
     }
   },
 
@@ -727,86 +726,93 @@ const server = Bun.serve({
   // ========================================
   websocket: {
     async open(ws) {
-      const clientId = (ws.data as { clientId: number }).clientId
-      console.log(`CDP proxy: Client ${clientId} connected`)
+      const clientId = ws.data.clientId;
+      console.log(`CDP proxy: Client ${clientId} connected`);
 
       try {
-        const cdpUrl = await getCdpWebSocketUrl()
-        console.log(`CDP proxy: Connecting to Chrome at ${cdpUrl}`)
+        const cdpUrl = await getCdpWebSocketUrl();
+        console.log(`CDP proxy: Connecting to Chrome at ${cdpUrl}`);
 
-        const upstream = new WebSocket(cdpUrl)
+        const upstream = new WebSocket(cdpUrl);
 
         // Wait for upstream connection to open before setting up forwarding
         await new Promise<void>((resolve, reject) => {
-          upstream.addEventListener('open', () => resolve(), { once: true })
-          upstream.addEventListener('error', (e) => reject(e), { once: true })
-          setTimeout(() => reject(new Error('CDP upstream connection timeout')), 5000)
-        })
+          upstream.addEventListener("open", () => resolve(), { once: true });
+          upstream.addEventListener("error", (e) => reject(e), { once: true });
+          setTimeout(() => reject(new Error("CDP upstream connection timeout")), 5000);
+        });
 
-        cdpUpstreams.set(clientId, upstream)
+        cdpUpstreams.set(clientId, upstream);
 
-        upstream.addEventListener('message', (event) => {
+        upstream.addEventListener("message", (event) => {
           try {
-            ws.send(typeof event.data === 'string' ? event.data : event.data as ArrayBuffer)
+            ws.send(typeof event.data === "string" ? event.data : (event.data as ArrayBuffer));
           } catch {
             // Client may have disconnected
           }
-        })
+        });
 
-        upstream.addEventListener('close', () => {
-          console.log(`CDP proxy: Chrome closed connection for client ${clientId}`)
-          try { ws.close() } catch { /* already closed */ }
-          cdpUpstreams.delete(clientId)
-        })
+        upstream.addEventListener("close", () => {
+          console.log(`CDP proxy: Chrome closed connection for client ${clientId}`);
+          try {
+            ws.close();
+          } catch {
+            /* already closed */
+          }
+          cdpUpstreams.delete(clientId);
+        });
 
-        upstream.addEventListener('error', () => {
-          console.error(`CDP proxy: Upstream error for client ${clientId}`)
-          try { ws.close() } catch { /* already closed */ }
-          cdpUpstreams.delete(clientId)
-        })
-
+        upstream.addEventListener("error", () => {
+          console.error(`CDP proxy: Upstream error for client ${clientId}`);
+          try {
+            ws.close();
+          } catch {
+            /* already closed */
+          }
+          cdpUpstreams.delete(clientId);
+        });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`CDP proxy: Failed to connect to Chrome CDP — ${message}`)
-        console.error(`CDP proxy: Ensure Chrome was launched with --remote-debugging-port=${CONFIG.cdpInternalPort}`)
-        ws.close()
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`CDP proxy: Failed to connect to Chrome CDP — ${message}`);
+        console.error(`CDP proxy: Ensure Chrome was launched with --remote-debugging-port=${CONFIG.cdpInternalPort}`);
+        ws.close();
       }
     },
 
     message(ws, message) {
-      const clientId = (ws.data as { clientId: number }).clientId
-      const upstream = cdpUpstreams.get(clientId)
+      const clientId = ws.data.clientId;
+      const upstream = cdpUpstreams.get(clientId);
       if (upstream?.readyState === WebSocket.OPEN) {
-        upstream.send(typeof message === 'string' ? message : message)
+        upstream.send(typeof message === "string" ? message : message);
       }
     },
 
     close(ws) {
-      const clientId = (ws.data as { clientId: number }).clientId
-      console.log(`CDP proxy: Client ${clientId} disconnected`)
-      const upstream = cdpUpstreams.get(clientId)
+      const clientId = ws.data.clientId;
+      console.log(`CDP proxy: Client ${clientId} disconnected`);
+      const upstream = cdpUpstreams.get(clientId);
       if (upstream) {
-        upstream.close()
-        cdpUpstreams.delete(clientId)
+        upstream.close();
+        cdpUpstreams.delete(clientId);
       }
     },
   },
-})
+});
 
-await saveState()
-console.log(`\nBrowser session started!`)
-console.log(`  Session ID: ${sessionId}`)
-console.log(`  URL: http://localhost:${CONFIG.port}`)
-console.log(`  CDP WebSocket: ws://localhost:${CONFIG.port} (proxied to Chrome port ${CONFIG.cdpInternalPort})`)
-console.log(`  Diagnostics: http://localhost:${CONFIG.port}/diagnostics`)
-console.log(`\nStagehand can connect via: bun run Stagehand.ts --session browse <command>`)
-console.log(`Session will auto-close after ${CONFIG.idleTimeout / 60000} minutes of inactivity.`)
-console.log(`Press Ctrl+C to stop manually.`)
+await saveState();
+console.log(`\nBrowser session started!`);
+console.log(`  Session ID: ${sessionId}`);
+console.log(`  URL: http://localhost:${CONFIG.port}`);
+console.log(`  CDP WebSocket: ws://localhost:${CONFIG.port} (proxied to Chrome port ${CONFIG.cdpInternalPort})`);
+console.log(`  Diagnostics: http://localhost:${CONFIG.port}/diagnostics`);
+console.log(`\nStagehand can connect via: bun run Stagehand.ts --session browse <command>`);
+console.log(`Session will auto-close after ${CONFIG.idleTimeout / 60000} minutes of inactivity.`);
+console.log(`Press Ctrl+C to stop manually.`);
 
 // Cleanup handlers
-process.on('SIGTERM', cleanup)
-process.on('SIGINT', cleanup)
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err)
-  cleanup()
-})
+process.on("SIGTERM", cleanup);
+process.on("SIGINT", cleanup);
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  cleanup();
+});

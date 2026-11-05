@@ -17,23 +17,20 @@
  * Session auto-starts on first use. No explicit start needed.
  */
 
-import { PlaywrightBrowser } from '../index.ts'
-import { loadSettings } from '../../../../lib/core/ConfigLoader.ts'
-import { createStateManager } from '../../../../lib/core/StateManager.ts'
-import { notifySync } from '../../../../lib/core/NotificationService.ts'
-import { SessionStateSchema, type SessionState, BROWSER_CDP_PORT } from './types.ts'
+import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { SessionStateSchema, type SessionState, BROWSER_CDP_PORT } from "./types.ts";
 
-const STATE_FILE = '/tmp/browser-session.json'
-const DEFAULT_PORT = BROWSER_CDP_PORT
-const SESSION_TIMEOUT = 5000 // 5s to wait for session start
+const STATE_FILE = "/tmp/browser-session.json";
+const DEFAULT_PORT = BROWSER_CDP_PORT;
 
 // ============================================
 // SETTINGS
 // ============================================
 
 function getBrowser(): string {
-  const settings = loadSettings()
-  return settings.techStack?.browser || 'Dia'
+  const settings = loadSettings();
+  return settings.techStack?.browser || "Dia";
 }
 
 // ============================================
@@ -43,7 +40,7 @@ function getBrowser(): string {
 // SessionState and SessionStateSchema are imported from ./types.ts
 
 // Initialize StateManager for session persistence
-let sessionManager: ReturnType<typeof createStateManager<SessionState>> | null = null
+let sessionManager: ReturnType<typeof createStateManager<SessionState>> | null = null;
 
 function getSessionManager() {
   if (!sessionManager) {
@@ -53,60 +50,52 @@ function getSessionManager() {
       defaults: {
         pid: 0,
         port: 0,
-        sessionId: '',
-        startedAt: '',
+        sessionId: "",
+        startedAt: "",
         headless: true,
-        url: '',
+        url: "",
       },
       backupOnWrite: true,
       lockTimeout: 5000,
-    })
+    });
   }
-  return sessionManager
+  return sessionManager;
 }
 
 interface Diagnostics {
-  errors: Array<{ type: string; text: string; timestamp: number }>
-  warnings: Array<{ type: string; text: string; timestamp: number }>
+  errors: Array<{ type: string; text: string; timestamp: number }>;
+  warnings: Array<{ type: string; text: string; timestamp: number }>;
   failedRequests: Array<{
-    url: string
-    method: string
-    status: number
-    statusText?: string
-  }>
+    url: string;
+    method: string;
+    status: number;
+    statusText?: string;
+  }>;
   stats: {
-    totalRequests: number
-    totalResponses: number
-    totalSize: number
-    avgDuration: number
-  }
-  pageTitle: string
-  pageUrl: string
+    totalRequests: number;
+    totalResponses: number;
+    totalSize: number;
+    avgDuration: number;
+  };
+  pageTitle: string;
+  pageUrl: string;
 }
 
 // ============================================
 // UTILITIES
 // ============================================
 
-function notify(message: string): void {
-  try {
-    notifySync(message)
-  } catch {
-    // Voice server not running - silent fail
-  }
-}
-
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i] ?? "B"}`;
 }
 
 function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str
-  return str.slice(0, maxLen - 3) + '...'
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 3) + "...";
 }
 
 // ============================================
@@ -115,184 +104,164 @@ function truncate(str: string, maxLen: number): string {
 
 async function getSessionState(): Promise<SessionState | null> {
   try {
-    const manager = getSessionManager()
-    const exists = await manager.exists()
-    if (!exists) return null
+    const manager = getSessionManager();
+    const exists = await manager.exists();
+    if (!exists) return null;
 
-    const state = await manager.load()
+    const state = await manager.load();
     // Return null if state is all defaults (no active session)
-    if (state.pid === 0 && state.port === 0) return null
-    return state
+    if (state.pid === 0 && state.port === 0) return null;
+    return state;
   } catch {
-    return null
-  }
-}
-
-async function isSessionRunning(): Promise<boolean> {
-  const state = await getSessionState()
-  if (!state) return false
-
-  try {
-    // Native fetch required: health-checking the local BrowserSession.ts server (localhost, not an external API)
-    const res = await fetch(`http://localhost:${state.port}/health`, {
-      signal: AbortSignal.timeout(1000)
-    })
-    return res.ok
-  } catch {
-    // Server not responding - clean up orphan state via StateManager
-    try {
-      const manager = getSessionManager()
-      await manager.save({
-        pid: 0,
-        port: 0,
-        sessionId: '',
-        startedAt: '',
-        headless: true,
-        url: '',
-      })
-    } catch {}
-    return false
+    return null;
   }
 }
 
 interface SessionInfo {
-  port: number
-  token: string
+  port: number;
+  token: string;
 }
 
 async function ensureSession(): Promise<SessionInfo> {
   // Check if already running
-  const state = await getSessionState()
+  const state = await getSessionState();
   if (state) {
     try {
       // Native fetch required: health-checking the local BrowserSession.ts server (localhost, not an external API)
       const res = await fetch(`http://localhost:${state.port}/health`, {
-        signal: AbortSignal.timeout(1000)
-      })
+        signal: AbortSignal.timeout(1000),
+      });
       if (res.ok && state.sessionToken) {
-        return { port: state.port, token: state.sessionToken }
+        return { port: state.port, token: state.sessionToken };
       }
-    } catch {}
+    } catch {
+      // Health check failed (server down or slow): fall through and start a new session.
+    }
   }
 
   // Need to start session
-  const port = DEFAULT_PORT
+  const port = DEFAULT_PORT;
 
   // Check port availability — if running, wait for BrowserSession to write token to state file
   // Native fetch required: probing local port availability (localhost, not an external API)
   try {
     const res = await fetch(`http://localhost:${port}/health`, {
-      signal: AbortSignal.timeout(500)
-    })
+      signal: AbortSignal.timeout(500),
+    });
     if (res.ok) {
       // Server is already running — poll state file for token (BrowserSession writes it)
       for (let i = 0; i < 20; i++) {
-        await Bun.sleep(200)
-        const s = await getSessionState()
+        await Bun.sleep(200);
+        const s = await getSessionState();
         if (s?.sessionToken) {
-          return { port, token: s.sessionToken }
+          return { port, token: s.sessionToken };
         }
       }
-      throw new Error('Browser session running but no token found in state file')
+      throw new Error("Browser session running but no token found in state file");
     }
   } catch (e) {
-    if (e instanceof Error && e.message.includes('no token found')) throw e
+    if (e instanceof Error && e.message.includes("no token found")) throw e;
   }
 
   // Start server in background
-  const { spawn } = await import('child_process')
-  const serverPath = new URL('./BrowserSession.ts', import.meta.url).pathname
+  const { spawn } = await import("node:child_process");
+  const serverPath = new URL("./BrowserSession.ts", import.meta.url).pathname;
 
   const env: Record<string, string> = {
-    ...process.env as Record<string, string>,
+    ...(process.env as Record<string, string>),
     BROWSER_PORT: String(port),
-    BROWSER_HEADLESS: 'true'
-  }
+    BROWSER_HEADLESS: "true",
+  };
 
-  const child = spawn('bun', ['run', serverPath], {
+  const child = spawn("bun", ["run", serverPath], {
     detached: true,
-    stdio: 'ignore',
-    env
-  })
-  child.unref()
+    stdio: "ignore",
+    env,
+  });
+  child.unref();
 
   // Wait for BrowserSession to start AND write its token to the state file
   for (let i = 0; i < 50; i++) {
-    await Bun.sleep(200)
+    await Bun.sleep(200);
     try {
       // Native fetch required: polling local BrowserSession.ts server readiness (localhost, not an external API)
       const res = await fetch(`http://localhost:${port}/health`, {
-        signal: AbortSignal.timeout(1000)
-      })
+        signal: AbortSignal.timeout(1000),
+      });
       if (res.ok) {
         // Server is up — now wait for BrowserSession.ts to write sessionToken to state
         for (let j = 0; j < 20; j++) {
-          await Bun.sleep(200)
-          const s = await getSessionState()
+          await Bun.sleep(200);
+          const s = await getSessionState();
           if (s?.sessionToken) {
-            return { port, token: s.sessionToken }
+            return { port, token: s.sessionToken };
           }
         }
-        throw new Error('Browser session started but no token written to state file')
+        throw new Error("Browser session started but no token written to state file");
       }
     } catch (e) {
-      if (e instanceof Error && e.message.includes('no token')) throw e
+      if (e instanceof Error && e.message.includes("no token")) throw e;
     }
   }
 
   // Fallback: record pid so state shows session is active (without token)
   try {
-    const manager = getSessionManager()
+    const manager = getSessionManager();
     await manager.save({
       pid: child.pid || process.pid,
       port,
       sessionId: `session-${Date.now()}`,
       startedAt: new Date().toISOString(),
       headless: true,
-      url: '',
-    })
-  } catch {}
+      url: "",
+    });
+  } catch (err) {
+    console.error(
+      `[Browse] Could not record fallback session state: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
-  throw new Error('Failed to start browser session')
+  throw new Error("Failed to start browser session");
 }
 
 async function sessionCommand<T = unknown>(
   endpoint: string,
   body?: Record<string, unknown>,
-  method = 'POST'
+  method = "POST",
 ): Promise<T> {
-  const { port, token } = await ensureSession()
+  const { port, token } = await ensureSession();
 
   const headers: Record<string, string> = {
-    'x-session-token': token,
-  }
+    "x-session-token": token,
+  };
 
-  if (body && method !== 'GET') {
-    headers['Content-Type'] = 'application/json'
+  if (body && method !== "GET") {
+    headers["Content-Type"] = "application/json";
   }
 
   const options: RequestInit = {
     method,
     headers,
-    signal: AbortSignal.timeout(60000) // 60s for long operations
+    signal: AbortSignal.timeout(60000), // 60s for long operations
+  };
+
+  if (body && method !== "GET") {
+    options.body = JSON.stringify(body);
   }
 
-  if (body && method !== 'GET') {
-    options.body = JSON.stringify(body)
-  }
-
-  const url = method === 'GET' && body
-    ? `http://localhost:${port}/${endpoint}?${new URLSearchParams(body as Record<string, string>)}`
-    : `http://localhost:${port}/${endpoint}`
+  const url =
+    method === "GET" && body
+      ? `http://localhost:${port}/${endpoint}?${new URLSearchParams(body as Record<string, string>)}`
+      : `http://localhost:${port}/${endpoint}`;
 
   // Native fetch required: communicating with the local BrowserSession.ts server (localhost, not an external API)
-  const res = await fetch(url, options)
-  const data = await res.json() as { success: boolean; data?: T; error?: string }
+  const res = await fetch(url, options);
+  const data = (await res.json()) as { success: boolean; data?: T; error?: string };
 
   if (data.success) {
-    return data.data as T
+    return data.data as T;
   } else {
-    throw new Error(data.error || 'Unknown error')
+    throw new Error(data.error || "Unknown error");
   }
 }
 
@@ -300,67 +269,66 @@ async function sessionCommand<T = unknown>(
 // DIAGNOSTIC FORMATTING
 // ============================================
 
-function formatDiagnostics(
-  diag: Diagnostics,
-  screenshotPath?: string
-): string {
-  const lines: string[] = []
+function formatDiagnostics(diag: Diagnostics, screenshotPath?: string): string {
+  const lines: string[] = [];
 
   // Screenshot (if taken)
   if (screenshotPath) {
-    lines.push(`📸 Screenshot: ${screenshotPath}`)
-    lines.push('')
+    lines.push(`📸 Screenshot: ${screenshotPath}`);
+    lines.push("");
   }
 
   // Console errors
   if (diag.errors.length > 0) {
-    lines.push(`🔴 Console Errors (${diag.errors.length}):`)
+    lines.push(`🔴 Console Errors (${diag.errors.length}):`);
     for (const err of diag.errors.slice(0, 5)) {
-      lines.push(`   • ${truncate(err.text, 100)}`)
+      lines.push(`   • ${truncate(err.text, 100)}`);
     }
     if (diag.errors.length > 5) {
-      lines.push(`   ... and ${diag.errors.length - 5} more`)
+      lines.push(`   ... and ${diag.errors.length - 5} more`);
     }
-    lines.push('')
+    lines.push("");
   }
 
   // Console warnings
   if (diag.warnings.length > 0) {
-    lines.push(`⚠️ Console Warnings (${diag.warnings.length}):`)
+    lines.push(`⚠️ Console Warnings (${diag.warnings.length}):`);
     for (const warn of diag.warnings.slice(0, 3)) {
-      lines.push(`   • ${truncate(warn.text, 100)}`)
+      lines.push(`   • ${truncate(warn.text, 100)}`);
     }
     if (diag.warnings.length > 3) {
-      lines.push(`   ... and ${diag.warnings.length - 3} more`)
+      lines.push(`   ... and ${diag.warnings.length - 3} more`);
     }
-    lines.push('')
+    lines.push("");
   }
 
   // Failed requests
   if (diag.failedRequests.length > 0) {
-    lines.push(`🌐 Failed Requests (${diag.failedRequests.length}):`)
+    lines.push(`🌐 Failed Requests (${diag.failedRequests.length}):`);
     for (const req of diag.failedRequests.slice(0, 5)) {
-      const urlPath = new URL(req.url).pathname
-      lines.push(`   • ${req.method} ${truncate(urlPath, 50)} → ${req.status} ${req.statusText || ''}`)
+      const urlPath = new URL(req.url).pathname;
+      lines.push(`   • ${req.method} ${truncate(urlPath, 50)} → ${req.status} ${req.statusText || ""}`);
     }
     if (diag.failedRequests.length > 5) {
-      lines.push(`   ... and ${diag.failedRequests.length - 5} more`)
+      lines.push(`   ... and ${diag.failedRequests.length - 5} more`);
     }
-    lines.push('')
+    lines.push("");
   }
 
   // Network summary
-  lines.push(`📊 Network: ${diag.stats.totalRequests} requests | ${formatBytes(diag.stats.totalSize)} | avg ${Math.round(diag.stats.avgDuration)}ms`)
+  lines.push(
+    `📊 Network: ${diag.stats.totalRequests} requests | ${formatBytes(diag.stats.totalSize)} | avg ${Math.round(diag.stats.avgDuration)}ms`,
+  );
 
   // Final status
-  const hasIssues = diag.errors.length > 0 || diag.failedRequests.length > 0
+  const hasIssues = diag.errors.length > 0 || diag.failedRequests.length > 0;
   if (hasIssues) {
-    lines.push(`⚠️ Page: "${diag.pageTitle}" loaded with issues`)
+    lines.push(`⚠️ Page: "${diag.pageTitle}" loaded with issues`);
   } else {
-    lines.push(`✅ Page: "${diag.pageTitle}" loaded successfully`)
+    lines.push(`✅ Page: "${diag.pageTitle}" loaded successfully`);
   }
 
-  return lines.join('\n')
+  return lines.join("\n");
 }
 
 // ============================================
@@ -368,285 +336,298 @@ function formatDiagnostics(
 // ============================================
 
 async function debugUrl(url: string): Promise<void> {
-  console.log(`Kaya Browser Action: Navigating to ${url}`)
+  console.log(`Kaya Browser Action: Navigating to ${url}`);
 
   // Navigate
-  await sessionCommand('navigate', { url })
+  await sessionCommand("navigate", { url });
 
   // Take screenshot
-  const timestamp = Date.now()
-  const screenshotPath = `/tmp/browse-${timestamp}.png`
-  console.log(`Kaya Browser Action: Taking screenshot`)
-  await sessionCommand('screenshot', { path: screenshotPath })
+  const timestamp = Date.now();
+  const screenshotPath = `/tmp/browse-${timestamp}.png`;
+  console.log(`Kaya Browser Action: Taking screenshot`);
+  await sessionCommand("screenshot", { path: screenshotPath });
 
   // Get diagnostics
-  const diag = await sessionCommand('diagnostics', {}, 'GET') as Diagnostics
+  const diag = (await sessionCommand("diagnostics", {}, "GET")) as Diagnostics;
 
   // Output
-  console.log(`Kaya Browser Results:`)
-  console.log(formatDiagnostics(diag, screenshotPath))
+  console.log(`Kaya Browser Results:`);
+  console.log(formatDiagnostics(diag, screenshotPath));
 }
 
 async function showErrors(): Promise<void> {
-  console.log(`Kaya Browser Action: Checking console errors`)
-  const diag = await sessionCommand('diagnostics', {}, 'GET') as Diagnostics
+  console.log(`Kaya Browser Action: Checking console errors`);
+  const diag = (await sessionCommand("diagnostics", {}, "GET")) as Diagnostics;
 
-  console.log(`Kaya Browser Results:`)
+  console.log(`Kaya Browser Results:`);
   if (diag.errors.length === 0) {
-    console.log('✅ No console errors')
-    return
+    console.log("✅ No console errors");
+    return;
   }
 
-  console.log(`🔴 Console Errors (${diag.errors.length}):\n`)
+  console.log(`🔴 Console Errors (${diag.errors.length}):\n`);
   for (const err of diag.errors) {
-    const time = new Date(err.timestamp).toLocaleTimeString()
-    console.log(`[${time}] ${err.text}\n`)
+    const time = new Date(err.timestamp).toLocaleTimeString();
+    console.log(`[${time}] ${err.text}\n`);
   }
 }
 
 async function showWarnings(): Promise<void> {
-  console.log(`Kaya Browser Action: Checking console warnings`)
-  const diag = await sessionCommand('diagnostics', {}, 'GET') as Diagnostics
+  console.log(`Kaya Browser Action: Checking console warnings`);
+  const diag = (await sessionCommand("diagnostics", {}, "GET")) as Diagnostics;
 
-  console.log(`Kaya Browser Results:`)
+  console.log(`Kaya Browser Results:`);
   if (diag.warnings.length === 0) {
-    console.log('✅ No console warnings')
-    return
+    console.log("✅ No console warnings");
+    return;
   }
 
-  console.log(`⚠️ Console Warnings (${diag.warnings.length}):\n`)
+  console.log(`⚠️ Console Warnings (${diag.warnings.length}):\n`);
   for (const warn of diag.warnings) {
-    const time = new Date(warn.timestamp).toLocaleTimeString()
-    console.log(`[${time}] ${warn.text}\n`)
+    const time = new Date(warn.timestamp).toLocaleTimeString();
+    console.log(`[${time}] ${warn.text}\n`);
   }
 }
 
 async function showConsole(): Promise<void> {
-  console.log(`Kaya Browser Action: Getting console output`)
-  const logs = await sessionCommand('console', {}, 'GET') as Array<{
-    type: string
-    text: string
-    timestamp: number
-  }>
+  console.log(`Kaya Browser Action: Getting console output`);
+  const logs = (await sessionCommand("console", {}, "GET")) as Array<{
+    type: string;
+    text: string;
+    timestamp: number;
+  }>;
 
-  console.log(`Kaya Browser Results:`)
+  console.log(`Kaya Browser Results:`);
   if (logs.length === 0) {
-    console.log('📋 No console output')
-    return
+    console.log("📋 No console output");
+    return;
   }
 
-  console.log(`📋 Console Output (${logs.length} entries):\n`)
+  console.log(`📋 Console Output (${logs.length} entries):\n`);
   for (const log of logs) {
-    const time = new Date(log.timestamp).toLocaleTimeString()
-    const icon = log.type === 'error' ? '🔴' :
-                 log.type === 'warning' ? '⚠️' :
-                 log.type === 'info' ? 'ℹ️' : '   '
-    console.log(`${icon} [${time}] ${log.text}`)
+    const time = new Date(log.timestamp).toLocaleTimeString();
+    const icon = log.type === "error" ? "🔴" : log.type === "warning" ? "⚠️" : log.type === "info" ? "ℹ️" : "   ";
+    console.log(`${icon} [${time}] ${log.text}`);
   }
 }
 
 async function showNetwork(): Promise<void> {
-  console.log(`Kaya Browser Action: Getting network activity`)
-  const logs = await sessionCommand('network', {}, 'GET') as Array<{
-    type: string
-    url: string
-    method: string
-    status?: number
-    duration?: number
-    size?: number
-  }>
+  console.log(`Kaya Browser Action: Getting network activity`);
+  const logs = (await sessionCommand("network", {}, "GET")) as Array<{
+    type: string;
+    url: string;
+    method: string;
+    status?: number;
+    duration?: number;
+    size?: number;
+  }>;
 
-  console.log(`Kaya Browser Results:`)
+  console.log(`Kaya Browser Results:`);
   if (logs.length === 0) {
-    console.log('🌐 No network activity')
-    return
+    console.log("🌐 No network activity");
+    return;
   }
 
   // Show only responses (more useful)
-  const responses = logs.filter(l => l.type === 'response')
+  const responses = logs.filter((l) => l.type === "response");
 
-  console.log(`🌐 Network Activity (${responses.length} responses):\n`)
+  console.log(`🌐 Network Activity (${responses.length} responses):\n`);
   for (const log of responses.slice(-20)) {
-    const urlPath = new URL(log.url).pathname
-    const status = log.status || 0
-    const icon = status >= 400 ? '❌' : status >= 300 ? '↪️' : '✅'
-    const size = log.size ? formatBytes(log.size) : ''
-    const duration = log.duration ? `${log.duration}ms` : ''
-    console.log(`${icon} ${status} ${log.method} ${truncate(urlPath, 50)} ${size} ${duration}`)
+    const urlPath = new URL(log.url).pathname;
+    const status = log.status || 0;
+    const icon = status >= 400 ? "❌" : status >= 300 ? "↪️" : "✅";
+    const size = log.size ? formatBytes(log.size) : "";
+    const duration = log.duration ? `${log.duration}ms` : "";
+    console.log(`${icon} ${status} ${log.method} ${truncate(urlPath, 50)} ${size} ${duration}`);
   }
 }
 
 async function showFailed(): Promise<void> {
-  console.log(`Kaya Browser Action: Checking failed requests`)
-  const diag = await sessionCommand('diagnostics', {}, 'GET') as Diagnostics
+  console.log(`Kaya Browser Action: Checking failed requests`);
+  const diag = (await sessionCommand("diagnostics", {}, "GET")) as Diagnostics;
 
-  console.log(`Kaya Browser Results:`)
+  console.log(`Kaya Browser Results:`);
   if (diag.failedRequests.length === 0) {
-    console.log('✅ No failed requests')
-    return
+    console.log("✅ No failed requests");
+    return;
   }
 
-  console.log(`🌐 Failed Requests (${diag.failedRequests.length}):\n`)
+  console.log(`🌐 Failed Requests (${diag.failedRequests.length}):\n`);
   for (const req of diag.failedRequests) {
-    console.log(`❌ ${req.status} ${req.method} ${req.url}`)
+    console.log(`❌ ${req.status} ${req.method} ${req.url}`);
   }
 }
 
 async function takeScreenshot(path?: string): Promise<void> {
-  const screenshotPath = path || `/tmp/screenshot-${Date.now()}.png`
-  console.log(`Kaya Browser Action: Taking screenshot`)
-  await sessionCommand('screenshot', { path: screenshotPath })
-  console.log(`Kaya Browser Results: Screenshot saved to ${screenshotPath}`)
+  const screenshotPath = path || `/tmp/screenshot-${Date.now()}.png`;
+  console.log(`Kaya Browser Action: Taking screenshot`);
+  await sessionCommand("screenshot", { path: screenshotPath });
+  console.log(`Kaya Browser Results: Screenshot saved to ${screenshotPath}`);
 }
 
 async function navigate(url: string): Promise<void> {
-  console.log(`Kaya Browser Action: Navigating to ${url}`)
-  const result = await sessionCommand('navigate', { url })
-  console.log(`Kaya Browser Results: Navigated to ${result.url}`)
+  console.log(`Kaya Browser Action: Navigating to ${url}`);
+  const result = await sessionCommand<{ url: string }>("navigate", { url });
+  console.log(`Kaya Browser Results: Navigated to ${result.url}`);
 }
 
 async function click(selector: string): Promise<void> {
-  console.log(`Kaya Browser Action: Clicking ${selector}`)
-  await sessionCommand('click', { selector })
-  console.log(`Kaya Browser Results: Clicked ${selector}`)
+  console.log(`Kaya Browser Action: Clicking ${selector}`);
+  await sessionCommand("click", { selector });
+  console.log(`Kaya Browser Results: Clicked ${selector}`);
 }
 
 async function fill(selector: string, value: string): Promise<void> {
-  console.log(`Kaya Browser Action: Filling ${selector}`)
-  await sessionCommand('fill', { selector, value })
-  console.log(`Kaya Browser Results: Filled ${selector}`)
+  console.log(`Kaya Browser Action: Filling ${selector}`);
+  await sessionCommand("fill", { selector, value });
+  console.log(`Kaya Browser Results: Filled ${selector}`);
 }
 
 async function type(selector: string, text: string): Promise<void> {
-  console.log(`Kaya Browser Action: Typing in ${selector}`)
-  await sessionCommand('type', { selector, text })
-  console.log(`Kaya Browser Results: Typed in ${selector}`)
+  console.log(`Kaya Browser Action: Typing in ${selector}`);
+  await sessionCommand("type", { selector, text });
+  console.log(`Kaya Browser Results: Typed in ${selector}`);
 }
 
 async function evaluate(script: string): Promise<void> {
-  console.log(`Kaya Browser Action: Evaluating JavaScript`)
-  const result = await sessionCommand('evaluate', { script })
-  console.log(`Kaya Browser Results:`)
-  console.log(JSON.stringify(result.result, null, 2))
+  console.log(`Kaya Browser Action: Evaluating JavaScript`);
+  const result = await sessionCommand<{ result: unknown }>("evaluate", { script });
+  console.log(`Kaya Browser Results:`);
+  console.log(JSON.stringify(result.result, null, 2));
 }
 
 async function showStatus(): Promise<void> {
-  console.log(`Kaya Browser Action: Getting session status`)
+  console.log(`Kaya Browser Action: Getting session status`);
   try {
-    const state = await getSessionState()
+    const state = await getSessionState();
     if (!state) {
-      console.log('Kaya Browser Results: No session running')
-      return
+      console.log("Kaya Browser Results: No session running");
+      return;
     }
 
-    const session = await sessionCommand('session', {}, 'GET')
-    console.log('Kaya Browser Results:')
-    console.log('Browser Session:')
-    console.log(`  ID: ${session.sessionId}`)
-    console.log(`  Port: ${session.port}`)
-    console.log(`  URL: ${session.url || '(none)'}`)
-    console.log(`  Title: ${session.title || '(none)'}`)
-    console.log(`  Started: ${session.startedAt}`)
-    console.log(`  Idle timeout: ${session.idleTimeout}`)
+    const session = await sessionCommand<{
+      sessionId: string;
+      port: number;
+      url?: string;
+      title?: string;
+      startedAt: string;
+      idleTimeout: string | number;
+    }>("session", {}, "GET");
+    console.log("Kaya Browser Results:");
+    console.log("Browser Session:");
+    console.log(`  ID: ${session.sessionId}`);
+    console.log(`  Port: ${session.port}`);
+    console.log(`  URL: ${session.url || "(none)"}`);
+    console.log(`  Title: ${session.title || "(none)"}`);
+    console.log(`  Started: ${session.startedAt}`);
+    console.log(`  Idle timeout: ${session.idleTimeout}`);
   } catch {
-    console.log('Kaya Browser Results: Session not responding')
+    console.log("Kaya Browser Results: Session not responding");
   }
 }
 
 async function restart(): Promise<void> {
-  console.log(`Kaya Browser Action: Restarting session`)
+  console.log(`Kaya Browser Action: Restarting session`);
   // Stop if running
   try {
-    const state = await getSessionState()
+    const state = await getSessionState();
     if (state) {
       // Native fetch required: sending stop signal to local BrowserSession.ts server (localhost, not an external API)
       await fetch(`http://localhost:${state.port}/stop`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(2000)
-      })
-      await Bun.sleep(500)
+        method: "POST",
+        signal: AbortSignal.timeout(2000),
+      });
+      await Bun.sleep(500);
     }
-  } catch {}
+  } catch {
+    // Stop request failed (no session or already gone): continue with state cleanup.
+  }
 
   // Clean up state via StateManager
   try {
-    const manager = getSessionManager()
+    const manager = getSessionManager();
     await manager.save({
       pid: 0,
       port: 0,
-      sessionId: '',
-      startedAt: '',
+      sessionId: "",
+      startedAt: "",
       headless: true,
-      url: '',
-    })
-  } catch {}
+      url: "",
+    });
+  } catch (err) {
+    console.error(`[Browse] Could not reset session state: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Start fresh
-  await ensureSession()
-  console.log('Kaya Browser Results: Session restarted')
+  await ensureSession();
+  console.log("Kaya Browser Results: Session restarted");
 }
 
 async function stop(): Promise<void> {
-  console.log(`Kaya Browser Action: Stopping session`)
-  const state = await getSessionState()
+  console.log(`Kaya Browser Action: Stopping session`);
+  const state = await getSessionState();
   if (!state) {
-    console.log('Kaya Browser Results: No session running')
-    return
+    console.log("Kaya Browser Results: No session running");
+    return;
   }
 
   try {
     // Native fetch required: sending stop signal to local BrowserSession.ts server (localhost, not an external API)
     await fetch(`http://localhost:${state.port}/stop`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(2000)
-    })
-    console.log('Kaya Browser Results: Session stopped')
+      method: "POST",
+      signal: AbortSignal.timeout(2000),
+    });
+    console.log("Kaya Browser Results: Session stopped");
   } catch {
-    console.log('Kaya Browser Results: Session already stopped')
+    console.log("Kaya Browser Results: Session already stopped");
   }
 }
 
 async function takeSnapshot(path?: string): Promise<void> {
-  console.log(`Kaya Browser Action: Taking accessibility snapshot`)
-  const result = await sessionCommand('snapshot', { path }, 'POST') as { path: string; size: number }
-  console.log(`Kaya Browser Results: Snapshot saved to ${result.path} (${result.size} bytes)`)
+  console.log(`Kaya Browser Action: Taking accessibility snapshot`);
+  const result = (await sessionCommand("snapshot", { path }, "POST")) as { path: string; size: number };
+  console.log(`Kaya Browser Results: Snapshot saved to ${result.path} (${result.size} bytes)`);
 }
 
 async function stateSave(name: string): Promise<void> {
-  console.log(`Kaya Browser Action: Saving browser state "${name}"`)
-  const result = await sessionCommand('state-save', { name }, 'POST') as { path: string; url: string }
-  console.log(`Kaya Browser Results: State saved to ${result.path}`)
-  console.log(`  URL: ${result.url}`)
+  console.log(`Kaya Browser Action: Saving browser state "${name}"`);
+  const result = (await sessionCommand("state-save", { name }, "POST")) as { path: string; url: string };
+  console.log(`Kaya Browser Results: State saved to ${result.path}`);
+  console.log(`  URL: ${result.url}`);
 }
 
 async function stateLoad(name: string): Promise<void> {
-  console.log(`Kaya Browser Action: Loading browser state "${name}"`)
-  const result = await sessionCommand('state-load', { name }, 'POST') as { loaded: string; url: string; savedAt: string }
-  console.log(`Kaya Browser Results: State "${result.loaded}" loaded`)
-  console.log(`  URL: ${result.url}`)
-  console.log(`  Originally saved: ${result.savedAt}`)
+  console.log(`Kaya Browser Action: Loading browser state "${name}"`);
+  const result = (await sessionCommand("state-load", { name }, "POST")) as {
+    loaded: string;
+    url: string;
+    savedAt: string;
+  };
+  console.log(`Kaya Browser Results: State "${result.loaded}" loaded`);
+  console.log(`  URL: ${result.url}`);
+  console.log(`  Originally saved: ${result.savedAt}`);
 }
 
 async function startTrace(path?: string): Promise<void> {
-  const tracePath = path || `/tmp/trace-${Date.now()}.zip`
-  console.log(`Kaya Browser Action: Starting trace`)
-  await sessionCommand('trace-start', { path: tracePath }, 'POST')
-  console.log(`Kaya Browser Results: Trace started → will save to ${tracePath}`)
+  const tracePath = path || `/tmp/trace-${Date.now()}.zip`;
+  console.log(`Kaya Browser Action: Starting trace`);
+  await sessionCommand("trace-start", { path: tracePath }, "POST");
+  console.log(`Kaya Browser Results: Trace started → will save to ${tracePath}`);
 }
 
 async function stopTrace(): Promise<void> {
-  console.log(`Kaya Browser Action: Stopping trace`)
-  const result = await sessionCommand('trace-stop', {}, 'POST') as { path: string; size: number }
-  console.log(`Kaya Browser Results: Trace saved to ${result.path} (${result.size} bytes)`)
+  console.log(`Kaya Browser Action: Stopping trace`);
+  const result = (await sessionCommand("trace-stop", {}, "POST")) as { path: string; size: number };
+  console.log(`Kaya Browser Results: Trace saved to ${result.path} (${result.size} bytes)`);
 }
 
 async function openUrl(url: string): Promise<void> {
-  console.log(`Kaya Browser Action: Opening URL in browser`)
+  console.log(`Kaya Browser Action: Opening URL in browser`);
   // Use browser from settings.json techStack
-  const browser = getBrowser()
-  const { spawn } = await import('child_process')
-  spawn('open', ['-a', browser, url], { detached: true, stdio: 'ignore' }).unref()
-  console.log(`Kaya Browser Results: Opened in ${browser}: ${url}`)
+  const browser = getBrowser();
+  const { spawn } = await import("node:child_process");
+  spawn("open", ["-a", browser, url], { detached: true, stdio: "ignore" }).unref();
+  console.log(`Kaya Browser Results: Opened in ${browser}: ${url}`);
 }
 
 // ============================================
@@ -687,169 +668,170 @@ Examples:
   bun run Browse.ts errors
   bun run Browse.ts click "#submit"
   bun run Browse.ts fill "#email" "test@example.com"
-  `)
+  `);
 }
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2)
-  const command = args[0]
+  const args = process.argv.slice(2);
+  const command = args[0];
 
-  if (!command || command === 'help' || command === '--help' || command === '-h') {
-    showHelp()
-    return
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    showHelp();
+    return;
   }
 
   try {
     // URL detection - if it looks like a URL, treat as debug command
-    if (command.startsWith('http://') || command.startsWith('https://') || command.startsWith('localhost')) {
-      const url = command.startsWith('localhost') ? `http://${command}` : command
-      await debugUrl(url)
-      return
+    if (command.startsWith("http://") || command.startsWith("https://") || command.startsWith("localhost")) {
+      const url = command.startsWith("localhost") ? `http://${command}` : command;
+      await debugUrl(url);
+      return;
     }
 
     // Named commands
     switch (command) {
-      case 'errors':
-        await showErrors()
-        break
+      case "errors":
+        await showErrors();
+        break;
 
-      case 'warnings':
-        await showWarnings()
-        break
+      case "warnings":
+        await showWarnings();
+        break;
 
-      case 'console':
-        await showConsole()
-        break
+      case "console":
+        await showConsole();
+        break;
 
-      case 'network':
-        await showNetwork()
-        break
+      case "network":
+        await showNetwork();
+        break;
 
-      case 'failed':
-        await showFailed()
-        break
+      case "failed":
+        await showFailed();
+        break;
 
-      case 'screenshot':
-        await takeScreenshot(args[1])
-        break
+      case "screenshot":
+        await takeScreenshot(args[1]);
+        break;
 
-      case 'navigate':
+      case "navigate":
         if (!args[1]) {
-          console.error('URL required')
-          process.exit(1)
+          console.error("URL required");
+          process.exit(1);
         }
-        await navigate(args[1])
-        break
+        await navigate(args[1]);
+        break;
 
-      case 'click':
+      case "click":
         if (!args[1]) {
-          console.error('Selector required')
-          process.exit(1)
+          console.error("Selector required");
+          process.exit(1);
         }
-        await click(args[1])
-        break
+        await click(args[1]);
+        break;
 
-      case 'fill':
+      case "fill":
         if (!args[1] || !args[2]) {
-          console.error('Selector and value required')
-          process.exit(1)
+          console.error("Selector and value required");
+          process.exit(1);
         }
-        await fill(args[1], args[2])
-        break
+        await fill(args[1], args[2]);
+        break;
 
-      case 'type':
+      case "type":
         if (!args[1] || !args[2]) {
-          console.error('Selector and text required')
-          process.exit(1)
+          console.error("Selector and text required");
+          process.exit(1);
         }
-        await type(args[1], args[2])
-        break
+        await type(args[1], args[2]);
+        break;
 
-      case 'eval':
+      case "eval":
         if (!args[1]) {
-          console.error('JavaScript code required')
-          process.exit(1)
+          console.error("JavaScript code required");
+          process.exit(1);
         }
-        await evaluate(args[1])
-        break
+        await evaluate(args[1]);
+        break;
 
-      case 'open':
+      case "open":
         if (!args[1]) {
-          console.error('URL required')
-          process.exit(1)
+          console.error("URL required");
+          process.exit(1);
         }
-        await openUrl(args[1])
-        break
+        await openUrl(args[1]);
+        break;
 
-      case 'snapshot':
-        await takeSnapshot(args[1])
-        break
+      case "snapshot":
+        await takeSnapshot(args[1]);
+        break;
 
-      case 'state-save':
+      case "state-save":
         if (!args[1]) {
-          console.error('Name required (e.g., state-save mysite)')
-          process.exit(1)
+          console.error("Name required (e.g., state-save mysite)");
+          process.exit(1);
         }
-        await stateSave(args[1])
-        break
+        await stateSave(args[1]);
+        break;
 
-      case 'state-load':
+      case "state-load":
         if (!args[1]) {
-          console.error('Name required (e.g., state-load mysite)')
-          process.exit(1)
+          console.error("Name required (e.g., state-load mysite)");
+          process.exit(1);
         }
-        await stateLoad(args[1])
-        break
+        await stateLoad(args[1]);
+        break;
 
-      case 'trace':
-        if (args[1] === 'start') {
-          await startTrace(args[2])
-        } else if (args[1] === 'stop') {
-          await stopTrace()
+      case "trace":
+        if (args[1] === "start") {
+          await startTrace(args[2]);
+        } else if (args[1] === "stop") {
+          await stopTrace();
         } else {
-          console.error('Usage: trace start [path] | trace stop')
-          process.exit(1)
+          console.error("Usage: trace start [path] | trace stop");
+          process.exit(1);
         }
-        break
+        break;
 
-      case 'status':
-        await showStatus()
-        break
+      case "status":
+        await showStatus();
+        break;
 
-      case 'restart':
-        await restart()
-        break
+      case "restart":
+        await restart();
+        break;
 
-      case 'stop':
-        await stop()
-        break
+      case "stop":
+        await stop();
+        break;
 
       // Legacy session commands (redirect to new interface)
-      case 'session':
-        const subCmd = args[1]
-        if (subCmd === 'start') {
-          await ensureSession()
-          console.log('Session started (auto-starts on any command now)')
-        } else if (subCmd === 'stop') {
-          await stop()
-        } else if (subCmd === 'status') {
-          await showStatus()
+      case "session": {
+        const subCmd = args[1];
+        if (subCmd === "start") {
+          await ensureSession();
+          console.log("Session started (auto-starts on any command now)");
+        } else if (subCmd === "stop") {
+          await stop();
+        } else if (subCmd === "status") {
+          await showStatus();
         } else {
-          console.log('Session commands deprecated. Session auto-starts on first use.')
-          console.log('Use: Browse.ts <url> | errors | network | failed | etc.')
+          console.log("Session commands deprecated. Session auto-starts on first use.");
+          console.log("Use: Browse.ts <url> | errors | network | failed | etc.");
         }
-        break
+        break;
+      }
 
       default:
-        console.error(`Unknown command: ${command}`)
-        console.log('Run with --help for usage')
-        process.exit(1)
+        console.error(`Unknown command: ${command}`);
+        console.log("Run with --help for usage");
+        process.exit(1);
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error(`Error: ${message}`)
-    process.exit(1)
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${message}`);
+    process.exit(1);
   }
 }
 
-main()
+main();
