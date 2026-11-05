@@ -23,9 +23,9 @@
  * @version 1.0.0
  */
 
-import { existsSync, mkdirSync, readdirSync } from "fs";
-import { homedir } from "os";
-import { basename, dirname, join } from "path";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
 
 function fail(msg: string): never {
   console.error(`\x1b[31mERROR:\x1b[0m ${msg}`);
@@ -35,7 +35,10 @@ function fail(msg: string): never {
 function countFilesOnDisk(dir: string): number {
   const proc = Bun.spawnSync(["find", dir, "-type", "f"]);
   if (proc.exitCode !== 0) fail(`find failed on ${dir}`);
-  return proc.stdout.toString().split("\n").filter((l) => l.length > 0).length;
+  return proc.stdout
+    .toString()
+    .split("\n")
+    .filter((l) => l.length > 0).length;
 }
 
 function main(): void {
@@ -64,7 +67,7 @@ Default destination: ~/Documents/ScrivenerBackups/`);
     if (!force) {
       fail(
         `Lock file present (${lockFiles.join(", ")}) — project may be open in Scrivener. ` +
-          `Close it first, or pass --force to back up anyway (risks an inconsistent copy).`
+          `Close it first, or pass --force to back up anyway (risks an inconsistent copy).`,
       );
     }
     console.error(`\x1b[33mWARN:\x1b[0m lock file present (${lockFiles.join(", ")}) — backing up anyway (--force).`);
@@ -101,7 +104,7 @@ Default destination: ~/Documents/ScrivenerBackups/`);
   if (zipFileCount !== diskFileCount) {
     fail(
       `Backup FAILED verification: zip has ${zipFileCount} files, project has ${diskFileCount}. ` +
-        `(Project modified during backup?) Zip left at ${zipPath} for inspection.`
+        `(Project modified during backup?) Zip left at ${zipPath} for inspection.`,
     );
   }
 

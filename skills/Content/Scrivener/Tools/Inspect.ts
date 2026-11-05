@@ -18,8 +18,8 @@
  * @version 1.0.0
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { basename, join } from "path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 
 // ---------- Minimal XML parser (scrivx is machine-generated, well-formed XML) ----------
 
@@ -44,8 +44,7 @@ function decodeEntities(s: string): string {
 function parseAttrs(s: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const re = /([\w:.-]+)\s*=\s*"([^"]*)"/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) {
+  for (let m = re.exec(s); m !== null; m = re.exec(s)) {
     const name = m[1];
     const value = m[2];
     if (name !== undefined && value !== undefined) attrs[name] = decodeEntities(value);
@@ -57,10 +56,10 @@ function parseAttrs(s: string): Record<string, string> {
 function parseXml(xml: string): XmlNode {
   const root: XmlNode = { tag: "#document", attrs: {}, children: [], text: "" };
   const stack: XmlNode[] = [root];
-  const tagRe = /<(\/?)([\w:.-]+)((?:[^"'>]|"[^"]*"|'[^']*')*?)(\/?)>|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>/g;
+  const tagRe =
+    /<(\/?)([\w:.-]+)((?:[^"'>]|"[^"]*"|'[^']*')*?)(\/?)>|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>/g;
   let lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = tagRe.exec(xml)) !== null) {
+  for (let m = tagRe.exec(xml); m !== null; m = tagRe.exec(xml)) {
     const parent = stack[stack.length - 1];
     if (parent === undefined) throw new Error("XML parse error: empty stack");
     const textChunk = xml.slice(lastIndex, m.index);
@@ -71,7 +70,9 @@ function parseXml(xml: string): XmlNode {
     if (closing === "/") {
       const popped = stack.pop();
       if (popped === undefined || popped.tag !== tag) {
-        throw new Error(`XML parse error: mismatched </${tag}> near offset ${m.index} (open: ${popped?.tag ?? "none"})`);
+        throw new Error(
+          `XML parse error: mismatched </${tag}> near offset ${m.index} (open: ${popped?.tag ?? "none"})`,
+        );
       }
     } else {
       const node: XmlNode = { tag, attrs: parseAttrs(attrText ?? ""), children: [], text: "" };
@@ -154,7 +155,10 @@ function wordCount(rtfPath: string): number {
   const proc = Bun.spawnSync(["textutil", "-convert", "txt", "-stdout", rtfPath]);
   if (proc.exitCode !== 0) return 0;
   const text = proc.stdout.toString();
-  const words = text.trim().split(/\s+/).filter((w) => w.length > 0);
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
   return words.length;
 }
 
@@ -258,7 +262,7 @@ function renderTree(
   labels: Record<string, string>,
   statuses: Record<string, string>,
   lines: string[],
-  depth = 0
+  depth = 0,
 ): void {
   for (const d of docs) {
     const icon = TYPE_ICONS[d.type] ?? "❔";
@@ -286,7 +290,11 @@ function renderMarkdown(r: ProjectReport): string {
   lines.push("");
   lines.push("## Stats");
   lines.push("");
-  lines.push(`- Total binder items: ${r.stats.totalItems} (${Object.entries(r.stats.byType).map(([t, n]) => `${t}: ${n}`).join(", ")})`);
+  lines.push(
+    `- Total binder items: ${r.stats.totalItems} (${Object.entries(r.stats.byType)
+      .map(([t, n]) => `${t}: ${n}`)
+      .join(", ")})`,
+  );
   lines.push(`- In compile: ${r.stats.inCompile}`);
   lines.push(`- In trash: ${r.stats.trashedItems}`);
   if (r.stats.draftWords !== null) lines.push(`- Draft word count: ${r.stats.draftWords}`);
@@ -302,19 +310,21 @@ function renderMarkdown(r: ProjectReport): string {
     lines.push(
       c.lockFiles.length > 0
         ? `- ⚠️ **Lock file(s) present:** ${c.lockFiles.join(", ")} — project may be open in Scrivener. Do NOT modify.`
-        : "- ✅ No lock files (project not flagged as open)"
+        : "- ✅ No lock files (project not flagged as open)",
     );
     lines.push(`- ${c.binderBackupPresent ? "✅" : "ℹ️"} binder.backup ${c.binderBackupPresent ? "present" : "absent"}`);
-    lines.push(`- ${c.searchIndexesPresent ? "✅" : "ℹ️"} search.indexes ${c.searchIndexesPresent ? "present (regenerable, never edit)" : "absent (Scrivener will rebuild)"}`);
+    lines.push(
+      `- ${c.searchIndexesPresent ? "✅" : "ℹ️"} search.indexes ${c.searchIndexesPresent ? "present (regenerable, never edit)" : "absent (Scrivener will rebuild)"}`,
+    );
     lines.push(
       c.orphanDataDirs.length > 0
         ? `- ⚠️ **Orphan Data dirs (not in binder):** ${c.orphanDataDirs.length} — ${c.orphanDataDirs.slice(0, 5).join(", ")}${c.orphanDataDirs.length > 5 ? ", …" : ""}`
-        : "- ✅ No orphan Data directories"
+        : "- ✅ No orphan Data directories",
     );
     lines.push(
       c.textItemsWithoutData.length > 0
         ? `- ℹ️ Text items with no Data dir (empty docs — usually fine): ${c.textItemsWithoutData.length}`
-        : "- ✅ Every Text item has a Data directory"
+        : "- ✅ Every Text item has a Data directory",
     );
   }
   lines.push("");

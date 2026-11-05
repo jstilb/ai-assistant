@@ -35,5 +35,5 @@ The kaya repo auto-commits its whole tree. Backups contain Jm's manuscripts and 
 ```bash
 bun Backup.ts ~/Desktop/projects/on_set/on_set.scriv
 # OK: backup written and verified (312 files)
-# /Users/[user]/Documents/ScrivenerBackups/on_set-backup-20260814-101500.zip
+# ~/Documents/ScrivenerBackups/on_set-backup-20260814-101500.zip
 ```
