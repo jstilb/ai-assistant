@@ -43,18 +43,18 @@
  * @version 1.0.0
  */
 
-import { parseArgs } from 'util';
+import { parseArgs } from "node:util";
 // cross-skill-allowed: IssueTrace persists issue/trace nodes into the knowledge graph by design
-import { GraphPersistence, getGraphPersistence } from '../../Graph/Tools/GraphPersistence';
+import { type GraphPersistence, getGraphPersistence } from "../../Graph/Tools/GraphPersistence.ts";
 // cross-skill-allowed: graph node/edge constructors + types for the writes above
-import { createNode, createEdge, type GraphNode, type GraphNodeType } from '../../Graph/Tools/types';
+import { createNode, createEdge, type GraphNode, type GraphNodeType } from "../../Graph/Tools/types.ts";
 
 // ============================================
 // TYPES
 // ============================================
 
-export type IssueSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type IssueStatus = 'open' | 'resolved' | 'blocked';
+export type IssueSeverity = "low" | "medium" | "high" | "critical";
+export type IssueStatus = "open" | "resolved" | "blocked";
 
 export interface OpenIssueInput {
   /** Human-readable issue title (required) */
@@ -111,8 +111,8 @@ export interface ListFilter {
   limit?: number;
 }
 
-const RESOLUTION_LEARNING_TAG = 'issue-resolution';
-const LIFECYCLE_EDGE_TYPES = ['caused', 'blocks', 'fixed_by', 'learned_from', 'contains'] as const;
+const RESOLUTION_LEARNING_TAG = "issue-resolution";
+const LIFECYCLE_EDGE_TYPES = ["caused", "blocks", "fixed_by", "learned_from", "contains"] as const;
 
 // ============================================
 // ISSUE TRACER
@@ -130,41 +130,45 @@ export class IssueTracer {
    * @returns the issue node id
    */
   openIssue(input: OpenIssueInput): string {
-    if (!input.title || !input.title.trim()) {
-      throw new Error('openIssue: title is required');
+    if (!input.title?.trim()) {
+      throw new Error("openIssue: title is required");
     }
-    const severity = input.severity ?? 'medium';
+    const severity = input.severity ?? "medium";
     const id = input.id ?? `issue:${slugify(input.title)}-${shortToken()}`;
     const now = new Date().toISOString();
 
-    const tags = ['issue', `severity:${severity}`];
+    const tags = ["issue", `severity:${severity}`];
     if (input.component) tags.push(`component:${input.component}`);
     for (const t of input.tags ?? []) if (!tags.includes(t)) tags.push(t);
 
-    const node = createNode('issue', id, input.title.trim(), {
-      severity,
-      status: 'open', // snapshot at open time; live status is derived from edges
-      description: input.description ?? '',
-      file: input.file ?? null,
-      component: input.component ?? null,
-      openedAt: now,
-    }, tags);
+    const node = createNode(
+      "issue",
+      id,
+      input.title.trim(),
+      {
+        severity,
+        status: "open", // snapshot at open time; live status is derived from edges
+        description: input.description ?? "",
+        file: input.file ?? null,
+        component: input.component ?? null,
+        openedAt: now,
+      },
+      tags,
+    );
 
     this.persistence.appendNode(node);
 
     // session → issue (contains)
     if (input.session) {
-      const sessionId = input.session.startsWith('session:') ? input.session : `session:${input.session}`;
-      this.ensureNode(sessionId, 'Session ' + input.session);
-      this.persistence.appendEdge(
-        createEdge('contains', sessionId, id, 1.0, { via: 'issue-trace' }),
-      );
+      const sessionId = input.session.startsWith("session:") ? input.session : `session:${input.session}`;
+      this.ensureNode(sessionId, "Session " + input.session);
+      this.persistence.appendEdge(createEdge("contains", sessionId, id, 1.0, { via: "issue-trace" }));
     }
 
     // file → issue (caused), if a file was named but not passed as an explicit cause
     const causes = [...(input.causes ?? [])];
     if (input.file) {
-      const fileId = input.file.startsWith('file:') ? input.file : `file:${input.file}`;
+      const fileId = input.file.startsWith("file:") ? input.file : `file:${input.file}`;
       if (!causes.includes(fileId)) causes.push(fileId);
     }
     for (const causeId of causes) {
@@ -180,9 +184,7 @@ export class IssueTracer {
    */
   linkCause(issueId: string, causeId: string, weight = 0.9): void {
     this.ensureNode(causeId, causeId);
-    this.persistence.appendEdge(
-      createEdge('caused', causeId, issueId, weight, { via: 'issue-trace' }),
-    );
+    this.persistence.appendEdge(createEdge("caused", causeId, issueId, weight, { via: "issue-trace" }));
   }
 
   /**
@@ -190,9 +192,7 @@ export class IssueTracer {
    */
   blockIssue(issueId: string, blockerId: string): void {
     this.ensureNode(blockerId, blockerId);
-    this.persistence.appendEdge(
-      createEdge('blocks', blockerId, issueId, 1.0, { via: 'issue-trace' }),
-    );
+    this.persistence.appendEdge(createEdge("blocks", blockerId, issueId, 1.0, { via: "issue-trace" }));
   }
 
   /**
@@ -201,10 +201,10 @@ export class IssueTracer {
    * @returns the learning node id created for the resolution
    */
   resolveIssue(issueId: string, input: ResolveIssueInput): string {
-    const issue = this.persistence.loadNodes('issue').find(n => n.id === issueId);
+    const issue = this.persistence.loadNodes("issue").find((n) => n.id === issueId);
     if (!issue) throw new Error(`resolveIssue: unknown issue ${issueId}`);
-    if (!input.resolution || !input.resolution.trim()) {
-      throw new Error('resolveIssue: resolution is required');
+    if (!input.resolution?.trim()) {
+      throw new Error("resolveIssue: resolution is required");
     }
 
     const now = new Date().toISOString();
@@ -212,28 +212,38 @@ export class IssueTracer {
     const timeToResolveMs = Math.max(0, new Date(now).getTime() - new Date(openedAt).getTime());
 
     // Resolution learning node — marks the issue resolved and is mineable by the bridge.
-    const learningId = `learning:resolution:${issueId.replace(/^issue:/, '')}-${shortToken()}`;
+    const learningId = `learning:resolution:${issueId.replace(/^issue:/, "")}-${shortToken()}`;
     const learningBody = input.learning?.trim() || input.resolution.trim();
-    const learning = createNode('learning', learningId, `Resolution: ${issue.title}`.slice(0, 120), {
-      content: learningBody,
-      resolution: input.resolution.trim(),
-      resolvedAt: now,
-      timeToResolveMs,
-      issueId,
-      commit: input.commit ?? null,
-    }, ['learning', RESOLUTION_LEARNING_TAG, ...(issue.metadata.severity ? [`severity:${issue.metadata.severity}`] : [])]);
+    const learning = createNode(
+      "learning",
+      learningId,
+      `Resolution: ${issue.title}`.slice(0, 120),
+      {
+        content: learningBody,
+        resolution: input.resolution.trim(),
+        resolvedAt: now,
+        timeToResolveMs,
+        issueId,
+        commit: input.commit ?? null,
+      },
+      [
+        "learning",
+        RESOLUTION_LEARNING_TAG,
+        ...(issue.metadata.severity ? [`severity:${issue.metadata.severity}`] : []),
+      ],
+    );
     this.persistence.appendNode(learning);
     this.persistence.appendEdge(
-      createEdge('learned_from', issueId, learningId, 1.0, { via: 'issue-trace', resolvedAt: now }),
+      createEdge("learned_from", issueId, learningId, 1.0, { via: "issue-trace", resolvedAt: now }),
     );
 
     // fixed_by → commit, when supplied
     if (input.commit) {
-      const commitId = input.commit.startsWith('commit:') ? input.commit : `commit:${input.commit}`;
+      const commitId = input.commit.startsWith("commit:") ? input.commit : `commit:${input.commit}`;
       this.ensureNode(commitId, `Commit ${input.commit}`);
       this.persistence.appendEdge(
-        createEdge('fixed_by', issueId, commitId, 1.0, {
-          via: 'issue-trace',
+        createEdge("fixed_by", issueId, commitId, 1.0, {
+          via: "issue-trace",
           resolution: input.resolution.trim(),
           resolvedAt: now,
           timeToResolveMs,
@@ -250,55 +260,60 @@ export class IssueTracer {
   traceIssue(issueId: string): IssueTrace {
     const engine = this.persistence.loadIntoEngine();
     const issue = engine.getNode(issueId);
-    if (!issue || issue.type !== 'issue') {
+    if (issue?.type !== "issue") {
       throw new Error(`traceIssue: unknown issue ${issueId}`);
     }
 
     const incident = this.incidentEdges(engine, issueId);
     const causes = incident
-      .filter(e => e.type === 'caused' && e.target === issueId)
-      .map(e => engine.getNode(e.source))
+      .filter((e) => e.type === "caused" && e.target === issueId)
+      .map((e) => engine.getNode(e.source))
       .filter((n): n is GraphNode => !!n);
     const blockers = incident
-      .filter(e => e.type === 'blocks' && e.target === issueId)
-      .map(e => engine.getNode(e.source))
+      .filter((e) => e.type === "blocks" && e.target === issueId)
+      .map((e) => engine.getNode(e.source))
       .filter((n): n is GraphNode => !!n);
     const fixes = incident
-      .filter(e => e.type === 'fixed_by' && e.source === issueId)
-      .map(e => engine.getNode(e.target))
+      .filter((e) => e.type === "fixed_by" && e.source === issueId)
+      .map((e) => engine.getNode(e.target))
       .filter((n): n is GraphNode => !!n);
     const learnings = incident
-      .filter(e => e.type === 'learned_from' && e.source === issueId)
-      .map(e => engine.getNode(e.target))
+      .filter((e) => e.type === "learned_from" && e.source === issueId)
+      .map((e) => engine.getNode(e.target))
       .filter((n): n is GraphNode => !!n);
 
     const resolved = fixes.length > 0 || learnings.length > 0;
-    const status: IssueStatus = resolved ? 'resolved' : blockers.length > 0 ? 'blocked' : 'open';
+    const status: IssueStatus = resolved ? "resolved" : blockers.length > 0 ? "blocked" : "open";
 
     const openedAt = (issue.metadata.openedAt as string) || issue.created_at;
     let resolvedAt: string | null = null;
     if (resolved) {
       const resTimes = [
-        ...learnings.map(l => l.metadata.resolvedAt as string | undefined),
-        ...fixes.map(f => f.created_at),
+        ...learnings.map((l) => l.metadata.resolvedAt as string | undefined),
+        ...fixes.map((f) => f.created_at),
       ].filter((t): t is string => !!t);
       resolvedAt = resTimes.sort()[0] ?? null;
     }
-    const timeToResolveMs =
-      resolvedAt ? Math.max(0, new Date(resolvedAt).getTime() - new Date(openedAt).getTime()) : null;
+    const timeToResolveMs = resolvedAt
+      ? Math.max(0, new Date(resolvedAt).getTime() - new Date(openedAt).getTime())
+      : null;
 
-    const timeline: IssueTrace['timeline'] = [
-      { at: openedAt, event: 'opened', node: issue.id },
-      ...causes.map(c => ({ at: c.created_at, event: 'caused by', node: c.id })),
-      ...blockers.map(b => ({ at: b.created_at, event: 'blocked by', node: b.id })),
-      ...fixes.map(f => ({ at: f.created_at, event: 'fixed by', node: f.id })),
-      ...learnings.map(l => ({ at: (l.metadata.resolvedAt as string) || l.created_at, event: 'learned', node: l.id })),
+    const timeline: IssueTrace["timeline"] = [
+      { at: openedAt, event: "opened", node: issue.id },
+      ...causes.map((c) => ({ at: c.created_at, event: "caused by", node: c.id })),
+      ...blockers.map((b) => ({ at: b.created_at, event: "blocked by", node: b.id })),
+      ...fixes.map((f) => ({ at: f.created_at, event: "fixed by", node: f.id })),
+      ...learnings.map((l) => ({
+        at: (l.metadata.resolvedAt as string) || l.created_at,
+        event: "learned",
+        node: l.id,
+      })),
     ].sort((a, b) => a.at.localeCompare(b.at));
 
     return {
       issue,
       status,
-      severity: (issue.metadata.severity as IssueSeverity) ?? 'medium',
+      severity: (issue.metadata.severity as IssueSeverity) ?? "medium",
       openedAt,
       resolvedAt,
       timeToResolveMs,
@@ -314,12 +329,12 @@ export class IssueTracer {
    * List issues with derived status, newest first.
    */
   listIssues(filter: ListFilter = {}): IssueTrace[] {
-    const issues = this.persistence.loadNodes('issue');
+    const issues = this.persistence.loadNodes("issue");
     const sinceDate = filter.since ? parseSince(filter.since) : undefined;
 
     let traces = issues
-      .map(i => this.traceIssue(i.id))
-      .filter(t => {
+      .map((i) => this.traceIssue(i.id))
+      .filter((t) => {
         if (filter.status && t.status !== filter.status) return false;
         if (filter.severity && t.severity !== filter.severity) return false;
         if (filter.file && (t.issue.metadata.file as string | null) !== filter.file) return false;
@@ -337,7 +352,7 @@ export class IssueTracer {
   // ============================================
 
   /** Collect all lifecycle edges incident to a node id. */
-  private incidentEdges(engine: ReturnType<GraphPersistence['loadIntoEngine']>, nodeId: string) {
+  private incidentEdges(engine: ReturnType<GraphPersistence["loadIntoEngine"]>, nodeId: string) {
     const out = [];
     for (const type of LIFECYCLE_EDGE_TYPES) {
       for (const e of engine.getEdges(type)) {
@@ -353,11 +368,9 @@ export class IssueTracer {
    */
   private ensureNode(id: string, title: string): void {
     const type = inferNodeType(id);
-    const existing = this.persistence.loadNodes(type).some(n => n.id === id);
+    const existing = this.persistence.loadNodes(type).some((n) => n.id === id);
     if (existing) return;
-    this.persistence.appendNode(
-      createNode(type, id, title.slice(0, 120), { stub: true, via: 'issue-trace' }, [type]),
-    );
+    this.persistence.appendNode(createNode(type, id, title.slice(0, 120), { stub: true, via: "issue-trace" }, [type]));
   }
 }
 
@@ -366,21 +379,32 @@ export class IssueTracer {
 // ============================================
 
 const KNOWN_PREFIXES: GraphNodeType[] = [
-  'session', 'agent_trace', 'error', 'commit', 'learning',
-  'skill_change', 'file', 'issue', 'decision', 'outcome', 'context',
+  "session",
+  "agent_trace",
+  "error",
+  "commit",
+  "learning",
+  "skill_change",
+  "file",
+  "issue",
+  "decision",
+  "outcome",
+  "context",
 ];
 
 function inferNodeType(id: string): GraphNodeType {
-  const prefix = id.split(':')[0] as GraphNodeType;
-  return KNOWN_PREFIXES.includes(prefix) ? prefix : 'context';
+  const prefix = id.split(":")[0] as GraphNodeType;
+  return KNOWN_PREFIXES.includes(prefix) ? prefix : "context";
 }
 
 function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'issue';
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "issue"
+  );
 }
 
 let _counter = 0;
@@ -392,18 +416,18 @@ function shortToken(): string {
 
 function parseSince(since: string): Date {
   const rel = since.match(/^(\d+)\s*([dh])$/i);
-  if (rel) {
+  if (rel?.[1] !== undefined && rel[2] !== undefined) {
     const n = parseInt(rel[1], 10);
-    const ms = rel[2].toLowerCase() === 'd' ? n * 86400000 : n * 3600000;
+    const ms = rel[2].toLowerCase() === "d" ? n * 86400000 : n * 3600000;
     return new Date(Date.now() - ms);
   }
   const d = new Date(since);
-  if (isNaN(d.getTime())) throw new Error(`Invalid --since: ${since}`);
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid --since: ${since}`);
   return d;
 }
 
 function fmtDuration(ms: number | null): string {
-  if (ms == null) return '—';
+  if (ms == null) return "—";
   const h = ms / 3600000;
   if (h < 1) return `${Math.round(ms / 60000)}m`;
   if (h < 48) return `${h.toFixed(1)}h`;
@@ -427,16 +451,21 @@ if (import.meta.main) {
   };
 
   try {
-    if (sub === 'open') {
+    if (sub === "open") {
       const { values } = parseArgs({
         args: rest,
         options: {
-          title: { type: 'string' }, severity: { type: 'string' }, description: { type: 'string' },
-          file: { type: 'string' }, component: { type: 'string' }, session: { type: 'string' },
-          cause: { type: 'string', multiple: true }, tag: { type: 'string', multiple: true },
+          title: { type: "string" },
+          severity: { type: "string" },
+          description: { type: "string" },
+          file: { type: "string" },
+          component: { type: "string" },
+          session: { type: "string" },
+          cause: { type: "string", multiple: true },
+          tag: { type: "string", multiple: true },
         },
       });
-      if (!values.title) throw new Error('--title required');
+      if (!values.title) throw new Error("--title required");
       const tracer = new IssueTracer();
       const id = tracer.openIssue({
         title: values.title,
@@ -449,42 +478,51 @@ if (import.meta.main) {
         tags: values.tag as string[] | undefined,
       });
       console.log(`Opened ${id}`);
-    } else if (sub === 'resolve') {
+    } else if (sub === "resolve") {
       const issueId = rest[0];
       const { values } = parseArgs({
         args: rest.slice(1),
-        options: { commit: { type: 'string' }, resolution: { type: 'string' }, learning: { type: 'string' } },
+        options: { commit: { type: "string" }, resolution: { type: "string" }, learning: { type: "string" } },
       });
-      if (!issueId || !values.resolution) throw new Error('usage: resolve <issueId> --resolution "..." [--commit hash] [--learning "..."]');
+      if (!issueId || !values.resolution)
+        throw new Error('usage: resolve <issueId> --resolution "..." [--commit hash] [--learning "..."]');
       const tracer = new IssueTracer();
-      const lid = tracer.resolveIssue(issueId, { commit: values.commit, resolution: values.resolution, learning: values.learning });
+      const lid = tracer.resolveIssue(issueId, {
+        commit: values.commit,
+        resolution: values.resolution,
+        learning: values.learning,
+      });
       console.log(`Resolved ${issueId} (learning ${lid})`);
-    } else if (sub === 'cause') {
+    } else if (sub === "cause") {
       const issueId = rest[0];
-      const { values } = parseArgs({ args: rest.slice(1), options: { cause: { type: 'string', multiple: true } } });
-      if (!issueId || !values.cause) throw new Error('usage: cause <issueId> --cause <nodeId>');
+      const { values } = parseArgs({ args: rest.slice(1), options: { cause: { type: "string", multiple: true } } });
+      if (!issueId || !values.cause) throw new Error("usage: cause <issueId> --cause <nodeId>");
       const tracer = new IssueTracer();
       for (const c of values.cause as string[]) tracer.linkCause(issueId, c);
       console.log(`Linked ${(values.cause as string[]).length} cause(s) to ${issueId}`);
-    } else if (sub === 'block') {
+    } else if (sub === "block") {
       const issueId = rest[0];
-      const { values } = parseArgs({ args: rest.slice(1), options: { by: { type: 'string' } } });
-      if (!issueId || !values.by) throw new Error('usage: block <issueId> --by <nodeId>');
+      const { values } = parseArgs({ args: rest.slice(1), options: { by: { type: "string" } } });
+      if (!issueId || !values.by) throw new Error("usage: block <issueId> --by <nodeId>");
       new IssueTracer().blockIssue(issueId, values.by);
       console.log(`${issueId} blocked by ${values.by}`);
-    } else if (sub === 'trace') {
+    } else if (sub === "trace") {
       const issueId = rest[0];
-      const json = rest.includes('--json');
-      if (!issueId) throw new Error('usage: trace <issueId>');
+      const json = rest.includes("--json");
+      if (!issueId) throw new Error("usage: trace <issueId>");
       const t = new IssueTracer().traceIssue(issueId);
       if (json) console.log(JSON.stringify(t, null, 2));
       else printTrace(t);
-    } else if (sub === 'list') {
+    } else if (sub === "list") {
       const { values } = parseArgs({
         args: rest,
         options: {
-          status: { type: 'string' }, severity: { type: 'string' }, file: { type: 'string' },
-          since: { type: 'string' }, limit: { type: 'string' }, json: { type: 'boolean' },
+          status: { type: "string" },
+          severity: { type: "string" },
+          file: { type: "string" },
+          since: { type: "string" },
+          limit: { type: "string" },
+          json: { type: "boolean" },
         },
       });
       const traces = new IssueTracer().listIssues({
@@ -499,7 +537,9 @@ if (import.meta.main) {
       } else {
         console.log(`\n${traces.length} issue(s)\n`);
         for (const t of traces) {
-          console.log(`${statusIcon(t.status)} ${t.issue.id}  [${t.severity}]  ${t.status}  ttr:${fmtDuration(t.timeToResolveMs)}`);
+          console.log(
+            `${statusIcon(t.status)} ${t.issue.id}  [${t.severity}]  ${t.status}  ttr:${fmtDuration(t.timeToResolveMs)}`,
+          );
           console.log(`   ${t.issue.title}`);
         }
       }
@@ -523,5 +563,5 @@ Commands:
 }
 
 function statusIcon(s: IssueStatus): string {
-  return s === 'resolved' ? '✓' : s === 'blocked' ? '⛔' : '○';
+  return s === "resolved" ? "✓" : s === "blocked" ? "⛔" : "○";
 }

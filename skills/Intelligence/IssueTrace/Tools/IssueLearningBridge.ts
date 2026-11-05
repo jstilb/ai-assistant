@@ -34,22 +34,22 @@
  * @version 1.0.0
  */
 
-import { join } from 'path';
-import { parseArgs } from 'util';
+import { join } from "node:path";
+import { parseArgs } from "node:util";
 // cross-skill-allowed: IssueTrace writes issue/learning nodes into the knowledge graph by design
-import { GraphPersistence, getGraphPersistence } from '../../Graph/Tools/GraphPersistence';
-import { createMemoryStore, type MemoryStore } from '../../../../lib/core/MemoryStore';
-import { getKayaHome } from '../../../../lib/core/KayaHome.ts';
+import { type GraphPersistence, getGraphPersistence } from "../../Graph/Tools/GraphPersistence.ts";
+import { createMemoryStore, type MemoryStore } from "../../../../lib/core/MemoryStore.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 // cross-skill-allowed: bridges issue outcomes into AgentMetacognition's signal ledger by design
-import { SignalLedger } from '../../../Intelligence/AgentMetacognition/Tools/SignalLedger';
-import { IssueTracer, type IssueTrace, type IssueSeverity } from './IssueTracer';
+import { SignalLedger } from "../../../Intelligence/AgentMetacognition/Tools/SignalLedger.ts";
+import { IssueTracer, type IssueTrace, type IssueSeverity } from "./IssueTracer.ts";
 
 // ============================================
 // CONFIG
 // ============================================
 
 /** Default signal file for dev-issue signals under MEMORY/LEARNING/SIGNALS/. */
-export const DEV_ISSUES_SIGNAL_FILE = 'dev-issues.jsonl';
+export const DEV_ISSUES_SIGNAL_FILE = "dev-issues.jsonl";
 
 const SLOW_RESOLUTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const STALE_OPEN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
@@ -62,19 +62,19 @@ const BACKLOG_THRESHOLD = 5;
 // ============================================
 
 export type IssuePatternType =
-  | 'recurring_issue'
-  | 'issue_prone_file'
-  | 'slow_resolution'
-  | 'stale_open_issue'
-  | 'regression'
-  | 'unresolved_backlog';
+  | "recurring_issue"
+  | "issue_prone_file"
+  | "slow_resolution"
+  | "stale_open_issue"
+  | "regression"
+  | "unresolved_backlog";
 
 export interface IssueInsight {
   type: IssuePatternType;
   title: string;
   description: string;
   evidence: string[];
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   tags: string[];
 }
 
@@ -99,7 +99,7 @@ export class IssueLearningBridge {
   constructor(opts?: { persistence?: GraphPersistence; memoryStore?: MemoryStore; signalsDir?: string }) {
     this.persistence = opts?.persistence || getGraphPersistence();
     this.memoryStore = opts?.memoryStore || createMemoryStore();
-    this.signalsDir = opts?.signalsDir || join(getKayaHome(), 'MEMORY', 'LEARNING', 'SIGNALS');
+    this.signalsDir = opts?.signalsDir || join(getKayaHome(), "MEMORY", "LEARNING", "SIGNALS");
     this.tracer = new IssueTracer(this.persistence);
   }
 
@@ -127,13 +127,13 @@ export class IssueLearningBridge {
         // Channel 1: MemoryStore insight (graph → AgentMetacognition contract)
         try {
           await this.memoryStore.capture({
-            type: 'insight',
+            type: "insight",
             category: insight.type,
             title: insight.title,
             content: this.formatInsight(insight),
-            tags: ['graph', 'issue-trace', 'pattern', ...insight.tags],
-            tier: 'warm',
-            source: 'Intelligence/IssueTrace',
+            tags: ["graph", "issue-trace", "pattern", ...insight.tags],
+            tier: "warm",
+            source: "Intelligence/IssueTrace",
             metadata: {
               patternType: insight.type,
               severity: insight.severity,
@@ -150,9 +150,9 @@ export class IssueLearningBridge {
           const signal = await ledger.append(
             {
               rating: this.insightToRating(insight),
-              source: 'explicit', // always qualifies — dev-health signal, not a session rating
+              source: "explicit", // always qualifies — dev-health signal, not a session rating
               sentiment_summary: this.insightToSummary(insight),
-              session_id: 'issue-trace',
+              session_id: "issue-trace",
               timestamp: new Date().toISOString(),
               patternType: insight.type,
               severity: insight.severity,
@@ -170,7 +170,7 @@ export class IssueLearningBridge {
       patternsFound: insights.length,
       captured,
       signalsEmitted,
-      patternTypes: [...new Set(insights.map(i => i.type))],
+      patternTypes: [...new Set(insights.map((i) => i.type))],
       insights,
     };
   }
@@ -190,15 +190,16 @@ export class IssueLearningBridge {
       clusters.set(key, arr);
     }
     for (const [, group] of clusters) {
-      if (group.length >= RECURRENCE_THRESHOLD) {
-        const unresolved = group.filter(t => t.status !== 'resolved').length;
+      const first = group[0];
+      if (first && group.length >= RECURRENCE_THRESHOLD) {
+        const unresolved = group.filter((t) => t.status !== "resolved").length;
         out.push({
-          type: 'recurring_issue',
-          title: `Recurring issue: ${group[0].issue.title.slice(0, 70)}`,
+          type: "recurring_issue",
+          title: `Recurring issue: ${first.issue.title.slice(0, 70)}`,
           description: `This bug pattern has been reported ${group.length} times (${unresolved} still open). A durable fix or guardrail is likely needed rather than repeated patching.`,
-          evidence: group.map(t => `${t.issue.id} [${t.status}]`),
-          severity: group.length >= 5 ? 'high' : 'medium',
-          tags: ['recurring-error', 'bug'],
+          evidence: group.map((t) => `${t.issue.id} [${t.status}]`),
+          severity: group.length >= 5 ? "high" : "medium",
+          tags: ["recurring-error", "bug"],
         });
       }
     }
@@ -219,12 +220,12 @@ export class IssueLearningBridge {
     for (const [file, group] of byFile) {
       if (group.length >= FILE_ISSUE_THRESHOLD) {
         out.push({
-          type: 'issue_prone_file',
+          type: "issue_prone_file",
           title: `Issue-prone file: ${file}`,
           description: `${file} has accumulated ${group.length} tracked issues. Consider adding tests, refactoring, or tightening its interface.`,
-          evidence: group.map(t => `${t.issue.id}: ${t.issue.title.slice(0, 60)}`),
-          severity: group.length >= 5 ? 'high' : 'medium',
-          tags: ['error-prone', 'file-quality', 'bug'],
+          evidence: group.map((t) => `${t.issue.id}: ${t.issue.title.slice(0, 60)}`),
+          severity: group.length >= 5 ? "high" : "medium",
+          tags: ["error-prone", "file-quality", "bug"],
         });
       }
     }
@@ -234,37 +235,41 @@ export class IssueLearningBridge {
   /** Resolved issues that took longer than the resolution budget. */
   private detectSlowResolutions(traces: IssueTrace[]): IssueInsight[] {
     const slow = traces.filter(
-      t => t.status === 'resolved' && t.timeToResolveMs != null && t.timeToResolveMs > SLOW_RESOLUTION_MS,
+      (t) => t.status === "resolved" && t.timeToResolveMs != null && t.timeToResolveMs > SLOW_RESOLUTION_MS,
     );
     if (slow.length === 0) return [];
-    return [{
-      type: 'slow_resolution',
-      title: `Slow resolutions: ${slow.length} issue(s) over ${Math.round(SLOW_RESOLUTION_MS / 86400000)}d to fix`,
-      description: `${slow.length} resolved issues exceeded the ${Math.round(SLOW_RESOLUTION_MS / 86400000)}-day resolution budget. Long fix latency often signals missing repro tooling or unclear ownership.`,
-      evidence: slow.map(t => `${t.issue.id}: ${Math.round((t.timeToResolveMs ?? 0) / 86400000)}d`),
-      severity: slow.length >= 3 ? 'high' : 'medium',
-      tags: ['slow-fix', 'process'],
-    }];
+    return [
+      {
+        type: "slow_resolution",
+        title: `Slow resolutions: ${slow.length} issue(s) over ${Math.round(SLOW_RESOLUTION_MS / 86400000)}d to fix`,
+        description: `${slow.length} resolved issues exceeded the ${Math.round(SLOW_RESOLUTION_MS / 86400000)}-day resolution budget. Long fix latency often signals missing repro tooling or unclear ownership.`,
+        evidence: slow.map((t) => `${t.issue.id}: ${Math.round((t.timeToResolveMs ?? 0) / 86400000)}d`),
+        severity: slow.length >= 3 ? "high" : "medium",
+        tags: ["slow-fix", "process"],
+      },
+    ];
   }
 
   /** High/critical issues that have been open too long. */
   private detectStaleOpenIssues(traces: IssueTrace[]): IssueInsight[] {
     const now = Date.now();
-    const stale = traces.filter(t => {
-      if (t.status === 'resolved') return false;
+    const stale = traces.filter((t) => {
+      if (t.status === "resolved") return false;
       const sev = t.severity;
-      if (sev !== 'high' && sev !== 'critical') return false;
+      if (sev !== "high" && sev !== "critical") return false;
       return now - new Date(t.openedAt).getTime() > STALE_OPEN_MS;
     });
     if (stale.length === 0) return [];
-    return [{
-      type: 'stale_open_issue',
-      title: `Stale high-severity issues: ${stale.length} open > ${Math.round(STALE_OPEN_MS / 86400000)}d`,
-      description: `${stale.length} high/critical issues have been open beyond ${Math.round(STALE_OPEN_MS / 86400000)} days without resolution. These are the most likely sources of compounding risk.`,
-      evidence: stale.map(t => `${t.issue.id} [${t.severity}] opened ${t.openedAt.slice(0, 10)}`),
-      severity: 'high',
-      tags: ['stale', 'risk'],
-    }];
+    return [
+      {
+        type: "stale_open_issue",
+        title: `Stale high-severity issues: ${stale.length} open > ${Math.round(STALE_OPEN_MS / 86400000)}d`,
+        description: `${stale.length} high/critical issues have been open beyond ${Math.round(STALE_OPEN_MS / 86400000)} days without resolution. These are the most likely sources of compounding risk.`,
+        evidence: stale.map((t) => `${t.issue.id} [${t.severity}] opened ${t.openedAt.slice(0, 10)}`),
+        severity: "high",
+        tags: ["stale", "risk"],
+      },
+    ];
   }
 
   /** A file with a new issue opened after an earlier resolution → regression loop. */
@@ -279,7 +284,7 @@ export class IssueLearningBridge {
       byFile.set(file, arr);
     }
     for (const [file, group] of byFile) {
-      const resolved = group.filter(t => t.status === 'resolved' && t.resolvedAt);
+      const resolved = group.filter((t) => t.status === "resolved" && t.resolvedAt);
       if (resolved.length === 0) continue;
       // >= not >: a reopen can land in the same millisecond as the resolution.
       // The resolving trace itself is excluded so it can't self-flag when an
@@ -291,17 +296,15 @@ export class IssueLearningBridge {
         },
         { ts: Infinity, id: "" },
       );
-      const reopened = group.filter(
-        t => t.issue.id !== earliest.id && new Date(t.openedAt).getTime() >= earliest.ts,
-      );
+      const reopened = group.filter((t) => t.issue.id !== earliest.id && new Date(t.openedAt).getTime() >= earliest.ts);
       if (reopened.length > 0) {
         out.push({
-          type: 'regression',
+          type: "regression",
           title: `Regression loop: ${file}`,
           description: `${file} had ${reopened.length} new issue(s) opened after a prior fix. The earlier resolution may have been incomplete or lacked a regression test.`,
-          evidence: reopened.map(t => `${t.issue.id}: ${t.issue.title.slice(0, 60)}`),
-          severity: reopened.length >= 2 ? 'high' : 'medium',
-          tags: ['regression', 'bug', 'missing-test'],
+          evidence: reopened.map((t) => `${t.issue.id}: ${t.issue.title.slice(0, 60)}`),
+          severity: reopened.length >= 2 ? "high" : "medium",
+          tags: ["regression", "bug", "missing-test"],
         });
       }
     }
@@ -311,17 +314,19 @@ export class IssueLearningBridge {
   /** Too many open high/critical issues right now. */
   private detectUnresolvedBacklog(traces: IssueTrace[]): IssueInsight[] {
     const openSevere = traces.filter(
-      t => t.status !== 'resolved' && (t.severity === 'high' || t.severity === 'critical'),
+      (t) => t.status !== "resolved" && (t.severity === "high" || t.severity === "critical"),
     );
     if (openSevere.length < BACKLOG_THRESHOLD) return [];
-    return [{
-      type: 'unresolved_backlog',
-      title: `High-severity backlog: ${openSevere.length} open`,
-      description: `${openSevere.length} high/critical issues are currently unresolved (threshold ${BACKLOG_THRESHOLD}). Backlog growth at this severity tends to slow everything else down.`,
-      evidence: openSevere.map(t => `${t.issue.id} [${t.severity}]`),
-      severity: 'high',
-      tags: ['backlog', 'risk'],
-    }];
+    return [
+      {
+        type: "unresolved_backlog",
+        title: `High-severity backlog: ${openSevere.length} open`,
+        description: `${openSevere.length} high/critical issues are currently unresolved (threshold ${BACKLOG_THRESHOLD}). Backlog growth at this severity tends to slow everything else down.`,
+        evidence: openSevere.map((t) => `${t.issue.id} [${t.severity}]`),
+        severity: "high",
+        tags: ["backlog", "risk"],
+      },
+    ];
   }
 
   // ============================================
@@ -339,7 +344,7 @@ export class IssueLearningBridge {
 
   /** Map insight severity to a 1-10 rating (lower = more frustration). */
   private insightToRating(insight: IssueInsight): number {
-    return insight.severity === 'high' ? 2 : insight.severity === 'medium' ? 3 : 4;
+    return insight.severity === "high" ? 2 : insight.severity === "medium" ? 3 : 4;
   }
 
   /** Build a keyword-rich summary so downstream readers can categorize it. */
@@ -351,20 +356,24 @@ export class IssueLearningBridge {
 /** Map an issue severity to a signal rating (exposed for callers/tests). */
 export function severityToRating(severity: IssueSeverity): number {
   switch (severity) {
-    case 'critical': return 1;
-    case 'high': return 2;
-    case 'medium': return 3;
-    case 'low': return 4;
+    case "critical":
+      return 1;
+    case "high":
+      return 2;
+    case "medium":
+      return 3;
+    case "low":
+      return 4;
   }
 }
 
 function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
-    .replace(/\d+/g, 'N')
-    .replace(/[`'"]/g, '')
-    .replace(/\/[\w\-.\/]+/g, '<path>')
-    .replace(/\s+/g, ' ')
+    .replace(/\d+/g, "N")
+    .replace(/[`'"]/g, "")
+    .replace(/\/[\w\-./]+/g, "<path>")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 70);
 }
@@ -377,11 +386,11 @@ if (import.meta.main) {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      synthesize: { type: 'boolean' },
-      json: { type: 'boolean' },
-      since: { type: 'string' },
-      'dry-run': { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' },
+      synthesize: { type: "boolean" },
+      json: { type: "boolean" },
+      since: { type: "string" },
+      "dry-run": { type: "boolean" },
+      help: { type: "boolean", short: "h" },
     },
   });
 
@@ -400,18 +409,18 @@ Usage:
   const bridge = new IssueLearningBridge();
   const result = await bridge.synthesize({
     since: values.since,
-    dryRun: values['dry-run'],
+    dryRun: values["dry-run"],
   });
 
   if (values.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log('IssueLearningBridge');
-    console.log('===================\n');
+    console.log("IssueLearningBridge");
+    console.log("===================\n");
     console.log(`Patterns found:      ${result.patternsFound}`);
     console.log(`Insights captured:   ${result.captured}`);
     console.log(`Signals emitted:     ${result.signalsEmitted}`);
-    if (result.patternTypes.length) console.log(`Pattern types:       ${result.patternTypes.join(', ')}`);
+    if (result.patternTypes.length) console.log(`Pattern types:       ${result.patternTypes.join(", ")}`);
     for (const i of result.insights) console.log(`  [${i.severity}] ${i.title}`);
   }
 }
