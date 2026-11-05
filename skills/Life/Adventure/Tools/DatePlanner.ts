@@ -20,8 +20,8 @@
  * @module DatePlanner
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir } from "./AdventurePaths.ts";
 
@@ -185,7 +185,11 @@ export function renderMarkdown(dp: DatePlan): string {
 export function writeObsidianDoc(dp: DatePlan): string {
   const dir = adventureVaultDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const safe = dp.title.replace(/[^a-z0-9 ]/gi, "").trim().slice(0, 50) || "Date";
+  const safe =
+    dp.title
+      .replace(/[^a-z0-9 ]/gi, "")
+      .trim()
+      .slice(0, 50) || "Date";
   const path = join(dir, `Date - ${safe}.md`);
   writeFileSync(path, renderMarkdown(dp), "utf8");
   return path;

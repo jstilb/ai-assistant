@@ -31,8 +31,8 @@
  * @module PackingListGenerator
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir, packingStatePath } from "./AdventurePaths.ts";
 import { TRIP_TYPES, type TripType } from "./TripTracker.ts";
@@ -242,10 +242,7 @@ const SEASON_ADDS: Record<Season, BaseItem[]> = {
  * + season items, de-duplicating by (category, name) with essential-wins.
  * Purely a function of its inputs — the unit of determinism the tests pin.
  */
-export function buildBaseItems(
-  profile: PackingProfile,
-  season: Season = "any",
-): PackingItem[] {
+export function buildBaseItems(profile: PackingProfile, season: Season = "any"): PackingItem[] {
   const merged = new Map<string, PackingItem>();
   const add = (b: BaseItem) => {
     const key = `${b.category}::${b.name}`.toLowerCase();
@@ -282,11 +279,7 @@ export function loadState(statePath: string = packingStatePath()): PackingState 
   } catch (e) {
     throw new Error(`Failed to parse packing-lists.json at ${statePath}: ${String(e)}`);
   }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !Array.isArray((parsed as { lists?: unknown }).lists)
-  ) {
+  if (typeof parsed !== "object" || parsed === null || !Array.isArray((parsed as { lists?: unknown }).lists)) {
     throw new Error(`packing-lists.json at ${statePath} is malformed (missing lists[])`);
   }
   return parsed as PackingState;

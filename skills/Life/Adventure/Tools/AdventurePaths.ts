@@ -18,8 +18,8 @@
  * @module AdventurePaths
  */
 
-import { join } from "path";
-import { homedir } from "os";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 /** The Adventure skill's Obsidian vault directory (itineraries, date plans, packing docs). */
 export function adventureVaultDir(): string {

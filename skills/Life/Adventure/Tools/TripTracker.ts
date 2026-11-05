@@ -31,8 +31,8 @@
  * @module TripTracker
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { tripsStatePath } from "./AdventurePaths.ts";
 
 // ---------------------------------------------------------------------------
@@ -144,11 +144,7 @@ export function loadState(statePath: string = tripsStatePath()): TripsState {
   } catch (e) {
     throw new Error(`Failed to parse trips.json at ${statePath}: ${String(e)}`);
   }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !Array.isArray((parsed as { trips?: unknown }).trips)
-  ) {
+  if (typeof parsed !== "object" || parsed === null || !Array.isArray((parsed as { trips?: unknown }).trips)) {
     throw new Error(`trips.json at ${statePath} is malformed (missing trips[])`);
   }
   return parsed as TripsState;
@@ -239,8 +235,7 @@ export function agenda(state: TripsState, asOf: string = todayISO()): AgendaEntr
     const daysUntil = trip.startDate ? daysBetween(asOf, trip.startDate) : null;
     const readiness = readinessNote(trip);
     const packingDone = packingIsDone(trip);
-    const packingNudge =
-      daysUntil !== null && daysUntil >= 0 && daysUntil <= PACKING_NUDGE_DAYS && !packingDone;
+    const packingNudge = daysUntil !== null && daysUntil >= 0 && daysUntil <= PACKING_NUDGE_DAYS && !packingDone;
     return { trip, status, daysUntil, readiness, packingNudge };
   });
   // Sort: dated soonest-first, undated (null) last.
@@ -253,7 +248,7 @@ export function agenda(state: TripsState, asOf: string = todayISO()): AgendaEntr
   return entries;
 }
 
-function packingIsDone(trip: Trip): boolean {
+function packingIsDone(_trip: Trip): boolean {
   // The tracker only knows whether a list is *linked*; completeness lives in
   // PackingListGenerator's own state. We treat "linked" as "packing started".
   // A caller wanting true done-ness passes it via update notes; here linked
@@ -287,7 +282,7 @@ export interface AddTripInput {
 }
 
 export function addTrip(state: TripsState, input: AddTripInput): Trip {
-  if (!input.destination || !input.destination.trim()) {
+  if (!input.destination?.trim()) {
     throw new Error("addTrip: destination is required");
   }
   if (input.startDate && !isValidDay(input.startDate)) {

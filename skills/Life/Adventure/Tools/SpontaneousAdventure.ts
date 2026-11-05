@@ -253,7 +253,10 @@ async function main() {
     companions: typeof flags.with === "string" ? flags.with : undefined,
     goals:
       typeof flags.goals === "string"
-        ? flags.goals.split(",").map((s) => s.trim()).filter(Boolean)
+        ? flags.goals
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : undefined,
   };
   console.error("Rolling the adventure dice…");

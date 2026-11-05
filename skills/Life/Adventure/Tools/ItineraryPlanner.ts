@@ -21,8 +21,8 @@
  * @module ItineraryPlanner
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir } from "./AdventurePaths.ts";
 import { loadState, saveState, updateTrip } from "./TripTracker.ts";
@@ -81,9 +81,7 @@ export function validateItinerary(it: unknown, expectedDays: number): Itinerary 
   }
   if (!Array.isArray(obj.days) || obj.days.length !== expectedDays) {
     throw new Error(
-      `Itinerary must have exactly ${expectedDays} day(s), got ${
-        Array.isArray(obj.days) ? obj.days.length : "none"
-      }`,
+      `Itinerary must have exactly ${expectedDays} day(s), got ${Array.isArray(obj.days) ? obj.days.length : "none"}`,
     );
   }
   const days: ItineraryDay[] = [];
@@ -171,7 +169,11 @@ Return JSON of EXACTLY this shape:
   "tips": ["<3-6 practical, destination-specific tips>"]
 }
 There MUST be exactly ${input.days} day object(s), each with at least 2 blocks. A ${pace} pace means ${
-    pace === "relaxed" ? "2-3 anchor activities/day with downtime" : pace === "packed" ? "4-5 activities/day, efficient" : "3-4 activities/day"
+    pace === "relaxed"
+      ? "2-3 anchor activities/day with downtime"
+      : pace === "packed"
+        ? "4-5 activities/day, efficient"
+        : "3-4 activities/day"
   }.`;
 
   const result = await inference({
@@ -291,7 +293,10 @@ async function main() {
     startDate: typeof flags.start === "string" ? flags.start : undefined,
     interests:
       typeof flags.interests === "string"
-        ? flags.interests.split(",").map((s) => s.trim()).filter(Boolean)
+        ? flags.interests
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : undefined,
     budget: typeof flags.budget === "string" ? flags.budget : undefined,
     pace: typeof flags.pace === "string" ? (flags.pace as PlanInput["pace"]) : undefined,
