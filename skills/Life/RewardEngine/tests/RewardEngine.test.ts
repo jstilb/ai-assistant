@@ -3,18 +3,19 @@
  * Pure logic only; no LLM, no real clock (now is injected).
  */
 import { describe, test, expect, beforeEach } from "bun:test";
-import { mkdtempSync, existsSync, readFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Pin KAYA_HOME to a temp dir BEFORE importing the module (KayaHome caches it).
 const TMP = mkdtempSync(join(tmpdir(), "reward-engine-test-"));
 process.env.KAYA_HOME = TMP;
 delete process.env.KAYA_DIR;
 
+import type { RewardConfig, RollResolution, EngineState } from "../Tools/RewardEngine.ts";
 const M = await import("../Tools/RewardEngine.ts");
 
-const cfg: M.RewardConfig = {
+const cfg: RewardConfig = {
   schedule: {
     pReward: 0.5,
     tierWeights: { small: 70, medium: 25, jackpot: 5 },
@@ -98,7 +99,8 @@ describe("resolveRoll", () => {
 
   test("higher streak raises jackpot share", () => {
     const tally = (streak: number) => {
-      let jackpot = 0, rewards = 0;
+      let jackpot = 0,
+        rewards = 0;
       for (let i = 0; i < 20000; i++) {
         const r = M.resolveRoll(cfg, M.mulberry32(i + 1), streak, 0);
         if (r.outcome === "reward") {
@@ -112,16 +114,16 @@ describe("resolveRoll", () => {
   });
 
   test("falls back gracefully when a tier is empty", () => {
-    const emptyJackpot: M.RewardConfig = { ...cfg, rewards: { small: ["s"], medium: ["m"], jackpot: [] } };
+    const emptyJackpot: RewardConfig = { ...cfg, rewards: { small: ["s"], medium: ["m"], jackpot: [] } };
     // force tier selection toward jackpot via weights but reward exists path
     const r = M.resolveRoll(emptyJackpot, () => 0.0, 100, 0);
     expect(r.outcome).toBe("reward");
-    expect(["small", "medium"]).toContain(r.tier); // jackpot empty → fell back
+    expect(["small", "medium"]).toContain(r.tier as string); // jackpot empty → fell back
   });
 });
 
 describe("checkGate", () => {
-  const baseState = (): M.EngineState => M.defaultState();
+  const baseState = (): EngineState => M.defaultState();
 
   test("allows first roll", () => {
     const g = M.checkGate(cfg.schedule, baseState(), new Date("2026-06-27T12:00:00Z"));
@@ -168,9 +170,27 @@ describe("checkGate", () => {
 });
 
 describe("applyRoll", () => {
-  const reward: M.RollResolution = { outcome: "reward", tier: "small", reward: "s1", effectiveJackpotWeight: 5, pityTriggered: false };
-  const jackpot: M.RollResolution = { outcome: "reward", tier: "jackpot", reward: "j1", effectiveJackpotWeight: 5, pityTriggered: false };
-  const miss: M.RollResolution = { outcome: "near_miss", tier: null, reward: "miss1", effectiveJackpotWeight: 5, pityTriggered: false };
+  const reward: RollResolution = {
+    outcome: "reward",
+    tier: "small",
+    reward: "s1",
+    effectiveJackpotWeight: 5,
+    pityTriggered: false,
+  };
+  const jackpot: RollResolution = {
+    outcome: "reward",
+    tier: "jackpot",
+    reward: "j1",
+    effectiveJackpotWeight: 5,
+    pityTriggered: false,
+  };
+  const miss: RollResolution = {
+    outcome: "near_miss",
+    tier: null,
+    reward: "miss1",
+    effectiveJackpotWeight: 5,
+    pityTriggered: false,
+  };
 
   test("first qualifying roll starts a 1-day streak", () => {
     const next = M.applyRoll(M.defaultState(), reward, new Date("2026-06-27T12:00:00Z"), 0);
@@ -222,15 +242,22 @@ describe("ledger + state persistence", () => {
   test("appendLedger + readLedger round-trip and respect limit", () => {
     for (let i = 0; i < 5; i++) {
       M.appendLedger({
-        at: `2026-06-27T1${i}:00:00Z`, day: "2026-06-27", work: `w${i}`, qualified: true,
-        outcome: "reward", tier: "small", reward: `r${i}`, streakDays: 1, seed: i,
+        at: `2026-06-27T1${i}:00:00Z`,
+        day: "2026-06-27",
+        work: `w${i}`,
+        qualified: true,
+        outcome: "reward",
+        tier: "small",
+        reward: `r${i}`,
+        streakDays: 1,
+        seed: i,
       });
     }
     const all = M.readLedger();
     expect(all.length).toBeGreaterThanOrEqual(5);
     const last2 = M.readLedger(2);
     expect(last2.length).toBe(2);
-    expect(last2[1].reward).toBe("r4");
+    expect(last2[1]?.reward).toBe("r4");
   });
 
   test("saveState + loadState round-trip", () => {
@@ -248,7 +275,7 @@ describe("ledger + state persistence", () => {
   test("loadState returns defaults when file absent/corrupt", () => {
     // corrupt the file
     const { state } = M.rewardEnginePaths();
-    require("fs").writeFileSync(state, "{not json");
+    require("node:fs").writeFileSync(state, "{not json");
     const loaded = M.loadState();
     expect(loaded.streakDays).toBe(0);
   });

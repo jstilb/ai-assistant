@@ -4,9 +4,9 @@
  */
 import { describe, test, expect } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, writeFileSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Pin KAYA_HOME to a temp dir BEFORE importing the module (KayaHome caches it).
 const TMP = mkdtempSync(join(tmpdir(), "reward-points-test-"));
@@ -34,16 +34,55 @@ const cfg: PointsConfig = {
   },
   items: {
     tasks: { label: "Tasks", cadence: "daily", points: 0, bonuses: ["continuation", "recovery"] },
-    workout: { label: "Workout", cadence: "daily", points: 10, bonuses: ["continuation", "recovery"], habits: ["workout"], routines: ["Workout"] },
+    workout: {
+      label: "Workout",
+      cadence: "daily",
+      points: 10,
+      bonuses: ["continuation", "recovery"],
+      habits: ["workout"],
+      routines: ["Workout"],
+    },
     floss: { label: "Floss", cadence: "daily", points: 3, bonuses: ["continuation"], habits: ["floss"] },
     dance: { label: "Dance", cadence: "daily", points: 6, bonuses: [], habits: ["dance"] },
-    phone_sep: { label: "Phone reps", cadence: "daily", points: 0, unitPoints: 2, maxUnits: 8, doneAt: 5, bonuses: ["continuation"], habits: ["phone_sep"] },
-    build: { label: "Build", cadence: "daily", points: 12, weeklyTarget: { count: 5, bonus: 25 }, bonuses: [], habits: ["build"], routines: ["Fourth Spaces build block"] },
-    community_event: { label: "Community", cadence: "weekly", points: 0, unitPoints: 15, maxUnits: 4, weeklyTarget: { count: 2, bonus: 20 }, bonuses: ["continuation", "recovery"], habits: ["community_event"] },
+    phone_sep: {
+      label: "Phone reps",
+      cadence: "daily",
+      points: 0,
+      unitPoints: 2,
+      maxUnits: 8,
+      doneAt: 5,
+      bonuses: ["continuation"],
+      habits: ["phone_sep"],
+    },
+    build: {
+      label: "Build",
+      cadence: "daily",
+      points: 12,
+      weeklyTarget: { count: 5, bonus: 25 },
+      bonuses: [],
+      habits: ["build"],
+      routines: ["Fourth Spaces build block"],
+    },
+    community_event: {
+      label: "Community",
+      cadence: "weekly",
+      points: 0,
+      unitPoints: 15,
+      maxUnits: 4,
+      weeklyTarget: { count: 2, bonus: 20 },
+      bonuses: ["continuation", "recovery"],
+      habits: ["community_event"],
+    },
   },
 };
 
-const habit = (item: string, day: string, units = 1): Completion => ({ source: "habit", item, day, units, label: item });
+const habit = (item: string, day: string, units = 1): Completion => ({
+  source: "habit",
+  item,
+  day,
+  units,
+  label: item,
+});
 const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => P.addDays(from, i));
 const byKind = <T extends { kind: string }>(awards: T[], kind: string): T[] => awards.filter((a) => a.kind === kind);
 
@@ -67,19 +106,32 @@ describe("taskPoints", () => {
   });
 });
 
+const itemOf = (key: string) => {
+  const def = cfg.items[key];
+  if (!def) throw new Error(`test config has no item "${key}"`);
+  return def;
+};
+
 describe("itemBasePoints", () => {
   test("flat items pay points; counters pay per unit up to cap", () => {
-    expect(P.itemBasePoints(cfg.items.workout, 1)).toBe(10);
-    expect(P.itemBasePoints(cfg.items.phone_sep, 3)).toBe(6);
-    expect(P.itemBasePoints(cfg.items.phone_sep, 20)).toBe(16);
-    expect(P.itemBasePoints(cfg.items.workout, 0)).toBe(0);
+    expect(P.itemBasePoints(itemOf("workout"), 1)).toBe(10);
+    expect(P.itemBasePoints(itemOf("phone_sep"), 3)).toBe(6);
+    expect(P.itemBasePoints(itemOf("phone_sep"), 20)).toBe(16);
+    expect(P.itemBasePoints(itemOf("workout"), 0)).toBe(0);
   });
 });
 
 describe("scoreHistory", () => {
   test("a completed task and a habit each add points", () => {
     const awards = P.scoreHistory(cfg, [
-      { source: "task", item: "t-1", day: "2026-10-02", units: 1, label: "Ship X", task: { priority: 1, estimatedMinutes: null, goalLinked: false } },
+      {
+        source: "task",
+        item: "t-1",
+        day: "2026-10-02",
+        units: 1,
+        label: "Ship X",
+        task: { priority: 1, estimatedMinutes: null, goalLinked: false },
+      },
       habit("workout", "2026-10-02"),
     ]);
     expect(awards.find((a) => a.key === "task:t-1")?.points).toBe(15);
@@ -87,7 +139,10 @@ describe("scoreHistory", () => {
   });
 
   test("nothing before startDate pays, but it still builds the streak", () => {
-    const awards = P.scoreHistory(cfg, days("2026-09-29", 4).map((d) => habit("workout", d)));
+    const awards = P.scoreHistory(
+      cfg,
+      days("2026-09-29", 4).map((d) => habit("workout", d)),
+    );
     // 09-29, 09-30 unpaid; 10-01 is day 3 of the streak → continuation +1
     expect(awards.filter((a) => a.kind === "base").map((a) => a.day)).toEqual(["2026-10-01", "2026-10-02"]);
     expect(awards.find((a) => a.key === "streak:workout:2026-10-01")?.points).toBe(1);
@@ -95,7 +150,10 @@ describe("scoreHistory", () => {
   });
 
   test("continuation grows per day, caps at max, milestone fires once at 7", () => {
-    const awards = P.scoreHistory(cfg, days("2026-10-01", 9).map((d) => habit("workout", d)));
+    const awards = P.scoreHistory(
+      cfg,
+      days("2026-10-01", 9).map((d) => habit("workout", d)),
+    );
     expect(byKind(awards, "continuation").map((a) => a.points)).toEqual([1, 2, 3, 4, 5, 5, 5]);
     const ms = byKind(awards, "milestone");
     expect(ms.length).toBe(1);
@@ -128,7 +186,12 @@ describe("scoreHistory", () => {
   });
 
   test("counter streak only counts days at/above doneAt", () => {
-    const hist = [habit("phone_sep", "2026-10-01", 5), habit("phone_sep", "2026-10-02", 6), habit("phone_sep", "2026-10-03", 2), habit("phone_sep", "2026-10-04", 5)];
+    const hist = [
+      habit("phone_sep", "2026-10-01", 5),
+      habit("phone_sep", "2026-10-02", 6),
+      habit("phone_sep", "2026-10-03", 2),
+      habit("phone_sep", "2026-10-04", 5),
+    ];
     const awards = P.scoreHistory(cfg, hist);
     expect(awards.find((a) => a.key === "item:phone_sep:2026-10-03")?.points).toBe(4); // reps still pay
     expect(byKind(awards, "continuation").length).toBe(0); // streak never reached 3
@@ -149,19 +212,33 @@ describe("scoreHistory", () => {
     const awards = P.scoreHistory(cfg, hist);
     expect(byKind(awards, "weekly_target").length).toBe(4);
     expect(awards.find((a) => a.key === "item:community_event:2026-10-05")?.points).toBe(15);
-    expect(awards.find((a) => a.key === "streak:community_event:2026-10-19")).toMatchObject({ points: 1, day: "2026-10-21" });
+    expect(awards.find((a) => a.key === "streak:community_event:2026-10-19")).toMatchObject({
+      points: 1,
+      day: "2026-10-21",
+    });
     expect(awards.find((a) => a.key === "recovery:community_event:2026-11-02")?.points).toBe(8);
   });
 
   test("tasks feed a ≥1-task-per-day streak", () => {
     const hist: Completion[] = days("2026-10-01", 3).map((d, i) => ({
-      source: "task", item: `t${i}`, day: d, units: 1, label: "t", task: { priority: 2, estimatedMinutes: null, goalLinked: false },
+      source: "task",
+      item: `t${i}`,
+      day: d,
+      units: 1,
+      label: "t",
+      task: { priority: 2, estimatedMinutes: null, goalLinked: false },
     }));
     expect(P.scoreHistory(cfg, hist).find((a) => a.key === "streak:tasks:2026-10-03")?.points).toBe(1);
   });
 
   test("unconfigured routine items score routineDefault with its bonuses", () => {
-    const hist: Completion[] = days("2026-10-01", 3).map((d) => ({ source: "routine", item: "routine:make_bed", day: d, units: 1, label: "Make bed" }));
+    const hist: Completion[] = days("2026-10-01", 3).map((d) => ({
+      source: "routine",
+      item: "routine:make_bed",
+      day: d,
+      units: 1,
+      label: "Make bed",
+    }));
     const awards = P.scoreHistory(cfg, hist);
     expect(byKind(awards, "base").map((a) => a.points)).toEqual([3, 3, 3]);
     expect(byKind(awards, "continuation").length).toBe(1);
@@ -220,7 +297,14 @@ describe("goal", () => {
   });
   test("goalProgress: pct, remaining, pro-rata pace", () => {
     const p = P.goalProgress({ target: 350, period: "week", setAt: "" }, 150, "2026-10-07"); // Wed = day 3/7
-    expect(p).toMatchObject({ pct: 43, remaining: 200, expectedByNow: 150, onPace: true, dayOfPeriod: 3, periodDays: 7 });
+    expect(p).toMatchObject({
+      pct: 43,
+      remaining: 200,
+      expectedByNow: 150,
+      onPace: true,
+      dayOfPeriod: 3,
+      periodDays: 7,
+    });
   });
   test("save/load round-trip and clear", () => {
     P.saveGoal({ target: 400, period: "week", setAt: "2026-10-07T00:00:00Z" });
@@ -264,7 +348,10 @@ describe("habit sources", () => {
       { date: "2026-10-02", habit: "floss", value: "0" },
       { date: "2026-10-02", habit: "juggling", value: "1" },
     ]);
-    expect(out.map((c) => [c.item, c.units])).toEqual([["workout", 1], ["phone_sep", 6]]);
+    expect(out.map((c) => [c.item, c.units])).toEqual([
+      ["workout", 1],
+      ["phone_sep", 6],
+    ]);
   });
   test("dedupeToggles: a habit log + routine check of the same item pay once", () => {
     const out = P.dedupeToggles(cfg, [
@@ -282,7 +369,9 @@ describe("syncLedger end-to-end (temp DBs, read-only sources)", () => {
   const tasksDb = join(TMP, "tasks.db");
   const lifeosDb = join(TMP, "lifeos.db");
   const t = new Database(tasksDb);
-  t.exec("CREATE TABLE tasks (id TEXT, title TEXT, status TEXT, priority INTEGER, estimated_minutes INTEGER, goal_id TEXT, disposition TEXT, completed_at TEXT)");
+  t.exec(
+    "CREATE TABLE tasks (id TEXT, title TEXT, status TEXT, priority INTEGER, estimated_minutes INTEGER, goal_id TEXT, disposition TEXT, completed_at TEXT)",
+  );
   const ins = t.prepare("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?)");
   ins.run("t-mine", "Call landlord", "done", 1, null, null, "personal-todo", "2026-10-06T18:00:00.000Z");
   ins.run("t-agent", "Agent task", "done", 1, null, null, "autonomous", "2026-10-06T18:00:00.000Z");
@@ -312,7 +401,13 @@ describe("syncLedger end-to-end (temp DBs, read-only sources)", () => {
     expect(again.appended).toEqual([]);
     expect(again.ledger.reduce((s, e) => s + e.points, 0)).toBe(25);
 
-    P.appendRoutineCheck({ at: now.toISOString(), day: "2026-10-07", item: "routine:make_bed", label: "Make bed", cadence: "daily" });
+    P.appendRoutineCheck({
+      at: now.toISOString(),
+      day: "2026-10-07",
+      item: "routine:make_bed",
+      label: "Make bed",
+      cadence: "daily",
+    });
     const third = await P.syncLedger(cfg, now, paths);
     expect(third.appended.map((e) => [e.key, e.points])).toEqual([["item:routine:make_bed:2026-10-07", 3]]);
     expect(P.readPointsLedger().length).toBe(3);

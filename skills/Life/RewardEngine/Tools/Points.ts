@@ -39,8 +39,9 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 
@@ -166,7 +167,7 @@ const NO_ROTATE = { maxSizeMB: 1024, maxRotatedFiles: 1000, retentionDays: 36500
 const pointsLedgerLog = createAppendLog(pointsPaths().ledger, NO_ROTATE);
 const routineCheckLog = createAppendLog(pointsPaths().routines, NO_ROTATE);
 
-const HOME = process.env.HOME || "/Users/[user]";
+const HOME = process.env.HOME || homedir();
 export const DAILY_BEHAVIORS_PATH = join(HOME, "Desktop/obsidian/POS/Daily Behaviors.md");
 export const WEEKLY_BEHAVIORS_PATH = join(HOME, "Desktop/obsidian/POS/Weekly Behaviors.md");
 
@@ -207,7 +208,11 @@ export function localDayOf(instant: Date): string {
 }
 
 export function slugify(s: string): string {
-  return s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return s
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 // ----------------------------------------------------------------------------
@@ -217,9 +222,10 @@ export function slugify(s: string): string {
 /** Points for one completed task. */
 export function taskPoints(w: TaskWeights, t: NonNullable<Completion["task"]>): { points: number; detail: string } {
   const base = w.byPriority[String(t.priority)] ?? w.byPriority["2"] ?? 0;
-  const est = t.estimatedMinutes && t.estimatedMinutes > 0
-    ? Math.min(w.estimate.max, Math.floor(t.estimatedMinutes / w.estimate.everyMinutes) * w.estimate.points)
-    : 0;
+  const est =
+    t.estimatedMinutes && t.estimatedMinutes > 0
+      ? Math.min(w.estimate.max, Math.floor(t.estimatedMinutes / w.estimate.everyMinutes) * w.estimate.points)
+      : 0;
   const goal = t.goalLinked ? w.goalLinkedBonus : 0;
   const parts = [`P${t.priority} ${base}`];
   if (est) parts.push(`+${est} size`);
@@ -250,7 +256,12 @@ function periodsBetween(cadence: Cadence, a: string, b: string): number {
 }
 
 /** Resolve an item definition, synthesizing one for unconfigured routine items. */
-export function resolveItem(cfg: PointsConfig, item: string, fallbackLabel: string, cadence: Cadence = "daily"): ItemDef | null {
+export function resolveItem(
+  cfg: PointsConfig,
+  item: string,
+  fallbackLabel: string,
+  cadence: Cadence = "daily",
+): ItemDef | null {
   const def = cfg.items[item];
   if (def) return def;
   if (item.startsWith("routine:")) {
@@ -303,7 +314,11 @@ export function walkStreak(
  * Only awards dated on/after cfg.startDate are emitted; earlier history still
  * builds streaks.
  */
-export function scoreHistory(cfg: PointsConfig, completions: Completion[], routineCadence: Record<string, Cadence> = {}): Award[] {
+export function scoreHistory(
+  cfg: PointsConfig,
+  completions: Completion[],
+  routineCadence: Record<string, Cadence> = {},
+): Award[] {
   const awards: Award[] = [];
   const inWindow = (day: string) => day >= cfg.startDate;
 
@@ -340,7 +355,10 @@ export function scoreHistory(cfg: PointsConfig, completions: Completion[], routi
     for (const [day, units] of days) {
       const pts = itemBasePoints(def, units);
       if (pts > 0 && inWindow(day)) {
-        const detail = def.unitPoints !== undefined ? `${units} × ${def.unitPoints}${def.maxUnits !== undefined && units > def.maxUnits ? ` (cap ${def.maxUnits})` : ""}` : "done";
+        const detail =
+          def.unitPoints !== undefined
+            ? `${units} × ${def.unitPoints}${def.maxUnits !== undefined && units > def.maxUnits ? ` (cap ${def.maxUnits})` : ""}`
+            : "done";
         awards.push({ key: `item:${item}:${day}`, day, kind: "base", item, label: def.label, points: pts, detail });
       }
     }
@@ -373,14 +391,30 @@ export function scoreHistory(cfg: PointsConfig, completions: Completion[], routi
         for (const [wk, doneDays] of doneByWeek) {
           if (doneDays.length < t.count) continue;
           const day = doneDays.sort()[t.count - 1];
-          if (inWindow(day)) {
-            awards.push({ key: `weekly:${item}:${wk}`, day, kind: "weekly_target", item, label: def.label, points: t.bonus, detail: `${t.count} days in week of ${wk}` });
+          if (day && inWindow(day)) {
+            awards.push({
+              key: `weekly:${item}:${wk}`,
+              day,
+              kind: "weekly_target",
+              item,
+              label: def.label,
+              points: t.bonus,
+              detail: `${t.count} days in week of ${wk}`,
+            });
           }
         }
       } else {
         for (const s of periods.values()) {
           if (s.doneDay && inWindow(s.doneDay)) {
-            awards.push({ key: `weekly:${item}:${s.period}`, day: s.doneDay, kind: "weekly_target", item, label: def.label, points: t.bonus, detail: `${t.count}/week in week of ${s.period}` });
+            awards.push({
+              key: `weekly:${item}:${s.period}`,
+              day: s.doneDay,
+              kind: "weekly_target",
+              item,
+              label: def.label,
+              points: t.bonus,
+              detail: `${t.count}/week in week of ${s.period}`,
+            });
           }
         }
       }
@@ -397,15 +431,39 @@ export function scoreHistory(cfg: PointsConfig, completions: Completion[], routi
       if (def.bonuses.includes("continuation")) {
         const bonus = continuationBonus(cfg.streaks, ev.streak);
         if (bonus > 0) {
-          awards.push({ key: `streak:${item}:${ev.period}`, day, kind: "continuation", item, label: def.label, points: bonus, detail: `${ev.streak}${unit} streak` });
+          awards.push({
+            key: `streak:${item}:${ev.period}`,
+            day,
+            kind: "continuation",
+            item,
+            label: def.label,
+            points: bonus,
+            detail: `${ev.streak}${unit} streak`,
+          });
         }
         const milestone = cfg.streaks.continuation.milestones[String(ev.streak)];
         if (milestone) {
-          awards.push({ key: `milestone:${item}:${ev.period}`, day, kind: "milestone", item, label: def.label, points: milestone, detail: `${ev.streak}${unit} milestone` });
+          awards.push({
+            key: `milestone:${item}:${ev.period}`,
+            day,
+            kind: "milestone",
+            item,
+            label: def.label,
+            points: milestone,
+            detail: `${ev.streak}${unit} milestone`,
+          });
         }
       }
       if (def.bonuses.includes("recovery") && ev.recoveredFrom !== null) {
-        awards.push({ key: `recovery:${item}:${ev.period}`, day, kind: "recovery", item, label: def.label, points: cfg.streaks.recovery.bonus, detail: `restarted after a ${ev.recoveredFrom}${unit} streak broke` });
+        awards.push({
+          key: `recovery:${item}:${ev.period}`,
+          day,
+          kind: "recovery",
+          item,
+          label: def.label,
+          points: cfg.streaks.recovery.bonus,
+          detail: `restarted after a ${ev.recoveredFrom}${unit} streak broke`,
+        });
       }
     }
   }
@@ -417,7 +475,11 @@ export function scoreHistory(cfg: PointsConfig, completions: Completion[], routi
  * PURE: what to append so the ledger pays exactly what history owes per key.
  * Never negative — already-paid points are never clawed back.
  */
-export function ledgerDelta(awards: Award[], ledger: Array<Pick<PointsLedgerEntry, "key" | "points">>, at: string): PointsLedgerEntry[] {
+export function ledgerDelta(
+  awards: Award[],
+  ledger: Array<Pick<PointsLedgerEntry, "key" | "points">>,
+  at: string,
+): PointsLedgerEntry[] {
   const paid = new Map<string, number>();
   for (const e of ledger) paid.set(e.key, (paid.get(e.key) ?? 0) + e.points);
   const out: PointsLedgerEntry[] = [];
@@ -431,7 +493,12 @@ export function ledgerDelta(awards: Award[], ledger: Array<Pick<PointsLedgerEntr
 }
 
 /** PURE: current streak per item as of `today` (broken streaks show recoverable). */
-export function currentStreaks(cfg: PointsConfig, completions: Completion[], today: string, routineCadence: Record<string, Cadence> = {}): ItemStreak[] {
+export function currentStreaks(
+  cfg: PointsConfig,
+  completions: Completion[],
+  today: string,
+  routineCadence: Record<string, Cadence> = {},
+): ItemStreak[] {
   const doneDays = new Map<string, { label: string; days: Map<string, number> }>();
   for (const c of completions) {
     const item = c.source === "task" ? cfg.tasks.streakItem : c.item;
@@ -445,13 +512,16 @@ export function currentStreaks(cfg: PointsConfig, completions: Completion[], tod
   for (const [item, g] of doneDays) {
     const def = resolveItem(cfg, item, g.label, routineCadence[item] ?? "daily");
     if (!def) continue;
-    const need = def.cadence === "weekly" ? def.weeklyTarget?.count ?? def.doneAt ?? 1 : def.doneAt ?? 1;
+    const need = def.cadence === "weekly" ? (def.weeklyTarget?.count ?? def.doneAt ?? 1) : (def.doneAt ?? 1);
     const totals = new Map<string, number>();
     for (const [day, units] of g.days) {
       const p = def.cadence === "daily" ? day : weekStart(day);
       totals.set(p, (totals.get(p) ?? 0) + units);
     }
-    const done = [...totals.entries()].filter(([, u]) => u >= need).map(([p]) => p).sort();
+    const done = [...totals.entries()]
+      .filter(([, u]) => u >= need)
+      .map(([p]) => p)
+      .sort();
     const events = walkStreak(cfg.streaks, def.cadence, done);
     const last = events[events.length - 1];
     if (!last) continue;
@@ -460,22 +530,46 @@ export function currentStreaks(cfg: PointsConfig, completions: Completion[], tod
     // Alive if done this period, or last period (still time to extend today/this week).
     const alive = gap <= 1;
     const missed = gap - 1;
-    const recoverable = !alive && last.streak >= cfg.streaks.recovery.minPriorStreak && missed <= cfg.streaks.recovery.maxMissedPeriods[def.cadence]
-      ? last.streak : null;
-    out.push({ item, label: def.label, cadence: def.cadence, current: alive ? last.streak : 0, lastDone: last.period, recoverable });
+    const recoverable =
+      !alive &&
+      last.streak >= cfg.streaks.recovery.minPriorStreak &&
+      missed <= cfg.streaks.recovery.maxMissedPeriods[def.cadence]
+        ? last.streak
+        : null;
+    out.push({
+      item,
+      label: def.label,
+      cadence: def.cadence,
+      current: alive ? last.streak : 0,
+      lastDone: last.period,
+      recoverable,
+    });
   }
   return out.sort((a, b) => b.current - a.current || a.label.localeCompare(b.label));
 }
 
 /** PURE: sum ledger points inside the period containing `today`. */
-export function periodScore(ledger: Array<Pick<PointsLedgerEntry, "day" | "points">>, period: GoalPeriod, today: string): number {
+export function periodScore(
+  ledger: Array<Pick<PointsLedgerEntry, "day" | "points">>,
+  period: GoalPeriod,
+  today: string,
+): number {
   const start = periodStart(today, period);
   return ledger.filter((e) => e.day >= start && e.day <= today).reduce((s, e) => s + e.points, 0);
 }
 
 /** PURE: goal progress incl. on-pace check (pro-rata through the period). */
-export function goalProgress(goal: PointsGoal, score: number, today: string): {
-  pct: number; remaining: number; expectedByNow: number; onPace: boolean; periodDays: number; dayOfPeriod: number;
+export function goalProgress(
+  goal: PointsGoal,
+  score: number,
+  today: string,
+): {
+  pct: number;
+  remaining: number;
+  expectedByNow: number;
+  onPace: boolean;
+  periodDays: number;
+  dayOfPeriod: number;
 } {
   const start = periodStart(today, goal.period);
   let periodDays = 1;
@@ -520,7 +614,10 @@ export function parseBehaviors(markdown: string): string[] {
       if (!line.startsWith("|")) col = -1;
       continue;
     }
-    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
     if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
     if (col === -1) {
       col = cells.findIndex((c) => /^(activity|block|item)$/i.test(c));
@@ -548,26 +645,37 @@ export function routineCatalogue(cfg: PointsConfig, daily: string[], weekly: str
     const id = `routine:${slugify(name)}`;
     if (!out.has(id)) out.set(id, { item: id, label: name, cadence });
   };
-  daily.forEach((n) => add(n, "daily"));
-  weekly.forEach((n) => add(n, "weekly"));
+  for (const n of daily) add(n, "daily");
+  for (const n of weekly) add(n, "weekly");
   return out;
 }
 
 /** Resolve a user-typed routine name → catalogue entry (exact slug/label, then unique substring). */
-export function resolveRoutine(catalogue: Map<string, RoutineEntry>, cfg: PointsConfig, query: string): RoutineEntry | { error: string } {
+export function resolveRoutine(
+  catalogue: Map<string, RoutineEntry>,
+  cfg: PointsConfig,
+  query: string,
+): RoutineEntry | { error: string } {
   const q = query.toLowerCase().trim();
   const qs = slugify(query);
   const entries = [...catalogue.values()];
   const aliasesOf = (e: RoutineEntry) => [e.label, ...(cfg.items[e.item]?.routines ?? [])].map((s) => s.toLowerCase());
-  const exact = entries.find((e) => e.item === q || e.item === `routine:${qs}` || e.item === qs || aliasesOf(e).includes(q));
+  const exact = entries.find(
+    (e) => e.item === q || e.item === `routine:${qs}` || e.item === qs || aliasesOf(e).includes(q),
+  );
   if (exact) return exact;
   const partial = entries.filter((e) => aliasesOf(e).some((a) => a.includes(q)) || e.item.includes(qs));
-  if (partial.length === 1) return partial[0];
+  const [onlyMatch] = partial;
+  if (partial.length === 1 && onlyMatch) return onlyMatch;
   if (partial.length > 1) return { error: `"${query}" is ambiguous: ${partial.map((e) => e.label).join(" · ")}` };
   return { error: `No routine matches "${query}". See: points routines` };
 }
 
-export function loadRoutineCatalogue(cfg: PointsConfig, dailyPath = DAILY_BEHAVIORS_PATH, weeklyPath = WEEKLY_BEHAVIORS_PATH): Map<string, RoutineEntry> {
+export function loadRoutineCatalogue(
+  cfg: PointsConfig,
+  dailyPath = DAILY_BEHAVIORS_PATH,
+  weeklyPath = WEEKLY_BEHAVIORS_PATH,
+): Map<string, RoutineEntry> {
   const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
   return routineCatalogue(cfg, parseBehaviors(read(dailyPath)), parseBehaviors(read(weeklyPath)));
 }
@@ -591,7 +699,9 @@ export function readTaskCompletions(cfg: PointsConfig, dbPath: string): Completi
   const db = new Database(dbPath, { readonly: true });
   try {
     const rows = db
-      .prepare("SELECT id, title, priority, estimated_minutes, goal_id, disposition, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL")
+      .prepare(
+        "SELECT id, title, priority, estimated_minutes, goal_id, disposition, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL",
+      )
       .all() as TaskRow[];
     const excluded = new Set(cfg.tasks.excludeDispositions);
     return rows
@@ -609,10 +719,18 @@ export function readTaskCompletions(cfg: PointsConfig, dbPath: string): Completi
   }
 }
 
-export interface HabitRow { date: string; habit: string; value: string }
+export interface HabitRow {
+  date: string;
+  habit: string;
+  value: string;
+}
 
 /** PURE: habit_log rows → completions for configured items. */
-export function habitCompletions(cfg: PointsConfig, rows: HabitRow[], canonical: (raw: string) => string | null = (s) => s): Completion[] {
+export function habitCompletions(
+  cfg: PointsConfig,
+  rows: HabitRow[],
+  canonical: (raw: string) => string | null = (s) => s,
+): Completion[] {
   const habitToItem = new Map<string, string>();
   for (const [id, def] of Object.entries(cfg.items)) for (const h of def.habits ?? []) habitToItem.set(h, id);
   const out: Completion[] = [];
@@ -645,10 +763,16 @@ export function dedupeToggles(cfg: PointsConfig, completions: Completion[]): Com
   const seen = new Set<string>();
   const out: Completion[] = [];
   for (const c of completions) {
-    if (c.source === "task") { out.push(c); continue; }
+    if (c.source === "task") {
+      out.push(c);
+      continue;
+    }
     const def = cfg.items[c.item];
     const isCounter = def?.unitPoints !== undefined;
-    if (isCounter) { out.push(c); continue; }
+    if (isCounter) {
+      out.push(c);
+      continue;
+    }
     const k = `${c.item}|${c.day}`;
     if (seen.has(k)) continue;
     seen.add(k);
@@ -657,7 +781,13 @@ export function dedupeToggles(cfg: PointsConfig, completions: Completion[]): Com
   return out;
 }
 
-export interface RoutineCheck { at: string; day: string; item: string; label: string; cadence: Cadence }
+export interface RoutineCheck {
+  at: string;
+  day: string;
+  item: string;
+  label: string;
+  cadence: Cadence;
+}
 
 export function readRoutineChecks(): RoutineCheck[] {
   return readJsonl<RoutineCheck>(pointsPaths().routines);
@@ -678,12 +808,15 @@ export function routineCompletions(checks: RoutineCheck[]): Completion[] {
 function readJsonl<T>(path: string): T[] {
   if (!existsSync(path)) return [];
   const out: T[] = [];
-  for (const line of readFileSync(path, "utf8").split("\n")) {
+  for (const [i, line] of readFileSync(path, "utf8").split("\n").entries()) {
     if (!line.trim()) continue;
     try {
       out.push(JSON.parse(line) as T);
-    } catch {
-      // skip malformed line
+    } catch (err) {
+      // The ledger is the dedup source of truth: a skipped line can change totals, so say which one.
+      console.error(
+        `[Points] Skipping malformed line ${i + 1} in ${path}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
   return out;
@@ -698,7 +831,9 @@ export function loadGoal(): PointsGoal | null {
   if (!existsSync(goal)) return null;
   try {
     const g = JSON.parse(readFileSync(goal, "utf8")) as Partial<PointsGoal>;
-    return typeof g.target === "number" && g.target > 0 && (g.period === "day" || g.period === "week" || g.period === "month")
+    return typeof g.target === "number" &&
+      g.target > 0 &&
+      (g.period === "day" || g.period === "week" || g.period === "month")
       ? { target: g.target, period: g.period, setAt: g.setAt ?? "" }
       : null;
   } catch {
@@ -716,7 +851,12 @@ export function saveGoal(goal: PointsGoal | null): void {
 // Sync (IO wrapper around the pure core)
 // ----------------------------------------------------------------------------
 
-export interface SourcePaths { tasksDb: string; lifeosDb: string; dailyBehaviors: string; weeklyBehaviors: string }
+export interface SourcePaths {
+  tasksDb: string;
+  lifeosDb: string;
+  dailyBehaviors: string;
+  weeklyBehaviors: string;
+}
 
 export function defaultSourcePaths(): SourcePaths {
   const home = getKayaHome();
@@ -729,8 +869,13 @@ export function defaultSourcePaths(): SourcePaths {
 }
 
 /** Gather every completion from all three sources. */
-export async function gatherCompletions(cfg: PointsConfig, paths: SourcePaths = defaultSourcePaths()): Promise<{
-  completions: Completion[]; routineCadence: Record<string, Cadence>; warnings: string[];
+export async function gatherCompletions(
+  cfg: PointsConfig,
+  paths: SourcePaths = defaultSourcePaths(),
+): Promise<{
+  completions: Completion[];
+  routineCadence: Record<string, Cadence>;
+  warnings: string[];
 }> {
   const warnings: string[] = [];
   let canonical: (raw: string) => string | null = (s) => s;
@@ -759,8 +904,17 @@ export async function gatherCompletions(cfg: PointsConfig, paths: SourcePaths = 
 }
 
 /** Score the full history and append whatever the ledger doesn't have yet. */
-export async function syncLedger(cfg: PointsConfig, now: Date = new Date(), paths?: SourcePaths, dryRun = false): Promise<{
-  appended: PointsLedgerEntry[]; ledger: PointsLedgerEntry[]; completions: Completion[]; routineCadence: Record<string, Cadence>; warnings: string[];
+export async function syncLedger(
+  cfg: PointsConfig,
+  now: Date = new Date(),
+  paths?: SourcePaths,
+  dryRun = false,
+): Promise<{
+  appended: PointsLedgerEntry[];
+  ledger: PointsLedgerEntry[];
+  completions: Completion[];
+  routineCadence: Record<string, Cadence>;
+  warnings: string[];
 }> {
   const { completions, routineCadence, warnings } = await gatherCompletions(cfg, paths);
   const today = localDayOf(now);

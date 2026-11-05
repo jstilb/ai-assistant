@@ -46,9 +46,9 @@
  * ============================================================================
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import type { PointsConfig } from "./Points.ts";
@@ -117,7 +117,7 @@ export function rewardEnginePaths(): { dir: string; state: string; ledger: strin
 /** Returns a function producing deterministic floats in [0,1) from a seed. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
-  return function () {
+  return () => {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -132,7 +132,7 @@ function weightedPick(rng: () => number, weights: number[]): number {
   if (total <= 0) return 0;
   let r = rng() * total;
   for (let i = 0; i < weights.length; i++) {
-    r -= Math.max(0, weights[i]);
+    r -= Math.max(0, weights[i] ?? 0);
     if (r < 0) return i;
   }
   return weights.length - 1;
@@ -156,7 +156,7 @@ export function resolveRoll(
   config: RewardConfig,
   rng: () => number,
   streakDays: number,
-  consecutiveNearMisses: number
+  consecutiveNearMisses: number,
 ): RollResolution {
   const cfg = config.schedule;
   const jackpotWeight = effectiveJackpotWeight(cfg, streakDays);
@@ -170,7 +170,7 @@ export function resolveRoll(
     return {
       outcome: "near_miss",
       tier: null,
-      reward: list[Math.floor(rng() * list.length)] ?? list[0],
+      reward: list[Math.floor(rng() * list.length)] ?? "No reward this roll.",
       effectiveJackpotWeight: jackpotWeight,
       pityTriggered,
     };
@@ -179,14 +179,14 @@ export function resolveRoll(
   // Variable MAGNITUDE: draw a tier by weight, then a specific reward within it.
   const tiers: Tier[] = ["small", "medium", "jackpot"];
   const weights = [cfg.tierWeights.small, cfg.tierWeights.medium, jackpotWeight];
-  let tier = tiers[weightedPick(rng, weights)];
+  let tier: Tier = tiers[weightedPick(rng, weights)] ?? "small";
 
   // Fall back to a populated tier if the chosen one is empty.
   if (!config.rewards[tier]?.length) {
     tier = tiers.find((t) => config.rewards[t]?.length) ?? "small";
   }
   const pool = config.rewards[tier] ?? [];
-  const reward = pool.length ? pool[Math.floor(rng() * pool.length)] : "(reward menu is empty — edit config/rewards.json)";
+  const reward = pool[Math.floor(rng() * pool.length)] ?? "(reward menu is empty — edit config/rewards.json)";
 
   return { outcome: "reward", tier, reward, effectiveJackpotWeight: jackpotWeight, pityTriggered };
 }
@@ -202,7 +202,7 @@ export function localDay(now: Date): string {
 
 function previousDay(day: string): string {
   const [y, m, d] = day.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
   dt.setUTCDate(dt.getUTCDate() - 1);
   return dt.toISOString().slice(0, 10);
 }
@@ -269,7 +269,10 @@ export function readLedger(limit?: number): LedgerEntry[] {
     .map((l) => {
       try {
         return JSON.parse(l) as LedgerEntry;
-      } catch {
+      } catch (err) {
+        console.error(
+          `[RewardEngine] Skipping malformed ledger line in ${ledger}: ${err instanceof Error ? err.message : err}`,
+        );
         return null;
       }
     })
@@ -327,7 +330,7 @@ export function applyRoll(
   state: EngineState,
   resolution: RollResolution,
   now: Date,
-  rollsTodayAfterReset: number
+  rollsTodayAfterReset: number,
 ): EngineState {
   const today = localDay(now);
   const next: EngineState = JSON.parse(JSON.stringify(state));
@@ -374,8 +377,8 @@ async function judgeWorkQualifies(work: string): Promise<{ qualifies: boolean; r
         'Respond ONLY with JSON: {"qualifies": boolean, "reason": "<one short sentence>"}.',
       userPrompt: `Work described: "${work}"`,
     });
-    if (res.success && res.parsed && typeof (res.parsed as any).qualifies === "boolean") {
-      const p = res.parsed as { qualifies: boolean; reason?: string };
+    const p = res.parsed as { qualifies?: unknown; reason?: string } | null | undefined;
+    if (res.success && p && typeof p.qualifies === "boolean") {
       return { qualifies: p.qualifies, reason: p.reason ?? "" };
     }
   } catch {
@@ -385,7 +388,11 @@ async function judgeWorkQualifies(work: string): Promise<{ qualifies: boolean; r
   return { qualifies: true, reason: "(qualification gate unavailable — accepted)" };
 }
 
-async function flavorReveal(resolution: RollResolution, work: string | null, streakDays: number): Promise<string | null> {
+async function flavorReveal(
+  resolution: RollResolution,
+  work: string | null,
+  streakDays: number,
+): Promise<string | null> {
   try {
     const { inference } = await import("../../../../lib/core/Inference.ts");
     const res = await inference({
@@ -404,7 +411,7 @@ async function flavorReveal(resolution: RollResolution, work: string | null, str
         pity: resolution.pityTriggered,
       }),
     });
-    if (res.success && res.output.trim()) return res.output.trim().split("\n")[0];
+    if (res.success && res.output.trim()) return res.output.trim().split("\n")[0] ?? null;
   } catch {
     // fall through
   }
@@ -430,7 +437,8 @@ async function cmdRoll(): Promise<void> {
   const now = new Date();
   const work = arg("--work") ?? null;
   const useLlm = !hasFlag("--no-llm");
-  const seed = arg("--seed") !== undefined ? Number(arg("--seed")) : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+  const seed =
+    arg("--seed") !== undefined ? Number(arg("--seed")) : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
   // 1. Gate: daily cap + cooldown.
   const gate = checkGate(cfg, state, now);
@@ -443,10 +451,19 @@ async function cmdRoll(): Promise<void> {
   if (work && useLlm) {
     const judged = await judgeWorkQualifies(work);
     if (!judged.qualifies) {
-      console.log(`\n  🤔 Not a roll yet — ${judged.reason}\n     (Do the work first, then come back. Or use --no-llm to override.)\n`);
+      console.log(
+        `\n  🤔 Not a roll yet — ${judged.reason}\n     (Do the work first, then come back. Or use --no-llm to override.)\n`,
+      );
       appendLedger({
-        at: now.toISOString(), day: localDay(now), work, qualified: false,
-        outcome: "blocked", tier: null, reward: judged.reason, streakDays: state.streakDays, seed,
+        at: now.toISOString(),
+        day: localDay(now),
+        work,
+        qualified: false,
+        outcome: "blocked",
+        tier: null,
+        reward: judged.reason,
+        streakDays: state.streakDays,
+        seed,
       });
       return;
     }
@@ -460,9 +477,15 @@ async function cmdRoll(): Promise<void> {
   const next = applyRoll(state, resolution, now, gate.rollsTodayAfterReset);
   saveState(next);
   appendLedger({
-    at: now.toISOString(), day: localDay(now), work, qualified: true,
-    outcome: resolution.outcome, tier: resolution.tier, reward: resolution.reward,
-    streakDays: next.streakDays, seed,
+    at: now.toISOString(),
+    day: localDay(now),
+    work,
+    qualified: true,
+    outcome: resolution.outcome,
+    tier: resolution.tier,
+    reward: resolution.reward,
+    streakDays: next.streakDays,
+    seed,
   });
 
   // 5. Reveal (LLM flavor if available, else templated).
@@ -480,8 +503,11 @@ async function cmdRoll(): Promise<void> {
     console.log(`  🎁 ${resolution.reward}`);
     if (flavor) console.log(`     ${flavor}`);
   }
-  if (resolution.pityTriggered) console.log(`     (guaranteed after ${state.consecutiveNearMisses} near-misses — pity timer)`);
-  console.log(`     streak: ${next.streakDays}d · rolls today: ${next.rollsToday}/${cfg.dailyRollCap} · jackpot odds boosted to weight ${resolution.effectiveJackpotWeight}\n`);
+  if (resolution.pityTriggered)
+    console.log(`     (guaranteed after ${state.consecutiveNearMisses} near-misses — pity timer)`);
+  console.log(
+    `     streak: ${next.streakDays}d · rolls today: ${next.rollsToday}/${cfg.dailyRollCap} · jackpot odds boosted to weight ${resolution.effectiveJackpotWeight}\n`,
+  );
 }
 
 async function cmdStats(): Promise<void> {
@@ -495,8 +521,12 @@ async function cmdStats(): Promise<void> {
   console.log(`  streak:        ${s.streakDays} day(s)`);
   console.log(`  rolls today:   ${rollsToday}/${config.schedule.dailyRollCap}`);
   console.log(`  near-misses:   ${s.consecutiveNearMisses} in a row (pity at ${config.schedule.pityAfter})`);
-  console.log(`  lifetime:      ${s.totals.rolls} rolls · ${s.totals.rewards} rewards (${rewardRate}%) · ${s.totals.jackpots} jackpots`);
-  console.log(`  jackpot odds:  weight ${effectiveJackpotWeight(config.schedule, s.streakDays)} (base ${config.schedule.tierWeights.jackpot})`);
+  console.log(
+    `  lifetime:      ${s.totals.rolls} rolls · ${s.totals.rewards} rewards (${rewardRate}%) · ${s.totals.jackpots} jackpots`,
+  );
+  console.log(
+    `  jackpot odds:  weight ${effectiveJackpotWeight(config.schedule, s.streakDays)} (base ${config.schedule.tierWeights.jackpot})`,
+  );
   if (config.points) {
     const { syncLedger } = await import("./Points.ts");
     const { scoreLines } = await import("./PointsCli.ts");
@@ -511,13 +541,20 @@ function cmdHistory(): void {
   const limit = arg("--limit") ? Number(arg("--limit")) : 15;
   const entries = readLedger(limit);
   if (!entries.length) {
-    console.log("\n  No rolls yet. Do good work, then: bun RewardEngine.ts roll --work \"...\"\n");
+    console.log('\n  No rolls yet. Do good work, then: bun RewardEngine.ts roll --work "..."\n');
     return;
   }
   console.log(`\n  🎰 RewardEngine — last ${entries.length} roll(s)`);
   console.log(`  ──────────────────────────`);
   for (const e of entries) {
-    const tag = e.outcome === "blocked" ? "⛔ blocked" : e.outcome === "near_miss" ? "🎲 miss" : e.tier === "jackpot" ? "🎰 JACKPOT" : `🎁 ${e.tier}`;
+    const tag =
+      e.outcome === "blocked"
+        ? "⛔ blocked"
+        : e.outcome === "near_miss"
+          ? "🎲 miss"
+          : e.tier === "jackpot"
+            ? "🎰 JACKPOT"
+            : `🎁 ${e.tier}`;
     console.log(`  ${e.at.slice(0, 16).replace("T", " ")}  ${tag.padEnd(12)} ${e.reward}`);
   }
   console.log("");
@@ -539,10 +576,12 @@ function cmdOdds(): void {
   const cfg = config.schedule;
   const jw = effectiveJackpotWeight(cfg, s.streakDays);
   const totalW = cfg.tierWeights.small + cfg.tierWeights.medium + jw;
-  const pct = (w: number) => ((cfg.pReward * w) / totalW * 100).toFixed(1);
+  const pct = (w: number) => (((cfg.pReward * w) / totalW) * 100).toFixed(1);
   console.log(`\n  🎲 Current effective odds (streak ${s.streakDays}d)`);
   console.log(`  ──────────────────────────`);
-  console.log(`  any reward:  ${(cfg.pReward * 100).toFixed(0)}%   near-miss: ${((1 - cfg.pReward) * 100).toFixed(0)}%`);
+  console.log(
+    `  any reward:  ${(cfg.pReward * 100).toFixed(0)}%   near-miss: ${((1 - cfg.pReward) * 100).toFixed(0)}%`,
+  );
   console.log(`  ├ small:     ${pct(cfg.tierWeights.small)}%`);
   console.log(`  ├ medium:    ${pct(cfg.tierWeights.medium)}%`);
   console.log(`  └ jackpot:   ${pct(jw)}%   (weight ${jw}, +${jw - cfg.tierWeights.jackpot} from streak)`);
@@ -552,16 +591,26 @@ function cmdOdds(): void {
 async function main(): Promise<void> {
   const cmd = process.argv[2];
   switch (cmd) {
-    case "roll": await cmdRoll(); break;
-    case "stats": await cmdStats(); break;
+    case "roll":
+      await cmdRoll();
+      break;
+    case "stats":
+      await cmdStats();
+      break;
     case "points": {
       const { cmdPoints } = await import("./PointsCli.ts");
       await cmdPoints(loadConfig().points, process.argv.slice(3));
       break;
     }
-    case "history": cmdHistory(); break;
-    case "menu": cmdMenu(); break;
-    case "odds": cmdOdds(); break;
+    case "history":
+      cmdHistory();
+      break;
+    case "menu":
+      cmdMenu();
+      break;
+    case "odds":
+      cmdOdds();
+      break;
     default:
       console.log(`RewardEngine — randomized (variable-ratio) rewards for good work
 

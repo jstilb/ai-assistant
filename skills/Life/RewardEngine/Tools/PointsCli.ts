@@ -32,11 +32,13 @@ function flag(args: string[], name: string): string | undefined {
 function positional(args: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith("--")) {
-      if (!["--dry-run"].includes(args[i])) i++;
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg.startsWith("--")) {
+      if (!["--dry-run"].includes(arg)) i++;
       continue;
     }
-    out.push(args[i]);
+    out.push(arg);
   }
   return out;
 }
@@ -86,7 +88,12 @@ export function scoreLines(ledger: PointsLedgerEntry[], today: string): string[]
 async function cmdScore(cfg: PointsConfig, args: string[]): Promise<void> {
   const now = new Date();
   const today = localDayOf(now);
-  const { appended, ledger, completions, routineCadence, warnings } = await syncLedger(cfg, now, undefined, args.includes("--dry-run"));
+  const { appended, ledger, completions, routineCadence, warnings } = await syncLedger(
+    cfg,
+    now,
+    undefined,
+    args.includes("--dry-run"),
+  );
   console.log(`\n  🏆 RewardEngine — points`);
   console.log(`  ──────────────────────────`);
   for (const l of scoreLines(ledger, today)) console.log(l);
@@ -96,11 +103,13 @@ async function cmdScore(cfg: PointsConfig, args: string[]): Promise<void> {
   const recoverable = streaks.filter((s) => s.recoverable !== null);
   if (alive.length) {
     console.log(`\n  🔥 streaks`);
-    for (const s of alive) console.log(`     ${String(s.current).padStart(3)}${s.cadence === "daily" ? "d" : "w"}  ${s.label}`);
+    for (const s of alive)
+      console.log(`     ${String(s.current).padStart(3)}${s.cadence === "daily" ? "d" : "w"}  ${s.label}`);
   }
   if (recoverable.length) {
     console.log(`\n  🩹 broken — restart for +${cfg.streaks.recovery.bonus} recovery bonus`);
-    for (const s of recoverable) console.log(`     ${s.label} (was ${s.recoverable}${s.cadence === "daily" ? "d" : "w"}, last ${s.lastDone})`);
+    for (const s of recoverable)
+      console.log(`     ${s.label} (was ${s.recoverable}${s.cadence === "daily" ? "d" : "w"}, last ${s.lastDone})`);
   }
   if (appended.length) {
     console.log(`\n  ➕ new since last sync (${appended.reduce((s, e) => s + e.points, 0)} pts)`);
@@ -115,7 +124,9 @@ async function cmdSync(cfg: PointsConfig, args: string[]): Promise<void> {
   const dry = args.includes("--dry-run");
   const { appended, warnings } = await syncLedger(cfg, new Date(), undefined, dry);
   const total = appended.reduce((s, e) => s + e.points, 0);
-  console.log(`\n  ${dry ? "[dry-run] would append" : "appended"} ${appended.length} entr${appended.length === 1 ? "y" : "ies"} (+${total} pts)`);
+  console.log(
+    `\n  ${dry ? "[dry-run] would append" : "appended"} ${appended.length} entr${appended.length === 1 ? "y" : "ies"} (+${total} pts)`,
+  );
   for (const e of appended.slice(-20)) console.log(fmtEntry(e));
   for (const w of warnings) console.log(`  ⚠️  ${w}`);
   console.log("");
@@ -157,7 +168,11 @@ function cmdRoutines(cfg: PointsConfig): void {
     console.log(`\n  ${cadence.toUpperCase()}`);
     for (const e of [...catalogue.values()].filter((x) => x.cadence === cadence)) {
       const def = cfg.items[e.item];
-      const pts = def ? (def.unitPoints !== undefined ? `${def.unitPoints}/unit` : `${def.points}`) : `${cfg.routineDefault.points}`;
+      const pts = def
+        ? def.unitPoints !== undefined
+          ? `${def.unitPoints}/unit`
+          : `${def.points}`
+        : `${cfg.routineDefault.points}`;
       console.log(`    ${pts.padStart(6)} pts  ${e.label}`);
     }
   }
@@ -183,7 +198,11 @@ function cmdGoal(args: string[]): void {
     return;
   }
   const goal = loadGoal();
-  console.log(goal ? `\n  🎯 ${goal.target} pts per ${goal.period} (set ${goal.setAt.slice(0, 10)})\n` : `\n  No goal set. points goal <n> [--period week]\n`);
+  console.log(
+    goal
+      ? `\n  🎯 ${goal.target} pts per ${goal.period} (set ${goal.setAt.slice(0, 10)})\n`
+      : `\n  No goal set. points goal <n> [--period week]\n`,
+  );
 }
 
 function cmdHistory(args: string[]): void {
@@ -203,10 +222,20 @@ function cmdWeights(cfg: PointsConfig): void {
   const s = cfg.streaks;
   console.log(`\n  ⚖️  Point weights (edit config/rewards.json → points)`);
   console.log(`  paying since:  ${cfg.startDate}`);
-  console.log(`  tasks:         P1 ${t.byPriority["1"]} · P2 ${t.byPriority["2"]} · P3 ${t.byPriority["3"]}  +${t.estimate.points}/${t.estimate.everyMinutes}min estimate (max +${t.estimate.max})  +${t.goalLinkedBonus} goal-linked`);
+  console.log(
+    `  tasks:         P1 ${t.byPriority["1"]} · P2 ${t.byPriority["2"]} · P3 ${t.byPriority["3"]}  +${t.estimate.points}/${t.estimate.everyMinutes}min estimate (max +${t.estimate.max})  +${t.goalLinkedBonus} goal-linked`,
+  );
   console.log(`                 excluded dispositions: ${t.excludeDispositions.join(", ")}`);
-  console.log(`  continuation:  from ${s.continuation.startAt} in a row, +${s.continuation.perPeriod}/period (max +${s.continuation.max}); milestones ${Object.entries(s.continuation.milestones).map(([k, v]) => `${k}→+${v}`).join(" ")}`);
-  console.log(`  recovery:      +${s.recovery.bonus} for restarting after a ≥${s.recovery.minPriorStreak} streak broke (within ${s.recovery.maxMissedPeriods.daily} missed days / ${s.recovery.maxMissedPeriods.weekly} missed weeks)`);
+  console.log(
+    `  continuation:  from ${s.continuation.startAt} in a row, +${s.continuation.perPeriod}/period (max +${s.continuation.max}); milestones ${Object.entries(
+      s.continuation.milestones,
+    )
+      .map(([k, v]) => `${k}→+${v}`)
+      .join(" ")}`,
+  );
+  console.log(
+    `  recovery:      +${s.recovery.bonus} for restarting after a ≥${s.recovery.minPriorStreak} streak broke (within ${s.recovery.maxMissedPeriods.daily} missed days / ${s.recovery.maxMissedPeriods.weekly} missed weeks)`,
+  );
   console.log(`  routines:      ${cfg.routineDefault.points} pts default for unlisted Behaviors rows\n`);
   for (const [id, d] of Object.entries(cfg.items)) {
     const pts = d.unitPoints !== undefined ? `${d.unitPoints}/unit (max ${d.maxUnits ?? "∞"})` : `${d.points}`;
@@ -216,7 +245,9 @@ function cmdWeights(cfg: PointsConfig): void {
       d.weeklyTarget ? `🎯 ${d.weeklyTarget.count}/wk +${d.weeklyTarget.bonus}` : "",
       d.bonuses.includes("continuation") ? "🔥" : "",
       d.bonuses.includes("recovery") ? "🩹" : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
     console.log(`    ${pts.padStart(16)}  ${d.label.padEnd(34)} ${extras}  [${id}]`);
   }
   console.log("");
@@ -225,11 +256,13 @@ function cmdWeights(cfg: PointsConfig): void {
 /** Score history from --since without writing — calibrates a goal. */
 async function cmdPreview(cfg: PointsConfig, args: string[]): Promise<void> {
   const today = localDayOf(new Date());
-  const since = flag(args, "--since") ?? (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 56);
-    return localDayOf(d);
-  })();
+  const since =
+    flag(args, "--since") ??
+    (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 56);
+      return localDayOf(d);
+    })();
   const { completions, routineCadence } = await gatherCompletions(cfg);
   const awards = scoreHistory({ ...cfg, startDate: since }, completions, routineCadence).filter((a) => a.day <= today);
   const weeks = new Map<string, { total: number; byKind: Record<string, number> }>();
@@ -246,13 +279,17 @@ async function cmdPreview(cfg: PointsConfig, args: string[]): Promise<void> {
   for (const [wk, w] of [...weeks.entries()].sort()) {
     const partial = wk === weekStart(today) ? "  (in progress)" : "";
     if (!partial) totals.push(w.total);
-    console.log(`    ${wk}  ${String(w.total).padStart(5)}  tasks ${w.byKind["tasks"] ?? 0} · habits/routines ${w.byKind["habits/routines"] ?? 0} · bonuses ${w.byKind["bonuses"] ?? 0}${partial}`);
+    console.log(
+      `    ${wk}  ${String(w.total).padStart(5)}  tasks ${w.byKind["tasks"] ?? 0} · habits/routines ${w.byKind["habits/routines"] ?? 0} · bonuses ${w.byKind["bonuses"] ?? 0}${partial}`,
+    );
   }
   if (totals.length) {
     const sorted = [...totals].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)];
     const avg = Math.round(totals.reduce((s, x) => s + x, 0) / totals.length);
-    console.log(`\n    full weeks: ${totals.length} · avg ${avg} · median ${median} · best ${sorted[sorted.length - 1]}`);
+    console.log(
+      `\n    full weeks: ${totals.length} · avg ${avg} · median ${median} · best ${sorted[sorted.length - 1]}`,
+    );
   }
   console.log("");
 }
@@ -265,14 +302,22 @@ export async function cmdPoints(cfg: PointsConfig | undefined, args: string[]): 
   const [sub, ...rest] = args[0]?.startsWith("--") ? ["score", ...args] : args;
   switch (sub) {
     case undefined:
-    case "score": return cmdScore(cfg, rest);
-    case "sync": return cmdSync(cfg, rest);
-    case "check": return cmdCheck(cfg, rest);
-    case "routines": return cmdRoutines(cfg);
-    case "goal": return cmdGoal(rest);
-    case "history": return cmdHistory(rest);
-    case "weights": return cmdWeights(cfg);
-    case "preview": return cmdPreview(cfg, rest);
+    case "score":
+      return cmdScore(cfg, rest);
+    case "sync":
+      return cmdSync(cfg, rest);
+    case "check":
+      return cmdCheck(cfg, rest);
+    case "routines":
+      return cmdRoutines(cfg);
+    case "goal":
+      return cmdGoal(rest);
+    case "history":
+      return cmdHistory(rest);
+    case "weights":
+      return cmdWeights(cfg);
+    case "preview":
+      return cmdPreview(cfg, rest);
     default:
       console.log(`points — deterministic points for tasks, habits and routines
 
