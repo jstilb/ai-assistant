@@ -90,7 +90,7 @@ Rules:
 
 - Run tests with **absolute paths**. A relative path triggers bun's discovery/filter mode, which corrupts child-process stdio capture (`feedback_bun_test_absolute_paths_stdio`).
 - Never trust **"0 fail" alone** — require a nonzero **"Ran N tests"** line in the output. bun 1.3.5's transpiler cache can report 0 fail / exit 0 for a file that still contains tests (`project_bun_transpiler_cache_false_green_20260710`).
-- **Never** run whole-tree `bun test ~/.claude` — file-descriptor exhaustion (EMFILE) produces a false-green exit 0 with zero tests reported. Run chunked, per-directory `bun test` invocations instead (`docs/testing-baseline-2026-07.md`).
+- **Never** run whole-tree `bun test ~/.claude` — file-descriptor exhaustion (EMFILE) produces a false-green exit 0 with zero tests reported. Run `bun run verify --tests-only` (one process per suite) instead (`docs/testing-baseline.md`).
 
 ### 4. Refactor
 
