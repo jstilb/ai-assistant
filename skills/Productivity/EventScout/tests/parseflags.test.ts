@@ -31,16 +31,10 @@ test("T1: --refresh before --limit 3 — boolean flag must not swallow value", (
   const { flags, positional } = parseFlags(args);
   assert(
     positional.includes("comedy") && !positional.includes("3"),
-    'T1: positional contains "comedy" and NOT "3" when --refresh precedes --limit'
+    'T1: positional contains "comedy" and NOT "3" when --refresh precedes --limit',
   );
-  assert(
-    "refresh" in flags,
-    "T1: flags has refresh key"
-  );
-  assert(
-    flags["limit"] === "3",
-    'T1: flags.limit === "3"'
-  );
+  assert("refresh" in flags, "T1: flags has refresh key");
+  assert(flags["limit"] === "3", 'T1: flags.limit === "3"');
 });
 
 test("T2: --limit before --refresh — order independent", () => {
@@ -48,16 +42,10 @@ test("T2: --limit before --refresh — order independent", () => {
   const { flags, positional } = parseFlags(args);
   assert(
     positional.includes("comedy") && !positional.includes("3"),
-    'T2: positional contains "comedy" and NOT "3" when --limit precedes --refresh'
+    'T2: positional contains "comedy" and NOT "3" when --limit precedes --refresh',
   );
-  assert(
-    "refresh" in flags,
-    "T2: flags has refresh key"
-  );
-  assert(
-    flags["limit"] === "3",
-    'T2: flags.limit === "3"'
-  );
+  assert("refresh" in flags, "T2: flags has refresh key");
+  assert(flags["limit"] === "3", 'T2: flags.limit === "3"');
 });
 
 test("T3: trailing boolean flag (no following token)", () => {
@@ -65,25 +53,16 @@ test("T3: trailing boolean flag (no following token)", () => {
   const { flags, positional } = parseFlags(args);
   assert(
     positional.length === 2 && positional[0] === "query" && positional[1] === "comedy",
-    'T3: positional is ["query","comedy"] with trailing --refresh'
+    'T3: positional is ["query","comedy"] with trailing --refresh',
   );
-  assert(
-    "refresh" in flags,
-    "T3: flags has refresh key"
-  );
+  assert("refresh" in flags, "T3: flags has refresh key");
 });
 
 test("T4: value-bearing flag still works correctly", () => {
   const args = ["add-source", "https://example.com", "--tier", "html-llm"];
   const { flags, positional } = parseFlags(args);
-  assert(
-    flags["tier"] === "html-llm",
-    "T4: --tier html-llm parses correctly"
-  );
-  assert(
-    positional.includes("https://example.com"),
-    "T4: URL stays in positional"
-  );
+  assert(flags["tier"] === "html-llm", "T4: --tier html-llm parses correctly");
+  assert(positional.includes("https://example.com"), "T4: URL stays in positional");
 });
 
 test("T5: multiple value flags alongside a boolean flag", () => {
@@ -91,7 +70,7 @@ test("T5: multiple value flags alongside a boolean flag", () => {
   const { flags, positional } = parseFlags(args);
   assert(
     positional.includes("concerts") && !positional.includes("5") && !positional.includes("music"),
-    "T5: only non-flag tokens in positional"
+    "T5: only non-flag tokens in positional",
   );
   assert("refresh" in flags, "T5: refresh key present");
   assert(flags["limit"] === "5", 'T5: limit === "5"');

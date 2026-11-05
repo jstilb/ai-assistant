@@ -1,7 +1,7 @@
 /**
  * weekenddigest.test.ts — WeekendDigest pure helpers (no network, no alerts).
  *
- * Run: bun test ~/.claude/skills/Productivity/EventScout/tests/weekenddigest.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/weekenddigest.test.ts
  */
 
 import { describe, test, expect } from "bun:test";
@@ -86,6 +86,6 @@ describe("renderWeekendDigest", () => {
   });
 
   test("footer hands the agent the exact follow-up query window", () => {
-    expect(md).toContain('--from 2026-08-22 --to 2026-08-23');
+    expect(md).toContain("--from 2026-08-22 --to 2026-08-23");
   });
 });

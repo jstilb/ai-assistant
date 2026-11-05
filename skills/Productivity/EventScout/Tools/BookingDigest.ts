@@ -47,10 +47,7 @@ export interface DigestOutcome {
  * Scan + route. Pure-ish: all side effects go through the injected/real
  * AlertGate. `now` and `windowDays` are injectable for tests.
  */
-export async function runBookingDigest(
-  now: Date = new Date(),
-  windowDays = 14,
-): Promise<DigestOutcome> {
+export async function runBookingDigest(now: Date = new Date(), windowDays = 14): Promise<DigestOutcome> {
   const { notices, expired } = scanNotices(now, windowDays);
 
   const outcome: DigestOutcome = {
@@ -94,7 +91,7 @@ if (import.meta.main) {
   console.log(renderNoticesMarkdown(outcome.notices, now));
   console.log(
     `\n[booking-digest] total=${outcome.total} paged=${outcome.paged} spooled=${outcome.spooled} expired=${outcome.expired}` +
-      (process.env["KAYA_ALERT_DRY_RUN"] === "1" ? " (DRY RUN — nothing sent)" : "")
+      (process.env["KAYA_ALERT_DRY_RUN"] === "1" ? " (DRY RUN — nothing sent)" : ""),
   );
 
   process.exit(0);

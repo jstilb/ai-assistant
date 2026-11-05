@@ -10,15 +10,11 @@
  *     venue kept for display while geocode address anchors to the complex;
  *     ticketUrl is absolute; stableId is deterministic 16-hex.
  *
- * Run: bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/ctycms.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/ctycms.test.ts
  */
 
 import { test } from "bun:test";
-import {
-  parseCards,
-  classifyPerformanceTitle,
-  mapCardToEvent,
-} from "../Tools/adapters/CtycmsAdapter.ts";
+import { parseCards, classifyPerformanceTitle, mapCardToEvent } from "../Tools/adapters/CtycmsAdapter.ts";
 import type { EventSource } from "../Tools/types.ts";
 
 function assert(condition: boolean, message: string): void {
@@ -149,4 +145,3 @@ test("mapCardToEvent: stableId deterministic, 16-hex", () => {
   assert(a.id === b.id, "ids match");
   assert(/^[0-9a-f]{16}$/.test(a.id), `id format ${a.id}`);
 });
-

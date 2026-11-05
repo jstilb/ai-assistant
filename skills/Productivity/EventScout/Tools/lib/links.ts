@@ -21,7 +21,8 @@ import type { EventItem } from "../types.ts";
  * Links that a person cannot open in a browser to find the event: calendar
  * feeds, ICS exports, stats/JSON APIs, and raw RSS/Atom/XML feeds.
  */
-const NON_NAVIGABLE = /\.ics(\?|$)|\/calendar\/ical\/|calendar\.google\.com|statsapi\.|\/feed\/?(\?|$)|format=ical|\.xml(\?|$)/i;
+const NON_NAVIGABLE =
+  /\.ics(\?|$)|\/calendar\/ical\/|calendar\.google\.com|statsapi\.|\/feed\/?(\?|$)|format=ical|\.xml(\?|$)/i;
 
 /** True if `url` is an http(s) link a human can actually open to see the event. */
 function isNavigable(url: string | undefined): url is string {

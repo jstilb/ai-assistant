@@ -2,7 +2,7 @@
 /**
  * render-tiered.test.ts — TDD tests for renderTiered (Slice 4 / D7).
  *
- * Run: bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/render-tiered.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/render-tiered.test.ts
  *
  * Tests:
  *   RT01  25 events → exactly 10 full cards (rank markers ### 1.–### 10.)
@@ -46,7 +46,7 @@ function assertContains(str: string, needle: string, label: string): void {
   assert(
     str.includes(needle),
     label,
-    `Expected to contain: ${JSON.stringify(needle)}\nGot (first 400): ${str.slice(0, 400)}`
+    `Expected to contain: ${JSON.stringify(needle)}\nGot (first 400): ${str.slice(0, 400)}`,
   );
 }
 
@@ -54,7 +54,7 @@ function assertNotContains(str: string, needle: string, label: string): void {
   assert(
     !str.includes(needle),
     label,
-    `Expected NOT to contain: ${JSON.stringify(needle)}\nGot (first 400): ${str.slice(0, 400)}`
+    `Expected NOT to contain: ${JSON.stringify(needle)}\nGot (first 400): ${str.slice(0, 400)}`,
   );
 }
 
@@ -113,19 +113,19 @@ const CONSTRAINT: QueryContext = {
 // ============================================================================
 
 const out25 = renderTiered(EVENTS_25, CONSTRAINT);
-const rankMarkers = out25.match(/^### \d+\. /mg) ?? [];
+const rankMarkers = out25.match(/^### \d+\. /gm) ?? [];
 const markerNumbers = rankMarkers.map((m) => {
   const match = m.match(/### (\d+)\./);
   return match ? parseInt(match[1]!, 10) : -1;
 });
-const whyLines = out25.match(/^> _.*_$/mg) ?? [];
-const compactLines = out25.match(/^\d+\. .+ · .+ · .+ · .+ · https?:\/\//mg) ?? [];
+const whyLines = out25.match(/^> _.*_$/gm) ?? [];
+const compactLines = out25.match(/^\d+\. .+ · .+ · .+ · .+ · https?:\/\//gm) ?? [];
 const firstCompact = compactLines[0] ?? "";
 const bulletCount = (firstCompact.match(/ · /g) ?? []).length;
 const allCompactHaveLink = compactLines.every((line) => /https?:\/\//.test(line));
 
 const out5 = renderTiered(EVENTS_5, CONSTRAINT);
-const markers5 = out5.match(/^### \d+\. /mg) ?? [];
+const markers5 = out5.match(/^### \d+\. /gm) ?? [];
 
 const out0 = renderTiered(EVENTS_0, CONSTRAINT);
 
@@ -152,7 +152,7 @@ test("RT01: exactly 10 rank markers for 25 events", () => {
   assert(
     rankMarkers.length === 10,
     "RT01 exactly 10 rank markers for 25 events",
-    `Found: ${rankMarkers.length} markers: ${rankMarkers.join(", ")}`
+    `Found: ${rankMarkers.length} markers: ${rankMarkers.join(", ")}`,
   );
 });
 
@@ -160,7 +160,7 @@ test("RT12: rank markers are 1 through 10 in order", () => {
   assert(
     markerNumbers.every((n, i) => n === i + 1),
     "RT12 rank markers are 1 through 10 in order",
-    `Got: ${markerNumbers.join(", ")}`
+    `Got: ${markerNumbers.join(", ")}`,
   );
 });
 
@@ -173,7 +173,7 @@ test("RT02: compact section heading shows (15) and has 15 compact lines", () => 
   assert(
     compactLines.length === 15,
     "RT02b 15 compact lines present",
-    `Found: ${compactLines.length}\nFirst 3: ${compactLines.slice(0, 3).join("\n")}`
+    `Found: ${compactLines.length}\nFirst 3: ${compactLines.slice(0, 3).join("\n")}`,
   );
 });
 

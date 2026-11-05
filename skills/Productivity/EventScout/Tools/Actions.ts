@@ -11,11 +11,7 @@
  *   buildCalendarEvent(event) → gcalcli arg set
  */
 
-import {
-  appendRow,
-  readRows,
-  deleteRows,
-} from "../../LifeOS/StorageIO/SheetsIO.ts"; // cross-skill-allowed: EventScout writes idea/calendar rows through LifeOS's positive-data store by design (capture routing)
+import { appendRow, readRows, deleteRows } from "../../LifeOS/StorageIO/SheetsIO.ts"; // cross-skill-allowed: EventScout writes idea/calendar rows through LifeOS's positive-data store by design (capture routing)
 // cross-skill-allowed: EventScout writes idea/calendar rows through LifeOS's positive-data store by design (capture routing)
 import { readWorkbookConfig } from "../../LifeOS/StorageIO/Config.ts";
 import { addEvent, deleteEvent } from "../../../../lib/core/GcalCli.ts";
@@ -65,7 +61,7 @@ export function buildIdeaRow(event: EventItem | RankedEvent): IdeaRow {
 export interface CalendarEventArgs {
   title: string;
   when: string;
-  duration: number;   // minutes
+  duration: number; // minutes
   location: string;
   description: string;
   calendar: string;
@@ -152,8 +148,7 @@ function formatWhenForGcal(isoStr: string): string {
       hour12: false,
     }).formatToParts(d);
 
-    const get = (t: string): string =>
-      parts.find((p) => p.type === t)?.value ?? "";
+    const get = (t: string): string => parts.find((p) => p.type === t)?.value ?? "";
 
     const year = get("year");
     const month = get("month");
@@ -311,9 +306,9 @@ export function buildCalendarRef(event: EventItem | RankedEvent): string {
 }
 
 export interface CalendarDeleteCommand {
-  text: string;          // the search text passed to gcalcli delete (must be non-empty)
-  startDate: string;     // "YYYY-MM-DD"
-  endDate: string;       // "YYYY-MM-DD" (startDate + 1 day)
+  text: string; // the search text passed to gcalcli delete (must be non-empty)
+  startDate: string; // "YYYY-MM-DD"
+  endDate: string; // "YYYY-MM-DD" (startDate + 1 day)
 }
 
 /**
@@ -322,9 +317,7 @@ export interface CalendarDeleteCommand {
  */
 export function parseCalendarRef(ref: string): CalendarDeleteCommand {
   if (!ref.includes("|")) {
-    throw new Error(
-      `Invalid calendar ref "${ref}": expected "<title>|<when>" format`
-    );
+    throw new Error(`Invalid calendar ref "${ref}": expected "<title>|<when>" format`);
   }
   const pipeIdx = ref.indexOf("|");
   const title = ref.slice(0, pipeIdx);

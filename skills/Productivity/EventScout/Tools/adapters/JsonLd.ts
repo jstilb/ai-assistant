@@ -27,9 +27,9 @@
  * No network calls. Pure function.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { z } from "zod";
-import { EventItemSchema, CategorySchema } from "../types.ts";
+import { EventItemSchema } from "../types.ts";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { isNaiveDatetime, naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
 
@@ -49,36 +49,39 @@ const SchemaOrgAddressSchema = z.union([
   }),
 ]);
 
-const SchemaOrgLocationSchema = z.object({
-  "@type": z.string().optional(),
-  name: z.string().optional(),
-  address: SchemaOrgAddressSchema.optional(),
-}).passthrough();
+const SchemaOrgLocationSchema = z
+  .object({
+    "@type": z.string().optional(),
+    name: z.string().optional(),
+    address: SchemaOrgAddressSchema.optional(),
+  })
+  .passthrough();
 
-const SchemaOrgOfferSchema = z.object({
-  "@type": z.string().optional(),
-  price: z.union([z.string(), z.number()]).optional(),
-  lowPrice: z.union([z.string(), z.number()]).optional(),
-  priceCurrency: z.string().optional(),
-  url: z.string().optional(),
-}).passthrough();
+const SchemaOrgOfferSchema = z
+  .object({
+    "@type": z.string().optional(),
+    price: z.union([z.string(), z.number()]).optional(),
+    lowPrice: z.union([z.string(), z.number()]).optional(),
+    priceCurrency: z.string().optional(),
+    url: z.string().optional(),
+  })
+  .passthrough();
 
-const SchemaOrgOffersField = z.union([
-  SchemaOrgOfferSchema,
-  z.array(SchemaOrgOfferSchema),
-]);
+const SchemaOrgOffersField = z.union([SchemaOrgOfferSchema, z.array(SchemaOrgOfferSchema)]);
 
-const SchemaOrgEventSchema = z.object({
-  "@type": z.string(),
-  name: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  location: z.union([SchemaOrgLocationSchema, z.array(SchemaOrgLocationSchema)]).optional(),
-  offers: SchemaOrgOffersField.optional(),
-  image: z.union([z.string(), z.array(z.string()), z.object({ url: z.string() }).passthrough()]).optional(),
-  description: z.string().optional(),
-  url: z.string().optional(),
-}).passthrough();
+const SchemaOrgEventSchema = z
+  .object({
+    "@type": z.string(),
+    name: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    location: z.union([SchemaOrgLocationSchema, z.array(SchemaOrgLocationSchema)]).optional(),
+    offers: SchemaOrgOffersField.optional(),
+    image: z.union([z.string(), z.array(z.string()), z.object({ url: z.string() }).passthrough()]).optional(),
+    description: z.string().optional(),
+    url: z.string().optional(),
+  })
+  .passthrough();
 
 type SchemaOrgEvent = z.infer<typeof SchemaOrgEventSchema>;
 
@@ -93,7 +96,7 @@ function canonical(s: string): string {
 function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
   const utcNorm = (() => {
     const ms = Date.parse(startDatetime);
-    return isNaN(ms) ? startDatetime : new Date(ms).toISOString();
+    return Number.isNaN(ms) ? startDatetime : new Date(ms).toISOString();
   })();
   const raw = `${canonical(title)}|${utcNorm}|${canonical(venueOrUrl)}`;
   return createHash("sha256").update(raw).digest("hex").slice(0, 16);
@@ -109,12 +112,12 @@ function coerceToIso(raw: string): string | null {
 
   if (!isNaiveDatetime(trimmed)) {
     const ts = Date.parse(trimmed);
-    if (isNaN(ts)) return null;
+    if (Number.isNaN(ts)) return null;
     return new Date(ts).toISOString();
   }
 
   const utcMs = naiveLaToUtcMs(trimmed);
-  if (isNaN(utcMs)) return null;
+  if (Number.isNaN(utcMs)) return null;
   return utcIsoToLaIso(new Date(utcMs).toISOString());
 }
 
@@ -150,7 +153,7 @@ function extractPriceInfo(offers: z.infer<typeof SchemaOrgOffersField> | undefin
 
   // Numeric price
   const num = parseFloat(priceStr.replace(/[^0-9.]/g, ""));
-  if (!isNaN(num)) {
+  if (!Number.isNaN(num)) {
     return { isFree: num === 0, priceMin: num };
   }
 
@@ -194,7 +197,7 @@ function extractImageUrl(image: SchemaOrgEvent["image"]): string | undefined {
 
 function extractTicketUrl(
   offers: z.infer<typeof SchemaOrgOffersField> | undefined,
-  eventUrl: string | undefined
+  eventUrl: string | undefined,
 ): string | undefined {
   if (offers) {
     const offerList = Array.isArray(offers) ? offers : [offers];
@@ -218,11 +221,7 @@ function categoryFromHint(hint: Category | undefined): Category {
 // Returns null if required fields (name + parseable startDate) are missing.
 // ============================================================================
 
-function schemaEventToItem(
-  ev: SchemaOrgEvent,
-  source: EventSource,
-  now: string
-): EventItem | null {
+function schemaEventToItem(ev: SchemaOrgEvent, source: EventSource, now: string): EventItem | null {
   // name is required
   const title = ev.name?.trim();
   if (!title) return null;
@@ -371,9 +370,8 @@ export function extractJsonLdEvents(html: string, source: EventSource): EventIte
 
   // Extract all <script type="application/ld+json"> block contents
   const scriptRegex = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let match: RegExpExecArray | null;
 
-  while ((match = scriptRegex.exec(html)) !== null) {
+  for (const match of html.matchAll(scriptRegex)) {
     const raw = match[1]?.trim();
     if (!raw) continue;
 

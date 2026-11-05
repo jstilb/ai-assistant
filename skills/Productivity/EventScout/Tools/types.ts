@@ -60,7 +60,7 @@ export const EventItemSchema = z.object({
     z.object({
       sourceId: z.string(),
       url: z.string(),
-    })
+    }),
   ),
   /** "Padres vs Dodgers" / "Tycho" */
   performersOrTeams: z.string().optional(),
@@ -81,9 +81,7 @@ export type TimeOfDay = z.infer<typeof TimeOfDaySchema>;
 
 export const ConstraintSetSchema = z.object({
   /** Resolved date range; default = next 7 days */
-  when: z
-    .object({ start: z.string(), end: z.string() })
-    .optional(),
+  when: z.object({ start: z.string(), end: z.string() }).optional(),
   timeOfDay: z.array(TimeOfDaySchema).optional(),
   /** Default = any */
   categories: z.array(CategorySchema).optional(),

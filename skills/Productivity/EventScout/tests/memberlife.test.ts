@@ -20,9 +20,9 @@
  */
 
 import { test } from "bun:test";
-import { readFileSync } from "fs";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   mapTimeslotOccurrenceToEvent,
   mapClassesResponseToEvents,
@@ -44,7 +44,7 @@ function assert(condition: boolean, message: string): void {
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   assert(
     JSON.stringify(actual) === JSON.stringify(expected),
-    `${message}\n         expected: ${JSON.stringify(expected)}\n         actual:   ${JSON.stringify(actual)}`
+    `${message}\n         expected: ${JSON.stringify(expected)}\n         actual:   ${JSON.stringify(actual)}`,
   );
 }
 
@@ -152,7 +152,7 @@ test("projectWeekdayDates: 14-day window yields two occurrences", () => {
       { year: 2026, month: 7, day: 15 },
       { year: 2026, month: 7, day: 22 },
     ],
-    `dates ${JSON.stringify(dates)}`
+    `dates ${JSON.stringify(dates)}`,
   );
 });
 
@@ -217,7 +217,7 @@ test("mapTimeslotOccurrenceToEvent: description is normalized and set", () => {
   assert(
     e.description ===
       "This class is designed for all levels. In this beginner class, you will learn the basic Salsa steps and turns, along with rhythm, timing, lead, and follow techniques. No partner is needed!",
-    `description "${e.description}"`
+    `description "${e.description}"`,
   );
 });
 
@@ -326,7 +326,7 @@ test("mapClassesResponseToEvents: Wednesday slice matches the known 8-class cros
       "Mambo Intermediate Partner Team",
       "Mambo Technique Class",
     ].sort(),
-    `Wednesday titles: ${wednesday.map((e) => e.title).join(", ")}`
+    `Wednesday titles: ${wednesday.map((e) => e.title).join(", ")}`,
   );
   assertEqual(wednesday.length, 8, `wednesday.length ${wednesday.length}`);
 });
@@ -337,7 +337,7 @@ test("mapClassesResponseToEvents: every projected occurrence has an LA offset-aw
   for (const e of events) {
     assert(
       /T\d{2}:\d{2}:\d{2}-0[78]:00$/.test(e.startDatetime),
-      `startDatetime "${e.startDatetime}" is not a PDT/PST offset-aware ISO string`
+      `startDatetime "${e.startDatetime}" is not a PDT/PST offset-aware ISO string`,
     );
   }
 });

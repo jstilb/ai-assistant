@@ -27,7 +27,7 @@
  *  14.  buildIntentBrief: on failure (inference error) falls back to raw query text.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/ranker.test.ts
+ *   bun test skills/Productivity/EventScout/tests/ranker.test.ts
  */
 
 import { test } from "bun:test";
@@ -35,13 +35,7 @@ import { test } from "bun:test";
 // Disable real LLM calls — tests use injected fakes
 process.env["EVENTSCOUT_DISABLE_RERANK"] = "0"; // start with rerank ON; per-test overrides below
 
-import {
-  scoreAllEvents,
-  rankEvents,
-  buildIntentBrief,
-  SCORE_BATCH_SIZE,
-  NEUTRAL_SCORE,
-} from "../Tools/Ranker.ts";
+import { scoreAllEvents, rankEvents, buildIntentBrief, SCORE_BATCH_SIZE, NEUTRAL_SCORE } from "../Tools/Ranker.ts";
 import type { ScoreBatchFn } from "../Tools/Ranker.ts";
 import type { EventItem, InterestProfile, QueryContext } from "../Tools/types.ts";
 
@@ -57,9 +51,7 @@ function assert(condition: boolean, message: string): void {
 
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(
-      `${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`
-    );
+    throw new Error(`${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`);
   }
 }
 
@@ -97,13 +89,12 @@ const NEAR = { lat: 32.7073, lng: -117.1566 };
 /** Far: ~30mi from home */
 const FAR = { lat: 33.0, lng: -117.1611 };
 
-function makeEvent(overrides: Partial<EventItem> & { id: string; title: string; category: EventItem["category"] }): EventItem {
+function makeEvent(
+  overrides: Partial<EventItem> & { id: string; title: string; category: EventItem["category"] },
+): EventItem {
   return {
-    id: overrides.id,
-    title: overrides.title,
     startDatetime: overrides.startDatetime ?? SOON_ISO,
     allDay: false,
-    category: overrides.category,
     tags: overrides.tags ?? [],
     isFree: overrides.isFree ?? false,
     sourceUrl: "https://example.com",
@@ -140,9 +131,7 @@ const baseConstraints: QueryContext = {
  */
 function makeExactFakeScorer(scoreMap: Record<string, number>): ScoreBatchFn {
   return async (events) => {
-    return events
-      .filter((e) => e.id in scoreMap)
-      .map((e) => ({ id: e.id, score: scoreMap[e.id]! }));
+    return events.filter((e) => e.id in scoreMap).map((e) => ({ id: e.id, score: scoreMap[e.id]! }));
   };
 }
 
@@ -168,7 +157,9 @@ test("1. scoreAllEvents returns a score for EVERY event", async () => {
     makeEvent({ id: "c", title: "C", category: "theater" }),
   ];
   const scorer = makeExactFakeScorer({ a: 80, b: 60, c: 40 });
-  const result = await scoreAllEvents(events, baseConstraints, neutralProfile, "comedy night brief", { scoreBatch: scorer });
+  const result = await scoreAllEvents(events, baseConstraints, neutralProfile, "comedy night brief", {
+    scoreBatch: scorer,
+  });
 
   assert(result.size === 3, `result has 3 entries (got ${result.size})`);
   assertEq(result.get("a"), 80, "a=80");
@@ -198,7 +189,7 @@ test("2. Events the scorer forgets still appear with the neutral default", async
 test("3. >75 events produces multiple batches; all merged and scored", async () => {
   const count = SCORE_BATCH_SIZE * 2 + 10; // e.g. 160
   const events = Array.from({ length: count }, (_, i) =>
-    makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" })
+    makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" }),
   );
 
   let batchCount = 0;
@@ -215,76 +206,103 @@ test("3. >75 events produces multiple batches; all merged and scored", async () 
 
 // -- Test 4 ------------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("4. rankEvents sorts DESC by score [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const events = [
-    makeEvent({ id: "low", title: "Low", category: "music" }),
-    makeEvent({ id: "high", title: "High", category: "comedy" }),
-    makeEvent({ id: "mid", title: "Mid", category: "theater" }),
-  ];
-  const scorer = makeExactFakeScorer({ low: 10, high: 90, mid: 50 });
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "4. rankEvents sorts DESC by score [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const events = [
+      makeEvent({ id: "low", title: "Low", category: "music" }),
+      makeEvent({ id: "high", title: "High", category: "comedy" }),
+      makeEvent({ id: "mid", title: "Mid", category: "theater" }),
+    ];
+    const scorer = makeExactFakeScorer({ low: 10, high: 90, mid: 50 });
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-  assertEq(ranked[0]!.id, "high", "first = highest score (90)");
-  assertEq(ranked[1]!.id, "mid", "second = mid score (50)");
-  assertEq(ranked[2]!.id, "low", "third = lowest score (10)");
-}, 120_000);
+    assertEq(ranked[0]!.id, "high", "first = highest score (90)");
+    assertEq(ranked[1]!.id, "mid", "second = mid score (50)");
+    assertEq(ranked[2]!.id, "low", "third = lowest score (10)");
+  },
+  120_000,
+);
 
 // -- Test 5 ------------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("5. Tie-break: equal score → sooner startDatetime first [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const events = [
-    makeEvent({ id: "later", title: "Later", category: "music", startDatetime: LATER_ISO }),
-    makeEvent({ id: "soon", title: "Soon", category: "music", startDatetime: SOON_ISO }),
-    makeEvent({ id: "mid", title: "Mid", category: "music", startDatetime: MID_ISO }),
-  ];
-  // All same score → sort by soonness
-  const scorer = makeFlexFakeScorer(70);
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "5. Tie-break: equal score → sooner startDatetime first [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const events = [
+      makeEvent({ id: "later", title: "Later", category: "music", startDatetime: LATER_ISO }),
+      makeEvent({ id: "soon", title: "Soon", category: "music", startDatetime: SOON_ISO }),
+      makeEvent({ id: "mid", title: "Mid", category: "music", startDatetime: MID_ISO }),
+    ];
+    // All same score → sort by soonness
+    const scorer = makeFlexFakeScorer(70);
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-  assertEq(ranked[0]!.id, "soon", "tied → sooner first (SOON)");
-  assertEq(ranked[1]!.id, "mid", "tied → mid date second (MID)");
-  assertEq(ranked[2]!.id, "later", "tied → later last (LATER)");
-}, 120_000);
+    assertEq(ranked[0]!.id, "soon", "tied → sooner first (SOON)");
+    assertEq(ranked[1]!.id, "mid", "tied → mid date second (MID)");
+    assertEq(ranked[2]!.id, "later", "tied → later last (LATER)");
+  },
+  120_000,
+);
 
 // -- Test 6 ------------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("6. Tie-break level 2: equal score, equal date → nearer location first [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const events = [
-    makeEvent({ id: "far", title: "Far", category: "music", startDatetime: SOON_ISO, lat: FAR.lat, lng: FAR.lng }),
-    makeEvent({ id: "near", title: "Near", category: "music", startDatetime: SOON_ISO, lat: NEAR.lat, lng: NEAR.lng }),
-  ];
-  // Same score, same date → nearer wins
-  const scorer = makeFlexFakeScorer(70);
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "6. Tie-break level 2: equal score, equal date → nearer location first [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const events = [
+      makeEvent({ id: "far", title: "Far", category: "music", startDatetime: SOON_ISO, lat: FAR.lat, lng: FAR.lng }),
+      makeEvent({
+        id: "near",
+        title: "Near",
+        category: "music",
+        startDatetime: SOON_ISO,
+        lat: NEAR.lat,
+        lng: NEAR.lng,
+      }),
+    ];
+    // Same score, same date → nearer wins
+    const scorer = makeFlexFakeScorer(70);
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-  assertEq(ranked[0]!.id, "near", "near event wins the tiebreak");
-  assertEq(ranked[1]!.id, "far", "far event comes second");
-}, 120_000);
+    assertEq(ranked[0]!.id, "near", "near event wins the tiebreak");
+    assertEq(ranked[1]!.id, "far", "far event comes second");
+  },
+  120_000,
+);
 
 // -- Test 7 ------------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("7. rankEvents with no limit returns ALL events [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const count = 50;
-  const events = Array.from({ length: count }, (_, i) =>
-    makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" })
-  );
-  const scorer = makeFlexFakeScorer(50);
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "7. rankEvents with no limit returns ALL events [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const count = 50;
+    const events = Array.from({ length: count }, (_, i) =>
+      makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" }),
+    );
+    const scorer = makeFlexFakeScorer(50);
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-  assertEq(ranked.length, count, `no limit → all ${count} returned (got ${ranked.length})`);
-}, 120_000);
+    assertEq(ranked.length, count, `no limit → all ${count} returned (got ${ranked.length})`);
+  },
+  120_000,
+);
 
 // -- Test 8 ------------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("8. rankEvents with limit=3 returns exactly 3 [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const events = Array.from({ length: 10 }, (_, i) =>
-    makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" })
-  );
-  const scorer = makeFlexFakeScorer(50);
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, 3, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "8. rankEvents with limit=3 returns exactly 3 [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const events = Array.from({ length: 10 }, (_, i) =>
+      makeEvent({ id: `e${i}`, title: `Event ${i}`, category: "music" }),
+    );
+    const scorer = makeFlexFakeScorer(50);
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, 3, { scoreBatch: scorer });
 
-  assertEq(ranked.length, 3, `limit=3 → 3 returned (got ${ranked.length})`);
-}, 120_000);
+    assertEq(ranked.length, 3, `limit=3 → 3 returned (got ${ranked.length})`);
+  },
+  120_000,
+);
 
 // -- Test 9 ------------------------------------------------------------------
 
@@ -318,29 +336,33 @@ test("9. EVENTSCOUT_DISABLE_RERANK=1 → soonness order, scorer NOT called", asy
 
 // -- Test 10 -----------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("10. Fallback: scorer throws → returns all events soonness-ordered [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — buildIntentBrief() runs before the scorer throws, hitting real inference()]", async () => {
-  const saved = process.env["EVENTSCOUT_DISABLE_RERANK"];
-  process.env["EVENTSCOUT_DISABLE_RERANK"] = "0";
+test.skipIf(!LIVE_RANKER)(
+  "10. Fallback: scorer throws → returns all events soonness-ordered [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — buildIntentBrief() runs before the scorer throws, hitting real inference()]",
+  async () => {
+    const saved = process.env["EVENTSCOUT_DISABLE_RERANK"];
+    process.env["EVENTSCOUT_DISABLE_RERANK"] = "0";
 
-  try {
-    const events = [
-      makeEvent({ id: "later", title: "Later", category: "music", startDatetime: LATER_ISO }),
-      makeEvent({ id: "soon", title: "Soon", category: "music", startDatetime: SOON_ISO }),
-    ];
+    try {
+      const events = [
+        makeEvent({ id: "later", title: "Later", category: "music", startDatetime: LATER_ISO }),
+        makeEvent({ id: "soon", title: "Soon", category: "music", startDatetime: SOON_ISO }),
+      ];
 
-    const scorer: ScoreBatchFn = async () => {
-      throw new Error("LLM down");
-    };
+      const scorer: ScoreBatchFn = async () => {
+        throw new Error("LLM down");
+      };
 
-    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+      const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-    assert(ranked.length === 2, `all 2 events returned on scorer failure (got ${ranked.length})`);
-    assertEq(ranked[0]!.id, "soon", "fallback after failure: sooner first");
-  } finally {
-    if (saved !== undefined) process.env["EVENTSCOUT_DISABLE_RERANK"] = saved;
-    else delete process.env["EVENTSCOUT_DISABLE_RERANK"];
-  }
-}, 120_000);
+      assert(ranked.length === 2, `all 2 events returned on scorer failure (got ${ranked.length})`);
+      assertEq(ranked[0]!.id, "soon", "fallback after failure: sooner first");
+    } finally {
+      if (saved !== undefined) process.env["EVENTSCOUT_DISABLE_RERANK"] = saved;
+      else delete process.env["EVENTSCOUT_DISABLE_RERANK"];
+    }
+  },
+  120_000,
+);
 
 // -- Test 11 -----------------------------------------------------------------
 
@@ -352,19 +374,23 @@ test("11. Empty events → empty result", async () => {
 
 // -- Test 12 -----------------------------------------------------------------
 
-test.skipIf(!LIVE_RANKER)("12. Every returned RankedEvent has a non-empty why string [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]", async () => {
-  const events = [
-    makeEvent({ id: "a", title: "A", category: "comedy" }),
-    makeEvent({ id: "b", title: "B", category: "music" }),
-    makeEvent({ id: "c", title: "C", category: "theater" }),
-  ];
-  const scorer = makeExactFakeScorer({ a: 80, b: 60, c: 40 });
-  const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
+test.skipIf(!LIVE_RANKER)(
+  "12. Every returned RankedEvent has a non-empty why string [KAYA_LIVE_EVENTSCOUT_TESTS=1 required — real inference() call]",
+  async () => {
+    const events = [
+      makeEvent({ id: "a", title: "A", category: "comedy" }),
+      makeEvent({ id: "b", title: "B", category: "music" }),
+      makeEvent({ id: "c", title: "C", category: "theater" }),
+    ];
+    const scorer = makeExactFakeScorer({ a: 80, b: 60, c: 40 });
+    const ranked = await rankEvents(events, baseConstraints, neutralProfile, undefined, { scoreBatch: scorer });
 
-  for (const r of ranked) {
-    assert(typeof r.why === "string" && r.why.length > 0, `"${r.title}" has non-empty why`);
-  }
-}, 120_000);
+    for (const r of ranked) {
+      assert(typeof r.why === "string" && r.why.length > 0, `"${r.title}" has non-empty why`);
+    }
+  },
+  120_000,
+);
 
 // -- Test 13 -----------------------------------------------------------------
 

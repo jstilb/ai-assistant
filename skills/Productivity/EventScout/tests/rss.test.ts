@@ -12,7 +12,7 @@
  *   - description is populated from item content
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/rss.test.ts
+ *   bun test skills/Productivity/EventScout/tests/rss.test.ts
  */
 
 import { test } from "bun:test";
@@ -111,7 +111,7 @@ test("1. title maps from FeedItem.title", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
     event.title === "An Evening with San Diego Police Chief Scott Wahl",
-    `Expected original title, got "${event.title}"`
+    `Expected original title, got "${event.title}"`,
   );
 });
 
@@ -119,129 +119,96 @@ test("2. sourceUrl maps from FeedItem.url", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
     event.sourceUrl === "https://sdpressclub.org/2026/03/30/an-evening-with-san-diego-police-chief-scott-wahl/",
-    `Expected FeedItem.url as sourceUrl, got "${event.sourceUrl}"`
+    `Expected FeedItem.url as sourceUrl, got "${event.sourceUrl}"`,
   );
 });
 
 test("3. category comes from source.categoryHint (community)", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event.category === "community",
-    `Expected category "community" from categoryHint, got "${event.category}"`
-  );
+  assert(event.category === "community", `Expected category "community" from categoryHint, got "${event.category}"`);
 });
 
 test("4. category comes from source.categoryHint (music)", () => {
   const event = mapFeedItemToEvent(MUSIC_FEED_ITEM, MUSIC_SOURCE);
   assert(
     event.category === "music",
-    `Expected category "music" from musicSource.categoryHint, got "${event.category}"`
+    `Expected category "music" from musicSource.categoryHint, got "${event.category}"`,
   );
 });
 
 test("5. sources[0].sourceId === source.id", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
+  assert(event.sources.length >= 1, `Expected at least 1 source entry, got ${event.sources.length}`);
   assert(
-    event.sources.length >= 1,
-    `Expected at least 1 source entry, got ${event.sources.length}`
-  );
-  assert(
-    event.sources[0].sourceId === "sd-press-club",
-    `Expected sourceId "sd-press-club", got "${event.sources[0].sourceId}"`
+    event.sources[0]!.sourceId === "sd-press-club",
+    `Expected sourceId "sd-press-club", got "${event.sources[0]!.sourceId}"`,
   );
 });
 
 test("6. startDatetime is a valid ISO 8601 datetime", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   const parsed = new Date(event.startDatetime);
-  assert(
-    !isNaN(parsed.getTime()),
-    `startDatetime "${event.startDatetime}" did not parse to a valid Date`
-  );
+  assert(!Number.isNaN(parsed.getTime()), `startDatetime "${event.startDatetime}" did not parse to a valid Date`);
   // Must be a non-empty string
-  assert(
-    event.startDatetime.length > 0,
-    `startDatetime is empty`
-  );
+  assert(event.startDatetime.length > 0, `startDatetime is empty`);
 });
 
 test("7. description is populated from FeedItem.body", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
     typeof event.description === "string" && event.description.length > 0,
-    `Expected non-empty description, got "${event.description}"`
+    `Expected non-empty description, got "${event.description}"`,
   );
 });
 
 test("8. id is a non-empty deterministic string", () => {
   const event1 = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   const event2 = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    typeof event1.id === "string" && event1.id.length > 0,
-    `id is empty or not a string: "${event1.id}"`
-  );
-  assert(
-    event1.id === event2.id,
-    `id is not deterministic: "${event1.id}" vs "${event2.id}"`
-  );
+  assert(typeof event1.id === "string" && event1.id.length > 0, `id is empty or not a string: "${event1.id}"`);
+  assert(event1.id === event2.id, `id is not deterministic: "${event1.id}" vs "${event2.id}"`);
 });
 
 test("9. tags includes FeedItem.tags", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   // The item has tags ["News + Events"] — these should flow through
-  assert(
-    Array.isArray(event.tags),
-    `tags should be an array, got ${typeof event.tags}`
-  );
+  assert(Array.isArray(event.tags), `tags should be an array, got ${typeof event.tags}`);
 });
 
 test("10. allDay defaults to false", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event.allDay === false,
-    `Expected allDay=false, got ${event.allDay}`
-  );
+  assert(event.allDay === false, `Expected allDay=false, got ${event.allDay}`);
 });
 
 test("11. isFree defaults to false (RSS items don't indicate price)", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event.isFree === false,
-    `Expected isFree=false as default, got ${event.isFree}`
-  );
+  assert(event.isFree === false, `Expected isFree=false as default, got ${event.isFree}`);
 });
 
 test("12. status defaults to 'scheduled'", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event.status === "scheduled",
-    `Expected status "scheduled", got "${event.status}"`
-  );
+  assert(event.status === "scheduled", `Expected status "scheduled", got "${event.status}"`);
 });
 
 test("13. sourceUrl falls back to source.url when FeedItem.url is empty", () => {
   const event = mapFeedItemToEvent(NO_URL_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
     event.sourceUrl === PRESS_CLUB_SOURCE.url,
-    `Expected source.url fallback "${PRESS_CLUB_SOURCE.url}", got "${event.sourceUrl}"`
+    `Expected source.url fallback "${PRESS_CLUB_SOURCE.url}", got "${event.sourceUrl}"`,
   );
 });
 
 test("14. sources[0].url is FeedItem.url (or source.url as fallback)", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
-    event.sources[0].url === PRESS_CLUB_FEED_ITEM.url,
-    `Expected sources[0].url = "${PRESS_CLUB_FEED_ITEM.url}", got "${event.sources[0].url}"`
+    event.sources[0]!.url === PRESS_CLUB_FEED_ITEM.url,
+    `Expected sources[0].url = "${PRESS_CLUB_FEED_ITEM.url}", got "${event.sources[0]!.url}"`,
   );
 });
 
 test("15. Two different feed items produce different ids", () => {
   const event1 = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   const event2 = mapFeedItemToEvent(NO_URL_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event1.id !== event2.id,
-    `Different items must not produce the same id: both got "${event1.id}"`
-  );
+  assert(event1.id !== event2.id, `Different items must not produce the same id: both got "${event1.id}"`);
 });
 
 // ============================================================================
@@ -316,53 +283,44 @@ test("16. enrichmentFromModelRow converts naive start to LA offset ISO (PDT, hou
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(v !== null, "row should validate");
   assert(
-    v!.fields.startDatetime !== undefined && v!.fields.startDatetime.includes("2026-06-01"),
-    `startDatetime "${v!.fields.startDatetime}" should contain "2026-06-01"`
+    v!.fields.startDatetime?.includes("2026-06-01") === true,
+    `startDatetime "${v!.fields.startDatetime}" should contain "2026-06-01"`,
   );
   assert(
     v!.fields.startDatetime!.includes("-07:00"),
-    `startDatetime "${v!.fields.startDatetime}" should carry the -07:00 PDT offset`
+    `startDatetime "${v!.fields.startDatetime}" should carry the -07:00 PDT offset`,
   );
   assert(
     v!.fields.startDatetime!.includes("T08:30"),
-    `startDatetime "${v!.fields.startDatetime}" should keep local wall-clock 08:30`
+    `startDatetime "${v!.fields.startDatetime}" should keep local wall-clock 08:30`,
   );
 });
 
 test("17. enrichmentFromModelRow converts end time (15:30 local)", () => {
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(
-    v!.fields.endDatetime !== undefined && v!.fields.endDatetime.includes("T15:30"),
-    `endDatetime "${v!.fields.endDatetime}" should contain "T15:30"`
+    v!.fields.endDatetime?.includes("T15:30") === true,
+    `endDatetime "${v!.fields.endDatetime}" should contain "T15:30"`,
   );
 });
 
 test("18. enrichmentFromModelRow passes venue/address/prices through", () => {
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(v!.fields.venue === "Theatre for Young Professionals", `venue: "${v!.fields.venue}"`);
-  assert(
-    v!.fields.address !== undefined && v!.fields.address.includes("7960 University Avenue"),
-    `address: "${v!.fields.address}"`
-  );
+  assert(v!.fields.address?.includes("7960 University Avenue") === true, `address: "${v!.fields.address}"`);
   assert(v!.fields.priceMin === 250 && v!.fields.priceMax === 450, "prices should pass through");
   assert(v!.fields.isFree === false, "isFree should be false");
 });
 
 test("19. enrichmentFromModelRow: null datetimes stay absent (no fabricated times)", () => {
-  const v = enrichmentFromModelRow(
-    { ...MODEL_ROW_PAID, startDatetime: null, endDatetime: null },
-    1
-  );
+  const v = enrichmentFromModelRow({ ...MODEL_ROW_PAID, startDatetime: null, endDatetime: null }, 1);
   assert(v !== null, "row should still validate");
   assert(v!.fields.startDatetime === undefined, "no startDatetime should be set");
   assert(v!.fields.endDatetime === undefined, "no endDatetime should be set");
 });
 
 test("20. enrichmentFromModelRow: malformed datetime drops the field, keeps the row", () => {
-  const v = enrichmentFromModelRow(
-    { ...MODEL_ROW_PAID, startDatetime: "next Saturday at 8" },
-    1
-  );
+  const v = enrichmentFromModelRow({ ...MODEL_ROW_PAID, startDatetime: "next Saturday at 8" }, 1);
   assert(v !== null, "row should survive a malformed datetime");
   assert(v!.fields.startDatetime === undefined, "malformed start must be dropped");
   assert(v!.fields.venue === "Theatre for Young Professionals", "other fields keep flowing");
@@ -378,10 +336,7 @@ test("22. enrichmentFromModelRow: empty title is rejected", () => {
 });
 
 test("23. enrichmentFromModelRow: free event (isFree, priceMin 0)", () => {
-  const v = enrichmentFromModelRow(
-    { ...MODEL_ROW_PAID, priceMin: 0, priceMax: null, isFree: true },
-    1
-  );
+  const v = enrichmentFromModelRow({ ...MODEL_ROW_PAID, priceMin: 0, priceMax: null, isFree: true }, 1);
   assert(v!.fields.isFree === true, "isFree should be true");
   assert(v!.fields.priceMin === 0, `priceMin should be 0, got ${v!.fields.priceMin}`);
   assert(v!.fields.priceMax === undefined, "priceMax should be absent");
@@ -394,35 +349,28 @@ test("23. enrichmentFromModelRow: free event (isFree, priceMin 0)", () => {
 console.log("\n--- SD Reader mapFeedItemToEvent Integration Tests ---\n");
 
 /** Enrichment as extractReaderEnrichments would deliver it for the paid item. */
-const PAID_ENRICHMENT: ReaderDescriptionFields =
-  enrichmentFromModelRow(MODEL_ROW_PAID, 1)!.fields;
+const PAID_ENRICHMENT: ReaderDescriptionFields = enrichmentFromModelRow(MODEL_ROW_PAID, 1)!.fields;
 
 test("24. Enriched item: startDatetime comes from the enrichment (NOT publishedAt)", () => {
   const event = mapFeedItemToEvent(READER_FEED_ITEM_PAID, READER_SOURCE, PAID_ENRICHMENT);
   assert(
     event.startDatetime.includes("2026-06-01"),
-    `startDatetime "${event.startDatetime}" must contain "2026-06-01", not today`
+    `startDatetime "${event.startDatetime}" must contain "2026-06-01", not today`,
   );
   assert(
     !event.startDatetime.endsWith("Z"),
-    `startDatetime "${event.startDatetime}" should not be a UTC "Z" timestamp (publishedAt passthrough)`
+    `startDatetime "${event.startDatetime}" should not be a UTC "Z" timestamp (publishedAt passthrough)`,
   );
 });
 
 test("25. Enriched item: title comes from the enrichment (prefix stripped)", () => {
   const event = mapFeedItemToEvent(READER_FEED_ITEM_PAID, READER_SOURCE, PAID_ENRICHMENT);
-  assert(
-    event.title === "Musical Theater Summer Camps",
-    `Expected cleaned title, got "${event.title}"`
-  );
+  assert(event.title === "Musical Theater Summer Camps", `Expected cleaned title, got "${event.title}"`);
 });
 
 test("26. Enriched item: venue is set", () => {
   const event = mapFeedItemToEvent(READER_FEED_ITEM_PAID, READER_SOURCE, PAID_ENRICHMENT);
-  assert(
-    event.venue === "Theatre for Young Professionals",
-    `Expected venue to be set, got "${event.venue}"`
-  );
+  assert(event.venue === "Theatre for Young Professionals", `Expected venue to be set, got "${event.venue}"`);
 });
 
 test("27. Enriched item: priceMin/priceMax are set", () => {
@@ -434,13 +382,10 @@ test("27. Enriched item: priceMin/priceMax are set", () => {
 test("28. Reader item WITHOUT enrichment falls back to standard RSS mapping", () => {
   // Extraction failed / unavailable → raw title + publish date, never a guess.
   const event = mapFeedItemToEvent(READER_FEED_ITEM_PAID, READER_SOURCE);
-  assert(
-    event.title === READER_FEED_ITEM_PAID.title,
-    `Expected raw title fallback, got "${event.title}"`
-  );
+  assert(event.title === READER_FEED_ITEM_PAID.title, `Expected raw title fallback, got "${event.title}"`);
   assert(
     event.startDatetime === READER_FEED_ITEM_PAID.publishedAt,
-    `Expected publishedAt fallback, got "${event.startDatetime}"`
+    `Expected publishedAt fallback, got "${event.startDatetime}"`,
   );
 });
 
@@ -449,7 +394,7 @@ test("29. Press Club item (no 'When:') — startDatetime == publishedAt unchange
   // The press club item has no "When:" in its body — should be unaffected
   assert(
     event.startDatetime === PRESS_CLUB_FEED_ITEM.publishedAt,
-    `Expected startDatetime to equal publishedAt "${PRESS_CLUB_FEED_ITEM.publishedAt}", got "${event.startDatetime}"`
+    `Expected startDatetime to equal publishedAt "${PRESS_CLUB_FEED_ITEM.publishedAt}", got "${event.startDatetime}"`,
   );
 });
 
@@ -457,15 +402,11 @@ test("30. Press Club item (no 'When:') — title unchanged", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
     event.title === PRESS_CLUB_FEED_ITEM.title,
-    `Expected title to be unchanged "${PRESS_CLUB_FEED_ITEM.title}", got "${event.title}"`
+    `Expected title to be unchanged "${PRESS_CLUB_FEED_ITEM.title}", got "${event.title}"`,
   );
 });
 
 test("31. Press Club item (no 'When:') — venue is undefined", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
-  assert(
-    event.venue === undefined,
-    `Expected venue=undefined for press club item, got "${event.venue}"`
-  );
+  assert(event.venue === undefined, `Expected venue=undefined for press club item, got "${event.venue}"`);
 });
-

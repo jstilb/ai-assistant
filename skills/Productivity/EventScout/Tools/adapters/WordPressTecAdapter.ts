@@ -52,7 +52,7 @@
  *   raw.image may be an object with a `url` string, or boolean false.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { EventItemSchema, CategorySchema } from "../types.ts";
 import { utcIsoToLaIso, naiveLaToUtcMs } from "../lib/tz.ts";
@@ -89,13 +89,13 @@ export interface TecEvent {
   title: string;
   url: string;
   all_day: boolean;
-  start_date: string;       // "YYYY-MM-DD HH:MM:SS" local
-  utc_start_date?: string;  // "YYYY-MM-DD HH:MM:SS" UTC
+  start_date: string; // "YYYY-MM-DD HH:MM:SS" local
+  utc_start_date?: string; // "YYYY-MM-DD HH:MM:SS" UTC
   end_date?: string;
   utc_end_date?: string;
   description?: string;
   excerpt?: string;
-  venue?: TecVenue | [];    // may be empty array when no venue
+  venue?: TecVenue | []; // may be empty array when no venue
   categories?: TecCategory[];
   cost?: string;
   cost_details?: TecCostDetails;
@@ -155,7 +155,7 @@ function normalizeTecUtc(raw: string | undefined): string | null {
   const normalized = raw.trim().replace(" ", "T") + "Z";
   // Validate the resulting ISO string parses correctly
   const ms = Date.parse(normalized);
-  if (isNaN(ms)) return null;
+  if (Number.isNaN(ms)) return null;
   return normalized;
 }
 
@@ -183,7 +183,7 @@ function parseTecDatetime(utcField: string | undefined, localField: string | und
   if (localField) {
     const naiveIso = localField.trim().replace(" ", "T"); // "YYYY-MM-DDTHH:MM:SS" (no Z)
     const utcMs = naiveLaToUtcMs(naiveIso);
-    if (!isNaN(utcMs)) {
+    if (!Number.isNaN(utcMs)) {
       return utcIsoToLaIso(new Date(utcMs).toISOString());
     }
   }
@@ -201,7 +201,7 @@ function parseTecDatetime(utcField: string | undefined, localField: string | und
 
 function stripHtml(html: string): string {
   return html
-    .replace(/<[^>]*>/g, " ")   // replace tags with spaces
+    .replace(/<[^>]*>/g, " ") // replace tags with spaces
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -219,29 +219,21 @@ function stripHtml(html: string): string {
 // TEC slugs are lowercase-hyphenated; we normalize before matching.
 // ============================================================================
 
-const VALID_CATEGORIES: Category[] = [
-  "music", "comedy", "theater", "sports", "arts",
-  "community", "festival", "talk", "film", "food", "other",
-];
-
 // Slug/name patterns → Category. Order matters: more specific first.
 const CATEGORY_MAP: Array<{ pattern: RegExp; category: Category }> = [
-  { pattern: /\bmusic\b/i,         category: "music" },
-  { pattern: /\bcomedy\b/i,         category: "comedy" },
-  { pattern: /\btheat(er|re)\b/i,   category: "theater" },
-  { pattern: /\bsports?\b/i,        category: "sports" },
-  { pattern: /\barts?\b/i,          category: "arts" },
+  { pattern: /\bmusic\b/i, category: "music" },
+  { pattern: /\bcomedy\b/i, category: "comedy" },
+  { pattern: /\btheat(er|re)\b/i, category: "theater" },
+  { pattern: /\bsports?\b/i, category: "sports" },
+  { pattern: /\barts?\b/i, category: "arts" },
   { pattern: /\bcommunit(y|ies)\b/i, category: "community" },
-  { pattern: /\bfestival\b/i,       category: "festival" },
-  { pattern: /\btalk(s)?\b/i,       category: "talk" },
+  { pattern: /\bfestival\b/i, category: "festival" },
+  { pattern: /\btalk(s)?\b/i, category: "talk" },
   { pattern: /\bfilm\b|\bcinema\b|\bmovie\b/i, category: "film" },
   { pattern: /\bfood\b|\bdrink\b|\bculinary\b|\bdining\b|\btasting\b/i, category: "food" },
 ];
 
-function mapTecCategory(
-  categories: TecCategory[] | undefined,
-  hint: Category | undefined
-): Category {
+function mapTecCategory(categories: TecCategory[] | undefined, hint: Category | undefined): Category {
   if (!categories || categories.length === 0) return hint ?? "other";
 
   for (const cat of categories) {
@@ -316,9 +308,7 @@ function extractPriceInfo(event: TecEvent): PriceInfo {
     return { isFree: false };
   }
 
-  const parsed = values
-    .map((v) => parseFloat(v))
-    .filter((n) => !isNaN(n));
+  const parsed = values.map((v) => parseFloat(v)).filter((n) => !Number.isNaN(n));
 
   if (parsed.length === 0) {
     return { isFree: false };
@@ -353,9 +343,7 @@ export function mapTecEventToItem(raw: TecEvent, source: EventSource): EventItem
   // --- Dates ---
   const startDatetime = parseTecDatetime(raw.utc_start_date, raw.start_date);
   if (startDatetime === null) {
-    throw new Error(
-      `[WordPressTecAdapter] Cannot parse date for event id=${raw.id} title="${raw.title}"`
-    );
+    throw new Error(`[WordPressTecAdapter] Cannot parse date for event id=${raw.id} title="${raw.title}"`);
   }
 
   const endDatetime = parseTecDatetime(raw.utc_end_date, raw.end_date) ?? undefined;
@@ -371,7 +359,7 @@ export function mapTecEventToItem(raw: TecEvent, source: EventSource): EventItem
 
   // --- Description ---
   const rawDesc = raw.description ? stripHtml(raw.description) : undefined;
-  const description = (rawDesc && rawDesc.length > 0) ? rawDesc : (raw.excerpt ?? undefined);
+  const description = rawDesc && rawDesc.length > 0 ? rawDesc : (raw.excerpt ?? undefined);
 
   // --- Tags: from TEC category slugs/names ---
   const tags = (raw.categories ?? []).map((c) => c.slug.toLowerCase()).filter(Boolean);
@@ -410,8 +398,7 @@ export function mapTecEventToItem(raw: TecEvent, source: EventSource): EventItem
   const parsed = EventItemSchema.safeParse(item);
   if (!parsed.success) {
     throw new Error(
-      `[WordPressTecAdapter] EventItem schema validation failed for event id=${raw.id}: ` +
-      parsed.error.message
+      `[WordPressTecAdapter] EventItem schema validation failed for event id=${raw.id}: ` + parsed.error.message,
     );
   }
 
@@ -470,24 +457,20 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
 
     const res = await fetch(url, {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "User-Agent": "EventScout/1.0 (kaya-bot)",
       },
     });
 
     if (!res.ok) {
-      throw new Error(
-        `[WordPressTecAdapter] HTTP ${res.status} ${res.statusText} from ${url}`
-      );
+      throw new Error(`[WordPressTecAdapter] HTTP ${res.status} ${res.statusText} from ${url}`);
     }
 
     let data: TecApiResponse;
     try {
       data = (await res.json()) as TecApiResponse;
     } catch (err) {
-      throw new Error(
-        `[WordPressTecAdapter] Failed to parse JSON from ${url}: ${(err as Error).message}`
-      );
+      throw new Error(`[WordPressTecAdapter] Failed to parse JSON from ${url}: ${(err as Error).message}`);
     }
 
     // On first page, set maxPages from the server-reported total_pages,
@@ -512,9 +495,7 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
         }
       } catch (err) {
         // Log and skip; don't abort the whole fetch
-        console.warn(
-          `[WordPressTecAdapter] Skipping event id=${raw.id}: ${(err as Error).message}`
-        );
+        console.warn(`[WordPressTecAdapter] Skipping event id=${raw.id}: ${(err as Error).message}`);
       }
     }
   }
@@ -522,7 +503,7 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
   // Log after the loop so we have the final count
   if (safetyHit) {
     console.log(
-      `[WordPressTecAdapter] safety bound ${MAX_PAGES_SAFETY} hit for source "${source.id}" — stopping (coverage may be incomplete)`
+      `[WordPressTecAdapter] safety bound ${MAX_PAGES_SAFETY} hit for source "${source.id}" — stopping (coverage may be incomplete)`,
     );
   }
 
@@ -536,8 +517,7 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("WordPressTecAdapter.ts") ||
-    process.argv[1].endsWith("WordPressTecAdapter"));
+  (process.argv[1].endsWith("WordPressTecAdapter.ts") || process.argv[1].endsWith("WordPressTecAdapter"));
 
 if (IS_SCRIPT) {
   const sourceUrl = process.env["EVENTSCOUT_TEC_URL"] ?? "https://balboapark.org/events/";
@@ -565,9 +545,7 @@ if (IS_SCRIPT) {
     } else {
       console.log("First 5 events:");
       for (const e of preview) {
-        console.log(
-          `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`
-        );
+        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`);
       }
     }
 

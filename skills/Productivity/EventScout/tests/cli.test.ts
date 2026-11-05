@@ -35,15 +35,15 @@
  * worktrees").
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/cli.test.ts
+ *   bun test skills/Productivity/EventScout/tests/cli.test.ts
  */
 
 import { test, afterAll } from "bun:test";
-import { spawnSync } from "child_process";
-import { writeFileSync, readFileSync, unlinkSync, existsSync, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { spawnSync } from "node:child_process";
+import { writeFileSync, readFileSync, unlinkSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { EventSourceSchema } from "../Tools/types.ts";
 import { z } from "zod";
 
@@ -126,13 +126,10 @@ test("Test 1: add-source with bad URL exits non-zero with an error message", () 
   const r = runCLI(["add-source", "not-a-valid-url"], {
     EVENTSCOUT_SOURCES_PATH: TEMP_SOURCES,
   });
-  assert(
-    (r.status ?? 0) !== 0,
-    "Test 1: bad URL → exits non-zero"
-  );
+  assert((r.status ?? 0) !== 0, "Test 1: bad URL → exits non-zero");
   assert(
     r.stderr.length > 0 || r.stdout.includes("Error") || r.stdout.includes("Invalid") || r.stdout.includes("invalid"),
-    "Test 1b: bad URL → error message printed"
+    "Test 1b: bad URL → error message printed",
   );
 });
 
@@ -141,10 +138,7 @@ test("Test 2: add-source with valid URL appends a schema-valid EventSource", () 
   const r = runCLI(["add-source", "https://example.com/events"], {
     EVENTSCOUT_SOURCES_PATH: TEMP_SOURCES,
   });
-  assert(
-    r.status === 0,
-    "Test 2: valid URL → exits 0"
-  );
+  assert(r.status === 0, "Test 2: valid URL → exits 0");
   const sources = readTempSources();
   assert(sources.length === 1, "Test 2b: one source written to temp file");
   const parsed = z.array(EventSourceSchema).safeParse(sources);
@@ -153,10 +147,9 @@ test("Test 2: add-source with valid URL appends a schema-valid EventSource", () 
 
 test("Test 3: --tier and --category flags are persisted", () => {
   initTempSources();
-  const r = runCLI(
-    ["add-source", "https://example.com/events2", "--tier", "rss", "--category", "music"],
-    { EVENTSCOUT_SOURCES_PATH: TEMP_SOURCES }
-  );
+  const r = runCLI(["add-source", "https://example.com/events2", "--tier", "rss", "--category", "music"], {
+    EVENTSCOUT_SOURCES_PATH: TEMP_SOURCES,
+  });
   assert(r.status === 0, "Test 3: exits 0 with --tier and --category");
   const sources = readTempSources() as Array<{ fetchTier?: string; categoryHint?: string }>;
   const added = sources[0];
@@ -170,10 +163,7 @@ test("Test 4: default tier is html-llm", () => {
     EVENTSCOUT_SOURCES_PATH: TEMP_SOURCES,
   });
   const sources = readTempSources() as Array<{ fetchTier?: string }>;
-  assert(
-    sources[0]?.fetchTier === "html-llm",
-    "Test 4: default fetchTier is html-llm when --tier not provided"
-  );
+  assert(sources[0]?.fetchTier === "html-llm", "Test 4: default fetchTier is html-llm when --tier not provided");
 });
 
 test("Test 5: default pollInterval=720, enabled=true", () => {
@@ -216,9 +206,11 @@ test("Test 8: unknown subcommand exits non-zero with usage/error", () => {
   const r = runCLI(["foobar"]);
   assert((r.status ?? 0) !== 0, "Test 8: unknown subcommand exits non-zero");
   assert(
-    r.stdout.includes("Unknown") || r.stderr.includes("Unknown") ||
-    r.stdout.includes("Usage") || r.stderr.includes("Usage"),
-    "Test 8b: unknown subcommand prints usage/error"
+    r.stdout.includes("Unknown") ||
+      r.stderr.includes("Unknown") ||
+      r.stdout.includes("Usage") ||
+      r.stderr.includes("Usage"),
+    "Test 8b: unknown subcommand prints usage/error",
   );
 });
 
@@ -246,6 +238,14 @@ afterAll(() => {
   } else {
     process.env["KAYA_DIR"] = ORIGINAL_KAYA_DIR;
   }
-  try { rmSync(TEST_KAYA_DIR, { recursive: true, force: true }); } catch { /* ok */ }
-  try { if (existsSync(TEMP_SOURCES)) unlinkSync(TEMP_SOURCES); } catch { /* ok */ }
+  try {
+    rmSync(TEST_KAYA_DIR, { recursive: true, force: true });
+  } catch {
+    /* ok */
+  }
+  try {
+    if (existsSync(TEMP_SOURCES)) unlinkSync(TEMP_SOURCES);
+  } catch {
+    /* ok */
+  }
 });

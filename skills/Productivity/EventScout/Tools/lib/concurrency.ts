@@ -27,7 +27,7 @@
 export async function runWithConcurrency<T>(
   items: T[],
   limit: number,
-  worker: (item: T) => Promise<void>
+  worker: (item: T) => Promise<void>,
 ): Promise<void> {
   if (items.length === 0) return;
   let idx = 0;

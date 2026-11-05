@@ -31,7 +31,7 @@
  *   If BrightData returns empty content on tier-1/2 we rely on tier-3 Playwright.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { inference } from "../../../../../lib/core/Inference.ts";
 // cross-skill-allowed: adapter wraps Data/BrightData's fetch client by design — thin adapter over a shared client (tier-1/2/3 fetch strategy)
 import { BrightDataTool } from "../../../../Data/BrightData/Tools/BrightDataTool.ts";
@@ -56,7 +56,7 @@ function stableId(title: string, startDatetime: string, venueOrUrl: string): str
   // both produce the same id.
   const utcNorm = (() => {
     const ms = Date.parse(startDatetime);
-    return isNaN(ms) ? startDatetime : new Date(ms).toISOString();
+    return Number.isNaN(ms) ? startDatetime : new Date(ms).toISOString();
   })();
   const raw = `${canonical(title)}|${utcNorm}|${canonical(venueOrUrl)}`;
   return createHash("sha256").update(raw).digest("hex").slice(0, 16);
@@ -125,7 +125,7 @@ function coerceToIso(raw: string): string | null {
   // correct -07:00 timestamps that a Z round-trip used to obscure).
   if (!isNaiveDatetime(trimmed)) {
     const ts = Date.parse(trimmed);
-    if (isNaN(ts)) return null;
+    if (Number.isNaN(ts)) return null;
     return utcIsoToLaIso(new Date(ts).toISOString());
   }
 
@@ -137,7 +137,7 @@ function coerceToIso(raw: string): string | null {
   // because appending "Z" to "YYYY-MM-DDZ" gives a valid UTC midnight parse,
   // and the offset correction moves it to LA midnight.
   const utcMs = naiveLaToUtcMs(trimmed);
-  if (isNaN(utcMs)) return null;
+  if (Number.isNaN(utcMs)) return null;
 
   // Convert the resolved UTC instant to an LA offset-aware ISO string so that
   // the stored value carries the correct wall-clock time visibly.
@@ -213,14 +213,13 @@ export function normalizeExtracted(raw: unknown[], source: EventSource): EventIt
       droppedUnparseableDate++;
       console.warn(
         `[SPAAdapter] normalizeExtracted (${source.id}): dropping "${r.title}" — ` +
-        `unparseable startDatetime "${r.startDatetime}"`
+          `unparseable startDatetime "${r.startDatetime}"`,
       );
       continue;
     }
 
     // Step 3: optional endDatetime
-    const endDatetime =
-      r.endDatetime ? (coerceToIso(r.endDatetime) ?? undefined) : undefined;
+    const endDatetime = r.endDatetime ? (coerceToIso(r.endDatetime) ?? undefined) : undefined;
 
     // Step 4: category
     const category = coerceCategory(r.category, source.categoryHint);
@@ -275,8 +274,8 @@ export function normalizeExtracted(raw: unknown[], source: EventSource): EventIt
   if (totalDropped > 0) {
     console.warn(
       `[SPAAdapter] normalizeExtracted (${source.id}): dropped ${totalDropped}/${raw.length} raw entr${totalDropped === 1 ? "y" : "ies"} ` +
-      `(${droppedInvalidShape} invalid shape, ${droppedUnparseableDate} unparseable date, ${droppedFinalSchema} failed final schema) — ` +
-      `${results.length} survived`
+        `(${droppedInvalidShape} invalid shape, ${droppedUnparseableDate} unparseable date, ${droppedFinalSchema} failed final schema) — ` +
+        `${results.length} survived`,
     );
   }
 
@@ -304,7 +303,9 @@ function extractJsonArray(text: string): unknown[] {
   try {
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) return parsed;
-  } catch {}
+  } catch {
+    // not valid JSON: fall through to the next parse strategy
+  }
 
   // Strategy 2: code fence strip
   const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
@@ -312,7 +313,9 @@ function extractJsonArray(text: string): unknown[] {
     try {
       const parsed = JSON.parse(fenceMatch[1].trim());
       if (Array.isArray(parsed)) return parsed;
-    } catch {}
+    } catch {
+      // not valid JSON: fall through to the next parse strategy
+    }
   }
 
   // Strategy 3: greedy bracket match
@@ -320,19 +323,31 @@ function extractJsonArray(text: string): unknown[] {
   if (openIdx !== -1) {
     let depth = 0;
     let inString = false;
-    let escape = false;
+    let escaped = false;
     let closeIdx = -1;
 
     for (let i = openIdx; i < trimmed.length; i++) {
       const ch = trimmed[i];
-      if (escape) { escape = false; continue; }
-      if (ch === "\\" && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\" && inString) {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
       if (inString) continue;
       if (ch === "[") depth++;
       else if (ch === "]") {
         depth--;
-        if (depth === 0) { closeIdx = i; break; }
+        if (depth === 0) {
+          closeIdx = i;
+          break;
+        }
       }
     }
 
@@ -340,7 +355,9 @@ function extractJsonArray(text: string): unknown[] {
       try {
         const parsed = JSON.parse(trimmed.slice(openIdx, closeIdx + 1));
         if (Array.isArray(parsed)) return parsed;
-      } catch {}
+      } catch {
+        // not valid JSON: fall through to the next parse strategy
+      }
     }
   }
 
@@ -368,12 +385,7 @@ function extractJsonArray(text: string): unknown[] {
  *
  * PURE — deterministic, no I/O.
  */
-export function chunkContent(
-  content: string,
-  chunkSize: number,
-  maxChunks: number,
-  overlap: number,
-): string[] {
+export function chunkContent(content: string, chunkSize: number, maxChunks: number, overlap: number): string[] {
   if (content.length <= chunkSize) return [content];
   const stride = Math.max(1, chunkSize - overlap);
   const chunks: string[] = [];
@@ -455,10 +467,8 @@ export function trimToContentStart(content: string): string {
   const templateCount = new Map<string, number>();
   const templateFirstMatch = new Map<string, number>(); // template → byte offset of first href attr
 
-  let m: RegExpExecArray | null;
-  while ((m = hrefRe.exec(content)) !== null) {
-    const fullMatch = m[0];      // e.g. href="https://x.org/events/2026/06/01/slug"
-    const href = m[1];           // e.g. https://x.org/events/2026/06/01/slug
+  for (const m of content.matchAll(hrefRe)) {
+    const href = m[1]; // e.g. https://x.org/events/2026/06/01/slug
     if (!href) continue;
 
     // Extract path (strip scheme + host if absolute; take as-is if relative).
@@ -468,7 +478,7 @@ export function trimToContentStart(content: string): string {
       if (href.startsWith("http://") || href.startsWith("https://")) {
         path = new URL(href).pathname;
       } else {
-        path = href.startsWith("/") ? href.split("?")[0] ?? href : "/" + (href.split("?")[0] ?? href);
+        path = href.startsWith("/") ? (href.split("?")[0] ?? href) : "/" + (href.split("?")[0] ?? href);
       }
     } catch {
       path = href;
@@ -483,7 +493,7 @@ export function trimToContentStart(content: string): string {
     // Replace digit-only runs with '#' and keep at most the first 3 segments.
     const normalized = segments
       .slice(0, 3)
-      .map((seg) => /^\d+$/.test(seg) ? "#" : seg)
+      .map((seg) => (/^\d+$/.test(seg) ? "#" : seg))
       .join("/");
 
     // Require the normalized template to still have depth ≥ 2.
@@ -517,10 +527,7 @@ export function trimToContentStart(content: string): string {
     }
   }
 
-  const linkClusterOffset: number =
-    winnerTemplate !== null
-      ? (templateFirstMatch.get(winnerTemplate) ?? -1)
-      : -1;
+  const linkClusterOffset: number = winnerTemplate !== null ? (templateFirstMatch.get(winnerTemplate) ?? -1) : -1;
 
   // ── startOffset: minimum of available candidates ──────────────────────────
   const candidates: number[] = [];
@@ -543,8 +550,8 @@ export function trimToContentStart(content: string): string {
   if (content.length - startOffset < LLM_CHUNK_SIZE) {
     console.warn(
       `[SPAAdapter] trimToContentStart: signal at ${startOffset} is within the ` +
-      `last ${content.length - startOffset} chars of ${content.length} — too deep; ` +
-      `skipping trim and scanning from the top instead`
+        `last ${content.length - startOffset} chars of ${content.length} — too deep; ` +
+        `skipping trim and scanning from the top instead`,
     );
     return content;
   }
@@ -554,7 +561,7 @@ export function trimToContentStart(content: string): string {
 
   console.log(
     `[SPAAdapter] trimToContentStart: trimming from offset ${trimPoint} ` +
-    `(signal at ${startOffset}) — ${content.length} → ${content.length - trimPoint} chars`
+      `(signal at ${startOffset}) — ${content.length} → ${content.length - trimPoint} chars`,
   );
 
   return content.slice(trimPoint);
@@ -653,10 +660,7 @@ If no events are found, return an empty array: []`;
  * @param source  - EventSource the content was fetched for.
  * @returns       - EventItem[] extracted; may be empty if nothing found.
  */
-export async function extractEventsFromContent(
-  content: string,
-  source: EventSource,
-): Promise<EventItem[]> {
+export async function extractEventsFromContent(content: string, source: EventSource): Promise<EventItem[]> {
   // JSON-LD pre-pass (deterministic, fast)
   const jsonLdEvents = extractJsonLdEvents(content, source);
   if (jsonLdEvents.length > 0) {
@@ -696,10 +700,7 @@ const LLM_CHUNK_OVERLAP = 2_000;
  * Run one LLM extraction call over a single content window.
  * Throws if the inference call itself fails (caller handles per-chunk).
  */
-async function extractChunkViaLLM(
-  chunk: string,
-  source: EventSource,
-): Promise<EventItem[]> {
+async function extractChunkViaLLM(chunk: string, source: EventSource): Promise<EventItem[]> {
   const inferenceResult = await inference({
     systemPrompt: buildExtractionSystemPrompt(todayLaDateString()),
     userPrompt:
@@ -718,7 +719,7 @@ async function extractChunkViaLLM(
 
   if (!inferenceResult.success) {
     throw new Error(
-      `[SPAAdapter] LLM extraction failed for ${source.url}: ${inferenceResult.error ?? "unknown error"}`
+      `[SPAAdapter] LLM extraction failed for ${source.url}: ${inferenceResult.error ?? "unknown error"}`,
     );
   }
 
@@ -735,36 +736,31 @@ async function extractChunkViaLLM(
  * single-slice behaviour. A chunk whose inference fails is skipped (logged),
  * not fatal — the surviving chunks still contribute.
  */
-async function extractViaLLM(
-  content: string,
-  source: EventSource
-): Promise<EventItem[]> {
+async function extractViaLLM(content: string, source: EventSource): Promise<EventItem[]> {
   const trimmed = trimToContentStart(content);
   // Per-source override for content-dense pages whose listing exceeds the
   // default 4-window (~150KB) budget — events past it would be silently dropped.
   const maxWindows = source.maxLlmWindows ?? LLM_MAX_CHUNKS;
   const chunks = chunkContent(trimmed, LLM_CHUNK_SIZE, maxWindows, LLM_CHUNK_OVERLAP);
   if (chunks.length > 1) {
-    console.log(
-      `[SPAAdapter] Content ${trimmed.length} chars → ${chunks.length} window(s) for LLM extraction`
-    );
+    console.log(`[SPAAdapter] Content ${trimmed.length} chars → ${chunks.length} window(s) for LLM extraction`);
   }
 
-  const settled = await Promise.allSettled(
-    chunks.map((chunk) => extractChunkViaLLM(chunk, source))
-  );
+  const settled = await Promise.allSettled(chunks.map((chunk) => extractChunkViaLLM(chunk, source)));
 
   const all: EventItem[] = [];
   let failures = 0;
   for (const r of settled) {
     if (r.status === "fulfilled") all.push(...r.value);
-    else { failures++; console.warn(`[SPAAdapter] window extraction skipped: ${(r.reason as Error)?.message ?? r.reason}`); }
+    else {
+      failures++;
+      console.warn(`[SPAAdapter] window extraction skipped: ${(r.reason as Error)?.message ?? r.reason}`);
+    }
   }
 
   const deduped = dedupById(all);
   console.log(
-    `[SPAAdapter] LLM returned ${deduped.length} unique event(s) ` +
-    `(${chunks.length} window(s), ${failures} failed)`
+    `[SPAAdapter] LLM returned ${deduped.length} unique event(s) ` + `(${chunks.length} window(s), ${failures} failed)`,
   );
   return deduped;
 }
@@ -773,28 +769,20 @@ async function extractViaLLM(
 // Playwright (tier-3) escalation helper
 // ============================================================================
 
-async function escalateToPlaywright(
-  url: string,
-  tool: BrightDataTool
-): Promise<string | null> {
-  console.log(
-    `[SPAAdapter] Escalating to Playwright (tier-3) for thin/empty content: ${url}`
-  );
+async function escalateToPlaywright(url: string, tool: BrightDataTool): Promise<string | null> {
+  console.log(`[SPAAdapter] Escalating to Playwright (tier-3) for thin/empty content: ${url}`);
   const pw = await tool.scrape(url, {
     startTier: 3,
-    skipBrowser: false,  // explicitly enable Playwright
+    skipBrowser: false, // explicitly enable Playwright
     timeoutMs: 90_000,
   });
   if (pw.success && pw.content && pw.content.length > 0) {
-    console.log(
-      `[SPAAdapter] Playwright returned ${pw.content.length} chars ` +
-      `(tier ${pw.winningTier})`
-    );
+    console.log(`[SPAAdapter] Playwright returned ${pw.content.length} chars ` + `(tier ${pw.winningTier})`);
     return pw.content;
   }
   console.warn(
     `[SPAAdapter] Playwright escalation failed for ${url}: ` +
-    `${pw.error ?? "no content"} (tiers: ${pw.tiersAttempted.join(",")})`
+      `${pw.error ?? "no content"} (tiers: ${pw.tiersAttempted.join(",")})`,
   );
   return null;
 }
@@ -823,7 +811,7 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
   // --- Step 1: tier-1/2 fetch ---
   const scrapeResult = await tool.scrape(url, {
     startTier: 1,
-    skipBrowser: true,   // Lightweight: tier-1 fetch, tier-2 curl only
+    skipBrowser: true, // Lightweight: tier-1 fetch, tier-2 curl only
     timeoutMs: 60_000,
   });
 
@@ -833,12 +821,11 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
     content = scrapeResult.content;
     console.log(
       `[SPAAdapter] Fetched ${content.length} chars via tier ${scrapeResult.winningTier} ` +
-      `(tiers tried: ${scrapeResult.tiersAttempted.join(",")})`
+        `(tiers tried: ${scrapeResult.tiersAttempted.join(",")})`,
     );
   } else {
     console.warn(
-      `[SPAAdapter] Tier-1/2 fetch failed for ${url}: ` +
-      `${scrapeResult.error ?? "no content"} — will try Playwright`
+      `[SPAAdapter] Tier-1/2 fetch failed for ${url}: ` + `${scrapeResult.error ?? "no content"} — will try Playwright`,
     );
   }
 
@@ -883,17 +870,14 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
     }
   }
 
-  console.log(
-    `[SPAAdapter] ${events.length} valid EventItem(s) ` +
-    `(escalated=${escalated})`
-  );
+  console.log(`[SPAAdapter] ${events.length} valid EventItem(s) ` + `(escalated=${escalated})`);
 
   // If nothing worked at all, throw so callers can record the failure
   if (!content && !escalated) {
     throw new Error(
       `[SPAAdapter] Failed to fetch ${url} — ` +
-      `tiers attempted: ${scrapeResult.tiersAttempted.join(",")} — ` +
-      `error: ${scrapeResult.error ?? "no content returned"}`
+        `tiers attempted: ${scrapeResult.tiersAttempted.join(",")} — ` +
+        `error: ${scrapeResult.error ?? "no content returned"}`,
     );
   }
 
@@ -916,7 +900,7 @@ export const MAX_PAGES_SAFETY = 40;
  * Receives the fully-built page URL and the EventSource; returns EventItem[].
  * Allows tests to mock the network + LLM without any real I/O.
  */
-export type PageFetcherFn = (url: string, source: EventSource) => Promise<EventItem[]>;
+type PageFetcherFn = (url: string, source: EventSource) => Promise<EventItem[]>;
 
 /**
  * Core horizon-aware pagination loop — separated from the real fetcher so tests
@@ -980,8 +964,8 @@ export async function fetchSPAEventsWithPageFn(
     if (pagesFetched >= MAX_PAGES_SAFETY) {
       console.warn(
         `[SPAAdapter] SAFETY BOUND HIT: ${source.id} reached MAX_PAGES_SAFETY=${MAX_PAGES_SAFETY} pages ` +
-        `— stopping pagination. Review 'paginate.pages' config or source behavior. ` +
-        `Events fetched so far: ${all.length}`,
+          `— stopping pagination. Review 'paginate.pages' config or source behavior. ` +
+          `Events fetched so far: ${all.length}`,
       );
       break;
     }
@@ -993,9 +977,7 @@ export async function fetchSPAEventsWithPageFn(
     try {
       pageEvents = await pageFn(pageUrl, source);
     } catch (err) {
-      console.warn(
-        `[SPAAdapter] page ${p} failed: ${(err as Error).message} — stopping pagination`,
-      );
+      console.warn(`[SPAAdapter] page ${p} failed: ${(err as Error).message} — stopping pagination`);
       break;
     }
     pagesFetched++;
@@ -1013,7 +995,7 @@ export async function fetchSPAEventsWithPageFn(
     if (newEvents.length === 0) {
       console.log(
         `[SPAAdapter] page ${p} has no new unique events (all ${pageEvents.length} already seen) ` +
-        `— stopping pagination (no-op param or deduplication loop)`,
+          `— stopping pagination (no-op param or deduplication loop)`,
       );
       break;
     }
@@ -1028,7 +1010,7 @@ export async function fetchSPAEventsWithPageFn(
     if (inHorizonEvents.length === 0) {
       console.log(
         `[SPAAdapter] page ${p} is entirely beyond ${days}-day horizon — ` +
-        `stopping pagination (date-ordering assumption: further pages also past horizon)`,
+          `stopping pagination (date-ordering assumption: further pages also past horizon)`,
       );
       // Add the in-horizon events (empty here, but keep the pattern uniform).
       // The beyond-horizon events are intentionally dropped here; the downstream
@@ -1044,15 +1026,14 @@ export async function fetchSPAEventsWithPageFn(
 
     console.log(
       `[SPAAdapter] page ${p}: added ${newEvents.length} new event(s) ` +
-      `(${pageEvents.length - newEvents.length} dupes skipped, ` +
-      `${pageEvents.length - inHorizonEvents.length} beyond horizon on page)`,
+        `(${pageEvents.length - newEvents.length} dupes skipped, ` +
+        `${pageEvents.length - inHorizonEvents.length} beyond horizon on page)`,
     );
   }
 
   const deduped = dedupById(all);
   console.log(
-    `[SPAAdapter] Paginated total (${source.id}): ${deduped.length} unique event(s) ` +
-    `across fetched pages`,
+    `[SPAAdapter] Paginated total (${source.id}): ${deduped.length} unique event(s) ` + `across fetched pages`,
   );
   return deduped;
 }
@@ -1068,10 +1049,7 @@ export async function fetchSPAEventsWithPageFn(
  * @returns      - EventItem[] across all fetched pages; may be empty.
  */
 export async function fetchSPAEvents(source: EventSource): Promise<EventItem[]> {
-  return fetchSPAEventsWithPageFn(
-    source,
-    (url, src) => fetchEventsForUrl(url, src),
-  );
+  return fetchSPAEventsWithPageFn(source, (url, src) => fetchEventsForUrl(url, src));
 }
 
 // ============================================================================
@@ -1081,18 +1059,15 @@ export async function fetchSPAEvents(source: EventSource): Promise<EventItem[]> 
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("SPAAdapter.ts") ||
-    process.argv[1].endsWith("SPAAdapter"));
+  (process.argv[1].endsWith("SPAAdapter.ts") || process.argv[1].endsWith("SPAAdapter"));
 
 if (IS_SCRIPT) {
   const sourcesPath = new URL("../sources.json", import.meta.url).pathname;
-  const { readFileSync } = await import("fs");
+  const { readFileSync } = await import("node:fs");
   const { z } = await import("zod");
   const { EventSourceSchema } = await import("../types.ts");
 
-  const sources = z.array(EventSourceSchema).parse(
-    JSON.parse(readFileSync(sourcesPath, "utf-8"))
-  );
+  const sources = z.array(EventSourceSchema).parse(JSON.parse(readFileSync(sourcesPath, "utf-8")));
 
   const spaSources = sources.filter((s) => s.fetchTier === "spa" && s.enabled);
   if (spaSources.length === 0) {

@@ -11,7 +11,7 @@
  *     returned/written after the horizon filter is applied in ingestSource.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/horizon.test.ts
+ *   bun test skills/Productivity/EventScout/tests/horizon.test.ts
  */
 
 import { test } from "bun:test";
@@ -30,7 +30,7 @@ function assert(condition: boolean, message: string): void {
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
-      `Assertion failed: ${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
+      `Assertion failed: ${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
     );
   }
 }
@@ -123,11 +123,7 @@ test("1.4: past event (now-5d) kept — horizon is a future cap only", () => {
 });
 
 test("1.5: unparseable startDatetime kept (don't silently lose data)", () => {
-  const events = [
-    makeEvent("not-a-date"),
-    makeEvent(""),
-    makeEvent("2026-99-99T00:00:00"),
-  ];
+  const events = [makeEvent("not-a-date"), makeEvent(""), makeEvent("2026-99-99T00:00:00")];
   const result = withinHorizon(events, NOW);
   assertEq(result.length, 3, "all 3 unparseable events kept");
 });
@@ -223,11 +219,7 @@ test("3.1: far-future events from adapter dropped in result", async () => {
   });
 
   // perSource count reflects AFTER the horizon filter (what was kept)
-  assertEq(
-    result.perSource["test-horizon-src"],
-    1,
-    "perSource count = 1 (only in-horizon event counted)"
-  );
+  assertEq(result.perSource["test-horizon-src"], 1, "perSource count = 1 (only in-horizon event counted)");
   assertEq(result.written, 1, "written = 1 (far-future event not written)");
 
   if (prevEnv !== undefined) process.env["EVENTSCOUT_HORIZON_DAYS"] = prevEnv;
@@ -286,8 +278,8 @@ test("3.4: EVENTSCOUT_HORIZON_DAYS=30 env knob respected in integration", async 
   const prevEnv = process.env["EVENTSCOUT_HORIZON_DAYS"];
   process.env["EVENTSCOUT_HORIZON_DAYS"] = "30";
 
-  const eIn30 = makeEvent(isoOffsetReal(20));   // kept: 20 ≤ 30
-  const eOut30 = makeEvent(isoOffsetReal(50));  // dropped: 50 > 30
+  const eIn30 = makeEvent(isoOffsetReal(20)); // kept: 20 ≤ 30
+  const eOut30 = makeEvent(isoOffsetReal(50)); // dropped: 50 > 30
 
   const sources = [makeSource("knob-test-src")];
   const adapters: Record<string, () => Promise<EventItem[]>> = {

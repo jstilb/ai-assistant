@@ -19,13 +19,9 @@
  *   savedIdSet(): Set<string>
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
-import {
-  DEFAULT_SAVED_PATH,
-  EventItemSchema,
-  SavedEventsStoreSchema,
-} from "./types.ts";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { DEFAULT_SAVED_PATH, EventItemSchema, SavedEventsStoreSchema } from "./types.ts";
 import type { EventItem, SavedEventEntry, SavedEventsStore } from "./types.ts";
 
 function getSavedPath(): string {

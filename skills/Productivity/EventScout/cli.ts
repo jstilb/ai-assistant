@@ -37,8 +37,8 @@
  *   EVENTSCOUT_CACHE_PATH=/tmp/cache.json      — avoids touching real cache
  */
 
-import { dirname, sep } from "path";
-import { fileURLToPath } from "url";
+import { dirname, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ingestSource, ingestAll } from "./Tools/Ingest.ts";
 import { queryHybrid, persistRefreshedEvents } from "./Tools/Query.ts";
 import { loadSources, addSource, updateLastFetched } from "./Tools/SourceManager.ts";
@@ -201,9 +201,7 @@ function deriveSourceName(url: string): string {
 }
 
 /** Parse --key value pairs from args array, returning leftover positional args */
-export function parseFlags(
-  args: string[]
-): { flags: Record<string, string>; positional: string[] } {
+export function parseFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
   const flags: Record<string, string> = {};
   const positional: string[] = [];
   let i = 0;
@@ -366,7 +364,7 @@ export function buildQueryContext(
   args: string[],
   now: Date = new Date(),
   home: { lat: number; lng: number } = DEFAULT_HOME,
-  radiusMiles: number = DEFAULT_RADIUS_MILES
+  radiusMiles: number = DEFAULT_RADIUS_MILES,
 ): BuiltQuery {
   const { flags, positional } = parseFlags(args);
 
@@ -378,10 +376,10 @@ export function buildQueryContext(
   // ---- limit ----------------------------------------------------------------
   const limitRaw = flags["limit"];
   const limit = limitRaw ? parseInt(limitRaw, 10) : Infinity;
-  if (!isFinite(limit) && limitRaw !== undefined) {
+  if (!Number.isFinite(limit) && limitRaw !== undefined) {
     throw new QueryFlagError("--limit must be a positive integer");
   }
-  if (isFinite(limit) && (isNaN(limit) || limit < 1)) {
+  if (Number.isFinite(limit) && (Number.isNaN(limit) || limit < 1)) {
     throw new QueryFlagError("--limit must be a positive integer");
   }
 
@@ -394,9 +392,7 @@ export function buildQueryContext(
   if (flags["max-price"] !== undefined) {
     const n = Number(flags["max-price"]);
     if (!Number.isFinite(n) || n < 0) {
-      throw new QueryFlagError(
-        `--max-price must be a non-negative number, got "${flags["max-price"]}"`
-      );
+      throw new QueryFlagError(`--max-price must be a non-negative number, got "${flags["max-price"]}"`);
     }
     maxPrice = n;
   }
@@ -410,7 +406,7 @@ export function buildQueryContext(
       if (!parsed.success) {
         throw new QueryFlagError(
           `Invalid --category "${cat}". Valid categories: music | comedy | theater | ` +
-            "sports | arts | community | festival | talk | film | food | other"
+            "sports | arts | community | festival | talk | film | food | other",
         );
       }
       return parsed.data;
@@ -424,9 +420,7 @@ export function buildQueryContext(
     timeOfDay = timeOfDayRaw.map((tod) => {
       const parsed = TimeOfDaySchema.safeParse(tod);
       if (!parsed.success) {
-        throw new QueryFlagError(
-          `Invalid --time-of-day "${tod}". Valid buckets: morning | afternoon | evening | late`
-        );
+        throw new QueryFlagError(`Invalid --time-of-day "${tod}". Valid buckets: morning | afternoon | evening | late`);
       }
       return parsed.data;
     });
@@ -510,9 +504,7 @@ export function parseBookingFlags(args: string[]): BookingFlags {
   if (rawAction !== undefined) {
     const parsed = ExplicitBookingActionSchema.safeParse(rawAction);
     if (!parsed.success) {
-      throw new BookingFlagError(
-        `Invalid --action "${rawAction}". Valid actions: buy-tickets | reserve | rsvp | none`
-      );
+      throw new BookingFlagError(`Invalid --action "${rawAction}". Valid actions: buy-tickets | reserve | rsvp | none`);
     }
     action = parsed.data;
   }
@@ -575,9 +567,7 @@ async function cmdQuery(args: string[]): Promise<void> {
 
   console.log("\n=== Results ===");
   console.log(result.markdown);
-  console.log(
-    `\n[${result.rankedEvents.length} ranked result(s) from ${result.events.length} filtered / cache total]`
-  );
+  console.log(`\n[${result.rankedEvents.length} ranked result(s) from ${result.events.length} filtered / cache total]`);
 }
 
 async function cmdPrefetch(): Promise<void> {
@@ -609,9 +599,7 @@ async function cmdPrefetch(): Promise<void> {
 
     console.log("Per-source counts:");
     for (const [id, count] of Object.entries(result.perSource)) {
-      const status = result.failureReasons?.[id]
-        ? `FAILED — ${result.failureReasons[id]}`
-        : `${count} event(s)`;
+      const status = result.failureReasons?.[id] ? `FAILED — ${result.failureReasons[id]}` : `${count} event(s)`;
       console.log(`  ${id}: ${status}`);
     }
     console.log(`\nMerges: ${result.merges} | Written to cache: ${result.written}`);
@@ -662,9 +650,7 @@ async function cmdAddSource(args: string[]): Promise<void> {
   const tierRaw = flags["tier"] ?? "html-llm";
   const tierParsed = FetchTierSchema.safeParse(tierRaw);
   if (!tierParsed.success) {
-    console.error(
-      `Invalid tier "${tierRaw}". Valid tiers: api | rss | ics | shopify | spa | html-llm`
-    );
+    console.error(`Invalid tier "${tierRaw}". Valid tiers: api | rss | ics | shopify | spa | html-llm`);
     process.exit(1);
   }
   const tier = tierParsed.data as FetchTier;
@@ -675,7 +661,7 @@ async function cmdAddSource(args: string[]): Promise<void> {
     const catParsed = CategorySchema.safeParse(flags["category"]);
     if (!catParsed.success) {
       console.error(
-        `Invalid category "${flags["category"]}". Valid categories: music | comedy | theater | sports | arts | community | festival | talk | film | other`
+        `Invalid category "${flags["category"]}". Valid categories: music | comedy | theater | sports | arts | community | festival | talk | film | other`,
       );
       process.exit(1);
     }
@@ -707,15 +693,11 @@ function cmdListSources(): void {
     return;
   }
   console.log(`\nEventScout — ${sources.length} source(s):\n`);
-  console.log(
-    `${"ID".padEnd(36)} ${"TIER".padEnd(10)} ${"ENABLED".padEnd(8)} ${"LAST FETCHED"}`
-  );
+  console.log(`${"ID".padEnd(36)} ${"TIER".padEnd(10)} ${"ENABLED".padEnd(8)} ${"LAST FETCHED"}`);
   console.log("-".repeat(80));
   for (const s of sources) {
     const lastFetched = s.lastFetched ? new Date(s.lastFetched).toLocaleString() : "never";
-    console.log(
-      `${s.id.padEnd(36)} ${s.fetchTier.padEnd(10)} ${String(s.enabled).padEnd(8)} ${lastFetched}`
-    );
+    console.log(`${s.id.padEnd(36)} ${s.fetchTier.padEnd(10)} ${String(s.enabled).padEnd(8)} ${lastFetched}`);
   }
   console.log("");
 }
@@ -744,7 +726,7 @@ async function cmdRefresh(args: string[]): Promise<void> {
     const ts = new Date().toISOString();
     updateLastFetched(source.id, ts);
     console.log(
-      `Done — ${events.length} event(s) fetched, ${persisted} persisted to cache; lastFetched updated to ${ts}\n`
+      `Done — ${events.length} event(s) fetched, ${persisted} persisted to cache; lastFetched updated to ${ts}\n`,
     );
   } catch (err) {
     console.error(`ERROR: ${(err as Error).message}`);
@@ -797,8 +779,7 @@ function cmdSaved(args: string[]): void {
       for (const { savedAt, event } of saved) {
         const gone = cachedIds.has(event.id) ? "" : "  [no longer in cache]";
         console.log(
-          `- ${event.startDatetime.slice(0, 10)} · ${event.title}` +
-            `${event.venue ? ` · ${event.venue}` : ""}${gone}`
+          `- ${event.startDatetime.slice(0, 10)} · ${event.title}` + `${event.venue ? ` · ${event.venue}` : ""}${gone}`,
         );
         console.log(`    id: ${event.id}  (saved ${savedAt.slice(0, 10)})`);
       }
@@ -821,7 +802,7 @@ function cmdSaved(args: string[]): void {
       console.log(
         added
           ? `Saved ★ "${event.title}" (${event.startDatetime.slice(0, 10)}${event.venue ? `, ${event.venue}` : ""})`
-          : `Already saved — snapshot refreshed: "${event.title}"`
+          : `Already saved — snapshot refreshed: "${event.title}"`,
       );
       return;
     }
@@ -851,7 +832,9 @@ async function cmdAddToCalendar(args: string[]): Promise<void> {
   const { positional } = parseFlags(args);
   const eventId = positional[0];
   if (!eventId) {
-    console.error("Usage: eventscout add-to-calendar <eventId> [--action buy-tickets|reserve|rsvp|none] [--book-by YYYY-MM-DD]");
+    console.error(
+      "Usage: eventscout add-to-calendar <eventId> [--action buy-tickets|reserve|rsvp|none] [--book-by YYYY-MM-DD]",
+    );
     process.exit(1);
   }
 
@@ -900,8 +883,7 @@ async function cmdBooking(args: string[]): Promise<void> {
     case "scan": {
       // Optional --window N (days); default 14.
       const wi = args.indexOf("--window");
-      const windowDays =
-        wi >= 0 && args[wi + 1] ? parseInt(args[wi + 1]!, 10) || 14 : 14;
+      const windowDays = wi >= 0 && args[wi + 1] ? parseInt(args[wi + 1]!, 10) || 14 : 14;
       const { notices, expired } = scanNotices(new Date(), windowDays);
       console.log(renderNoticesMarkdown(notices, new Date()));
       if (expired.length > 0) {
@@ -921,7 +903,7 @@ async function cmdBooking(args: string[]): Promise<void> {
         console.log(
           `  [${e.status}] ${e.action} — ${e.title}\n` +
             `    when: ${e.startDatetime}  bookBy: ${e.bookBy ?? "—"}\n` +
-            `    id:   ${e.eventId}`
+            `    id:   ${e.eventId}`,
         );
       }
       break;
@@ -932,7 +914,9 @@ async function cmdBooking(args: string[]): Promise<void> {
       const { positional } = parseFlags(noteArgs);
       const eventId = positional[0];
       if (!eventId) {
-        console.error("Usage: eventscout booking note <eventId> [--action buy-tickets|reserve|rsvp|none] [--book-by YYYY-MM-DD]");
+        console.error(
+          "Usage: eventscout booking note <eventId> [--action buy-tickets|reserve|rsvp|none] [--book-by YYYY-MM-DD]",
+        );
         process.exit(1);
       }
 
@@ -954,9 +938,7 @@ async function cmdBooking(args: string[]): Promise<void> {
         console.log(`Not noted: ${res.reason}`);
       } else {
         const label = res.entry!.action === "unclassified" ? "⚠️ unclassified (needs review)" : res.entry!.action;
-        console.log(
-          `Noted "${event.title}" — action: ${label}, bookBy: ${res.entry!.bookBy ?? "—"}`
-        );
+        console.log(`Noted "${event.title}" — action: ${label}, bookBy: ${res.entry!.bookBy ?? "—"}`);
       }
       break;
     }
@@ -972,7 +954,7 @@ async function cmdBooking(args: string[]): Promise<void> {
       console.log(
         ok
           ? `Marked "${eventId}" as ${sub === "booked" ? "booked" : "dismissed"}.`
-          : `No ledger entry for "${eventId}".`
+          : `No ledger entry for "${eventId}".`,
       );
       break;
     }

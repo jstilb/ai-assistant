@@ -27,7 +27,7 @@
  * Pike13 studio is added (two adapters = a real seam).
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
@@ -244,8 +244,7 @@ export async function fetchPike13Events(from?: string, to?: string): Promise<Eve
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("Pike13Adapter.ts") ||
-    process.argv[1].endsWith("Pike13Adapter"));
+  (process.argv[1].endsWith("Pike13Adapter.ts") || process.argv[1].endsWith("Pike13Adapter"));
 
 if (IS_SCRIPT) {
   console.log(`\nFetching Culture Shock SD classes (today → +${WINDOW_DAYS} days)...\n`);
@@ -256,7 +255,7 @@ if (IS_SCRIPT) {
     for (const e of events.slice(0, 12)) {
       console.log(
         `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          (e.performersOrTeams ? ` (${e.performersOrTeams})` : "")
+          (e.performersOrTeams ? ` (${e.performersOrTeams})` : ""),
       );
     }
     console.log(`\nSource: ${SOURCE_ID} | Pike13 ${SUBDOMAIN} loc ${LOCATION_IDS.join(",")}`);

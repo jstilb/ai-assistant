@@ -21,7 +21,7 @@
  *   12. Empty events → empty result.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/filter.test.ts
+ *   bun test skills/Productivity/EventScout/tests/filter.test.ts
  */
 
 import { test } from "bun:test";
@@ -40,9 +40,7 @@ function assert(condition: boolean, message: string): void {
 
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(
-      `${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
-    );
+    throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }
 }
 
@@ -79,7 +77,7 @@ function makeEvent(overrides: Partial<EventItem> & { id: string; startDatetime: 
 
 const HOME = { lat: 32.7157, lng: -117.1611 };
 // ~2.0 miles north of home
-const NEARBY_LAT = 32.7450;
+const NEARBY_LAT = 32.745;
 const NEARBY_LNG = -117.1611;
 // Comedy Store La Jolla (~9.4 miles)
 const FAR_LAT = 32.8404;
@@ -87,7 +85,7 @@ const FAR_LNG = -117.2733;
 
 // A fixed 7-day window
 const WINDOW_START = "2026-06-01T00:00:00-07:00";
-const WINDOW_END   = "2026-06-07T23:59:59-07:00";
+const WINDOW_END = "2026-06-07T23:59:59-07:00";
 
 /** A wide-open window covering every fixture date used below — QueryContext.window
  *  is mandatory (never undefined), so tests that don't care about date filtering
@@ -119,7 +117,7 @@ test("1. Date window: in-range included, out-of-range excluded", () => {
 
   const result = filterEvents([inRange, outBefore, outAfter], c);
   assertEq(result.length, 1, "Only 1 in-range event returned");
-  assert(result[0].id === "in", "Correct in-range event");
+  assert(result[0]!.id === "in", "Correct in-range event");
 });
 
 // ============================================================================
@@ -167,7 +165,10 @@ test("3. Null-coords kept with radius; coordful far event still excluded", () =>
   const withoutRadius: QueryContext = { window: WINDOW_ALL, home: HOME, radiusMiles: NO_RADIUS, rawQuery: "test" };
 
   const resultWith = filterEvents([nullCoordEvent, farCoordEvent], withRadius);
-  assert(resultWith.some((e) => e.id === "null-coord"), "Null-coord KEPT when radius active");
+  assert(
+    resultWith.some((e) => e.id === "null-coord"),
+    "Null-coord KEPT when radius active",
+  );
   assert(!resultWith.some((e) => e.id === "far-coord"), "Coordful far event still excluded");
 
   const resultWithout = filterEvents([nullCoordEvent], withoutRadius);
@@ -221,7 +222,7 @@ test("4. Price free: only isFree===true kept", () => {
 
   const result = filterEvents([free, paid], c);
   assertEq(result.length, 1, "Only 1 free event");
-  assert(result[0].id === "free", "Correct free event");
+  assert(result[0]!.id === "free", "Correct free event");
 });
 
 // ============================================================================
@@ -255,8 +256,14 @@ test("5. Price under: isFree or priceMin≤maxUsd", () => {
 
   const result = filterEvents([free, cheap, expensive, unknownPrice], c);
   assertEq(result.length, 2, "2 events within budget");
-  assert(result.some((e) => e.id === "free"), "free included");
-  assert(result.some((e) => e.id === "cheap"), "cheap included");
+  assert(
+    result.some((e) => e.id === "free"),
+    "free included",
+  );
+  assert(
+    result.some((e) => e.id === "cheap"),
+    "cheap included",
+  );
   assert(!result.some((e) => e.id === "expensive"), "expensive excluded");
   assert(!result.some((e) => e.id === "unknown"), "unknown-price excluded");
 });
@@ -311,8 +318,14 @@ test("7. Category filter: only matching categories kept", () => {
 
   const result = filterEvents([comedy, sports, music], c);
   assertEq(result.length, 2, "2 events from allowed categories");
-  assert(result.some((e) => e.id === "comedy"), "comedy included");
-  assert(result.some((e) => e.id === "music"), "music included");
+  assert(
+    result.some((e) => e.id === "comedy"),
+    "comedy included",
+  );
+  assert(
+    result.some((e) => e.id === "music"),
+    "music included",
+  );
   assert(!result.some((e) => e.id === "sports"), "sports excluded");
 });
 
@@ -342,7 +355,7 @@ test("8. TimeOfDay evening: 7pm included, 10am excluded", () => {
 
   const result = filterEvents([eveningEvent, morningEvent], c);
   assertEq(result.length, 1, "Only evening event kept");
-  assert(result[0].id === "evening", "Correct evening event");
+  assert(result[0]!.id === "evening", "Correct evening event");
 });
 
 // ============================================================================
@@ -373,8 +386,14 @@ test("9. TimeOfDay morning+evening: both bands included", () => {
 
   const result = filterEvents([morningEvent, afternoonEvent, eveningEvent], c);
   assertEq(result.length, 2, "Morning and evening events both included");
-  assert(result.some((e) => e.id === "morning"), "morning included");
-  assert(result.some((e) => e.id === "evening"), "evening included");
+  assert(
+    result.some((e) => e.id === "morning"),
+    "morning included",
+  );
+  assert(
+    result.some((e) => e.id === "evening"),
+    "evening included",
+  );
   assert(!result.some((e) => e.id === "afternoon"), "afternoon excluded");
 });
 
@@ -390,9 +409,9 @@ test("10. Sort: result sorted by startDatetime ascending", () => {
   const ctx: QueryContext = { window: WINDOW_ALL, home: HOME, radiusMiles: NO_RADIUS, rawQuery: "test" };
   const result = filterEvents([c, a, b], ctx);
   assertEq(result.length, 3, "All 3 events returned");
-  assertEq(result[0].id, "a", "First: a (earliest)");
-  assertEq(result[1].id, "b", "Second: b");
-  assertEq(result[2].id, "c", "Third: c (latest)");
+  assertEq(result[0]!.id, "a", "First: a (earliest)");
+  assertEq(result[1]!.id, "b", "Second: b");
+  assertEq(result[2]!.id, "c", "Third: c (latest)");
 });
 
 // ============================================================================
@@ -481,7 +500,7 @@ test("13. Combined filters: date+free+category+near all active", () => {
 
   const result = filterEvents([match, wrongDate, wrongPrice, wrongCat, farAway], c);
   assertEq(result.length, 1, "Only the matching event passes all filters");
-  assert(result[0].id === "match", "Correct match");
+  assert(result[0]!.id === "match", "Correct match");
 });
 
 // ============================================================================
@@ -509,7 +528,7 @@ test("14. TimeOfDay late band: midnight event (00:00 LA) is 'late'", () => {
 
   const result = filterEvents([lateEvent, eveningEvent], c);
   assertEq(result.length, 1, "Only late event kept");
-  assert(result[0].id === "late", "Correct late event");
+  assert(result[0]!.id === "late", "Correct late event");
 });
 
 // ============================================================================

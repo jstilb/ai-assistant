@@ -6,10 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  buildClassesPostBody,
-  parseStudioParams,
-} from "../Tools/adapters/DanceStudioProAdapter.ts";
+import { buildClassesPostBody, parseStudioParams } from "../Tools/adapters/DanceStudioProAdapter.ts";
 
 const DANCEHOUSE_URL =
   "https://dancestudio-pro.com/apps/api_classes.php?id=zaqlxajd29jd262a3d5852549209jasdklj21dx62a3d585254d1&s=99627";
@@ -23,15 +20,15 @@ describe("parseStudioParams", () => {
   });
 
   test("throws loudly when id is missing", () => {
-    expect(() =>
-      parseStudioParams("https://dancestudio-pro.com/apps/api_classes.php?s=99627")
-    ).toThrow(/missing the id\/s query params/);
+    expect(() => parseStudioParams("https://dancestudio-pro.com/apps/api_classes.php?s=99627")).toThrow(
+      /missing the id\/s query params/,
+    );
   });
 
   test("throws loudly when s is missing", () => {
-    expect(() =>
-      parseStudioParams("https://dancestudio-pro.com/apps/api_classes.php?id=abc")
-    ).toThrow(/missing the id\/s query params/);
+    expect(() => parseStudioParams("https://dancestudio-pro.com/apps/api_classes.php?id=abc")).toThrow(
+      /missing the id\/s query params/,
+    );
   });
 
   test("throws on a non-URL string", () => {

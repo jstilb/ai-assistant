@@ -9,7 +9,7 @@
  *   - status mapping (scheduled / cancelled / postponed)
  *   - startDatetime is converted to LA local time (UTC kickoff → PT)
  *
- * Run: bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/sdfc.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/sdfc.test.ts
  */
 
 import { test } from "bun:test";
@@ -89,13 +89,19 @@ test("mapMatchToEvent: venue, category, tags, sourceId", () => {
 
 test("mapMatchToEvent: ticketUrl uses the ESPN match link", () => {
   const e = mapMatchToEvent(HOME_MATCH);
-  assert(e.ticketUrl === "https://www.espn.com/soccer/match/_/gameId/761449/fc-dallas-san-diego-fc", `ticketUrl ${e.ticketUrl}`);
+  assert(
+    e.ticketUrl === "https://www.espn.com/soccer/match/_/gameId/761449/fc-dallas-san-diego-fc",
+    `ticketUrl ${e.ticketUrl}`,
+  );
 });
 
 test("mapMatchToEvent: UTC kickoff converts to LA local time", () => {
   const e = mapMatchToEvent(HOME_MATCH);
   // 2026-07-26T01:30Z = 2026-07-25 18:30 PDT (UTC-7)
-  assert(e.startDatetime.startsWith("2026-07-25T18:30"), `startDatetime "${e.startDatetime}" should be 2026-07-25 18:30 PT`);
+  assert(
+    e.startDatetime.startsWith("2026-07-25T18:30"),
+    `startDatetime "${e.startDatetime}" should be 2026-07-25 18:30 PT`,
+  );
 });
 
 test("status mapping: cancelled / postponed", () => {

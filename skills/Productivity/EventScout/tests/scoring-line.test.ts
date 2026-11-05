@@ -23,16 +23,12 @@
  *  16.  buildBatchSystemPrompt contains all calibration bands (70–89, 50–69, 30–49, 0–29).
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/scoring-line.test.ts
+ *   bun test skills/Productivity/EventScout/tests/scoring-line.test.ts
  */
 
 import { test } from "bun:test";
 
-import {
-  buildScoringLine,
-  buildBatchSystemPrompt,
-  SCORE_BATCH_SIZE,
-} from "../Tools/Ranker.ts";
+import { buildScoringLine, buildBatchSystemPrompt, SCORE_BATCH_SIZE } from "../Tools/Ranker.ts";
 import type { EventItem } from "../Tools/types.ts";
 
 // ============================================================================
@@ -51,8 +47,6 @@ function assert(condition: boolean, message: string): void {
 
 // A Saturday in LA (PDT): 2026-06-13T14:00:00-07:00 is a Saturday
 const SATURDAY_ISO = "2026-06-13T14:00:00-07:00";
-// 2026-06-07T18:00:00-07:00 is a Sunday
-const SUNDAY_ISO = "2026-06-07T18:00:00-07:00";
 
 /** Home: Ocean Beach, San Diego */
 const HOME = { lat: 32.7449, lng: -117.2508 };
@@ -69,13 +63,12 @@ const LONG_DESC =
 
 const MANY_TAGS = ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"];
 
-function makeEvent(overrides: Partial<EventItem> & { id: string; title: string; category: EventItem["category"] }): EventItem {
+function makeEvent(
+  overrides: Partial<EventItem> & { id: string; title: string; category: EventItem["category"] },
+): EventItem {
   return {
-    id: overrides.id,
-    title: overrides.title,
     startDatetime: overrides.startDatetime ?? SATURDAY_ISO,
     allDay: false,
-    category: overrides.category,
     tags: overrides.tags ?? [],
     isFree: overrides.isFree ?? false,
     sourceUrl: "https://example.com",
@@ -120,7 +113,7 @@ test("1. buildScoringLine contains day-of-week (LA local)", () => {
   // 2026-06-13 is a Saturday
   assert(
     line.toLowerCase().includes("saturday") || line.includes("Sat"),
-    `line contains day-of-week: "${line.slice(0, 120)}..."`
+    `line contains day-of-week: "${line.slice(0, 120)}..."`,
   );
 });
 
@@ -135,10 +128,7 @@ test("2. buildScoringLine contains a distance token with 'mi' (has coords)", () 
     lng: NEAR_LNG,
   });
   const line = buildScoringLine(event, makeCtx());
-  assert(
-    line.includes("mi"),
-    `line contains "mi" distance token: "${line.slice(0, 120)}..."`
-  );
+  assert(line.includes("mi"), `line contains "mi" distance token: "${line.slice(0, 120)}..."`);
 });
 
 // -- Test 3 ------------------------------------------------------------------
@@ -151,10 +141,7 @@ test("3. buildScoringLine contains 'location unknown' when event has no coords",
     // lat/lng deliberately omitted
   });
   const line = buildScoringLine(event, makeCtx());
-  assert(
-    line.includes("location unknown"),
-    `line contains "location unknown": "${line.slice(0, 150)}..."`
-  );
+  assert(line.includes("location unknown"), `line contains "location unknown": "${line.slice(0, 150)}..."`);
 });
 
 // -- Test 4 ------------------------------------------------------------------
@@ -171,7 +158,7 @@ test("4. buildScoringLine derives neighborhood from first comma-segment of addre
   const line = buildScoringLine(event, makeCtx());
   assert(
     line.includes("North Park"),
-    `line contains neighborhood "North Park" from address: "${line.slice(0, 150)}..."`
+    `line contains neighborhood "North Park" from address: "${line.slice(0, 150)}..."`,
   );
 });
 
@@ -186,10 +173,7 @@ test("5. buildScoringLine falls back to geoHint when address is absent", () => {
     // address deliberately absent
   });
   const line = buildScoringLine(event, makeCtx());
-  assert(
-    line.includes("Ocean Beach"),
-    `line contains geoHint "Ocean Beach" fallback: "${line.slice(0, 150)}..."`
-  );
+  assert(line.includes("Ocean Beach"), `line contains geoHint "Ocean Beach" fallback: "${line.slice(0, 150)}..."`);
 });
 
 // -- Test 6 ------------------------------------------------------------------
@@ -204,7 +188,7 @@ test("6. buildScoringLine contains the source name (human name, not id)", () => 
   const line = buildScoringLine(event, makeCtx());
   assert(
     line.includes("San Diego Events Hub"),
-    `line contains source name "San Diego Events Hub": "${line.slice(0, 150)}..."`
+    `line contains source name "San Diego Events Hub": "${line.slice(0, 150)}..."`,
   );
 });
 
@@ -232,10 +216,7 @@ test("8. buildScoringLine shows price token for paid events", () => {
     priceMin: 25,
   });
   const line = buildScoringLine(event, makeCtx());
-  assert(
-    line.includes("$25") || line.includes("25"),
-    `line contains price token: "${line.slice(0, 120)}..."`
-  );
+  assert(line.includes("$25") || line.includes("25"), `line contains price token: "${line.slice(0, 120)}..."`);
 });
 
 // -- Test 9 ------------------------------------------------------------------
@@ -254,10 +235,7 @@ test("9. buildScoringLine description is >= 200 chars when input desc is long", 
   assert(descIdx !== -1, "line contains desc: field");
   if (descIdx !== -1) {
     const descPortion = line.slice(descIdx);
-    assert(
-      descPortion.length >= 200,
-      `description portion is >= 200 chars (got ${descPortion.length})`
-    );
+    assert(descPortion.length >= 200, `description portion is >= 200 chars (got ${descPortion.length})`);
   }
 });
 
@@ -273,10 +251,7 @@ test("10. buildScoringLine includes ALL tags (not just first 5)", () => {
   const line = buildScoringLine(event, makeCtx());
   // All 8 tags should appear
   for (const tag of MANY_TAGS) {
-    assert(
-      line.includes(tag),
-      `line contains tag "${tag}"`
-    );
+    assert(line.includes(tag), `line contains tag "${tag}"`);
   }
 });
 
@@ -294,9 +269,9 @@ test("11. buildScoringLine contains how-soon token ('today', 'in X day', etc.)",
   const todayLine = buildScoringLine(todayEvent, todayCtx);
   assert(
     todayLine.toLowerCase().includes("today") ||
-    todayLine.toLowerCase().includes("in 0") ||
-    todayLine.toLowerCase().includes("in 1"),
-    `line contains "today" or close-day token for same-day event: "${todayLine.slice(0, 120)}..."`
+      todayLine.toLowerCase().includes("in 0") ||
+      todayLine.toLowerCase().includes("in 1"),
+    `line contains "today" or close-day token for same-day event: "${todayLine.slice(0, 120)}..."`,
   );
 
   // Event is 2 days out
@@ -311,7 +286,7 @@ test("11. buildScoringLine contains how-soon token ('today', 'in X day', etc.)",
   const futureLine = buildScoringLine(futureDateEvent, futureCtx);
   assert(
     futureLine.toLowerCase().includes("day"),
-    `line contains "day" token for future event: "${futureLine.slice(0, 120)}..."`
+    `line contains "day" token for future event: "${futureLine.slice(0, 120)}..."`,
   );
 });
 
@@ -325,37 +300,25 @@ test("12. buildScoringLine includes full performersOrTeams string", () => {
     performersOrTeams: "The Rolling Stones, The Black Keys",
   });
   const line = buildScoringLine(event, makeCtx());
-  assert(
-    line.includes("The Rolling Stones"),
-    `line includes full performer string: "${line.slice(0, 150)}..."`
-  );
+  assert(line.includes("The Rolling Stones"), `line includes full performer string: "${line.slice(0, 150)}..."`);
 });
 
 // -- Test 13 -----------------------------------------------------------------
 
 test("13. SCORE_BATCH_SIZE is <= 50 (reduced for token budget)", () => {
-  assert(
-    SCORE_BATCH_SIZE <= 50,
-    `SCORE_BATCH_SIZE=${SCORE_BATCH_SIZE} is <= 50`
-  );
-  assert(
-    SCORE_BATCH_SIZE > 0,
-    `SCORE_BATCH_SIZE=${SCORE_BATCH_SIZE} is positive`
-  );
+  assert(SCORE_BATCH_SIZE <= 50, `SCORE_BATCH_SIZE=${SCORE_BATCH_SIZE} is <= 50`);
+  assert(SCORE_BATCH_SIZE > 0, `SCORE_BATCH_SIZE=${SCORE_BATCH_SIZE} is positive`);
 });
 
 // -- Test 14 -----------------------------------------------------------------
 
 test("14. buildBatchSystemPrompt contains 0–100 rubric band '90–100'", () => {
   const prompt = buildBatchSystemPrompt("user wants free outdoor events");
-  assert(
-    prompt.includes("90"),
-    `prompt contains "90" rubric band: "${prompt.slice(0, 200)}..."`
-  );
+  assert(prompt.includes("90"), `prompt contains "90" rubric band: "${prompt.slice(0, 200)}..."`);
   // Also verify it's a range-style rubric (contains a dash between numbers)
   assert(
-    /9[0-9].*[–\-].*100|100.*[–\-].*9[0-9]/.test(prompt) || prompt.includes("90–100") || prompt.includes("90-100"),
-    `prompt contains 90-100 band notation`
+    /9[0-9].*[–-].*100|100.*[–-].*9[0-9]/.test(prompt) || prompt.includes("90–100") || prompt.includes("90-100"),
+    `prompt contains 90-100 band notation`,
   );
 });
 
@@ -366,7 +329,7 @@ test("15. buildBatchSystemPrompt references the intent brief passed to it", () =
   const prompt = buildBatchSystemPrompt(brief);
   assert(
     prompt.includes(brief) || prompt.includes("free outdoor events near Ocean Beach"),
-    `prompt contains the brief text: "${prompt.slice(0, 300)}..."`
+    `prompt contains the brief text: "${prompt.slice(0, 300)}..."`,
   );
 });
 
@@ -386,4 +349,3 @@ test("16. buildBatchSystemPrompt contains all calibration bands", () => {
     assert(band.check(), `prompt contains calibration band ${band.label}`);
   }
 });
-

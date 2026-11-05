@@ -11,9 +11,9 @@
  * Throws a descriptive error if the file is missing or fails Zod validation.
  */
 
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { InterestProfileSchema } from "./types.ts";
 import type { InterestProfile } from "./types.ts";
 
@@ -56,9 +56,7 @@ export async function loadProfile(pathOverride?: string): Promise<InterestProfil
     const text = readFileSync(profilePath, "utf-8");
     raw = JSON.parse(text);
   } catch (err) {
-    throw new Error(
-      `[InterestProfile] Failed to read profile at "${profilePath}": ${(err as Error).message}`
-    );
+    throw new Error(`[InterestProfile] Failed to read profile at "${profilePath}": ${(err as Error).message}`);
   }
 
   // Strip the _README field before validation (it's editorial metadata)
@@ -70,9 +68,7 @@ export async function loadProfile(pathOverride?: string): Promise<InterestProfil
 
   const result = InterestProfileSchema.safeParse(raw);
   if (!result.success) {
-    throw new Error(
-      `[InterestProfile] Profile at "${profilePath}" failed validation:\n${result.error.message}`
-    );
+    throw new Error(`[InterestProfile] Profile at "${profilePath}" failed validation:\n${result.error.message}`);
   }
 
   return result.data;

@@ -110,7 +110,6 @@ function refreshConcurrency(): number {
   return Number.isFinite(n) && n > 0 ? n : 8;
 }
 
-
 /**
  * Hybrid-aware query pipeline:
  *   1. Take a caller-built QueryContext (structured, agent-resolved — see
@@ -138,7 +137,7 @@ function refreshConcurrency(): number {
 export async function queryHybrid(
   context: QueryContext,
   limit = Infinity,
-  refresh = false
+  refresh = false,
 ): Promise<HybridQueryResult> {
   // ---- cache-first decision ----
   const allSources = loadSources();
@@ -148,13 +147,11 @@ export async function queryHybrid(
   const skippedSources: string[] = [];
 
   if (!refresh) {
-    console.log(
-      "[hybrid] cache-only — reading cache (pass --refresh or say 'latest/update' to fetch live)"
-    );
+    console.log("[hybrid] cache-only — reading cache (pass --refresh or say 'latest/update' to fetch live)");
   } else if (toRefresh.length > 0) {
     console.log(
       `[hybrid] Refreshing ${toRefresh.length} source(s) live ` +
-      `(parallel, up to ${refreshConcurrency()} at once, ${Math.round(refreshTimeoutMs() / 1000)}s timeout each):`
+        `(parallel, up to ${refreshConcurrency()} at once, ${Math.round(refreshTimeoutMs() / 1000)}s timeout each):`,
     );
   }
 
@@ -170,10 +167,7 @@ export async function queryHybrid(
       const result = await Promise.race([
         ingestSource(source),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`timeout after ${Math.round(timeoutMs / 1000)}s`)),
-            timeoutMs
-          );
+          timer = setTimeout(() => reject(new Error(`timeout after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
         }),
       ]);
       const fetched = result as EventItem[];
@@ -227,4 +221,3 @@ export async function queryHybrid(
 
   return { context, events, rankedEvents, markdown, refreshedSources, skippedSources };
 }
-

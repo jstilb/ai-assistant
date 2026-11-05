@@ -30,8 +30,8 @@
  *   Items:    .markdown (preferred) | .text
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 // cross-skill-allowed: adapter wraps Data/Apify's fetch client by design — thin adapter over a shared client
 import { Apify } from "../../../../Data/Apify/index.ts";
 import { extractEventsFromContent } from "./SPAAdapter.ts";
@@ -133,7 +133,7 @@ export function loadApifyToken(): string {
   if (!existsSync(secretsPath)) {
     throw new Error(
       `[ApifyAdapter] secrets.json not found at ${secretsPath}. ` +
-        `Add APIFY_TOKEN to that file to use the apify fetch tier.`
+        `Add APIFY_TOKEN to that file to use the apify fetch tier.`,
     );
   }
 
@@ -141,16 +141,14 @@ export function loadApifyToken(): string {
   try {
     secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
   } catch (err) {
-    throw new Error(
-      `[ApifyAdapter] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`
-    );
+    throw new Error(`[ApifyAdapter] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`);
   }
 
   const token = secrets["APIFY_TOKEN"];
   if (typeof token !== "string" || token.trim() === "") {
     throw new Error(
       `[ApifyAdapter] APIFY_TOKEN is missing or empty in ${secretsPath}. ` +
-        `Set it to your Apify API token to use the apify fetch tier.`
+        `Set it to your Apify API token to use the apify fetch tier.`,
     );
   }
 
@@ -201,9 +199,7 @@ export async function fetchApifyEvents(source: EventSource): Promise<EventItem[]
   console.log(`[ApifyAdapter] Actor run finished: status=${run.status} id=${run.id}`);
 
   if (run.status !== "SUCCEEDED") {
-    throw new Error(
-      `[ApifyAdapter] Actor run for ${source.url} did not succeed: status=${run.status}`
-    );
+    throw new Error(`[ApifyAdapter] Actor run for ${source.url} did not succeed: status=${run.status}`);
   }
 
   // 3. Fetch dataset items
@@ -211,37 +207,27 @@ export async function fetchApifyEvents(source: EventSource): Promise<EventItem[]
   const items = await dataset.listItems<CrawlerDatasetItem>({ limit: 1 });
 
   if (items.length === 0) {
-    throw new Error(
-      `[ApifyAdapter] Actor run for ${source.url} succeeded but dataset is empty`
-    );
+    throw new Error(`[ApifyAdapter] Actor run for ${source.url} succeeded but dataset is empty`);
   }
 
   const firstItem = items[0];
   // firstItem is guaranteed by the length check above; narrow the type explicitly
   if (firstItem === undefined) {
-    throw new Error(
-      `[ApifyAdapter] Dataset item unexpectedly undefined for ${source.url}`
-    );
+    throw new Error(`[ApifyAdapter] Dataset item unexpectedly undefined for ${source.url}`);
   }
 
   const content: string | undefined = firstItem.markdown ?? firstItem.text;
 
   if (!content || content.trim() === "") {
-    throw new Error(
-      `[ApifyAdapter] Actor run for ${source.url} returned an item with no markdown or text content`
-    );
+    throw new Error(`[ApifyAdapter] Actor run for ${source.url} returned an item with no markdown or text content`);
   }
 
-  console.log(
-    `[ApifyAdapter] Rendered content: ${content.length} chars for ${source.url}`
-  );
+  console.log(`[ApifyAdapter] Rendered content: ${content.length} chars for ${source.url}`);
 
   // 4. Run the standard EventScout extraction pipeline (JSON-LD → LLM)
   const events = await extractEventsFromContent(content, source);
 
-  console.log(
-    `[ApifyAdapter] Extracted ${events.length} event(s) from ${source.url}`
-  );
+  console.log(`[ApifyAdapter] Extracted ${events.length} event(s) from ${source.url}`);
 
   return events;
 }
@@ -253,8 +239,7 @@ export async function fetchApifyEvents(source: EventSource): Promise<EventItem[]
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("ApifyAdapter.ts") ||
-    process.argv[1].endsWith("ApifyAdapter"));
+  (process.argv[1].endsWith("ApifyAdapter.ts") || process.argv[1].endsWith("ApifyAdapter"));
 
 if (IS_SCRIPT) {
   const url = process.argv[2];

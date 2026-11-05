@@ -6,13 +6,13 @@
  * loadSources overlays state (state wins over a legacy in-config field), and
  * saveSources strips freshness so it can't leak back into config.
  *
- * Run: bun test ~/.claude/skills/Productivity/EventScout/tests/sourcestate.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/sourcestate.test.ts
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const TS = "2026-08-20T12:00:00.000Z";
 const LEGACY_TS = "2026-08-01T00:00:00.000Z";
@@ -42,7 +42,7 @@ describe("SourceManager — lastFetched config/state split", () => {
     process.env["EVENTSCOUT_SOURCE_STATE_PATH"] = statePath;
     writeFileSync(
       sourcesPath,
-      JSON.stringify([makeSource("alpha"), makeSource("beta", { lastFetched: LEGACY_TS })], null, 2)
+      JSON.stringify([makeSource("alpha"), makeSource("beta", { lastFetched: LEGACY_TS })], null, 2),
     );
   });
 

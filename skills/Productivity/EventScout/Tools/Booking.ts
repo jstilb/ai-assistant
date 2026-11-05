@@ -47,13 +47,7 @@ import { utcIsoToLaIso } from "./lib/tz.ts";
  * same as "none" (a deliberate "no booking needed" determination). See the
  * module doc comment above.
  */
-export const BookingActionSchema = z.enum([
-  "buy-tickets",
-  "reserve",
-  "rsvp",
-  "none",
-  "unclassified",
-]);
+export const BookingActionSchema = z.enum(["buy-tickets", "reserve", "rsvp", "none", "unclassified"]);
 export type BookingAction = z.infer<typeof BookingActionSchema>;
 
 /**
@@ -124,21 +118,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  *   - the event start is unparseable, or
  *   - the event has already started (nothing left to book).
  */
-export function computeBookBy(
-  event: EventItem | RankedEvent,
-  action: BookingAction,
-  now: Date,
-): string | null {
+export function computeBookBy(event: EventItem | RankedEvent, action: BookingAction, now: Date): string | null {
   if (!requiresBookingAction(action)) return null;
 
   const startMs = Date.parse(event.startDatetime);
   if (!Number.isFinite(startMs)) return null;
   if (startMs <= now.getTime()) return null; // event already began
 
-  const leadDays =
-    ACTION_LEAD_DAYS[action] ??
-    CATEGORY_LEAD_DAYS[event.category] ??
-    CATEGORY_LEAD_DAYS["other"]!;
+  const leadDays = ACTION_LEAD_DAYS[action] ?? CATEGORY_LEAD_DAYS[event.category] ?? CATEGORY_LEAD_DAYS["other"]!;
 
   const idealMs = startMs - leadDays * DAY_MS;
   const bookByMs = Math.max(idealMs, now.getTime());
@@ -272,11 +259,7 @@ const URGENCY_RANK: Record<NoticeUrgency, number> = {
  *
  * Pure: does not mutate `entries`.
  */
-export function selectDueNotices(
-  entries: BookingLedgerEntry[],
-  now: Date,
-  windowDays = 14,
-): BookingNotice[] {
+export function selectDueNotices(entries: BookingLedgerEntry[], now: Date, windowDays = 14): BookingNotice[] {
   const nowMs = now.getTime();
   const windowMs = windowDays * DAY_MS;
 
@@ -343,9 +326,7 @@ const URGENCY_EMOJI: Record<NoticeUrgency, string> = {
 function fmtDatePT(isoStr: string): string {
   try {
     const laIso =
-      /[+-]\d{2}:\d{2}$/.test(isoStr) || isoStr.endsWith("Z")
-        ? utcIsoToLaIso(new Date(isoStr).toISOString())
-        : isoStr;
+      /[+-]\d{2}:\d{2}$/.test(isoStr) || isoStr.endsWith("Z") ? utcIsoToLaIso(new Date(isoStr).toISOString()) : isoStr;
     return new Intl.DateTimeFormat("en-US", {
       timeZone: "America/Los_Angeles",
       weekday: "short",
@@ -397,9 +378,8 @@ export function renderNoticesMarkdown(notices: BookingNotice[], now: Date): stri
 }
 
 /** Telegram HTML digest (parse_mode=HTML), ≤4096 chars. */
-export function renderNoticesTelegram(notices: BookingNotice[], now: Date): string {
-  const esc = (s: string): string =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export function renderNoticesTelegram(notices: BookingNotice[], _now: Date): string {
+  const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   if (notices.length === 0) {
     return "<b>Booking notices</b>\nNothing to book — you're caught up. ✅";

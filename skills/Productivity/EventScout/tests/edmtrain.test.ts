@@ -1,15 +1,11 @@
 /**
  * edmtrain.test.ts — EdmtrainAdapter pure-mapper tests (no network, no key).
  *
- * Run: bun test ~/.claude/skills/Productivity/EventScout/tests/edmtrain.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/edmtrain.test.ts
  */
 
 import { describe, test, expect } from "bun:test";
-import {
-  mapEdmtrainEventToItem,
-  edmtrainTimeToLaIso,
-  type EdmtrainEvent,
-} from "../Tools/adapters/EdmtrainAdapter.ts";
+import { mapEdmtrainEventToItem, edmtrainTimeToLaIso, type EdmtrainEvent } from "../Tools/adapters/EdmtrainAdapter.ts";
 
 const FETCHED_AT = "2026-08-20T12:00:00.000Z";
 
@@ -70,10 +66,7 @@ describe("mapEdmtrainEventToItem", () => {
   });
 
   test("festivalInd → festival category + tag", () => {
-    const item = mapEdmtrainEventToItem(
-      baseEvent({ name: "CRSSD Festival", festivalInd: true }),
-      FETCHED_AT
-    )!;
+    const item = mapEdmtrainEventToItem(baseEvent({ name: "CRSSD Festival", festivalInd: true }), FETCHED_AT)!;
     expect(item.category).toBe("festival");
     expect(item.tags).toContain("festival");
     expect(item.title).toBe("CRSSD Festival");

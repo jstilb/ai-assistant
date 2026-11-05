@@ -20,9 +20,9 @@
  * env so it reads/writes the SAME cache file the server serves.
  */
 
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { readEvents } from "./Cache.ts";
 import { loadSources } from "./SourceManager.ts";
 import { readSaved, saveEvent, unsaveEvent } from "./SavedEvents.ts";
@@ -85,8 +85,7 @@ function startRefresh(kind: "all" | "source", sourceId?: string): { ok: boolean;
   if (job?.running) {
     return { ok: false, error: "A refresh is already running." };
   }
-  const args =
-    kind === "all" ? [CLI_PATH, "prefetch"] : [CLI_PATH, "refresh", sourceId ?? ""];
+  const args = kind === "all" ? [CLI_PATH, "prefetch"] : [CLI_PATH, "refresh", sourceId ?? ""];
   if (kind === "source" && !sourceId) {
     return { ok: false, error: "Missing source id." };
   }
@@ -139,10 +138,8 @@ function buildData(): string {
   // lastUpdated lives on the cache file; readEvents() drops it, so re-read it
   // cheaply from the same module surface by reading the raw file is avoided —
   // instead derive freshness from the newest fetchedAt we have.
-  const newestFetched = events.reduce<string>(
-    (acc, e) => (e.fetchedAt > acc ? e.fetchedAt : acc),
-    ""
-  );
+  // biome-ignore lint/complexity/useMathMinMax: string (ISO timestamp) compare, not numbers
+  const newestFetched = events.reduce<string>((acc, e) => (e.fetchedAt > acc ? e.fetchedAt : acc), "");
   return JSON.stringify({ events, sources, lastUpdated: newestFetched, saved: readSaved() });
 }
 
@@ -203,8 +200,7 @@ export function startUiServer(): ReturnType<typeof Bun.serve> {
         // as a fallback for events that already rotated out of the cache
         // (unsave → re-save of a past event). saveEvent Zod-validates it.
         const event =
-          readEvents().find((e) => e.id === body.id) ??
-          (body.event as Parameters<typeof saveEvent>[0] | undefined);
+          readEvents().find((e) => e.id === body.id) ?? (body.event as Parameters<typeof saveEvent>[0] | undefined);
         if (!event) return json({ error: `Event not in cache: ${body.id}` }, 404);
         const { added } = saveEvent(event);
         return json({ added, saved: readSaved() });
@@ -240,7 +236,7 @@ export function startUiServer(): ReturnType<typeof Bun.serve> {
                 exitCode: job.exitCode,
                 lines: job.lines,
               }
-            : { active: false }
+            : { active: false },
         );
       }
 
@@ -251,7 +247,9 @@ export function startUiServer(): ReturnType<typeof Bun.serve> {
   }
 
   const addr = `http://localhost:${server.port}`;
-  console.log(`\nEventScout UI → ${addr}${bind === "127.0.0.1" ? "" : ` (bound ${bind}, token auth ${token ? "ON" : "OFF"})`}\n`);
+  console.log(
+    `\nEventScout UI → ${addr}${bind === "127.0.0.1" ? "" : ` (bound ${bind}, token auth ${token ? "ON" : "OFF"})`}\n`,
+  );
   console.log("  • Browse, filter, and search the cached events catalog.");
   console.log("  • Refresh all sources or a single source from the toolbar.");
   console.log("  • Ctrl-C to stop.\n");

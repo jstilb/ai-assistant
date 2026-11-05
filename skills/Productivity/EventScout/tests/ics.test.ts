@@ -9,13 +9,13 @@
  * NO network calls. All fixtures are inline.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/ics.test.ts
+ *   bun test skills/Productivity/EventScout/tests/ics.test.ts
  */
 
 import { test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   mapVeventToItem,
   isFutureWithin,
@@ -91,44 +91,32 @@ console.log("--- mapVeventToItem ---\n");
 
 test("1. title === summary (trimmed)", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
-  assert(
-    item.title === "Neighborhood Cleanup Day",
-    `title: expected "Neighborhood Cleanup Day", got "${item.title}"`
-  );
+  assert(item.title === "Neighborhood Cleanup Day", `title: expected "Neighborhood Cleanup Day", got "${item.title}"`);
 });
 
 test("2. startDatetime contains correct LA date (July → PDT = -07:00)", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   // 2026-07-01T22:00:00Z → PDT (-07:00) → 2026-07-01T15:00:00-07:00
   const dt = item.startDatetime;
-  assert(
-    !dt.endsWith("Z"),
-    `startDatetime should have explicit offset, not Z: "${dt}"`
-  );
+  assert(!dt.endsWith("Z"), `startDatetime should have explicit offset, not Z: "${dt}"`);
 
   const offsetMatch = dt.match(/([+-]\d{2}):(\d{2})$/);
   assert(offsetMatch !== null, `startDatetime missing UTC offset: "${dt}"`);
-  const offsetHours = parseInt(offsetMatch![1], 10);
-  assert(
-    offsetHours === -7,
-    `Expected PDT offset -7, got ${offsetHours} in "${dt}"`
-  );
+  const offsetHours = parseInt(offsetMatch![1]!, 10);
+  assert(offsetHours === -7, `Expected PDT offset -7, got ${offsetHours} in "${dt}"`);
 
   const hourMatch = dt.match(/T(\d{2}):\d{2}:\d{2}/);
   assert(hourMatch !== null, `Cannot extract local hour from "${dt}"`);
-  const localHour = parseInt(hourMatch![1], 10);
+  const localHour = parseInt(hourMatch![1]!, 10);
   // 22:00 UTC → 15:00 PDT
-  assert(
-    localHour === 15,
-    `Expected local hour 15 (15:00 PDT), got ${localHour} in "${dt}"`
-  );
+  assert(localHour === 15, `Expected local hour 15 (15:00 PDT), got ${localHour} in "${dt}"`);
 });
 
 test("3. endDatetime is present when end supplied", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
     typeof item.endDatetime === "string" && item.endDatetime.length > 0,
-    `endDatetime should be a non-empty string, got: ${item.endDatetime}`
+    `endDatetime should be a non-empty string, got: ${item.endDatetime}`,
   );
 });
 
@@ -136,7 +124,7 @@ test("4. venue === location (trimmed)", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
     item.venue === "Market Creek Plaza, San Diego",
-    `venue: expected "Market Creek Plaza, San Diego", got "${item.venue}"`
+    `venue: expected "Market Creek Plaza, San Diego", got "${item.venue}"`,
   );
 });
 
@@ -144,61 +132,43 @@ test("5. ticketUrl === occ.url when present", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
     item.ticketUrl === "https://daylightsandiego.org/e/x",
-    `ticketUrl: expected the occ.url, got "${item.ticketUrl}"`
+    `ticketUrl: expected the occ.url, got "${item.ticketUrl}"`,
   );
 });
 
 test("6. category === source.categoryHint when provided", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
-  assert(
-    item.category === "community",
-    `category: expected "community" from categoryHint, got "${item.category}"`
-  );
+  assert(item.category === "community", `category: expected "community" from categoryHint, got "${item.category}"`);
 });
 
 test("7. category falls back to 'other' when no categoryHint", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE_NO_HINT);
-  assert(
-    item.category === "other",
-    `category: expected "other" (no hint), got "${item.category}"`
-  );
+  assert(item.category === "other", `category: expected "other" (no hint), got "${item.category}"`);
 });
 
 test("8. id is deterministic and non-empty", async () => {
   const item1 = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   const item2 = mapVeventToItem(OCC_FULL, TEST_SOURCE);
-  assert(
-    typeof item1.id === "string" && item1.id.length > 0,
-    `id should be a non-empty string, got: "${item1.id}"`
-  );
-  assert(
-    item1.id === item2.id,
-    `id should be deterministic: "${item1.id}" vs "${item2.id}"`
-  );
+  assert(typeof item1.id === "string" && item1.id.length > 0, `id should be a non-empty string, got: "${item1.id}"`);
+  assert(item1.id === item2.id, `id should be deterministic: "${item1.id}" vs "${item2.id}"`);
 });
 
 test("9. sourceUrl falls back to source.url when occ.url absent", async () => {
   const item = mapVeventToItem(OCC_MINIMAL, TEST_SOURCE);
   assert(
     item.sourceUrl === TEST_SOURCE.url,
-    `sourceUrl should fall back to source.url: expected "${TEST_SOURCE.url}", got "${item.sourceUrl}"`
+    `sourceUrl should fall back to source.url: expected "${TEST_SOURCE.url}", got "${item.sourceUrl}"`,
   );
 });
 
 test("10. venue is undefined when no location", async () => {
   const item = mapVeventToItem(OCC_MINIMAL, TEST_SOURCE);
-  assert(
-    item.venue === undefined,
-    `venue should be undefined when no location, got "${item.venue}"`
-  );
+  assert(item.venue === undefined, `venue should be undefined when no location, got "${item.venue}"`);
 });
 
 test("11. ticketUrl is undefined when no occ.url", async () => {
   const item = mapVeventToItem(OCC_MINIMAL, TEST_SOURCE);
-  assert(
-    item.ticketUrl === undefined,
-    `ticketUrl should be undefined when no url, got "${item.ticketUrl}"`
-  );
+  assert(item.ticketUrl === undefined, `ticketUrl should be undefined when no url, got "${item.ticketUrl}"`);
 });
 
 test("12. no crash when no location/url (fixture 2 maps cleanly)", async () => {
@@ -225,33 +195,27 @@ test("15. tags === []", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
     Array.isArray(item.tags) && item.tags.length === 0,
-    `tags should be empty array, got ${JSON.stringify(item.tags)}`
+    `tags should be empty array, got ${JSON.stringify(item.tags)}`,
   );
 });
 
 test("16. status === 'scheduled'", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
-  assert(
-    item.status === "scheduled",
-    `status should be "scheduled", got "${item.status}"`
-  );
+  assert(item.status === "scheduled", `status should be "scheduled", got "${item.status}"`);
 });
 
 test("17. sources[0].sourceId === source.id", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
-    item.sources.length >= 1 && item.sources[0].sourceId === "daylight-sd",
-    `sources[0].sourceId expected "daylight-sd", got "${item.sources[0]?.sourceId}"`
+    item.sources.length >= 1 && item.sources[0]!.sourceId === "daylight-sd",
+    `sources[0].sourceId expected "daylight-sd", got "${item.sources[0]?.sourceId}"`,
   );
 });
 
 test("18. fetchedAt is a valid ISO timestamp", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   const parsed = new Date(item.fetchedAt);
-  assert(
-    !isNaN(parsed.getTime()),
-    `fetchedAt "${item.fetchedAt}" should parse to a valid Date`
-  );
+  assert(!Number.isNaN(parsed.getTime()), `fetchedAt "${item.fetchedAt}" should parse to a valid Date`);
 });
 
 // ============================================================================
@@ -292,10 +256,7 @@ test("23. date 120 days out (beyond 90) → false", async () => {
 });
 
 test("24. expandHorizonDays === 90", async () => {
-  assert(
-    expandHorizonDays === 90,
-    `expandHorizonDays should be 90, got ${expandHorizonDays}`
-  );
+  assert(expandHorizonDays === 90, `expandHorizonDays should be 90, got ${expandHorizonDays}`);
 });
 
 // ============================================================================
@@ -319,15 +280,11 @@ console.log("\n--- Slice 6: fetchICSEvents cap-removal (mocked fetch) ---\n");
  * We spread them across many days so dedup doesn't collapse them.
  */
 function buildICSFeed(n: number): string {
-  const lines: string[] = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Test//Test//EN",
-  ];
+  const lines: string[] = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Test//Test//EN"];
   const baseMs = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days from now
   for (let i = 0; i < n; i++) {
     const startMs = baseMs + i * 30 * 60 * 1000; // 30-min increments
-    const endMs = startMs + 60 * 60 * 1000;      // 1-hour events
+    const endMs = startMs + 60 * 60 * 1000; // 1-hour events
     const toIcsDate = (ms: number): string => {
       return new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
     };
@@ -337,7 +294,7 @@ function buildICSFeed(n: number): string {
       `DTSTART:${toIcsDate(startMs)}`,
       `DTEND:${toIcsDate(endMs)}`,
       `SUMMARY:Test Event ${i}`,
-      "END:VEVENT"
+      "END:VEVENT",
     );
   }
   lines.push("END:VCALENDAR");
@@ -357,24 +314,24 @@ const ICS_TEST_SOURCE: EventSource = {
 test("25. MAX_EVENTS_SAFETY is exported and >= 1000", async () => {
   assert(
     typeof MAX_EVENTS_SAFETY === "number" && MAX_EVENTS_SAFETY >= 1000,
-    `MAX_EVENTS_SAFETY should be a number >= 1000, got ${MAX_EVENTS_SAFETY}`
+    `MAX_EVENTS_SAFETY should be a number >= 1000, got ${MAX_EVENTS_SAFETY}`,
   );
 });
 
 test("26. feed with 310 in-horizon events → all 310 returned (old 300 cap removed)", async () => {
   const originalFetch = globalThis.fetch;
   const icsBody = buildICSFeed(310);
-  globalThis.fetch = async () => {
+  globalThis.fetch = fakeFetch(async () => {
     return new Response(icsBody, {
       status: 200,
       headers: { "Content-Type": "text/calendar" },
     });
-  };
+  });
   try {
     const result = await fetchICSEvents(ICS_TEST_SOURCE);
     assert(
       result.length === 310,
-      `26. feed with 310 events → expected 310, got ${result.length} (old cap=300 should be gone)`
+      `26. feed with 310 events → expected 310, got ${result.length} (old cap=300 should be gone)`,
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -384,18 +341,15 @@ test("26. feed with 310 in-horizon events → all 310 returned (old 300 cap remo
 test("27. feed with 299 events → all 299 returned (regression: still works under cap)", async () => {
   const originalFetch = globalThis.fetch;
   const icsBody = buildICSFeed(299);
-  globalThis.fetch = async () => {
+  globalThis.fetch = fakeFetch(async () => {
     return new Response(icsBody, {
       status: 200,
       headers: { "Content-Type": "text/calendar" },
     });
-  };
+  });
   try {
     const result = await fetchICSEvents(ICS_TEST_SOURCE);
-    assert(
-      result.length === 299,
-      `27. 299-event feed → expected 299, got ${result.length}`
-    );
+    assert(result.length === 299, `27. 299-event feed → expected 299, got ${result.length}`);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -444,12 +398,12 @@ test("28. unblock:true routes through the Bright Data unlocker endpoint", async 
   let calledAuth: string | null = null;
   let calledBody: Record<string, unknown> = {};
   await withTempSecrets("dummy-token-123", async () => {
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = fakeFetch(async (input: string | URL | Request, init?: RequestInit) => {
       calledUrl = String(input);
       calledAuth = new Headers(init?.headers).get("Authorization");
       calledBody = JSON.parse(String(init?.body ?? "{}"));
       return new Response(buildICSFeed(3), { status: 200, headers: { "Content-Type": "text/calendar" } });
-    };
+    });
     try {
       const result = await fetchICSEvents(UNBLOCK_SOURCE);
       assert(calledUrl === "https://api.brightdata.com/request", `28a. hits unlocker endpoint, got "${calledUrl}"`);
@@ -466,8 +420,9 @@ test("28. unblock:true routes through the Bright Data unlocker endpoint", async 
 test("29. unblock:true throws when the unlocker returns a non-iCal body (fail loud)", async () => {
   const originalFetch = globalThis.fetch;
   await withTempSecrets("dummy-token-123", async () => {
-    globalThis.fetch = async () =>
-      new Response('{"error":"blocked"}', { status: 200, headers: { "Content-Type": "application/json" } });
+    globalThis.fetch = fakeFetch(
+      async () => new Response('{"error":"blocked"}', { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
     let threw = false;
     try {
       await fetchICSEvents(UNBLOCK_SOURCE);
@@ -483,8 +438,9 @@ test("29. unblock:true throws when the unlocker returns a non-iCal body (fail lo
 test("30. unblock:true throws a clear error when BRIGHTDATA_API_TOKEN is absent", async () => {
   const originalFetch = globalThis.fetch;
   await withTempSecrets(null, async () => {
-    globalThis.fetch = async () =>
-      new Response(buildICSFeed(1), { status: 200, headers: { "Content-Type": "text/calendar" } });
+    globalThis.fetch = fakeFetch(
+      async () => new Response(buildICSFeed(1), { status: 200, headers: { "Content-Type": "text/calendar" } }),
+    );
     let msg = "";
     try {
       await fetchICSEvents(UNBLOCK_SOURCE);
@@ -497,9 +453,77 @@ test("30. unblock:true throws a clear error when BRIGHTDATA_API_TOKEN is absent"
   });
 });
 
-
 test("31. loadBrightDataToken reads secrets.json from KAYA_HOME, not os.homedir()", async () => {
   await withTempSecrets("fake-token-from-kaya-home", async () => {
     assert(loadBrightDataToken() === "fake-token-from-kaya-home", "31. token comes from the KAYA_HOME secrets.json");
+  });
+});
+
+/** Adds Bun's `fetch.preconnect` so a plain function satisfies `typeof fetch`. */
+function fakeFetch(fn: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
+  return Object.assign(fn, { preconnect: () => {} });
+}
+
+// ============================================================================
+// Tier-4 spend breaker (T2-11): checked before each unlocker request, each real
+// attempt recorded, and an open breaker fails loudly with no request sent.
+// ============================================================================
+
+test("32. unblock:true checks the breaker before and records each real attempt", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  const breaker = {
+    check: async (domain: string) => {
+      calls.push(`check:${domain}`);
+      return { allowed: true } as const;
+    },
+    recordUse: async (domain: string) => {
+      calls.push(`record:${domain}`);
+    },
+  };
+  await withTempSecrets("dummy-token-123", async () => {
+    globalThis.fetch = fakeFetch(async () => {
+      calls.push("fetch");
+      return new Response(buildICSFeed(2), { status: 200, headers: { "Content-Type": "text/calendar" } });
+    });
+    try {
+      const result = await fetchICSEvents(UNBLOCK_SOURCE, { breaker });
+      assert(result.length === 2, `32a. feed parsed, got ${result.length}`);
+      assert(
+        calls.join(",") === "check:www.songkick.com,fetch,record:www.songkick.com",
+        `32b. order check, fetch, record; got ${calls.join(",")}`,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("33. unblock:true fails loudly and sends no request when the breaker is open", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetched = 0;
+  let recorded = 0;
+  const breaker = {
+    check: async () => ({ allowed: false, kind: "daily", reason: "daily ceiling 20 reached" }) as const,
+    recordUse: async () => {
+      recorded++;
+    },
+  };
+  await withTempSecrets("dummy-token-123", async () => {
+    globalThis.fetch = fakeFetch(async () => {
+      fetched++;
+      return new Response(buildICSFeed(1), { status: 200 });
+    });
+    let msg = "";
+    try {
+      await fetchICSEvents(UNBLOCK_SOURCE, { breaker });
+    } catch (err) {
+      msg = (err as Error).message;
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assert(/breaker open \(daily\).*daily ceiling 20 reached/.test(msg), `33a. loud breaker error, got "${msg}"`);
+    assert(fetched === 0, `33b. no unlocker request when open, got ${fetched}`);
+    assert(recorded === 0, `33c. nothing recorded when no request was made, got ${recorded}`);
   });
 });

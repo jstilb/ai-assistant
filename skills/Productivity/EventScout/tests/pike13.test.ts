@@ -10,15 +10,11 @@
  *   - deriveTags: style + level + youth tags from the class name
  *   - stripHtml: collapses Pike13 rich-text into a plain one-liner
  *
- * Run: bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/pike13.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/pike13.test.ts
  */
 
 import { test } from "bun:test";
-import {
-  mapOccurrenceToEvent,
-  deriveTags,
-  stripHtml,
-} from "../Tools/adapters/Pike13Adapter.ts";
+import { mapOccurrenceToEvent, deriveTags, stripHtml } from "../Tools/adapters/Pike13Adapter.ts";
 import type { Pike13Occurrence } from "../Tools/adapters/Pike13Adapter.ts";
 
 function assert(condition: boolean, message: string): void {
@@ -34,8 +30,7 @@ const CLASS: Pike13Occurrence = {
   id: 265290277,
   event_id: 8482817,
   name: "Int. Hip Hop Choreography",
-  description:
-    "<b><p>A <span style=\"font-size:11pt\">fun &amp; sweaty</span> choreography class.</p></b>",
+  description: '<b><p>A <span style="font-size:11pt">fun &amp; sweaty</span> choreography class.</p></b>',
   location_id: 37073,
   start_at: "2026-06-06T01:30:00Z",
   end_at: "2026-06-06T02:30:00Z",
@@ -88,10 +83,7 @@ test("mapOccurrenceToEvent: instructors → performersOrTeams", () => {
 
 test("mapOccurrenceToEvent: ticketUrl uses the per-class registration link", () => {
   const e = mapOccurrenceToEvent(CLASS);
-  assert(
-    e.ticketUrl === "https://cultureshocksandiego.pike13.com/e/265290277",
-    `ticketUrl ${e.ticketUrl}`
-  );
+  assert(e.ticketUrl === "https://cultureshocksandiego.pike13.com/e/265290277", `ticketUrl ${e.ticketUrl}`);
 });
 
 test("mapOccurrenceToEvent: UTC start/end convert to LA local time", () => {
@@ -111,7 +103,7 @@ test("mapOccurrenceToEvent: missing url/resource fall back gracefully", () => {
   assert(e.venue === "Culture Shock Dance Studio", `venue "${e.venue}"`);
   assert(
     e.ticketUrl === "https://cultureshocksandiego.org/hip-hop-class-schedule/",
-    `ticketUrl falls back to schedule page, got ${e.ticketUrl}`
+    `ticketUrl falls back to schedule page, got ${e.ticketUrl}`,
   );
   assert(e.endDatetime === undefined, "no end → endDatetime omitted");
 });
@@ -141,4 +133,3 @@ test("stableId is deterministic for the same class+time+venue", () => {
   assert(a.id === b.id, "ids match");
   assert(a.id.length === 16, `id length ${a.id.length}`);
 });
-

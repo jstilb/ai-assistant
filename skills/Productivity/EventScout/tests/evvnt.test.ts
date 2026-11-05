@@ -12,7 +12,7 @@
  *      original_links (no links) — verifies fallback branches.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/evvnt.test.ts
+ *   bun test skills/Productivity/EventScout/tests/evvnt.test.ts
  */
 
 import { test } from "bun:test";
@@ -69,7 +69,9 @@ const FIXTURE_1: EvvntEvent = {
   description: "<p>Foster Innovation</p>",
   // REAL live shapes (verified against discovery.evvnt.com): images = nested
   // objects, links = dict, keywords = comma-separated string, artists = string.
-  images: [{ original: { url: "https://cdn.evvnt.com/orig.png" }, featured: { url: "https://cdn.evvnt.com/feat.png" } }],
+  images: [
+    { original: { url: "https://cdn.evvnt.com/orig.png" }, featured: { url: "https://cdn.evvnt.com/feat.png" } },
+  ],
   links: { Tickets: "https://go.evvnt.com/3450473-0", Website: "https://go.evvnt.com/3450473-2" },
   organiser_name: "Org",
   online_only: false,
@@ -107,17 +109,14 @@ console.log("--- Fixture 1: Conference event (Conferences → talk) ---");
 
 test("1. Title is preserved exactly", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.title === "PFS & Injectable Drug Devices West Coast",
-    `Expected exact title, got "${item.title}"`
-  );
+  assert(item.title === "PFS & Injectable Drug Devices West Coast", `Expected exact title, got "${item.title}"`);
 });
 
 test("2. startDatetime contains 2026-06-08", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.startDatetime.includes("2026-06-08"),
-    `Expected startDatetime to include "2026-06-08", got "${item.startDatetime}"`
+    `Expected startDatetime to include "2026-06-08", got "${item.startDatetime}"`,
   );
 });
 
@@ -125,7 +124,7 @@ test("3. startDatetime contains LA offset -07:00", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.startDatetime.includes("-07:00"),
-    `Expected startDatetime to include "-07:00", got "${item.startDatetime}"`
+    `Expected startDatetime to include "-07:00", got "${item.startDatetime}"`,
   );
 });
 
@@ -133,7 +132,7 @@ test("4. startDatetime local hour is 08 (input is 08:00:00-07:00)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   const hourMatch = item.startDatetime.match(/T(\d{2}):/);
   assert(hourMatch !== null, `Cannot extract hour from "${item.startDatetime}"`);
-  const localHour = parseInt(hourMatch![1], 10);
+  const localHour = parseInt(hourMatch![1]!, 10);
   assert(localHour === 8, `Expected local hour 8, got ${localHour} in "${item.startDatetime}"`);
 });
 
@@ -141,7 +140,7 @@ test("5. endDatetime is present", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     typeof item.endDatetime === "string" && item.endDatetime.length > 0,
-    `Expected endDatetime to be set, got "${item.endDatetime}"`
+    `Expected endDatetime to be set, got "${item.endDatetime}"`,
   );
 });
 
@@ -149,7 +148,7 @@ test("6. venue === 'San Diego Marriott La Jolla'", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.venue === "San Diego Marriott La Jolla",
-    `Expected venue "San Diego Marriott La Jolla", got "${item.venue}"`
+    `Expected venue "San Diego Marriott La Jolla", got "${item.venue}"`,
   );
 });
 
@@ -157,7 +156,7 @@ test("7. address contains the street (4240 La Jolla Village Drive)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     typeof item.address === "string" && item.address.includes("4240 La Jolla Village Drive"),
-    `Expected address to contain street, got "${item.address}"`
+    `Expected address to contain street, got "${item.address}"`,
   );
 });
 
@@ -165,23 +164,20 @@ test("8. address contains the town (San Diego)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     typeof item.address === "string" && item.address.includes("San Diego"),
-    `Expected address to contain "San Diego", got "${item.address}"`
+    `Expected address to contain "San Diego", got "${item.address}"`,
   );
 });
 
 test("9. category === 'talk' (Conferences → talk)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.category === "talk",
-    `Expected category "talk", got "${item.category}"`
-  );
+  assert(item.category === "talk", `Expected category "talk", got "${item.category}"`);
 });
 
 test("10. ticketUrl === 'https://go.evvnt.com/3450473-0'", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.ticketUrl === "https://go.evvnt.com/3450473-0",
-    `Expected ticketUrl "https://go.evvnt.com/3450473-0", got "${item.ticketUrl}"`
+    `Expected ticketUrl "https://go.evvnt.com/3450473-0", got "${item.ticketUrl}"`,
   );
 });
 
@@ -211,25 +207,22 @@ test("15. sources[0].sourceId === 'inewsource-events'", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(item.sources.length >= 1, `Expected at least 1 source`);
   assert(
-    item.sources[0].sourceId === "inewsource-events",
-    `Expected sourceId "inewsource-events", got "${item.sources[0].sourceId}"`
+    item.sources[0]!.sourceId === "inewsource-events",
+    `Expected sourceId "inewsource-events", got "${item.sources[0]!.sourceId}"`,
   );
 });
 
 // Real-shape coverage (regression for the live "{} is not iterable" bug):
 test("15b. imageUrl extracted from nested images[0].original.url (live shape)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.imageUrl === "https://cdn.evvnt.com/orig.png",
-    `Expected nested image url, got "${item.imageUrl}"`
-  );
+  assert(item.imageUrl === "https://cdn.evvnt.com/orig.png", `Expected nested image url, got "${item.imageUrl}"`);
 });
 
 test("15c. tags parsed from comma-separated keywords string (live shape)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.tags.includes("pharma") && item.tags.includes("syringes") && item.tags.includes("idd"),
-    `Expected tags from comma string, got ${JSON.stringify(item.tags)}`
+    `Expected tags from comma string, got ${JSON.stringify(item.tags)}`,
   );
 });
 
@@ -241,33 +234,24 @@ console.log("\n--- Fixture 2: Live Music, null venue, images=string, original_li
 
 test("16. venue is undefined when venue=null", () => {
   const item = mapEvvntEventToItem(FIXTURE_2, TEST_SOURCE);
-  assert(
-    item.venue === undefined,
-    `Expected venue=undefined when raw.venue=null, got "${item.venue}"`
-  );
+  assert(item.venue === undefined, `Expected venue=undefined when raw.venue=null, got "${item.venue}"`);
 });
 
 test("17. category === 'music' (Live Music → music)", () => {
   const item = mapEvvntEventToItem(FIXTURE_2, TEST_SOURCE);
-  assert(
-    item.category === "music",
-    `Expected category "music", got "${item.category}"`
-  );
+  assert(item.category === "music", `Expected category "music", got "${item.category}"`);
 });
 
 test("18. imageUrl is set from bare string in images array", () => {
   const item = mapEvvntEventToItem(FIXTURE_2, TEST_SOURCE);
-  assert(
-    item.imageUrl === "https://x/i.jpg",
-    `Expected imageUrl "https://x/i.jpg", got "${item.imageUrl}"`
-  );
+  assert(item.imageUrl === "https://x/i.jpg", `Expected imageUrl "https://x/i.jpg", got "${item.imageUrl}"`);
 });
 
 test("19. ticketUrl comes from original_links when links absent", () => {
   const item = mapEvvntEventToItem(FIXTURE_2, TEST_SOURCE);
   assert(
     item.ticketUrl === "https://go.evvnt.com/x",
-    `Expected ticketUrl "https://go.evvnt.com/x", got "${item.ticketUrl}"`
+    `Expected ticketUrl "https://go.evvnt.com/x", got "${item.ticketUrl}"`,
   );
 });
 
@@ -285,7 +269,7 @@ test("21. endDatetime is undefined when end_time=null", () => {
   const item = mapEvvntEventToItem(FIXTURE_2, TEST_SOURCE);
   assert(
     item.endDatetime === undefined,
-    `Expected endDatetime=undefined when end_time=null, got "${item.endDatetime}"`
+    `Expected endDatetime=undefined when end_time=null, got "${item.endDatetime}"`,
   );
 });
 
@@ -325,7 +309,7 @@ function makeFutureEvvntEvent(id: string, title: string): EvvntEvent {
 /** Build a full page of N events. */
 function makeEvvntPage(n: number, pageIndex: number): EvvntEvent[] {
   return Array.from({ length: n }, (_, i) =>
-    makeFutureEvvntEvent(`p${pageIndex}-e${i}`, `Page ${pageIndex} Event ${i}`)
+    makeFutureEvvntEvent(`p${pageIndex}-e${i}`, `Page ${pageIndex} Event ${i}`),
   );
 }
 
@@ -351,7 +335,7 @@ const EVVNT_TEST_SOURCE: EventSource = {
 test("P1. accumulates all pages when > old MAX_PAGES=3 (5 full pages + empty stop)", async () => {
   const originalFetch = globalThis.fetch;
   let callCount = 0;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "0", 10);
     callCount++;
@@ -365,13 +349,10 @@ test("P1. accumulates all pages when > old MAX_PAGES=3 (5 full pages + empty sto
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchEvvntEvents(EVVNT_TEST_SOURCE);
-    assert(
-      result.length === 250,
-      `P1. should return 250 events from 5 full pages, got ${result.length}`
-    );
+    assert(result.length === 250, `P1. should return 250 events from 5 full pages, got ${result.length}`);
     assert(callCount >= 6, `P1. should have called fetch at least 6 times (5 full + 1 empty), got ${callCount}`);
   } finally {
     globalThis.fetch = originalFetch;
@@ -381,12 +362,12 @@ test("P1. accumulates all pages when > old MAX_PAGES=3 (5 full pages + empty sto
 // Test P2: Stop on empty page immediately
 test("P2. stops immediately on first empty page (page 0 empty)", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
+  globalThis.fetch = fakeFetch(async () => {
     return new Response(JSON.stringify(makeEvvntResponse([])), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchEvvntEvents(EVVNT_TEST_SOURCE);
     assert(result.length === 0, `P2. empty page 0 → 0 events, got ${result.length}`);
@@ -399,7 +380,7 @@ test("P2. stops immediately on first empty page (page 0 empty)", async () => {
 test("P3. short final page stops pagination (natural last-page signal)", async () => {
   const originalFetch = globalThis.fetch;
   let callCount = 0;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "0", 10);
     callCount++;
@@ -413,7 +394,7 @@ test("P3. short final page stops pagination (natural last-page signal)", async (
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchEvvntEvents(EVVNT_TEST_SOURCE);
     assert(result.length === 60, `P3. 1 full + 1 short → 60 events, got ${result.length}`);
@@ -427,24 +408,30 @@ test("P3. short final page stops pagination (natural last-page signal)", async (
 test("P4. safety bound stops runaway loop and logs warning", async () => {
   const originalFetch = globalThis.fetch;
   // Always return full pages — simulates an infinite paginating API
-  globalThis.fetch = async () => {
+  globalThis.fetch = fakeFetch(async () => {
     return new Response(JSON.stringify(makeEvvntResponse(makeEvvntPage(EVVNT_PAGE_SIZE, 0))), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   const warnMessages: string[] = [];
   const origLog = console.log;
   const origWarn = console.warn;
   // Capture any safety log (could be console.log or console.warn)
-  console.log = (...args: unknown[]) => { warnMessages.push(args.join(" ")); origLog(...args); };
-  console.warn = (...args: unknown[]) => { warnMessages.push(args.join(" ")); origWarn(...args); };
+  console.log = (...args: unknown[]) => {
+    warnMessages.push(args.join(" "));
+    origLog(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    warnMessages.push(args.join(" "));
+    origWarn(...args);
+  };
   try {
     const result = await fetchEvvntEvents(EVVNT_TEST_SOURCE);
     // Should be capped at MAX_PAGES_SAFETY * HITS_PER_PAGE
     assert(result.length < 10000, `P4. should be bounded, got ${result.length}`);
     assert(result.length > 0, `P4. should return events up to safety bound, got ${result.length}`);
-    const safetyLogged = warnMessages.some(m => m.includes("safety bound") || m.includes("safety"));
+    const safetyLogged = warnMessages.some((m) => m.includes("safety bound") || m.includes("safety"));
     assert(safetyLogged, `P4. should log safety bound warning — got: ${warnMessages.join("; ")}`);
   } finally {
     globalThis.fetch = originalFetch;
@@ -453,3 +440,7 @@ test("P4. safety bound stops runaway loop and logs warning", async () => {
   }
 });
 
+/** Adds Bun's `fetch.preconnect` so a plain function satisfies `typeof fetch`. */
+function fakeFetch(fn: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
+  return Object.assign(fn, { preconnect: () => {} });
+}

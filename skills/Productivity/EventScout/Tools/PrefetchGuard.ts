@@ -14,7 +14,7 @@
  *   exit 1  → unhealthy (non-zero so monitors see failure, not silent green)
  */
 
-import { existsSync, statSync, readFileSync } from "fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 
 export interface PrefetchGuardResult {
   healthy: boolean;
@@ -40,7 +40,7 @@ export interface PrefetchGuardResult {
 export function isPrefetchHealthy(
   cachePath: string,
   sinceMs: number = 15 * 60 * 1000,
-  now: number = Date.now()
+  now: number = Date.now(),
 ): PrefetchGuardResult {
   // 1. File must exist.
   if (!existsSync(cachePath)) {
@@ -69,11 +69,7 @@ export function isPrefetchHealthy(
     const raw = readFileSync(cachePath, "utf-8").trim();
     if (raw !== "") {
       const parsed = JSON.parse(raw) as unknown;
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        "events" in (parsed as Record<string, unknown>)
-      ) {
+      if (parsed !== null && typeof parsed === "object" && "events" in (parsed as Record<string, unknown>)) {
         const events = (parsed as { events: unknown[] }).events;
         if (Array.isArray(events)) {
           eventCount = events.length;

@@ -28,7 +28,7 @@
  *   (Ingest.ts) handle cache writes.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 // cross-skill-allowed: adapter wraps ContentAggregator's RSSParser by design — thin adapter over a shared parser
 import { parseRSSFeed } from "../../../../../skills/Content/ContentAggregator/Tools/RSSParser.ts";
 // cross-skill-allowed: adapter wraps ContentAggregator's RSSParser by design — thin adapter over a shared parser
@@ -93,7 +93,7 @@ export interface ReaderDescriptionFields {
  */
 function naiveToLaIso(naive: string): string | undefined {
   const utcMs = naiveLaToUtcMs(`${naive}:00`);
-  if (isNaN(utcMs)) return undefined;
+  if (Number.isNaN(utcMs)) return undefined;
   return utcIsoToLaIso(new Date(utcMs).toISOString());
 }
 
@@ -121,7 +121,10 @@ const READER_EXTRACTION_SCHEMA: Record<string, unknown> = {
         properties: {
           index: { type: "integer" },
           title: { type: "string" },
-          startDatetime: { type: ["string", "null"], description: "Naive local start time 'YYYY-MM-DDTHH:MM', or null" },
+          startDatetime: {
+            type: ["string", "null"],
+            description: "Naive local start time 'YYYY-MM-DDTHH:MM', or null",
+          },
           endDatetime: { type: ["string", "null"], description: "Naive local end time 'YYYY-MM-DDTHH:MM', or null" },
           venue: { type: ["string", "null"] },
           address: { type: ["string", "null"] },
@@ -129,7 +132,17 @@ const READER_EXTRACTION_SCHEMA: Record<string, unknown> = {
           priceMax: { type: ["number", "null"] },
           isFree: { type: "boolean" },
         },
-        required: ["index", "title", "startDatetime", "endDatetime", "venue", "address", "priceMin", "priceMax", "isFree"],
+        required: [
+          "index",
+          "title",
+          "startDatetime",
+          "endDatetime",
+          "venue",
+          "address",
+          "priceMin",
+          "priceMax",
+          "isFree",
+        ],
         additionalProperties: false,
       },
     },
@@ -194,14 +207,10 @@ export function enrichmentFromModelRow(
  * the cron log shows exactly why. Never throws: one bad batch must not kill
  * the whole source ingest.
  */
-export async function extractReaderEnrichments(
-  items: FeedItem[],
-): Promise<Map<number, ReaderDescriptionFields>> {
+export async function extractReaderEnrichments(items: FeedItem[]): Promise<Map<number, ReaderDescriptionFields>> {
   const enrichments = new Map<number, ReaderDescriptionFields>();
 
-  const readerIndices = items
-    .map((item, i) => ({ item, i }))
-    .filter(({ item }) => item.body != null && item.body.includes("When:"));
+  const readerIndices = items.map((item, i) => ({ item, i })).filter(({ item }) => item.body?.includes("When:"));
   if (readerIndices.length === 0) return enrichments;
 
   for (let b = 0; b < readerIndices.length; b += READER_BATCH_SIZE) {
@@ -222,7 +231,7 @@ export async function extractReaderEnrichments(
     if (!result.success || result.parsed === undefined || result.parsed === null) {
       console.error(
         `[RSSAdapter] Reader enrichment batch failed (items ${batch[0]!.i}–${batch[batch.length - 1]!.i}): ` +
-        `${result.error ?? "no structured output"} — these items keep publish-date fallback`,
+          `${result.error ?? "no structured output"} — these items keep publish-date fallback`,
       );
       continue;
     }
@@ -328,9 +337,7 @@ export async function fetchRSSEvents(source: EventSource): Promise<EventItem[]> 
   });
 
   if (!res.ok) {
-    throw new Error(
-      `RSS fetch failed: HTTP ${res.status} ${res.statusText} — ${source.url}`
-    );
+    throw new Error(`RSS fetch failed: HTTP ${res.status} ${res.statusText} — ${source.url}`);
   }
 
   const xml = await res.text();
@@ -352,8 +359,7 @@ export async function fetchRSSEvents(source: EventSource): Promise<EventItem[]> 
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("RSSAdapter.ts") ||
-    process.argv[1].endsWith("RSSAdapter"));
+  (process.argv[1].endsWith("RSSAdapter.ts") || process.argv[1].endsWith("RSSAdapter"));
 
 if (IS_SCRIPT) {
   const args = process.argv.slice(2);
@@ -372,11 +378,12 @@ Examples:
   }
 
   const urlIdx = args.indexOf("--url");
-  const feedUrl = urlIdx !== -1 ? args[urlIdx + 1] : "https://sdpressclub.org/category/news-events/feed/";
+  const feedUrl =
+    (urlIdx !== -1 ? args[urlIdx + 1] : undefined) ?? "https://sdpressclub.org/category/news-events/feed/";
   const sourceIdIdx = args.indexOf("--source-id");
-  const sourceId = sourceIdIdx !== -1 ? args[sourceIdIdx + 1] : "rss-script";
+  const sourceId = (sourceIdIdx !== -1 ? args[sourceIdIdx + 1] : undefined) ?? "rss-script";
   const catIdx = args.indexOf("--category");
-  const categoryArg = catIdx !== -1 ? args[catIdx + 1] : "community";
+  const categoryArg = (catIdx !== -1 ? args[catIdx + 1] : undefined) ?? "community";
 
   const scriptSource: EventSource = {
     id: sourceId,

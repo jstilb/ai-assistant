@@ -98,12 +98,12 @@ import { sendAlert } from "../../../../lib/core/AlertGate.ts";
  */
 export const APIFY_HARD_FAIL_PAGE_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
-export type ApifySourceOutcome =
+type ApifySourceOutcome =
   | { readonly kind: "hard-fail"; readonly error: unknown }
   | { readonly kind: "zero-result" }
   | { readonly kind: "success"; readonly count: number };
 
-export interface ApifyHealthResult {
+interface ApifyHealthResult {
   /** Hard-failure (page-tier) streak outcome, straight from trackHealStreak(). */
   hardFail: FailStreakResult;
   /** Zero-result (digest-tier) streak count after this run (0 = just reset). */
@@ -180,10 +180,7 @@ export async function trackApifySourceHealth(
     // for this channel (via sendAlertFn, tier: 'page' internally) — this
     // recordFailure() call is deliberately always tier 'log' (forensic-only)
     // so the same occurrence is never double-alerted.
-    const streak =
-      hardFail.action === "below-threshold" || hardFail.action === "paged"
-        ? hardFail.streak
-        : 0;
+    const streak = hardFail.action === "below-threshold" || hardFail.action === "paged" ? hardFail.streak : 0;
     recordFailure({
       source: "EventScout:ApifyIngest",
       error: outcome.error,

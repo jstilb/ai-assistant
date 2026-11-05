@@ -17,7 +17,7 @@
  *   (d) Total count = 2 (only the 2 valid ones survive)
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/spa.test.ts
+ *   bun test skills/Productivity/EventScout/tests/spa.test.ts
  */
 
 import { test } from "bun:test";
@@ -42,7 +42,7 @@ function assert(condition: boolean, message: string): void {
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) {
     throw new Error(
-      `Assertion failed: ${message} — expected: ${JSON.stringify(expected)}, actual: ${JSON.stringify(actual)}`
+      `Assertion failed: ${message} — expected: ${JSON.stringify(expected)}, actual: ${JSON.stringify(actual)}`,
     );
   }
 }
@@ -125,16 +125,8 @@ test("Section 4: sources[] populated from EventSource", () => {
   const items = normalizeExtracted(rawInput, mockSource);
   for (const item of items) {
     assert(item.sources.length >= 1, `"${item.title}" has at least 1 source`);
-    assertEq(
-      item.sources[0]!.sourceId,
-      mockSource.id,
-      `"${item.title}" sources[0].sourceId === "${mockSource.id}"`
-    );
-    assertEq(
-      item.sources[0]!.url,
-      mockSource.url,
-      `"${item.title}" sources[0].url === source.url`
-    );
+    assertEq(item.sources[0]!.sourceId, mockSource.id, `"${item.title}" sources[0].sourceId === "${mockSource.id}"`);
+    assertEq(item.sources[0]!.url, mockSource.url, `"${item.title}" sources[0].url === source.url`);
   }
 });
 
@@ -142,15 +134,9 @@ test("Section 5: startDatetime is valid ISO 8601", () => {
   const items = normalizeExtracted(rawInput, mockSource);
   for (const item of items) {
     const d = new Date(item.startDatetime);
-    assert(
-      !isNaN(d.getTime()),
-      `"${item.title}" startDatetime "${item.startDatetime}" parses as valid Date`
-    );
+    assert(!Number.isNaN(d.getTime()), `"${item.title}" startDatetime "${item.startDatetime}" parses as valid Date`);
     // ISO 8601 strings contain 'T'
-    assert(
-      item.startDatetime.includes("T"),
-      `"${item.title}" startDatetime contains 'T' separator`
-    );
+    assert(item.startDatetime.includes("T"), `"${item.title}" startDatetime contains 'T' separator`);
   }
 });
 
@@ -159,11 +145,7 @@ test("Section 6: id is non-empty + deterministic", () => {
   const items2 = normalizeExtracted(rawInput, mockSource);
   for (let i = 0; i < items1.length; i++) {
     assert(items1[i]!.id.length > 0, `"${items1[i]!.title}" id is non-empty`);
-    assertEq(
-      items1[i]!.id,
-      items2[i]!.id,
-      `"${items1[i]!.title}" id is deterministic across two calls`
-    );
+    assertEq(items1[i]!.id, items2[i]!.id, `"${items1[i]!.title}" id is deterministic across two calls`);
   }
 });
 
@@ -199,15 +181,13 @@ test("Section 10a: naive datetime → correct LA wall-clock", () => {
   // "2026-06-05T19:00:00" has no offset → must be treated as PDT (UTC-7).
   // Expected UTC instant: 2026-06-06T02:00:00.000Z
   // LA wall-clock at that instant: June 5 at 19:00 (hour=19, day=5, month=6)
-  const raw: unknown[] = [
-    { title: "TZ Test Naive", startDatetime: "2026-06-05T19:00:00", isFree: false },
-  ];
+  const raw: unknown[] = [{ title: "TZ Test Naive", startDatetime: "2026-06-05T19:00:00", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10a: naive datetime → 1 valid item");
   const item = items[0]!;
   const utcMs = new Date(item.startDatetime).getTime();
   // Must be a valid time
-  assert(!isNaN(utcMs), "10a: startDatetime parses as valid Date");
+  assert(!Number.isNaN(utcMs), "10a: startDatetime parses as valid Date");
   // LA wall-clock must be 7 PM on June 5
   const la = utcMsToLaParts(utcMs);
   assertEq(la.hour, 19, "10a: naive 19:00 → LA wall-clock hour = 19 (7 PM PDT)");
@@ -217,15 +197,13 @@ test("Section 10a: naive datetime → correct LA wall-clock", () => {
   assertEq(
     new Date(utcMs).toISOString(),
     "2026-06-06T02:00:00.000Z",
-    "10a: naive 2026-06-05T19:00:00 (LA) → UTC = 2026-06-06T02:00:00.000Z"
+    "10a: naive 2026-06-05T19:00:00 (LA) → UTC = 2026-06-06T02:00:00.000Z",
   );
 });
 
 test("Section 10b: offset-aware datetime → same UTC instant as naive", () => {
   // This is a regression check: offset-aware strings must NOT be altered.
-  const raw: unknown[] = [
-    { title: "TZ Test Offset", startDatetime: "2026-06-05T19:00:00-07:00", isFree: false },
-  ];
+  const raw: unknown[] = [{ title: "TZ Test Offset", startDatetime: "2026-06-05T19:00:00-07:00", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10b: offset-aware datetime → 1 valid item");
   const item = items[0]!;
@@ -234,7 +212,7 @@ test("Section 10b: offset-aware datetime → same UTC instant as naive", () => {
   assertEq(
     new Date(utcMs).toISOString(),
     "2026-06-06T02:00:00.000Z",
-    "10b: offset-aware -07:00 → UTC = 2026-06-06T02:00:00.000Z (same as naive)"
+    "10b: offset-aware -07:00 → UTC = 2026-06-06T02:00:00.000Z (same as naive)",
   );
   const la = utcMsToLaParts(utcMs);
   assertEq(la.hour, 19, "10b: offset-aware → LA wall-clock hour = 19");
@@ -242,9 +220,7 @@ test("Section 10b: offset-aware datetime → same UTC instant as naive", () => {
 });
 
 test("Section 10c: Z datetime → that exact UTC instant preserved", () => {
-  const raw: unknown[] = [
-    { title: "TZ Test Z", startDatetime: "2026-06-06T02:00:00Z", isFree: false },
-  ];
+  const raw: unknown[] = [{ title: "TZ Test Z", startDatetime: "2026-06-06T02:00:00Z", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10c: Z datetime → 1 valid item");
   const item = items[0]!;
@@ -252,20 +228,18 @@ test("Section 10c: Z datetime → that exact UTC instant preserved", () => {
   assertEq(
     new Date(utcMs).toISOString(),
     "2026-06-06T02:00:00.000Z",
-    "10c: Z string 2026-06-06T02:00:00Z preserved exactly"
+    "10c: Z string 2026-06-06T02:00:00Z preserved exactly",
   );
 });
 
 test("Section 10d: date-only input → LA local midnight", () => {
   // LA midnight on June 5 during PDT (UTC-7) = 2026-06-05T07:00:00.000Z
-  const raw: unknown[] = [
-    { title: "TZ Test DateOnly", startDatetime: "2026-06-05", isFree: false },
-  ];
+  const raw: unknown[] = [{ title: "TZ Test DateOnly", startDatetime: "2026-06-05", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10d: date-only → 1 valid item");
   const item = items[0]!;
   const utcMs = new Date(item.startDatetime).getTime();
-  assert(!isNaN(utcMs), "10d: date-only startDatetime parses as valid Date");
+  assert(!Number.isNaN(utcMs), "10d: date-only startDatetime parses as valid Date");
   const la = utcMsToLaParts(utcMs);
   // Midnight = hour 0 in LA
   assertEq(la.hour, 0, "10d: date-only → LA wall-clock hour = 0 (midnight)");
@@ -275,7 +249,7 @@ test("Section 10d: date-only input → LA local midnight", () => {
   assertEq(
     new Date(utcMs).toISOString(),
     "2026-06-05T07:00:00.000Z",
-    "10d: date-only 2026-06-05 (LA midnight PDT) → UTC = 2026-06-05T07:00:00.000Z"
+    "10d: date-only 2026-06-05 (LA midnight PDT) → UTC = 2026-06-05T07:00:00.000Z",
   );
 });
 
@@ -292,11 +266,7 @@ test("Section 10e: naive and offset-aware for same event → identical id (deter
   const aware = normalizeExtracted(rawAware, mockSource);
   assertEq(naive.length, 1, "10e: naive produced exactly 1 item (prerequisite)");
   assertEq(aware.length, 1, "10e: aware produced exactly 1 item (prerequisite)");
-  assertEq(
-    naive[0]!.id,
-    aware[0]!.id,
-    "10e: naive and offset-aware same event → identical stable id"
-  );
+  assertEq(naive[0]!.id, aware[0]!.id, "10e: naive and offset-aware same event → identical stable id");
 });
 
 // ============================================================================
@@ -379,10 +349,7 @@ test("11a: multi-page accumulation — loop stops on no-new-unique page", async 
 test("11b: no-op param safety — same events every page → stops at page 2", async () => {
   // Every page returns the SAME events → loop stops after the 2nd page (no
   // new uniques), does NOT spin to MAX_PAGES_SAFETY bound.
-  const sameEvents = [
-    makePaginationEvent("same-a", futureIso(10)),
-    makePaginationEvent("same-b", futureIso(11)),
-  ];
+  const sameEvents = [makePaginationEvent("same-a", futureIso(10)), makePaginationEvent("same-b", futureIso(11))];
 
   let callCount = 0;
   const pageFn = async (_url: string): Promise<EventItem[]> => {
@@ -403,10 +370,7 @@ test("11c: all-past-horizon page → stop pagination", async () => {
   const page1 = [makePaginationEvent("h1", futureIso(5)), makePaginationEvent("h2", futureIso(10))];
   const page2 = [makePaginationEvent("h3", futureIso(15))];
   // Page 3 entirely beyond 120d horizon
-  const page3 = [
-    makePaginationEvent("h4", beyondHorizonIso()),
-    makePaginationEvent("h5", beyondHorizonIso()),
-  ];
+  const page3 = [makePaginationEvent("h4", beyondHorizonIso()), makePaginationEvent("h5", beyondHorizonIso())];
 
   let callCount = 0;
   const pageFn = async (_url: string): Promise<EventItem[]> => {
@@ -426,10 +390,7 @@ test("11c: all-past-horizon page → stop pagination", async () => {
   // None of the beyond-horizon events should be in the result.
   const beyondIds = ["h4", "h5"];
   for (const id of beyondIds) {
-    assert(
-      !result.some((e) => e.id === id),
-      `11c: beyond-horizon event ${id} not in result`,
-    );
+    assert(!result.some((e) => e.id === id), `11c: beyond-horizon event ${id} not in result`);
   }
 });
 
@@ -457,7 +418,7 @@ test("11e: maxLlmWindows override preserved on source passed to pageFn", async (
   // Source with maxLlmWindows=12 is passed through to the page fetcher context.
   // This is a structural test — the source's maxLlmWindows value must be
   // present on the source object received by the page fn (no stripping by the loop).
-  let receivedSource: EventSource | null = null;
+  let receivedSource = null as EventSource | null; // assigned in the callback below; `as` stops TS narrowing it to null
   const pageFn = async (_url: string, src: EventSource): Promise<EventItem[]> => {
     receivedSource = src;
     return [makePaginationEvent("w1", futureIso(5))];
@@ -517,7 +478,7 @@ test("12b: todayLaDateString — UTC date rolls back a day in early LA morning h
   assertEq(
     todayLaDateString(now),
     "2026-07-10",
-    "12b: early-UTC-morning instant still reads as the prior LA calendar date"
+    "12b: early-UTC-morning instant still reads as the prior LA calendar date",
   );
 });
 
@@ -530,7 +491,7 @@ test("12d: todayLaDateString — defaults to current instant when no arg given",
   const result = todayLaDateString();
   assert(
     /^\d{4}-\d{2}-\d{2}$/.test(result),
-    `12d: no-arg call returns a well-formed YYYY-MM-DD string, got "${result}"`
+    `12d: no-arg call returns a well-formed YYYY-MM-DD string, got "${result}"`,
   );
 });
 
@@ -545,10 +506,7 @@ test("12d: todayLaDateString — defaults to current instant when no arg given",
 
 test("13a: prompt embeds the exact today-string passed in", () => {
   const prompt = buildExtractionSystemPrompt("2026-07-10");
-  assert(
-    prompt.includes("2026-07-10"),
-    "13a: prompt contains the injected today-date string"
-  );
+  assert(prompt.includes("2026-07-10"), "13a: prompt contains the injected today-date string");
 });
 
 test("13b: prompt instructs the model to resolve year-less dates using today", () => {
@@ -557,7 +515,7 @@ test("13b: prompt instructs the model to resolve year-less dates using today", (
   assert(lower.includes("year"), "13b: prompt mentions 'year' resolution guidance");
   assert(
     lower.includes("without a year") || lower.includes("no year") || lower.includes("year-less"),
-    "13b: prompt explicitly names the year-less-date scenario"
+    "13b: prompt explicitly names the year-less-date scenario",
   );
 });
 
@@ -566,16 +524,13 @@ test("13c: prompt instructs the model to always output a full year, never drop/o
   const lower = prompt.toLowerCase();
   assert(
     lower.includes("never") && lower.includes("year"),
-    "13c: prompt carries a hard 'never omit/placeholder the year' instruction"
+    "13c: prompt carries a hard 'never omit/placeholder the year' instruction",
   );
 });
 
 test("13d: prompt still requires the JSON-only output contract (regression)", () => {
   const prompt = buildExtractionSystemPrompt("2026-07-10");
-  assert(
-    prompt.includes("Output ONLY a valid JSON array"),
-    "13d: original JSON-only output contract preserved"
-  );
+  assert(prompt.includes("Output ONLY a valid JSON array"), "13d: original JSON-only output contract preserved");
 });
 
 test("13e: prompt still carries the required field list (regression)", () => {
@@ -593,17 +548,14 @@ test("13g: prompt requires ISO 8601 only — no ambiguous free-text date format 
   // re-offer that format.
   const prompt = buildExtractionSystemPrompt("2026-07-10");
   assert(
-    !prompt.includes("or \"Month DD, YYYY HH:MM AM/PM\""),
-    "13g: prompt no longer OFFERS the ambiguous free-text format as a valid option"
+    !prompt.includes('or "Month DD, YYYY HH:MM AM/PM"'),
+    "13g: prompt no longer OFFERS the ambiguous free-text format as a valid option",
   );
   assert(
-    prompt.includes("Do NOT use \"Month DD, YYYY HH:MM AM/PM\""),
-    "13g: prompt explicitly forbids the free-text format that broke coerceToIso"
+    prompt.includes('Do NOT use "Month DD, YYYY HH:MM AM/PM"'),
+    "13g: prompt explicitly forbids the free-text format that broke coerceToIso",
   );
-  assert(
-    prompt.toLowerCase().includes("iso 8601"),
-    "13g: prompt names ISO 8601 as the required startDatetime format"
-  );
+  assert(prompt.toLowerCase().includes("iso 8601"), "13g: prompt names ISO 8601 as the required startDatetime format");
 });
 
 test("13f: prompt is a pure function of todayLaDate — different dates produce different prompts", () => {
@@ -628,27 +580,29 @@ function captureConsole(): { messages: string[]; restore: () => void } {
   const messages: string[] = [];
   const origLog = console.log;
   const origWarn = console.warn;
-  console.log = (...args: unknown[]) => { messages.push(args.map(String).join(" ")); };
-  console.warn = (...args: unknown[]) => { messages.push(args.map(String).join(" ")); };
+  console.log = (...args: unknown[]) => {
+    messages.push(args.map(String).join(" "));
+  };
+  console.warn = (...args: unknown[]) => {
+    messages.push(args.map(String).join(" "));
+  };
   return {
     messages,
-    restore: () => { console.log = origLog; console.warn = origWarn; },
+    restore: () => {
+      console.log = origLog;
+      console.warn = origWarn;
+    },
   };
 }
 
 test("14a: unparseable-date drop is logged individually, not silent", () => {
   const cap = captureConsole();
   try {
-    normalizeExtracted(
-      [{ title: "Year-less Caption Show", startDatetime: "July 5th", isFree: false }],
-      mockSource
-    );
+    normalizeExtracted([{ title: "Year-less Caption Show", startDatetime: "July 5th", isFree: false }], mockSource);
   } finally {
     cap.restore();
   }
-  const hit = cap.messages.some(
-    (m) => m.includes("Year-less Caption Show") && m.toLowerCase().includes("unparseable")
-  );
+  const hit = cap.messages.some((m) => m.includes("Year-less Caption Show") && m.toLowerCase().includes("unparseable"));
   assert(hit, `14a: expected a per-entry unparseable-date warning — got: ${cap.messages.join(" | ")}`);
 });
 
@@ -667,9 +621,7 @@ test("14b: drop-count summary line reports counts and survivor total", () => {
 });
 
 test("14c: no drops → no drop-related log line (quiet on the happy path)", () => {
-  const cleanInput: unknown[] = [
-    { title: "Clean Event", startDatetime: "2026-06-15T20:00:00-07:00", isFree: false },
-  ];
+  const cleanInput: unknown[] = [{ title: "Clean Event", startDatetime: "2026-06-15T20:00:00-07:00", isFree: false }];
   const cap = captureConsole();
   try {
     normalizeExtracted(cleanInput, mockSource);

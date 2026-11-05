@@ -122,13 +122,11 @@ export function naiveLaToUtcMs(naive: string): number {
   // Date-only strings ("YYYY-MM-DD"): expand to midnight before processing.
   // Date.parse("2026-06-05Z") is invalid in most engines; normalise to
   // "2026-06-05T00:00:00" first so that appending "Z" gives a valid UTC parse.
-  const normalised = /^\d{4}-\d{2}-\d{2}$/.test(naive.trim())
-    ? `${naive.trim()}T00:00:00`
-    : naive;
+  const normalised = /^\d{4}-\d{2}-\d{2}$/.test(naive.trim()) ? `${naive.trim()}T00:00:00` : naive;
 
   // Step 1: parse as UTC to get a starting candidate
   const naiveAsUtcMs = Date.parse(normalised + "Z");
-  if (isNaN(naiveAsUtcMs)) return NaN;
+  if (Number.isNaN(naiveAsUtcMs)) return NaN;
 
   // Helper: given a UTC ms value, return the offset (in ms) at that instant
   // for America/Los_Angeles. offsetMs = localWallMs - utcMs.
@@ -188,7 +186,7 @@ export function laDateIso(
   day: number,
   hour: number = 0,
   minute: number = 0,
-  second: number = 0
+  second: number = 0,
 ): string {
   // Strategy: construct the naive datetime as UTC, then find the LA offset
   // at that approximate moment, then reconstruct.
@@ -211,7 +209,7 @@ export function laDateIso(
     parseInt(p["day"]!, 10),
     parseInt(p["hour"]!, 10),
     parseInt(p["minute"]!, 10),
-    parseInt(p["second"]!, 10)
+    parseInt(p["second"]!, 10),
   );
   const offsetMinutes = (localMs - naiveUtcMs) / 60_000;
   const sign = offsetMinutes >= 0 ? "+" : "-";

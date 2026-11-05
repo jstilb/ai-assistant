@@ -27,7 +27,7 @@
  * runner. fetchNineteenHzEvents() returns EventItem[]; it does NOT write cache.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import type { EventItem, EventSource } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso, utcMsToLaParts } from "../lib/tz.ts";
 
@@ -159,15 +159,7 @@ export function parseRows(html: string): NineteenHzRow[] {
 // Recurring-row date resolution ("Mondays", "2nd Saturdays" → next occurrence)
 // ============================================================================
 
-const WEEKDAYS = [
-  "sundays",
-  "mondays",
-  "tuesdays",
-  "wednesdays",
-  "thursdays",
-  "fridays",
-  "saturdays",
-];
+const WEEKDAYS = ["sundays", "mondays", "tuesdays", "wednesdays", "thursdays", "fridays", "saturdays"];
 
 function isoWeekday(iso: string): number {
   return new Date(`${iso}T12:00:00Z`).getUTCDay();
@@ -187,7 +179,7 @@ function isoAddDays(iso: string, days: number): string {
  */
 export function nextOccurrenceDate(dayLabel: string, todayIso: string): string | null {
   const m = /^(?:(1st|2nd|3rd|4th|5th)\s+)?(sundays|mondays|tuesdays|wednesdays|thursdays|fridays|saturdays)\b/i.exec(
-    dayLabel.trim()
+    dayLabel.trim(),
   );
   if (!m) return null;
   const weekday = WEEKDAYS.indexOf(m[2]!.toLowerCase());
@@ -217,7 +209,7 @@ export function nextOccurrenceDate(dayLabel: string, todayIso: string): string |
 
 /** "(9pm-2am)" / "(9:30pm)" → { start, end? } as {hour, minute} 24h, or null. */
 export function parseTimeRange(
-  dayTime: string
+  dayTime: string,
 ): { start: { hour: number; minute: number }; end?: { hour: number; minute: number } } | null {
   const paren = /\(([^)]*)\)/.exec(stripTags(dayTime));
   if (!paren) return null;
@@ -268,12 +260,12 @@ export function parsePriceAge(priceAge: string): {
 
 /** "<a href='URL'>Title</a> @ Venue (City)" → parts. Null without a title. */
 export function parseEventCell(
-  eventHtml: string
+  eventHtml: string,
 ): { title: string; url: string | null; venue: string; city: string } | null {
   const anchor = /<a\s+[^>]*href=['"]([^'"]*)['"][^>]*>(.*?)<\/a>/is.exec(eventHtml);
   const url = anchor ? anchor[1]!.trim() : null;
   const afterAnchor = anchor ? eventHtml.slice(anchor.index + anchor[0].length) : eventHtml;
-  const title = stripTags(anchor ? anchor[2]! : eventHtml.split("@")[0] ?? "");
+  const title = stripTags(anchor ? anchor[2]! : (eventHtml.split("@")[0] ?? ""));
   if (!title) return null;
 
   // Venue = text after "@", city = the LAST parenthesized group in it.
@@ -307,7 +299,7 @@ export function mapRowToItem(
   sourceId: string,
   pageUrl: string,
   fetchedAt: string,
-  todayLaDate: string
+  todayLaDate: string,
 ): EventItem | null {
   const cell = parseEventCell(row.eventHtml);
   if (!cell) return null;
@@ -319,9 +311,7 @@ export function mapRowToItem(
 
   const time = parseTimeRange(row.dayTime);
   const allDay = time == null;
-  const startDatetime = time
-    ? laIso(date, time.start.hour, time.start.minute)
-    : laIso(date, 0, 0);
+  const startDatetime = time ? laIso(date, time.start.hour, time.start.minute) : laIso(date, 0, 0);
 
   const genres = row.genres
     .split(",")
@@ -353,8 +343,7 @@ export function mapRowToItem(
   if (time?.end) {
     // An end at/before the start ("9pm-2am") crosses midnight → next day.
     const crossesMidnight =
-      time.end.hour < time.start.hour ||
-      (time.end.hour === time.start.hour && time.end.minute <= time.start.minute);
+      time.end.hour < time.start.hour || (time.end.hour === time.start.hour && time.end.minute <= time.start.minute);
     item.endDatetime = laIso(date, time.end.hour, time.end.minute, crossesMidnight ? 1 : 0);
   }
   if (priceMin !== undefined) {
@@ -393,9 +382,7 @@ export async function fetchNineteenHzEvents(source: EventSource): Promise<EventI
   const rows = parseRows(html);
   if (rows.length === 0) {
     // A structure change must fail LOUDLY, not read as "no events this week".
-    throw new Error(
-      `[NineteenHz] parsed 0 rows from ${source.url} (${html.length} chars) — page structure changed?`
-    );
+    throw new Error(`[NineteenHz] parsed 0 rows from ${source.url} (${html.length} chars) — page structure changed?`);
   }
 
   const fetchedAt = new Date().toISOString();
@@ -406,8 +393,6 @@ export async function fetchNineteenHzEvents(source: EventSource): Promise<EventI
     const item = mapRowToItem(row, source.id, source.url, fetchedAt, todayLaDate);
     if (item) byId.set(item.id, item);
   }
-  console.log(
-    `[NineteenHz] ${rows.length} rows parsed, ${byId.size} San Diego-area events kept`
-  );
+  console.log(`[NineteenHz] ${rows.length} rows parsed, ${byId.size} San Diego-area events kept`);
   return [...byId.values()];
 }

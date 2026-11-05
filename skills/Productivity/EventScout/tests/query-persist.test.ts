@@ -28,13 +28,13 @@
  * restored in afterAll for the shared bun:test process.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/query-persist.test.ts
+ *   bun test skills/Productivity/EventScout/tests/query-persist.test.ts
  */
 
 import { test, afterAll } from "bun:test";
-import { existsSync, rmSync, mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { existsSync, rmSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EventItem } from "../Tools/types.ts";
 
 // ============================================================================
@@ -117,10 +117,7 @@ test("Test 1: refreshed events merge into the cache; existing survive", async ()
   cleanup();
   writeEvents([makeEvent("existing-1"), makeEvent("existing-2")]);
 
-  const written = await persistRefreshedEvents([
-    makeEvent("fresh-1"),
-    makeEvent("fresh-2"),
-  ]);
+  const written = await persistRefreshedEvents([makeEvent("fresh-1"), makeEvent("fresh-2")]);
 
   const afterMerge = readEvents();
   const ids = new Set(afterMerge.map((e) => e.id));
@@ -183,15 +180,9 @@ test("Test 4 (api-tier): same-day/venue/instructor api-tier batch is NOT fuzzy-c
 
 test("Test 5 (api-tier): double refresh of the same batch does not duplicate (exact-id upsert)", async () => {
   cleanup();
-  const batch = [
-    makeApiEvent("ml-level1", "Level 1 Salsa"),
-    makeApiEvent("ml-level2", "Level 2 Salsa"),
-  ];
+  const batch = [makeApiEvent("ml-level1", "Level 1 Salsa"), makeApiEvent("ml-level2", "Level 2 Salsa")];
   await persistRefreshedEvents(batch);
   await persistRefreshedEvents(batch); // simulate a second refresh returning the same occurrences
   const after = readEvents();
-  assert(
-    after.length === 2,
-    `Refreshing the same api-tier batch twice must not duplicate (got ${after.length})`
-  );
+  assert(after.length === 2, `Refreshing the same api-tier batch twice must not duplicate (got ${after.length})`);
 });

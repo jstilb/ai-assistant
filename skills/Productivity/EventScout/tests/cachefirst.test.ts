@@ -30,13 +30,13 @@
  * and restored in afterAll.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/cachefirst.test.ts
+ *   bun test skills/Productivity/EventScout/tests/cachefirst.test.ts
  */
 
 import { test, afterAll } from "bun:test";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EventSource, ConstraintSet } from "../Tools/types.ts";
 
 // ============================================================================
@@ -72,9 +72,7 @@ function assert(condition: boolean, message: string): void {
 
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(
-      `${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
-    );
+    throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }
 }
 
@@ -150,8 +148,14 @@ test("Test 3: refresh=true + music constraints → comedy excluded, no-hint incl
     constraints: musicConstraints(),
   });
   assert(!result.some((s) => s.id === "comedy"), "Test 3a: comedy source excluded from music query");
-  assert(result.some((s) => s.id === "music"), "Test 3b: music source included in music query");
-  assert(result.some((s) => s.id === "nohint"), "Test 3c: no-hint source included in music query");
+  assert(
+    result.some((s) => s.id === "music"),
+    "Test 3b: music source included in music query",
+  );
+  assert(
+    result.some((s) => s.id === "nohint"),
+    "Test 3c: no-hint source included in music query",
+  );
 });
 
 test("Test 4: refresh=true, highValue=true source is included (same as any enabled source)", () => {
@@ -161,7 +165,10 @@ test("Test 4: refresh=true, highValue=true source is included (same as any enabl
     sources: [hv],
     constraints: noConstraints(),
   });
-  assert(result.some((s) => s.id === "hv"), "Test 4: highValue=true included on refresh=true (no special exclusion)");
+  assert(
+    result.some((s) => s.id === "hv"),
+    "Test 4: highValue=true included on refresh=true (no special exclusion)",
+  );
 });
 
 test("Test 5: refresh=false, highValue=true source → NOT returned", () => {
@@ -201,7 +208,10 @@ test("Test 8: fresh source (no highValue) included on refresh=true (staleness ig
     sources: [fresh],
     constraints: noConstraints(),
   });
-  assert(result.some((s) => s.id === "fresh2"), "Test 8: fresh source (no highValue) included on refresh=true");
+  assert(
+    result.some((s) => s.id === "fresh2"),
+    "Test 8: fresh source (no highValue) included on refresh=true",
+  );
 });
 
 test("Test 9: stale comedy source excluded from music constraints on refresh=true", () => {
@@ -211,5 +221,8 @@ test("Test 9: stale comedy source excluded from music constraints on refresh=tru
     sources: [comedy],
     constraints: musicConstraints(),
   });
-  assert(!result.some((s) => s.id === "comedy2"), "Test 9: stale comedy source excluded from music query on refresh=true");
+  assert(
+    !result.some((s) => s.id === "comedy2"),
+    "Test 9: stale comedy source excluded from music query on refresh=true",
+  );
 });

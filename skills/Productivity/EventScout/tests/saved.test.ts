@@ -20,9 +20,9 @@
  */
 
 import { test, expect, afterAll } from "bun:test";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EventItem } from "../Tools/types.ts";
 
 const ORIGINAL_KAYA_HOME = process.env["KAYA_HOME"];

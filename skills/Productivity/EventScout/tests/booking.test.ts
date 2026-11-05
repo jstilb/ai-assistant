@@ -19,12 +19,12 @@
  * a temp file via EVENTSCOUT_BOOKING_LEDGER_PATH so no real state is touched.
  *
  * Run directly:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/booking.test.ts
+ *   bun test skills/Productivity/EventScout/tests/booking.test.ts
  */
 
-import { mkdtempSync, existsSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { mkdtempSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "bun:test";
 import {
   computeBookBy,
@@ -50,7 +50,7 @@ function assert(condition: boolean, message: string): void {
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
-      `Assertion failed: ${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
+      `Assertion failed: ${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
     );
   }
 }
@@ -59,9 +59,7 @@ function assertEq<T>(actual: T, expected: T, message: string): void {
 // Fixtures
 // ============================================================================
 
-function makeEvent(
-  overrides: Partial<EventItem> & { id: string; startDatetime: string }
-): EventItem {
+function makeEvent(overrides: Partial<EventItem> & { id: string; startDatetime: string }): EventItem {
   return {
     title: `Event ${overrides.id}`,
     allDay: false,
@@ -220,7 +218,7 @@ test("computeBookBy: music action=buy-tickets 30d out → 14d lead", () => {
   });
   const bookBy = computeBookBy(e, "buy-tickets", NOW);
   // 07-31 20:00 minus 14 days = 07-17 20:00 (well after NOW)
-  assert(bookBy !== null && bookBy.startsWith("2026-07-18"), `music bookBy = ${bookBy} (~07-17/18 UTC)`);
+  assert(bookBy?.startsWith("2026-07-18") === true, `music bookBy = ${bookBy} (~07-17/18 UTC)`);
 });
 
 test("computeBookBy: sports gets 21d lead (earlier than music's 14d)", () => {
@@ -349,9 +347,9 @@ test("selectDueNotices: passed event excluded even if open", () => {
 
 test("selectDueNotices: sorted overdue → urgent → soon", () => {
   const entries = [
-    entry({ eventId: "soon", bookBy: "2026-07-10T00:00:00-07:00" }),   // ~9d out
+    entry({ eventId: "soon", bookBy: "2026-07-10T00:00:00-07:00" }), // ~9d out
     entry({ eventId: "overdue", bookBy: "2026-06-28T00:00:00-07:00" }), // past
-    entry({ eventId: "urgent", bookBy: "2026-07-02T00:00:00-07:00" }),  // ~1d out
+    entry({ eventId: "urgent", bookBy: "2026-07-02T00:00:00-07:00" }), // ~1d out
   ];
   const ids = selectDueNotices(entries, NOW, 14).map((n) => n.entry.eventId);
   assertEq(ids, ["overdue", "urgent", "soon"], "priority ordering by urgency");
@@ -374,15 +372,21 @@ test("selectDueNotices: UNCLASSIFIED (no bookBy) entries ALWAYS surface, even wi
 });
 
 test("selectDueNotices: unclassified entry stops surfacing once booked/dismissed", () => {
-  const entries = [
-    entry({ eventId: "resolved", action: "unclassified", bookBy: null, status: "booked" }),
-  ];
+  const entries = [entry({ eventId: "resolved", action: "unclassified", bookBy: null, status: "booked" })];
   assertEq(selectDueNotices(entries, NOW, 0).length, 0, "booked unclassified entry no longer nags");
 });
 
 test("urgencyOf: classifies overdue/urgent/soon", () => {
-  assertEq(urgencyOf(entry({ eventId: "a", bookBy: "2026-06-28T00:00:00-07:00" }), NOW).urgency, "overdue", "past bookBy → overdue");
-  assertEq(urgencyOf(entry({ eventId: "b", bookBy: "2026-07-02T00:00:00-07:00" }), NOW).urgency, "urgent", "≤2d → urgent");
+  assertEq(
+    urgencyOf(entry({ eventId: "a", bookBy: "2026-06-28T00:00:00-07:00" }), NOW).urgency,
+    "overdue",
+    "past bookBy → overdue",
+  );
+  assertEq(
+    urgencyOf(entry({ eventId: "b", bookBy: "2026-07-02T00:00:00-07:00" }), NOW).urgency,
+    "urgent",
+    "≤2d → urgent",
+  );
   assertEq(urgencyOf(entry({ eventId: "c", bookBy: "2026-07-12T00:00:00-07:00" }), NOW).urgency, "soon", ">2d → soon");
 });
 
@@ -391,12 +395,17 @@ test("findExpiredIds: only open + passed events (expiry unchanged by this migrat
     entry({ eventId: "past-open", startDatetime: "2026-06-20T20:00:00-07:00" }),
     entry({ eventId: "past-booked", status: "booked", startDatetime: "2026-06-20T20:00:00-07:00" }),
     entry({ eventId: "future-open", startDatetime: "2026-07-20T20:00:00-07:00" }),
-    entry({ eventId: "past-unclassified", action: "unclassified", bookBy: null, startDatetime: "2026-06-20T20:00:00-07:00" }),
+    entry({
+      eventId: "past-unclassified",
+      action: "unclassified",
+      bookBy: null,
+      startDatetime: "2026-06-20T20:00:00-07:00",
+    }),
   ];
   assertEq(
     findExpiredIds(entries, NOW),
     ["past-open", "past-unclassified"],
-    "only open+passed flagged expired — unclassified expires the same as any other open entry"
+    "only open+passed flagged expired — unclassified expires the same as any other open entry",
   );
 });
 
@@ -410,9 +419,16 @@ test("renderNoticesMarkdown: empty → caught-up message", () => {
 
 test("renderNoticesMarkdown: includes title, deadline, link", () => {
   const notices = selectDueNotices(
-    [entry({ eventId: "z", title: "Padres vs Dodgers", bookBy: "2026-07-04T00:00:00-07:00", link: "https://mlb.com/x" })],
+    [
+      entry({
+        eventId: "z",
+        title: "Padres vs Dodgers",
+        bookBy: "2026-07-04T00:00:00-07:00",
+        link: "https://mlb.com/x",
+      }),
+    ],
     NOW,
-    14
+    14,
   );
   const md = renderNoticesMarkdown(notices, NOW);
   assert(md.includes("Padres vs Dodgers"), "markdown has title");
@@ -424,7 +440,7 @@ test("renderNoticesMarkdown: unclassified entry shows the ⚠️ Needs review la
   const notices = selectDueNotices(
     [entry({ eventId: "z2", title: "Mystery Event", action: "unclassified", bookBy: null })],
     NOW,
-    14
+    14,
   );
   const md = renderNoticesMarkdown(notices, NOW);
   assert(md.includes("⚠️ Needs review"), "unclassified renders the needs-review label, not silently as 'none'");
@@ -434,7 +450,7 @@ test("renderNoticesTelegram: escapes HTML + stays under limit", () => {
   const notices = selectDueNotices(
     [entry({ eventId: "z", title: "Rock & Roll <Live>", bookBy: "2026-07-04T00:00:00-07:00" })],
     NOW,
-    14
+    14,
   );
   const tg = renderNoticesTelegram(notices, NOW);
   assert(tg.includes("&amp;") && tg.includes("&lt;Live&gt;"), "telegram escapes & and <>");
@@ -476,7 +492,7 @@ test("parseBookingFlags: --action bogus → throws BookingFlagError, LOUD", () =
 
 test("parseBookingFlags: --book-by 2026-07-10 → LA-midnight ISO instant", () => {
   const { bookBy } = parseBookingFlags(["--book-by", "2026-07-10"]);
-  assert(bookBy !== undefined && bookBy.startsWith("2026-07-10T00:00:00"), `bookBy = ${bookBy}`);
+  assert(bookBy?.startsWith("2026-07-10T00:00:00") === true, `bookBy = ${bookBy}`);
 });
 
 test("parseBookingFlags: malformed --book-by (not YYYY-MM-DD) → throws", () => {
@@ -502,7 +518,7 @@ test("parseBookingFlags: invalid calendar date (Feb 30) → throws", () => {
 test("parseBookingFlags: --action and --book-by combine", () => {
   const { action, bookBy } = parseBookingFlags(["--action", "buy-tickets", "--book-by", "2026-08-01"]);
   assertEq(action, "buy-tickets", "action parsed");
-  assert(bookBy !== undefined && bookBy.startsWith("2026-08-01"), `bookBy = ${bookBy}`);
+  assert(bookBy?.startsWith("2026-08-01") === true, `bookBy = ${bookBy}`);
 });
 
 // ============================================================================
@@ -585,7 +601,11 @@ test("ledger: noteBooking with NO action → unclassified entry always surfaces 
     // in the sense that it now has a real bookBy governing its window.
     L.noteBooking(e, NOW, "rsvp");
     const scan2 = L.scanNotices(NOW, 1);
-    assertEq(scan2.notices.length, 0, "re-noted with a real (rsvp) action, now respects the window like any other entry");
+    assertEq(
+      scan2.notices.length,
+      0,
+      "re-noted with a real (rsvp) action, now respects the window like any other entry",
+    );
   } finally {
     if (prev === undefined) delete process.env["EVENTSCOUT_BOOKING_LEDGER_PATH"];
     else process.env["EVENTSCOUT_BOOKING_LEDGER_PATH"] = prev;

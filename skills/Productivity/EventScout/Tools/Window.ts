@@ -78,23 +78,15 @@ export function parseIsoDateStrict(s: string): { year: number; month: number; da
   const trimmed = s.trim();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
   if (!m) {
-    throw new WindowValidationError(
-      `Malformed date "${s}" — expected YYYY-MM-DD (e.g. 2026-07-06).`
-    );
+    throw new WindowValidationError(`Malformed date "${s}" — expected YYYY-MM-DD (e.g. 2026-07-06).`);
   }
   const year = parseInt(m[1]!, 10);
   const month = parseInt(m[2]!, 10);
   const day = parseInt(m[3]!, 10);
 
   const roundTrip = new Date(Date.UTC(year, month - 1, day));
-  if (
-    roundTrip.getUTCFullYear() !== year ||
-    roundTrip.getUTCMonth() !== month - 1 ||
-    roundTrip.getUTCDate() !== day
-  ) {
-    throw new WindowValidationError(
-      `Malformed date "${s}" — not a real calendar date.`
-    );
+  if (roundTrip.getUTCFullYear() !== year || roundTrip.getUTCMonth() !== month - 1 || roundTrip.getUTCDate() !== day) {
+    throw new WindowValidationError(`Malformed date "${s}" — not a real calendar date.`);
   }
   return { year, month, day };
 }
@@ -116,7 +108,7 @@ export function parseIsoDateStrict(s: string): { year: number; month: number; da
 export function buildExplicitWindow(
   fromStr: string,
   toStr: string,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): { start: string; end: string } {
   const from = parseIsoDateStrict(fromStr);
   const to = parseIsoDateStrict(toStr);
@@ -128,26 +120,24 @@ export function buildExplicitWindow(
   const endMs = new Date(end).getTime();
 
   if (startMs > endMs) {
-    throw new WindowValidationError(
-      `--from (${fromStr}) is after --to (${toStr}) — the window is inverted.`
-    );
+    throw new WindowValidationError(`--from (${fromStr}) is after --to (${toStr}) — the window is inverted.`);
   }
 
   const spanDays = (endMs - startMs) / 86_400_000;
   if (spanDays > MAX_WINDOW_SPAN_DAYS) {
     throw new WindowValidationError(
       `Window span (${Math.ceil(spanDays)}d, ${fromStr} → ${toStr}) exceeds the ` +
-        `${MAX_WINDOW_SPAN_DAYS}d max — narrow --from/--to.`
+        `${MAX_WINDOW_SPAN_DAYS}d max — narrow --from/--to.`,
     );
   }
 
   const nowParts = utcMsToLaParts(now.getTime());
   const maxStartMs = new Date(
-    laDateIso(nowParts.year + MAX_START_YEARS_OUT, nowParts.month, nowParts.day, 0, 0, 0)
+    laDateIso(nowParts.year + MAX_START_YEARS_OUT, nowParts.month, nowParts.day, 0, 0, 0),
   ).getTime();
   if (startMs > maxStartMs) {
     throw new WindowValidationError(
-      `--from (${fromStr}) is more than ${MAX_START_YEARS_OUT} years out — check the date.`
+      `--from (${fromStr}) is more than ${MAX_START_YEARS_OUT} years out — check the date.`,
     );
   }
 

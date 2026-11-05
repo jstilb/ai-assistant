@@ -27,13 +27,13 @@
  * import), and restored in afterAll for the shared bun:test process.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/profile.test.ts
+ *   bun test skills/Productivity/EventScout/tests/profile.test.ts
  */
 
 import { test, afterAll } from "bun:test";
-import { writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { writeFileSync, mkdirSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // ============================================================================
 // Env isolation — pin KAYA_HOME/KAYA_DIR before importing Tools code.
@@ -69,7 +69,7 @@ function assert(condition: boolean, message: string): void {
 function assertEq<T>(actual: T, expected: T, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
-      `Assertion failed: ${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`
+      `Assertion failed: ${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`,
     );
   }
 }

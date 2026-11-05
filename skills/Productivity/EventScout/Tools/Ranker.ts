@@ -87,9 +87,7 @@ function toRad(deg: number): number {
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return EARTH_RADIUS_MILES * 2 * Math.asin(Math.sqrt(a));
 }
 
@@ -101,11 +99,7 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
  * Run `worker` over `items` with at most `limit` calls in flight at once.
  * A pull-based worker pool: each lane grabs the next index until the list drains.
  */
-async function runWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<void>
-): Promise<void> {
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
   let idx = 0;
   const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (idx < items.length) {
@@ -124,7 +118,7 @@ async function runWithConcurrency<T>(
 export type ScoreBatchFn = (
   events: EventItem[],
   brief: string,
-  constraints: QueryContext
+  constraints: QueryContext,
 ) => Promise<Array<{ id: string; score: number }>>;
 
 export interface RankOpts {
@@ -155,10 +149,7 @@ type InferFn = (opts: {
  * @param constraints - Active QueryContext (rawQuery + structured hard filters).
  * @param inferFn     - Inference function (injectable for tests; defaults to real `inference`).
  */
-export async function buildIntentBrief(
-  constraints: QueryContext,
-  inferFn: InferFn = inference
-): Promise<string> {
+export async function buildIntentBrief(constraints: QueryContext, inferFn: InferFn = inference): Promise<string> {
   const systemPrompt = `You are an event recommendation assistant for a San Diego event discovery app.
 Your job: read the user's query and write a compact (2–4 sentence) "intent brief" describing:
 - What they're really looking for
@@ -205,7 +196,7 @@ const ScoreBatchSchema = z.array(
   z.object({
     id: z.string(),
     score: z.number().min(0).max(100),
-  })
+  }),
 );
 
 // ============================================================================
@@ -218,9 +209,7 @@ function haversineMilesSL(lat1: number, lng1: number, lat2: number, lng2: number
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return EARTH_RADIUS_MILES_SL * 2 * Math.asin(Math.sqrt(a));
 }
 
@@ -254,7 +243,7 @@ const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "
 function deriveNeighborhood(
   address: string | undefined,
   firstSourceId: string | undefined,
-  sourceLookup: Map<string, { name: string; geoHint?: string }>
+  sourceLookup: Map<string, { name: string; geoHint?: string }>,
 ): string | null {
   if (address) {
     const seg = address.split(",")[0]?.trim();
@@ -287,7 +276,7 @@ export function buildScoringLine(event: EventItem, ctx: ScoringLineCtx): string 
   // an LA offset (e.g. "-07:00"), so Date.parse handles it correctly.
   const startMs = Date.parse(event.startDatetime);
   let dowStr = "unknown-day";
-  if (!isNaN(startMs)) {
+  if (!Number.isNaN(startMs)) {
     const laParts = utcMsToLaParts(startMs);
     // Reconstruct a Date using the LA wall-clock components to get getDay()
     const laWall = new Date(laParts.year, laParts.month - 1, laParts.day);
@@ -296,7 +285,7 @@ export function buildScoringLine(event: EventItem, ctx: ScoringLineCtx): string 
 
   // --- How-soon ---
   let howSoon = "date-unknown";
-  if (!isNaN(startMs)) {
+  if (!Number.isNaN(startMs)) {
     const nowMs = now.getTime();
     const deltaDays = Math.round((startMs - nowMs) / 86_400_000);
     if (deltaDays <= 0) {
@@ -403,7 +392,7 @@ function makeRealScoreBatch(ctx: ScoringLineCtx): ScoreBatchFn {
   return async (
     events: EventItem[],
     brief: string,
-    constraints: QueryContext
+    constraints: QueryContext,
   ): Promise<Array<{ id: string; score: number }>> => {
     return realScoreBatch(events, brief, constraints, ctx);
   };
@@ -413,7 +402,7 @@ async function realScoreBatch(
   events: EventItem[],
   brief: string,
   constraints: QueryContext,
-  ctx: ScoringLineCtx
+  ctx: ScoringLineCtx,
 ): Promise<Array<{ id: string; score: number }>> {
   const systemPrompt = buildBatchSystemPrompt(brief);
 
@@ -469,9 +458,16 @@ export async function scoreAllEvents(
   constraints: QueryContext,
   _profile: InterestProfile,
   brief: string,
-  opts?: RankOpts
+  opts?: RankOpts,
 ): Promise<Map<string, number>> {
-  const scoreBatch = opts?.scoreBatch ?? realScoreBatch;
+  // realScoreBatch needs a ScoringLineCtx; without an injected scorer, build one (rankEvents always injects its own).
+  const scoreBatch =
+    opts?.scoreBatch ??
+    makeRealScoreBatch({
+      home: constraints.home ?? _profile.homeLocation,
+      now: new Date(),
+      sourceLookup: new Map(),
+    });
   const scoreMap = new Map<string, number>();
 
   // Seed all events with NEUTRAL_SCORE so any that the LLM drops are still present.
@@ -515,7 +511,7 @@ const WhyLinesSchema = z.object({
     z.object({
       id: z.string(),
       why: z.string(),
-    })
+    }),
   ),
 });
 
@@ -523,10 +519,7 @@ const WhyLinesSchema = z.object({
  * Generate "why it fits" explanations for the top-tier events in ONE LLM call.
  * Returns a map of event.id → why-line. On failure returns empty map.
  */
-async function generateWhyLines(
-  events: EventItem[],
-  constraints: QueryContext
-): Promise<Map<string, string>> {
+async function generateWhyLines(events: EventItem[], constraints: QueryContext): Promise<Map<string, string>> {
   if (events.length === 0) return new Map();
 
   const eventList = events
@@ -541,7 +534,9 @@ async function generateWhyLines(
         `date: ${e.startDatetime.slice(0, 10)}`,
         e.performersOrTeams ? `performers: ${e.performersOrTeams}` : null,
         e.description ? `desc: ${e.description.slice(0, 120)}` : null,
-      ].filter(Boolean).join("; ");
+      ]
+        .filter(Boolean)
+        .join("; ");
       return `- ${parts}`;
     })
     .join("\n");
@@ -629,11 +624,11 @@ export async function rankEvents(
   constraints: QueryContext,
   profile: InterestProfile,
   limit: number = Infinity,
-  opts?: RankOpts
+  opts?: RankOpts,
 ): Promise<RankedEvent[]> {
   if (events.length === 0) return [];
 
-  const effectiveLimit = limit <= 0 ? 0 : limit;
+  const effectiveLimit = Math.max(limit, 0);
 
   // ---- Determine origin for proximity tiebreak ----------------------------
   // QueryContext.home is always resolved by the caller (never undefined).
@@ -647,20 +642,16 @@ export async function rankEvents(
 
     // Proximity tiebreak
     const dA =
-      a.lat !== undefined && a.lng !== undefined
-        ? haversineMiles(origin.lat, origin.lng, a.lat, a.lng)
-        : Infinity;
+      a.lat !== undefined && a.lng !== undefined ? haversineMiles(origin.lat, origin.lng, a.lat, a.lng) : Infinity;
     const dB =
-      b.lat !== undefined && b.lng !== undefined
-        ? haversineMiles(origin.lat, origin.lng, b.lat, b.lng)
-        : Infinity;
+      b.lat !== undefined && b.lng !== undefined ? haversineMiles(origin.lat, origin.lng, b.lat, b.lng) : Infinity;
     return dA - dB; // nearer first
   }
 
   // ---- Kill-switch: soonness fallback path --------------------------------
   if (process.env["EVENTSCOUT_DISABLE_RERANK"] === "1") {
     const sorted = [...events].sort(soonessThenProximity);
-    const sliced = isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
+    const sliced = Number.isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
     return sliced.map((e) => ({ ...e, score: 0, why: fallbackWhy(e) }));
   }
 
@@ -676,9 +667,7 @@ export async function rankEvents(
     let effectiveOpts = opts;
     if (!opts?.scoreBatch) {
       const sources = loadSources();
-      const sourceLookup = new Map(
-        sources.map((s) => [s.id, { name: s.name, geoHint: s.geoHint }])
-      );
+      const sourceLookup = new Map(sources.map((s) => [s.id, { name: s.name, geoHint: s.geoHint }]));
       const scoringCtx: ScoringLineCtx = {
         home: origin,
         now: new Date(),
@@ -691,7 +680,7 @@ export async function rankEvents(
   } catch (err) {
     console.warn("[Ranker] Scoring failed — falling back to soonness order:", (err as Error).message);
     const sorted = [...events].sort(soonessThenProximity);
-    const sliced = isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
+    const sliced = Number.isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
     return sliced.map((e) => ({ ...e, score: 0, why: fallbackWhy(e) }));
   }
 
@@ -708,21 +697,16 @@ export async function rankEvents(
 
     // Tiebreak 2: nearer location
     const dA =
-      a.lat !== undefined && a.lng !== undefined
-        ? haversineMiles(origin.lat, origin.lng, a.lat, a.lng)
-        : Infinity;
+      a.lat !== undefined && a.lng !== undefined ? haversineMiles(origin.lat, origin.lng, a.lat, a.lng) : Infinity;
     const dB =
-      b.lat !== undefined && b.lng !== undefined
-        ? haversineMiles(origin.lat, origin.lng, b.lat, b.lng)
-        : Infinity;
+      b.lat !== undefined && b.lng !== undefined ? haversineMiles(origin.lat, origin.lng, b.lat, b.lng) : Infinity;
     return dA - dB; // nearer first
   });
 
-  const sliced = isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
+  const sliced = Number.isFinite(effectiveLimit) ? sorted.slice(0, effectiveLimit) : sorted;
 
   // ---- Why-lines: top WHY_TIER get LLM call; tail gets fallback -----------
   const topTier = sliced.slice(0, WHY_TIER);
-  const tail = sliced.slice(WHY_TIER);
 
   // Best-effort why-lines for the top tier — on failure, fall back for all
   let whyMap = new Map<string, string>();

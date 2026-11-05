@@ -14,8 +14,8 @@
  *   upsertEvents(incoming: EventItem[]): void  — merge by id, richest wins
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { EventItemSchema, EventCacheSchema, DEFAULT_CACHE_PATH } from "./types.ts";
 import type { EventItem, EventCache } from "./types.ts";
 import { dedupeAndMerge } from "./Dedup.ts";

@@ -11,7 +11,7 @@
  *   3. Event with venue:[] and image:false → venue undefined, imageUrl undefined.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/wordpress-tec.test.ts
+ *   bun test skills/Productivity/EventScout/tests/wordpress-tec.test.ts
  */
 
 import { test } from "bun:test";
@@ -102,7 +102,7 @@ const FIXTURE_3: TecEvent = {
   all_day: false,
   start_date: "2026-06-10 09:00:00",
   utc_start_date: "2026-06-10 16:00:00",
-  venue: [] as unknown as TecEvent["venue"],   // empty array — no venue
+  venue: [] as unknown as TecEvent["venue"], // empty array — no venue
   categories: [{ name: "Community", slug: "community" }],
   cost: "",
   cost_details: { currency_symbol: "$", currency_code: "USD", values: [] },
@@ -127,7 +127,7 @@ test("2. startDatetime contains date 2026-06-01", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.startDatetime.includes("2026-06-01"),
-    `Expected startDatetime to contain "2026-06-01", got "${item.startDatetime}"`
+    `Expected startDatetime to contain "2026-06-01", got "${item.startDatetime}"`,
   );
 });
 
@@ -135,7 +135,7 @@ test("3. startDatetime contains LA PDT offset -07:00", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.startDatetime.includes("-07:00"),
-    `Expected startDatetime to contain "-07:00" (PDT), got "${item.startDatetime}"`
+    `Expected startDatetime to contain "-07:00" (PDT), got "${item.startDatetime}"`,
   );
 });
 
@@ -144,16 +144,13 @@ test("4. startDatetime reflects local hour 00 (midnight LA time)", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   const hourMatch = item.startDatetime.match(/T(\d{2}):/);
   assert(hourMatch !== null, `Cannot extract hour from "${item.startDatetime}"`);
-  const localHour = parseInt(hourMatch![1], 10);
+  const localHour = parseInt(hourMatch![1]!, 10);
   assert(localHour === 0, `Expected local hour 0 (midnight), got ${localHour} in "${item.startDatetime}"`);
 });
 
 test("5. venue === 'Fleet Science Center'", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.venue === "Fleet Science Center",
-    `Expected venue "Fleet Science Center", got "${item.venue}"`
-  );
+  assert(item.venue === "Fleet Science Center", `Expected venue "Fleet Science Center", got "${item.venue}"`);
 });
 
 test("6. category === 'arts'", () => {
@@ -165,16 +162,13 @@ test("7. ticketUrl === event URL", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(
     item.ticketUrl === "https://balboapark.org/event/backyard-wildnerness/",
-    `ticketUrl mismatch: "${item.ticketUrl}"`
+    `ticketUrl mismatch: "${item.ticketUrl}"`,
   );
 });
 
 test("8. imageUrl is set", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.imageUrl === "https://balboapark.org/x.jpg",
-    `imageUrl mismatch: "${item.imageUrl}"`
-  );
+  assert(item.imageUrl === "https://balboapark.org/x.jpg", `imageUrl mismatch: "${item.imageUrl}"`);
 });
 
 test("9. isFree === false when values is empty", () => {
@@ -185,10 +179,7 @@ test("9. isFree === false when values is empty", () => {
 
 test("10. priceMin is undefined when values is empty", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
-  assert(
-    item.priceMin === undefined,
-    `Expected priceMin=undefined when no values, got ${item.priceMin}`
-  );
+  assert(item.priceMin === undefined, `Expected priceMin=undefined when no values, got ${item.priceMin}`);
 });
 
 test("11. id is a non-empty string", () => {
@@ -216,8 +207,8 @@ test("15. sources[0].sourceId === 'balboa-park'", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(item.sources.length >= 1, `Expected at least 1 source`);
   assert(
-    item.sources[0].sourceId === "balboa-park",
-    `Expected sourceId "balboa-park", got "${item.sources[0].sourceId}"`
+    item.sources[0]!.sourceId === "balboa-park",
+    `Expected sourceId "balboa-park", got "${item.sources[0]!.sourceId}"`,
   );
 });
 
@@ -267,10 +258,7 @@ test("21. venue=[] → venue field is undefined", () => {
 
 test("22. image=false → imageUrl is undefined", () => {
   const item = mapTecEventToItem(FIXTURE_3, TEST_SOURCE);
-  assert(
-    item.imageUrl === undefined,
-    `Expected imageUrl=undefined when raw.image=false, got "${item.imageUrl}"`
-  );
+  assert(item.imageUrl === undefined, `Expected imageUrl=undefined when raw.image=false, got "${item.imageUrl}"`);
 });
 
 test("23. No crash when venue=[] and image=false", () => {
@@ -356,7 +344,7 @@ const WP_TEST_SOURCE: EventSource = {
 test("W1. accumulates all events from 10-page source, no 200-event cap", async () => {
   const originalFetch = globalThis.fetch;
   let callCount = 0;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "1", 10);
     callCount++;
@@ -365,13 +353,10 @@ test("W1. accumulates all events from 10-page source, no 200-event cap", async (
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchWordPressTecEvents(WP_TEST_SOURCE);
-    assert(
-      result.length === 500,
-      `W1. 10 pages × 50 = 500 events expected, got ${result.length}`
-    );
+    assert(result.length === 500, `W1. 10 pages × 50 = 500 events expected, got ${result.length}`);
     assert(callCount === 10, `W1. 10 fetch calls expected, got ${callCount}`);
   } finally {
     globalThis.fetch = originalFetch;
@@ -382,7 +367,7 @@ test("W1. accumulates all events from 10-page source, no 200-event cap", async (
 test("W2. stops on empty event list even when total_pages > current page", async () => {
   const originalFetch = globalThis.fetch;
   let callCount = 0;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "1", 10);
     callCount++;
@@ -392,7 +377,7 @@ test("W2. stops on empty event list even when total_pages > current page", async
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchWordPressTecEvents(WP_TEST_SOURCE);
     assert(result.length === 100, `W2. 2 pages before empty → 100 events, got ${result.length}`);
@@ -405,7 +390,7 @@ test("W2. stops on empty event list even when total_pages > current page", async
 // Test W3: Safety bound stops runaway (total_pages = 9999) + logs warning
 test("W3. safety bound stops runaway total_pages and logs warning", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "1", 10);
     const data = makeTecPage(page, 9999, WP_PER_PAGE);
@@ -413,17 +398,23 @@ test("W3. safety bound stops runaway total_pages and logs warning", async () => 
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   const logMessages: string[] = [];
   const origLog = console.log;
   const origWarn = console.warn;
-  console.log = (...args: unknown[]) => { logMessages.push(args.join(" ")); origLog(...args); };
-  console.warn = (...args: unknown[]) => { logMessages.push(args.join(" ")); origWarn(...args); };
+  console.log = (...args: unknown[]) => {
+    logMessages.push(args.join(" "));
+    origLog(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    logMessages.push(args.join(" "));
+    origWarn(...args);
+  };
   try {
     const result = await fetchWordPressTecEvents(WP_TEST_SOURCE);
     assert(result.length < 100000, `W3. safety bound should cap the result, got ${result.length}`);
     assert(result.length > 0, `W3. safety bound should still return events, got ${result.length}`);
-    const safetyLogged = logMessages.some(m => m.includes("safety bound") || m.includes("safety"));
+    const safetyLogged = logMessages.some((m) => m.includes("safety bound") || m.includes("safety"));
     assert(safetyLogged, `W3. should log safety bound warning — got: ${logMessages.join("; ")}`);
   } finally {
     globalThis.fetch = originalFetch;
@@ -435,7 +426,7 @@ test("W3. safety bound stops runaway total_pages and logs warning", async () => 
 // Test W4: Under 200 events — existing behavior unchanged (regression)
 test("W4. regression: 3-page source (150 events) still fully collected", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url: RequestInfo | URL) => {
+  globalThis.fetch = fakeFetch(async (url: string | URL | Request) => {
     const u = new URL(String(url));
     const page = parseInt(u.searchParams.get("page") ?? "1", 10);
     const data = makeTecPage(page, 3, page <= 3 ? WP_PER_PAGE : 0);
@@ -443,7 +434,7 @@ test("W4. regression: 3-page source (150 events) still fully collected", async (
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  };
+  });
   try {
     const result = await fetchWordPressTecEvents(WP_TEST_SOURCE);
     assert(result.length === 150, `W4. 3 pages × 50 = 150 events, got ${result.length}`);
@@ -452,3 +443,7 @@ test("W4. regression: 3-page source (150 events) still fully collected", async (
   }
 });
 
+/** Adds Bun's `fetch.preconnect` so a plain function satisfies `typeof fetch`. */
+function fakeFetch(fn: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
+  return Object.assign(fn, { preconnect: () => {} });
+}

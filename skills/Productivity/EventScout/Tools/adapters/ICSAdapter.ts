@@ -19,11 +19,13 @@
  *   bun .../ICSAdapter.ts <icsUrl>
  */
 
-import { createHash } from "crypto";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import ical, { expandRecurringEvent } from "node-ical";
 import type { VEvent } from "node-ical";
+// cross-skill-allowed: shared Tier-4 spend breaker (T2-11)
+import { Tier4Breaker } from "../../../../Data/BrightData/Tools/Tier4Breaker.ts";
 import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
@@ -85,9 +87,7 @@ function stripHtml(html: string): string {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&apos;/gi, "'")
-    .replace(/&#(\d+);/gi, (_, code: string) =>
-      String.fromCharCode(parseInt(code, 10))
-    )
+    .replace(/&#(\d+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -158,21 +158,14 @@ export function mapVeventToItem(occ: VeventOccurrence, source: EventSource): Eve
 // walkVevent — converts a VEvent + rrule expansion into VeventOccurrence[]
 // ============================================================================
 
-function extractOccurrences(
-  event: VEvent,
-  now: Date,
-  horizon: Date,
-): VeventOccurrence[] {
+function extractOccurrences(event: VEvent, now: Date, horizon: Date): VeventOccurrence[] {
   const uid = event.uid;
   const rawSummary = extractString(event.summary);
   const rawLocation = extractString(event.location);
   const rawDescription = extractString(event.description);
   const url = typeof event.url === "string" ? event.url : undefined;
 
-  const duration =
-    event.start != null && event.end != null
-      ? event.end.getTime() - event.start.getTime()
-      : 0;
+  const duration = event.start != null && event.end != null ? event.end.getTime() - event.start.getTime() : 0;
 
   // Recurring event: use expandRecurringEvent (handles exdate + recurrence overrides)
   if (event.rrule != null) {
@@ -192,20 +185,17 @@ function extractOccurrences(
       // Use override's summary/location/description if available
       const instSummary = extractString(inst.summary) || rawSummary;
       const instEvent = inst.event;
-      const instLocation =
-        extractString(instEvent.location) || rawLocation;
-      const instDescription =
-        extractString(instEvent.description) || rawDescription;
-      const instUrl =
-        typeof instEvent.url === "string" ? instEvent.url : url;
+      const instLocation = extractString(instEvent.location) || rawLocation;
+      const instDescription = extractString(instEvent.description) || rawDescription;
+      const instUrl = typeof instEvent.url === "string" ? instEvent.url : url;
 
       // Compute end from duration if inst.end is not meaningful
       const instEnd =
         inst.end != null && inst.end.getTime() !== inst.start.getTime()
           ? inst.end
           : duration > 0
-          ? new Date(start.getTime() + duration)
-          : undefined;
+            ? new Date(start.getTime() + duration)
+            : undefined;
 
       occs.push({
         uid,
@@ -249,8 +239,14 @@ function extractOccurrences(
  * retries with linear backoff make the source reliably yield instead of
  * intermittently failing the whole prefetch run.
  */
-async function fetchICSText(url: string, attempts = 3, unblock = false): Promise<string> {
-  if (unblock) return fetchICSTextViaUnblocker(url, attempts);
+/** Injectable dependencies (tests). */
+export interface ICSFetchDeps {
+  /** Shared Tier-4 spend breaker. Default: a Tier4Breaker on the Kaya home. */
+  breaker?: Pick<Tier4Breaker, "check" | "recordUse">;
+}
+
+async function fetchICSText(url: string, attempts = 3, unblock = false, deps: ICSFetchDeps = {}): Promise<string> {
+  if (unblock) return fetchICSTextViaUnblocker(url, attempts, deps);
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -288,22 +284,20 @@ export function loadBrightDataToken(): string {
   if (!existsSync(secretsPath)) {
     throw new Error(
       `[ICSAdapter] secrets.json not found at ${secretsPath}. ` +
-        `Add BRIGHTDATA_API_TOKEN to that file to fetch unblock:true sources.`
+        `Add BRIGHTDATA_API_TOKEN to that file to fetch unblock:true sources.`,
     );
   }
   let secrets: Record<string, unknown>;
   try {
     secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
   } catch (err) {
-    throw new Error(
-      `[ICSAdapter] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`
-    );
+    throw new Error(`[ICSAdapter] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`);
   }
   const token = secrets["BRIGHTDATA_API_TOKEN"];
   if (typeof token !== "string" || token.trim() === "") {
     throw new Error(
       `[ICSAdapter] BRIGHTDATA_API_TOKEN is missing or empty in ${secretsPath}. ` +
-        `Set it to your Bright Data API token to fetch unblock:true sources.`
+        `Set it to your Bright Data API token to fetch unblock:true sources.`,
     );
   }
   return token.trim();
@@ -314,19 +308,38 @@ export function loadBrightDataToken(): string {
  * same bounded linear-backoff retry as the plain path. Used for feeds whose
  * WAF rejects datacenter fetch/curl (e.g. Songkick per-user calendars → 406).
  */
-async function fetchICSTextViaUnblocker(url: string, attempts = 3): Promise<string> {
+async function fetchICSTextViaUnblocker(url: string, attempts = 3, deps: ICSFetchDeps = {}): Promise<string> {
   const token = loadBrightDataToken();
+  const breaker = deps.breaker ?? new Tier4Breaker();
+  const domain = new URL(url).hostname;
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
+    // Tier-4 spend boundary (T2-11): every attempt costs a credit, so check before each one.
+    // Only the shared daily ceiling applies here (off unless BRIGHTDATA_TIER4_DAILY_CEILING is set);
+    // an open breaker fails loudly and is not retried or routed to another path.
+    const decision = await breaker.check(domain, { ignoreDomainRule: true });
+    if (!decision.allowed) {
+      throw new Error(
+        `[ICSAdapter] Bright Data Tier-4 breaker open (${decision.kind}) for "${url}": ${decision.reason}`,
+      );
+    }
     try {
-      const res = await fetch(BRIGHTDATA_UNLOCKER_ENDPOINT, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ zone: BRIGHTDATA_UNLOCKER_ZONE, url, format: "raw" }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(BRIGHTDATA_UNLOCKER_ENDPOINT, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ zone: BRIGHTDATA_UNLOCKER_ZONE, url, format: "raw" }),
+        });
+      } finally {
+        // A real attempt was made, so count it even when it failed.
+        await breaker.recordUse(domain);
+      }
       const body = await res.text();
       if (!res.ok) {
-        throw new Error(`[ICSAdapter] Unlocker HTTP ${res.status} ${res.statusText} fetching "${url}": ${body.slice(0, 200)}`);
+        throw new Error(
+          `[ICSAdapter] Unlocker HTTP ${res.status} ${res.statusText} fetching "${url}": ${body.slice(0, 200)}`,
+        );
       }
       // The unlocker returns the upstream body verbatim; a non-calendar body
       // (e.g. a Bright Data error JSON) means the bypass failed — fail loudly.
@@ -342,8 +355,8 @@ async function fetchICSTextViaUnblocker(url: string, attempts = 3): Promise<stri
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-export async function fetchICSEvents(source: EventSource): Promise<EventItem[]> {
-  const icsText = await fetchICSText(source.url, 3, source.unblock ?? false);
+export async function fetchICSEvents(source: EventSource, deps: ICSFetchDeps = {}): Promise<EventItem[]> {
+  const icsText = await fetchICSText(source.url, 3, source.unblock ?? false, deps);
 
   const data = ical.sync.parseICS(icsText);
 
@@ -361,9 +374,7 @@ export async function fetchICSEvents(source: EventSource): Promise<EventItem[]> 
       const occs = extractOccurrences(event, now, horizon);
       allOccs.push(...occs);
     } catch (err) {
-      console.warn(
-        `[ICSAdapter] skipping VEVENT uid=${event.uid}: ${(err as Error).message}`
-      );
+      console.warn(`[ICSAdapter] skipping VEVENT uid=${event.uid}: ${(err as Error).message}`);
     }
   }
 
@@ -374,9 +385,7 @@ export async function fetchICSEvents(source: EventSource): Promise<EventItem[]> 
       items.push(mapVeventToItem(occ, source));
     } catch (err) {
       console.warn(
-        `[ICSAdapter] skipping occurrence "${occ.summary}" (${occ.start.toISOString()}): ${
-          (err as Error).message
-        }`
+        `[ICSAdapter] skipping occurrence "${occ.summary}" (${occ.start.toISOString()}): ${(err as Error).message}`,
       );
     }
   }
@@ -396,7 +405,7 @@ export async function fetchICSEvents(source: EventSource): Promise<EventItem[]> 
   // The real horizon bounding is done by withinHorizon in ingestSource (Slice 5).
   if (deduped.length > MAX_EVENTS_SAFETY) {
     console.log(
-      `[ICSAdapter] safety bound ${MAX_EVENTS_SAFETY} hit for source "${source.id}" — returning first ${MAX_EVENTS_SAFETY} (coverage may be incomplete)`
+      `[ICSAdapter] safety bound ${MAX_EVENTS_SAFETY} hit for source "${source.id}" — returning first ${MAX_EVENTS_SAFETY} (coverage may be incomplete)`,
     );
     return deduped.slice(0, MAX_EVENTS_SAFETY);
   }
@@ -411,8 +420,7 @@ export async function fetchICSEvents(source: EventSource): Promise<EventItem[]> 
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("ICSAdapter.ts") ||
-    process.argv[1].endsWith("ICSAdapter"));
+  (process.argv[1].endsWith("ICSAdapter.ts") || process.argv[1].endsWith("ICSAdapter"));
 
 if (IS_SCRIPT) {
   const icsUrl = process.argv[2];

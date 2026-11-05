@@ -43,7 +43,7 @@
  * = a real seam).
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { Category, EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
@@ -98,8 +98,7 @@ interface ActiveNetListResponse {
 // ============================================================================
 
 const SOURCE_ID = "sdparkandrec-activenet";
-const API_URL =
-  "https://anc.apm.activecommunities.com/sdparkandrec/rest/activities/list?locale=en-US";
+const API_URL = "https://anc.apm.activecommunities.com/sdparkandrec/rest/activities/list?locale=en-US";
 const SEARCH_PAGE_URL =
   "https://anc.apm.activecommunities.com/sdparkandrec/activity/search?onlineSiteId=0&activity_select_param=2&drop_in=0&viewMode=list";
 const PER_PAGE = 20; // server hard cap — larger requests still return 20
@@ -164,7 +163,13 @@ export function parseTimeRange(s: string): { start: string; end: string | null }
 }
 
 const DOW_INDEX: Record<string, number> = {
-  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
 };
 
 /**
@@ -220,7 +225,10 @@ const CATEGORY_RULES: Array<[RegExp, Category]> = [
   [/cook|culinary|baking/i, "food"],
   [/danc|ballet|salsa|hip ?hop|baton/i, "arts"],
   [/\bart\b|paint|craft|ceramic|pottery|music|guitar|piano|theat|drama|photo/i, "arts"],
-  [/yoga|fitness|zumba|pilates|aerobic|swim|aquatic|tennis|pickleball|golf|basketball|soccer|futsal|volleyball|softball|league|martial|karate|taekwondo|boxing|skate|surf|walk|run|hik/i, "sports"],
+  [
+    /yoga|fitness|zumba|pilates|aerobic|swim|aquatic|tennis|pickleball|golf|basketball|soccer|futsal|volleyball|softball|league|martial|karate|taekwondo|boxing|skate|surf|walk|run|hik/i,
+    "sports",
+  ],
   [/concert|festival/i, "festival"],
   [/movie|film/i, "film"],
   [/lecture|workshop|seminar|class/i, "talk"],
@@ -275,9 +283,7 @@ export function skipReason(a: ActiveNetActivity, todayYmd: string): SkipReason |
 export function mapActivityToEvent(a: ActiveNetActivity, todayYmd: string): EventItem {
   const title = a.name.trim();
   const inProgress = a.date_range_start < todayYmd;
-  const eventYmd = inProgress
-    ? nextOccurrenceYmd(a.days_of_week, todayYmd)
-    : a.date_range_start;
+  const eventYmd = inProgress ? nextOccurrenceYmd(a.days_of_week, todayYmd) : a.date_range_start;
 
   const times = a.time_range ? parseTimeRange(a.time_range) : null;
   const startNaive = times ? `${eventYmd}T${times.start}:00` : `${eventYmd}T00:00:00`;
@@ -286,8 +292,7 @@ export function mapActivityToEvent(a: ActiveNetActivity, todayYmd: string): Even
   const { venue, address } = parseLocation(a.location.label);
   const price = parseFee(a.fee.label);
   const isFree = /^free$/i.test(a.fee.label.trim()) || price === 0;
-  const ticketUrl =
-    (a.enroll_now?.href || a.detail_url || SEARCH_PAGE_URL).trim() || SEARCH_PAGE_URL;
+  const ticketUrl = (a.enroll_now?.href || a.detail_url || SEARCH_PAGE_URL).trim() || SEARCH_PAGE_URL;
   const description = a.desc ? stripHtml(a.desc).slice(0, 300) : "";
 
   const event: EventItem = {
@@ -317,9 +322,10 @@ export function mapActivityToEvent(a: ActiveNetActivity, todayYmd: string): Even
   if (description) {
     // Multi-week sessions: surface the session span + cadence the single
     // event row no longer carries structurally.
-    const span = a.date_range_end && !a.only_one_day
-      ? `[Session ${a.date_range_start} to ${a.date_range_end}${a.days_of_week ? `, ${a.days_of_week}` : ""}] `
-      : "";
+    const span =
+      a.date_range_end && !a.only_one_day
+        ? `[Session ${a.date_range_start} to ${a.date_range_end}${a.days_of_week ? `, ${a.days_of_week}` : ""}] `
+        : "";
     event.description = `${span}${description}`.slice(0, 300);
   }
   return event;
@@ -401,9 +407,7 @@ export async function fetchActiveNetEvents(): Promise<EventItem[]> {
   rows.push(...first.body.activity_items);
   const totalPages = Math.min(first.headers.page_info.total_page, MAX_PAGES);
   if (first.headers.page_info.total_page > MAX_PAGES) {
-    console.warn(
-      `  [activenet] catalog has ${first.headers.page_info.total_page} pages; capped at ${MAX_PAGES}`,
-    );
+    console.warn(`  [activenet] catalog has ${first.headers.page_info.total_page} pages; capped at ${MAX_PAGES}`);
   }
 
   for (let p = 2; p <= totalPages; p++) {
@@ -438,8 +442,7 @@ export async function fetchActiveNetEvents(): Promise<EventItem[]> {
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("ActiveNetAdapter.ts") ||
-    process.argv[1].endsWith("ActiveNetAdapter"));
+  (process.argv[1].endsWith("ActiveNetAdapter.ts") || process.argv[1].endsWith("ActiveNetAdapter"));
 
 if (IS_SCRIPT) {
   console.log(`\nFetching SD Parks & Rec activities (ActiveNet catalog)...\n`);
@@ -449,8 +452,7 @@ if (IS_SCRIPT) {
     console.log(`Upserted ${events.length} activity event(s) to cache.\n`);
     for (const e of events.slice(0, 15)) {
       console.log(
-        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          ` (${e.isFree ? "Free" : `$${e.priceMin ?? "?"}`})`,
+        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` + ` (${e.isFree ? "Free" : `$${e.priceMin ?? "?"}`})`,
       );
     }
     console.log(`\nSource: ${SOURCE_ID}`);

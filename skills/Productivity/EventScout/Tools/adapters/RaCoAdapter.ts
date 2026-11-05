@@ -31,7 +31,7 @@
  * seam).
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import { horizonDays } from "../Horizon.ts";
 import type { EventItem } from "../types.ts";

@@ -9,7 +9,7 @@
  *   - dedupById     (stable-id dedup of accumulated events)
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/pagination-chunk.test.ts
+ *   bun test skills/Productivity/EventScout/tests/pagination-chunk.test.ts
  */
 
 import { test } from "bun:test";
@@ -22,7 +22,7 @@ function assert(cond: boolean, msg: string): void {
 function assertEq<T>(actual: T, expected: T, msg: string): void {
   if (actual !== expected) {
     throw new Error(
-      `Assertion failed: ${msg} — expected: ${JSON.stringify(expected)}, actual: ${JSON.stringify(actual)}`
+      `Assertion failed: ${msg} — expected: ${JSON.stringify(expected)}, actual: ${JSON.stringify(actual)}`,
     );
   }
 }
@@ -79,10 +79,17 @@ test("buildPageUrl: overwrites existing page param, keeps other params", () => {
 
 test("dedupById: 4 events with one dupe id → 3 unique, first-seen order", () => {
   const mk = (id: string, title: string): EventItem => ({
-    id, title, startDatetime: "2026-06-06T19:00:00-07:00", allDay: false,
-    category: "music", tags: [], isFree: false,
-    sourceUrl: "https://ex.com", sources: [{ sourceId: "s", url: "https://ex.com" }],
-    fetchedAt: "2026-06-01T00:00:00.000Z", status: "scheduled",
+    id,
+    title,
+    startDatetime: "2026-06-06T19:00:00-07:00",
+    allDay: false,
+    category: "music",
+    tags: [],
+    isFree: false,
+    sourceUrl: "https://ex.com",
+    sources: [{ sourceId: "s", url: "https://ex.com" }],
+    fetchedAt: "2026-06-01T00:00:00.000Z",
+    status: "scheduled",
   });
   const out = dedupById([mk("a", "A"), mk("b", "B"), mk("a", "A-dupe"), mk("c", "C")]);
   assertEq(out.length, 3, "4 events with one dupe id → 3 unique");
@@ -129,7 +136,7 @@ test("trimToContentStart 4b: large page — boilerplate prefix, then deep event 
   const eventLinks: string[] = [];
   for (let i = 0; i < 10; i++) {
     eventLinks.push(
-      `<a href="https://x.org/events/2026/06/${String(i + 1).padStart(2, "0")}/slug-${i}">Event ${i}</a>`
+      `<a href="https://x.org/events/2026/06/${String(i + 1).padStart(2, "0")}/slug-${i}">Event ${i}</a>`,
     );
   }
   const eventBlock = eventLinks.join("\n");
@@ -138,29 +145,25 @@ test("trimToContentStart 4b: large page — boilerplate prefix, then deep event 
 
   // Filler to push total beyond 154 KB.
   const fillerNeeded = Math.max(0, 160_000 - prefix.length - eventBlock.length);
-  const filler = "<div>footer</div>".repeat(Math.ceil(fillerNeeded / "<div>footer</div>".length)).slice(0, fillerNeeded);
+  const filler = "<div>footer</div>"
+    .repeat(Math.ceil(fillerNeeded / "<div>footer</div>".length))
+    .slice(0, fillerNeeded);
 
   const bigContent = prefix + eventBlock + filler;
   assert(bigContent.length > 154_000, "4b fixture: total content > 154 KB (test pre-condition)");
 
   const resultBig = trimToContentStart(bigContent);
   assert(resultBig.length < bigContent.length, "4b: large page with deep event links → result is shorter than input");
-  assert(
-    resultBig.includes(firstEventLinkText),
-    "4b: trimmed result contains the first event link"
-  );
+  assert(resultBig.includes(firstEventLinkText), "4b: trimmed result contains the first event link");
   // The first event link must be reachable within the first 40 KB of the trimmed result.
   const positionInTrimmed = resultBig.indexOf(firstEventLinkText);
   assert(positionInTrimmed !== -1, "4b: first event link found in trimmed result");
   assert(
     positionInTrimmed < CHUNK_SIZE,
-    `4b: first event link is within the first ${CHUNK_SIZE} chars of the trimmed result (position: ${positionInTrimmed})`
+    `4b: first event link is within the first ${CHUNK_SIZE} chars of the trimmed result (position: ${positionInTrimmed})`,
   );
   // The boilerplate-only prefix must be gone from the start.
-  assert(
-    !resultBig.startsWith(prefix),
-    "4b: boilerplate prefix is removed from the start of the trimmed result"
-  );
+  assert(!resultBig.startsWith(prefix), "4b: boilerplate prefix is removed from the start of the trimmed result");
 });
 
 test("trimToContentStart 4c: repeated links at ~10 KB (<= 40 KB) → UNCHANGED", () => {
@@ -178,7 +181,7 @@ test("trimToContentStart 4c: repeated links at ~10 KB (<= 40 KB) → UNCHANGED",
   const resultShallow = trimToContentStart(shallowContent);
   assert(
     resultShallow === shallowContent,
-    "4c: repeated links at ~10 KB (< CHUNK_SIZE) → returned unchanged (safety gate)"
+    "4c: repeated links at ~10 KB (< CHUNK_SIZE) → returned unchanged (safety gate)",
   );
 });
 
@@ -186,10 +189,7 @@ test("trimToContentStart 4d: no repeated deep-link cluster, no ld+json → UNCHA
   const noLinksContent = "<div>plain content without any event links</div>".repeat(4_000);
   assert(noLinksContent.length > 154_000, "4d fixture: total content > 154 KB (test pre-condition)");
   const resultNoLinks = trimToContentStart(noLinksContent);
-  assert(
-    resultNoLinks === noLinksContent,
-    "4d: no repeated deep-link cluster, no ld+json → returned unchanged"
-  );
+  assert(resultNoLinks === noLinksContent, "4d: no repeated deep-link cluster, no ld+json → returned unchanged");
 });
 
 test("trimToContentStart 4e: KPBS regression — high-count NAV link must NOT outvote the deep DETAIL cluster", () => {
@@ -202,22 +202,21 @@ test("trimToContentStart 4e: KPBS regression — high-count NAV link must NOT ou
   const detailLinks: string[] = [];
   for (let i = 0; i < 20; i++) {
     detailLinks.push(
-      `<a href="https://x.org/events/2026/06/${String((i % 28) + 1).padStart(2, "0")}/slug-${i}">E${i}</a>`
+      `<a href="https://x.org/events/2026/06/${String((i % 28) + 1).padStart(2, "0")}/slug-${i}">E${i}</a>`,
     );
   }
   const firstDetail = detailLinks[0]!;
   const kpbsLike = navBlock + navPad + detailLinks.join("\n") + "w".repeat(120_000);
   assert(kpbsLike.length > 154_000, "4e fixture: total content > 154 KB (test pre-condition)");
   const resultKpbs = trimToContentStart(kpbsLike);
-  assert(
-    resultKpbs.length < kpbsLike.length,
-    "4e: high-count nav link does NOT block trim — deep detail cluster wins"
-  );
+  assert(resultKpbs.length < kpbsLike.length, "4e: high-count nav link does NOT block trim — deep detail cluster wins");
   const detailPos = resultKpbs.indexOf(firstDetail);
-  assert(detailPos !== -1 && detailPos < CHUNK_SIZE,
-    `4e: first detail link is within the first ${CHUNK_SIZE} chars of trimmed result (pos: ${detailPos})`);
+  assert(
+    detailPos !== -1 && detailPos < CHUNK_SIZE,
+    `4e: first detail link is within the first ${CHUNK_SIZE} chars of trimmed result (pos: ${detailPos})`,
+  );
   assert(
     !resultKpbs.includes(`href="/events/all"`),
-    "4e: the byte-~0 nav-link prefix is removed (all 300 nav links trimmed away)"
+    "4e: the byte-~0 nav-link prefix is removed (all 300 nav links trimmed away)",
   );
 });

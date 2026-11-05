@@ -133,13 +133,11 @@ export function renderTiered(events: RankedEvent[], c?: QueryContext): string {
 
   // ---- 0 events: graceful no-results ----
   if (total === 0) {
-    const lines: string[] = [
-      `## EventScout — No results for ${rawQuery}`,
-    ];
+    const lines: string[] = [`## EventScout — No results for ${rawQuery}`];
     if (constraintSummary) lines.push(`> Filters: ${constraintSummary}`);
     lines.push("");
     lines.push(
-      "No events matched your criteria. Try broadening your date range, increasing the radius, or relaxing the price or category filter."
+      "No events matched your criteria. Try broadening your date range, increasing the radius, or relaxing the price or category filter.",
     );
     return lines.join("\n");
   }
@@ -149,9 +147,7 @@ export function renderTiered(events: RankedEvent[], c?: QueryContext): string {
   const compactEvents = events.slice(fullCount);
 
   // ---- Header ----
-  const lines: string[] = [
-    `## EventScout — Top ${fullCount} of ${total} matches for ${rawQuery}`,
-  ];
+  const lines: string[] = [`## EventScout — Top ${fullCount} of ${total} matches for ${rawQuery}`];
   if (constraintSummary) lines.push(`> Filters: ${constraintSummary}`);
   lines.push("");
 

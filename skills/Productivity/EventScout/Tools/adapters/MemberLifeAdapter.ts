@@ -35,7 +35,7 @@
  * hypothetical seam; generalize further only when a second caller exists).
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { laDateIso, utcMsToLaParts } from "../lib/tz.ts";
@@ -122,14 +122,14 @@ function stableId(title: string, startDatetime: string, venue: string): string {
 
 /** Collapse Member.life's plain-text (CRLF-heavy) description into one line. */
 export function normalizeWhitespace(s: string): string {
-  return s.replace(/\r\n|\r|\n/g, " ").replace(/\s+/g, " ").trim();
+  return s
+    .replace(/\r\n|\r|\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function joinName(
-  first: string | null | undefined,
-  last: string | null | undefined
-): string | undefined {
-  const parts = [first, last].filter((p): p is string => Boolean(p && p.trim()));
+function joinName(first: string | null | undefined, last: string | null | undefined): string | undefined {
+  const parts = [first, last].filter((p): p is string => Boolean(p?.trim()));
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
@@ -177,7 +177,7 @@ export function secondsToHms(totalSeconds: number): {
 export function projectWeekdayDates(
   weekday: number,
   windowStart: { year: number; month: number; day: number },
-  windowDays: number
+  windowDays: number,
 ): Array<{ year: number; month: number; day: number }> {
   const dates: Array<{ year: number; month: number; day: number }> = [];
   const startMs = Date.UTC(windowStart.year, windowStart.month - 1, windowStart.day);
@@ -198,7 +198,7 @@ export function projectWeekdayDates(
 export function mapTimeslotOccurrenceToEvent(
   cls: MemberLifeClass,
   timeslot: MemberLifeTimeslot,
-  date: { year: number; month: number; day: number }
+  date: { year: number; month: number; day: number },
 ): EventItem {
   const title = cls.title.trim();
   const start = secondsToHms(timeslot.seconds_start);
@@ -243,7 +243,7 @@ export function mapTimeslotOccurrenceToEvent(
 export function mapClassesResponseToEvents(
   response: MemberLifeGetDataResponse,
   windowStart: { year: number; month: number; day: number },
-  windowDays: number = WINDOW_DAYS
+  windowDays: number = WINDOW_DAYS,
 ): EventItem[] {
   const events: EventItem[] = [];
   for (const categoryClasses of Object.values(response.data.classes)) {
@@ -252,7 +252,7 @@ export function mapClassesResponseToEvents(
         if (timeslot.day < 0 || timeslot.day > 6) {
           console.warn(
             `[MemberLifeAdapter] skipping timeslot ${timeslot.id} on class "${cls.title}" ` +
-              `(id ${cls.id}): invalid day=${timeslot.day} (expected 0-6)`
+              `(id ${cls.id}): invalid day=${timeslot.day} (expected 0-6)`,
           );
           continue;
         }
@@ -272,7 +272,7 @@ export function mapClassesResponseToEvents(
 
 export async function fetchMemberLifeEvents(
   nameShort: string = DEFAULT_NAME_SHORT,
-  windowDays: number = WINDOW_DAYS
+  windowDays: number = WINDOW_DAYS,
 ): Promise<EventItem[]> {
   const res = await fetch(API_ENDPOINT, {
     method: "POST",
@@ -303,8 +303,7 @@ export async function fetchMemberLifeEvents(
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("MemberLifeAdapter.ts") ||
-    process.argv[1].endsWith("MemberLifeAdapter"));
+  (process.argv[1].endsWith("MemberLifeAdapter.ts") || process.argv[1].endsWith("MemberLifeAdapter"));
 
 if (IS_SCRIPT) {
   console.log(`\nFetching Majesty in Motion classes (today → +${WINDOW_DAYS} days)...\n`);
@@ -315,7 +314,7 @@ if (IS_SCRIPT) {
     for (const e of events.slice(0, 12)) {
       console.log(
         `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          (e.performersOrTeams ? ` (${e.performersOrTeams})` : "")
+          (e.performersOrTeams ? ` (${e.performersOrTeams})` : ""),
       );
     }
     console.log(`\nSource: ${SOURCE_ID} | Member.life ${DEFAULT_NAME_SHORT}`);

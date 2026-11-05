@@ -5,7 +5,7 @@
  * in the event cell, dated 7-cell rows (shrink-div date) + recurring 6-cell
  * rows, SoCal-wide cities.
  *
- * Run: bun test ~/.claude/skills/Productivity/EventScout/tests/nineteenhz.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/nineteenhz.test.ts
  */
 
 import { describe, test, expect } from "bun:test";
@@ -88,9 +88,7 @@ describe("parsePriceAge", () => {
 
 describe("parseEventCell", () => {
   test("anchor + venue + city", () => {
-    expect(
-      parseEventCell("<a href='https://t.example/x'>Nitefreak</a> @ Spin Nightclub (San Diego)")
-    ).toEqual({
+    expect(parseEventCell("<a href='https://t.example/x'>Nitefreak</a> @ Spin Nightclub (San Diego)")).toEqual({
       title: "Nitefreak",
       url: "https://t.example/x",
       venue: "Spin Nightclub",

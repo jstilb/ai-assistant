@@ -21,9 +21,9 @@
  *   addSource(source: EventSource): void            — appends, does not dedup
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { EventSourceSchema, DEFAULT_SOURCE_STATE_PATH } from "./types.ts";
 import type { EventSource } from "./types.ts";
 import { z } from "zod";
@@ -98,7 +98,11 @@ export function loadSources(): EventSource[] {
  * should filter that list directly instead of calling this.
  */
 export function loadApiTierSourceIds(): Set<string> {
-  return new Set(loadSources().filter((s) => s.fetchTier === "api").map((s) => s.id));
+  return new Set(
+    loadSources()
+      .filter((s) => s.fetchTier === "api")
+      .map((s) => s.id),
+  );
 }
 
 export function saveSources(sources: EventSource[]): void {

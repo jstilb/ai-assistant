@@ -42,8 +42,7 @@ function baseActivity(overrides: Partial<ActiveNetActivity>): ActiveNetActivity 
     id: 135000,
     name: "Test Activity",
     desc: "",
-    detail_url:
-      "https://apm.activecommunities.com/sdparkandrec/Activity_Search/test/135000?locale=en-US",
+    detail_url: "https://apm.activecommunities.com/sdparkandrec/Activity_Search/test/135000?locale=en-US",
     parent_activity: false,
     only_one_day: false,
     date_range_start: "2026-09-25",
@@ -114,31 +113,16 @@ test("skipReason: sessions already ended are skipped", () => {
 
 test("mapActivityToEvent: upcoming session maps to start date + LA local time", () => {
   const e = mapActivityToEvent(baseActivity({}), TODAY);
-  assert(
-    e.startDatetime === "2026-09-25T16:30:00-07:00",
-    `startDatetime PDT expected, got ${e.startDatetime}`,
-  );
-  assert(
-    e.endDatetime === "2026-09-25T17:30:00-07:00",
-    `endDatetime PDT expected, got ${e.endDatetime}`,
-  );
+  assert(e.startDatetime === "2026-09-25T16:30:00-07:00", `startDatetime PDT expected, got ${e.startDatetime}`);
+  assert(e.endDatetime === "2026-09-25T17:30:00-07:00", `endDatetime PDT expected, got ${e.endDatetime}`);
   assert(e.allDay === false, "timed session is not allDay");
   assert(e.venue === "Balboa Park Club", `venue split, got ${e.venue}`);
-  assert(
-    e.address === "2150 Pan American Road, 92101",
-    `address from parens, got ${e.address}`,
-  );
+  assert(e.address === "2150 Pan American Road, 92101", `address from parens, got ${e.address}`);
   assert(e.isFree === false, "fee $25 is not free");
   assert(e.priceMin === 25, `priceMin 25, got ${e.priceMin}`);
   assert(e.currency === "USD", "currency USD");
-  assert(
-    e.ticketUrl?.includes("/enroll/135000") === true,
-    `enroll link as ticketUrl, got ${e.ticketUrl}`,
-  );
-  assert(
-    e.sources[0]?.sourceId === "sdparkandrec-activenet",
-    "sourceId stamped",
-  );
+  assert(e.ticketUrl?.includes("/enroll/135000") === true, `enroll link as ticketUrl, got ${e.ticketUrl}`);
+  assert(e.sources[0]?.sourceId === "sdparkandrec-activenet", "sourceId stamped");
   assert(e.tags.includes("class"), "multi-week row tagged class");
   assert(e.tags.includes("adults"), "18+ tagged adults");
   assert(!e.tags.includes("in-progress"), "upcoming session not in-progress");
@@ -191,10 +175,7 @@ test("mapActivityToEvent: in-progress session → next days_of_week occurrence",
   });
   // TODAY is Thursday 2026-08-20 → next of Sun/Wed/Fri is Friday 2026-08-21
   const e = mapActivityToEvent(a, TODAY);
-  assert(
-    e.startDatetime === "2026-08-21T17:00:00-07:00",
-    `next Friday expected, got ${e.startDatetime}`,
-  );
+  assert(e.startDatetime === "2026-08-21T17:00:00-07:00", `next Friday expected, got ${e.startDatetime}`);
   assert(e.tags.includes("in-progress"), "tagged in-progress");
 });
 
@@ -241,7 +222,10 @@ test("parseLocation: paren address, comma address, room-only", () => {
   assert(p.venue === "Balboa Park Club" && p.address === "2150 Pan American Road, 92101", "paren form");
   const c = parseLocation("Stockton Recreation Center, 330 32nd Street, San Diego, CA 92102");
   assert(c.venue === "Stockton Recreation Center", "comma form venue");
-  assert(c.address === "Stockton Recreation Center, 330 32nd Street, San Diego, CA 92102", "comma form keeps full label as address");
+  assert(
+    c.address === "Stockton Recreation Center, 330 32nd Street, San Diego, CA 92102",
+    "comma form keeps full label as address",
+  );
   const r = parseLocation("Fitness Room");
   assert(r.venue === "Fitness Room" && r.address === undefined, "room-only → no address");
 });
@@ -262,8 +246,7 @@ test("deriveCategory: name heuristics", () => {
 
 test("stripHtml: collapses rich text", () => {
   assert(
-    stripHtml("<div>Be a <b>tourist</b> for&nbsp;a night &amp; relax.</div>") ===
-      "Be a tourist for a night & relax.",
+    stripHtml("<div>Be a <b>tourist</b> for&nbsp;a night &amp; relax.</div>") === "Be a tourist for a night & relax.",
     "html stripped",
   );
 });

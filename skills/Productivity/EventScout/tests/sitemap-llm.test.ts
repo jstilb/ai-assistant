@@ -78,17 +78,13 @@ describe("dropHubEntries", () => {
 
 describe("slugDateOf", () => {
   test("reads the YYYY-MM-DD prefix of a dated slug", () => {
-    expect(
-      slugDateOf(
-        "https://writeyourstorynow.org/classes-workshops/2026-09-13-how-to-self-publish/"
-      )
-    ).toBe("2026-09-13");
+    expect(slugDateOf("https://writeyourstorynow.org/classes-workshops/2026-09-13-how-to-self-publish/")).toBe(
+      "2026-09-13",
+    );
   });
 
   test("returns null for undated recurring-group slugs", () => {
-    expect(
-      slugDateOf("https://writeyourstorynow.org/writing-reading/thursday-writers/")
-    ).toBeNull();
+    expect(slugDateOf("https://writeyourstorynow.org/writing-reading/thursday-writers/")).toBeNull();
   });
 
   test("handles missing trailing slash", () => {
@@ -111,24 +107,16 @@ describe("filterFetchWorthy", () => {
       dated("2026-08-20"), // 4 days back — within 7-day grace
       dated("2026-08-01"), // stale
     ];
-    expect(filterFetchWorthy(entries, "2026-08-24")).toEqual([
-      undated,
-      dated("2026-09-13"),
-      dated("2026-08-20"),
-    ]);
+    expect(filterFetchWorthy(entries, "2026-08-24")).toEqual([undated, dated("2026-09-13"), dated("2026-08-20")]);
   });
 
   test("grace boundary is inclusive at exactly 7 days back", () => {
-    expect(filterFetchWorthy([dated("2026-08-17")], "2026-08-24")).toEqual([
-      dated("2026-08-17"),
-    ]);
+    expect(filterFetchWorthy([dated("2026-08-17")], "2026-08-24")).toEqual([dated("2026-08-17")]);
     expect(filterFetchWorthy([dated("2026-08-16")], "2026-08-24")).toEqual([]);
   });
 
   test("grace window crosses month boundaries correctly", () => {
-    expect(filterFetchWorthy([dated("2026-08-28")], "2026-09-03")).toEqual([
-      dated("2026-08-28"),
-    ]);
+    expect(filterFetchWorthy([dated("2026-08-28")], "2026-09-03")).toEqual([dated("2026-08-28")]);
   });
 
   test("caps at 60 pages", () => {
@@ -163,7 +151,7 @@ describe("extractMainText", () => {
 describe("decodeEntities", () => {
   test("decodes numeric, hex, and common named entities", () => {
     expect(decodeEntities("Judy &amp; Steve &#8212; 5 PM &ndash; 6 PM &#x2019;26")).toBe(
-      "Judy & Steve — 5 PM – 6 PM ’26"
+      "Judy & Steve — 5 PM – 6 PM ’26",
     );
   });
 
@@ -181,20 +169,14 @@ describe("batchBlocks", () => {
   test("keeps small blocks in one batch with headers and separators", () => {
     const batches = batchBlocks([block("https://a/", 100), block("https://b/", 100)]);
     expect(batches).toHaveLength(1);
-    expect(batches[0]).toContain(
-      "PAGE (for every event found below, set ticketUrl to exactly this URL): https://a/"
-    );
+    expect(batches[0]).toContain("PAGE (for every event found below, set ticketUrl to exactly this URL): https://a/");
     expect(batches[0]).toContain("https://b/");
     expect(batches[0]).toContain("\n\n=====\n\n");
   });
 
   test("never splits a block across batches", () => {
     // Three ~15KB blocks: budget 36KB fits two per batch, third overflows.
-    const blocks = [
-      block("https://a/", 15_000),
-      block("https://b/", 15_000),
-      block("https://c/", 15_000),
-    ];
+    const blocks = [block("https://a/", 15_000), block("https://b/", 15_000), block("https://c/", 15_000)];
     const batches = batchBlocks(blocks);
     expect(batches).toHaveLength(2);
     expect(batches[0]).toContain("https://a/");
@@ -225,6 +207,8 @@ describe("attributeTicketUrls", () => {
     isFree: false,
     sourceUrl: SITEMAP_URL,
     sources: [{ sourceId: "sdwritersink-classes", url: SITEMAP_URL }],
+    fetchedAt: "2026-09-01T00:00:00Z",
+    status: "scheduled",
     ...(ticketUrl !== undefined && { ticketUrl }),
   });
 
@@ -236,10 +220,7 @@ describe("attributeTicketUrls", () => {
   ];
 
   test("assigns the unique block whose text contains the title", () => {
-    const [a, b] = attributeTicketUrls(
-      [ev("How to Self-Publish"), ev("Thursday Writers")],
-      blocks
-    );
+    const [a, b] = attributeTicketUrls([ev("How to Self-Publish"), ev("Thursday Writers")], blocks);
     expect(a!.ticketUrl).toBe("https://x.org/c/self-publish/");
     expect(b!.ticketUrl).toBe("https://x.org/g/thursday/");
   });
@@ -250,10 +231,7 @@ describe("attributeTicketUrls", () => {
   });
 
   test("never overwrites an LLM-extracted ticketUrl", () => {
-    const [a] = attributeTicketUrls(
-      [ev("Thursday Writers", "https://keep.me/")],
-      blocks
-    );
+    const [a] = attributeTicketUrls([ev("Thursday Writers", "https://keep.me/")], blocks);
     expect(a!.ticketUrl).toBe("https://keep.me/");
   });
 

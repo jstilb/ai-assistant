@@ -3,7 +3,7 @@
  * actions.test.ts — Unit tests for Actions.ts payload builders (Slice 11).
  *
  * bun:test module — deterministic, no network, no filesystem state.
- * Run: bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/actions.test.ts
+ * Run: bun test skills/Productivity/EventScout/tests/actions.test.ts
  *
  * Tests (deterministic, no network):
  *   - buildIdeaRow(event): EventItem → activity_ideas row object
@@ -35,13 +35,12 @@ function assertEq<T>(actual: T, expected: T, label: string): void {
   assert(
     JSON.stringify(actual) === JSON.stringify(expected),
     label,
-    `Expected: ${JSON.stringify(expected)}\n        Actual:   ${JSON.stringify(actual)}`
+    `Expected: ${JSON.stringify(expected)}\n        Actual:   ${JSON.stringify(actual)}`,
   );
 }
 
 function assertContains(str: string, needle: string, label: string): void {
-  assert(str.includes(needle), label,
-    `Expected to contain: ${JSON.stringify(needle)}\nActual: ${JSON.stringify(str)}`);
+  assert(str.includes(needle), label, `Expected to contain: ${JSON.stringify(needle)}\nActual: ${JSON.stringify(str)}`);
 }
 
 // ============================================================================
@@ -193,8 +192,11 @@ test("buildCalendarEvent — no venue or address", () => {
 test("buildCalendarEvent — sourceUrl fallback in description", () => {
   const noTicketEvent = makeRankedEvent({ ticketUrl: undefined });
   const noTicketArgs = buildCalendarEvent(noTicketEvent);
-  assertContains(noTicketArgs.description, "https://www.observatorynorthpark.com/events",
-    "A32 description uses sourceUrl when no ticketUrl");
+  assertContains(
+    noTicketArgs.description,
+    "https://www.observatorynorthpark.com/events",
+    "A32 description uses sourceUrl when no ticketUrl",
+  );
 });
 
 test("buildCalendarEvent — plain EventItem (no why)", () => {
@@ -203,8 +205,11 @@ test("buildCalendarEvent — plain EventItem (no why)", () => {
   assert("title" in plainArgs, "A33 plain EventItem: title present");
   assertContains(plainArgs.title, "Tycho at Observatory North Park", "A34 plain EventItem: title correct");
   // Description should still include the link
-  assertContains(plainArgs.description, "https://tickets.example.com/tycho-2026",
-    "A35 plain EventItem: description has ticket link");
+  assertContains(
+    plainArgs.description,
+    "https://tickets.example.com/tycho-2026",
+    "A35 plain EventItem: description has ticket link",
+  );
 });
 
 test("buildCalendarEvent — various durations", () => {
@@ -244,31 +249,23 @@ test("ref round-trip — addToCalendar ref format", () => {
   assert(calRef.includes("|"), "R01 buildCalendarRef contains pipe separator");
 
   // Ref starts with event title
-  assert(calRef.startsWith("Tycho at Observatory North Park"),
-    "R02 ref title matches event title");
+  assert(calRef.startsWith("Tycho at Observatory North Park"), "R02 ref title matches event title");
 
   // Ref encodes the correct date
-  assertContains(calRef, "2026-06-08",
-    "R03 ref contains correct date");
+  assertContains(calRef, "2026-06-08", "R03 ref contains correct date");
 
   // parseCalendarRef: text is non-empty (critical — this was the empty-search bug)
   const parsed = parseCalendarRef(calRef);
-  assert(parsed.text.length > 0,
-    "R04 parseCalendarRef: text (delete search term) is non-empty");
-  assertEq(parsed.text, "Tycho at Observatory North Park",
-    "R05 parseCalendarRef: text equals event title");
+  assert(parsed.text.length > 0, "R04 parseCalendarRef: text (delete search term) is non-empty");
+  assertEq(parsed.text, "Tycho at Observatory North Park", "R05 parseCalendarRef: text equals event title");
 
   // parseCalendarRef: startDate and endDate are valid YYYY-MM-DD
-  assert(/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate),
-    "R06 parseCalendarRef: startDate is YYYY-MM-DD");
-  assert(/^\d{4}-\d{2}-\d{2}$/.test(parsed.endDate),
-    "R07 parseCalendarRef: endDate is YYYY-MM-DD");
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate), "R06 parseCalendarRef: startDate is YYYY-MM-DD");
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(parsed.endDate), "R07 parseCalendarRef: endDate is YYYY-MM-DD");
 
   // endDate is exactly one day after startDate
-  assertEq(parsed.startDate, "2026-06-08",
-    "R08 parseCalendarRef: startDate is event date");
-  assertEq(parsed.endDate, "2026-06-09",
-    "R09 parseCalendarRef: endDate is event date + 1");
+  assertEq(parsed.startDate, "2026-06-08", "R08 parseCalendarRef: startDate is event date");
+  assertEq(parsed.endDate, "2026-06-09", "R09 parseCalendarRef: endDate is event date + 1");
 });
 
 test("ref round-trip — bare event-id / empty string rejected", () => {
@@ -280,8 +277,7 @@ test("ref round-trip — bare event-id / empty string rejected", () => {
   } catch {
     parseThrew = true;
   }
-  assert(parseThrew,
-    "R10 parseCalendarRef: bare event-id (no '|') throws, never produces empty search");
+  assert(parseThrew, "R10 parseCalendarRef: bare event-id (no '|') throws, never produces empty search");
 
   // Empty string also rejected
   let emptyThrew = false;
@@ -317,12 +313,13 @@ test("ref round-trip — title containing pipe is invalid (known constraint)", (
   } catch {
     pipeParseThrew = true;
   }
-  assert(pipeParseThrew,
-    "R13 parseCalendarRef: title with '|' fails at parse ('|' is reserved delimiter; titles must not contain it)");
+  assert(
+    pipeParseThrew,
+    "R13 parseCalendarRef: title with '|' fails at parse ('|' is reserved delimiter; titles must not contain it)",
+  );
 
   // Confirm that normal event titles (no pipe) always round-trip cleanly
   const normalRef = buildCalendarRef(makeRankedEvent());
   const normalParsed = parseCalendarRef(normalRef);
-  assert(normalParsed.text.length > 0,
-    "R14 parseCalendarRef: normal title (no '|') always yields non-empty text");
+  assert(normalParsed.text.length > 0, "R14 parseCalendarRef: normal title (no '|') always yields non-empty text");
 });

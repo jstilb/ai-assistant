@@ -68,11 +68,7 @@ export function horizonDays(): number {
  * @param days   - Horizon in days. Defaults to horizonDays().
  * @returns      - New array containing only events within or at the horizon.
  */
-export function withinHorizon(
-  events: EventItem[],
-  now: Date,
-  days: number = horizonDays(),
-): EventItem[] {
+export function withinHorizon(events: EventItem[], now: Date, days: number = horizonDays()): EventItem[] {
   const cutoffMs = now.getTime() + days * 24 * 60 * 60 * 1000;
 
   return events.filter((event) => {
@@ -81,7 +77,7 @@ export function withinHorizon(
     // Unparseable or empty → keep (design decision 2 above)
     if (!startDatetime || startDatetime.trim() === "") return true;
     const startMs = Date.parse(startDatetime);
-    if (!Number.isFinite(startMs) || isNaN(startMs)) return true;
+    if (!Number.isFinite(startMs) || Number.isNaN(startMs)) return true;
 
     // Keep if at or before the cutoff (strictly AFTER = drop)
     return startMs <= cutoffMs;

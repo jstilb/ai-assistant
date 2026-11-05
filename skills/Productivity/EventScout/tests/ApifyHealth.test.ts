@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * ApifyHealth.test.ts — T2-09 per-source Apify streak counters.
- * Run: bun test ~/.claude/.claude/worktrees/fable-remediation-batch4/skills/Productivity/EventScout/tests/ApifyHealth.test.ts
+ * Run: bun test .claude/worktrees/fable-remediation-batch4/skills/Productivity/EventScout/tests/ApifyHealth.test.ts
  *
  * Mirrors lib/cron/__tests__/FailStreak.test.ts's KAYA_HOME-pin +
  * injected-sendAlertFn convention. No network call, no real Apify/BrightData
@@ -12,9 +12,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { AlertResult, SendAlertOptions } from "../../../../lib/core/AlertGate.ts";
 
 const tmpHome = join(tmpdir(), `apify-health-test-${Date.now()}`);
@@ -43,7 +43,10 @@ afterEach(() => {
 
 type SpyCall = { message: string; options: SendAlertOptions };
 
-function makeSpySendAlert(): { fn: (message: string, options: SendAlertOptions) => Promise<AlertResult>; calls: SpyCall[] } {
+function makeSpySendAlert(): {
+  fn: (message: string, options: SendAlertOptions) => Promise<AlertResult>;
+  calls: SpyCall[];
+} {
   const calls: SpyCall[] = [];
   const fn = async (message: string, options: SendAlertOptions): Promise<AlertResult> => {
     calls.push({ message, options });
@@ -57,10 +60,20 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const { trackApifySourceHealth } = await import("../Tools/ApifyHealth.ts");
     const spy = makeSpySendAlert();
 
-    const r1 = await trackApifySourceHealth("src-a", "https://example.com/a", { kind: "hard-fail", error: new Error("boom") }, spy.fn);
+    const r1 = await trackApifySourceHealth(
+      "src-a",
+      "https://example.com/a",
+      { kind: "hard-fail", error: new Error("boom") },
+      spy.fn,
+    );
     expect(r1.hardFail).toEqual({ action: "below-threshold", streak: 1 });
 
-    const r2 = await trackApifySourceHealth("src-a", "https://example.com/a", { kind: "hard-fail", error: new Error("boom") }, spy.fn);
+    const r2 = await trackApifySourceHealth(
+      "src-a",
+      "https://example.com/a",
+      { kind: "hard-fail", error: new Error("boom") },
+      spy.fn,
+    );
     expect(r2.hardFail).toEqual({ action: "below-threshold", streak: 2 });
 
     expect(spy.calls.length).toBe(0);
@@ -70,9 +83,24 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const { trackApifySourceHealth, APIFY_HARD_FAIL_PAGE_COOLDOWN_MS } = await import("../Tools/ApifyHealth.ts");
     const spy = makeSpySendAlert();
 
-    await trackApifySourceHealth("src-b", "https://example.com/b", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
-    await trackApifySourceHealth("src-b", "https://example.com/b", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
-    const r3 = await trackApifySourceHealth("src-b", "https://example.com/b", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
+    await trackApifySourceHealth(
+      "src-b",
+      "https://example.com/b",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-b",
+      "https://example.com/b",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
+    const r3 = await trackApifySourceHealth(
+      "src-b",
+      "https://example.com/b",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
 
     expect(r3.hardFail.action).toBe("paged");
     expect(spy.calls.length).toBe(1);
@@ -87,13 +115,33 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const spy = makeSpySendAlert();
 
     // src-fail hard-fails 3x in a row (pages on the 3rd)
-    await trackApifySourceHealth("src-fail", "https://example.com/fail", { kind: "hard-fail", error: new Error("e") }, spy.fn);
-    await trackApifySourceHealth("src-fail", "https://example.com/fail", { kind: "hard-fail", error: new Error("e") }, spy.fn);
-    const failResult = await trackApifySourceHealth("src-fail", "https://example.com/fail", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    await trackApifySourceHealth(
+      "src-fail",
+      "https://example.com/fail",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-fail",
+      "https://example.com/fail",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
+    const failResult = await trackApifySourceHealth(
+      "src-fail",
+      "https://example.com/fail",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     expect(failResult.hardFail.action).toBe("paged");
 
     // src-healthy succeeds every run, interleaved with src-fail's failures
-    const healthyResult = await trackApifySourceHealth("src-healthy", "https://example.com/healthy", { kind: "success", count: 12 }, spy.fn);
+    const healthyResult = await trackApifySourceHealth(
+      "src-healthy",
+      "https://example.com/healthy",
+      { kind: "success", count: 12 },
+      spy.fn,
+    );
     expect(healthyResult.hardFail).toEqual({ action: "reset" });
 
     // Only ONE page fired, and it names src-fail, never src-healthy.
@@ -108,15 +156,35 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const { trackApifySourceHealth } = await import("../Tools/ApifyHealth.ts");
     const spy = makeSpySendAlert();
 
-    await trackApifySourceHealth("src-c", "https://example.com/c", { kind: "hard-fail", error: new Error("e") }, spy.fn);
-    await trackApifySourceHealth("src-c", "https://example.com/c", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    await trackApifySourceHealth(
+      "src-c",
+      "https://example.com/c",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-c",
+      "https://example.com/c",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     // Streak is at 2 here — one more hard-fail would page. Instead: a clean success.
-    const resetResult = await trackApifySourceHealth("src-c", "https://example.com/c", { kind: "success", count: 5 }, spy.fn);
+    const resetResult = await trackApifySourceHealth(
+      "src-c",
+      "https://example.com/c",
+      { kind: "success", count: 5 },
+      spy.fn,
+    );
     expect(resetResult.hardFail).toEqual({ action: "reset" });
 
     // Streak must have actually gone back to 0 on disk, not just in the return value —
     // one more hard-fail should be back to "1", not "3"/paged.
-    const nextResult = await trackApifySourceHealth("src-c", "https://example.com/c", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    const nextResult = await trackApifySourceHealth(
+      "src-c",
+      "https://example.com/c",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     expect(nextResult.hardFail).toEqual({ action: "below-threshold", streak: 1 });
     expect(spy.calls.length).toBe(0);
   });
@@ -125,13 +193,33 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const { trackApifySourceHealth } = await import("../Tools/ApifyHealth.ts");
     const spy = makeSpySendAlert();
 
-    await trackApifySourceHealth("src-d", "https://example.com/d", { kind: "hard-fail", error: new Error("e") }, spy.fn);
-    await trackApifySourceHealth("src-d", "https://example.com/d", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    await trackApifySourceHealth(
+      "src-d",
+      "https://example.com/d",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-d",
+      "https://example.com/d",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     // A zero-result run is NOT evidence of recovery for this channel — it must leave the streak at 2, untouched.
-    const zeroRunResult = await trackApifySourceHealth("src-d", "https://example.com/d", { kind: "zero-result" }, spy.fn);
+    const zeroRunResult = await trackApifySourceHealth(
+      "src-d",
+      "https://example.com/d",
+      { kind: "zero-result" },
+      spy.fn,
+    );
     expect(zeroRunResult.hardFail).toEqual({ action: "below-threshold", streak: 2 });
 
-    const after = await trackApifySourceHealth("src-d", "https://example.com/d", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    const after = await trackApifySourceHealth(
+      "src-d",
+      "https://example.com/d",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     expect(after.hardFail.action).toBe("paged"); // 3rd hard-fail overall, streak never got wiped by the zero-result in between
     expect(spy.calls.length).toBe(1);
   });
@@ -140,9 +228,24 @@ describe("trackApifySourceHealth — hard-failure channel (page tier)", () => {
     const { trackApifySourceHealth } = await import("../Tools/ApifyHealth.ts");
     const spy = makeSpySendAlert();
 
-    await trackApifySourceHealth("src-e", "https://example.com/e", { kind: "hard-fail", error: new Error("first") }, spy.fn);
-    await trackApifySourceHealth("src-e", "https://example.com/e", { kind: "hard-fail", error: new Error("second") }, spy.fn);
-    await trackApifySourceHealth("src-e", "https://example.com/e", { kind: "hard-fail", error: new Error("third") }, spy.fn);
+    await trackApifySourceHealth(
+      "src-e",
+      "https://example.com/e",
+      { kind: "hard-fail", error: new Error("first") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-e",
+      "https://example.com/e",
+      { kind: "hard-fail", error: new Error("second") },
+      spy.fn,
+    );
+    await trackApifySourceHealth(
+      "src-e",
+      "https://example.com/e",
+      { kind: "hard-fail", error: new Error("third") },
+      spy.fn,
+    );
 
     const lines = readFailureLogLines().filter(
       (l) => (l["context"] as Record<string, unknown>)["sourceId"] === "src-e",
@@ -209,7 +312,12 @@ describe("trackApifySourceHealth — zero-result channel (digest tier, never pag
 
     await trackApifySourceHealth("src-z3", "https://example.com/z3", { kind: "zero-result" }, spy.fn);
     await trackApifySourceHealth("src-z3", "https://example.com/z3", { kind: "zero-result" }, spy.fn);
-    const resetResult = await trackApifySourceHealth("src-z3", "https://example.com/z3", { kind: "success", count: 20 }, spy.fn);
+    const resetResult = await trackApifySourceHealth(
+      "src-z3",
+      "https://example.com/z3",
+      { kind: "success", count: 20 },
+      spy.fn,
+    );
     expect(resetResult.zeroResultStreak).toBe(0);
     expect(resetResult.zeroResultTier).toBe("log");
 
@@ -224,7 +332,12 @@ describe("trackApifySourceHealth — zero-result channel (digest tier, never pag
     await trackApifySourceHealth("src-z4", "https://example.com/z4", { kind: "zero-result" }, spy.fn);
     await trackApifySourceHealth("src-z4", "https://example.com/z4", { kind: "zero-result" }, spy.fn);
     // A hard-fail run is NOT evidence of recovery for this channel — it must leave the streak at 2, untouched.
-    const hardFailRunResult = await trackApifySourceHealth("src-z4", "https://example.com/z4", { kind: "hard-fail", error: new Error("e") }, spy.fn);
+    const hardFailRunResult = await trackApifySourceHealth(
+      "src-z4",
+      "https://example.com/z4",
+      { kind: "hard-fail", error: new Error("e") },
+      spy.fn,
+    );
     expect(hardFailRunResult.zeroResultStreak).toBe(2);
 
     const after = await trackApifySourceHealth("src-z4", "https://example.com/z4", { kind: "zero-result" }, spy.fn);
@@ -244,21 +357,36 @@ describe("trackApifySourceHealth — zero-result channel (digest tier, never pag
     // close. It must now escalate via the hard-fail channel on the 5th run
     // (3 hard-fails total: run 1, run 3, run 5 — never reset by the
     // zero-results interleaved at run 2 and run 4).
-    const r1 = await trackApifySourceHealth("src-alt", "https://example.com/alt", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
+    const r1 = await trackApifySourceHealth(
+      "src-alt",
+      "https://example.com/alt",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
     expect(r1.hardFail).toEqual({ action: "below-threshold", streak: 1 });
 
     const r2 = await trackApifySourceHealth("src-alt", "https://example.com/alt", { kind: "zero-result" }, spy.fn);
     expect(r2.hardFail).toEqual({ action: "below-threshold", streak: 1 }); // untouched, not reset
     expect(r2.zeroResultStreak).toBe(1);
 
-    const r3 = await trackApifySourceHealth("src-alt", "https://example.com/alt", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
+    const r3 = await trackApifySourceHealth(
+      "src-alt",
+      "https://example.com/alt",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
     expect(r3.hardFail).toEqual({ action: "below-threshold", streak: 2 }); // 2nd hard-fail overall, not reset back to 1
 
     const r4 = await trackApifySourceHealth("src-alt", "https://example.com/alt", { kind: "zero-result" }, spy.fn);
     expect(r4.hardFail).toEqual({ action: "below-threshold", streak: 2 }); // still untouched
     expect(r4.zeroResultStreak).toBe(2); // zero-result channel also never got wiped by the hard-fails
 
-    const r5 = await trackApifySourceHealth("src-alt", "https://example.com/alt", { kind: "hard-fail", error: new Error("timeout") }, spy.fn);
+    const r5 = await trackApifySourceHealth(
+      "src-alt",
+      "https://example.com/alt",
+      { kind: "hard-fail", error: new Error("timeout") },
+      spy.fn,
+    );
     expect(r5.hardFail.action).toBe("paged"); // 3rd hard-fail overall — escalates, as it must
     expect(spy.calls.length).toBe(1);
     expect(spy.calls[0]!.options.key).toBe("eventscout-apify-fail-src-alt");

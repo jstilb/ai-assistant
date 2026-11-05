@@ -99,9 +99,7 @@ export interface SitemapEntry {
  */
 export function parseSitemapLocs(xml: string, sitemapUrl: string): SitemapEntry[] {
   if (/<sitemapindex[\s>]/i.test(xml)) {
-    throw new Error(
-      `[SitemapLlm] ${sitemapUrl} is a sitemap INDEX — point the source at one of its leaf sitemaps`
-    );
+    throw new Error(`[SitemapLlm] ${sitemapUrl} is a sitemap INDEX — point the source at one of its leaf sitemaps`);
   }
   const entries: SitemapEntry[] = [];
   for (const block of xml.match(/<url>[\s\S]*?<\/url>/gi) ?? []) {
@@ -111,9 +109,7 @@ export function parseSitemapLocs(xml: string, sitemapUrl: string): SitemapEntry[
     entries.push({ loc, ...(lastmod !== undefined && { lastmod }) });
   }
   if (entries.length === 0) {
-    throw new Error(
-      `[SitemapLlm] ${sitemapUrl} contains no <url><loc> entries — sitemap format change?`
-    );
+    throw new Error(`[SitemapLlm] ${sitemapUrl} contains no <url><loc> entries — sitemap format change?`);
   }
   return entries;
 }
@@ -128,10 +124,7 @@ export function parseSitemapLocs(xml: string, sitemapUrl: string): SitemapEntry[
  */
 export function dropHubEntries(entries: SitemapEntry[]): SitemapEntry[] {
   const norm = (u: string) => u.replace(/\/+$/, "") + "/";
-  return entries.filter(
-    (e) =>
-      !entries.some((other) => other !== e && norm(other.loc).startsWith(norm(e.loc)))
-  );
+  return entries.filter((e) => !entries.some((other) => other !== e && norm(other.loc).startsWith(norm(e.loc))));
 }
 
 /**
@@ -149,10 +142,7 @@ export function slugDateOf(url: string): string | null {
  * before `todayLaDate` ("YYYY-MM-DD"), then cap at MAX_PAGES (loudly).
  * String comparison suffices — both sides are ISO date strings.
  */
-export function filterFetchWorthy(
-  entries: SitemapEntry[],
-  todayLaDate: string
-): SitemapEntry[] {
+export function filterFetchWorthy(entries: SitemapEntry[], todayLaDate: string): SitemapEntry[] {
   const [y, m, d] = todayLaDate.split("-").map(Number) as [number, number, number];
   const cutoffMs = Date.UTC(y, m - 1, d - SLUG_DATE_GRACE_DAYS);
   const cutoff = new Date(cutoffMs).toISOString().slice(0, 10);
@@ -164,7 +154,7 @@ export function filterFetchWorthy(
   if (fresh.length > MAX_PAGES) {
     console.warn(
       `[SitemapLlm] capping ${fresh.length} fetch-worthy pages to ${MAX_PAGES} — ` +
-        `pages beyond the cap are DROPPED this refresh`
+        `pages beyond the cap are DROPPED this refresh`,
     );
     return fresh.slice(0, MAX_PAGES);
   }
@@ -179,12 +169,8 @@ export function filterFetchWorthy(
  */
 export function extractMainText(html: string): string {
   const region =
-    html.match(/<main[\s>][\s\S]*?<\/main>/i)?.[0] ??
-    html.match(/<body[\s>][\s\S]*?<\/body>/i)?.[0] ??
-    html;
-  const noTags = region
-    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]+>/g, "\n");
+    html.match(/<main[\s>][\s\S]*?<\/main>/i)?.[0] ?? html.match(/<body[\s>][\s\S]*?<\/body>/i)?.[0] ?? html;
+  const noTags = region.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, "\n");
   return decodeEntities(noTags)
     .replace(/[ \t]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
@@ -226,10 +212,7 @@ export interface PageBlock {
  * the sitemap sourceUrl is .xml and deliberately non-navigable. Returns new
  * objects; never mutates input.
  */
-export function attributeTicketUrls(
-  events: EventItem[],
-  blocks: PageBlock[]
-): EventItem[] {
+export function attributeTicketUrls(events: EventItem[], blocks: PageBlock[]): EventItem[] {
   const lowered = blocks.map((b) => ({ url: b.url, text: b.text.toLowerCase() }));
   return events.map((ev) => {
     if (ev.ticketUrl) return ev;
@@ -263,15 +246,11 @@ async function fetchText(url: string): Promise<string> {
  */
 export async function fetchSitemapLlmEvents(source: EventSource): Promise<EventItem[]> {
   const xml = await fetchText(source.url).catch((err: unknown) => {
-    throw new Error(
-      `[SitemapLlm] sitemap fetch failed for ${source.id}: ${(err as Error).message}`
-    );
+    throw new Error(`[SitemapLlm] sitemap fetch failed for ${source.id}: ${(err as Error).message}`);
   });
   const entries = dropHubEntries(parseSitemapLocs(xml, source.url));
   const fresh = filterFetchWorthy(entries, todayLaDateString());
-  console.log(
-    `[SitemapLlm] ${source.id}: ${entries.length} sitemap entries, ${fresh.length} fetch-worthy`
-  );
+  console.log(`[SitemapLlm] ${source.id}: ${entries.length} sitemap entries, ${fresh.length} fetch-worthy`);
   if (fresh.length === 0) return [];
 
   const blocks: PageBlock[] = [];
@@ -293,13 +272,11 @@ export async function fetchSitemapLlmEvents(source: EventSource): Promise<EventI
   if (failures.length > 0) {
     console.warn(
       `[SitemapLlm] ${source.id}: ${failures.length}/${fresh.length} page fetches failed:\n` +
-        failures.map((f) => `  - ${f}`).join("\n")
+        failures.map((f) => `  - ${f}`).join("\n"),
     );
   }
   if (blocks.length === 0) {
-    throw new Error(
-      `[SitemapLlm] ${source.id}: all ${fresh.length} page fetches failed — bot wall or site change?`
-    );
+    throw new Error(`[SitemapLlm] ${source.id}: all ${fresh.length} page fetches failed — bot wall or site change?`);
   }
 
   // Keep sitemap order (concurrency lanes finish out of order) so batching
@@ -315,9 +292,7 @@ export async function fetchSitemapLlmEvents(source: EventSource): Promise<EventI
   // each batch a single window: no splits, no overlap duplicates, same LLM
   // call count.
   const batches = batchBlocks(blocks);
-  console.log(
-    `[SitemapLlm] ${source.id}: ${blocks.length} pages in ${batches.length} extraction batch(es)`
-  );
+  console.log(`[SitemapLlm] ${source.id}: ${blocks.length} pages in ${batches.length} extraction batch(es)`);
   const events: EventItem[] = [];
   for (const batch of batches) {
     events.push(...(await extractEventsFromContent(batch, source)));
@@ -336,8 +311,7 @@ export async function fetchSitemapLlmEvents(source: EventSource): Promise<EventI
  */
 export function batchBlocks(blocks: PageBlock[]): string[] {
   const rendered = blocks.map(
-    (b) =>
-      `PAGE (for every event found below, set ticketUrl to exactly this URL): ${b.url}\n${b.text}`
+    (b) => `PAGE (for every event found below, set ticketUrl to exactly this URL): ${b.url}\n${b.text}`,
   );
   const batches: string[] = [];
   let current: string[] = [];

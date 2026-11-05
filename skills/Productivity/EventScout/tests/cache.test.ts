@@ -16,13 +16,13 @@
  * transiently, and restored in afterAll for the shared bun:test process.
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/cache.test.ts
+ *   bun test skills/Productivity/EventScout/tests/cache.test.ts
  */
 
 import { test, afterAll } from "bun:test";
-import { existsSync, unlinkSync, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { existsSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EventItem } from "../Tools/types.ts";
 
 // ============================================================================
@@ -130,14 +130,8 @@ test("1. writeEvents + readEvents: round-trip is lossless", () => {
   writeEvents(testEvents);
   const loaded = readEvents();
   assert(loaded.length === 2, `Expected 2 events, got ${loaded.length}`);
-  assert(
-    deepEqual(loaded[0], testEvents[0]),
-    "First event deep equal failed"
-  );
-  assert(
-    deepEqual(loaded[1], testEvents[1]),
-    "Second event deep equal failed"
-  );
+  assert(deepEqual(loaded[0], testEvents[0]), "First event deep equal failed");
+  assert(deepEqual(loaded[1], testEvents[1]), "Second event deep equal failed");
 });
 
 test("2. pruneExpired: removes past event, keeps future event", () => {
@@ -149,11 +143,8 @@ test("2. pruneExpired: removes past event, keeps future event", () => {
 
   const remaining = readEvents();
   assert(remaining.length === 1, `Expected 1 event after prune, got ${remaining.length}`);
-  assert(remaining[0].id === "future-event-001", `Expected future-event-001, got ${remaining[0].id}`);
-  assert(
-    !remaining.some((e: EventItem) => e.id === "past-event-001"),
-    "Past event should have been pruned"
-  );
+  assert(remaining[0]!.id === "future-event-001", `Expected future-event-001, got ${remaining[0]!.id}`);
+  assert(!remaining.some((e: EventItem) => e.id === "past-event-001"), "Past event should have been pruned");
 });
 
 test("3. pruneExpired: event with only startDatetime (past) is pruned", () => {
@@ -189,7 +180,7 @@ test("3. pruneExpired: event with only startDatetime (past) is pruned", () => {
 
   const remaining = readEvents();
   assert(remaining.length === 1, `Expected 1 event, got ${remaining.length}`);
-  assert(remaining[0].id === "no-end-future-001", `Expected no-end-future-001, got ${remaining[0].id}`);
+  assert(remaining[0]!.id === "no-end-future-001", `Expected no-end-future-001, got ${remaining[0]!.id}`);
 });
 
 test("4. upsertEventsDeduped: collapses a cross-source twin already in the cache", () => {
@@ -231,10 +222,10 @@ test("4. upsertEventsDeduped: collapses a cross-source twin already in the cache
 
   const after = readEvents();
   assert(after.length === 1, `Expected the cross-source twin to collapse to 1, got ${after.length}`);
-  const sourceIds = after[0].sources.map((s) => s.sourceId).sort();
+  const sourceIds = after[0]!.sources.map((s) => s.sourceId).sort();
   assert(
     sourceIds.length === 2 && sourceIds.includes("songkick") && sourceIds.includes("bandsintown"),
-    `Expected both sources unioned, got ${JSON.stringify(sourceIds)}`
+    `Expected both sources unioned, got ${JSON.stringify(sourceIds)}`,
   );
 });
 
@@ -282,19 +273,26 @@ test("6. upsertEventsDeduped: api-tier events (padres-mlb) survive the whole-cac
   const after = readEvents();
   assert(
     after.length === 2,
-    `api-tier events must not be fuzzy-collapsed by the whole-cache re-dedup pass (got ${after.length})`
+    `api-tier events must not be fuzzy-collapsed by the whole-cache re-dedup pass (got ${after.length})`,
   );
 });
 
 test("7. upsertEventsDeduped: prunes expired events, keeps ones inside the 24h grace", () => {
   cleanup();
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const endedToday: EventItem = { ...pastEvent, id: "ended-today-001", startDatetime: twoHoursAgo, endDatetime: twoHoursAgo };
+  const endedToday: EventItem = {
+    ...pastEvent,
+    id: "ended-today-001",
+    startDatetime: twoHoursAgo,
+    endDatetime: twoHoursAgo,
+  };
   writeEvents([pastEvent, endedToday]);
   upsertEventsDeduped([futureEvent]);
-  const ids = readEvents().map((e: EventItem) => e.id).sort();
+  const ids = readEvents()
+    .map((e: EventItem) => e.id)
+    .sort();
   assert(
     deepEqual(ids, ["ended-today-001", "future-event-001"]),
-    `Expected [ended-today-001, future-event-001], got ${JSON.stringify(ids)}`
+    `Expected [ended-today-001, future-event-001], got ${JSON.stringify(ids)}`,
   );
 });

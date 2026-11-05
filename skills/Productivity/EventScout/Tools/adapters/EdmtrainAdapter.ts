@@ -24,9 +24,9 @@
  * and does NOT write cache.
  */
 
-import { createHash } from "crypto";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { defaultKayaHome } from "../../../../../lib/core/KayaHome.ts";
 import type { EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
@@ -84,23 +84,21 @@ export function loadEdmtrainKey(): string {
   if (!existsSync(secretsPath)) {
     throw new Error(
       `[Edmtrain] secrets.json not found at ${secretsPath}. ` +
-        `Add EDMTRAIN_API_KEY (free key: https://edmtrain.com/developer-api).`
+        `Add EDMTRAIN_API_KEY (free key: https://edmtrain.com/developer-api).`,
     );
   }
   let secrets: Record<string, unknown>;
   try {
     secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
   } catch (err) {
-    throw new Error(
-      `[Edmtrain] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`
-    );
+    throw new Error(`[Edmtrain] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`);
   }
   const key = secrets["EDMTRAIN_API_KEY"];
   if (typeof key !== "string" || key.trim() === "") {
     throw new Error(
       `[Edmtrain] EDMTRAIN_API_KEY is missing or empty in ${secretsPath}. ` +
         `Sign up for the free key at https://edmtrain.com/developer-api (NEEDS-JM), ` +
-        `then set fetchTier: "api" on the "${SOURCE_ID}" source.`
+        `then set fetchTier: "api" on the "${SOURCE_ID}" source.`,
     );
   }
   return key.trim();
@@ -208,7 +206,7 @@ export async function fetchEdmtrainEvents(): Promise<EventItem[]> {
 
   const locations = await apiGet<Array<{ id: number; city: string | null }>>(
     "/locations?state=california&city=san%20diego",
-    key
+    key,
   );
   const sd = locations.find((l) => l.city?.toLowerCase() === "san diego") ?? locations[0];
   if (!sd) throw new Error("[Edmtrain] locations API returned no San Diego location");

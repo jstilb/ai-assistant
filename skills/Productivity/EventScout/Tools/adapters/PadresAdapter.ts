@@ -21,7 +21,7 @@
  *   Padres teamId = 135
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
@@ -30,7 +30,7 @@ import { utcIsoToLaIso } from "../lib/tz.ts";
 // MLB API types (minimal, only fields we use)
 // ============================================================================
 
-export interface MlbTeamRef {
+interface MlbTeamRef {
   id: number;
   name: string;
 }
@@ -41,7 +41,7 @@ export interface MlbTeamSlot {
 
 export interface MlbStatus {
   abstractGameState: string; // "Preview" | "Live" | "Final"
-  detailedState: string;     // "Scheduled" | "In Progress" | "Final" | "Cancelled" | "Postponed" | ...
+  detailedState: string; // "Scheduled" | "In Progress" | "Final" | "Cancelled" | "Postponed" | ...
 }
 
 export interface MlbVenue {
@@ -60,7 +60,7 @@ export interface MlbGame {
   venue: MlbVenue;
 }
 
-export interface MlbScheduleResponse {
+interface MlbScheduleResponse {
   dates: Array<{
     date: string;
     games: MlbGame[];
@@ -98,9 +98,7 @@ function stableId(title: string, startDatetime: string, venue: string): string {
 // Status mapping
 // ============================================================================
 
-function mapStatus(
-  status: MlbStatus
-): "scheduled" | "cancelled" | "postponed" {
+function mapStatus(status: MlbStatus): "scheduled" | "cancelled" | "postponed" {
   const detail = status.detailedState.toLowerCase();
   if (detail.includes("cancel")) return "cancelled";
   if (detail.includes("postpone")) return "postponed";
@@ -114,13 +112,9 @@ function mapStatus(
 
 export function mapGameToEvent(game: MlbGame): EventItem {
   const isPadresHome = game.teams.home.team.id === PADRES_TEAM_ID;
-  const opponent = isPadresHome
-    ? game.teams.away.team.name
-    : game.teams.home.team.name;
+  const opponent = isPadresHome ? game.teams.away.team.name : game.teams.home.team.name;
 
-  const title = isPadresHome
-    ? `Padres vs ${opponent}`
-    : `Padres @ ${opponent}`;
+  const title = isPadresHome ? `Padres vs ${opponent}` : `Padres @ ${opponent}`;
 
   const startDatetime = utcIsoToLaIso(game.gameDate);
   const venueName = game.venue.name;
@@ -156,10 +150,7 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export async function fetchPadresEvents(
-  startDate?: string,
-  endDate?: string
-): Promise<EventItem[]> {
+export async function fetchPadresEvents(startDate?: string, endDate?: string): Promise<EventItem[]> {
   const today = new Date();
   const defaultEnd = new Date(today);
   defaultEnd.setDate(today.getDate() + 45);
@@ -167,14 +158,11 @@ export async function fetchPadresEvents(
   const start = startDate ?? formatDate(today);
   const end = endDate ?? formatDate(defaultEnd);
 
-  const url =
-    `${BASE_URL}?sportId=1&teamId=${PADRES_TEAM_ID}&startDate=${start}&endDate=${end}`;
+  const url = `${BASE_URL}?sportId=1&teamId=${PADRES_TEAM_ID}&startDate=${start}&endDate=${end}`;
 
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(
-      `MLB StatsAPI request failed: ${res.status} ${res.statusText} — ${url}`
-    );
+    throw new Error(`MLB StatsAPI request failed: ${res.status} ${res.statusText} — ${url}`);
   }
 
   const data = (await res.json()) as MlbScheduleResponse;
@@ -196,8 +184,7 @@ export async function fetchPadresEvents(
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("PadresAdapter.ts") ||
-    process.argv[1].endsWith("PadresAdapter"));
+  (process.argv[1].endsWith("PadresAdapter.ts") || process.argv[1].endsWith("PadresAdapter"));
 
 if (IS_SCRIPT) {
   console.log(`\nFetching upcoming Padres games (today → +45 days)...\n`);
@@ -214,9 +201,7 @@ if (IS_SCRIPT) {
     } else {
       console.log("First 3 games:");
       for (const e of preview) {
-        console.log(
-          `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"} (${e.status})`
-        );
+        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"} (${e.status})`);
       }
     }
 

@@ -36,7 +36,7 @@
  * prints a summary. Does NOT write to cache.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso, utcMsToLaParts } from "../lib/tz.ts";
 
@@ -84,8 +84,18 @@ const SITE_CONFIG: Record<string, CtycmsConfig> = {
 const HORIZON_DAYS = 90;
 
 const MONTHS: Record<string, number> = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
 };
 
 // ============================================================================
@@ -135,7 +145,7 @@ function pickDiv(block: string, cls: string): string | undefined {
 // Card parsing — PURE
 // ============================================================================
 
-export interface PicnicCard {
+interface PicnicCard {
   /** Detail path, e.g. "/do/cyanotype" (or absolute URL). */
   href: string;
   /** Last path segment — stable per-event key. */
@@ -158,8 +168,7 @@ export interface PicnicCard {
 export function parseCards(html: string): PicnicCard[] {
   const cards: PicnicCard[] = [];
   const blockRe = /<a\s+class="pcrd"\s+href="([^"]+)"[\s\S]*?<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = blockRe.exec(html)) !== null) {
+  for (const m of html.matchAll(blockRe)) {
     const block = m[0]!;
     const href = m[1]!.trim();
 
@@ -219,7 +228,10 @@ export function classifyPerformanceTitle(title: string): Category {
 
 /** Parse "8:30pm" / "1pm" / "12am" → minutes since midnight, or null. */
 function parseClock(token: string): number | null {
-  const m = token.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  const m = token
+    .trim()
+    .toLowerCase()
+    .match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
   if (!m) return null;
   let h = parseInt(m[1]!, 10);
   const min = m[2] ? parseInt(m[2], 10) : 0;
@@ -268,7 +280,7 @@ export function mapCardToEvent(
   category: Category,
   source: EventSource,
   refMs: number,
-  geocodeAddress: string
+  geocodeAddress: string,
 ): EventItem {
   const origin = new URL(source.url).origin;
   const detailUrl = card.href.startsWith("http") ? card.href : `${origin}${card.href}`;
@@ -288,8 +300,8 @@ export function mapCardToEvent(
   let endDatetime: string | undefined;
   if (!allDay && endMin !== null) {
     // End past midnight (rare): roll to next day.
-    const endDayMs = naiveLaToUtcMs(`${year}-${mm}-${dd}T00:00:00`) +
-      (endMin <= startMin! ? 24 * 60 : 0) * 60_000 + endMin * 60_000;
+    const endDayMs =
+      naiveLaToUtcMs(`${year}-${mm}-${dd}T00:00:00`) + (endMin <= startMin! ? 24 * 60 : 0) * 60_000 + endMin * 60_000;
     endDatetime = utcIsoToLaIso(new Date(endDayMs).toISOString());
   }
 
@@ -353,9 +365,7 @@ async function fetchTag(origin: string, refererUrl: string, ds: string, de: stri
 export async function fetchCtycmsEvents(source: EventSource): Promise<EventItem[]> {
   const cfg = SITE_CONFIG[source.id];
   if (!cfg) {
-    throw new Error(
-      `[CtycmsAdapter] no tag config for source "${source.id}" — add one to SITE_CONFIG`
-    );
+    throw new Error(`[CtycmsAdapter] no tag config for source "${source.id}" — add one to SITE_CONFIG`);
   }
 
   const origin = new URL(source.url).origin;
@@ -389,9 +399,8 @@ export async function fetchCtycmsEvents(source: EventSource): Promise<EventItem[
   // 2) Performance grab-bag, classified by title.
   if (cfg.performanceTi !== undefined) {
     try {
-      applyCards(
-        await fetchTag(origin, refererUrl, ds, de, cfg.performanceTi),
-        (c) => classifyPerformanceTitle(c.title)
+      applyCards(await fetchTag(origin, refererUrl, ds, de, cfg.performanceTi), (c) =>
+        classifyPerformanceTitle(c.title),
       );
     } catch {
       /* non-fatal: base set already populated */

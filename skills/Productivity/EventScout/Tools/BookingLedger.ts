@@ -15,17 +15,12 @@
  * runs that must not write to the production ledger.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { KAYA_HOME } from "./types.ts";
 import type { EventItem } from "./types.ts";
 import type { RankedEvent } from "./Ranker.ts";
-import {
-  BookingLedgerSchema,
-  buildLedgerEntry,
-  selectDueNotices,
-  findExpiredIds,
-} from "./Booking.ts";
+import { BookingLedgerSchema, buildLedgerEntry, selectDueNotices, findExpiredIds } from "./Booking.ts";
 import type { BookingAction, BookingLedger, BookingLedgerEntry, BookingNotice } from "./Booking.ts";
 
 // ============================================================================
@@ -68,7 +63,7 @@ export function readLedger(): BookingLedger {
   return result.data;
 }
 
-export function writeLedger(ledger: BookingLedger): void {
+function writeLedger(ledger: BookingLedger): void {
   const path = ledgerPath();
   ensureDir(path);
   const validated = BookingLedgerSchema.parse({
@@ -134,10 +129,7 @@ export function noteBooking(
 }
 
 /** Flip an entry's status by eventId. Returns false if not found. */
-export function setStatus(
-  eventId: string,
-  status: BookingLedgerEntry["status"],
-): boolean {
+export function setStatus(eventId: string, status: BookingLedgerEntry["status"]): boolean {
   const ledger = readLedger();
   const entry = ledger.entries.find((e) => e.eventId === eventId);
   if (!entry) return false;

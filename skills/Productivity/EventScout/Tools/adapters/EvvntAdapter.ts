@@ -43,7 +43,7 @@
  *   stop when rawEvents is empty or shorter than hitsPerPage.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { EventItemSchema } from "../types.ts";
 import { utcIsoToLaIso, naiveLaToUtcMs } from "../lib/tz.ts";
@@ -63,9 +63,9 @@ export interface EvvntVenue {
 export interface EvvntEvent {
   objectID: string | number;
   title: string;
-  start_date?: string;        // "YYYY-MM-DD"
-  start_time?: string;        // "YYYY-MM-DDTHH:MM:SS±HH:MM" — already offset-aware
-  end_time?: string | null;   // same format, may be null/absent
+  start_date?: string; // "YYYY-MM-DD"
+  start_time?: string; // "YYYY-MM-DDTHH:MM:SS±HH:MM" — already offset-aware
+  end_time?: string | null; // same format, may be null/absent
   venue?: EvvntVenue | null;
   category_name?: string;
   description?: string;
@@ -140,7 +140,7 @@ function parseEvvntDatetime(
   // Attempt 1: offset-aware ISO field (start_time / end_time)
   if (offsetAwareField) {
     const ms = Date.parse(offsetAwareField);
-    if (!isNaN(ms)) {
+    if (!Number.isNaN(ms)) {
       return utcIsoToLaIso(new Date(ms).toISOString());
     }
   }
@@ -148,7 +148,7 @@ function parseEvvntDatetime(
   // Attempt 2: date-only fallback — treat as LA-local midnight
   if (fallbackDateOnly) {
     const naiveMs = naiveLaToUtcMs(fallbackDateOnly);
-    if (!isNaN(naiveMs)) {
+    if (!Number.isNaN(naiveMs)) {
       return utcIsoToLaIso(new Date(naiveMs).toISOString());
     }
   }
@@ -186,14 +186,14 @@ function stripHtml(html: string): string {
 //          "theat" → theater, "film"/"movie" → film, "sport" → sports,
 //          "communit" → community; else → source.categoryHint ?? "other"
 const CATEGORY_MAP: Array<{ pattern: RegExp; category: Category }> = [
-  { pattern: /\bfestival\b/i,                      category: "festival" },
-  { pattern: /\bcomedy\b/i,                         category: "comedy" },
-  { pattern: /\btheat(er|re)\b/i,                   category: "theater" },
-  { pattern: /\bfilm\b|\bcinema\b|\bmovie\b/i,      category: "film" },
-  { pattern: /\bmusic\b|\bconcert\b/i,              category: "music" },
-  { pattern: /\bsports?\b/i,                        category: "sports" },
-  { pattern: /\bcommunit(y|ies)\b/i,                category: "community" },
-  { pattern: /\barts?\b/i,                          category: "arts" },
+  { pattern: /\bfestival\b/i, category: "festival" },
+  { pattern: /\bcomedy\b/i, category: "comedy" },
+  { pattern: /\btheat(er|re)\b/i, category: "theater" },
+  { pattern: /\bfilm\b|\bcinema\b|\bmovie\b/i, category: "film" },
+  { pattern: /\bmusic\b|\bconcert\b/i, category: "music" },
+  { pattern: /\bsports?\b/i, category: "sports" },
+  { pattern: /\bcommunit(y|ies)\b/i, category: "community" },
+  { pattern: /\barts?\b/i, category: "arts" },
   { pattern: /\bconferences?\b|\blectures?\b|\btalks?\b/i, category: "talk" },
 ];
 
@@ -263,14 +263,10 @@ export function mapEvvntEventToItem(raw: EvvntEvent, source: EventSource): Event
   // --- Dates ---
   const startDatetime = parseEvvntDatetime(raw.start_time, raw.start_date);
   if (startDatetime === null) {
-    throw new Error(
-      `[EvvntAdapter] Cannot parse date for event objectID=${raw.objectID} title="${raw.title}"`
-    );
+    throw new Error(`[EvvntAdapter] Cannot parse date for event objectID=${raw.objectID} title="${raw.title}"`);
   }
 
-  const endDatetime = raw.end_time
-    ? parseEvvntDatetime(raw.end_time, undefined) ?? undefined
-    : undefined;
+  const endDatetime = raw.end_time ? (parseEvvntDatetime(raw.end_time, undefined) ?? undefined) : undefined;
 
   // --- Venue ---
   const venueName =
@@ -307,11 +303,8 @@ export function mapEvvntEventToItem(raw: EvvntEvent, source: EventSource): Event
   let description: string | undefined;
   if (raw.description) {
     const stripped = stripHtml(raw.description);
-    description = stripped.length > 0
-      ? stripped.length > 500
-        ? stripped.slice(0, 500).trimEnd() + "…"
-        : stripped
-      : undefined;
+    description =
+      stripped.length > 0 ? (stripped.length > 500 ? stripped.slice(0, 500).trimEnd() + "…" : stripped) : undefined;
   }
 
   // --- Tags: lowercased keywords + artists ---
@@ -355,8 +348,7 @@ export function mapEvvntEventToItem(raw: EvvntEvent, source: EventSource): Event
   const parsed = EventItemSchema.safeParse(item);
   if (!parsed.success) {
     throw new Error(
-      `[EvvntAdapter] EventItem schema validation failed for event objectID=${raw.objectID}: ` +
-      parsed.error.message
+      `[EvvntAdapter] EventItem schema validation failed for event objectID=${raw.objectID}: ` + parsed.error.message,
     );
   }
 
@@ -404,24 +396,20 @@ export async function fetchEvvntEvents(source: EventSource): Promise<EventItem[]
 
     const res = await fetch(url, {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "User-Agent": "EventScout/1.0 (kaya-bot)",
       },
     });
 
     if (!res.ok) {
-      throw new Error(
-        `[EvvntAdapter] HTTP ${res.status} ${res.statusText} from ${url}`
-      );
+      throw new Error(`[EvvntAdapter] HTTP ${res.status} ${res.statusText} from ${url}`);
     }
 
     let data: EvvntResponse;
     try {
       data = (await res.json()) as EvvntResponse;
     } catch (err) {
-      throw new Error(
-        `[EvvntAdapter] Failed to parse JSON from ${url}: ${(err as Error).message}`
-      );
+      throw new Error(`[EvvntAdapter] Failed to parse JSON from ${url}: ${(err as Error).message}`);
     }
 
     const events = data.rawEvents ?? [];
@@ -437,9 +425,7 @@ export async function fetchEvvntEvents(source: EventSource): Promise<EventItem[]
           allItems.push(item);
         }
       } catch (err) {
-        console.warn(
-          `[EvvntAdapter] Skipping event objectID=${raw.objectID}: ${(err as Error).message}`
-        );
+        console.warn(`[EvvntAdapter] Skipping event objectID=${raw.objectID}: ${(err as Error).message}`);
       }
     }
 
@@ -449,7 +435,7 @@ export async function fetchEvvntEvents(source: EventSource): Promise<EventItem[]
     // Safety bound: if we reach here on the last iteration, log loudly
     if (page === MAX_PAGES_SAFETY - 1) {
       console.log(
-        `[EvvntAdapter] safety bound ${MAX_PAGES_SAFETY} hit for source "${source.id}" — stopping (coverage may be incomplete)`
+        `[EvvntAdapter] safety bound ${MAX_PAGES_SAFETY} hit for source "${source.id}" — stopping (coverage may be incomplete)`,
       );
     }
   }
@@ -464,15 +450,14 @@ export async function fetchEvvntEvents(source: EventSource): Promise<EventItem[]
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("EvvntAdapter.ts") ||
-    process.argv[1].endsWith("EvvntAdapter"));
+  (process.argv[1].endsWith("EvvntAdapter.ts") || process.argv[1].endsWith("EvvntAdapter"));
 
 if (IS_SCRIPT) {
   const publisherId = process.env["EVVNT_PUBLISHER_ID"] ?? "11515";
   const sourceUrl =
     process.env["EVVNT_SOURCE_URL"] ??
     `https://discovery.evvnt.com/api/publisher/${publisherId}/home_page_events` +
-    `?hitsPerPage=${HITS_PER_PAGE}&multipleEventInstances=true&page=0&publisher_id=${publisherId}`;
+      `?hitsPerPage=${HITS_PER_PAGE}&multipleEventInstances=true&page=0&publisher_id=${publisherId}`;
 
   const testSource: EventSource = {
     id: `evvnt-${publisherId}`,
@@ -497,9 +482,7 @@ if (IS_SCRIPT) {
     } else {
       console.log("First 5 events:");
       for (const e of preview) {
-        console.log(
-          `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`
-        );
+        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`);
       }
     }
 

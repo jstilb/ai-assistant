@@ -33,9 +33,9 @@
  *   real cache during tests or ad-hoc runs.
  */
 
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { fetchPadresEvents } from "./adapters/PadresAdapter.ts";
 import { fetchSdfcEvents } from "./adapters/SdfcAdapter.ts";
 import { fetchPike13Events } from "./adapters/Pike13Adapter.ts";
@@ -149,8 +149,14 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
     }, timeoutMs);
 
     promise.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (err) => { clearTimeout(timer); reject(err); },
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
     );
   });
 }
@@ -185,9 +191,7 @@ export async function ingestSource(source: EventSource): Promise<EventItem[]> {
   const events = withinHorizon(rawEvents, new Date(), days);
   const dropped = rawEvents.length - events.length;
   if (dropped > 0) {
-    console.log(
-      `  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`
-    );
+    console.log(`  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`);
   }
   return events;
 }
@@ -286,9 +290,7 @@ async function fetchRawEvents(source: EventSource): Promise<EventItem[]> {
     }
 
     case "shopify":
-      throw new Error(
-        `[Ingest] fetchTier "shopify" for source "${source.id}" is not yet implemented`
-      );
+      throw new Error(`[Ingest] fetchTier "shopify" for source "${source.id}" is not yet implemented`);
 
     default: {
       // TypeScript exhaustiveness guard
@@ -373,9 +375,7 @@ async function ingestAllCore(
   await runWithConcurrency(enabledSources, concurrencyLimit, async (source) => {
     try {
       // Use injected adapter if provided, otherwise dispatch normally
-      const fetchFn = adapters?.[source.id]
-        ? adapters[source.id]!
-        : () => ingestSource(source);
+      const fetchFn = adapters?.[source.id] ? adapters[source.id]! : () => ingestSource(source);
 
       const rawEvents = await withTimeout(fetchFn(), timeoutMs, source.id);
 
@@ -388,9 +388,7 @@ async function ingestAllCore(
       const events = withinHorizon(rawEvents, new Date(), days);
       const dropped = rawEvents.length - events.length;
       if (dropped > 0) {
-        console.log(
-          `  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`
-        );
+        console.log(`  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`);
       }
 
       perSource[source.id] = events.length;
@@ -408,9 +406,7 @@ async function ingestAllCore(
           await trackApifySourceHealth(
             source.id,
             source.url,
-            events.length === 0
-              ? { kind: "zero-result" }
-              : { kind: "success", count: events.length },
+            events.length === 0 ? { kind: "zero-result" } : { kind: "success", count: events.length },
           );
         } catch (healthErr) {
           console.error(
@@ -445,9 +441,7 @@ async function ingestAllCore(
   // actual list this run is ingesting — respects test injection) rather than
   // re-reading sources.json, so ingestAllWithAdapters' test-supplied sources
   // are honored exactly.
-  const apiTierSourceIds = new Set(
-    allSources.filter((s) => s.fetchTier === "api").map((s) => s.id)
-  );
+  const apiTierSourceIds = new Set(allSources.filter((s) => s.fetchTier === "api").map((s) => s.id));
 
   const beforeDedup = allEvents.length;
   const merged = dedupeAndMerge(allEvents, apiTierSourceIds);
@@ -487,8 +481,7 @@ async function ingestAllCore(
 const IS_SCRIPT =
   typeof process !== "undefined" &&
   process.argv[1] != null &&
-  (process.argv[1].endsWith("Ingest.ts") ||
-    process.argv[1].endsWith("Ingest"));
+  (process.argv[1].endsWith("Ingest.ts") || process.argv[1].endsWith("Ingest"));
 
 if (IS_SCRIPT) {
   console.log("\nEventScout — Ingest Pipeline (Slice 3)\n");

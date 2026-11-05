@@ -33,13 +33,13 @@
  *
  * bun:test module.
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/ingest.test.ts
+ *   bun test skills/Productivity/EventScout/tests/ingest.test.ts
  */
 
 import { test, describe, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { ingestAllWithAdapters } from "../Tools/Ingest.ts";
 import type { EventSource, EventItem } from "../Tools/types.ts";
 
@@ -56,7 +56,7 @@ function assert(condition: boolean, message: string): void {
 function assertEq<T>(actual: T, expected: T, message: string): void {
   assert(
     JSON.stringify(actual) === JSON.stringify(expected),
-    `${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`
+    `${message}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`,
   );
 }
 
@@ -90,18 +90,18 @@ const EVENT_NAMES: Record<string, string[]> = {
   "ok-2": ["Food Festival Downtown", "Beer Garden Social"],
   "fast-1": ["Marathon Running Event"],
   "fast-2": ["Farmers Market Sunday"],
-  "good": ["Symphony Hall Concert"],
-  "bad": ["Never Gets Created"],
-  "x": ["Theatre Production Opening", "Dance Recital Annual"],
-  "y": ["Sports Championship Final"],
+  good: ["Symphony Hall Concert"],
+  bad: ["Never Gets Created"],
+  x: ["Theatre Production Opening", "Dance Recital Annual"],
+  y: ["Sports Championship Final"],
   "empty-source": [],
-  "s1": ["Photography Exhibition Show"],
-  "s2": ["Blocked Event"],
-  "s3": [],
-  "s4": ["Craft Beer Festival", "Wine Tasting Event"],
-  "s5": ["Parse Failed Event"],
-  "active": ["Community Parade Annual"],
-  "disabled": ["Should Not Appear"],
+  s1: ["Photography Exhibition Show"],
+  s2: ["Blocked Event"],
+  s3: [],
+  s4: ["Craft Beer Festival", "Wine Tasting Event"],
+  s5: ["Parse Failed Event"],
+  active: ["Community Parade Annual"],
+  disabled: ["Should Not Appear"],
 };
 
 function makeEvent(sourceId: string, n: number): EventItem {
@@ -130,11 +130,7 @@ function makeEvent(sourceId: string, n: number): EventItem {
 // ============================================================================
 
 test("Test 1: all-success — 3 sources all yield events", async () => {
-  const sources = [
-    makeSource("source-a"),
-    makeSource("source-b"),
-    makeSource("source-c"),
-  ];
+  const sources = [makeSource("source-a"), makeSource("source-b"), makeSource("source-c")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "source-a": async () => [makeEvent("source-a", 1), makeEvent("source-a", 2)],
@@ -158,15 +154,13 @@ test("Test 1: all-success — 3 sources all yield events", async () => {
 // ============================================================================
 
 test("Test 2: one source throws — others continue, failure recorded", async () => {
-  const sources = [
-    makeSource("ok-1"),
-    makeSource("thrower"),
-    makeSource("ok-2"),
-  ];
+  const sources = [makeSource("ok-1"), makeSource("thrower"), makeSource("ok-2")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "ok-1": async () => [makeEvent("ok-1", 1)],
-    "thrower": async () => { throw new Error("HTTP 403 Forbidden"); },
+    thrower: async () => {
+      throw new Error("HTTP 403 Forbidden");
+    },
     "ok-2": async () => [makeEvent("ok-2", 1), makeEvent("ok-2", 2)],
   };
 
@@ -177,12 +171,9 @@ test("Test 2: one source throws — others continue, failure recorded", async ()
   assertEq(result.perSource["thrower"], 0, "thrower: 0 events (failed)");
   assert(
     typeof result.failureReasons?.["thrower"] === "string" && result.failureReasons["thrower"].length > 0,
-    "thrower: failureReason is a non-empty string"
+    "thrower: failureReason is a non-empty string",
   );
-  assert(
-    result.failureReasons?.["thrower"]?.includes("403") ?? false,
-    "thrower: failureReason contains '403'"
-  );
+  assert(result.failureReasons?.["thrower"]?.includes("403") ?? false, "thrower: failureReason contains '403'");
 });
 
 // ============================================================================
@@ -190,11 +181,7 @@ test("Test 2: one source throws — others continue, failure recorded", async ()
 // ============================================================================
 
 test("Test 3: one source times out — others continue, timeout recorded", async () => {
-  const sources = [
-    makeSource("fast-1"),
-    makeSource("slow-hang"),
-    makeSource("fast-2"),
-  ];
+  const sources = [makeSource("fast-1"), makeSource("slow-hang"), makeSource("fast-2")];
 
   // The slow source never resolves within the 100ms test timeout
   const neverResolves = new Promise<EventItem[]>(() => {
@@ -216,13 +203,10 @@ test("Test 3: one source times out — others continue, timeout recorded", async
   assertEq(result.perSource["fast-1"], 1, "fast-1: 1 event despite hang");
   assertEq(result.perSource["fast-2"], 1, "fast-2: 1 event despite hang");
   assertEq(result.perSource["slow-hang"], 0, "slow-hang: 0 events (timed out)");
-  assert(
-    typeof result.failureReasons?.["slow-hang"] === "string",
-    "slow-hang: failureReason is a string"
-  );
+  assert(typeof result.failureReasons?.["slow-hang"] === "string", "slow-hang: failureReason is a string");
   assert(
     result.failureReasons?.["slow-hang"]?.toLowerCase().includes("timeout") ?? false,
-    "slow-hang: failureReason contains 'timeout'"
+    "slow-hang: failureReason contains 'timeout'",
   );
 });
 
@@ -248,30 +232,25 @@ test("Test 4: source returns 0 events — not a failure, count = 0", async () =>
 // ============================================================================
 
 test("Test 5: no silent drop — all enabled sources appear in perSource", async () => {
-  const sources = [
-    makeSource("s1"),
-    makeSource("s2"),
-    makeSource("s3"),
-    makeSource("s4"),
-    makeSource("s5"),
-  ];
+  const sources = [makeSource("s1"), makeSource("s2"), makeSource("s3"), makeSource("s4"), makeSource("s5")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
-    "s1": async () => [makeEvent("s1", 1)],
-    "s2": async () => { throw new Error("network error"); },
-    "s3": async () => [],
-    "s4": async () => [makeEvent("s4", 1), makeEvent("s4", 2)],
-    "s5": async () => { throw new Error("parse error"); },
+    s1: async () => [makeEvent("s1", 1)],
+    s2: async () => {
+      throw new Error("network error");
+    },
+    s3: async () => [],
+    s4: async () => [makeEvent("s4", 1), makeEvent("s4", 2)],
+    s5: async () => {
+      throw new Error("parse error");
+    },
   };
 
   const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
 
   const reportedIds = Object.keys(result.perSource);
   for (const source of sources) {
-    assert(
-      reportedIds.includes(source.id),
-      `${source.id} appears in perSource (no silent drop)`
-    );
+    assert(reportedIds.includes(source.id), `${source.id} appears in perSource (no silent drop)`);
   }
   assert(reportedIds.length === 5, `perSource has exactly 5 entries (got ${reportedIds.length})`);
 });
@@ -281,23 +260,19 @@ test("Test 5: no silent drop — all enabled sources appear in perSource", async
 // ============================================================================
 
 test("Test 6: failureReasons only set for failed sources, not succeeded ones", async () => {
-  const sources = [
-    makeSource("good"),
-    makeSource("bad"),
-  ];
+  const sources = [makeSource("good"), makeSource("bad")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
-    "good": async () => [makeEvent("good", 1)],
-    "bad": async () => { throw new Error("connection refused"); },
+    good: async () => [makeEvent("good", 1)],
+    bad: async () => {
+      throw new Error("connection refused");
+    },
   };
 
   const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
 
   assert(!result.failureReasons?.["good"], "good: no failure reason (succeeded)");
-  assert(
-    typeof result.failureReasons?.["bad"] === "string",
-    "bad: failureReason is a string"
-  );
+  assert(typeof result.failureReasons?.["bad"] === "string", "bad: failureReason is a string");
 });
 
 // ============================================================================
@@ -305,14 +280,11 @@ test("Test 6: failureReasons only set for failed sources, not succeeded ones", a
 // ============================================================================
 
 test("Test 7: written count = total events (no dedup in stub scenario)", async () => {
-  const sources = [
-    makeSource("x"),
-    makeSource("y"),
-  ];
+  const sources = [makeSource("x"), makeSource("y")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
-    "x": async () => [makeEvent("x", 1), makeEvent("x", 2)],
-    "y": async () => [makeEvent("y", 1)],
+    x: async () => [makeEvent("x", 1), makeEvent("x", 2)],
+    y: async () => [makeEvent("y", 1)],
   };
 
   const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
@@ -327,14 +299,11 @@ test("Test 7: written count = total events (no dedup in stub scenario)", async (
 // ============================================================================
 
 test("Test 8: disabled source is skipped — not in perSource", async () => {
-  const sources = [
-    makeSource("active"),
-    makeSource("disabled", { enabled: false }),
-  ];
+  const sources = [makeSource("active"), makeSource("disabled", { enabled: false })];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
-    "active": async () => [makeEvent("active", 1)],
-    "disabled": async () => [makeEvent("disabled", 1)], // would work but should be skipped
+    active: async () => [makeEvent("active", 1)],
+    disabled: async () => [makeEvent("disabled", 1)], // would work but should be skipped
   };
 
   const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
@@ -388,7 +357,7 @@ test("Test 9 (Slice 8): concurrency cap respected — max in-flight bounded AND 
   // All 6 sources must have been attempted
   assert(
     sourceIds.every((id) => id in result.perSource),
-    "all 6 sources appear in perSource"
+    "all 6 sources appear in perSource",
   );
 });
 
@@ -397,16 +366,13 @@ test("Test 9 (Slice 8): concurrency cap respected — max in-flight bounded AND 
 // ============================================================================
 
 test("Test 10 (Slice 8): failure isolation — one throws, others succeed, run completes", async () => {
-  const sources = [
-    makeSource("fi-good-1"),
-    makeSource("fi-bad"),
-    makeSource("fi-good-2"),
-    makeSource("fi-good-3"),
-  ];
+  const sources = [makeSource("fi-good-1"), makeSource("fi-bad"), makeSource("fi-good-2"), makeSource("fi-good-3")];
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "fi-good-1": async () => [makeEvent("fi-good-1", 1)],
-    "fi-bad":    async () => { throw new Error("simulated failure"); },
+    "fi-bad": async () => {
+      throw new Error("simulated failure");
+    },
     "fi-good-2": async () => [makeEvent("fi-good-2", 1)],
     "fi-good-3": async () => [makeEvent("fi-good-3", 1)],
   };
@@ -421,9 +387,8 @@ test("Test 10 (Slice 8): failure isolation — one throws, others succeed, run c
   assertEq(result.perSource["fi-good-3"], 1, "fi-good-3: 1 event despite fi-bad failing");
   assertEq(result.perSource["fi-bad"], 0, "fi-bad: 0 events (threw)");
   assert(
-    typeof result.failureReasons?.["fi-bad"] === "string" &&
-    result.failureReasons["fi-bad"].includes("simulated"),
-    "fi-bad: failureReason records the error"
+    typeof result.failureReasons?.["fi-bad"] === "string" && result.failureReasons["fi-bad"].includes("simulated"),
+    "fi-bad: failureReason records the error",
   );
   assert(!result.failureReasons?.["fi-good-1"], "fi-good-1: no failureReason");
 });
@@ -465,17 +430,15 @@ test("Test 11 (Slice 8): each adapter called exactly once — no double-fetch", 
 // ============================================================================
 
 test("Test 12 (Slice 8): timeout isolation — one hangs, others complete under concurrency", async () => {
-  const sources = [
-    makeSource("ti-fast-1"),
-    makeSource("ti-hang"),
-    makeSource("ti-fast-2"),
-  ];
+  const sources = [makeSource("ti-fast-1"), makeSource("ti-hang"), makeSource("ti-fast-2")];
 
-  const neverResolves = new Promise<EventItem[]>(() => { /* never */ });
+  const neverResolves = new Promise<EventItem[]>(() => {
+    /* never */
+  });
 
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "ti-fast-1": async () => [makeEvent("ti-fast-1", 1)],
-    "ti-hang":   () => neverResolves,
+    "ti-hang": () => neverResolves,
     "ti-fast-2": async () => [makeEvent("ti-fast-2", 1)],
   };
 
@@ -490,7 +453,7 @@ test("Test 12 (Slice 8): timeout isolation — one hangs, others complete under 
   assertEq(result.perSource["ti-hang"], 0, "ti-hang: 0 events (timed out)");
   assert(
     result.failureReasons?.["ti-hang"]?.toLowerCase().includes("timeout") ?? false,
-    "ti-hang: failureReason contains 'timeout'"
+    "ti-hang: failureReason contains 'timeout'",
   );
 });
 
@@ -545,7 +508,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
       assertEq(result.perSource["apify-dead"], 0, `run ${i + 1}: apify-dead still reports 0 events`);
       assert(
         (result.failureReasons?.["apify-dead"] ?? "").includes("TIMED-OUT"),
-        `run ${i + 1}: apify-dead failureReason still populated (unchanged existing behavior)`
+        `run ${i + 1}: apify-dead failureReason still populated (unchanged existing behavior)`,
       );
     }
 
@@ -553,7 +516,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
       (l) =>
         l["source"] === "EventScout:ApifyIngest" &&
         (l["context"] as Record<string, unknown>)["sourceId"] === "apify-dead" &&
-        (l["context"] as Record<string, unknown>)["channel"] === "hard-fail"
+        (l["context"] as Record<string, unknown>)["channel"] === "hard-fail",
     );
     assertEq(lines.length, 3, "3 hard-fail forensic entries recorded, one per run");
     const streaks = lines.map((l) => (l["context"] as Record<string, unknown>)["streak"]);
@@ -570,7 +533,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
     assertEq(result.perSource["apify-healthy"], 1, "apify-healthy: 1 event, unchanged existing behavior");
 
     const lines = readFailureLogLines().filter(
-      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "apify-healthy"
+      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "apify-healthy",
     );
     assertEq(lines.length, 0, "a clean success writes no failure-log entry at all");
   });
@@ -586,7 +549,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
       assertEq(result.perSource["apify-quiet"], 0, `run ${i + 1}: 0 events`);
       assert(
         result.failureReasons?.["apify-quiet"] === undefined,
-        `run ${i + 1}: 0 events with no exception is NOT a failureReason (existing scenario-4 invariant, unchanged)`
+        `run ${i + 1}: 0 events with no exception is NOT a failureReason (existing scenario-4 invariant, unchanged)`,
       );
     }
 
@@ -594,7 +557,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
       (l) =>
         l["source"] === "EventScout:ApifyIngest" &&
         (l["context"] as Record<string, unknown>)["sourceId"] === "apify-quiet" &&
-        (l["context"] as Record<string, unknown>)["channel"] === "zero-result"
+        (l["context"] as Record<string, unknown>)["channel"] === "zero-result",
     );
     assertEq(lines.length, 3, "3 zero-result forensic entries recorded, one per run");
     assertEq(lines[0]!["tier"], undefined, "run 1: tier 'log' (field omitted)");
@@ -613,7 +576,7 @@ describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
     await ingestAllWithAdapters([htmlLlmSource], adapters, { skipCacheWrite: true });
 
     const lines = readFailureLogLines().filter(
-      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "not-apify"
+      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "not-apify",
     );
     assertEq(lines.length, 0, "a non-apify-tier failure never reaches FailureLog via this new wiring");
   });

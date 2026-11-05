@@ -43,17 +43,10 @@ function toRad(deg: number): number {
 /**
  * Haversine great-circle distance in miles between two lat/lng points.
  */
-function haversineMiles(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-): number {
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return EARTH_RADIUS_MILES * 2 * Math.asin(Math.sqrt(a));
 }
 
@@ -74,7 +67,7 @@ type TimeOfDay = "morning" | "afternoon" | "evening" | "late";
  */
 function inTimeOfDayBand(startDatetime: string, band: TimeOfDay): boolean {
   const utcMs = new Date(startDatetime).getTime();
-  if (isNaN(utcMs)) return false;
+  if (Number.isNaN(utcMs)) return false;
   const { hour } = utcMsToLaParts(utcMs);
 
   switch (band) {
@@ -99,10 +92,7 @@ function inTimeOfDayBand(startDatetime: string, band: TimeOfDay): boolean {
  * Each constraint is AND-gated (every active constraint must pass).
  * Result is sorted by startDatetime ascending.
  */
-export function filterEvents(
-  events: EventItem[],
-  c: QueryContext
-): EventItem[] {
+export function filterEvents(events: EventItem[], c: QueryContext): EventItem[] {
   let result = events;
 
   // ---- window filter --------------------------------------------------------
@@ -169,15 +159,11 @@ export function filterEvents(
   // ---- timeOfDay filter ---------------------------------------------------
   if (c.timeOfDay && c.timeOfDay.length > 0) {
     const bands = c.timeOfDay as TimeOfDay[];
-    result = result.filter((e) =>
-      bands.some((band) => inTimeOfDayBand(e.startDatetime, band))
-    );
+    result = result.filter((e) => bands.some((band) => inTimeOfDayBand(e.startDatetime, band)));
   }
 
   // ---- sort ascending by startDatetime ------------------------------------
-  result = result.slice().sort(
-    (a, b) => new Date(a.startDatetime).getTime() - new Date(b.startDatetime).getTime()
-  );
+  result = result.slice().sort((a, b) => new Date(a.startDatetime).getTime() - new Date(b.startDatetime).getTime());
 
   return result;
 }

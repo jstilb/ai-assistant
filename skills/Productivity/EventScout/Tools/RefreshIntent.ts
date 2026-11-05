@@ -65,14 +65,8 @@ function isCategoryRelevant(source: EventSource, constraints: CategoryConstraint
  *
  * PURE function — deterministic for the same inputs.
  */
-export function selectRefreshSources({
-  refresh,
-  sources,
-  constraints,
-}: SelectRefreshSourcesArgs): EventSource[] {
+export function selectRefreshSources({ refresh, sources, constraints }: SelectRefreshSourcesArgs): EventSource[] {
   if (!refresh) return [];
 
-  return sources.filter(
-    (s) => s.enabled && isCategoryRelevant(s, constraints)
-  );
+  return sources.filter((s) => s.enabled && isCategoryRelevant(s, constraints));
 }

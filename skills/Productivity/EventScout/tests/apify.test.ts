@@ -19,7 +19,7 @@
  *
  * bun:test module.
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/apify.test.ts
+ *   bun test skills/Productivity/EventScout/tests/apify.test.ts
  */
 
 import { test } from "bun:test";
@@ -39,7 +39,7 @@ function assert(condition: boolean, message: string): void {
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   assert(
     JSON.stringify(actual) === JSON.stringify(expected),
-    `${message}\n         expected: ${JSON.stringify(expected)}\n         actual:   ${JSON.stringify(actual)}`
+    `${message}\n         expected: ${JSON.stringify(expected)}\n         actual:   ${JSON.stringify(actual)}`,
   );
 }
 
@@ -57,10 +57,7 @@ const input = buildCrawlerInput(TEST_URL);
 test("startUrls shape", () => {
   const startUrls = input["startUrls"];
   assert(Array.isArray(startUrls), "startUrls is an array");
-  assert(
-    Array.isArray(startUrls) && startUrls.length === 1,
-    "startUrls has exactly one entry"
-  );
+  assert(Array.isArray(startUrls) && startUrls.length === 1, "startUrls has exactly one entry");
   if (Array.isArray(startUrls) && startUrls.length === 1) {
     const entry = startUrls[0] as Record<string, unknown>;
     assertEqual(entry["url"], TEST_URL, "startUrls[0].url matches input url");
@@ -70,15 +67,15 @@ test("startUrls shape", () => {
 });
 
 test("maxCrawlPages defaults to APIFY_DEFAULT_CRAWL_PAGES", () => {
-  assertEqual(input["maxCrawlPages"], APIFY_DEFAULT_CRAWL_PAGES, `maxCrawlPages is APIFY_DEFAULT_CRAWL_PAGES (${APIFY_DEFAULT_CRAWL_PAGES})`);
+  assertEqual(
+    input["maxCrawlPages"],
+    APIFY_DEFAULT_CRAWL_PAGES,
+    `maxCrawlPages is APIFY_DEFAULT_CRAWL_PAGES (${APIFY_DEFAULT_CRAWL_PAGES})`,
+  );
 });
 
 test("crawlerType is playwright:firefox", () => {
-  assertEqual(
-    input["crawlerType"],
-    "playwright:firefox",
-    'crawlerType is "playwright:firefox"'
-  );
+  assertEqual(input["crawlerType"], "playwright:firefox", 'crawlerType is "playwright:firefox"');
 });
 
 test("saveMarkdown is true", () => {
@@ -87,10 +84,7 @@ test("saveMarkdown is true", () => {
 
 test("proxyConfiguration uses Apify residential proxy pool", () => {
   const proxyConfig = input["proxyConfiguration"];
-  assert(
-    typeof proxyConfig === "object" && proxyConfig !== null,
-    "proxyConfiguration is an object"
-  );
+  assert(typeof proxyConfig === "object" && proxyConfig !== null, "proxyConfiguration is an object");
   if (typeof proxyConfig === "object" && proxyConfig !== null) {
     const pc = proxyConfig as Record<string, unknown>;
     assertEqual(pc["useApifyProxy"], true, "proxyConfiguration.useApifyProxy is true");
@@ -118,7 +112,7 @@ test("dynamic-rendering params required for AJAX-hydrated SPAs", () => {
   assertEqual(
     input["htmlTransformer"],
     "none",
-    'htmlTransformer is "none" (preserve title anchors; readableText strips them)'
+    'htmlTransformer is "none" (preserve title anchors; readableText strips them)',
   );
 });
 
@@ -133,16 +127,8 @@ test("URL threading — different URLs produce different startUrls", () => {
     assert(entry2["url"] !== TEST_URL, "second url differs from first");
   }
   // Other fields stay identical
-  assertEqual(
-    input2["crawlerType"],
-    input["crawlerType"],
-    "crawlerType is stable across calls"
-  );
-  assertEqual(
-    input2["maxCrawlPages"],
-    input["maxCrawlPages"],
-    "maxCrawlPages is stable across calls"
-  );
+  assertEqual(input2["crawlerType"], input["crawlerType"], "crawlerType is stable across calls");
+  assertEqual(input2["maxCrawlPages"], input["maxCrawlPages"], "maxCrawlPages is stable across calls");
 });
 
 // ============================================================================
@@ -168,17 +154,13 @@ test("Slice 6: buildCrawlerInput with no override uses APIFY_DEFAULT_CRAWL_PAGES
   assertEqual(
     inputDefault["maxCrawlPages"],
     APIFY_DEFAULT_CRAWL_PAGES,
-    `default maxCrawlPages equals APIFY_DEFAULT_CRAWL_PAGES (${APIFY_DEFAULT_CRAWL_PAGES})`
+    `default maxCrawlPages equals APIFY_DEFAULT_CRAWL_PAGES (${APIFY_DEFAULT_CRAWL_PAGES})`,
   );
 });
 
 test("Slice 6: buildCrawlerInput with explicit maxPages override", () => {
   const inputOverride = buildCrawlerInput(TEST_URL, 10);
-  assertEqual(
-    inputOverride["maxCrawlPages"],
-    10,
-    "buildCrawlerInput(url, 10) → maxCrawlPages = 10"
-  );
+  assertEqual(inputOverride["maxCrawlPages"], 10, "buildCrawlerInput(url, 10) → maxCrawlPages = 10");
 });
 
 test("Slice 6: explicit maxPages=1 is a backwards-compatible override", () => {
@@ -200,9 +182,5 @@ test("Slice 6: source.paginate.pages threads to maxCrawlPages", () => {
   };
   const pages = sourceWithPaginate.paginate?.pages ?? APIFY_DEFAULT_CRAWL_PAGES;
   const inputFromSource = buildCrawlerInput(sourceWithPaginate.url, pages);
-  assertEqual(
-    inputFromSource["maxCrawlPages"],
-    7,
-    "source.paginate.pages=7 threads to maxCrawlPages=7"
-  );
+  assertEqual(inputFromSource["maxCrawlPages"], 7, "source.paginate.pages=7 threads to maxCrawlPages=7");
 });

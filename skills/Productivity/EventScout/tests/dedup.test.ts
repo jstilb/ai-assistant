@@ -10,7 +10,7 @@
  *   (c) Padres sports event + RSS news event → no false merge (stay 2).
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/dedup.test.ts
+ *   bun test skills/Productivity/EventScout/tests/dedup.test.ts
  */
 
 import { test } from "bun:test";
@@ -31,7 +31,9 @@ function assert(condition: boolean, message: string): void {
 // Fixture helpers
 // ============================================================================
 
-function makeEvent(overrides: Partial<EventItem> & Pick<EventItem, "id" | "title" | "startDatetime" | "sources">): EventItem {
+function makeEvent(
+  overrides: Partial<EventItem> & Pick<EventItem, "id" | "title" | "startDatetime" | "sources">,
+): EventItem {
   return {
     allDay: false,
     category: "music",
@@ -121,21 +123,21 @@ test("(a1) Two near-dup same-day events collapse to 1", () => {
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B]);
   assert(
     result.length === 1,
-    `Expected 1 merged event, got ${result.length}: ${JSON.stringify(result.map(e => e.title))}`
+    `Expected 1 merged event, got ${result.length}: ${JSON.stringify(result.map((e) => e.title))}`,
   );
 });
 
 test("(a2) Merged event sources[] is unioned (length 2)", () => {
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B]);
   assert(result.length === 1, `Expected 1 event, got ${result.length}`);
-  const sourceIds = result[0].sources.map(s => s.sourceId).sort();
+  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
   assert(
     sourceIds.length === 2,
-    `Expected 2 sources after union, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`
+    `Expected 2 sources after union, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`,
   );
   assert(
     sourceIds.includes("songkick") && sourceIds.includes("bandsintown"),
-    `Expected both "songkick" and "bandsintown", got ${JSON.stringify(sourceIds)}`
+    `Expected both "songkick" and "bandsintown", got ${JSON.stringify(sourceIds)}`,
   );
 });
 
@@ -144,8 +146,8 @@ test("(a3) Merged event keeps richest fields (description from TYCHO_B)", () => 
   assert(result.length === 1, `Expected 1 event`);
   // TYCHO_B has description; TYCHO_A does not → merged record must have it
   assert(
-    result[0].description === "Tycho live at The Observatory North Park",
-    `Expected description from TYCHO_B, got "${result[0].description}"`
+    result[0]!.description === "Tycho live at The Observatory North Park",
+    `Expected description from TYCHO_B, got "${result[0]!.description}"`,
   );
 });
 
@@ -153,18 +155,18 @@ test("(a4) Merged event keeps ticketUrl from TYCHO_B (TYCHO_A had none)", () => 
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B]);
   assert(result.length === 1, `Expected 1 event`);
   assert(
-    result[0].ticketUrl === "https://tickets.example.com/tycho",
-    `Expected ticketUrl from TYCHO_B, got "${result[0].ticketUrl}"`
+    result[0]!.ticketUrl === "https://tickets.example.com/tycho",
+    `Expected ticketUrl from TYCHO_B, got "${result[0]!.ticketUrl}"`,
   );
 });
 
 test("(a5) Merge is commutative — order [B, A] gives same source union", () => {
   const result = dedupeAndMerge([TYCHO_B, TYCHO_A]);
   assert(result.length === 1, `Expected 1 event`);
-  const sourceIds = result[0].sources.map(s => s.sourceId).sort();
+  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
   assert(
     sourceIds.length === 2 && sourceIds.includes("songkick") && sourceIds.includes("bandsintown"),
-    `Sources not unioned correctly: ${JSON.stringify(sourceIds)}`
+    `Sources not unioned correctly: ${JSON.stringify(sourceIds)}`,
   );
 });
 
@@ -173,7 +175,7 @@ test("(b1) Two different events (different titles + days) stay separate — coun
   const result = dedupeAndMerge([JAZZ_NIGHT, COMEDY_SHOW]);
   assert(
     result.length === 2,
-    `Expected 2 distinct events, got ${result.length}: ${JSON.stringify(result.map(e => e.title))}`
+    `Expected 2 distinct events, got ${result.length}: ${JSON.stringify(result.map((e) => e.title))}`,
   );
 });
 
@@ -183,7 +185,7 @@ test("(b2) Same day but very different titles do NOT merge", () => {
   const result = dedupeAndMerge([jazzSameDay, COMEDY_SHOW]);
   assert(
     result.length === 2,
-    `Expected 2 distinct events on same day, got ${result.length}: ${JSON.stringify(result.map(e => e.title))}`
+    `Expected 2 distinct events on same day, got ${result.length}: ${JSON.stringify(result.map((e) => e.title))}`,
   );
 });
 
@@ -192,7 +194,7 @@ test("(c1) Padres sports event + Press Club event on same day stay separate — 
   const result = dedupeAndMerge([PADRES_GAME, PRESS_EVENT]);
   assert(
     result.length === 2,
-    `False merge detected! Expected 2 events, got ${result.length}: ${JSON.stringify(result.map(e => e.title))}`
+    `False merge detected! Expected 2 events, got ${result.length}: ${JSON.stringify(result.map((e) => e.title))}`,
   );
 });
 
@@ -201,7 +203,7 @@ test("(c2) Four-event mix: 2 near-dups + 2 distinct → 3 total", () => {
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B, JAZZ_NIGHT, PADRES_GAME]);
   assert(
     result.length === 3,
-    `Expected 3 events after merge, got ${result.length}: ${JSON.stringify(result.map(e => e.title))}`
+    `Expected 3 events after merge, got ${result.length}: ${JSON.stringify(result.map((e) => e.title))}`,
   );
 });
 
@@ -213,7 +215,7 @@ test("(c3) Empty input returns empty array", () => {
 test("(c4) Single event passthrough unchanged", () => {
   const result = dedupeAndMerge([JAZZ_NIGHT]);
   assert(result.length === 1, `Expected 1 event, got ${result.length}`);
-  assert(result[0].id === JAZZ_NIGHT.id, `Event id changed`);
+  assert(result[0]!.id === JAZZ_NIGHT.id, `Event id changed`);
 });
 
 // ============================================================================
@@ -240,10 +242,7 @@ test("(r-a) Mulaney vs Chappelle @ same venue same day → stay separate", () =>
     sources: [{ sourceId: "comedy-store-2", url: "https://thecomedystore.com/chappelle" }],
   });
   const result = dedupeAndMerge([mulaney, chappelle]);
-  assert(
-    result.length === 2,
-    `False merge: Mulaney and Chappelle merged into 1 (got ${result.length})`
-  );
+  assert(result.length === 2, `False merge: Mulaney and Chappelle merged into 1 (got ${result.length})`);
 });
 
 // (r-b) Jazz Night vs Open Mic Night @ Comedy Store, same day → NO merge
@@ -263,10 +262,7 @@ test("(r-b) Jazz Night vs Open Mic Night @ same venue same day → stay separate
     sources: [{ sourceId: "comedy-store-mic", url: "https://thecomedystore.com/openmic" }],
   });
   const result = dedupeAndMerge([jazzNight, openMic]);
-  assert(
-    result.length === 2,
-    `False merge: Jazz Night and Open Mic Night merged into 1 (got ${result.length})`
-  );
+  assert(result.length === 2, `False merge: Jazz Night and Open Mic Night merged into 1 (got ${result.length})`);
 });
 
 // (r-c) Latin Night vs Salsa Night @ Soda Bar, same day → NO merge
@@ -286,10 +282,7 @@ test("(r-c) Latin Night vs Salsa Night @ same venue same day → stay separate",
     sources: [{ sourceId: "sodabar-salsa", url: "https://sodabar.com/salsa" }],
   });
   const result = dedupeAndMerge([latinNight, salsaNight]);
-  assert(
-    result.length === 2,
-    `False merge: Latin Night and Salsa Night merged into 1 (got ${result.length})`
-  );
+  assert(result.length === 2, `False merge: Latin Night and Salsa Night merged into 1 (got ${result.length})`);
 });
 
 // (r-d) Tycho @ Observatory vs Tycho @ Observatory North Park, same day → MERGE
@@ -309,15 +302,9 @@ test("(r-d) Tycho @ Observatory vs Tycho @ Observatory North Park same day → m
     sources: [{ sourceId: "bandsintown-reg", url: "https://bandsintown.com/tycho-reg" }],
   });
   const result = dedupeAndMerge([tychoA, tychoB]);
-  assert(
-    result.length === 1,
-    `Failed to merge Tycho duplicates (got ${result.length})`
-  );
-  const sourceIds = result[0].sources.map((s) => s.sourceId).sort();
-  assert(
-    sourceIds.length === 2,
-    `Expected 2 unioned sources, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`
-  );
+  assert(result.length === 1, `Failed to merge Tycho duplicates (got ${result.length})`);
+  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
+  assert(sourceIds.length === 2, `Expected 2 unioned sources, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`);
 });
 
 // (r-e) Padres game vs Press Club news same day → NO merge
@@ -341,10 +328,7 @@ test("(r-e) Padres game vs Press Club news item same day → stay separate", () 
     tags: ["journalism"],
   });
   const result = dedupeAndMerge([padres, pressClub]);
-  assert(
-    result.length === 2,
-    `False merge: Padres game and Press Club news merged into 1 (got ${result.length})`
-  );
+  assert(result.length === 2, `False merge: Padres game and Press Club news merged into 1 (got ${result.length})`);
 });
 
 // ============================================================================
@@ -370,14 +354,8 @@ test("twins: diff titles + UTC-vs-offset datetime + shared performer → merge t
     sources: [{ sourceId: "bandsintown-sd", url: "https://bandsintown.com/q" }],
   });
   const result = dedupeAndMerge([songkick, bandsintown]);
-  assert(
-    result.length === 1,
-    `Twins should merge to 1 via LA-day bucketing + performer match (got ${result.length})`
-  );
-  assert(
-    result[0].sources.length === 2,
-    `Merged twin should union both sources (got ${result[0].sources.length})`
-  );
+  assert(result.length === 1, `Twins should merge to 1 via LA-day bucketing + performer match (got ${result.length})`);
+  assert(result[0]!.sources.length === 2, `Merged twin should union both sources (got ${result[0]!.sources.length})`);
 });
 
 test("same venue + same day, DIFFERENT performer → stay separate (no false merge)", () => {
@@ -398,10 +376,7 @@ test("same venue + same day, DIFFERENT performer → stay separate (no false mer
     sources: [{ sourceId: "songkick-sd", url: "https://songkick.com/b" }],
   });
   const result = dedupeAndMerge([showA, showB]);
-  assert(
-    result.length === 2,
-    `Different performers at the same venue must NOT merge (got ${result.length})`
-  );
+  assert(result.length === 2, `Different performers at the same venue must NOT merge (got ${result.length})`);
 });
 
 // ============================================================================
@@ -425,14 +400,8 @@ test("accents: 'Négociant Winery' vs 'Negociant Winery' same title/day → merg
     sources: [{ sourceId: "eventbrite-sd", url: "https://eventbrite.com/kogee" }],
   });
   const result = dedupeAndMerge([accented, ascii]);
-  assert(
-    result.length === 1,
-    `Accented + ASCII venue spelling should merge to 1 (got ${result.length})`
-  );
-  assert(
-    result[0].sources.length === 2,
-    `Merged twin should union both sources (got ${result[0].sources.length})`
-  );
+  assert(result.length === 1, `Accented + ASCII venue spelling should merge to 1 (got ${result.length})`);
+  assert(result[0]!.sources.length === 2, `Merged twin should union both sources (got ${result[0]!.sources.length})`);
 });
 
 // ============================================================================
@@ -459,10 +428,7 @@ test("address-suffix: bare venue vs venue+postal-address, same act/day → merge
     sources: [{ sourceId: "sd-reader", url: "https://sandiegoreader.com/qveen" }],
   });
   const result = dedupeAndMerge([bare, withAddress]);
-  assert(
-    result.length === 1,
-    `Bare venue + venue-with-address should merge to 1 (got ${result.length})`
-  );
+  assert(result.length === 1, `Bare venue + venue-with-address should merge to 1 (got ${result.length})`);
 });
 
 test("address-suffix safety: different acts at same address venue stay separate", () => {
@@ -483,10 +449,7 @@ test("address-suffix safety: different acts at same address venue stay separate"
     sources: [{ sourceId: "src-b", url: "https://example.com/b" }],
   });
   const result = dedupeAndMerge([showA, showB]);
-  assert(
-    result.length === 2,
-    `Different acts at the same address-venue must NOT merge (got ${result.length})`
-  );
+  assert(result.length === 2, `Different acts at the same address-venue must NOT merge (got ${result.length})`);
 });
 
 // ============================================================================
@@ -528,14 +491,11 @@ test("(api-1) api-tier: 'Level 1 Salsa' / 'Level 2 Salsa' same day/venue/instruc
   const withoutExemption = dedupeAndMerge([level1, level2]);
   assert(
     withoutExemption.length === 1,
-    `Sanity check failed: expected the OLD fuzzy predicate to still collapse these (got ${withoutExemption.length}) — the reproduction no longer matches the reported bug`
+    `Sanity check failed: expected the OLD fuzzy predicate to still collapse these (got ${withoutExemption.length}) — the reproduction no longer matches the reported bug`,
   );
 
   const result = dedupeAndMerge([level1, level2], API_TIER);
-  assert(
-    result.length === 2,
-    `api-tier events must NOT be fuzzy-merged with each other (got ${result.length})`
-  );
+  assert(result.length === 2, `api-tier events must NOT be fuzzy-merged with each other (got ${result.length})`);
 });
 
 test("(api-2) api-tier: duplicate stableId within one batch collapses to 1 (exact-id upsert)", () => {
@@ -551,12 +511,9 @@ test("(api-2) api-tier: duplicate stableId within one batch collapses to 1 (exac
   const result = dedupeAndMerge([original, refetched], API_TIER);
   assert(
     result.length === 1,
-    `Same stableId must collapse to 1 via exact-id upsert, not fuzzy merge (got ${result.length})`
+    `Same stableId must collapse to 1 via exact-id upsert, not fuzzy merge (got ${result.length})`,
   );
-  assert(
-    result[0].id === "ml-bachata-basics",
-    `Expected the shared id to survive, got "${result[0].id}"`
-  );
+  assert(result[0]!.id === "ml-bachata-basics", `Expected the shared id to survive, got "${result[0]!.id}"`);
 });
 
 test("(api-3) api-tier event is NOT absorbed into a fuzzy-tier twin (cross-source non-absorption)", () => {
@@ -581,13 +538,13 @@ test("(api-3) api-tier event is NOT absorbed into a fuzzy-tier twin (cross-sourc
   const withoutExemption = dedupeAndMerge([apiClass, scrapedTwin]);
   assert(
     withoutExemption.length === 1,
-    `Sanity check failed: expected the plain fuzzy predicate to merge an exact title/venue/day twin (got ${withoutExemption.length})`
+    `Sanity check failed: expected the plain fuzzy predicate to merge an exact title/venue/day twin (got ${withoutExemption.length})`,
   );
 
   const result = dedupeAndMerge([apiClass, scrapedTwin], API_TIER);
   assert(
     result.length === 2,
-    `api-tier event must not be absorbed into a non-api twin, and vice versa (got ${result.length})`
+    `api-tier event must not be absorbed into a non-api twin, and vice versa (got ${result.length})`,
   );
 });
 
@@ -598,6 +555,6 @@ test("(api-4) non-api sources are unaffected when apiTierSourceIds is passed but
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B], API_TIER);
   assert(
     result.length === 1,
-    `Non-api events must still fuzzy-merge normally when apiTierSourceIds is present but irrelevant (got ${result.length})`
+    `Non-api events must still fuzzy-merge normally when apiTierSourceIds is present but irrelevant (got ${result.length})`,
   );
 });

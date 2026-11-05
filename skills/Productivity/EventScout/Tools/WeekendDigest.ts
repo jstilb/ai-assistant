@@ -68,8 +68,7 @@ export function upcomingWeekend(now: Date): { satIso: string; sunIso: string } {
 
 function priceLabel(e: RankedEvent): string {
   if (e.isFree) return "free";
-  if (e.priceMin != null && e.priceMax != null && e.priceMax !== e.priceMin)
-    return `$${e.priceMin}–${e.priceMax}`;
+  if (e.priceMin != null && e.priceMax != null && e.priceMax !== e.priceMin) return `$${e.priceMin}–${e.priceMax}`;
   if (e.priceMin != null) return `$${e.priceMin}+`;
   return "";
 }
@@ -93,26 +92,18 @@ function humanDate(iso: string): string {
 }
 
 /** Compact spool-friendly markdown: header + top-N one-liners + footer. */
-export function renderWeekendDigest(
-  ranked: RankedEvent[],
-  satIso: string,
-  sunIso: string
-): string {
+export function renderWeekendDigest(ranked: RankedEvent[], satIso: string, sunIso: string): string {
   const lines: string[] = [
     `🎉 Weekend picks — ${humanDate(satIso)} + ${humanDate(sunIso)} (${ranked.length} match${ranked.length === 1 ? "" : "es"})`,
   ];
   for (const e of ranked.slice(0, TOP_N)) {
     const day = e.startDatetime.slice(0, 10) === satIso ? "Sat" : "Sun";
-    const parts = [
-      `${day}${timeLabel(e) ? ` ${timeLabel(e)}` : ""} — ${e.title}`,
-      e.venue ?? "",
-      priceLabel(e),
-    ].filter(Boolean);
+    const parts = [`${day}${timeLabel(e) ? ` ${timeLabel(e)}` : ""} — ${e.title}`, e.venue ?? "", priceLabel(e)].filter(
+      Boolean,
+    );
     lines.push(`• ${parts.join(" · ")}`);
   }
-  lines.push(
-    `Full list: eventscout query "this weekend" --from ${satIso} --to ${sunIso}`
-  );
+  lines.push(`Full list: eventscout query "this weekend" --from ${satIso} --to ${sunIso}`);
   return lines.join("\n");
 }
 
@@ -192,7 +183,7 @@ if (import.meta.main) {
   console.log(
     `\n[weekend-digest] weekend=${outcome.satIso}..${outcome.sunIso} matches=${outcome.matches} ` +
       `sent=${outcome.sent}${outcome.result ? ` (${outcome.result})` : ""}` +
-      (process.env["KAYA_ALERT_DRY_RUN"] === "1" ? " (DRY RUN — nothing sent)" : "")
+      (process.env["KAYA_ALERT_DRY_RUN"] === "1" ? " (DRY RUN — nothing sent)" : ""),
   );
   process.exit(0);
 }

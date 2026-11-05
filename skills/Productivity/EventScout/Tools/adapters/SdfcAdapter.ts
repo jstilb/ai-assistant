@@ -19,7 +19,7 @@
  *   window; we filter to those where SDFC is the home team.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
@@ -28,7 +28,7 @@ import { utcIsoToLaIso } from "../lib/tz.ts";
 // ESPN scoreboard types (minimal — only fields we use)
 // ============================================================================
 
-export interface EspnCompetitor {
+interface EspnCompetitor {
   homeAway: "home" | "away";
   team: { id: string; displayName: string };
 }
@@ -57,8 +57,7 @@ interface EspnScoreboardResponse {
 
 const SDFC_TEAM_ID = "22529";
 const SOURCE_ID = "sandiego-fc";
-const SCOREBOARD_URL =
-  "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard";
+const SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard";
 const SCHEDULE_PAGE_URL = "https://www.sandiegofc.com/schedule/";
 /** How far ahead to look. MLS plays into Nov; home games can be 50+ days out
  *  (the Padres' 45-day window would miss the next SDFC home match), so widen. */
@@ -140,10 +139,7 @@ function compactDate(d: Date): string {
   return `${y}${m}${day}`;
 }
 
-export async function fetchSdfcEvents(
-  startDate?: string,
-  endDate?: string
-): Promise<EventItem[]> {
+export async function fetchSdfcEvents(startDate?: string, endDate?: string): Promise<EventItem[]> {
   const today = new Date();
   const end = new Date(today);
   end.setDate(today.getDate() + WINDOW_DAYS);

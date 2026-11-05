@@ -68,7 +68,7 @@ function tokenize(text: string): Set<string> {
     stripDiacritics(text.toLowerCase())
       .replace(/[^a-z0-9\s]/g, "")
       .split(/\s+/)
-      .filter((w) => w.length > 2)
+      .filter((w) => w.length > 2),
   );
 }
 
@@ -205,8 +205,14 @@ function venueCompatible(a: string, b: string): boolean {
  *   3. Title-only token Jaccard >= threshold.
  */
 function titleSimilar(a: string, b: string, threshold: number): boolean {
-  const na = stripDiacritics(a.toLowerCase()).replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-  const nb = stripDiacritics(b.toLowerCase()).replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  const na = stripDiacritics(a.toLowerCase())
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const nb = stripDiacritics(b.toLowerCase())
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (na.includes(nb) || nb.includes(na)) return true;
 
   const ta = tokenize(a);
@@ -238,7 +244,7 @@ function performerSet(perf: string | undefined): Set<string> {
     perf
       .split(",")
       .map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, ""))
-      .filter((s) => s.length > 3)
+      .filter((s) => s.length > 3),
   );
 }
 
@@ -387,10 +393,7 @@ function mergeEvents(a: EventItem, b: EventItem): EventItem {
  *                           all-fuzzy behavior exactly.
  * @returns                 - Deduplicated, merged EventItem[].
  */
-export function dedupeAndMerge(
-  events: EventItem[],
-  apiTierSourceIds?: ReadonlySet<string>
-): EventItem[] {
+export function dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlySet<string>): EventItem[] {
   if (events.length === 0) return [];
 
   // Partition off api-tier events — see the "api-tier exemption" note above
@@ -432,9 +435,9 @@ export function dedupeAndMerge(
 
     for (const candidate of bucket) {
       let didMerge = false;
-      for (let i = 0; i < merged.length; i++) {
-        if (areDuplicates(merged[i], candidate)) {
-          merged[i] = mergeEvents(merged[i], candidate);
+      for (const [i, existing] of merged.entries()) {
+        if (areDuplicates(existing, candidate)) {
+          merged[i] = mergeEvents(existing, candidate);
           didMerge = true;
           break;
         }

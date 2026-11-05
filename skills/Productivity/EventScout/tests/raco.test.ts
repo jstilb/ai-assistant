@@ -15,11 +15,7 @@
  */
 
 import { test } from "bun:test";
-import {
-  mapRaEventToItem,
-  parseCost,
-  raTimeToLaIso,
-} from "../Tools/adapters/RaCoAdapter.ts";
+import { mapRaEventToItem, parseCost, raTimeToLaIso } from "../Tools/adapters/RaCoAdapter.ts";
 import type { RaEvent } from "../Tools/adapters/RaCoAdapter.ts";
 
 function assert(condition: boolean, message: string): void {
@@ -84,7 +80,7 @@ test("parseCost: empty/null/unparseable → unknown (not free, no price)", () =>
 
 test("raTimeToLaIso: naive venue-local → LA-offset ISO (PDT)", () => {
   const iso = raTimeToLaIso("2026-08-20T21:00:00.000");
-  assert(iso != null && iso.startsWith("2026-08-20T21:00:00"), `wall-clock kept, got ${iso}`);
+  assert(iso?.startsWith("2026-08-20T21:00:00") === true, `wall-clock kept, got ${iso}`);
   assert(iso!.endsWith("-07:00"), `August is PDT (-07:00), got ${iso}`);
 });
 
@@ -130,10 +126,7 @@ test("mapRaEventToItem: no startTime → all-day at the listing date", () => {
 });
 
 test("mapRaEventToItem: RA pick → blurb description + ra-pick tag", () => {
-  const item = mapRaEventToItem(
-    baseEvent({ pick: { blurb: "A rare stateside live set." } }),
-    FETCHED_AT,
-  );
+  const item = mapRaEventToItem(baseEvent({ pick: { blurb: "A rare stateside live set." } }), FETCHED_AT);
   assert(item !== null, "maps to an item");
   assert(item!.tags.includes("ra-pick"), "ra-pick tag");
   assert(item!.description === "[RA Pick] A rare stateside live set.", `description, got ${item!.description}`);

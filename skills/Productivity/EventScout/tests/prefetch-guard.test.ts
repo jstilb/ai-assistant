@@ -3,7 +3,7 @@
  * prefetch-guard.test.ts — Unit tests for PrefetchGuard.ts
  *
  * Run:
- *   bun test ~/.claude/.claude/worktrees/arch-debt-d2-eventscout-buntest/skills/Productivity/EventScout/tests/prefetch-guard.test.ts
+ *   bun test skills/Productivity/EventScout/tests/prefetch-guard.test.ts
  *
  * Tests the three liveness conditions:
  *   1. Missing cache → unhealthy
@@ -22,9 +22,9 @@
  */
 
 import { test, afterAll } from "bun:test";
-import { writeFileSync, utimesSync, mkdirSync, existsSync, mkdtempSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { writeFileSync, utimesSync, mkdirSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // ============================================================================
 // Env isolation — pin KAYA_HOME/KAYA_DIR before importing Tools code.
@@ -57,9 +57,7 @@ function assert(condition: boolean, message: string): asserts condition {
 
 function assertEqual<T>(actual: T, expected: T, label?: string): void {
   if (actual !== expected) {
-    throw new Error(
-      `${label ? label + ": " : ""}expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
-    );
+    throw new Error(`${label ? label + ": " : ""}expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }
 }
 

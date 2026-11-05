@@ -50,8 +50,7 @@ import type { EventItem, EventSource } from "../types.ts";
  * POST body (curl and fetch both resend as body-less), yielding an empty 200 —
  * so the adapter targets the final host directly.
  */
-export const DSP_AJAX_ENDPOINT =
-  "https://app.gostudiopro.com/apps/api_classes-ajax.php";
+export const DSP_AJAX_ENDPOINT = "https://app.gostudiopro.com/apps/api_classes-ajax.php";
 
 /** Fetch timeout — generous for a ~12KB response, far under Ingest's per-source cap. */
 const FETCH_TIMEOUT_MS = 30_000;
@@ -70,9 +69,7 @@ export function parseStudioParams(url: string): { id: string; s: string } {
   const id = parsed.searchParams.get("id");
   const s = parsed.searchParams.get("s");
   if (!id || !s) {
-    throw new Error(
-      `[DanceStudioPro] source url is missing the id/s query params: ${url}`
-    );
+    throw new Error(`[DanceStudioPro] source url is missing the id/s query params: ${url}`);
   }
   return { id, s };
 }
@@ -104,9 +101,7 @@ export function buildClassesPostBody(id: string, s: string): string {
  * JSON-LD → LLM kernel. Throws on transport failure, non-200, or an empty
  * body (the endpoint's signature response to a mis-shaped request).
  */
-export async function fetchDanceStudioProEvents(
-  source: EventSource
-): Promise<EventItem[]> {
+export async function fetchDanceStudioProEvents(source: EventSource): Promise<EventItem[]> {
   const { id, s } = parseStudioParams(source.url);
 
   const res = await fetch(DSP_AJAX_ENDPOINT, {
@@ -116,21 +111,17 @@ export async function fetchDanceStudioProEvents(
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
-    throw new Error(
-      `[DanceStudioPro] ${DSP_AJAX_ENDPOINT} returned ${res.status} for ${source.id}`
-    );
+    throw new Error(`[DanceStudioPro] ${DSP_AJAX_ENDPOINT} returned ${res.status} for ${source.id}`);
   }
 
   const html = await res.text();
   if (html.trim().length === 0) {
     throw new Error(
       `[DanceStudioPro] empty response body for ${source.id} — the endpoint ` +
-        `returns empty 200s to non-POST/mis-shaped requests; has the API changed?`
+        `returns empty 200s to non-POST/mis-shaped requests; has the API changed?`,
     );
   }
 
-  console.log(
-    `[DanceStudioPro] Fetched ${html.length} chars of schedule HTML for ${source.id}`
-  );
+  console.log(`[DanceStudioPro] Fetched ${html.length} chars of schedule HTML for ${source.id}`);
   return extractEventsFromContent(html, source);
 }

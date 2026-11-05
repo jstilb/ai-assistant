@@ -26,9 +26,9 @@
  *   Negative results (no match) are cached as null.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { EventItem } from "./types.ts";
 
 // ============================================================================
@@ -70,6 +70,7 @@ function loadGeoCache(): GeoCache {
   try {
     return JSON.parse(raw) as GeoCache;
   } catch {
+    // corrupt cache file: start with an empty cache
     return {};
   }
 }
@@ -188,10 +189,7 @@ async function throttle(): Promise<void> {
  * @param hint  - Geographic hint, e.g. "San Diego, CA". Defaults to "San Diego, CA".
  * @returns { lat, lng } on success; null if unresolvable or on network error.
  */
-export async function geocodeVenue(
-  venue: string,
-  hint?: string
-): Promise<{ lat: number; lng: number } | null> {
+export async function geocodeVenue(venue: string, hint?: string): Promise<{ lat: number; lng: number } | null> {
   return geocodeQuery(buildNominatimQuery(venue, hint));
 }
 
@@ -201,16 +199,14 @@ export async function geocodeVenue(
  * core path; geocodeVenue() is a thin wrapper. Best-effort: returns null on no
  * match or network error, never throws.
  */
-export async function geocodeQuery(
-  query: string
-): Promise<{ lat: number; lng: number } | null> {
+async function geocodeQuery(query: string): Promise<{ lat: number; lng: number } | null> {
   const normalizedKey = query.toLowerCase().trim();
   if (normalizedKey === "") return null;
 
   // --- Cache lookup ---
   const cache = loadGeoCache();
-  if (Object.prototype.hasOwnProperty.call(cache, normalizedKey)) {
-    return cache[normalizedKey];
+  if (Object.hasOwn(cache, normalizedKey)) {
+    return cache[normalizedKey] ?? null;
   }
 
   // --- Live Nominatim call ---
@@ -241,7 +237,7 @@ export async function geocodeQuery(
     if (data.length > 0 && data[0]) {
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
-      if (!isNaN(lat) && !isNaN(lng)) {
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
         result = { lat, lng };
       }
     }
@@ -295,7 +291,7 @@ export async function enrichWithGeo(events: EventItem[]): Promise<EventItem[]> {
     // Check cache before calling geocodeQuery (to count cache hits separately)
     const normalizedKey = query.toLowerCase().trim();
     const cache = loadGeoCache();
-    const wasCached = Object.prototype.hasOwnProperty.call(cache, normalizedKey);
+    const wasCached = Object.hasOwn(cache, normalizedKey);
 
     try {
       const coords = await geocodeQuery(query);
@@ -318,7 +314,7 @@ export async function enrichWithGeo(events: EventItem[]): Promise<EventItem[]> {
 
   const total = enriched + cacheHits;
   console.log(
-    `[Geocoder] enrichWithGeo: ${total} enriched (${cacheHits} cache-hits, ${enriched} live), ${failed} failed/no-result`
+    `[Geocoder] enrichWithGeo: ${total} enriched (${cacheHits} cache-hits, ${enriched} live), ${failed} failed/no-result`,
   );
 
   return result;

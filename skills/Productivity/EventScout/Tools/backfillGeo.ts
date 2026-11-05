@@ -19,7 +19,9 @@ import { enrichWithGeo } from "./Geocoder.ts";
 
 const before = readEvents();
 const missingBefore = before.filter((e) => e.lat === undefined || e.lng === undefined).length;
-console.log(`[backfillGeo] ${before.length} events; ${missingBefore} missing coords. Geocoding (address-preferred, throttled)…`);
+console.log(
+  `[backfillGeo] ${before.length} events; ${missingBefore} missing coords. Geocoding (address-preferred, throttled)…`,
+);
 
 const enriched = await enrichWithGeo(before);
 
@@ -27,4 +29,6 @@ const missingAfter = enriched.filter((e) => e.lat === undefined || e.lng === und
 const recovered = missingBefore - missingAfter;
 writeEvents(enriched);
 
-console.log(`[backfillGeo] DONE — recovered ${recovered} coords; ${missingAfter} still missing (no address / unresolvable). Cache written.`);
+console.log(
+  `[backfillGeo] DONE — recovered ${recovered} coords; ${missingAfter} still missing (no address / unresolvable). Cache written.`,
+);
