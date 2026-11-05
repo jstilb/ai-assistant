@@ -14,11 +14,11 @@
  * @version 1.0.0
  */
 
-import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { execSync } from "child_process";
-import { homedir } from "os";
-import { join } from "path";
-import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome";
+import { writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const PLIST_LABEL = "com.kaya.publicsync";
 const SKILL_DIR = join(defaultKayaHome(), "skills", "System", "PublicSync");
@@ -29,13 +29,7 @@ const LAUNCHD_AGENTS_DIR = join(homedir(), "Library", "LaunchAgents");
 const LAUNCHD_PLIST_PATH = join(LAUNCHD_AGENTS_DIR, PLIST_FILENAME);
 
 const LOG_PATH = join(getKayaHome(), "MEMORY", "logs", "publicsync.log");
-const ERROR_LOG_PATH = join(
-  homedir(),
-  ".claude",
-  "MEMORY",
-  "logs",
-  "publicsync-error.log"
-);
+const ERROR_LOG_PATH = join(getKayaHome(), "MEMORY", "logs", "publicsync-error.log");
 
 /**
  * Generate the launchd plist XML content.
@@ -178,12 +172,8 @@ function uninstall(): void {
 
 function status(): void {
   console.log("\n[LaunchdPlist] Status:");
-  console.log(
-    `  Plist in State:      ${existsSync(PLIST_STATE_PATH) ? "EXISTS" : "MISSING"}`
-  );
-  console.log(
-    `  Plist in LaunchAgents: ${existsSync(LAUNCHD_PLIST_PATH) ? "INSTALLED" : "NOT INSTALLED"}`
-  );
+  console.log(`  Plist in State:      ${existsSync(PLIST_STATE_PATH) ? "EXISTS" : "MISSING"}`);
+  console.log(`  Plist in LaunchAgents: ${existsSync(LAUNCHD_PLIST_PATH) ? "INSTALLED" : "NOT INSTALLED"}`);
 
   if (existsSync(LAUNCHD_PLIST_PATH)) {
     try {

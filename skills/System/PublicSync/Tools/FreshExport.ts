@@ -23,10 +23,10 @@
  * Exit code 0 when every gate passes, 1 otherwise (so it can sit in a runbook).
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, rmSync } from "fs";
-import { dirname, join } from "path";
-import { execFileSync } from "child_process";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import {
   BlocklistFilter,
   ContentTransformer,
@@ -35,7 +35,7 @@ import {
   loadBlocklistConfigFrom,
   walkAllowedFiles,
   type BlocklistConfig,
-} from "./SyncEngine";
+} from "./SyncEngine.ts";
 
 // ─────────────────────────────────────────────────────────────
 // CLI args
@@ -84,11 +84,11 @@ interface RemoteTree {
 
 function fetchRemoteTree(repo: string, branch: string): RemoteTree | { error: string } {
   try {
-    const raw = execFileSync(
-      "gh",
-      ["api", `repos/${repo}/git/trees/${branch}?recursive=1`],
-      { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }
-    );
+    const raw = execFileSync("gh", ["api", `repos/${repo}/git/trees/${branch}?recursive=1`], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return { error: "unexpected tree payload" };
     const obj = parsed as { sha?: unknown; truncated?: unknown; tree?: unknown };
@@ -260,8 +260,16 @@ function run(args: Args): Report {
     const allowedSet = new Set(allowedFiles);
     if ("error" in tree) {
       remote = {
-        repo: args.remote, branch: args.branch, sha: "?", truncated: false, pathCount: 0,
-        orphans: [], orphansByTopLevel: {}, additions: [], common: 0, matchesAllowedSet: false,
+        repo: args.remote,
+        branch: args.branch,
+        sha: "?",
+        truncated: false,
+        pathCount: 0,
+        orphans: [],
+        orphansByTopLevel: {},
+        additions: [],
+        common: 0,
+        matchesAllowedSet: false,
         error: tree.error,
       };
     } else {
@@ -360,7 +368,9 @@ function renderMarkdown(r: Report): string {
   const tick = (ok: boolean): string => (ok ? "PASS" : "FAIL");
   lines.push(`# PublicSync fresh-export report`);
   lines.push("");
-  lines.push(`Generated ${r.generatedAt}. Source \`${r.source}\`. Blocklist \`${r.blocklist}\`. Export tree \`${r.out}\`.`);
+  lines.push(
+    `Generated ${r.generatedAt}. Source \`${r.source}\`. Blocklist \`${r.blocklist}\`. Export tree \`${r.out}\`.`,
+  );
   lines.push("");
   lines.push(`## Gates`);
   lines.push("");
@@ -404,7 +414,9 @@ function renderMarkdown(r: Report): string {
     if (r.remote.error) {
       lines.push(`Remote tree unavailable: ${r.remote.error}`);
     } else {
-      lines.push(`Remote HEAD tree \`${r.remote.sha}\` holds ${r.remote.pathCount} blobs${r.remote.truncated ? " (TRUNCATED listing)" : ""}.`);
+      lines.push(
+        `Remote HEAD tree \`${r.remote.sha}\` holds ${r.remote.pathCount} blobs${r.remote.truncated ? " (TRUNCATED listing)" : ""}.`,
+      );
       lines.push("");
       lines.push(`| Set | Files |`);
       lines.push(`|---|---|`);
@@ -429,7 +441,9 @@ function renderMarkdown(r: Report): string {
   lines.push(`|---|---|`);
   for (const p of r.pii) lines.push(`| ${p.label} | ${p.files} |`);
   lines.push("");
-  lines.push(`Post-transform: the owner's e-mail and LinkedIn handle are replaced by placeholders; the bare username becomes \`[user]\`. Surname mentions are reported, not rewritten.`);
+  lines.push(
+    `Post-transform: the owner's e-mail and LinkedIn handle are replaced by placeholders; the bare username becomes \`[user]\`. Surname mentions are reported, not rewritten.`,
+  );
   lines.push("");
   return lines.join("\n");
 }
@@ -465,7 +479,9 @@ Exit 0 when every gate passes, 1 otherwise.
   console.log("");
   for (const g of report.gates) console.log(`  [${g.passed ? "PASS" : "FAIL"}] ${g.name} — ${g.detail}`);
   if (report.remote && !report.remote.error) {
-    console.log(`  remote: ${report.remote.pathCount} blobs, ${report.remote.orphans.length} orphans, ${report.remote.additions.length} additions`);
+    console.log(
+      `  remote: ${report.remote.pathCount} blobs, ${report.remote.orphans.length} orphans, ${report.remote.additions.length} additions`,
+    );
   } else if (report.remote?.error) {
     console.log(`  remote: ${report.remote.error}`);
   }

@@ -20,7 +20,7 @@ Before running the sync, verify:
 
 3. **Staging area accessible:**
    ```bash
-   ls /tmp/pai-public-staging 2>/dev/null && echo "EXISTS" || echo "FRESH CLONE"
+   ls /tmp/kaya-public-staging 2>/dev/null && echo "EXISTS" || echo "FRESH CLONE"
    ```
 
 ---
@@ -50,7 +50,7 @@ bun ~/.claude/skills/System/PublicSync/Tools/SyncRunner.ts --auto
 
 The runner will:
 1. Load `State/blocklist.yaml` — **aborts** if it is missing, invalid, or has no `allowedTopLevel`
-2. Clone or pull the staging repo (`/tmp/pai-public-staging/`) — aborts if the remote lost `main` (repo recreated → use `--fresh`)
+2. Clone or pull the staging repo (`/tmp/kaya-public-staging/`) — aborts if the remote lost `main` (repo recreated → use `--fresh`)
 3. Walk source files with blocklist filtering (Pass 1) — only allowed top-level entries are even descended into
 4. Transform content: normalize paths, strip usernames / owner e-mail (Pass 2)
 5. Scan each file for secret patterns AND blocked identifiers (Pass 3) — any hit aborts the whole run
@@ -71,7 +71,7 @@ After sync completes:
 bun ~/.claude/skills/System/PublicSync/Tools/SyncRunner.ts --status
 
 # Verify the remote repo has the new commits
-git -C /tmp/pai-public-staging log --oneline -10
+git -C /tmp/kaya-public-staging log --oneline -10
 ```
 
 ---
@@ -91,13 +91,13 @@ If the validator blocks the push:
 ssh -T git@github.com
 
 # Re-clone manually
-rm -rf /tmp/pai-public-staging
-git clone git@github.com:[user]/ai-assistant.git /tmp/pai-public-staging
+rm -rf /tmp/kaya-public-staging
+git clone git@github.com:[user]/ai-assistant.git /tmp/kaya-public-staging
 ```
 
 ### Push conflicts
 ```bash
-git -C /tmp/pai-public-staging pull --rebase
+git -C /tmp/kaya-public-staging pull --rebase
 bun ~/.claude/skills/System/PublicSync/Tools/SyncRunner.ts --auto
 ```
 

@@ -65,7 +65,7 @@ Writes the exact publish set to `/tmp/publicsync-fresh-export-<date>/` plus `REP
 4. Discard the stale staging clone (a rebase of old history onto the new repo would republish
    every orphan). `--fresh` does this too; belt and braces:
    ```bash
-   mv /tmp/pai-public-staging ~/.Trash/pai-public-staging-$(date +%s) 2>/dev/null || true
+   mv /tmp/kaya-public-staging ~/.Trash/kaya-public-staging-$(date +%s) 2>/dev/null || true
    ```
 
 ## Step 2 — GATE: irreversible delete (Jm only)

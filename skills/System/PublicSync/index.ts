@@ -42,7 +42,7 @@ export {
   type SyncResult,
   type FileGroup,
   type SecretFinding,
-} from "./Tools/SyncEngine";
+} from "./Tools/SyncEngine.ts";
 
 // ─────────────────────────────────────────────────────────────
 // CLI entry point — delegate to SyncRunner
@@ -52,9 +52,9 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const cmd = args[0] ?? "help";
 
-  const { execFileSync } = await import("child_process");
-  const { join } = await import("path");
-  const { defaultKayaHome } = await import("../../../lib/core/KayaHome");
+  const { execFileSync } = await import("node:child_process");
+  const { join } = await import("node:path");
+  const { defaultKayaHome } = await import("../../../lib/core/KayaHome.ts");
 
   const skillDir = join(defaultKayaHome(), "skills", "System", "PublicSync");
   const syncRunner = join(skillDir, "Tools", "SyncRunner.ts");

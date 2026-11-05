@@ -31,7 +31,7 @@ Use `notifySync()` from `lib/core/NotificationService.ts`
 ## Quick Reference
 
 - **Remote:** `https://<GITHUB_TOKEN>@github.com/[user]/ai-assistant.git` (token from `secrets.json`; SSH fallback interactively)
-- **Staging:** `/tmp/pai-public-staging/` (separate clone, never a worktree)
+- **Staging:** `/tmp/kaya-public-staging/` (separate clone, never a worktree)
 - **Blocklist:** `State/blocklist.yaml` — **fail-closed**: `allowedTopLevel` is the gate, everything else narrows it. Missing/invalid yaml aborts the sync.
 - **State:** `State/sync-state.json` — SHA-256 hash registry for incremental diffs
 - **Automation:** `bun Tools/LaunchdPlist.ts install` — daily 2am launchd job

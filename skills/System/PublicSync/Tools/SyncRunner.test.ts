@@ -12,14 +12,14 @@
  * the caught error's own `.message` (which embeds the full argv, token
  * included — see the extractOutput() comment in SyncRunner.ts).
  *
- * Run: bun test ~/.claude/.claude/worktrees/security-audit-exec-20260908/skills/System/PublicSync/Tools/SyncRunner.test.ts
+ * Run: bun test skills/System/PublicSync/Tools/SyncRunner.test.ts
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const FAKE_TOKEN = "FAKE_TOKEN_1234567890abcdefghij";
 
@@ -29,7 +29,7 @@ const FAKE_TOKEN = "FAKE_TOKEN_1234567890abcdefghij";
 const ORIGINAL_KAYA_HOME = process.env.KAYA_HOME;
 const TEST_KAYA_HOME = mkdtempSync(join(tmpdir(), "syncrunner-kaya-home-"));
 process.env.KAYA_HOME = TEST_KAYA_HOME;
-const { discardStagingHusk, runGit, loadGithubToken } = await import("./SyncRunner");
+const { discardStagingHusk, runGit, loadGithubToken } = await import("./SyncRunner.ts");
 
 afterAll(() => {
   if (ORIGINAL_KAYA_HOME === undefined) delete process.env.KAYA_HOME;
@@ -75,7 +75,7 @@ describe("runGit", () => {
 });
 
 // Root cause of the 2026-10 nightly exit-1 streak (t-mvlek5j1-dpxytf): macOS
-// /tmp cleanup guts /tmp/pai-public-staging's .git but leaves the directory,
+// /tmp cleanup guts /tmp/kaya-public-staging's .git but leaves the directory,
 // so ensureStagingRepo() saw "exists", skipped the clone and died at
 // `git pull` ("not a git repository") every night.
 describe("discardStagingHusk", () => {

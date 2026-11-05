@@ -21,18 +21,12 @@
  * @version 1.0.0
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  rmSync,
-} from "fs";
-import { join, dirname } from "path";
-import { execSync, execFileSync } from "child_process";
-import { createStateManager } from "../../../../lib/core/StateManager";
-import { defaultKayaHome, getKayaHome } from "../../../../lib/core/KayaHome";
-import { redactSecrets } from "../../../../lib/core/Redactor";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { execSync, execFileSync } from "node:child_process";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { defaultKayaHome, getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { redactSecrets } from "../../../../lib/core/Redactor.ts";
 import { z } from "zod";
 
 import {
@@ -50,14 +44,14 @@ import {
   type BlocklistConfig,
   type StagedFile,
   type SyncOutcome,
-} from "./SyncEngine";
+} from "./SyncEngine.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────────────────────
 
 const SOURCE_DIR = defaultKayaHome();
-const STAGING_DIR = "/tmp/pai-public-staging";
+const STAGING_DIR = "/tmp/kaya-public-staging";
 const SKILL_DIR = join(SOURCE_DIR, "skills", "System", "PublicSync");
 
 // Load GitHub token for HTTPS auth (SSH unavailable in launchd).
@@ -74,7 +68,7 @@ export function loadGithubToken(): string | undefined {
     return undefined;
   }
 }
-function getRemoteUrl(token: string | undefined): string {
+export function getRemoteUrl(token: string | undefined): string {
   // Test seam: point the whole pipeline at a local bare repo so the fresh /
   // prune / push flow can be exercised end-to-end without touching GitHub.
   // Never set in the launchd plist or SyncRunner.sh.
@@ -213,7 +207,7 @@ export function discardStagingHusk(dir: string): boolean {
 }
 
 /**
- * Prepare /tmp/pai-public-staging.
+ * Prepare /tmp/kaya-public-staging.
  *
  * `fresh` (recreate flow): the old staging clone is discarded before cloning,
  * so history from a DELETED remote can never be rebased onto — and pushed
@@ -247,7 +241,7 @@ function ensureStagingRepo(fresh: boolean): void {
   if (!remoteHasMain()) {
     throw new Error(
       "[SyncRunner] Remote has no `main` branch but the staging clone has history — the public repo was " +
-        "recreated. Refusing to push stale history. Re-run with --fresh (discards staging + hash registry)."
+        "recreated. Refusing to push stale history. Re-run with --fresh (discards staging + hash registry).",
     );
   }
   console.log(`[SyncRunner] Pulling latest from remote...`);
@@ -283,7 +277,11 @@ function listPruneCandidates(allowedFiles: ReadonlySet<string>): string[] {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     });
-  } catch {
+  } catch (err) {
+    // Fail visibly: an empty list here means "prune nothing", so a broken git must be reported.
+    console.error(
+      `[PublicSync] git ls-files failed in staging, skipping prune: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
   return tracked
@@ -327,9 +325,7 @@ async function runSync(opts: RunOptions): Promise<void> {
   let filesBlocked = 0;
   let registryEntriesPruned = 0;
 
-  console.log(
-    `\n[PublicSync] Starting ${dryRun ? "DRY RUN" : "LIVE SYNC"}${fresh ? " (FRESH BASELINE)" : ""}...`
-  );
+  console.log(`\n[PublicSync] Starting ${dryRun ? "DRY RUN" : "LIVE SYNC"}${fresh ? " (FRESH BASELINE)" : ""}...`);
   console.log(`  Source:  ${SOURCE_DIR}`);
   console.log(`  Staging: ${STAGING_DIR}`);
   console.log(`  Remote:  ${REMOTE_URL.replace(/\/\/[^@]+@/, "//***@")}\n`);
@@ -338,7 +334,7 @@ async function runSync(opts: RunOptions): Promise<void> {
   const blocklistConfig = loadBlocklistConfig();
   if (!blocklistConfig.allowedTopLevel?.length) {
     throw new Error(
-      "[PublicSync] blocklist.yaml has no allowedTopLevel list — the mirror must be fail-closed. Refusing to sync."
+      "[PublicSync] blocklist.yaml has no allowedTopLevel list — the mirror must be fail-closed. Refusing to sync.",
     );
   }
   const syncState: SyncState = fresh
@@ -358,7 +354,7 @@ async function runSync(opts: RunOptions): Promise<void> {
       syncStatePath: SYNC_STATE_PATH,
       dryRun,
     },
-    blocklistConfig
+    blocklistConfig,
   );
 
   // ── Ensure staging repo exists ────────────────────────
@@ -385,10 +381,7 @@ async function runSync(opts: RunOptions): Promise<void> {
   } else if (dryRun && !existsSync(join(STAGING_DIR, ".git"))) {
     console.log("  (no staging clone present — orphan list unavailable in dry-run)");
   }
-  const { pruned: prunedHashes, removedCount } = pruneRegistry(
-    syncState.hashes,
-    currentFileSet
-  );
+  const { pruned: prunedHashes, removedCount } = pruneRegistry(syncState.hashes, currentFileSet);
   registryEntriesPruned = removedCount;
   // Use pruned hashes for this run's incremental diff
   const prunedRegistry = FileHashRegistry.fromJSON(prunedHashes);
@@ -407,8 +400,13 @@ async function runSync(opts: RunOptions): Promise<void> {
     let rawContent: string;
     try {
       rawContent = readFileSync(absolutePath, "utf8");
-    } catch {
-      continue; // Binary or unreadable file — skip
+    } catch (err) {
+      // A skipped file is never synced (it is not in changedFiles), so this fails closed.
+      // ENOENT means the file vanished after the listing; anything else gets a warning.
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        console.error(`  [SKIPPED] ${relativePath}: unreadable (${err instanceof Error ? err.message : String(err)})`);
+      }
+      continue;
     }
 
     // Pass 2: Content transform (runs BEFORE secret scan so paths like
@@ -420,9 +418,7 @@ async function runSync(opts: RunOptions): Promise<void> {
     const scanResult = scanner.scan(finalContent);
     if (scanResult.hasSecrets) {
       const finding = scanResult.findings[0];
-      console.error(
-        `  [BLOCKED] ${relativePath}: secret pattern "${finding.pattern}" at line ${finding.line}`
-      );
+      console.error(`  [BLOCKED] ${relativePath}: secret pattern "${finding.pattern}" at line ${finding.line}`);
       filesBlocked++;
       blockedDetails.push({
         path: relativePath,
@@ -430,7 +426,7 @@ async function runSync(opts: RunOptions): Promise<void> {
         patternName: finding.pattern,
       });
       const error = new Error(
-        `SecretScanError: file "${relativePath}" contains secret pattern "${finding.pattern}" at line ${finding.line}. Sync aborted.`
+        `SecretScanError: file "${relativePath}" contains secret pattern "${finding.pattern}" at line ${finding.line}. Sync aborted.`,
       );
       error.name = "SecretScanError";
       // Log the outcome before throwing
@@ -491,7 +487,9 @@ async function runSync(opts: RunOptions): Promise<void> {
     console.log("\n[DRY RUN] Files that would be synced:");
     for (const f of changedFiles) console.log(`  + ${f.relativePath}`);
     if (pruneCandidates.length > 0) {
-      console.log(`\n[DRY RUN] ${pruneCandidates.length} orphan path(s) would be deleted from the mirror (listed above).`);
+      console.log(
+        `\n[DRY RUN] ${pruneCandidates.length} orphan path(s) would be deleted from the mirror (listed above).`,
+      );
     }
     console.log("\n[DRY RUN] Commit messages that would be generated:");
     if (fresh) {
@@ -500,9 +498,7 @@ async function runSync(opts: RunOptions): Promise<void> {
       if (pruneCandidates.length > 0) console.log(`  ${pruneCommitMessage(pruneCandidates.length)}`);
       const groups = engine.groupBySkill(changedFiles.map((f) => f.relativePath));
       for (const group of groups) {
-        console.log(
-          `  ${engine.generateCommitMessage(group.files.map(() => group.skill + "/" + group.files[0]))}`
-        );
+        console.log(`  ${engine.generateCommitMessage(group.files.map(() => group.skill + "/" + group.files[0]))}`);
       }
     }
     logSyncOutcome({
@@ -525,7 +521,7 @@ async function runSync(opts: RunOptions): Promise<void> {
   console.log("\n[PublicSync] Copying files to staging area...");
   const stagedFiles: StagedFile[] = [];
 
-  for (const { relativePath, content, absolutePath } of changedFiles) {
+  for (const { relativePath, content } of changedFiles) {
     const destPath = join(STAGING_DIR, relativePath);
     mkdirSync(dirname(destPath), { recursive: true });
     writeFileSync(destPath, content, "utf8");
@@ -555,14 +551,11 @@ async function runSync(opts: RunOptions): Promise<void> {
   });
 
   if (!validationResult.passed) {
-    console.error(
-      `\n[PublicSync] SAFETY CHECK FAILED (layer: ${validationResult.layer})`
-    );
+    console.error(`\n[PublicSync] SAFETY CHECK FAILED (layer: ${validationResult.layer})`);
     console.error(`  Reason: ${validationResult.reason}`);
     if (validationResult.blockedPaths) {
       console.error("  Blocked paths:");
-      for (const p of validationResult.blockedPaths)
-        console.error(`    - ${p}`);
+      for (const p of validationResult.blockedPaths) console.error(`    - ${p}`);
     }
 
     // Reset staging
@@ -604,11 +597,9 @@ async function runSync(opts: RunOptions): Promise<void> {
     if (pruneCandidates.length > 0) {
       const CHUNK = 500; // stay well under ARG_MAX
       for (let i = 0; i < pruneCandidates.length; i += CHUNK) {
-        execFileSync(
-          "git",
-          ["-C", STAGING_DIR, "add", "-A", "--", ...pruneCandidates.slice(i, i + CHUNK)],
-          { stdio: "pipe" }
-        );
+        execFileSync("git", ["-C", STAGING_DIR, "add", "-A", "--", ...pruneCandidates.slice(i, i + CHUNK)], {
+          stdio: "pipe",
+        });
       }
       const commitMsg = pruneCommitMessage(pruneCandidates.length);
       execFileSync("git", ["-C", STAGING_DIR, "commit", "-q", "-m", commitMsg], { stdio: "inherit" });
@@ -626,8 +617,11 @@ async function runSync(opts: RunOptions): Promise<void> {
     for (const file of group.files) {
       try {
         execSync(`git -C "${STAGING_DIR}" add -f "${file}"`, { stdio: "pipe" });
-      } catch {
-        // File may not exist in staging (e.g., filtered by target .gitignore)
+      } catch (err) {
+        // File may not exist in staging (e.g., filtered by target .gitignore); report it either way.
+        console.error(
+          `[PublicSync] git add skipped ${file}: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+        );
       }
     }
 
@@ -636,17 +630,16 @@ async function runSync(opts: RunOptions): Promise<void> {
       execSync(`git -C "${STAGING_DIR}" diff --cached --quiet`, { stdio: "pipe" });
       // Exit code 0 means no staged changes — skip this group
       continue;
-    } catch {
-      // Exit code 1 means there ARE staged changes — proceed to commit
+    } catch (err) {
+      // Exit code 1 means there ARE staged changes — proceed to commit.
+      // Any other failure (git missing, repo broken) must not look like "staged changes".
+      if ((err as { status?: number }).status !== 1) throw err;
     }
 
     const commitMsg = engine.generateCommitMessage(group.files);
     commitMessages.push(commitMsg);
 
-    execSync(
-      `git -C "${STAGING_DIR}" commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
-      { stdio: "inherit" }
-    );
+    execSync(`git -C "${STAGING_DIR}" commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { stdio: "inherit" });
     console.log(`  Committed: ${commitMsg}`);
   }
 
@@ -762,26 +755,28 @@ EXAMPLES:
   }
 
   if (isStatus) {
-    loadSyncState().then((state) => {
-      const trackedCount = Object.keys(state.hashes).length;
-      console.log("\n[PublicSync] Sync Status:");
-      console.log(`  Last sync:    ${state.lastSync ?? "never"}`);
-      console.log(`  Last commit:  ${state.lastSyncCommit ?? "none"}`);
-      console.log(`  Files tracked: ${trackedCount}`);
-      logSyncOutcome({
-        ts: Date.now(),
-        action: "status",
-        success: true,
-        filesScanned: trackedCount,
-        filesSynced: 0,
-        filesSkipped: 0,
-        filesBlocked: 0,
-        blockedDetails: [],
-        registryEntriesPruned: 0,
-        durationMs: 0,
-      });
-      process.exit(0);
-    }).catch(() => process.exit(1));
+    loadSyncState()
+      .then((state) => {
+        const trackedCount = Object.keys(state.hashes).length;
+        console.log("\n[PublicSync] Sync Status:");
+        console.log(`  Last sync:    ${state.lastSync ?? "never"}`);
+        console.log(`  Last commit:  ${state.lastSyncCommit ?? "none"}`);
+        console.log(`  Files tracked: ${trackedCount}`);
+        logSyncOutcome({
+          ts: Date.now(),
+          action: "status",
+          success: true,
+          filesScanned: trackedCount,
+          filesSynced: 0,
+          filesSkipped: 0,
+          filesBlocked: 0,
+          blockedDetails: [],
+          registryEntriesPruned: 0,
+          durationMs: 0,
+        });
+        process.exit(0);
+      })
+      .catch(() => process.exit(1));
   } else if (isDryRun || isAuto) {
     runSync({ dryRun: isDryRun, verbose: isVerbose, fresh: isFresh }).catch((e) => {
       const name = e instanceof Error ? e.name : undefined;

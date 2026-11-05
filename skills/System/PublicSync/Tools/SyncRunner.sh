@@ -6,7 +6,7 @@
 set -euo pipefail
 
 BUN=$(which bun 2>/dev/null || echo "/opt/homebrew/bin/bun")
-SYNC_ENGINE="~/.claude/skills/System/PublicSync/Tools/SyncRunner.ts"
+SYNC_ENGINE="${KAYA_HOME:-$HOME/.claude}/skills/System/PublicSync/Tools/SyncRunner.ts"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] PublicSync starting..."
 

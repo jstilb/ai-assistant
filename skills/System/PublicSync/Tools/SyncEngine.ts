@@ -21,13 +21,14 @@
  * @version 1.0.0
  */
 
-import { createHash } from "crypto";
-import { statSync, existsSync, readFileSync, readdirSync } from "fs";
-import { basename, join, relative } from "path";
+import { createHash } from "node:crypto";
+import { statSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { basename, join, relative } from "node:path";
 import { z } from "zod";
 import { parse as parseYaml } from "yaml";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { memPath } from "../../../../lib/core/MemoryPaths.ts";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -103,7 +104,7 @@ export interface TransformConfig {
 // HashRegistry: maps relative path → SHA-256 hex string
 export const HashRegistrySchema = z.record(
   z.string().min(1),
-  z.string().regex(/^[0-9a-f]{64}$/, "must be SHA-256 hex")
+  z.string().regex(/^[0-9a-f]{64}$/, "must be SHA-256 hex"),
 );
 export type HashRegistry = z.infer<typeof HashRegistrySchema>;
 
@@ -118,9 +119,7 @@ export function loadHashRegistry(statePath: string): HashRegistry {
     return HashRegistrySchema.parse(raw);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      throw new Error(
-        `sync-state.json schema validation failed: ${err.message}\nDelete ${statePath} to reset.`
-      );
+      throw new Error(`sync-state.json schema validation failed: ${err.message}\nDelete ${statePath} to reset.`);
     }
     // File doesn't exist or is not JSON — start fresh
     return {};
@@ -133,7 +132,7 @@ export function loadHashRegistry(statePath: string): HashRegistry {
  */
 export function pruneRegistry(
   registry: HashRegistry,
-  currentFiles: Set<string>
+  currentFiles: Set<string>,
 ): { pruned: HashRegistry; removedCount: number } {
   const pruned: HashRegistry = {};
   let removedCount = 0;
@@ -198,11 +197,7 @@ export class BlocklistFilter {
     for (const excludedDir of this.config.excludedDirs) {
       if (parts[0] === excludedDir) {
         // Preserve README.md at the direct root of the excluded dir
-        if (
-          this.config.preserveReadmes &&
-          parts.length === 2 &&
-          parts[1] === "README.md"
-        ) {
+        if (this.config.preserveReadmes && parts.length === 2 && parts[1] === "README.md") {
           return true;
         }
         return false;
@@ -210,23 +205,66 @@ export class BlocklistFilter {
     }
 
     // ── Always exclude at any depth ────────────────────────
-    const alwaysExcludeAnyDepth = ["node_modules", "__tests__", "__mocks__", ".cache", "examples", "static", "dist", "build", "Results"];
+    const alwaysExcludeAnyDepth = [
+      "node_modules",
+      "__tests__",
+      "__mocks__",
+      ".cache",
+      "examples",
+      "static",
+      "dist",
+      "build",
+      "Results",
+    ];
     if (parts.some((p) => alwaysExcludeAnyDepth.includes(p))) {
       return false;
     }
 
     // ── Exclude binary/media files by extension ────────────
     const EXCLUDED_EXTENSIONS = new Set([
-      ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".bmp",
-      ".mp3", ".mp4", ".wav", ".ogg", ".webm", ".mov",
-      ".pdf", ".zip", ".tar", ".gz", ".bz2", ".7z",
-      ".woff", ".woff2", ".ttf", ".eot", ".otf",
-      ".pyc", ".o", ".so", ".dylib", ".dll", ".exe",
-      ".log", ".db", ".sqlite", ".sqlite3", ".jsonl",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".webp",
+      ".ico",
+      ".svg",
+      ".bmp",
+      ".mp3",
+      ".mp4",
+      ".wav",
+      ".ogg",
+      ".webm",
+      ".mov",
+      ".pdf",
+      ".zip",
+      ".tar",
+      ".gz",
+      ".bz2",
+      ".7z",
+      ".woff",
+      ".woff2",
+      ".ttf",
+      ".eot",
+      ".otf",
+      ".pyc",
+      ".o",
+      ".so",
+      ".dylib",
+      ".dll",
+      ".exe",
+      ".log",
+      ".db",
+      ".sqlite",
+      ".sqlite3",
+      ".jsonl",
       // SQLite journal files (T7-08.1): live WAL/SHM files grow organically
       // between checkpoints and tripped the 500KB size-anomaly layer on every
       // nightly run from 2026-07-02 onward. Never sync candidates.
-      ".db-wal", ".db-shm", ".sqlite-wal", ".sqlite-shm",
+      ".db-wal",
+      ".db-shm",
+      ".sqlite-wal",
+      ".sqlite-shm",
       // Editor/rotation backups of config files
       ".bak",
     ]);
@@ -253,11 +291,7 @@ export class BlocklistFilter {
           // Preserve README.md at the direct root of the excluded skill dir
           const readmeDepth = parts[1] === skillName ? 3 : 4;
           const readmeIdx = readmeDepth - 1;
-          if (
-            this.config.preserveReadmes &&
-            parts.length === readmeDepth &&
-            parts[readmeIdx] === "README.md"
-          ) {
+          if (this.config.preserveReadmes && parts.length === readmeDepth && parts[readmeIdx] === "README.md") {
             return true;
           }
           return false;
@@ -268,8 +302,7 @@ export class BlocklistFilter {
       // Handles both skills/<Name>/State/ and skills/<Category>/<Name>/State/.
       // Only segments BELOW `skills/<first>` are matched, so a category dir
       // that happens to share a name (skills/Data/<Skill>/…) stays allowed.
-      const skillSubdirs = this.config.excludedSkillSubdirs
-        ?? (this.config.excludedStateDirs ? ["State"] : []);
+      const skillSubdirs = this.config.excludedSkillSubdirs ?? (this.config.excludedStateDirs ? ["State"] : []);
       if (skillSubdirs.length > 0) {
         const insideSkill = parts.slice(2, -1); // directory segments after skills/<first>, excluding the filename
         if (insideSkill.some((segment) => skillSubdirs.includes(segment))) {
@@ -295,19 +328,19 @@ export class BlocklistFilter {
 
 const SECRET_PATTERNS: Array<{ name: string; regex: RegExp }> = [
   // Anthropic API keys
-  { name: "sk-ant-*", regex: /sk-ant-[A-Za-z0-9_\-]{10,}/ },
+  { name: "sk-ant-*", regex: /sk-ant-[A-Za-z0-9_-]{10,}/ },
   // GitHub personal access tokens
   { name: "ghp_*", regex: /ghp_[A-Za-z0-9]{20,}/ },
   // Specific environment variable secrets (require literal string values, not variable refs)
-  { name: "ANTHROPIC_API_KEY=", regex: /ANTHROPIC_API_KEY\s*=\s*["']?sk-[A-Za-z0-9_\-]{10,}/ },
+  { name: "ANTHROPIC_API_KEY=", regex: /ANTHROPIC_API_KEY\s*=\s*["']?sk-[A-Za-z0-9_-]{10,}/ },
   { name: "AWS_SECRET=", regex: /AWS_SECRET\s*=\s*["']?[A-Za-z0-9/+=]{20,}/ },
   // Generic env var secrets — require value to look like an actual secret
   // (8+ alphanumeric chars, not a placeholder like "your_key", not in regex/code context)
-  { name: "[A-Z_]+_KEY=", regex: /[A-Z][A-Z0-9_]{2,}_KEY\s*=\s*[A-Za-z0-9_\-]{8,}/ },
-  { name: "[A-Z_]+_SECRET=", regex: /[A-Z][A-Z0-9_]{2,}_SECRET\s*=\s*[A-Za-z0-9_\-]{8,}/ },
-  { name: "[A-Z_]+_TOKEN=", regex: /[A-Z][A-Z0-9_]{2,}_TOKEN\s*=\s*[A-Za-z0-9_\-]{8,}/ },
+  { name: "[A-Z_]+_KEY=", regex: /[A-Z][A-Z0-9_]{2,}_KEY\s*=\s*[A-Za-z0-9_-]{8,}/ },
+  { name: "[A-Z_]+_SECRET=", regex: /[A-Z][A-Z0-9_]{2,}_SECRET\s*=\s*[A-Za-z0-9_-]{8,}/ },
+  { name: "[A-Z_]+_TOKEN=", regex: /[A-Z][A-Z0-9_]{2,}_TOKEN\s*=\s*[A-Za-z0-9_-]{8,}/ },
   // Google OAuth credentials
-  { name: "GOCSPX-*", regex: /GOCSPX-[A-Za-z0-9_\-]{10,}/ },
+  { name: "GOCSPX-*", regex: /GOCSPX-[A-Za-z0-9_-]{10,}/ },
   { name: "google-oauth-client-id", regex: /\d{10,}-[a-z0-9]{20,}\.apps\.googleusercontent\.com/ },
   // Absolute paths with username
   { name: "/Users/[user]/", regex: /\/Users\/[user]\// },
@@ -319,11 +352,11 @@ const SECRET_PATTERNS: Array<{ name: string; regex: RegExp }> = [
 // (the P0 ordering fix), and conversely the docs idiom KEY=your_key_here isn't
 // vetoed just because it parses as an assignment.
 const PLACEHOLDER_VALUE_PATTERNS: RegExp[] = [
-  /^<[^>]+>$/,             // <YOUR_API_KEY>
-  /\bYOUR_[A-Z_]+\b/,      // YOUR_API_KEY
-  /your[-_][a-z_-]+/i,     // your_key_here, your-token, your_actual_..._here
-  /x{4,}/i,                // xxxx filler: apify_api_xxxxx
-  /\.\.\./,                // truncated examples: sk-ant-api03-...
+  /^<[^>]+>$/, // <YOUR_API_KEY>
+  /\bYOUR_[A-Z_]+\b/, // YOUR_API_KEY
+  /your[-_][a-z_-]+/i, // your_key_here, your-token, your_actual_..._here
+  /x{4,}/i, // xxxx filler: apify_api_xxxxx
+  /\.\.\./, // truncated examples: sk-ant-api03-...
 ];
 
 // Line shapes that are code manipulating variables, not literal credentials.
@@ -331,9 +364,9 @@ const PLACEHOLDER_VALUE_PATTERNS: RegExp[] = [
 // secret; a quoted literal on the right-hand side deliberately does NOT match.
 const CODE_CONTEXT_PATTERNS: RegExp[] = [
   /\.match\(|\.test\(|\.replace\(|RegExp\(/, // Regex/string operations in code
-  /\/[^/]+_KEY[^/]*\//,    // Inside regex literals: /SOME_KEY=.../
+  /\/[^/]+_KEY[^/]*\//, // Inside regex literals: /SOME_KEY=.../
   /process\.env\.\w+\s*=\s*[A-Za-z_$][\w$]*\s*(\?\?|\|\||;|$)/, // env restore from variable
-  /os\.environ/,           // Python env access
+  /os\.environ/, // Python env access
 ];
 
 /**
@@ -407,14 +440,9 @@ export class SecretScanner {
         // Secret pattern matched. Exempt only when the assigned value itself
         // is placeholder-shaped (falling back to the matched text for bare
         // tokens with no assignment), or the line is code moving variables.
-        const value =
-          extractAssignedValue(line, match.index) ?? match[0];
-        const valueIsPlaceholder = PLACEHOLDER_VALUE_PATTERNS.some((p) =>
-          p.test(value)
-        );
-        const isCodeContext =
-          CODE_CONTEXT_PATTERNS.some((p) => p.test(line)) ||
-          assignsFromCall(line, match);
+        const value = extractAssignedValue(line, match.index) ?? match[0];
+        const valueIsPlaceholder = PLACEHOLDER_VALUE_PATTERNS.some((p) => p.test(value));
+        const isCodeContext = CODE_CONTEXT_PATTERNS.some((p) => p.test(line)) || assignsFromCall(line, match);
 
         if (valueIsPlaceholder || isCodeContext) {
           // Placeholder/documentation or variable plumbing — safe to skip
@@ -467,10 +495,7 @@ export class ContentTransformer {
     }
 
     // Normalize absolute paths to relative
-    const absolutePathRegex = new RegExp(
-      escapeRegex(this.config.absolutePathPrefix),
-      "g"
-    );
+    const absolutePathRegex = new RegExp(escapeRegex(this.config.absolutePathPrefix), "g");
     const absoluteMatches = result.match(absolutePathRegex);
     if (absoluteMatches) {
       replacementCount += absoluteMatches.length;
@@ -481,10 +506,7 @@ export class ContentTransformer {
     for (const username of this.config.stripUsernames) {
       // Only strip when not part of the path prefix (already handled above)
       // Match /Users/<username> patterns still remaining
-      const usernamePathRegex = new RegExp(
-        `/Users/${escapeRegex(username)}(?!/?\\.claude)`,
-        "g"
-      );
+      const usernamePathRegex = new RegExp(`/Users/${escapeRegex(username)}(?!/?\\.claude)`, "g");
       const usernameMatches = result.match(usernamePathRegex);
       if (usernameMatches) {
         replacementCount += usernameMatches.length;
@@ -564,12 +586,10 @@ export class FileHashRegistry {
 // ─────────────────────────────────────────────────────────────
 
 export class SafetyValidator {
-  private blocklist: BlocklistConfig;
   private scanner: SecretScanner;
   private filter: BlocklistFilter;
 
   constructor(blocklist: BlocklistConfig) {
-    this.blocklist = blocklist;
     this.scanner = new SecretScanner(blocklist.blockedIdentifiers ?? []);
     this.filter = new BlocklistFilter(blocklist);
   }
@@ -597,14 +617,11 @@ export class SafetyValidator {
   }
 
   /** Layer 2: Path audit against blocklist */
-  async validatePaths(
-    stagedPaths: string[] | StagedFile[]
-  ): Promise<ValidationLayerResult> {
+  async validatePaths(stagedPaths: string[] | StagedFile[]): Promise<ValidationLayerResult> {
     const blockedPaths: string[] = [];
 
     for (const pathEntry of stagedPaths) {
-      const relativePath =
-        typeof pathEntry === "string" ? pathEntry : pathEntry.relativePath;
+      const relativePath = typeof pathEntry === "string" ? pathEntry : pathEntry.relativePath;
       if (!this.filter.isAllowed(relativePath)) {
         blockedPaths.push(relativePath);
       }
@@ -622,9 +639,7 @@ export class SafetyValidator {
   }
 
   /** Layer 3: Size anomaly detection — block files > 500KB */
-  async validateFileSizes(
-    stagedPaths: StagedFile[]
-  ): Promise<ValidationLayerResult> {
+  async validateFileSizes(stagedPaths: StagedFile[]): Promise<ValidationLayerResult> {
     const MAX_SIZE_BYTES = 500 * 1024; // 500KB
 
     for (const { relativePath, absolutePath } of stagedPaths) {
@@ -686,7 +701,7 @@ export const DEFAULT_BLOCKLIST_CONFIG: BlocklistConfig = {
 };
 
 export const DEFAULT_TRANSFORM_CONFIG: TransformConfig = {
-  absolutePathPrefix: "~/.claude",
+  absolutePathPrefix: defaultKayaHome(),
   relativeReplacement: "~/.claude",
   stripUsernames: ["[user]"],
   stripLiterals: [
@@ -723,7 +738,7 @@ const BlocklistYamlSchema = z.object({
 export function loadBlocklistConfigFrom(yamlPath: string): BlocklistConfig {
   if (!existsSync(yamlPath)) {
     throw new Error(
-      `[PublicSync] blocklist.yaml not found at ${yamlPath} — refusing to sync with the built-in default (fail-closed).`
+      `[PublicSync] blocklist.yaml not found at ${yamlPath} — refusing to sync with the built-in default (fail-closed).`,
     );
   }
   let rawParsed: unknown;
@@ -736,7 +751,7 @@ export function loadBlocklistConfigFrom(yamlPath: string): BlocklistConfig {
   const result = BlocklistYamlSchema.safeParse(rawParsed);
   if (!result.success) {
     throw new Error(
-      `[PublicSync] blocklist.yaml failed schema validation — refusing to sync (fail-closed):\n${result.error.message}`
+      `[PublicSync] blocklist.yaml failed schema validation — refusing to sync (fail-closed):\n${result.error.message}`,
     );
   }
   const parsed = result.data;
@@ -762,7 +777,7 @@ export function loadBlocklistConfigFrom(yamlPath: string): BlocklistConfig {
 export function walkAllowedFiles(sourceDir: string, filter: BlocklistFilter): string[] {
   const results: string[] = [];
   const walk = (dir: string): void => {
-    let entries;
+    let entries: import("node:fs").Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
@@ -851,23 +866,10 @@ export interface FileGroup {
  * and manages the staging area + git operations.
  */
 export class SyncEngine {
-  private config: SyncEngineConfig;
-  private filter: BlocklistFilter;
-  private scanner: SecretScanner;
-  private transformer: ContentTransformer;
-  private validator: SafetyValidator;
-  private hashRegistry: FileHashRegistry;
-
-  constructor(config: SyncEngineConfig, blocklistConfig?: BlocklistConfig) {
-    this.config = config;
-    const blocklistCfg = blocklistConfig ?? DEFAULT_BLOCKLIST_CONFIG;
-
-    this.filter = new BlocklistFilter(blocklistCfg);
-    this.scanner = new SecretScanner(blocklistCfg.blockedIdentifiers ?? []);
-    this.transformer = new ContentTransformer(DEFAULT_TRANSFORM_CONFIG);
-    this.validator = new SafetyValidator(blocklistCfg);
-    this.hashRegistry = new FileHashRegistry();
-  }
+  // The sanitization pipeline lives in SyncRunner; this class only groups files and
+  // builds commit messages. The constructor arguments are kept for API compatibility.
+  // biome-ignore lint/complexity/noUselessConstructor: signature kept for existing callers
+  constructor(_config: SyncEngineConfig, _blocklistConfig?: BlocklistConfig) {}
 
   /**
    * Generate a conventional commit message for a group of files.
@@ -880,10 +882,7 @@ export class SyncEngine {
     if (groups.length === 1) {
       const group = groups[0];
       const action = group.files.length === 1 ? "update" : "sync";
-      const fileDesc =
-        group.files.length === 1
-          ? basename(group.files[0])
-          : `${group.files.length} files`;
+      const fileDesc = group.files.length === 1 ? basename(group.files[0]) : `${group.files.length} files`;
       return `feat(${group.skill}): ${action} ${fileDesc}`;
     }
 
@@ -961,15 +960,11 @@ DESCRIPTION:
 
   if (isDryRun) {
     console.log("[PublicSync] Dry-run mode — no changes will be pushed.");
-    console.log(
-      "[PublicSync] Use the Sync workflow for a full interactive run."
-    );
+    console.log("[PublicSync] Use the Sync workflow for a full interactive run.");
     process.exit(0);
   }
 
-  console.log(
-    "[PublicSync] Run via workflow: skills/System/PublicSync/Workflows/Sync.md"
-  );
+  console.log("[PublicSync] Run via workflow: skills/System/PublicSync/Workflows/Sync.md");
   console.log("[PublicSync] Or use --dry-run / --status / --help flags.");
   process.exit(0);
 }
