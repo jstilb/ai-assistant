@@ -7,8 +7,8 @@
  *   bun UpdateIndex.ts validate      # Check index matches files
  */
 
-import { readdir, readFile, writeFile, stat, mkdir } from "fs/promises";
-import { join, basename, dirname } from "path";
+import { readdir, readFile, writeFile, stat, mkdir } from "node:fs/promises";
+import { join, basename, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
@@ -18,17 +18,25 @@ const INDEX_PATH = join(UPDATES_DIR, "index.json");
 const CHANGELOG_PATH = join(UPDATES_DIR, "CHANGELOG.md");
 const RECENT_PATH = join(KAYA_DIR, "USER/UPGRADES/RECENT.md");
 
-type SignificanceLabel = 'trivial' | 'minor' | 'moderate' | 'major' | 'critical';
-type ChangeType = 'skill_update' | 'structure_change' | 'doc_update' | 'hook_update' | 'workflow_update' | 'config_update' | 'tool_update' | 'multi_area';
+type SignificanceLabel = "trivial" | "minor" | "moderate" | "major" | "critical";
+type ChangeType =
+  | "skill_update"
+  | "structure_change"
+  | "doc_update"
+  | "hook_update"
+  | "workflow_update"
+  | "config_update"
+  | "tool_update"
+  | "multi_area";
 
 interface UpdateRecord {
   id: string;
-  timestamp: string;  // Full ISO timestamp (2026-01-13T18:34:41Z) or legacy date (2026-01-13)
+  timestamp: string; // Full ISO timestamp (2026-01-13T18:34:41Z) or legacy date (2026-01-13)
   title: string;
-  significance: SignificanceLabel;  // New: replaces impact
-  change_type: ChangeType;  // New: replaces type
-  purpose?: string;  // New: why was this change made
-  expected_improvement?: string;  // New: what should be better
+  significance: SignificanceLabel; // New: replaces impact
+  change_type: ChangeType; // New: replaces type
+  purpose?: string; // New: why was this change made
+  expected_improvement?: string; // New: what should be better
   // Legacy fields for backward compatibility
   type?: string;
   impact?: string;
@@ -57,29 +65,29 @@ interface UpdateIndex {
 function mapLegacyFields(type?: string, impact?: string): { significance: SignificanceLabel; change_type: ChangeType } {
   // Map legacy impact to significance
   const significanceMap: Record<string, SignificanceLabel> = {
-    major: 'major',
-    minor: 'minor',
-    patch: 'trivial',
-    unknown: 'minor',
+    major: "major",
+    minor: "minor",
+    patch: "trivial",
+    unknown: "minor",
   };
 
   // Map legacy type to change_type
   const changeTypeMap: Record<string, ChangeType> = {
-    feature: 'skill_update',
-    enhancement: 'skill_update',
-    refactor: 'structure_change',
-    docs: 'doc_update',
-    architectural: 'structure_change',
-    documentation: 'doc_update',
-    correction: 'doc_update',
-    identity: 'config_update',
-    infrastructure: 'structure_change',
-    unknown: 'doc_update',
+    feature: "skill_update",
+    enhancement: "skill_update",
+    refactor: "structure_change",
+    docs: "doc_update",
+    architectural: "structure_change",
+    documentation: "doc_update",
+    correction: "doc_update",
+    identity: "config_update",
+    infrastructure: "structure_change",
+    unknown: "doc_update",
   };
 
   return {
-    significance: significanceMap[impact || 'unknown'] || 'minor',
-    change_type: changeTypeMap[type || 'unknown'] || 'doc_update',
+    significance: significanceMap[impact || "unknown"] || "minor",
+    change_type: changeTypeMap[type || "unknown"] || "doc_update",
   };
 }
 
@@ -94,7 +102,7 @@ async function parseUpdateFile(filePath: string): Promise<UpdateRecord | null> {
       return parseFromMarkdown(filePath, content);
     }
 
-    const frontmatter = parseYaml(frontmatterMatch[1]);
+    const frontmatter = parseYaml(frontmatterMatch[1] ?? "");
 
     // Handle both new 'timestamp' and legacy 'date' fields
     const timestamp = frontmatter.timestamp || frontmatter.date || extractTimestampFromFilename(filePath);
@@ -143,25 +151,37 @@ function parseFromMarkdown(filePath: string, content: string): UpdateRecord | nu
 
   // Extract title from first H1
   const titleMatch = content.match(/^# (.+)$/m);
-  const title = titleMatch ? titleMatch[1] : filename.replace(/^\d{4}-\d{2}-\d{2}(-\d{6})?_/, "").replace(/-/g, " ");
+  const title = titleMatch?.[1] ?? filename.replace(/^\d{4}-\d{2}-\d{2}(-\d{6})?_/, "").replace(/-/g, " ");
 
   // Extract type from **Type:** or **Change Type:** line
   const typeMatch = content.match(/\*\*(?:Change )?Type:\*\*\s*(.+)/i);
-  const typeRaw = typeMatch ? typeMatch[1].toLowerCase().trim() : "unknown";
-  const validTypes = ["architectural", "feature", "enhancement", "documentation", "correction", "identity", "infrastructure"];
-  const type = validTypes.find(t => typeRaw.includes(t)) || "unknown";
+  const typeRaw = typeMatch?.[1] ? typeMatch[1].toLowerCase().trim() : "unknown";
+  const validTypes = [
+    "architectural",
+    "feature",
+    "enhancement",
+    "documentation",
+    "correction",
+    "identity",
+    "infrastructure",
+  ];
+  const type = validTypes.find((t) => typeRaw.includes(t)) || "unknown";
 
   // Extract impact or significance
   const impactMatch = content.match(/\*\*(?:Impact|Significance):\*\*\s*(.+)/i);
-  const impactRaw = impactMatch ? impactMatch[1].toLowerCase().replace(/[🔴🟠🟡🟢⚪]/g, '').trim() : "unknown";
+  const impactRaw = impactMatch?.[1]
+    ? impactMatch[1]
+        .toLowerCase()
+        .replace(/[🔴🟠🟡🟢⚪]/gu, "")
+        .trim()
+    : "unknown";
   const impact = impactRaw;
 
   // Map to new schema
   const mapped = mapLegacyFields(type, impact);
 
   // Extract version
-  const versionMatch = content.match(/\*\*Version:\*\*\s*(v[\d.]+)/i) ||
-                       content.match(/Kaya (v[\d.]+)/i);
+  const versionMatch = content.match(/\*\*Version:\*\*\s*(v[\d.]+)/i) || content.match(/Kaya (v[\d.]+)/i);
   const version = versionMatch ? versionMatch[1] : undefined;
 
   return {
@@ -197,7 +217,7 @@ function extractTimestampFromFilename(filePath: string): string {
 
   // Fall back to legacy format: YYYY-MM-DD_title
   const legacyMatch = filename.match(/^(\d{4}-\d{2}-\d{2})_/);
-  if (legacyMatch) {
+  if (legacyMatch?.[1]) {
     return legacyMatch[1];
   }
 
@@ -259,8 +279,9 @@ async function scanUpdateFiles(): Promise<UpdateRecord[]> {
  */
 function extractYearMonth(timestamp: string): [string, string] {
   // Works for both formats since they both start with YYYY-MM
+  // An unparseable timestamp (e.g. "unknown") has no month: bucket it as "unknown".
   const [year, month] = timestamp.split("-");
-  return [year, month];
+  return [year ?? "unknown", month ?? "unknown"];
 }
 
 function buildIndex(updates: UpdateRecord[]): UpdateIndex {
@@ -321,25 +342,25 @@ function buildIndex(updates: UpdateRecord[]): UpdateIndex {
 
 function getSignificanceBadge(significance: SignificanceLabel): string {
   const badges: Record<SignificanceLabel, string> = {
-    critical: '🔴',
-    major: '🟠',
-    moderate: '🟡',
-    minor: '🟢',
-    trivial: '⚪',
+    critical: "🔴",
+    major: "🟠",
+    moderate: "🟡",
+    minor: "🟢",
+    trivial: "⚪",
   };
   return `${badges[significance]} ${significance}`;
 }
 
 function formatChangeType(changeType: ChangeType): string {
   const labels: Record<ChangeType, string> = {
-    skill_update: 'Skill',
-    structure_change: 'Structure',
-    doc_update: 'Docs',
-    hook_update: 'Hook',
-    workflow_update: 'Workflow',
-    config_update: 'Config',
-    tool_update: 'Tool',
-    multi_area: 'Multi',
+    skill_update: "Skill",
+    structure_change: "Structure",
+    doc_update: "Docs",
+    hook_update: "Hook",
+    workflow_update: "Workflow",
+    config_update: "Config",
+    tool_update: "Tool",
+    multi_area: "Multi",
   };
   return labels[changeType];
 }
@@ -360,9 +381,17 @@ function generateChangelog(updates: UpdateRecord[]): string {
 
   for (const update of updates) {
     const [year, month] = extractYearMonth(update.timestamp);
-    if (!byYearMonth[year]) byYearMonth[year] = {};
-    if (!byYearMonth[year][month]) byYearMonth[year][month] = [];
-    byYearMonth[year][month].push(update);
+    let yearBucket = byYearMonth[year];
+    if (!yearBucket) {
+      yearBucket = {};
+      byYearMonth[year] = yearBucket;
+    }
+    let monthBucket = yearBucket[month];
+    if (!monthBucket) {
+      monthBucket = [];
+      yearBucket[month] = monthBucket;
+    }
+    monthBucket.push(update);
   }
 
   // Generate markdown by year (descending)
@@ -372,7 +401,8 @@ function generateChangelog(updates: UpdateRecord[]): string {
     lines.push(`## ${year}`);
     lines.push("");
 
-    const months = Object.keys(byYearMonth[year]).sort().reverse();
+    const monthBuckets = byYearMonth[year] ?? {};
+    const months = Object.keys(monthBuckets).sort().reverse();
 
     for (const month of months) {
       const monthName = new Date(`${year}-${month}-01`).toLocaleString("en-US", { month: "long" });
@@ -381,9 +411,11 @@ function generateChangelog(updates: UpdateRecord[]): string {
       lines.push("| Timestamp | Title | Significance | Change Type |");
       lines.push("|-----------|-------|--------------|-------------|");
 
-      for (const update of byYearMonth[year][month]) {
+      for (const update of monthBuckets[month] ?? []) {
         const link = `[${update.title}](${update.file_path})`;
-        lines.push(`| ${update.timestamp} | ${link} | ${getSignificanceBadge(update.significance)} | ${formatChangeType(update.change_type)} |`);
+        lines.push(
+          `| ${update.timestamp} | ${link} | ${getSignificanceBadge(update.significance)} | ${formatChangeType(update.change_type)} |`,
+        );
       }
 
       lines.push("");
@@ -413,7 +445,9 @@ function generateRecent(updates: UpdateRecord[], count: number = 10): string {
 
   for (const update of recent) {
     const fullPath = `~/.claude/MEMORY/KAYASYSTEMUPDATES/${update.file_path}`;
-    lines.push(`| ${update.timestamp} | [${update.title}](${fullPath}) | ${getSignificanceBadge(update.significance)} | ${formatChangeType(update.change_type)} |`);
+    lines.push(
+      `| ${update.timestamp} | [${update.title}](${fullPath}) | ${getSignificanceBadge(update.significance)} | ${formatChangeType(update.change_type)} |`,
+    );
   }
 
   lines.push("");
@@ -455,7 +489,11 @@ async function regenerate() {
   console.log(`  Total updates: ${index.total_updates}`);
   console.log(`  By significance: ${JSON.stringify(index.by_significance)}`);
   console.log(`  By change type: ${JSON.stringify(index.by_change_type)}`);
-  console.log(`  By year: ${Object.entries(index.by_year).map(([y, d]) => `${y}: ${d.count}`).join(", ")}`);
+  console.log(
+    `  By year: ${Object.entries(index.by_year)
+      .map(([y, d]) => `${y}: ${d.count}`)
+      .join(", ")}`,
+  );
 }
 
 async function validate() {
@@ -472,11 +510,11 @@ async function validate() {
     process.exit(1);
   }
 
-  const fileIds = new Set(updates.map(u => u.id));
-  const indexIds = new Set(index.updates.map(u => u.id));
+  const fileIds = new Set(updates.map((u) => u.id));
+  const indexIds = new Set(index.updates.map((u) => u.id));
 
-  const missingInIndex = [...fileIds].filter(id => !indexIds.has(id));
-  const extraInIndex = [...indexIds].filter(id => !fileIds.has(id));
+  const missingInIndex = [...fileIds].filter((id) => !indexIds.has(id));
+  const extraInIndex = [...indexIds].filter((id) => !fileIds.has(id));
 
   if (missingInIndex.length === 0 && extraInIndex.length === 0) {
     console.log("Index is up to date!");

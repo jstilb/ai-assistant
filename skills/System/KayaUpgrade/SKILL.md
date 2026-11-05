@@ -197,7 +197,7 @@ The skill has four complementary workflows:
 - **QueueRouter** — Actionable upgrade items queued for Jm review → spec-pipeline → AutonomousWork
 - **AgentMetacognition** — Triage insights via `memoryStore.capture()` → MEMORY/entries/
 - **DailyBriefing** — `EcosystemUpdatesBlock` reads `State/latest-triage-result.json`
-- **Daemon Cron** — Weekly automated run via `MEMORY/daemon/cron/jobs/kayaupgrade-weekly.yaml`
+- **Daemon Cron** — Weekly automated run via `MEMORY/daemon/cron/manifests/kayaupgrade-weekly.yaml`
 
 ## Customization
 

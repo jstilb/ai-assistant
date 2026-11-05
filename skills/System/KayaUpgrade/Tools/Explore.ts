@@ -13,22 +13,22 @@
  *   bun Tools/Explore.ts --timeout 120000  # Override timeout (ms)
  */
 
-import { existsSync } from 'node:fs';
-import { execSync } from 'node:child_process';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { z } from 'zod';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
-import { httpClient } from '../../../../lib/core/CachedHTTPClient.ts';
-import { notifySync } from '../../../../lib/core/NotificationService.ts';
+import { existsSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { z } from "zod";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
+import { notifySync } from "../../../../lib/core/NotificationService.ts";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
 const HOME = homedir();
-const SKILL_DIR = join(HOME, '.claude', 'skills', 'System', 'KayaUpgrade');
-const STATE_DIR = join(SKILL_DIR, 'State');
+const SKILL_DIR = join(HOME, ".claude", "skills", "System", "KayaUpgrade");
+const STATE_DIR = join(SKILL_DIR, "State");
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 // ============================================================================
@@ -36,12 +36,13 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 // ============================================================================
 
 const cliArgs = process.argv.slice(2);
-const DRY_RUN = cliArgs.includes('--dry-run');
+const DRY_RUN = cliArgs.includes("--dry-run");
 
-const timeoutArgIdx = cliArgs.findIndex(a => a === '--timeout');
-const EXPLORE_TIMEOUT_MS = timeoutArgIdx !== -1 && cliArgs[timeoutArgIdx + 1]
-  ? parseInt(cliArgs[timeoutArgIdx + 1], 10)
-  : parseInt(process.env.EXPLORE_TIMEOUT_MS ?? '600000', 10); // 10 min default
+const timeoutArgIdx = cliArgs.indexOf("--timeout");
+const EXPLORE_TIMEOUT_MS =
+  timeoutArgIdx !== -1 && cliArgs[timeoutArgIdx + 1]
+    ? parseInt(cliArgs[timeoutArgIdx + 1] as string, 10)
+    : parseInt(process.env.EXPLORE_TIMEOUT_MS ?? "600000", 10); // 10 min default
 
 // ============================================================================
 // Schemas — Exploration Registry
@@ -56,7 +57,7 @@ const ExploredReleaseSchema = z.object({
 const ExploredRepoSchema = z.object({
   exploredAt: z.string(),
   summary: z.string(),
-  relevance: z.enum(['HIGH', 'MEDIUM', 'LOW', 'IRRELEVANT']),
+  relevance: z.enum(["HIGH", "MEDIUM", "LOW", "IRRELEVANT"]),
 });
 
 const ExploredVideoSchema = z.object({
@@ -91,7 +92,7 @@ const AnthropicUpdateSchema = z.object({
   url: z.string(),
   date: z.string(),
   summary: z.string().optional(),
-  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
   sha: z.string().optional(),
   hash: z.string().optional(),
   version: z.string().optional(),
@@ -110,7 +111,7 @@ const YouTubeVideoSchema = z.object({
   title: z.string(),
   url: z.string(),
   duration: z.number(),
-  relevance: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  relevance: z.enum(["HIGH", "MEDIUM", "LOW"]),
 });
 
 const YouTubeFindingsSchema = z.object({
@@ -130,7 +131,7 @@ const EnrichedUpdateSchema = z.object({
   url: z.string(),
   date: z.string(),
   summary: z.string().optional(),
-  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
   sha: z.string().optional(),
   hash: z.string().optional(),
   version: z.string().optional(),
@@ -147,7 +148,7 @@ const EnrichedVideoSchema = z.object({
   title: z.string(),
   url: z.string(),
   duration: z.number(),
-  relevance: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  relevance: z.enum(["HIGH", "MEDIUM", "LOW"]),
   // Enrichment
   explored: z.boolean().default(false),
   transcript: z.string().optional(),
@@ -179,8 +180,8 @@ type EnrichedVideo = z.infer<typeof EnrichedVideoSchema>;
 // State Managers
 // ============================================================================
 
-const registrySm = createStateManager({
-  path: join(STATE_DIR, 'exploration-registry.json'),
+const registrySm = createStateManager<z.infer<typeof ExplorationRegistrySchema>>({
+  path: join(STATE_DIR, "exploration-registry.json"),
   schema: ExplorationRegistrySchema,
   defaults: () => ({
     releases: {},
@@ -190,14 +191,14 @@ const registrySm = createStateManager({
   }),
 });
 
-const exploredFindingsSm = createStateManager({
-  path: join(STATE_DIR, 'latest-explored-findings.json'),
+const exploredFindingsSm = createStateManager<z.infer<typeof ExploredFindingsSchema>>({
+  path: join(STATE_DIR, "latest-explored-findings.json"),
   schema: ExploredFindingsSchema,
   defaults: () => ({
     timestamp: new Date().toISOString(),
     exploredAt: new Date().toISOString(),
-    anthropicFindings: { timestamp: '', daysChecked: 0, updates: [] },
-    youtubeFindings: { timestamp: '', videos: [] },
+    anthropicFindings: { timestamp: "", daysChecked: 0, updates: [] },
+    youtubeFindings: { timestamp: "", videos: [] },
   }),
 });
 
@@ -211,14 +212,14 @@ const exploredFindingsSm = createStateManager({
  */
 export function isAlreadyExplored(
   registry: ExplorationRegistry,
-  type: 'releases' | 'repos' | 'videos' | 'articles',
+  type: "releases" | "repos" | "videos" | "articles",
   key: string,
   ttlDays: number = 7,
 ): boolean {
   const entry = registry[type][key];
   if (!entry) return false;
   // For IRRELEVANT repos, apply a longer TTL
-  if (type === 'repos' && 'relevance' in entry && entry.relevance === 'IRRELEVANT') {
+  if (type === "repos" && "relevance" in entry && entry.relevance === "IRRELEVANT") {
     ttlDays = 30;
   }
   const age = Date.now() - new Date(entry.exploredAt).getTime();
@@ -240,7 +241,7 @@ export function hasTimeRemaining(startTime: number, budgetMs: number, fraction: 
 export function pruneRegistry(registry: ExplorationRegistry, maxAgeDays: number = 60): number {
   let pruned = 0;
   const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
-  for (const section of ['releases', 'repos', 'videos', 'articles'] as const) {
+  for (const section of ["releases", "repos", "videos", "articles"] as const) {
     for (const [key, entry] of Object.entries(registry[section])) {
       if (Date.now() - new Date(entry.exploredAt).getTime() > maxAgeMs) {
         delete registry[section][key];
@@ -257,11 +258,11 @@ export function pruneRegistry(registry: ExplorationRegistry, maxAgeDays: number 
 // ============================================================================
 
 async function runInference(systemPrompt: string, userPrompt: string): Promise<string> {
-  const { inference } = await import('../../../../lib/core/Inference.ts');
+  const { inference } = await import("../../../../lib/core/Inference.ts");
   const result = await inference({
     systemPrompt,
     userPrompt,
-    level: 'standard', // Sonnet — better judgment for relevance scoring
+    level: "standard", // Sonnet — better judgment for relevance scoring
   });
   if (!result.success) {
     throw new Error(`Inference failed: ${result.error}`);
@@ -273,13 +274,13 @@ async function runInference(systemPrompt: string, userPrompt: string): Promise<s
 // GitHub Headers Helper
 // ============================================================================
 
-function githubHeaders(accept: string = 'application/vnd.github+json'): Record<string, string> {
+function githubHeaders(accept: string = "application/vnd.github+json"): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: accept,
-    'X-GitHub-Api-Version': '2022-11-28',
+    "X-GitHub-Api-Version": "2022-11-28",
   };
   if (GITHUB_TOKEN) {
-    headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+    headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
   }
   return headers;
 }
@@ -303,25 +304,25 @@ export async function exploreRelease(update: AnthropicUpdate): Promise<EnrichedU
 
   const releaseData = await httpClient.fetchJson<{ body?: string }>(apiUrl, {
     headers: githubHeaders(),
-    cache: 'disk',
+    cache: "disk",
     ttl: 86400, // 24h
     timeout: 15000,
   });
 
-  const body = releaseData.body ?? '';
+  const body = releaseData.body ?? "";
 
   const inferenceResult = await runInference(
-    'You are a technical writer summarizing software releases for an AI developer.',
+    "You are a technical writer summarizing software releases for an AI developer.",
     `Extract a bullet list of user-facing features and changes from these release notes. Be concise, one line per feature. Only include meaningful changes, skip version bumps and infrastructure.\n\nRelease: ${update.title}\n\n${body.slice(0, 4000)}`,
   );
 
   // Parse features: lines starting with - or *
   const features = inferenceResult
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.startsWith('-') || l.startsWith('*'))
-    .map(l => l.replace(/^[-*]\s*/, '').trim())
-    .filter(l => l.length > 0);
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("-") || l.startsWith("*"))
+    .map((l) => l.replace(/^[-*]\s*/, "").trim())
+    .filter((l) => l.length > 0);
 
   return {
     ...update,
@@ -347,8 +348,8 @@ export async function exploreRepo(update: AnthropicUpdate): Promise<EnrichedUpda
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/readme`;
 
   const readme = await httpClient.fetchText(apiUrl, {
-    headers: githubHeaders('application/vnd.github.raw'),
-    cache: 'disk',
+    headers: githubHeaders("application/vnd.github.raw"),
+    cache: "disk",
     ttl: 86400,
     timeout: 15000,
   });
@@ -384,7 +385,7 @@ README:\n${readme.slice(0, 6000)}`,
  */
 export async function exploreArticle(update: AnthropicUpdate): Promise<EnrichedUpdate> {
   // cross-skill-allowed: upgrade research scrapes release pages via the BrightData client by design (lazy import)
-  const { BrightDataTool } = await import('../../../Data/BrightData/Tools/BrightDataTool.ts');
+  const { BrightDataTool } = await import("../../../Data/BrightData/Tools/BrightDataTool.ts");
 
   const result = await new BrightDataTool().scrape(update.url, {
     startTier: 1,
@@ -398,12 +399,12 @@ export async function exploreArticle(update: AnthropicUpdate): Promise<EnrichedU
   }
 
   const stripped = result.content
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 
   const inferenceResult = await runInference(
-    'You are a senior AI agent developer reading technical articles.',
+    "You are a senior AI agent developer reading technical articles.",
     `Summarize this article in 3-5 sentences for an AI agent developer. Focus on technical insights, patterns, or tools.\n\nArticle: ${update.title}\n\n${stripped.slice(0, 4000)}`,
   );
 
@@ -420,22 +421,19 @@ export async function exploreArticle(update: AnthropicUpdate): Promise<EnrichedU
  * Only processes HIGH relevance videos.
  */
 export async function exploreVideo(video: YouTubeVideo): Promise<EnrichedVideo> {
-  if (video.relevance !== 'HIGH') {
+  if (video.relevance !== "HIGH") {
     return { ...video, explored: false };
   }
 
-  const transcriptPath = join(HOME, '.claude', 'lib', 'core', 'GetTranscript.ts');
+  const transcriptPath = join(HOME, ".claude", "lib", "core", "GetTranscript.ts");
 
   let rawOutput: string;
   try {
-    rawOutput = execSync(
-      `/opt/homebrew/bin/bun "${transcriptPath}" "${video.url}"`,
-      {
-        timeout: 120_000,
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-      },
-    );
+    rawOutput = execSync(`"${process.execPath}" "${transcriptPath}" "${video.url}"`, {
+      timeout: 120_000,
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`  ⚠️  Transcript extraction failed for ${video.title}: ${msg}`);
@@ -443,8 +441,8 @@ export async function exploreVideo(video: YouTubeVideo): Promise<EnrichedVideo> 
   }
 
   // Extract transcript between markers
-  const startMarker = '--- TRANSCRIPT START ---';
-  const endMarker = '--- TRANSCRIPT END ---';
+  const startMarker = "--- TRANSCRIPT START ---";
+  const endMarker = "--- TRANSCRIPT END ---";
   const startIdx = rawOutput.indexOf(startMarker);
   const endIdx = rawOutput.indexOf(endMarker);
 
@@ -462,7 +460,7 @@ export async function exploreVideo(video: YouTubeVideo): Promise<EnrichedVideo> 
   }
 
   const summary = await runInference(
-    'You are a senior AI agent developer watching technical videos.',
+    "You are a senior AI agent developer watching technical videos.",
     `Summarize this video in 3-5 sentences for an AI agent developer. Extract any actionable techniques.\n\nVideo: ${video.title}\n\n${transcript.slice(0, 4000)}`,
   );
 
@@ -478,15 +476,15 @@ export async function exploreVideo(video: YouTubeVideo): Promise<EnrichedVideo> 
 // Registry Key Helpers
 // ============================================================================
 
-type RegistryType = 'releases' | 'repos' | 'videos' | 'articles';
+type RegistryType = "releases" | "repos" | "videos" | "articles";
 
 interface QueueItem {
   registryType: RegistryType;
   key: string;
   title: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  priority: "HIGH" | "MEDIUM" | "LOW";
   // Discriminated union payload
-  kind: 'release' | 'repo' | 'article' | 'video';
+  kind: "release" | "repo" | "article" | "video";
   update?: AnthropicUpdate;
   video?: YouTubeVideo;
 }
@@ -528,15 +526,13 @@ function videoRegistryKey(video: YouTubeVideo): string {
 // Parse relevance from inference output (for repo exploration)
 // ============================================================================
 
-function parseRelevance(
-  inferenceOutput: string,
-): 'HIGH' | 'MEDIUM' | 'LOW' | 'IRRELEVANT' {
+function parseRelevance(inferenceOutput: string): "HIGH" | "MEDIUM" | "LOW" | "IRRELEVANT" {
   const firstLines = inferenceOutput.slice(0, 300).toUpperCase();
-  if (firstLines.includes('IRRELEVANT')) return 'IRRELEVANT';
-  if (firstLines.includes('HIGH')) return 'HIGH';
-  if (firstLines.includes('MEDIUM')) return 'MEDIUM';
-  if (firstLines.includes('LOW')) return 'LOW';
-  return 'LOW';
+  if (firstLines.includes("IRRELEVANT")) return "IRRELEVANT";
+  if (firstLines.includes("HIGH")) return "HIGH";
+  if (firstLines.includes("MEDIUM")) return "MEDIUM";
+  if (firstLines.includes("LOW")) return "LOW";
+  return "LOW";
 }
 
 // ============================================================================
@@ -546,33 +542,37 @@ function parseRelevance(
 async function main() {
   const startTime = Date.now();
 
-  console.log('🔍 KayaUpgrade Explorer\n');
+  console.log("🔍 KayaUpgrade Explorer\n");
   console.log(`⏱️  Time budget: ${EXPLORE_TIMEOUT_MS / 1000}s`);
-  if (DRY_RUN) console.log('🔵 DRY RUN — no fetches or saves\n');
+  if (DRY_RUN) console.log("🔵 DRY RUN — no fetches or saves\n");
 
   // ── 1. Load raw findings ──────────────────────────────────────────────────
 
-  const anthropicPath = join(STATE_DIR, 'latest-anthropic-findings.json');
-  const youtubePath = join(STATE_DIR, 'latest-youtube-findings.json');
+  const anthropicPath = join(STATE_DIR, "latest-anthropic-findings.json");
+  const youtubePath = join(STATE_DIR, "latest-youtube-findings.json");
 
-  const anthropicSm = createStateManager({
+  const anthropicSm = createStateManager<z.infer<typeof AnthropicFindingsSchema>>({
     path: anthropicPath,
     schema: AnthropicFindingsSchema,
-    defaults: () => ({ timestamp: '', daysChecked: 0, updates: [] }),
+    defaults: () => ({ timestamp: "", daysChecked: 0, updates: [] }),
   });
 
-  const youtubeSm = createStateManager({
+  const youtubeSm = createStateManager<z.infer<typeof YouTubeFindingsSchema>>({
     path: youtubePath,
     schema: YouTubeFindingsSchema,
-    defaults: () => ({ timestamp: '', videos: [] }),
+    defaults: () => ({ timestamp: "", videos: [] }),
   });
 
   const [anthropicFindings, youtubeFindings] = await Promise.all([
-    existsSync(anthropicPath) ? anthropicSm.load() : Promise.resolve({ timestamp: '', daysChecked: 0, updates: [] as AnthropicUpdate[] }),
-    existsSync(youtubePath) ? youtubeSm.load() : Promise.resolve({ timestamp: '', videos: [] as YouTubeVideo[] }),
+    existsSync(anthropicPath)
+      ? anthropicSm.load()
+      : Promise.resolve<z.infer<typeof AnthropicFindingsSchema>>({ timestamp: "", daysChecked: 0, updates: [] }),
+    existsSync(youtubePath) ? youtubeSm.load() : Promise.resolve({ timestamp: "", videos: [] as YouTubeVideo[] }),
   ]);
 
-  console.log(`📂 Loaded ${anthropicFindings.updates.length} Anthropic updates, ${youtubeFindings.videos.length} YouTube videos\n`);
+  console.log(
+    `📂 Loaded ${anthropicFindings.updates.length} Anthropic updates, ${youtubeFindings.videos.length} YouTube videos\n`,
+  );
 
   // ── 2. Load exploration registry ──────────────────────────────────────────
 
@@ -593,34 +593,34 @@ async function main() {
     const lowerType = update.type.toLowerCase();
     const lowerCategory = update.category.toLowerCase();
 
-    if (lowerType === 'release' || lowerCategory === 'release') {
+    if (lowerType === "release" || lowerCategory === "release") {
       // Release → explore full release notes
       queue.push({
-        registryType: 'releases',
+        registryType: "releases",
         key: releaseRegistryKey(update),
         title: update.title,
         priority: update.priority,
-        kind: 'release',
+        kind: "release",
         update,
       });
-    } else if (lowerCategory === 'trending' || update.source === 'GitHub Trending') {
+    } else if (lowerCategory === "trending" || update.source === "GitHub Trending") {
       // Trending repo → explore README
       queue.push({
-        registryType: 'repos',
+        registryType: "repos",
         key: repoRegistryKey(update),
         title: update.title,
         priority: update.priority,
-        kind: 'repo',
+        kind: "repo",
         update,
       });
-    } else if (lowerType === 'blog' || lowerType === 'docs' || lowerType === 'changelog') {
+    } else if (lowerType === "blog" || lowerType === "docs" || lowerType === "changelog") {
       // Blog/docs/changelog → scrape article text
       queue.push({
-        registryType: 'articles',
+        registryType: "articles",
         key: articleRegistryKey(update),
         title: update.title,
         priority: update.priority,
-        kind: 'article',
+        kind: "article",
         update,
       });
     }
@@ -628,13 +628,13 @@ async function main() {
   }
 
   for (const video of youtubeFindings.videos) {
-    if (video.relevance !== 'HIGH') continue; // skip non-HIGH videos early
+    if (video.relevance !== "HIGH") continue; // skip non-HIGH videos early
     queue.push({
-      registryType: 'videos',
+      registryType: "videos",
       key: videoRegistryKey(video),
       title: video.title,
       priority: video.relevance, // HIGH/MEDIUM/LOW maps to priority
-      kind: 'video',
+      kind: "video",
       video,
     });
   }
@@ -653,10 +653,10 @@ async function main() {
   if (DRY_RUN) {
     for (const item of queue) {
       const cached = isAlreadyExplored(registry, item.registryType, item.key);
-      const status = cached ? '[CACHED]' : '[PENDING]';
+      const status = cached ? "[CACHED]" : "[PENDING]";
       console.log(`  ${status} [${item.priority}] [${item.kind}] ${item.title}`);
     }
-    console.log('\n🔵 Dry run complete — nothing fetched or saved.');
+    console.log("\n🔵 Dry run complete — nothing fetched or saved.");
     return;
   }
 
@@ -664,10 +664,10 @@ async function main() {
 
   // Start with un-enriched copies; exploration will replace entries in place
   const enrichedUpdates: Map<string, EnrichedUpdate> = new Map(
-    anthropicFindings.updates.map(u => [u.url, { ...u, explored: false }]),
+    anthropicFindings.updates.map((u) => [u.url, { ...u, explored: false }]),
   );
   const enrichedVideos: Map<string, EnrichedVideo> = new Map(
-    youtubeFindings.videos.map(v => [v.videoId, { ...v, explored: false }]),
+    youtubeFindings.videos.map((v) => [v.videoId, { ...v, explored: false }]),
   );
 
   // ── 6. Copy cached summaries into enriched output immediately ─────────────
@@ -675,7 +675,7 @@ async function main() {
   for (const item of queue) {
     if (!isAlreadyExplored(registry, item.registryType, item.key)) continue;
 
-    if (item.kind === 'video' && item.video) {
+    if (item.kind === "video" && item.video) {
       const cached = registry.videos[item.key];
       if (cached) {
         const existing = enrichedVideos.get(item.video.videoId);
@@ -689,15 +689,16 @@ async function main() {
       }
     } else if (item.update) {
       const existing = enrichedUpdates.get(item.update.url);
-      if (existing) {
-        const regEntry = registry[item.registryType][item.key];
+      const regEntry = registry[item.registryType][item.key];
+      if (existing && regEntry) {
         enrichedUpdates.set(item.update.url, {
           ...existing,
           explored: true,
           contentSummary: regEntry.summary,
-          features: item.kind === 'release' && 'features' in regEntry
-            ? (regEntry as z.infer<typeof ExploredReleaseSchema>).features
-            : undefined,
+          features:
+            item.kind === "release" && "features" in regEntry
+              ? (regEntry as z.infer<typeof ExploredReleaseSchema>).features
+              : undefined,
         });
       }
     }
@@ -723,7 +724,7 @@ async function main() {
     console.log(`  🔎 [${item.priority}] ${item.title.slice(0, 80)}...`);
 
     try {
-      if (item.kind === 'release' && item.update) {
+      if (item.kind === "release" && item.update) {
         const enriched = await exploreRelease(item.update);
         enrichedUpdates.set(item.update.url, enriched);
 
@@ -731,60 +732,54 @@ async function main() {
         registry.releases[item.key] = {
           exploredAt: new Date().toISOString(),
           features: enriched.features ?? [],
-          summary: enriched.contentSummary ?? '',
+          summary: enriched.contentSummary ?? "",
         };
 
         explored++;
-
-      } else if (item.kind === 'repo' && item.update) {
+      } else if (item.kind === "repo" && item.update) {
         const enriched = await exploreRepo(item.update);
         enrichedUpdates.set(item.update.url, enriched);
 
-        const relevance = parseRelevance(enriched.contentSummary ?? '');
+        const relevance = parseRelevance(enriched.contentSummary ?? "");
         registry.repos[item.key] = {
           exploredAt: new Date().toISOString(),
-          summary: enriched.contentSummary ?? '',
+          summary: enriched.contentSummary ?? "",
           relevance,
         };
 
         explored++;
-
-      } else if (item.kind === 'article' && item.update) {
+      } else if (item.kind === "article" && item.update) {
         const enriched = await exploreArticle(item.update);
         enrichedUpdates.set(item.update.url, enriched);
 
         registry.articles[item.key] = {
           exploredAt: new Date().toISOString(),
-          summary: enriched.contentSummary ?? '',
+          summary: enriched.contentSummary ?? "",
         };
 
         explored++;
-
-      } else if (item.kind === 'video' && item.video) {
+      } else if (item.kind === "video" && item.video) {
         const enriched = await exploreVideo(item.video);
         enrichedVideos.set(item.video.videoId, enriched);
 
         if (enriched.explored) {
           registry.videos[item.key] = {
             exploredAt: new Date().toISOString(),
-            summary: enriched.transcriptSummary ?? '',
+            summary: enriched.transcriptSummary ?? "",
           };
         }
 
         explored++;
       }
     } catch (error) {
-      console.warn(
-        `  ⚠️  Failed to explore "${item.title}":`,
-        error instanceof Error ? error.message : String(error),
-      );
+      console.warn(`  ⚠️  Failed to explore "${item.title}":`, error instanceof Error ? error.message : String(error));
       // Continue — never abort full run on single failure
     }
   }
 
   // Count remaining time-skipped items
   // (already tracked in the loop above, but recount for any that weren't iterated)
-  const actualTimeSkipped = queue.filter(item => {
+  const actualTimeSkipped = queue.filter((item) => {
     if (isAlreadyExplored(registry, item.registryType, item.key)) return false;
     return !hasTimeRemaining(startTime, EXPLORE_TIMEOUT_MS);
   }).length;
@@ -814,12 +809,14 @@ async function main() {
   // ── 9. Summary ─────────────────────────────────────────────────────────────
 
   console.log(`\n📊 Exploration complete: ${explored} explored, ${skipped} cached, ${timeSkipped} skipped (time)`);
-  console.log(`📁 Saved: ${join(STATE_DIR, 'latest-explored-findings.json')}`);
+  console.log(`📁 Saved: ${join(STATE_DIR, "latest-explored-findings.json")}`);
 
   notifySync(`KayaUpgrade Explore: ${explored} items explored`);
 }
 
-main().catch(error => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
+    process.exit(1);
+  });
+}

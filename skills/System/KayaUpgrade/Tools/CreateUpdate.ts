@@ -16,11 +16,12 @@
  *   --stdin             Accept full input as JSON via stdin (for automation)
  */
 
-import { writeFile, mkdir, readFile } from "fs/promises";
-import { join } from "path";
-import { parseArgs } from "util";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
 import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { readStdinText } from "../../../../lib/core/CliStdin.ts";
 
 const KAYA_DIR = getKayaHome();
 const UPDATES_DIR = join(KAYA_DIR, "MEMORY/KAYASYSTEMUPDATES");
@@ -30,27 +31,27 @@ const INDEX_PATH = join(UPDATES_DIR, "INDEX.md");
 // Types and Validation
 // ============================================================================
 
-type SignificanceLabel = 'trivial' | 'minor' | 'moderate' | 'major' | 'critical';
+type SignificanceLabel = "trivial" | "minor" | "moderate" | "major" | "critical";
 type ChangeType =
-  | 'skill_update'
-  | 'structure_change'
-  | 'doc_update'
-  | 'hook_update'
-  | 'workflow_update'
-  | 'config_update'
-  | 'tool_update'
-  | 'multi_area';
+  | "skill_update"
+  | "structure_change"
+  | "doc_update"
+  | "hook_update"
+  | "workflow_update"
+  | "config_update"
+  | "tool_update"
+  | "multi_area";
 
-const VALID_SIGNIFICANCE: SignificanceLabel[] = ['trivial', 'minor', 'moderate', 'major', 'critical'];
+const VALID_SIGNIFICANCE: SignificanceLabel[] = ["trivial", "minor", "moderate", "major", "critical"];
 const VALID_CHANGE_TYPES: ChangeType[] = [
-  'skill_update',
-  'structure_change',
-  'doc_update',
-  'hook_update',
-  'workflow_update',
-  'config_update',
-  'tool_update',
-  'multi_area',
+  "skill_update",
+  "structure_change",
+  "doc_update",
+  "hook_update",
+  "workflow_update",
+  "config_update",
+  "tool_update",
+  "multi_area",
 ];
 
 // Generic titles to reject
@@ -97,10 +98,7 @@ function generateTimestamp(): string {
 }
 
 function timestampForFilename(timestamp: string): string {
-  return timestamp
-    .replace("T", "-")
-    .replace(/:/g, "")
-    .replace("Z", "");
+  return timestamp.replace("T", "-").replace(/:/g, "").replace("Z", "");
 }
 
 function generateId(timestamp: string, title: string): string {
@@ -115,7 +113,7 @@ async function prependToIndex(
   timestamp: string,
   title: string,
   significance: SignificanceLabel,
-  changeType: ChangeType
+  changeType: ChangeType,
 ): Promise<void> {
   try {
     const indexContent = await readFile(INDEX_PATH, "utf-8");
@@ -141,10 +139,9 @@ async function prependToIndex(
     lines.splice(insertIndex, 0, newEntry);
 
     // Update the total count at the bottom
-    const updatedContent = lines.join("\n").replace(
-      /\*\*Total:\*\* (\d+) updates/,
-      (match, count) => `**Total:** ${parseInt(count) + 1} updates`
-    );
+    const updatedContent = lines
+      .join("\n")
+      .replace(/\*\*Total:\*\* (\d+) updates/, (_match, count) => `**Total:** ${parseInt(count) + 1} updates`);
 
     await writeFile(INDEX_PATH, updatedContent);
     console.log(`Prepended entry to INDEX.md`);
@@ -169,31 +166,31 @@ interface NarrativeData {
   problem?: string;
   solution?: string;
   verification?: string;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
 }
 
 // New verbose narrative format
 interface VerboseNarrative {
   // The Story (1-3 paragraphs)
-  story_background?: string;    // Paragraph 1: Context/background
-  story_problem?: string;       // Paragraph 2: What was broken/limited
-  story_resolution?: string;    // Paragraph 3: How we fixed it
+  story_background?: string; // Paragraph 1: Context/background
+  story_problem?: string; // Paragraph 2: What was broken/limited
+  story_resolution?: string; // Paragraph 3: How we fixed it
 
   // Before/After narratives
-  how_it_was?: string;          // "We used to do it this way"
-  how_it_was_bullets?: string[];// Characteristics of old approach
-  how_it_is?: string;           // "We now do it this way"
+  how_it_was?: string; // "We used to do it this way"
+  how_it_was_bullets?: string[]; // Characteristics of old approach
+  how_it_is?: string; // "We now do it this way"
   how_it_is_bullets?: string[]; // Improvements in new approach
 
   // Going forward
-  future_impact?: string;       // "In the future, X will happen"
-  future_bullets?: string[];    // Specific future implications
+  future_impact?: string; // "In the future, X will happen"
+  future_bullets?: string[]; // Specific future implications
 
   // Verification
   verification_steps?: string[];
   verification_commands?: string[];
 
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
 }
 
 interface ContentOptions {
@@ -206,7 +203,7 @@ interface ContentOptions {
   purpose: string;
   expected_improvement: string;
   integrity_work: IntegrityWork;
-  narrative?: NarrativeData;           // Legacy format
+  narrative?: NarrativeData; // Legacy format
   verbose_narrative?: VerboseNarrative; // New verbose format
 }
 
@@ -248,7 +245,7 @@ function generateContent(options: ContentOptions): string {
     frontmatter.push('  - "path/to/file"');
   }
 
-  const confidence = vn?.confidence || n?.confidence || 'medium';
+  const confidence = vn?.confidence || n?.confidence || "medium";
   frontmatter.push(`inference_confidence: "${confidence}"`);
   frontmatter.push("---");
 
@@ -260,9 +257,13 @@ function generateContent(options: ContentOptions): string {
 
   if (vn) {
     // New verbose format
-    const bg = vn.story_background || `This update addresses changes to the Kaya system related to ${formatChangeType(change_type).toLowerCase()}.`;
-    const prob = vn.story_problem || `The existing approach ${purpose ? `needed improvement: ${purpose}` : 'required modification to better serve system goals.'}`;
-    const res = vn.story_resolution || `${expected_improvement || 'The system was updated to address this need.'}`;
+    const bg =
+      vn.story_background ||
+      `This update addresses changes to the Kaya system related to ${formatChangeType(change_type).toLowerCase()}.`;
+    const prob =
+      vn.story_problem ||
+      `The existing approach ${purpose ? `needed improvement: ${purpose}` : "required modification to better serve system goals."}`;
+    const res = vn.story_resolution || `${expected_improvement || "The system was updated to address this need."}`;
 
     storySection = `## The Story
 
@@ -290,9 +291,9 @@ function generateContent(options: ContentOptions): string {
 
 **Background:** This update addresses ${formatChangeType(change_type).toLowerCase()} in the Kaya system.
 
-**The Problem:** ${purpose || 'System maintenance and improvement.'}
+**The Problem:** ${purpose || "System maintenance and improvement."}
 
-**The Resolution:** ${expected_improvement || 'The system was updated accordingly.'}`;
+**The Resolution:** ${expected_improvement || "The system was updated accordingly."}`;
   }
 
   // === HOW IT USED TO WORK ===
@@ -300,9 +301,9 @@ function generateContent(options: ContentOptions): string {
   if (vn?.how_it_was || vn?.how_it_was_bullets?.length) {
     howItWasSection = `## How It Used To Work
 
-${vn.how_it_was || 'Previously, the system operated as follows:'}
+${vn.how_it_was || "Previously, the system operated as follows:"}
 
-${vn.how_it_was_bullets?.length ? 'This approach had these characteristics:\n' + vn.how_it_was_bullets.map(b => `- ${b}`).join('\n') : ''}`;
+${vn.how_it_was_bullets?.length ? "This approach had these characteristics:\n" + vn.how_it_was_bullets.map((b) => `- ${b}`).join("\n") : ""}`;
   } else {
     howItWasSection = `## How It Used To Work
 
@@ -314,27 +315,24 @@ ${vn.how_it_was_bullets?.length ? 'This approach had these characteristics:\n' +
   if (vn?.how_it_is || vn?.how_it_is_bullets?.length) {
     howItIsSection = `## How It Works Now
 
-${vn.how_it_is || 'The system now operates as follows:'}
+${vn.how_it_is || "The system now operates as follows:"}
 
-${vn.how_it_is_bullets?.length ? 'Key improvements:\n' + vn.how_it_is_bullets.map(b => `- ${b}`).join('\n') : ''}`;
+${vn.how_it_is_bullets?.length ? "Key improvements:\n" + vn.how_it_is_bullets.map((b) => `- ${b}`).join("\n") : ""}`;
   } else {
     howItIsSection = `## How It Works Now
 
-${expected_improvement || '*New behavior matches the changes made below.*'}`;
+${expected_improvement || "*New behavior matches the changes made below.*"}`;
   }
 
   // === CHANGES MADE ===
-  const filesCreated = files.filter(f => f.includes('CREATE') || f.includes('new'));
-  const filesModified = files.filter(f => !filesCreated.includes(f));
-
   let changesSection = `## Changes Made
 
 ### Files Modified`;
 
   if (files.length > 0) {
-    changesSection += '\n' + files.map(f => `- \`${f}\``).join('\n');
+    changesSection += "\n" + files.map((f) => `- \`${f}\``).join("\n");
   } else {
-    changesSection += '\n- *No files recorded*';
+    changesSection += "\n- *No files recorded*";
   }
 
   // Add integrity info if meaningful
@@ -345,7 +343,10 @@ ${expected_improvement || '*New behavior matches the changes made below.*'}`;
 - **References Found:** ${integrity_work.references_found}
 - **References Updated:** ${integrity_work.references_updated}`;
     if (integrity_work.locations_checked.length > 0) {
-      changesSection += `\n- **Locations Checked:** ${integrity_work.locations_checked.slice(0, 5).map(l => `\`${l}\``).join(', ')}`;
+      changesSection += `\n- **Locations Checked:** ${integrity_work.locations_checked
+        .slice(0, 5)
+        .map((l) => `\`${l}\``)
+        .join(", ")}`;
       if (integrity_work.locations_checked.length > 5) {
         changesSection += ` and ${integrity_work.locations_checked.length - 5} more`;
       }
@@ -357,13 +358,13 @@ ${expected_improvement || '*New behavior matches the changes made below.*'}`;
   if (vn?.future_impact || vn?.future_bullets?.length) {
     goingForwardSection = `## Going Forward
 
-${vn.future_impact || 'In the future:'}
+${vn.future_impact || "In the future:"}
 
-${vn.future_bullets?.length ? vn.future_bullets.map(b => `- ${b}`).join('\n') : ''}`;
+${vn.future_bullets?.length ? vn.future_bullets.map((b) => `- ${b}`).join("\n") : ""}`;
   } else {
     goingForwardSection = `## Going Forward
 
-${expected_improvement ? `In the future, ${expected_improvement.toLowerCase().replace(/^improved?\s*/i, '')}` : '*Future implications not specified.*'}`;
+${expected_improvement ? `In the future, ${expected_improvement.toLowerCase().replace(/^improved?\s*/i, "")}` : "*Future implications not specified.*"}`;
   }
 
   // === VERIFICATION ===
@@ -372,14 +373,14 @@ ${expected_improvement ? `In the future, ${expected_improvement.toLowerCase().re
     verificationSection = `## Verification
 
 **Tests Performed:**
-${vn.verification_steps?.map(s => `- ${s}`).join('\n') || '- *None recorded*'}`;
+${vn.verification_steps?.map((s) => `- ${s}`).join("\n") || "- *None recorded*"}`;
 
     if (vn.verification_commands?.length) {
       verificationSection += `
 
 **Verification Commands:**
 \`\`\`bash
-${vn.verification_commands.join('\n')}
+${vn.verification_commands.join("\n")}
 \`\`\``;
     }
   } else if (n?.verification) {
@@ -431,25 +432,25 @@ ${verificationSection}
 
 function getSignificanceBadge(significance: SignificanceLabel): string {
   const badges: Record<SignificanceLabel, string> = {
-    critical: '🔴 Critical',
-    major: '🟠 Major',
-    moderate: '🟡 Moderate',
-    minor: '🟢 Minor',
-    trivial: '⚪ Trivial',
+    critical: "🔴 Critical",
+    major: "🟠 Major",
+    moderate: "🟡 Moderate",
+    minor: "🟢 Minor",
+    trivial: "⚪ Trivial",
   };
   return badges[significance];
 }
 
 function formatChangeType(changeType: ChangeType): string {
   const labels: Record<ChangeType, string> = {
-    skill_update: 'Skill Update',
-    structure_change: 'Structure Change',
-    doc_update: 'Documentation Update',
-    hook_update: 'Hook Update',
-    workflow_update: 'Workflow Update',
-    config_update: 'Config Update',
-    tool_update: 'Tool Update',
-    multi_area: 'Multi-Area',
+    skill_update: "Skill Update",
+    structure_change: "Structure Change",
+    doc_update: "Documentation Update",
+    hook_update: "Hook Update",
+    workflow_update: "Workflow Update",
+    config_update: "Config Update",
+    tool_update: "Tool Update",
+    multi_area: "Multi-Area",
   };
   return labels[changeType];
 }
@@ -457,22 +458,6 @@ function formatChangeType(changeType: ChangeType): string {
 // ============================================================================
 // Stdin Input
 // ============================================================================
-
-async function readStdin(): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (process.stdin.isTTY) {
-      resolve(null);
-      return;
-    }
-
-    let data = '';
-    const timeout = setTimeout(() => resolve(null), 1000);
-
-    process.stdin.on('data', (chunk) => { data += chunk.toString(); });
-    process.stdin.on('end', () => { clearTimeout(timeout); resolve(data || null); });
-    process.stdin.on('error', () => { clearTimeout(timeout); resolve(null); });
-  });
-}
 
 interface StdinInput {
   title: string;
@@ -482,7 +467,7 @@ interface StdinInput {
   expected_improvement?: string;
   files?: string[];
   integrity_work?: IntegrityWork;
-  narrative?: NarrativeData;           // Legacy format
+  narrative?: NarrativeData; // Legacy format
   verbose_narrative?: VerboseNarrative; // New verbose format (preferred)
 }
 
@@ -509,12 +494,14 @@ async function main() {
 
   if (values.help) {
     console.log("CreateUpdate - Create new system update files\n");
-    console.log("Usage: bun CreateUpdate.ts --title \"My Update\" [options]\n");
+    console.log('Usage: bun CreateUpdate.ts --title "My Update" [options]\n');
     console.log("       echo '{...}' | bun CreateUpdate.ts --stdin\n");
     console.log("Options:");
     console.log("  --title, -t         Update title (required, 4-8 words)");
     console.log("  --significance, -s  critical|major|moderate|minor|trivial");
-    console.log("  --change-type, -c   skill_update|structure_change|doc_update|hook_update|workflow_update|config_update|tool_update|multi_area");
+    console.log(
+      "  --change-type, -c   skill_update|structure_change|doc_update|hook_update|workflow_update|config_update|tool_update|multi_area",
+    );
     console.log("  --purpose, -p       Why was this change made");
     console.log("  --improvement, -i   What should be better as a result");
     console.log("  --files, -f         Comma-separated list of affected files");
@@ -523,7 +510,9 @@ async function main() {
     console.log("  --help, -h          Show this help");
     console.log("");
     console.log("Stdin JSON format:");
-    console.log('  { "title": "...", "significance": "major", "change_type": "skill_update", "files": [...], "purpose": "...", "expected_improvement": "..." }');
+    console.log(
+      '  { "title": "...", "significance": "major", "change_type": "skill_update", "files": [...], "purpose": "...", "expected_improvement": "..." }',
+    );
     process.exit(0);
   }
 
@@ -539,7 +528,7 @@ async function main() {
 
   // Check for stdin input mode
   if (values.stdin) {
-    const stdinData = await readStdin();
+    const stdinData = (await readStdinText({ timeoutMs: 1000, trim: false })) || null;
     if (!stdinData) {
       console.error("Error: --stdin specified but no JSON input received");
       process.exit(1);
@@ -577,7 +566,7 @@ async function main() {
     changeType = (values["change-type"] as ChangeType) || "skill_update";
     purpose = values.purpose || "System maintenance";
     expectedImprovement = values.improvement || "Improved system behavior";
-    files = values.files ? values.files.split(",").map(f => f.trim()) : [];
+    files = values.files ? values.files.split(",").map((f) => f.trim()) : [];
     integrityWork = { references_found: 0, references_updated: 0, locations_checked: [] };
     narrative = undefined;
     verboseNarrative = undefined;
@@ -608,7 +597,11 @@ async function main() {
   // Generate timestamp and ID
   const timestamp = values.timestamp || generateTimestamp();
   const [datePart] = timestamp.split("T");
-  const [year, month] = datePart.split("-");
+  const [year, month] = (datePart ?? "").split("-");
+  if (!year || !month) {
+    console.error(`Invalid timestamp "${timestamp}": expected YYYY-MM-DD...`);
+    process.exit(1);
+  }
   const id = generateId(timestamp, title);
   const filename = `${id}.md`;
 
@@ -643,46 +636,41 @@ async function main() {
     const narrativeContent = verboseNarrative
       ? `## The Story
 
-**Background:** ${verboseNarrative.story_background || 'N/A'}
+**Background:** ${verboseNarrative.story_background || "N/A"}
 
-**The Problem:** ${verboseNarrative.story_problem || 'N/A'}
+**The Problem:** ${verboseNarrative.story_problem || "N/A"}
 
-**The Resolution:** ${verboseNarrative.story_resolution || 'N/A'}
+**The Resolution:** ${verboseNarrative.story_resolution || "N/A"}
 
 ## How It Used To Work
 
-${verboseNarrative.how_it_was || 'N/A'}
+${verboseNarrative.how_it_was || "N/A"}
 
-${verboseNarrative.how_it_was_bullets?.map(b => `- ${b}`).join('\n') || ''}
+${verboseNarrative.how_it_was_bullets?.map((b) => `- ${b}`).join("\n") || ""}
 
 ## How It Works Now
 
-${verboseNarrative.how_it_is || 'N/A'}
+${verboseNarrative.how_it_is || "N/A"}
 
-${verboseNarrative.how_it_is_bullets?.map(b => `- ${b}`).join('\n') || ''}
+${verboseNarrative.how_it_is_bullets?.map((b) => `- ${b}`).join("\n") || ""}
 
 ## Going Forward
 
-${verboseNarrative.future_impact || 'N/A'}
+${verboseNarrative.future_impact || "N/A"}
 
-${verboseNarrative.future_bullets?.map(b => `- ${b}`).join('\n') || ''}`
+${verboseNarrative.future_bullets?.map((b) => `- ${b}`).join("\n") || ""}`
       : `${purpose}\n\n${expectedImprovement}`;
 
-    const tags = [
-      'system-update',
-      significance,
-      changeType,
-      ...(files.length > 0 ? ['files-modified'] : []),
-    ];
+    const tags = ["system-update", significance, changeType, ...(files.length > 0 ? ["files-modified"] : [])];
 
     await memoryStore.capture({
-      type: 'artifact',
+      type: "artifact",
       category: changeType,
       title,
       content: narrativeContent,
       tags,
-      tier: 'warm',
-      source: 'System/DocumentSession',
+      tier: "warm",
+      source: "System/DocumentSession",
       metadata: {
         significance,
         change_type: changeType,
@@ -691,7 +679,7 @@ ${verboseNarrative.future_bullets?.map(b => `- ${b}`).join('\n') || ''}`
         paisystemupdates_path: filePath,
         purpose,
         expected_improvement: expectedImprovement,
-        confidence: verboseNarrative?.confidence || narrative?.confidence || 'medium',
+        confidence: verboseNarrative?.confidence || narrative?.confidence || "medium",
       },
     });
   } catch (memoryError) {

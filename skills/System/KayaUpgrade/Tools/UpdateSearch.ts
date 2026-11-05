@@ -12,8 +12,8 @@
  *   bun UpdateSearch.ts show <id>             # Show full update details
  */
 
-import { readFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { readFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 const KAYA_DIR = getKayaHome(); // was KAYA_DIR-only; getKayaHome() superset
@@ -23,12 +23,12 @@ const INDEX_PATH = join(UPDATES_DIR, "index.json");
 interface UpdateRecord {
   id: string;
   date: string;
-  timestamp?: string;  // New schema
+  timestamp?: string; // New schema
   title: string;
-  type?: string;  // Legacy
-  impact?: string;  // Legacy
-  significance?: string;  // New schema
-  change_type?: string;  // New schema
+  type?: string; // Legacy
+  impact?: string; // Legacy
+  significance?: string; // New schema
+  change_type?: string; // New schema
   version?: string;
   tags: string[];
   files_affected: string[];
@@ -42,7 +42,7 @@ interface UpdateIndex {
   by_year: Record<string, { count: number; months: string[] }>;
   by_significance?: Record<string, number>;
   by_change_type?: Record<string, number>;
-  by_type?: Record<string, number>;  // Legacy
+  by_type?: Record<string, number>; // Legacy
   updates: UpdateRecord[];
 }
 
@@ -86,12 +86,7 @@ function formatTable(updates: UpdateRecord[]): string {
 
 function formatDetail(update: UpdateRecord): string {
   const dateStr = update.timestamp || update.date || "unknown";
-  const lines: string[] = [
-    `# ${update.title}`,
-    "",
-    `**ID:** ${update.id}`,
-    `**Date:** ${dateStr}`,
-  ];
+  const lines: string[] = [`# ${update.title}`, "", `**ID:** ${update.id}`, `**Date:** ${dateStr}`];
 
   // Support both new and legacy schemas
   if (update.change_type) {
@@ -149,11 +144,12 @@ async function search(term: string) {
   const index = await loadIndex();
   const termLower = term.toLowerCase();
 
-  const matches = index.updates.filter(update =>
-    update.title.toLowerCase().includes(termLower) ||
-    update.summary?.toLowerCase().includes(termLower) ||
-    (update.tags || []).some(tag => tag.toLowerCase().includes(termLower)) ||
-    update.id.toLowerCase().includes(termLower)
+  const matches = index.updates.filter(
+    (update) =>
+      update.title.toLowerCase().includes(termLower) ||
+      update.summary?.toLowerCase().includes(termLower) ||
+      (update.tags || []).some((tag) => tag.toLowerCase().includes(termLower)) ||
+      update.id.toLowerCase().includes(termLower),
   );
 
   console.log(`Search results for "${term}":\n`);
@@ -164,8 +160,8 @@ async function byType(type: string) {
   const index = await loadIndex();
   const typeLower = type.toLowerCase();
 
-  const matches = index.updates.filter(update =>
-    (update.change_type || update.type || '').toLowerCase().includes(typeLower)
+  const matches = index.updates.filter((update) =>
+    (update.change_type || update.type || "").toLowerCase().includes(typeLower),
   );
 
   console.log(`Updates of type "${type}":\n`);
@@ -175,9 +171,7 @@ async function byType(type: string) {
 async function byDate(datePrefix: string) {
   const index = await loadIndex();
 
-  const matches = index.updates.filter(update =>
-    (update.timestamp || update.date || '').startsWith(datePrefix)
-  );
+  const matches = index.updates.filter((update) => (update.timestamp || update.date || "").startsWith(datePrefix));
 
   console.log(`Updates from ${datePrefix}:\n`);
   console.log(formatTable(matches));
@@ -187,8 +181,8 @@ async function byImpact(impact: string) {
   const index = await loadIndex();
   const impactLower = impact.toLowerCase();
 
-  const matches = index.updates.filter(update =>
-    (update.significance || update.impact || '').toLowerCase() === impactLower
+  const matches = index.updates.filter(
+    (update) => (update.significance || update.impact || "").toLowerCase() === impactLower,
   );
 
   console.log(`Updates with impact "${impact}":\n`);
@@ -198,9 +192,7 @@ async function byImpact(impact: string) {
 async function show(id: string) {
   const index = await loadIndex();
 
-  const update = index.updates.find(u =>
-    u.id === id || u.id.includes(id)
-  );
+  const update = index.updates.find((u) => u.id === id || u.id.includes(id));
 
   if (!update) {
     console.error(`Update not found: ${id}`);

@@ -21,21 +21,21 @@
  *   - LoadSkillConfig.ts for merging base + user channels
  */
 
-import { execSync, spawnSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
-import { z } from 'zod';
-import { loadSkillConfig } from '../../../../lib/core/LoadSkillConfig.ts';
-import { createStateManager } from '../../../../lib/core/StateManager.ts';
-import { notifySync } from '../../../../lib/core/NotificationService.ts';
+import { execSync, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { z } from "zod";
+import { loadSkillConfig } from "../../../../lib/core/LoadSkillConfig.ts";
+import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { notifySync } from "../../../../lib/core/NotificationService.ts";
 
 // Types
 interface YouTubeChannel {
   name: string;
   channel_id: string; // @handle format
   url: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  priority: "HIGH" | "MEDIUM" | "LOW";
   description?: string;
 }
 
@@ -67,28 +67,28 @@ interface YouTubeState {
 
 interface NewVideo {
   channel: string;
-  channel_priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  channel_priority: "HIGH" | "MEDIUM" | "LOW";
   video: VideoInfo;
   transcript?: string;
-  relevance?: 'HIGH' | 'MEDIUM' | 'LOW';
+  relevance?: "HIGH" | "MEDIUM" | "LOW";
   recommendation?: string;
 }
 
 // Config
 const HOME = homedir();
-const SKILL_DIR = join(HOME, '.claude', 'skills', 'System', 'KayaUpgrade');
-const STATE_DIR = join(SKILL_DIR, 'State');
-const STATE_FILE = join(STATE_DIR, 'youtube-videos.json');
-const CHANNELS_FILE = 'youtube-channels.json';
+const SKILL_DIR = join(HOME, ".claude", "skills", "System", "KayaUpgrade");
+const STATE_DIR = join(SKILL_DIR, "State");
+const STATE_FILE = join(STATE_DIR, "youtube-videos.json");
+const CHANNELS_FILE = "youtube-channels.json";
 const MAX_VIDEOS_PER_CHANNEL = 5; // How many recent videos to check
 const MAX_SEEN_VIDEOS = 100; // How many video IDs to keep in state per channel
 
 // Parse args
 const args = process.argv.slice(2);
-const FORCE = args.includes('--force');
-const DRY_RUN = args.includes('--dry-run');
-const TRANSCRIPT_MODE = args.includes('--transcript');
-const TRANSCRIPT_VIDEO_ID = TRANSCRIPT_MODE ? args[args.indexOf('--transcript') + 1] : null;
+const FORCE = args.includes("--force");
+const DRY_RUN = args.includes("--dry-run");
+const TRANSCRIPT_MODE = args.includes("--transcript");
+const TRANSCRIPT_VIDEO_ID = TRANSCRIPT_MODE ? args[args.indexOf("--transcript") + 1] : null;
 
 // Zod schema for YouTube state validation
 const ChannelStateSchema = z.object({
@@ -109,23 +109,17 @@ const youtubeStateManager = createStateManager<YouTubeState>({
   schema: YouTubeStateSchema,
   defaults: () => ({
     last_check_timestamp: new Date(0).toISOString(),
-    channels: {}
+    channels: {},
   }),
 });
 
 // Utilities
-function ensureDir(dirPath: string): void {
-  if (!existsSync(dirPath)) {
-    mkdirSync(dirPath, { recursive: true });
-  }
-}
-
 async function loadChannels(): Promise<YouTubeChannel[]> {
   try {
     const config = await loadSkillConfig<ChannelsConfig>(SKILL_DIR, CHANNELS_FILE);
     return config.channels || [];
   } catch (error) {
-    console.error('❌ Failed to load YouTube channels config:', error);
+    console.error("❌ Failed to load YouTube channels config:", error);
     return [];
   }
 }
@@ -134,32 +128,28 @@ async function loadState(): Promise<YouTubeState> {
   try {
     return await youtubeStateManager.load();
   } catch (error) {
-    console.warn('⚠️ Failed to load YouTube state, starting fresh:', error);
+    console.warn("⚠️ Failed to load YouTube state, starting fresh:", error);
     return {
       last_check_timestamp: new Date(0).toISOString(),
-      channels: {}
+      channels: {},
     };
   }
 }
 
 async function saveState(state: YouTubeState): Promise<void> {
   if (DRY_RUN) {
-    console.log('🔍 [DRY RUN] Would save state (skipped)');
+    console.log("🔍 [DRY RUN] Would save state (skipped)");
     return;
   }
 
   try {
     await youtubeStateManager.save(state);
   } catch (error) {
-    console.error('❌ Failed to save YouTube state:', error);
+    console.error("❌ Failed to save YouTube state:", error);
   }
 }
 
-export function updateChannelFailure(
-  state: YouTubeState,
-  channelId: string,
-  error: string,
-): void {
+export function updateChannelFailure(state: YouTubeState, channelId: string, error: string): void {
   if (!state.channels[channelId]) {
     state.channels[channelId] = {
       last_check: new Date().toISOString(),
@@ -172,10 +162,7 @@ export function updateChannelFailure(
   ch.last_fetch_error = error;
 }
 
-export function updateChannelSuccess(
-  state: YouTubeState,
-  channelId: string,
-): void {
+export function updateChannelSuccess(state: YouTubeState, channelId: string): void {
   if (state.channels[channelId]) {
     state.channels[channelId].consecutive_fetch_failures = 0;
     state.channels[channelId].last_fetch_error = undefined;
@@ -187,7 +174,7 @@ export function updateChannelSuccess(
  */
 function checkYtDlp(): boolean {
   try {
-    execSync('which yt-dlp', { stdio: 'pipe' });
+    execSync("which yt-dlp", { stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -202,21 +189,17 @@ function fetchRecentVideos(channel: YouTubeChannel): { videos: VideoInfo[]; erro
 
   try {
     // Use yt-dlp to get flat playlist (video metadata only, no download)
-    const channelUrl = channel.url.includes('/videos')
-      ? channel.url
-      : `${channel.url}/videos`;
+    const channelUrl = channel.url.includes("/videos") ? channel.url : `${channel.url}/videos`;
 
-    const result = spawnSync('yt-dlp', [
-      '--flat-playlist',
-      '--dump-json',
-      '--playlist-end', String(MAX_VIDEOS_PER_CHANNEL),
-      '--no-warnings',
-      channelUrl
-    ], {
-      encoding: 'utf-8',
-      timeout: 60000, // 1 minute timeout
-      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
-    });
+    const result = spawnSync(
+      "yt-dlp",
+      ["--flat-playlist", "--dump-json", "--playlist-end", String(MAX_VIDEOS_PER_CHANNEL), "--no-warnings", channelUrl],
+      {
+        encoding: "utf-8",
+        timeout: 60000, // 1 minute timeout
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      },
+    );
 
     if (result.error) {
       console.warn(`⚠️ Error fetching ${channel.name}:`, result.error.message);
@@ -233,25 +216,24 @@ function fetchRecentVideos(channel: YouTubeChannel): { videos: VideoInfo[]; erro
     }
 
     // Parse each line as separate JSON object
-    const lines = (result.stdout || '').trim().split('\n').filter(Boolean);
+    const lines = (result.stdout || "").trim().split("\n").filter(Boolean);
 
     for (const line of lines) {
       try {
         const data = JSON.parse(line);
         videos.push({
           id: data.id,
-          title: data.title || 'Unknown Title',
+          title: data.title || "Unknown Title",
           url: data.url || `https://www.youtube.com/watch?v=${data.id}`,
-          upload_date: data.upload_date || '',
+          upload_date: data.upload_date || "",
           duration: data.duration || 0,
           view_count: data.view_count,
-          description: data.description?.substring(0, 500)
+          description: data.description?.substring(0, 500),
         });
       } catch {
         // Skip malformed JSON lines
       }
     }
-
   } catch (error) {
     console.warn(`⚠️ Error fetching ${channel.name}:`, error);
     return { videos: [], error: error instanceof Error ? error.message : String(error) };
@@ -263,11 +245,7 @@ function fetchRecentVideos(channel: YouTubeChannel): { videos: VideoInfo[]; erro
 /**
  * Filter videos to only new ones based on state
  */
-export function filterNewVideos(
-  channel: YouTubeChannel,
-  videos: VideoInfo[],
-  state: YouTubeState
-): VideoInfo[] {
+export function filterNewVideos(channel: YouTubeChannel, videos: VideoInfo[], state: YouTubeState): VideoInfo[] {
   if (FORCE) {
     return videos;
   }
@@ -278,7 +256,7 @@ export function filterNewVideos(
   }
 
   const seenSet = new Set(channelState.seen_videos);
-  return videos.filter(v => !seenSet.has(v.id));
+  return videos.filter((v) => !seenSet.has(v.id));
 }
 
 /**
@@ -286,29 +264,28 @@ export function filterNewVideos(
  */
 function extractTranscript(videoUrl: string): string | null {
   try {
-    const transcriptTool = join(HOME, '.claude', 'skills', 'CORE', 'Tools', 'GetTranscript.ts');
+    const transcriptTool = join(HOME, ".claude", "skills", "CORE", "Tools", "GetTranscript.ts");
 
     if (!existsSync(transcriptTool)) {
-      console.warn('⚠️ GetTranscript.ts not found, skipping transcript extraction');
+      console.warn("⚠️ GetTranscript.ts not found, skipping transcript extraction");
       return null;
     }
 
     const result = execSync(`bun "${transcriptTool}" "${videoUrl}"`, {
-      encoding: 'utf-8',
+      encoding: "utf-8",
       timeout: 120000, // 2 minute timeout
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     // Extract just the transcript content
     const match = result.match(/--- TRANSCRIPT START ---\n([\s\S]*?)\n--- TRANSCRIPT END ---/);
-    if (match) {
+    if (match?.[1] !== undefined) {
       return match[1].trim();
     }
 
     // If no markers, return the raw output (might be direct transcript)
     return result.trim() || null;
-
   } catch (error) {
     console.warn(`⚠️ Failed to extract transcript:`, error instanceof Error ? error.message : error);
     return null;
@@ -320,31 +297,55 @@ function extractTranscript(videoUrl: string): string | null {
  * The downstream UpgradeTriage step re-evaluates relevance with full codebase context,
  * so a lightweight keyword score here is sufficient for initial sorting.
  */
-export async function assessRelevance(video: VideoInfo): Promise<'HIGH' | 'MEDIUM' | 'LOW'> {
+export async function assessRelevance(video: VideoInfo): Promise<"HIGH" | "MEDIUM" | "LOW"> {
   return assessRelevanceKeyword(video);
 }
 
 /**
  * Keyword-based fallback for relevance scoring (used when inference unavailable)
  */
-export function assessRelevanceKeyword(video: VideoInfo): 'HIGH' | 'MEDIUM' | 'LOW' {
-  const text = `${video.title} ${video.description || ''}`.toLowerCase();
+export function assessRelevanceKeyword(video: VideoInfo): "HIGH" | "MEDIUM" | "LOW" {
+  const text = `${video.title} ${video.description || ""}`.toLowerCase();
 
   const highKeywords = [
-    'claude code', 'claude-code', 'anthropic', 'mcp', 'model context protocol',
-    'ai agent', 'ai agents', 'skill system', 'agentic', 'prompt engineering',
-    'claude 3', 'claude opus', 'claude sonnet', 'ai coding', 'ai programming'
+    "claude code",
+    "claude-code",
+    "anthropic",
+    "mcp",
+    "model context protocol",
+    "ai agent",
+    "ai agents",
+    "skill system",
+    "agentic",
+    "prompt engineering",
+    "claude 3",
+    "claude opus",
+    "claude sonnet",
+    "ai coding",
+    "ai programming",
   ];
 
   const mediumKeywords = [
-    'llm', 'large language model', 'ai assistant', 'chatgpt', 'gpt-4',
-    'automation', 'ai workflow', 'typescript', 'cli tool', 'developer tools',
-    'ai api', 'openai', 'gemini', 'llama', 'ai development'
+    "llm",
+    "large language model",
+    "ai assistant",
+    "chatgpt",
+    "gpt-4",
+    "automation",
+    "ai workflow",
+    "typescript",
+    "cli tool",
+    "developer tools",
+    "ai api",
+    "openai",
+    "gemini",
+    "llama",
+    "ai development",
   ];
 
-  if (highKeywords.some(k => text.includes(k))) return 'HIGH';
-  if (mediumKeywords.some(k => text.includes(k))) return 'MEDIUM';
-  return 'LOW';
+  if (highKeywords.some((k) => text.includes(k))) return "HIGH";
+  if (mediumKeywords.some((k) => text.includes(k))) return "MEDIUM";
+  return "LOW";
 }
 
 /**
@@ -359,26 +360,32 @@ async function generateRecommendation(video: VideoInfo, _channelName: string): P
 /** Deterministic fallback for recommendation generation */
 function _generateRecommendationFallback(video: VideoInfo): string {
   const relevance = assessRelevanceKeyword(video);
-  if (relevance === 'HIGH') {
-    return `**Kaya Impact:** HIGH - Relevant AI development content\n` +
+  if (relevance === "HIGH") {
+    return (
+      `**Kaya Impact:** HIGH - Relevant AI development content\n` +
       `**Why:** Matches Kaya's focus areas.\n` +
-      `**Action:** Review transcript or watch video for applicable patterns.`;
+      `**Action:** Review transcript or watch video for applicable patterns.`
+    );
   }
-  if (relevance === 'MEDIUM') {
-    return `**Kaya Impact:** MEDIUM - General AI/dev content\n` +
+  if (relevance === "MEDIUM") {
+    return (
+      `**Kaya Impact:** MEDIUM - General AI/dev content\n` +
       `**Why:** May contain useful patterns or insights.\n` +
-      `**Action:** Skim transcript for relevant sections. Lower priority.`;
+      `**Action:** Skim transcript for relevant sections. Lower priority.`
+    );
   }
-  return `**Kaya Impact:** LOW - General awareness\n` +
+  return (
+    `**Kaya Impact:** LOW - General awareness\n` +
     `**Why:** From monitored channel but topic less directly relevant.\n` +
-    `**Action:** Review if time permits. Good for staying informed.`;
+    `**Action:** Review if time permits. Good for staying informed.`
+  );
 }
 
 /**
  * Format duration as human-readable string
  */
 function formatDuration(seconds: number): string {
-  if (!seconds) return 'N/A';
+  if (!seconds) return "N/A";
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   if (mins >= 60) {
@@ -393,7 +400,7 @@ function formatDuration(seconds: number): string {
  * Format upload date
  */
 function formatDate(dateStr: string): string {
-  if (!dateStr || dateStr.length !== 8) return dateStr || 'Unknown';
+  if (dateStr?.length !== 8) return dateStr || "Unknown";
   // Format: YYYYMMDD -> YYYY-MM-DD
   return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
 }
@@ -401,19 +408,12 @@ function formatDate(dateStr: string): string {
 /**
  * Update state with newly seen videos
  */
-function updateState(
-  state: YouTubeState,
-  channel: YouTubeChannel,
-  videos: VideoInfo[]
-): void {
-  if (!state.channels[channel.channel_id]) {
-    state.channels[channel.channel_id] = {
-      last_check: new Date().toISOString(),
-      seen_videos: []
-    };
+function updateState(state: YouTubeState, channel: YouTubeChannel, videos: VideoInfo[]): void {
+  let channelState = state.channels[channel.channel_id];
+  if (!channelState) {
+    channelState = { last_check: new Date().toISOString(), seen_videos: [] };
+    state.channels[channel.channel_id] = channelState;
   }
-
-  const channelState = state.channels[channel.channel_id];
   channelState.last_check = new Date().toISOString();
 
   // Add new video IDs
@@ -436,11 +436,11 @@ async function main() {
   // Handle transcript mode
   if (TRANSCRIPT_MODE) {
     if (!TRANSCRIPT_VIDEO_ID) {
-      console.error('❌ Video ID required for --transcript mode');
+      console.error("❌ Video ID required for --transcript mode");
       process.exit(1);
     }
 
-    const url = TRANSCRIPT_VIDEO_ID.startsWith('http')
+    const url = TRANSCRIPT_VIDEO_ID.startsWith("http")
       ? TRANSCRIPT_VIDEO_ID
       : `https://www.youtube.com/watch?v=${TRANSCRIPT_VIDEO_ID}`;
 
@@ -448,25 +448,25 @@ async function main() {
     const transcript = extractTranscript(url);
 
     if (transcript) {
-      console.log('\n--- TRANSCRIPT ---\n');
+      console.log("\n--- TRANSCRIPT ---\n");
       console.log(transcript);
-      console.log('\n--- END TRANSCRIPT ---\n');
+      console.log("\n--- END TRANSCRIPT ---\n");
     } else {
-      console.error('❌ No transcript available');
+      console.error("❌ No transcript available");
       process.exit(1);
     }
     return;
   }
 
-  console.log('📺 YouTube Channel Monitor\n');
-  console.log(`📅 Date: ${new Date().toISOString().split('T')[0]}`);
-  console.log(`🔄 Force mode: ${FORCE ? 'Yes' : 'No'}`);
-  console.log(`🔍 Dry run: ${DRY_RUN ? 'Yes' : 'No'}`);
+  console.log("📺 YouTube Channel Monitor\n");
+  console.log(`📅 Date: ${new Date().toISOString().split("T")[0]}`);
+  console.log(`🔄 Force mode: ${FORCE ? "Yes" : "No"}`);
+  console.log(`🔍 Dry run: ${DRY_RUN ? "Yes" : "No"}`);
   console.log();
 
   // Check yt-dlp
   if (!checkYtDlp()) {
-    console.error('❌ yt-dlp not found. Install with: brew install yt-dlp');
+    console.error("❌ yt-dlp not found. Install with: brew install yt-dlp");
     process.exit(1);
   }
 
@@ -475,26 +475,34 @@ async function main() {
   const state = await loadState();
 
   if (channels.length === 0) {
-    console.log('⚠️ No YouTube channels configured.');
-    console.log('');
-    console.log('To add channels:');
-    console.log('Edit youtube-channels.json in the skill directory');
-    console.log('');
-    console.log('Example format:');
-    console.log(JSON.stringify({
-      channels: [{
-        name: "AI Explained",
-        channel_id: "@aiexplained-official",
-        url: "https://www.youtube.com/@aiexplained-official",
-        priority: "HIGH",
-        description: "Deep dives on AI papers and developments"
-      }]
-    }, null, 2));
+    console.log("⚠️ No YouTube channels configured.");
+    console.log("");
+    console.log("To add channels:");
+    console.log("Edit youtube-channels.json in the skill directory");
+    console.log("");
+    console.log("Example format:");
+    console.log(
+      JSON.stringify(
+        {
+          channels: [
+            {
+              name: "AI Explained",
+              channel_id: "@aiexplained-official",
+              url: "https://www.youtube.com/@aiexplained-official",
+              priority: "HIGH",
+              description: "Deep dives on AI papers and developments",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(`📡 Monitoring ${channels.length} channel(s):`);
-  channels.forEach(c => console.log(`   - ${c.name} (${c.priority})`));
+  for (const c of channels) console.log(`   - ${c.name} (${c.priority})`);
   console.log();
 
   // Fetch and process each channel
@@ -528,7 +536,7 @@ async function main() {
         channel_priority: channel.priority,
         video,
         relevance,
-        recommendation
+        recommendation,
       });
     }
 
@@ -542,31 +550,33 @@ async function main() {
   // Persist raw findings for AI triage (UpgradeTriage.ts reads this)
   const YouTubeFindingsSchema = z.object({
     timestamp: z.string(),
-    videos: z.array(z.object({
-      channel: z.string(),
-      videoId: z.string(),
-      title: z.string(),
-      url: z.string(),
-      duration: z.number(),
-      relevance: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-    })),
+    videos: z.array(
+      z.object({
+        channel: z.string(),
+        videoId: z.string(),
+        title: z.string(),
+        url: z.string(),
+        duration: z.number(),
+        relevance: z.enum(["HIGH", "MEDIUM", "LOW"]),
+      }),
+    ),
   });
 
   const findingsState = createStateManager({
-    path: join(STATE_DIR, 'latest-youtube-findings.json'),
+    path: join(STATE_DIR, "latest-youtube-findings.json"),
     schema: YouTubeFindingsSchema,
-    defaults: () => ({ timestamp: '', videos: [] }),
+    defaults: () => ({ timestamp: "", videos: [] }),
   });
 
   await findingsState.save({
     timestamp: new Date().toISOString(),
-    videos: allNewVideos.map(v => ({
+    videos: allNewVideos.map((v) => ({
       channel: v.channel,
       videoId: v.video.id,
       title: v.video.title,
       url: v.video.url,
       duration: v.video.duration,
-      relevance: v.relevance || 'LOW',
+      relevance: v.relevance || "LOW",
     })),
   });
   console.log(`💾 Raw findings persisted to State/latest-youtube-findings.json`);
@@ -575,28 +585,28 @@ async function main() {
 
   // Generate report
   if (allNewVideos.length === 0) {
-    console.log('✨ No new videos found. All channels up to date!\n');
-    console.log('📊 STATUS: All monitored YouTube channels checked, no new content');
-    console.log('➡️ NEXT: Check again later or use --force to see recent videos');
+    console.log("✨ No new videos found. All channels up to date!\n");
+    console.log("📊 STATUS: All monitored YouTube channels checked, no new content");
+    console.log("➡️ NEXT: Check again later or use --force to see recent videos");
     return;
   }
 
   // Sort by relevance then channel priority
-  const priorityOrder = { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2 };
+  const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
   allNewVideos.sort((a, b) => {
-    const relevanceDiff = priorityOrder[a.relevance || 'LOW'] - priorityOrder[b.relevance || 'LOW'];
+    const relevanceDiff = priorityOrder[a.relevance || "LOW"] - priorityOrder[b.relevance || "LOW"];
     if (relevanceDiff !== 0) return relevanceDiff;
     return priorityOrder[a.channel_priority] - priorityOrder[b.channel_priority];
   });
 
-  console.log('═'.repeat(80));
-  console.log('\n# 🎬 New YouTube Videos Report\n');
-  console.log(`📅 Generated: ${new Date().toISOString().split('T')[0]}`);
+  console.log("═".repeat(80));
+  console.log("\n# 🎬 New YouTube Videos Report\n");
+  console.log(`📅 Generated: ${new Date().toISOString().split("T")[0]}`);
   console.log(`📺 Videos found: ${allNewVideos.length}\n`);
 
-  const highRelevance = allNewVideos.filter(v => v.relevance === 'HIGH');
-  const mediumRelevance = allNewVideos.filter(v => v.relevance === 'MEDIUM');
-  const lowRelevance = allNewVideos.filter(v => v.relevance === 'LOW');
+  const highRelevance = allNewVideos.filter((v) => v.relevance === "HIGH");
+  const mediumRelevance = allNewVideos.filter((v) => v.relevance === "MEDIUM");
+  const lowRelevance = allNewVideos.filter((v) => v.relevance === "LOW");
 
   // HIGH RELEVANCE
   if (highRelevance.length > 0) {
@@ -611,7 +621,7 @@ async function main() {
         console.log(`**Views:** ${item.video.view_count.toLocaleString()}`);
       }
       console.log(`\n${item.recommendation}\n`);
-      console.log('---\n');
+      console.log("---\n");
     }
   }
 
@@ -625,7 +635,7 @@ async function main() {
       console.log(`**Duration:** ${formatDuration(item.video.duration)}`);
       console.log(`**Link:** ${item.video.url}`);
       console.log(`\n${item.recommendation}\n`);
-      console.log('---\n');
+      console.log("---\n");
     }
   }
 
@@ -633,19 +643,23 @@ async function main() {
   if (lowRelevance.length > 0) {
     console.log(`## 📝 LOW RELEVANCE (${lowRelevance.length})\n`);
     for (const item of lowRelevance) {
-      console.log(`- **${item.video.title}** (${item.channel}) - [Watch](${item.video.url}) - ${formatDate(item.video.upload_date)}`);
+      console.log(
+        `- **${item.video.title}** (${item.channel}) - [Watch](${item.video.url}) - ${formatDate(item.video.upload_date)}`,
+      );
     }
-    console.log('\n');
+    console.log("\n");
   }
 
-  console.log('═'.repeat(80));
-  console.log('\n📊 STATUS: YouTube monitoring complete');
+  console.log("═".repeat(80));
+  console.log("\n📊 STATUS: YouTube monitoring complete");
   console.log(`✅ Found ${allNewVideos.length} new video(s) across ${channels.length} channel(s)`);
-  console.log('➡️ NEXT: Review HIGH relevance videos first. Use --transcript <video-id> for transcripts.');
+  console.log("➡️ NEXT: Review HIGH relevance videos first. Use --transcript <video-id> for transcripts.");
   console.log();
 }
 
-main().catch(error => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
+    process.exit(1);
+  });
+}
