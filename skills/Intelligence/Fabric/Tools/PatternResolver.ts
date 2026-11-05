@@ -13,18 +13,17 @@
  *   import { resolvePattern, validatePattern } from './PatternResolver';
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join } from "path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PATTERNS_DIR = join(
-  process.env.HOME ?? "/Users/[user]",
-  ".claude/skills/Intelligence/Fabric/Patterns"
-);
-const SENTINEL_PATH = join(PATTERNS_DIR, "loaded");
+// Resolved at call time so tests can pin KAYA_HOME to a temp tree.
+const patternsDir = (): string => join(getKayaHome(), "skills/Intelligence/Fabric/Patterns");
+const sentinelPath = (): string => join(patternsDir(), "loaded");
 const STALE_THRESHOLD_DAYS = 30;
 const STALE_THRESHOLD_MS = STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
 const MAX_SUGGESTIONS = 3;
@@ -63,18 +62,18 @@ function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
   );
   for (let i = 1; i <= m; i++) {
+    const row = dp[i];
+    const prev = dp[i - 1];
+    if (!row || !prev) continue; // unreachable: dp has m + 1 rows
     for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
-      } else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
+      const diag = prev[j - 1] ?? 0;
+      row[j] = a[i - 1] === b[j - 1] ? diag : 1 + Math.min(prev[j] ?? 0, row[j - 1] ?? 0, diag);
     }
   }
-  return dp[m][n];
+  return dp[m]?.[n] ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,8 +81,8 @@ function levenshtein(a: string, b: string): number {
 // ---------------------------------------------------------------------------
 
 export function listPatternNames(): string[] {
-  if (!existsSync(PATTERNS_DIR)) return [];
-  return readdirSync(PATTERNS_DIR, { withFileTypes: true })
+  if (!existsSync(patternsDir())) return [];
+  return readdirSync(patternsDir(), { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 }
@@ -96,8 +95,8 @@ export function suggestPatterns(name: string, all: string[]): string[] {
   const lower = name.toLowerCase();
 
   // Prefer substring matches first
-  const substringMatches = all.filter((p) =>
-    p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase().substring(0, 4))
+  const substringMatches = all.filter(
+    (p) => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase().substring(0, 4)),
   );
 
   // Sort remaining by Levenshtein
@@ -121,8 +120,8 @@ export function suggestPatterns(name: string, all: string[]): string[] {
 // ---------------------------------------------------------------------------
 
 export function isSentinelStale(): boolean {
-  if (!existsSync(SENTINEL_PATH)) return true;
-  const stat = statSync(SENTINEL_PATH);
+  if (!existsSync(sentinelPath())) return true;
+  const stat = statSync(sentinelPath());
   const ageMs = Date.now() - stat.mtimeMs;
   return ageMs > STALE_THRESHOLD_MS;
 }
@@ -135,15 +134,11 @@ export function validatePattern(content: string, name: string): string[] {
   const warnings: string[] = [];
   const byteLength = Buffer.byteLength(content);
   if (byteLength > MAX_PATTERN_SIZE_BYTES) {
-    warnings.push(
-      `Pattern "${name}" is unusually large (${byteLength} bytes)`
-    );
+    warnings.push(`Pattern "${name}" is unusually large (${byteLength} bytes)`);
   }
   for (const signal of INJECTION_SIGNALS) {
     if (signal.test(content)) {
-      warnings.push(
-        `Pattern "${name}" contains potential injection signal: ${signal}`
-      );
+      warnings.push(`Pattern "${name}" contains potential injection signal: ${signal}`);
     }
   }
   return warnings;
@@ -158,20 +153,16 @@ export function resolvePattern(name: string): ResolveResult {
 
   // Sentinel staleness check
   if (isSentinelStale()) {
-    warnings.push(
-      "Note: Pattern library may not be synced. Run UpdatePatterns to refresh."
-    );
+    warnings.push("Note: Pattern library may not be synced. Run UpdatePatterns to refresh.");
   }
 
-  const systemMdPath = join(PATTERNS_DIR, name, "system.md");
+  const systemMdPath = join(patternsDir(), name, "system.md");
 
   if (!existsSync(systemMdPath)) {
     // Pattern not found — provide fuzzy suggestions
     const allPatterns = listPatternNames();
     const suggestions = suggestPatterns(name, allPatterns);
-    const suggestionStr = suggestions.length > 0
-      ? suggestions.join(", ")
-      : "none found";
+    const suggestionStr = suggestions.length > 0 ? suggestions.join(", ") : "none found";
     return {
       found: false,
       patternPath: null,
@@ -226,7 +217,7 @@ if (import.meta.main) {
     console.log(`Pattern '${patternName}' resolved at: ${result.patternPath}`);
     process.exit(0);
   } else if (command === "validate") {
-    const systemMdPath = join(PATTERNS_DIR, patternName, "system.md");
+    const systemMdPath = join(patternsDir(), patternName, "system.md");
     if (!existsSync(systemMdPath)) {
       console.error(`Pattern '${patternName}' not found at ${systemMdPath}`);
       process.exit(1);
