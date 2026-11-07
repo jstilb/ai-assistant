@@ -520,7 +520,11 @@ export function linearRegression(X: number[][], y: number[], names: string[]): L
   // Residuals and sums of squares.
   const yHat = matVec(design, beta);
   let sse = 0;
-  for (let i = 0; i < n; i++) sse += (y[i]! - yHat[i]!) ** 2;
+  for (const [i, yi] of y.entries()) {
+    const fitted = yHat[i];
+    if (fitted === undefined) throw new Error(`No fitted value for row ${i}`);
+    sse += (yi - fitted) ** 2;
+  }
   const yMean = mean(y);
   let sst = 0;
   for (const yi of y) sst += (yi - yMean) ** 2;
