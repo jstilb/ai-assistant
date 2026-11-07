@@ -136,9 +136,9 @@ test("enrich: batches IDs in groups of 50", async () => {
   expect(summary.requested).toBe(120);
   expect(summary.enriched).toBe(120);
   expect(calls.length).toBe(3);
-  expect(calls[0]!.length).toBe(50);
-  expect(calls[1]!.length).toBe(50);
-  expect(calls[2]!.length).toBe(20);
+  expect(calls[0]?.length).toBe(50);
+  expect(calls[1]?.length).toBe(50);
+  expect(calls[2]?.length).toBe(20);
 });
 
 test("enrich: idempotent — second run skips already-enriched videos", async () => {

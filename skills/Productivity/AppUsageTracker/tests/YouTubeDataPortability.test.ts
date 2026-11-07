@@ -21,6 +21,7 @@ import {
   type HttpFetcher,
   type HttpResponse,
 } from "../Tools/YouTubeDataPortability.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 const CFG: DPAConfig = {
   clientId: "test-client-id.apps.googleusercontent.com",
@@ -105,20 +106,20 @@ test("happy path: refresh → initiate → poll twice → download two urls", as
   expect(readdirSync(dest).length).toBe(2);
 
   // Verify call sequence + auth headers
-  expect(calls[0]!.url).toBe("https://oauth2.googleapis.com/token");
-  expect(calls[0]!.method).toBe("POST");
-  expect(calls[0]!.body).toContain("grant_type=refresh_token");
-  expect(calls[0]!.body).toContain("refresh_token=test-refresh");
+  expect(calls[0]?.url).toBe("https://oauth2.googleapis.com/token");
+  expect(calls[0]?.method).toBe("POST");
+  expect(calls[0]?.body).toContain("grant_type=refresh_token");
+  expect(calls[0]?.body).toContain("refresh_token=test-refresh");
 
-  expect(calls[1]!.url).toBe("https://dataportability.googleapis.com/v1/portabilityArchive:initiate");
-  expect(calls[1]!.method).toBe("POST");
-  const initBody = JSON.parse(calls[1]!.body ?? "{}");
+  expect(calls[1]?.url).toBe("https://dataportability.googleapis.com/v1/portabilityArchive:initiate");
+  expect(calls[1]?.method).toBe("POST");
+  const initBody = JSON.parse(defined(calls[1]).body ?? "{}");
   expect(initBody.resources).toEqual(["myactivity.youtube"]);
 
-  expect(calls[2]!.url).toBe("https://dataportability.googleapis.com/v1/archiveJobs/job-123/portabilityArchiveState");
-  expect(calls[2]!.method).toBe("GET");
-  expect(calls[3]!.url).toBe(calls[2]!.url);
-  expect(calls[4]!.url.startsWith("https://storage.googleapis.com/")).toBe(true);
+  expect(calls[2]?.url).toBe("https://dataportability.googleapis.com/v1/archiveJobs/job-123/portabilityArchiveState");
+  expect(calls[2]?.method).toBe("GET");
+  expect(calls[3]?.url).toBe(defined(calls[2]).url);
+  expect(calls[4]?.url.startsWith("https://storage.googleapis.com/")).toBe(true);
 });
 
 test("FAILED state surfaces typed error after poll", async () => {

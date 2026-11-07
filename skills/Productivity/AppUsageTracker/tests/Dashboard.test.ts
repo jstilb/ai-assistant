@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
 import { buildPayload, handleRequest, isRankableApp, readCeilingMin } from "../Tools/Dashboard.ts";
 import { todayLocal } from "../Tools/Util.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // The ceiling is read live from LifeOS/config/wig_status.json (fable-audit
 // batch2 fix — this dashboard previously hardcoded the retired Q2 G37/270
@@ -137,11 +138,11 @@ test("buildPayload: top_apps_7d sorts by minutes desc, limit 10", async () => {
   }
   const p = await buildPayload(db);
   expect(p.top_apps_7d.length).toBe(10);
-  expect(p.top_apps_7d[0]!.app).toBe("App11");
-  expect(p.top_apps_7d[0]!.minutes).toBe(12); // 60*(11+1)/60
+  expect(p.top_apps_7d[0]?.app).toBe("App11");
+  expect(p.top_apps_7d[0]?.minutes).toBe(12); // 60*(11+1)/60
   // sorted descending
   for (let i = 0; i < p.top_apps_7d.length - 1; i++) {
-    expect(p.top_apps_7d[i]!.minutes).toBeGreaterThanOrEqual(p.top_apps_7d[i + 1]!.minutes);
+    expect(p.top_apps_7d[i]?.minutes).toBeGreaterThanOrEqual(defined(p.top_apps_7d[i + 1]).minutes);
   }
 });
 
@@ -210,7 +211,7 @@ test("buildPayload: top_apps_7d excludes loginwindow and null app names, promote
   expect(apps).not.toContain("(null)");
   expect(p.top_apps_7d.length).toBe(10);
   // Highest-duration real app (RealApp10, 660s = 11min) now ranks #1.
-  expect(p.top_apps_7d[0]!.app).toBe("RealApp10");
+  expect(p.top_apps_7d[0]?.app).toBe("RealApp10");
 });
 
 test("buildPayload: filtering top_apps_7d does not change today/trend totals (daily_metrics-driven, independent of events)", async () => {

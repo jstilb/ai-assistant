@@ -84,11 +84,11 @@ test("parseChromeTakeoutHistory: extracts url, title, time_usec; computes domain
     ],
   });
   expect(rows.length).toBe(2);
-  expect(rows[0]!.url).toBe("https://www.reddit.com/r/programming/");
-  expect(rows[0]!.domain).toBe("reddit.com");
-  expect(rows[0]!.timeUsec).toBe(1747581135935546);
-  expect(rows[0]!.title).toBe("r/programming");
-  expect(rows[1]!.domain).toBe("github.com");
+  expect(rows[0]?.url).toBe("https://www.reddit.com/r/programming/");
+  expect(rows[0]?.domain).toBe("reddit.com");
+  expect(rows[0]?.timeUsec).toBe(1747581135935546);
+  expect(rows[0]?.title).toBe("r/programming");
+  expect(rows[1]?.domain).toBe("github.com");
 });
 
 test("parseChromeTakeoutHistory: skips entries missing url or time_usec", () => {
@@ -106,7 +106,7 @@ test("parseChromeTakeoutHistory: skips entries missing url or time_usec", () => 
     ],
   });
   expect(rows.length).toBe(1);
-  expect(rows[0]!.domain).toBe("ok.com");
+  expect(rows[0]?.domain).toBe("ok.com");
 });
 
 test("parseChromeTakeoutHistory: lowercases domain, strips www, handles port and subdomain", () => {
@@ -128,8 +128,8 @@ test("parseChromeTakeoutHistory: lowercases domain, strips www, handles port and
       },
     ],
   });
-  expect(rows[0]!.domain).toBe("reddit.com");
-  expect(rows[1]!.domain).toBe("mail.google.com");
+  expect(rows[0]?.domain).toBe("reddit.com");
+  expect(rows[1]?.domain).toBe("mail.google.com");
 });
 
 test("parseChromeTakeoutHistory: tolerates missing 'Browser History' key", () => {
@@ -162,11 +162,11 @@ test("ingestChromeTakeoutFile: inserts rows with source='takeout' and id='takeou
     `SELECT id, source, domain, visit_time::VARCHAR AS visit_time FROM chrome_visits ORDER BY visit_time`,
   );
   expect(rows.length).toBe(2);
-  expect(rows[0]!.source).toBe("takeout");
-  expect(rows[0]!.id).toBe("takeout:1747581135000000");
-  expect(rows[0]!.domain).toBe("reddit.com");
-  expect(rows[1]!.id).toBe("takeout:1747581200000000");
-  expect(rows[1]!.domain).toBe("news.ycombinator.com");
+  expect(rows[0]?.source).toBe("takeout");
+  expect(rows[0]?.id).toBe("takeout:1747581135000000");
+  expect(rows[0]?.domain).toBe("reddit.com");
+  expect(rows[1]?.id).toBe("takeout:1747581200000000");
+  expect(rows[1]?.domain).toBe("news.ycombinator.com");
 });
 
 test("ingestChromeTakeoutFile: idempotent re-runs (INSERT OR REPLACE on PK)", async () => {
@@ -201,7 +201,7 @@ test("ingestChromeTakeoutFile: idempotent re-runs (INSERT OR REPLACE on PK)", as
     `SELECT title FROM chrome_visits WHERE id='takeout:1747581135000000'`,
   );
   expect(rows.length).toBe(1);
-  expect(rows[0]!.title).toBe("Reddit v2");
+  expect(rows[0]?.title).toBe("Reddit v2");
 });
 
 test("ingestChromeTakeoutFile: time_usec → visit_time TIMESTAMP is UTC and round-trips", async () => {

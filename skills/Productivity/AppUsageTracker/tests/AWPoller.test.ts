@@ -24,6 +24,7 @@ process.env.KAYA_HOME = KAYA_HOME_TMP;
 
 import { Db } from "../Tools/Db.ts";
 import { pollDevice } from "../Tools/AWPoller.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-poller-test-"));
 const DB_PATH = join(TMP, "events.db");
@@ -50,7 +51,7 @@ beforeAll(async () => {
       }
       const m = u.pathname.match(/^\/api\/0\/buckets\/([^/]+)\/events$/);
       if (m) {
-        const bucketId = decodeURIComponent(m[1]!);
+        const bucketId = decodeURIComponent(defined(m[1]));
         const events = FIXTURE.events[bucketId] ?? [];
         return Response.json(events);
       }
@@ -114,7 +115,7 @@ test("event PK encodes device:bucket:event_id (cross-device unique)", async () =
   await pollDevice({ name: "phone", baseUrl: mockUrl }, db, false);
 
   const ids = await db.queryAll<{ id: string }>(`SELECT id FROM events ORDER BY id`);
-  expect(ids[0]!.id.startsWith("phone:")).toBe(true);
+  expect(ids[0]?.id.startsWith("phone:")).toBe(true);
   // Spot check unique id format: "phone:<bucketId>:<eventId>"
   const sample = ids.find((r) => r.id.includes("aw-watcher-window_test-host"));
   expect(sample).toBeDefined();
@@ -178,7 +179,7 @@ test("stale bucket skip: server-side bucket idle > 7 days is not polled", async 
       }
       if (u.pathname.startsWith("/api/0/buckets/")) {
         eventsEndpointHits++;
-        const bucket = decodeURIComponent(u.pathname.split("/")[4]!);
+        const bucket = decodeURIComponent(defined(u.pathname.split("/")[4]));
         // Either bucket: return one event so we can tell what was actually polled.
         if (bucket === "aw-watcher-fresh") {
           return Response.json([{ id: 1, timestamp: oneHourAgo, duration: 60, data: { app: "x" } }]);

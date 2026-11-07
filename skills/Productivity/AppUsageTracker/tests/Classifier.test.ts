@@ -22,6 +22,7 @@ import {
   type Tier2Event,
 } from "../Tools/Classifier.ts";
 import { computeTier2LowValueMinutes, upsertMetric, computeTier1Minutes } from "../Tools/MetricCalc.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-classifier-test-"));
 const DB_PATH = join(TMP, "events.db");
@@ -91,8 +92,8 @@ test("groupIntoSessions: single event → single session", () => {
   const events = [ev({ id: "a", ts_start: "2026-05-01T10:00:00Z", duration_sec: 120 })];
   const sessions = groupIntoSessions(events);
   expect(sessions.length).toBe(1);
-  expect(sessions[0]!.events.length).toBe(1);
-  expect(sessions[0]!.totalDurationSec).toBe(120);
+  expect(sessions[0]?.events.length).toBe(1);
+  expect(sessions[0]?.totalDurationSec).toBe(120);
 });
 
 test("groupIntoSessions: same app, gap ≤120s → one session", () => {
@@ -102,7 +103,7 @@ test("groupIntoSessions: same app, gap ≤120s → one session", () => {
   ];
   const sessions = groupIntoSessions(events);
   expect(sessions.length).toBe(1);
-  expect(sessions[0]!.events.length).toBe(2);
+  expect(sessions[0]?.events.length).toBe(2);
 });
 
 test("groupIntoSessions: same app, gap >120s → two sessions", () => {
@@ -139,7 +140,7 @@ test("groupIntoSessions: events with null app are dropped", () => {
   ];
   const sessions = groupIntoSessions(events);
   expect(sessions.length).toBe(1);
-  expect(sessions[0]!.events[0]!.id).toBe("b");
+  expect(sessions[0]?.events[0]?.id).toBe("b");
 });
 
 test("isClassifiable: requires at least one non-empty title or url", () => {
@@ -147,15 +148,15 @@ test("isClassifiable: requires at least one non-empty title or url", () => {
     ev({ id: "a", title: null, url: null, ts_start: "2026-05-01T10:00:00Z" }),
     ev({ id: "b", title: "", url: "   ", ts_start: "2026-05-01T10:00:30Z" }),
   ])[0];
-  expect(isClassifiable(blank!)).toBe(false);
+  expect(isClassifiable(defined(blank))).toBe(false);
 
   const titled = groupIntoSessions([ev({ id: "c", title: "Useful video", ts_start: "2026-05-01T10:00:00Z" })])[0];
-  expect(isClassifiable(titled!)).toBe(true);
+  expect(isClassifiable(defined(titled))).toBe(true);
 
   const urled = groupIntoSessions([
     ev({ id: "d", url: "https://youtube.com/watch?v=x", ts_start: "2026-05-01T10:00:00Z" }),
   ])[0];
-  expect(isClassifiable(urled!)).toBe(true);
+  expect(isClassifiable(defined(urled))).toBe(true);
 });
 
 test("loadTier2Events: returns only Tier-2 events newer than sinceDate, excluding already-classified", async () => {
@@ -189,11 +190,11 @@ test("loadTier2Events: returns only Tier-2 events newer than sinceDate, excludin
 
   const events = await loadTier2Events(db, "2026-04-01", true);
   expect(events.length).toBe(1);
-  expect(events[0]!.id).toBe("phone:yt:new");
+  expect(events[0]?.id).toBe("phone:yt:new");
 
   // After classifying it, excludeClassified=true should hide it
   const verdict = { is_low_value: false, reason: "test", confidence: 1 };
-  const session: Session = groupIntoSessions(events)[0]!;
+  const session: Session = defined(groupIntoSessions(events)[0]);
   await upsertClassification(db, session, verdict);
 
   const events2 = await loadTier2Events(db, "2026-04-01", true);
@@ -229,8 +230,8 @@ test("upsertClassification: idempotent re-write yields one row per event", async
   expect(sessions.length).toBe(1); // both grouped
 
   const verdict = { is_low_value: true, reason: "entertainment", confidence: 0.9 };
-  await upsertClassification(db, sessions[0]!, verdict);
-  await upsertClassification(db, sessions[0]!, verdict); // re-run → still 2 rows, not 4
+  await upsertClassification(db, defined(sessions[0]), verdict);
+  await upsertClassification(db, defined(sessions[0]), verdict); // re-run → still 2 rows, not 4
 
   const cnt = await db.queryRow<{ n: number | bigint }>(`SELECT COUNT(*) AS n FROM classifications`);
   expect(Number(cnt!.n)).toBe(2);

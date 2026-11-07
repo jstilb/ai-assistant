@@ -20,6 +20,7 @@ import {
   type SampleRow,
 } from "../Tools/CalibrationSampler.ts";
 import { buildSystemPrompt, readCalibrationGuidance } from "../Tools/YouTubeClassifier.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 const TMP = mkdtempSync(join(tmpdir(), "aw-calibration-"));
 const DB_PATH = join(TMP, "events.db");
@@ -44,7 +45,7 @@ const NOW = new Date("2026-08-25T12:00:00Z");
 function seededRng(): () => number {
   let i = 0;
   const seq = [0.11, 0.53, 0.97, 0.29, 0.71, 0.41, 0.83, 0.05, 0.61, 0.37];
-  return () => seq[i++ % seq.length]!;
+  return () => defined(seq[i++ % seq.length]);
 }
 
 function row(id: string, opts: Partial<SampleRow> = {}): SampleRow {
@@ -157,7 +158,7 @@ test("state round-trips and missing file yields empty state", () => {
   );
   const loaded = loadState(statePath);
   expect(loaded.rounds.length).toBe(1);
-  expect(loaded.rounds[0]!.video_ids).toEqual(["a", "b"]);
+  expect(loaded.rounds[0]?.video_ids).toEqual(["a", "b"]);
 });
 
 test("loadState throws on malformed state", () => {

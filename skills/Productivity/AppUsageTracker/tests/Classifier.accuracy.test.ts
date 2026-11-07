@@ -19,6 +19,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { classifySession, type Session } from "../Tools/Classifier.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 const RUN_LLM = process.env.RUN_LLM_TESTS === "1";
 
@@ -60,11 +61,15 @@ test.skipIf(!RUN_LLM)(
     };
 
     const cases: Array<{ session: Session; want: boolean; firstTitle: string }> = [
-      ...fixture.expected_low_value.map((f) => ({ session: buildSession(f), want: true, firstTitle: f.titles[0]! })),
+      ...fixture.expected_low_value.map((f) => ({
+        session: buildSession(f),
+        want: true,
+        firstTitle: defined(f.titles[0]),
+      })),
       ...fixture.expected_not_low_value.map((f) => ({
         session: buildSession(f),
         want: false,
-        firstTitle: f.titles[0]!,
+        firstTitle: defined(f.titles[0]),
       })),
     ];
 

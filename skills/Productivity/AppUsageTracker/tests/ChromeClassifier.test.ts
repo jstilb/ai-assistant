@@ -301,10 +301,10 @@ test("same domain on different sources gets independent verdicts", async () => {
     `SELECT source, is_low_value FROM chrome_domain_verdicts ORDER BY source`,
   );
   expect(rows.length).toBe(2);
-  expect(rows[0]!.source).toBe("mac");
-  expect(rows[0]!.is_low_value).toBe(false);
-  expect(rows[1]!.source).toBe("sync");
-  expect(rows[1]!.is_low_value).toBe(true);
+  expect(rows[0]?.source).toBe("mac");
+  expect(rows[0]?.is_low_value).toBe(false);
+  expect(rows[1]?.source).toBe("sync");
+  expect(rows[1]?.is_low_value).toBe(true);
 });
 
 test("domains with null/empty are skipped silently", async () => {
