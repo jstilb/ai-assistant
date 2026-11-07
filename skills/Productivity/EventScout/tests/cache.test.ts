@@ -24,6 +24,7 @@ import { existsSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { EventItem } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Env isolation — pin KAYA_HOME/KAYA_DIR to a scratch dir BEFORE importing
@@ -143,7 +144,7 @@ test("2. pruneExpired: removes past event, keeps future event", () => {
 
   const remaining = readEvents();
   assert(remaining.length === 1, `Expected 1 event after prune, got ${remaining.length}`);
-  assert(remaining[0]!.id === "future-event-001", `Expected future-event-001, got ${remaining[0]!.id}`);
+  assert(defined(remaining[0]).id === "future-event-001", `Expected future-event-001, got ${defined(remaining[0]).id}`);
   assert(!remaining.some((e: EventItem) => e.id === "past-event-001"), "Past event should have been pruned");
 });
 
@@ -180,7 +181,10 @@ test("3. pruneExpired: event with only startDatetime (past) is pruned", () => {
 
   const remaining = readEvents();
   assert(remaining.length === 1, `Expected 1 event, got ${remaining.length}`);
-  assert(remaining[0]!.id === "no-end-future-001", `Expected no-end-future-001, got ${remaining[0]!.id}`);
+  assert(
+    defined(remaining[0]).id === "no-end-future-001",
+    `Expected no-end-future-001, got ${defined(remaining[0]).id}`,
+  );
 });
 
 test("4. upsertEventsDeduped: collapses a cross-source twin already in the cache", () => {
@@ -222,7 +226,9 @@ test("4. upsertEventsDeduped: collapses a cross-source twin already in the cache
 
   const after = readEvents();
   assert(after.length === 1, `Expected the cross-source twin to collapse to 1, got ${after.length}`);
-  const sourceIds = after[0]!.sources.map((s) => s.sourceId).sort();
+  const sourceIds = defined(after[0])
+    .sources.map((s) => s.sourceId)
+    .sort();
   assert(
     sourceIds.length === 2 && sourceIds.includes("songkick") && sourceIds.includes("bandsintown"),
     `Expected both sources unioned, got ${JSON.stringify(sourceIds)}`,

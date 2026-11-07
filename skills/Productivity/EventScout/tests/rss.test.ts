@@ -140,8 +140,8 @@ test("5. sources[0].sourceId === source.id", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(event.sources.length >= 1, `Expected at least 1 source entry, got ${event.sources.length}`);
   assert(
-    event.sources[0]!.sourceId === "sd-press-club",
-    `Expected sourceId "sd-press-club", got "${event.sources[0]!.sourceId}"`,
+    defined(event.sources[0]).sourceId === "sd-press-club",
+    `Expected sourceId "sd-press-club", got "${defined(event.sources[0]).sourceId}"`,
   );
 });
 
@@ -200,8 +200,8 @@ test("13. sourceUrl falls back to source.url when FeedItem.url is empty", () => 
 test("14. sources[0].url is FeedItem.url (or source.url as fallback)", () => {
   const event = mapFeedItemToEvent(PRESS_CLUB_FEED_ITEM, PRESS_CLUB_SOURCE);
   assert(
-    event.sources[0]!.url === PRESS_CLUB_FEED_ITEM.url,
-    `Expected sources[0].url = "${PRESS_CLUB_FEED_ITEM.url}", got "${event.sources[0]!.url}"`,
+    defined(event.sources[0]).url === PRESS_CLUB_FEED_ITEM.url,
+    `Expected sources[0].url = "${PRESS_CLUB_FEED_ITEM.url}", got "${defined(event.sources[0]).url}"`,
   );
 });
 
@@ -263,6 +263,7 @@ const READER_FEED_ITEM_PAID: FeedItem = {
 
 import { enrichmentFromModelRow } from "../Tools/adapters/RSSAdapter.ts";
 import type { ReaderDescriptionFields } from "../Tools/adapters/RSSAdapter.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 console.log("\n--- Reader enrichment validation tests ---\n");
 
@@ -283,7 +284,7 @@ test("16. enrichmentFromModelRow converts naive start to LA offset ISO (PDT, hou
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(v !== null, "row should validate");
   assert(
-    v!.fields.startDatetime?.includes("2026-06-01") === true,
+    defined(v).fields.startDatetime?.includes("2026-06-01") === true,
     `startDatetime "${v!.fields.startDatetime}" should contain "2026-06-01"`,
   );
   assert(
@@ -299,7 +300,7 @@ test("16. enrichmentFromModelRow converts naive start to LA offset ISO (PDT, hou
 test("17. enrichmentFromModelRow converts end time (15:30 local)", () => {
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(
-    v!.fields.endDatetime?.includes("T15:30") === true,
+    defined(v).fields.endDatetime?.includes("T15:30") === true,
     `endDatetime "${v!.fields.endDatetime}" should contain "T15:30"`,
   );
 });
@@ -307,7 +308,10 @@ test("17. enrichmentFromModelRow converts end time (15:30 local)", () => {
 test("18. enrichmentFromModelRow passes venue/address/prices through", () => {
   const v = enrichmentFromModelRow(MODEL_ROW_PAID, 1);
   assert(v!.fields.venue === "Theatre for Young Professionals", `venue: "${v!.fields.venue}"`);
-  assert(v!.fields.address?.includes("7960 University Avenue") === true, `address: "${v!.fields.address}"`);
+  assert(
+    defined(v).fields.address?.includes("7960 University Avenue") === true,
+    `address: "${defined(v).fields.address}"`,
+  );
   assert(v!.fields.priceMin === 250 && v!.fields.priceMax === 450, "prices should pass through");
   assert(v!.fields.isFree === false, "isFree should be false");
 });

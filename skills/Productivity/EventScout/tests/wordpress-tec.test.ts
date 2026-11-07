@@ -18,6 +18,7 @@ import { test } from "bun:test";
 import { mapTecEventToItem, fetchWordPressTecEvents } from "../Tools/adapters/WordPressTecAdapter.ts";
 import type { TecEvent, TecApiResponse } from "../Tools/adapters/WordPressTecAdapter.ts";
 import type { EventSource } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -144,7 +145,7 @@ test("4. startDatetime reflects local hour 00 (midnight LA time)", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   const hourMatch = item.startDatetime.match(/T(\d{2}):/);
   assert(hourMatch !== null, `Cannot extract hour from "${item.startDatetime}"`);
-  const localHour = parseInt(hourMatch![1]!, 10);
+  const localHour = parseInt(defined(defined(hourMatch)[1]), 10);
   assert(localHour === 0, `Expected local hour 0 (midnight), got ${localHour} in "${item.startDatetime}"`);
 });
 
@@ -207,8 +208,8 @@ test("15. sources[0].sourceId === 'balboa-park'", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(item.sources.length >= 1, `Expected at least 1 source`);
   assert(
-    item.sources[0]!.sourceId === "balboa-park",
-    `Expected sourceId "balboa-park", got "${item.sources[0]!.sourceId}"`,
+    defined(item.sources[0]).sourceId === "balboa-park",
+    `Expected sourceId "balboa-park", got "${defined(item.sources[0]).sourceId}"`,
   );
 });
 

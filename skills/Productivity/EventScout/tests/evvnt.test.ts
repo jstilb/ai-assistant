@@ -19,6 +19,7 @@ import { test } from "bun:test";
 import { mapEvvntEventToItem, fetchEvvntEvents } from "../Tools/adapters/EvvntAdapter.ts";
 import type { EvvntEvent, EvvntResponse } from "../Tools/adapters/EvvntAdapter.ts";
 import type { EventSource } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -132,7 +133,7 @@ test("4. startDatetime local hour is 08 (input is 08:00:00-07:00)", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   const hourMatch = item.startDatetime.match(/T(\d{2}):/);
   assert(hourMatch !== null, `Cannot extract hour from "${item.startDatetime}"`);
-  const localHour = parseInt(hourMatch![1]!, 10);
+  const localHour = parseInt(defined(defined(hourMatch)[1]), 10);
   assert(localHour === 8, `Expected local hour 8, got ${localHour} in "${item.startDatetime}"`);
 });
 
@@ -207,8 +208,8 @@ test("15. sources[0].sourceId === 'inewsource-events'", () => {
   const item = mapEvvntEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(item.sources.length >= 1, `Expected at least 1 source`);
   assert(
-    item.sources[0]!.sourceId === "inewsource-events",
-    `Expected sourceId "inewsource-events", got "${item.sources[0]!.sourceId}"`,
+    defined(item.sources[0]).sourceId === "inewsource-events",
+    `Expected sourceId "inewsource-events", got "${defined(item.sources[0]).sourceId}"`,
   );
 });
 

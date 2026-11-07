@@ -32,6 +32,7 @@ import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { EventItem } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Env isolation — pin KAYA_HOME/KAYA_DIR before importing Tools code.
@@ -246,10 +247,16 @@ test("3a. enrichWithGeo: event with venue matching cache → gets lat/lng", asyn
     const event = makeEvent({ id: "ev-1", venue: "Petco Park" });
     const enriched = await enrichWithGeo([event]);
     assert(enriched.length === 1, "array length preserved");
-    assert(enriched[0]!.lat !== undefined, "lat set after enrich");
-    assert(enriched[0]!.lng !== undefined, "lng set after enrich");
-    assert(Math.abs((enriched[0]!.lat ?? 0) - 32.7073) < 0.0001, `lat ≈ 32.7073, got ${enriched[0]!.lat}`);
-    assert(Math.abs((enriched[0]!.lng ?? 0) - -117.1566) < 0.0001, `lng ≈ -117.1566, got ${enriched[0]!.lng}`);
+    assert(defined(enriched[0]).lat !== undefined, "lat set after enrich");
+    assert(defined(enriched[0]).lng !== undefined, "lng set after enrich");
+    assert(
+      Math.abs((defined(enriched[0]).lat ?? 0) - 32.7073) < 0.0001,
+      `lat ≈ 32.7073, got ${defined(enriched[0]).lat}`,
+    );
+    assert(
+      Math.abs((defined(enriched[0]).lng ?? 0) - -117.1566) < 0.0001,
+      `lng ≈ -117.1566, got ${defined(enriched[0]).lng}`,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -274,8 +281,8 @@ test("3b. enrichWithGeo: event already has coords → unchanged", async () => {
       lng: -117.222,
     });
     const enriched = await enrichWithGeo([event]);
-    assert(enriched[0]!.lat === 32.999, "existing lat preserved exactly");
-    assert(enriched[0]!.lng === -117.222, "existing lng preserved exactly");
+    assert(defined(enriched[0]).lat === 32.999, "existing lat preserved exactly");
+    assert(defined(enriched[0]).lng === -117.222, "existing lng preserved exactly");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -295,8 +302,8 @@ test("3c. enrichWithGeo: event with no venue → stays coordinate-less", async (
   try {
     const event = makeEvent({ id: "ev-3", venue: undefined });
     const enriched = await enrichWithGeo([event]);
-    assert(enriched[0]!.lat === undefined, "lat remains undefined when no venue");
-    assert(enriched[0]!.lng === undefined, "lng remains undefined when no venue");
+    assert(defined(enriched[0]).lat === undefined, "lat remains undefined when no venue");
+    assert(defined(enriched[0]).lng === undefined, "lng remains undefined when no venue");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -325,9 +332,9 @@ test("3d. enrichWithGeo: mixed array — only the venue-with-cache-match gets co
     const enriched = await enrichWithGeo(events);
 
     assert(enriched.length === 3, "array length unchanged");
-    assert(Math.abs((enriched[0]!.lat ?? 0) - 32.7073) < 0.0001, "ev-A got cached lat");
-    assert(enriched[1]!.lat === undefined, "ev-B (no venue) stays coordinate-less");
-    assert(enriched[2]!.lat === 32.1, "ev-C (already has coords) unchanged");
+    assert(Math.abs((defined(enriched[0]).lat ?? 0) - 32.7073) < 0.0001, "ev-A got cached lat");
+    assert(defined(enriched[1]).lat === undefined, "ev-B (no venue) stays coordinate-less");
+    assert(defined(enriched[2]).lat === 32.1, "ev-C (already has coords) unchanged");
   } finally {
     globalThis.fetch = originalFetch;
   }

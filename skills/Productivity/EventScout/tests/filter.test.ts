@@ -27,6 +27,7 @@
 import { test } from "bun:test";
 import { filterEvents } from "../Tools/Filter.ts";
 import type { EventItem, QueryContext } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -117,7 +118,7 @@ test("1. Date window: in-range included, out-of-range excluded", () => {
 
   const result = filterEvents([inRange, outBefore, outAfter], c);
   assertEq(result.length, 1, "Only 1 in-range event returned");
-  assert(result[0]!.id === "in", "Correct in-range event");
+  assert(defined(result[0]).id === "in", "Correct in-range event");
 });
 
 // ============================================================================
@@ -222,7 +223,7 @@ test("4. Price free: only isFree===true kept", () => {
 
   const result = filterEvents([free, paid], c);
   assertEq(result.length, 1, "Only 1 free event");
-  assert(result[0]!.id === "free", "Correct free event");
+  assert(defined(result[0]).id === "free", "Correct free event");
 });
 
 // ============================================================================
@@ -355,7 +356,7 @@ test("8. TimeOfDay evening: 7pm included, 10am excluded", () => {
 
   const result = filterEvents([eveningEvent, morningEvent], c);
   assertEq(result.length, 1, "Only evening event kept");
-  assert(result[0]!.id === "evening", "Correct evening event");
+  assert(defined(result[0]).id === "evening", "Correct evening event");
 });
 
 // ============================================================================
@@ -409,9 +410,9 @@ test("10. Sort: result sorted by startDatetime ascending", () => {
   const ctx: QueryContext = { window: WINDOW_ALL, home: HOME, radiusMiles: NO_RADIUS, rawQuery: "test" };
   const result = filterEvents([c, a, b], ctx);
   assertEq(result.length, 3, "All 3 events returned");
-  assertEq(result[0]!.id, "a", "First: a (earliest)");
-  assertEq(result[1]!.id, "b", "Second: b");
-  assertEq(result[2]!.id, "c", "Third: c (latest)");
+  assertEq(defined(result[0]).id, "a", "First: a (earliest)");
+  assertEq(defined(result[1]).id, "b", "Second: b");
+  assertEq(defined(result[2]).id, "c", "Third: c (latest)");
 });
 
 // ============================================================================
@@ -500,7 +501,7 @@ test("13. Combined filters: date+free+category+near all active", () => {
 
   const result = filterEvents([match, wrongDate, wrongPrice, wrongCat, farAway], c);
   assertEq(result.length, 1, "Only the matching event passes all filters");
-  assert(result[0]!.id === "match", "Correct match");
+  assert(defined(result[0]).id === "match", "Correct match");
 });
 
 // ============================================================================
@@ -528,7 +529,7 @@ test("14. TimeOfDay late band: midnight event (00:00 LA) is 'late'", () => {
 
   const result = filterEvents([lateEvent, eveningEvent], c);
   assertEq(result.length, 1, "Only late event kept");
-  assert(result[0]!.id === "late", "Correct late event");
+  assert(defined(result[0]).id === "late", "Correct late event");
 });
 
 // ============================================================================

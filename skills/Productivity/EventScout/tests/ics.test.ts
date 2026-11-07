@@ -26,6 +26,7 @@ import {
 } from "../Tools/adapters/ICSAdapter.ts";
 import type { VeventOccurrence } from "../Tools/adapters/ICSAdapter.ts";
 import type { EventSource } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -102,12 +103,12 @@ test("2. startDatetime contains correct LA date (July → PDT = -07:00)", async 
 
   const offsetMatch = dt.match(/([+-]\d{2}):(\d{2})$/);
   assert(offsetMatch !== null, `startDatetime missing UTC offset: "${dt}"`);
-  const offsetHours = parseInt(offsetMatch![1]!, 10);
+  const offsetHours = parseInt(defined(defined(offsetMatch)[1]), 10);
   assert(offsetHours === -7, `Expected PDT offset -7, got ${offsetHours} in "${dt}"`);
 
   const hourMatch = dt.match(/T(\d{2}):\d{2}:\d{2}/);
   assert(hourMatch !== null, `Cannot extract local hour from "${dt}"`);
-  const localHour = parseInt(hourMatch![1]!, 10);
+  const localHour = parseInt(defined(defined(hourMatch)[1]), 10);
   // 22:00 UTC → 15:00 PDT
   assert(localHour === 15, `Expected local hour 15 (15:00 PDT), got ${localHour} in "${dt}"`);
 });
@@ -207,7 +208,7 @@ test("16. status === 'scheduled'", async () => {
 test("17. sources[0].sourceId === source.id", async () => {
   const item = mapVeventToItem(OCC_FULL, TEST_SOURCE);
   assert(
-    item.sources.length >= 1 && item.sources[0]!.sourceId === "daylight-sd",
+    item.sources.length >= 1 && defined(item.sources[0]).sourceId === "daylight-sd",
     `sources[0].sourceId expected "daylight-sd", got "${item.sources[0]?.sourceId}"`,
   );
 });

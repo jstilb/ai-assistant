@@ -16,6 +16,7 @@
 import { test } from "bun:test";
 import { dedupeAndMerge } from "../Tools/Dedup.ts";
 import type { EventItem } from "../Tools/types.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -130,7 +131,9 @@ test("(a1) Two near-dup same-day events collapse to 1", () => {
 test("(a2) Merged event sources[] is unioned (length 2)", () => {
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B]);
   assert(result.length === 1, `Expected 1 event, got ${result.length}`);
-  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
+  const sourceIds = defined(result[0])
+    .sources.map((s) => s.sourceId)
+    .sort();
   assert(
     sourceIds.length === 2,
     `Expected 2 sources after union, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`,
@@ -146,8 +149,8 @@ test("(a3) Merged event keeps richest fields (description from TYCHO_B)", () => 
   assert(result.length === 1, `Expected 1 event`);
   // TYCHO_B has description; TYCHO_A does not → merged record must have it
   assert(
-    result[0]!.description === "Tycho live at The Observatory North Park",
-    `Expected description from TYCHO_B, got "${result[0]!.description}"`,
+    defined(result[0]).description === "Tycho live at The Observatory North Park",
+    `Expected description from TYCHO_B, got "${defined(result[0]).description}"`,
   );
 });
 
@@ -155,15 +158,17 @@ test("(a4) Merged event keeps ticketUrl from TYCHO_B (TYCHO_A had none)", () => 
   const result = dedupeAndMerge([TYCHO_A, TYCHO_B]);
   assert(result.length === 1, `Expected 1 event`);
   assert(
-    result[0]!.ticketUrl === "https://tickets.example.com/tycho",
-    `Expected ticketUrl from TYCHO_B, got "${result[0]!.ticketUrl}"`,
+    defined(result[0]).ticketUrl === "https://tickets.example.com/tycho",
+    `Expected ticketUrl from TYCHO_B, got "${defined(result[0]).ticketUrl}"`,
   );
 });
 
 test("(a5) Merge is commutative — order [B, A] gives same source union", () => {
   const result = dedupeAndMerge([TYCHO_B, TYCHO_A]);
   assert(result.length === 1, `Expected 1 event`);
-  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
+  const sourceIds = defined(result[0])
+    .sources.map((s) => s.sourceId)
+    .sort();
   assert(
     sourceIds.length === 2 && sourceIds.includes("songkick") && sourceIds.includes("bandsintown"),
     `Sources not unioned correctly: ${JSON.stringify(sourceIds)}`,
@@ -215,7 +220,7 @@ test("(c3) Empty input returns empty array", () => {
 test("(c4) Single event passthrough unchanged", () => {
   const result = dedupeAndMerge([JAZZ_NIGHT]);
   assert(result.length === 1, `Expected 1 event, got ${result.length}`);
-  assert(result[0]!.id === JAZZ_NIGHT.id, `Event id changed`);
+  assert(defined(result[0]).id === JAZZ_NIGHT.id, `Event id changed`);
 });
 
 // ============================================================================
@@ -303,7 +308,9 @@ test("(r-d) Tycho @ Observatory vs Tycho @ Observatory North Park same day → m
   });
   const result = dedupeAndMerge([tychoA, tychoB]);
   assert(result.length === 1, `Failed to merge Tycho duplicates (got ${result.length})`);
-  const sourceIds = result[0]!.sources.map((s) => s.sourceId).sort();
+  const sourceIds = defined(result[0])
+    .sources.map((s) => s.sourceId)
+    .sort();
   assert(sourceIds.length === 2, `Expected 2 unioned sources, got ${sourceIds.length}: ${JSON.stringify(sourceIds)}`);
 });
 
@@ -355,7 +362,10 @@ test("twins: diff titles + UTC-vs-offset datetime + shared performer → merge t
   });
   const result = dedupeAndMerge([songkick, bandsintown]);
   assert(result.length === 1, `Twins should merge to 1 via LA-day bucketing + performer match (got ${result.length})`);
-  assert(result[0]!.sources.length === 2, `Merged twin should union both sources (got ${result[0]!.sources.length})`);
+  assert(
+    defined(result[0]).sources.length === 2,
+    `Merged twin should union both sources (got ${defined(result[0]).sources.length})`,
+  );
 });
 
 test("same venue + same day, DIFFERENT performer → stay separate (no false merge)", () => {
@@ -401,7 +411,10 @@ test("accents: 'Négociant Winery' vs 'Negociant Winery' same title/day → merg
   });
   const result = dedupeAndMerge([accented, ascii]);
   assert(result.length === 1, `Accented + ASCII venue spelling should merge to 1 (got ${result.length})`);
-  assert(result[0]!.sources.length === 2, `Merged twin should union both sources (got ${result[0]!.sources.length})`);
+  assert(
+    defined(result[0]).sources.length === 2,
+    `Merged twin should union both sources (got ${defined(result[0]).sources.length})`,
+  );
 });
 
 // ============================================================================
@@ -513,7 +526,10 @@ test("(api-2) api-tier: duplicate stableId within one batch collapses to 1 (exac
     result.length === 1,
     `Same stableId must collapse to 1 via exact-id upsert, not fuzzy merge (got ${result.length})`,
   );
-  assert(result[0]!.id === "ml-bachata-basics", `Expected the shared id to survive, got "${result[0]!.id}"`);
+  assert(
+    defined(result[0]).id === "ml-bachata-basics",
+    `Expected the shared id to survive, got "${defined(result[0]).id}"`,
+  );
 });
 
 test("(api-3) api-tier event is NOT absorbed into a fuzzy-tier twin (cross-source non-absorption)", () => {

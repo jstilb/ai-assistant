@@ -18,6 +18,7 @@
 import { test } from "bun:test";
 import { mapGameToEvent } from "../Tools/adapters/PadresAdapter.ts";
 import type { MlbGame } from "../Tools/adapters/PadresAdapter.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -163,8 +164,8 @@ test("5. sources[0].sourceId === 'padres-mlb'", () => {
   const event = mapGameToEvent(HOME_GAME);
   assert(event.sources.length >= 1, `Expected at least 1 source, got ${event.sources.length}`);
   assert(
-    event.sources[0]!.sourceId === "padres-mlb",
-    `Expected sourceId "padres-mlb", got "${event.sources[0]!.sourceId}"`,
+    defined(event.sources[0]).sourceId === "padres-mlb",
+    `Expected sourceId "padres-mlb", got "${defined(event.sources[0]).sourceId}"`,
   );
 });
 
@@ -210,14 +211,14 @@ test("11. startDatetime reflects correct LA local time for known UTC input", () 
   const offsetMatch = dt.match(/([+-]\d{2}):(\d{2})$/);
   assert(offsetMatch !== null, `startDatetime missing UTC offset: "${dt}"`);
 
-  const offsetHours = parseInt(offsetMatch![1]!, 10);
+  const offsetHours = parseInt(defined(defined(offsetMatch)[1]), 10);
   // June in LA = PDT = UTC-7
   assert(offsetHours === -7, `Expected PDT offset -7, got ${offsetHours} in "${dt}"`);
 
   // The local hour embedded in the string: "2026-06-15T12:40:00-07:00"
   const hourMatch = dt.match(/T(\d{2}):\d{2}:\d{2}/);
   assert(hourMatch !== null, `Cannot extract local hour from "${dt}"`);
-  const localHour = parseInt(hourMatch![1]!, 10);
+  const localHour = parseInt(defined(defined(hourMatch)[1]), 10);
   assert(localHour === 12, `Expected local hour 12 (12:40 PM PDT), got ${localHour} in "${dt}"`);
 });
 
