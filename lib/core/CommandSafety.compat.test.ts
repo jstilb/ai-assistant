@@ -29,7 +29,6 @@ import {
   isCatastrophicCommand,
   isCommandSafe,
 } from "./CommandSafety.ts";
-import { isSelfVerifyCommandSafe } from "../../skills/Automation/AutonomousWork/Tools/SelfVerifyRunner.ts";
 
 // ---------------------------------------------------------------------------
 // Context 1 — "verifier" (SkepticalVerifier.ts VERIFICATION_ALLOWED_EXECUTABLES
@@ -107,9 +106,14 @@ describe("compat: verifier context (SkepticalVerifier/Evidence.ts)", () => {
 //
 // Provenance: literal examples from SelfVerifyRunner.test.ts
 // ("isSelfVerifyCommandSafe" describe block) — copied verbatim.
+// SelfVerifyRunner.ts was deleted 2026-11-05; its isSelfVerifyCommandSafe was a
+// thin wrapper over isCommandSafe(cmd, SELF_VERIFY_SCOPE), which the executor's
+// verifier prompt still uses, so the cases now pin that function directly.
 // ---------------------------------------------------------------------------
 
-describe("compat: self-verify context (SelfVerifyRunner.ts isSelfVerifyCommandSafe)", () => {
+const isSelfVerifyCommandSafe = (cmd: string): boolean => isCommandSafe(cmd, SELF_VERIFY_SCOPE);
+
+describe("compat: self-verify context (CommandSafety SELF_VERIFY_SCOPE)", () => {
   const allowed = [
     "bun test ./Foo.test.ts",
     "bunx tsc --noEmit",
@@ -137,15 +141,6 @@ describe("compat: self-verify context (SelfVerifyRunner.ts isSelfVerifyCommandSa
   ];
   it.each(deniedCatastrophic)("denied pre-refactor (catastrophic even with allowlisted first token): %s", (cmd) => {
     expect(isSelfVerifyCommandSafe(cmd)).toBe(false);
-  });
-
-  // Cross-checked directly against the new shared function too — proves
-  // SelfVerifyRunner.isSelfVerifyCommandSafe is now a thin wrapper over
-  // CommandSafety.isCommandSafe(cmd, SELF_VERIFY_SCOPE) with identical results.
-  it("isSelfVerifyCommandSafe(cmd) === isCommandSafe(cmd, SELF_VERIFY_SCOPE) for every example above", () => {
-    for (const cmd of [...allowed, ...deniedNeverClaude, ...deniedNotAllowlisted, ...deniedCatastrophic]) {
-      expect(isSelfVerifyCommandSafe(cmd)).toBe(isCommandSafe(cmd, SELF_VERIFY_SCOPE));
-    }
   });
 });
 

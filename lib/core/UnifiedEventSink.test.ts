@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { emit, type KayaEvent } from "./UnifiedEventSink.ts";
+import { defined } from "../test/defined.ts";
 
 const TEST_MEMORY_ROOT = "/tmp/kaya-test-unified-event-sink";
 const EVENTS_DIR = join(TEST_MEMORY_ROOT, "MONITORING/events");
@@ -48,7 +49,7 @@ describe("UnifiedEventSink", () => {
     const lines = readFileSync(canonicalFile, "utf-8").trim().split("\n");
     expect(lines.length).toBe(1);
 
-    const event = JSON.parse(lines[0]!) as KayaEvent;
+    const event = JSON.parse(defined(lines[0])) as KayaEvent;
     expect(event.source).toBe("hook");
     expect(event.category).toBe("test-event");
     expect(event.severity).toBe("info");
@@ -75,7 +76,7 @@ describe("UnifiedEventSink", () => {
     const lines = readFileSync(canonicalFile, "utf-8").trim().split("\n");
     expect(lines.length).toBe(1);
 
-    const event = JSON.parse(lines[0]!) as KayaEvent;
+    const event = JSON.parse(defined(lines[0])) as KayaEvent;
     expect(event.source).toBe("security");
     expect(event.category).toBe("block-event");
   });
@@ -103,7 +104,7 @@ describe("UnifiedEventSink", () => {
     const traceLines = readFileSync(traceFile, "utf-8").trim().split("\n");
     expect(traceLines.length).toBe(1);
 
-    const traceEvent = JSON.parse(traceLines[0]!) as KayaEvent;
+    const traceEvent = JSON.parse(defined(traceLines[0])) as KayaEvent;
     expect(traceEvent.workflowId).toBe("wf-123");
     expect(traceEvent.payload.phase).toBe("prepare-start");
   });
@@ -122,7 +123,7 @@ describe("UnifiedEventSink", () => {
     const canonicalFile = join(EVENTS_DIR, `${today}.jsonl`);
 
     const lines = readFileSync(canonicalFile, "utf-8").trim().split("\n");
-    const event = JSON.parse(lines[0]!) as KayaEvent;
+    const event = JSON.parse(defined(lines[0])) as KayaEvent;
     expect(event.correlationId).toBe("cron-job-abc123");
   });
 
@@ -141,7 +142,7 @@ describe("UnifiedEventSink", () => {
     const canonicalFile = join(EVENTS_DIR, `${today}.jsonl`);
 
     const lines = readFileSync(canonicalFile, "utf-8").trim().split("\n");
-    const event = JSON.parse(lines[0]!) as KayaEvent;
+    const event = JSON.parse(defined(lines[0])) as KayaEvent;
     expect(event.correlationId).toBe("explicit-id");
   });
 
@@ -186,8 +187,8 @@ describe("UnifiedEventSink", () => {
     const lines = readFileSync(canonicalFile, "utf-8").trim().split("\n");
     expect(lines.length).toBe(2);
 
-    const event1 = JSON.parse(lines[0]!) as KayaEvent;
-    const event2 = JSON.parse(lines[1]!) as KayaEvent;
+    const event1 = JSON.parse(defined(lines[0])) as KayaEvent;
+    const event2 = JSON.parse(defined(lines[1])) as KayaEvent;
 
     expect(event1.category).toBe("event1");
     expect(event2.category).toBe("event2");

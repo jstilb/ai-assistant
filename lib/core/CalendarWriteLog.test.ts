@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 import { logCalendarWrite, defaultCalendarWriteLogPath } from "./CalendarWriteLog.ts";
+import { defined } from "../test/defined.ts";
 
 // ============================================================================
 // defaultCalendarWriteLogPath — resolves under getKayaHome(), honors override
@@ -67,7 +68,7 @@ describe("logCalendarWrite", () => {
     );
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
     expect(lines).toHaveLength(1);
-    const entry = JSON.parse(lines[0]!);
+    const entry = JSON.parse(defined(lines[0]));
     expect(entry.target).toBe("Kaya Schedule");
     expect(entry.caller).toBe("test.caller");
     expect(entry.title).toBe("Test event");
@@ -81,9 +82,9 @@ describe("logCalendarWrite", () => {
     logCalendarWrite({ target: "primary", caller: "b", title: "two", outcome: "error:AUTH_EXPIRED" }, { logPath });
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0]!).title).toBe("one");
-    expect(JSON.parse(lines[1]!).title).toBe("two");
-    expect(JSON.parse(lines[1]!).outcome).toBe("error:AUTH_EXPIRED");
+    expect(JSON.parse(defined(lines[0])).title).toBe("one");
+    expect(JSON.parse(defined(lines[1])).title).toBe("two");
+    expect(JSON.parse(defined(lines[1])).outcome).toBe("error:AUTH_EXPIRED");
   });
 
   it("records failed writes too — the seam is auditable regardless of outcome", () => {

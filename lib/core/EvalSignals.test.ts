@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendEvalSignal, evalSignalsPath, type EvalSignalPayload } from "./EvalSignals.ts";
+import { defined } from "../test/defined.ts";
 
 describe("appendEvalSignal()", () => {
   let tempDir: string;
@@ -45,7 +46,7 @@ describe("appendEvalSignal()", () => {
     const content = readFileSync(path, "utf-8");
     const lines = content.split("\n").filter(Boolean);
     expect(lines.length).toBe(1);
-    const record = JSON.parse(lines[0]!);
+    const record = JSON.parse(defined(lines[0]));
     expect(record.source).toBe("TestSuite");
     expect(record.signalType).toBe("failure");
     expect(record.description).toBe("auth test failed");
@@ -73,8 +74,8 @@ describe("appendEvalSignal()", () => {
 
     const lines = readFileSync(evalSignalsPath(), "utf-8").split("\n").filter(Boolean);
     expect(lines.length).toBe(3);
-    expect(JSON.parse(lines[0]!).source).toBe("A");
-    expect(JSON.parse(lines[1]!).source).toBe("B");
-    expect(JSON.parse(lines[2]!).source).toBe("C");
+    expect(JSON.parse(defined(lines[0])).source).toBe("A");
+    expect(JSON.parse(defined(lines[1])).source).toBe("B");
+    expect(JSON.parse(defined(lines[2])).source).toBe("C");
   });
 });

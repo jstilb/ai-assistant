@@ -4,6 +4,7 @@ import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { MEMORY, memPath, defineFileAccessor, type FileAccessor } from "./MemoryPaths.ts";
+import { defined } from "../test/defined.ts";
 
 describe("MemoryPaths", () => {
   const originalKayaHome = process.env.KAYA_HOME;
@@ -169,7 +170,7 @@ describe("defineFileAccessor()", () => {
         writeFileSync(accessor.path(), "{not valid json", "utf-8");
         expect(accessor.read()).toBe(null);
         expect(warn).toHaveBeenCalled();
-        const msg = warn.mock.calls[0]![0] as string;
+        const msg = defined(warn.mock.calls[0])[0] as string;
         expect(msg).toContain("[MemoryPaths:synthetic]");
         expect(msg).toContain("JSON parse failed");
       } finally {
@@ -185,7 +186,7 @@ describe("defineFileAccessor()", () => {
         writeFileSync(accessor.path(), JSON.stringify({ name: "a", version: "wrong" }), "utf-8");
         expect(accessor.read()).toBe(null);
         expect(warn).toHaveBeenCalled();
-        const msg = warn.mock.calls[0]![0] as string;
+        const msg = defined(warn.mock.calls[0])[0] as string;
         expect(msg).toContain("[MemoryPaths:synthetic]");
         expect(msg).toContain("validation failed");
       } finally {

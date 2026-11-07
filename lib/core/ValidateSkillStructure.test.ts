@@ -144,9 +144,9 @@ describe("checkBrokenRoutingRefs", () => {
     const issues = checkBrokenRoutingRefs(dir);
     const broken = issues.filter((i) => i.rule === "BROKEN_ROUTING_REF");
     expect(broken).toHaveLength(1);
-    expect(broken[0]!.path).toBe("MockCategory/Ghost/SKILL.md");
-    expect(broken[0]!.severity).toBe("ERROR");
-    expect(broken[0]!.category).toBe("MockCategory");
+    expect(broken[0]?.path).toBe("MockCategory/Ghost/SKILL.md");
+    expect(broken[0]?.severity).toBe("ERROR");
+    expect(broken[0]?.category).toBe("MockCategory");
 
     // Real should produce no broken-ref issue
     const realBroken = broken.filter((i) => i.path?.includes("Real"));
@@ -177,9 +177,9 @@ describe("checkMissingFromTable", () => {
     const issues = checkMissingFromTable(dir);
     const missing = issues.filter((i) => i.rule === "MISSING_FROM_TABLE");
     expect(missing).toHaveLength(1);
-    expect(missing[0]!.subSkill).toBe("SubB");
-    expect(missing[0]!.severity).toBe("ERROR");
-    expect(missing[0]!.category).toBe("MockCategory");
+    expect(missing[0]?.subSkill).toBe("SubB");
+    expect(missing[0]?.severity).toBe("ERROR");
+    expect(missing[0]?.category).toBe("MockCategory");
   });
 });
 
@@ -207,8 +207,8 @@ describe("checkOrphanedRootDirs", () => {
     const issues = checkOrphanedRootDirs(dir);
     const orphaned = issues.filter((i) => i.rule === "ORPHANED_ROOT_DIR");
     expect(orphaned).toHaveLength(1);
-    expect(orphaned[0]!.severity).toBe("WARN");
-    expect(orphaned[0]!.message).toContain("Orphan");
+    expect(orphaned[0]?.severity).toBe("WARN");
+    expect(orphaned[0]?.message).toContain("Orphan");
   });
 
   it("does not flag a root dir that has its own SKILL.md", () => {
@@ -242,8 +242,8 @@ describe("checkExcessiveDepth", () => {
     const issues = checkExcessiveDepth(dir);
     const deep = issues.filter((i) => i.rule === "EXCESSIVE_DEPTH");
     expect(deep).toHaveLength(1);
-    expect(deep[0]!.severity).toBe("ERROR");
-    expect(deep[0]!.path).toContain("Cat/Sub/Deep/SKILL.md");
+    expect(deep[0]?.severity).toBe("ERROR");
+    expect(deep[0]?.path).toContain("Cat/Sub/Deep/SKILL.md");
   });
 });
 
@@ -265,9 +265,9 @@ describe("checkNameMismatch", () => {
     const issues = checkNameMismatch(dir);
     const mismatches = issues.filter((i) => i.rule === "NAME_MISMATCH");
     expect(mismatches).toHaveLength(1);
-    expect(mismatches[0]!.severity).toBe("WARN");
-    expect(mismatches[0]!.message).toContain("WrongName");
-    expect(mismatches[0]!.message).toContain("RightName");
+    expect(mismatches[0]?.severity).toBe("WARN");
+    expect(mismatches[0]?.message).toContain("WrongName");
+    expect(mismatches[0]?.message).toContain("RightName");
   });
 
   it("does not flag when name field matches directory name", () => {

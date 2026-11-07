@@ -184,13 +184,10 @@ export const DesiredArtifactSchema = z.object({
   // whenever its first line (a bounded read — see bin/job-reconciler.ts's
   // checkStaleMarker) contains this substring, REGARDLESS of mtime-based
   // freshness. This closes the gap where a deterministic-fallback-authored
-  // artifact (e.g. daily-briefing's 07:45 sentinel) satisfies the plain
-  // maxAgeHrs check trivially — it was just written — so the reconciler
-  // never re-ran the real agent for the rest of the day. See
-  // skills/Productivity/DailyBriefing/Tools/BriefingFallback.ts's
-  // FALLBACK_MARKER. YAML manifests can't import a TS const, so the string
-  // set here is duplicated by hand (see daily-briefing.yaml) — keep both
-  // sides in sync if the marker text ever changes.
+  // artifact satisfies the plain maxAgeHrs check trivially — it was just
+  // written — so the reconciler never re-runs the real agent that day.
+  // The motivating job (daily-briefing's 07:45 sentinel) was deleted
+  // 2026-11-05; no manifest declares this field or pendingSuffix now.
   staleIfFirstLineContains: z.string().optional(),
   pendingSuffix: z
     .string()

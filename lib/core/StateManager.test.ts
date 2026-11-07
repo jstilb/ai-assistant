@@ -318,7 +318,7 @@ describe("StateManager", () => {
 
       const saved = await manager.load();
       expect(saved.items.length).toBe(1);
-      expect(saved.items[0]!.id).toBe("1");
+      expect(saved.items[0]?.id).toBe("1");
     });
 
     it("should rollback on error", async () => {
@@ -347,7 +347,7 @@ describe("StateManager", () => {
 
       const saved = await manager.load();
       expect(saved.items.length).toBe(1);
-      expect(saved.items[0]!.id).toBe("original");
+      expect(saved.items[0]?.id).toBe("original");
     });
   });
 
@@ -517,7 +517,7 @@ describe("StateManager", () => {
       const loaded = await manager.load();
 
       expect(loaded.items.length).toBe(2);
-      expect(loaded.items[0]!.id).toBe("a");
+      expect(loaded.items[0]?.id).toBe("a");
       expect(loaded.metadata.createdAt).toBe("2024-01-01T00:00:00Z");
     });
 

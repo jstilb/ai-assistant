@@ -32,6 +32,7 @@ import {
   type SplitPlan,
   type PlannedOutputFile,
 } from "./AutoMemoryConsolidator.ts";
+import { defined } from "../test/defined.ts";
 
 // ============================================================================
 // Fixtures
@@ -113,25 +114,25 @@ describe("parseMemoryFile", () => {
     expect(parsed.frontmatter.description).toBe("A small test fixture");
     expect(parsed.frontmatter.metadata.type).toBe("project");
     expect(parsed.blocks.length).toBe(4);
-    expect(parsed.blocks[0]!.headingTitle).toBe("Overview section");
-    expect(parsed.blocks[1]!.headingTitle).toBe("2026-01-02: first dated finding");
-    expect(parsed.blocks[3]!.headingTitle).toBe("Undated followup note");
+    expect(parsed.blocks[0]?.headingTitle).toBe("Overview section");
+    expect(parsed.blocks[1]?.headingTitle).toBe("2026-01-02: first dated finding");
+    expect(parsed.blocks[3]?.headingTitle).toBe("Undated followup note");
   });
 
   it("detects dated blocks correctly", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[0]!.hasDate).toBe(false);
-    expect(parsed.blocks[1]!.hasDate).toBe(true);
-    expect(parsed.blocks[1]!.dates).toEqual(["2026-01-02"]);
-    expect(parsed.blocks[2]!.hasDate).toBe(true);
-    expect(parsed.blocks[2]!.dates).toEqual(["2026-03-15"]);
-    expect(parsed.blocks[3]!.hasDate).toBe(false);
+    expect(parsed.blocks[0]?.hasDate).toBe(false);
+    expect(parsed.blocks[1]?.hasDate).toBe(true);
+    expect(parsed.blocks[1]?.dates).toEqual(["2026-01-02"]);
+    expect(parsed.blocks[2]?.hasDate).toBe(true);
+    expect(parsed.blocks[2]?.dates).toEqual(["2026-03-15"]);
+    expect(parsed.blocks[3]?.hasDate).toBe(false);
   });
 
   it("detects NEEDS JM markers", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[1]!.needsJmMarkers).toEqual(["NEEDS JM"]);
-    expect(parsed.blocks[0]!.needsJmMarkers).toEqual([]);
+    expect(parsed.blocks[1]?.needsJmMarkers).toEqual(["NEEDS JM"]);
+    expect(parsed.blocks[0]?.needsJmMarkers).toEqual([]);
   });
 
   it("does not flag title-case 'Needs Jm' prose as a marker (only ALL-CAPS)", () => {
@@ -148,13 +149,13 @@ metadata:
 Escalations land in the "Kaya — Needs Jm" project, per Needs-Jm: convention.
 `;
     const parsed = parseMemoryFile(raw, "fixture");
-    expect(parsed.blocks[0]!.needsJmMarkers).toEqual([]);
+    expect(parsed.blocks[0]?.needsJmMarkers).toEqual([]);
   });
 
   it("detects wikilinks", () => {
     const parsed = parseMemoryFile(SMALL_FIXTURE, "fixture");
-    expect(parsed.blocks[0]!.wikilinks).toEqual(["some_wikilink"]);
-    expect(parsed.blocks[2]!.wikilinks).toEqual(["other_link"]);
+    expect(parsed.blocks[0]?.wikilinks).toEqual(["some_wikilink"]);
+    expect(parsed.blocks[2]?.wikilinks).toEqual(["other_link"]);
   });
 
   it("throws loudly when frontmatter is missing", () => {
@@ -342,8 +343,8 @@ describe("buildOutputFiles", () => {
       conflictNotes: [],
     };
     const outputs = buildOutputFiles("project_fixture.md", parsed.frontmatter, parsed.blocks, plan);
-    const reparsed = parseMemoryFile(outputs[0]!.raw, outputs[0]!.filename);
-    expect(reparsed.blocks.map((b) => b.raw)).toEqual([parsed.blocks[0]!.raw, parsed.blocks[3]!.raw]);
+    const reparsed = parseMemoryFile(defined(outputs[0]).raw, defined(outputs[0]).filename);
+    expect(reparsed.blocks.map((b) => b.raw)).toEqual([defined(parsed.blocks[0]).raw, defined(parsed.blocks[3]).raw]);
   });
 });
 
@@ -406,7 +407,7 @@ describe("verifySplitPreservesContent", () => {
 
   it("FAILS LOUD when a block is duplicated across two outputs", () => {
     const outputs = validSplit();
-    const duplicated = [...outputs, outputs[0]!];
+    const duplicated = [...outputs, defined(outputs[0])];
     const result = verifySplitPreservesContent(
       SMALL_FIXTURE,
       "fixture",

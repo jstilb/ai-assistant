@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createAppendLog } from "./AppendLog.ts";
+import { defined } from "../test/defined.ts";
 
 describe("AppendLog", () => {
   let testDir: string;
@@ -46,8 +47,8 @@ describe("AppendLog", () => {
       const lines = content.split("\n").filter((l) => l.trim().length > 0);
       expect(lines).toHaveLength(2);
 
-      const first = JSON.parse(lines[0]!);
-      const second = JSON.parse(lines[1]!);
+      const first = JSON.parse(defined(lines[0]));
+      const second = JSON.parse(defined(lines[1]));
       expect(first.event).toBe("first");
       expect(first.value).toBe(1);
       expect(second.event).toBe("second");
@@ -206,10 +207,10 @@ describe("AppendLog", () => {
 
       const results = log.readLastN<{ hello: string; n: number }>(10);
       expect(results).toHaveLength(2);
-      expect(results[0]!.hello).toBe("world");
-      expect(results[0]!.n).toBe(42);
-      expect(results[1]!.hello).toBe("second");
-      expect(results[1]!.n).toBe(99);
+      expect(results[0]?.hello).toBe("world");
+      expect(results[0]?.n).toBe(42);
+      expect(results[1]?.hello).toBe("second");
+      expect(results[1]?.n).toBe(99);
     });
 
     it("returns only the last N records when more exist than requested", () => {
@@ -217,8 +218,8 @@ describe("AppendLog", () => {
       for (let i = 0; i < 5; i++) log.append({ i });
       const results = log.readLastN<{ i: number }>(2);
       expect(results).toHaveLength(2);
-      expect(results[0]!.i).toBe(3);
-      expect(results[1]!.i).toBe(4);
+      expect(results[0]?.i).toBe(3);
+      expect(results[1]?.i).toBe(4);
     });
 
     it("skips malformed lines silently", () => {

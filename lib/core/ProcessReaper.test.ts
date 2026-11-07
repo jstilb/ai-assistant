@@ -20,6 +20,7 @@ import {
   reapAgentRun,
   reapProcessesInDir,
 } from "./ProcessReaper.ts";
+import { defined } from "../test/defined.ts";
 
 function alive(pid: number): boolean {
   try {
@@ -83,7 +84,7 @@ function startOrphanBun(tag: string, opts: { env: Record<string, string>; cwd: s
     }),
   );
   expect(pids.length).toBe(1);
-  return pids[0]!;
+  return defined(pids[0]);
 }
 
 describe("findAgentRunPids", () => {
@@ -166,11 +167,11 @@ describe("real processes", () => {
     expect(pids.length).toBe(1);
     expect(pids[0]).not.toBe(bang); // $! named the subshell, not sleep
     Bun.sleepSync(200);
-    expect(alive(pids[0]!)).toBe(true); // so the "kill" left the real process running
+    expect(alive(defined(pids[0]))).toBe(true); // so the "kill" left the real process running
 
     // The cwd sweep the executor runs before removing a worktree ends it.
-    expect(reapProcessesInDir(dir, { graceMs: 2000 })).toEqual([pids[0]!]);
-    expect(alive(pids[0]!)).toBe(false);
+    expect(reapProcessesInDir(dir, { graceMs: 2000 })).toEqual([defined(pids[0])]);
+    expect(alive(defined(pids[0]))).toBe(false);
   });
 
   it("reapAgentRun ends an orphan that inherited the run marker, and only that one", () => {

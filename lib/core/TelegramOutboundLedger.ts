@@ -16,7 +16,6 @@
  *   - TelegramClient.sendTextMessage()      (CLI + in-process senders)
  *   - NotificationService.sendTelegram()    (AlertGate pages & all notify() traffic)
  *   - TelegramGatewayImpl.notify()
- *   - DailyBriefing DeliveryUtils.sendTelegramMessage()  (digests)
  *
  * Lives in lib/core (not the Telegram skill) because NotificationService —
  * lib/core itself — is one of the writers, and lib/core must not import from

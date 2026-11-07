@@ -15,7 +15,8 @@
  * descriptions, search text) are always inert, literal arguments.
  *
  * Consumers (S14):
- *   - skills/Productivity/DailyBriefing/Tools/CalendarBlock.ts   → agenda()
+ *   - skills/Productivity/LifeOS/Aggregation/SocialTouches.ts      → agenda()
+ *   - skills/Productivity/InformationManager/Tools/GatheringOrchestrator.ts → agenda()
  *   - skills/Productivity/EventScout/Tools/Actions.ts            → addEvent(), deleteEvent()
  *   - skills/Productivity/LifeOS/Capture/Router.ts               → addEvent()
  *
@@ -90,7 +91,7 @@ function runGcal(subArgs: string[], deps: GcalCliDeps = {}): string {
 }
 
 // ============================================================================
-// agenda — DailyBriefing/CalendarBlock.ts
+// agenda — LifeOS SocialTouches, InformationManager GatheringOrchestrator
 // ============================================================================
 
 export interface AgendaOptions extends GcalCliDeps {

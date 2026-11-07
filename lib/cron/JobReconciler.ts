@@ -221,8 +221,8 @@ export function buildLastInvokedAtMap(rows: readonly unknown[]): Map<string, str
 // ============================================================================
 
 /**
- * Some desiredArtifact paths are date-stamped (e.g. daily-briefing writes
- * MEMORY/BRIEFINGS/<YYYY-MM-DD>.md — see DailyBriefing's Deliver.ts) so a literal
+ * Some desiredArtifact paths are date-stamped (e.g. a job that writes
+ * MEMORY/<dir>/<YYYY-MM-DD>.md) so a literal
  * manifest path can never match. Manifest authors may write `{date}` as a
  * token in `desiredArtifact.path`; this substitutes it with the current
  * LA-local calendar day in YYYY-MM-DD form, matching the briefing's

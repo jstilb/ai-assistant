@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { logFailure, recordFailure, rotateFailureLog } from "./FailureLog.ts";
+import { defined } from "../test/defined.ts";
 
 const tmpHome = join(tmpdir(), `failure-log-test-${Date.now()}`);
 const logPath = () => join(tmpHome, "MEMORY/MONITORING/failure-log.jsonl");
@@ -63,8 +64,8 @@ describe("logFailure", () => {
     logFailure("B", new Error("second"));
     const lines = readFileSync(logPath(), "utf-8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0]!).source).toBe("A");
-    expect(JSON.parse(lines[1]!).source).toBe("B");
+    expect(JSON.parse(defined(lines[0])).source).toBe("A");
+    expect(JSON.parse(defined(lines[1])).source).toBe("B");
   });
 
   test("never throws even if path is unwritable", () => {

@@ -146,13 +146,13 @@ describe("scanCategorySubSkills", () => {
     expect(entries).toHaveLength(2);
 
     // Results are sorted alphabetically — Analysis before Research
-    expect(entries[0]!.name).toBe("Analysis");
-    expect(entries[0]!.triggers).toEqual(["analyze", "breakdown"]);
-    expect(entries[0]!.path).toBe("Intelligence/Analysis/SKILL.md");
+    expect(entries[0]?.name).toBe("Analysis");
+    expect(entries[0]?.triggers).toEqual(["analyze", "breakdown"]);
+    expect(entries[0]?.path).toBe("Intelligence/Analysis/SKILL.md");
 
-    expect(entries[1]!.name).toBe("Research");
-    expect(entries[1]!.triggers).toEqual(["research", "investigate", "deep dive"]);
-    expect(entries[1]!.path).toBe("Intelligence/Research/SKILL.md");
+    expect(entries[1]?.name).toBe("Research");
+    expect(entries[1]?.triggers).toEqual(["research", "investigate", "deep dive"]);
+    expect(entries[1]?.path).toBe("Intelligence/Research/SKILL.md");
   });
 
   it("falls back to lowercased name when sub-skill has no USE WHEN clause", () => {
@@ -168,9 +168,9 @@ describe("scanCategorySubSkills", () => {
     const entries = scanCategorySubSkills("Tools", skillsDir);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.name).toBe("HammerTool");
-    expect(entries[0]!.triggers).toEqual(["hammertool"]);
-    expect(entries[0]!.path).toBe("Tools/HammerTool/SKILL.md");
+    expect(entries[0]?.name).toBe("HammerTool");
+    expect(entries[0]?.triggers).toEqual(["hammertool"]);
+    expect(entries[0]?.path).toBe("Tools/HammerTool/SKILL.md");
   });
 
   it("returns empty array for nonexistent category", () => {
@@ -192,7 +192,7 @@ describe("scanCategorySubSkills", () => {
 
     const entries = scanCategorySubSkills("Mixed", skillsDir);
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.name).toBe("HasSkill");
+    expect(entries[0]?.name).toBe("HasSkill");
   });
 });
 
@@ -426,11 +426,11 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, commandsDir, false);
 
     expect(results).toHaveLength(2);
-    expect(results[0]!.name).toBe("research");
-    expect(results[0]!.written).toBe(true);
-    expect(results[0]!.skipped).toBe(false);
-    expect(results[1]!.name).toBe("analysis");
-    expect(results[1]!.written).toBe(true);
+    expect(results[0]?.name).toBe("research");
+    expect(results[0]?.written).toBe(true);
+    expect(results[0]?.skipped).toBe(false);
+    expect(results[1]?.name).toBe("analysis");
+    expect(results[1]?.written).toBe(true);
 
     // Verify file content
     const content = readFileSync(join(commandsDir, "research.md"), "utf-8");
@@ -465,8 +465,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, handWrittenDir, false);
 
     expect(results).toHaveLength(1);
-    expect(results[0]!.skipped).toBe(true);
-    expect(results[0]!.reason).toBe("Hand-written command exists");
+    expect(results[0]?.skipped).toBe(true);
+    expect(results[0]?.reason).toBe("Hand-written command exists");
 
     // Verify original content preserved
     const content = readFileSync(join(handWrittenDir, "research.md"), "utf-8");
@@ -503,8 +503,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, overwriteDir, false);
 
     expect(results).toHaveLength(1);
-    expect(results[0]!.written).toBe(true);
-    expect(results[0]!.skipped).toBe(false);
+    expect(results[0]?.written).toBe(true);
+    expect(results[0]?.skipped).toBe(false);
 
     const content = readFileSync(join(overwriteDir, "research.md"), "utf-8");
     expect(content).not.toContain("Old content");
@@ -544,8 +544,8 @@ describe("generateCommandFiles", () => {
     const results = generateCommandFiles(categories, dryDir, true);
 
     expect(results).toHaveLength(1);
-    expect(results[0]!.written).toBe(false);
-    expect(results[0]!.skipped).toBe(false);
+    expect(results[0]?.written).toBe(false);
+    expect(results[0]?.skipped).toBe(false);
     expect(existsSync(join(dryDir, "cooking.md"))).toBe(false);
   });
 });

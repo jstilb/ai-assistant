@@ -10,6 +10,7 @@ import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { defined } from "../test/defined.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: parsed JSON of mocked calls is asserted structurally in these tests
 type AnyJson = any;
@@ -413,7 +414,7 @@ describe("MemoryStore", () => {
       const archiveDir = join(TEST_DIR, "archive");
       const files = readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"));
       expect(files.length).toBe(1);
-      const raw = readFileSync(join(archiveDir, files[0]!), "utf-8");
+      const raw = readFileSync(join(archiveDir, defined(files[0])), "utf-8");
       expect(raw.endsWith("\n")).toBe(true);
       const lines = raw.split("\n").filter((l: string) => l.trim());
       expect(lines.length).toBe(2);
@@ -430,7 +431,7 @@ describe("MemoryStore", () => {
       await store.archive(b.id);
       const { readdirSync } = await import("node:fs");
       const archiveDir = join(TEST_DIR, "archive");
-      const file = join(archiveDir, readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"))[0]!);
+      const file = join(archiveDir, defined(readdirSync(archiveDir).filter((f: string) => f.endsWith(".jsonl"))[0]));
       // Reproduce the historical corruption: two records glued onto one line.
       const records = readFileSync(file, "utf-8")
         .split("\n")

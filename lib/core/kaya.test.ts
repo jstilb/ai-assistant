@@ -13,6 +13,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readNormalizedSource } from "../test/sourceText.ts";
+import { defined } from "../test/defined.ts";
 
 // kaya.ts doesn't export functions directly - it's a CLI tool.
 // We test by verifying the tool compiles and runs correctly.
@@ -64,8 +65,8 @@ describe("kaya.ts - version comparison", () => {
     const partsA = a.split(".").map(Number);
     const partsB = b.split(".").map(Number);
     for (let i = 0; i < 3; i++) {
-      if (partsA[i]! > partsB[i]!) return 1;
-      if (partsA[i]! < partsB[i]!) return -1;
+      if (partsA[i]! > defined(partsB[i])) return 1;
+      if (partsA[i]! < defined(partsB[i])) return -1;
     }
     return 0;
   }
