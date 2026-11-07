@@ -30,7 +30,7 @@ If important fields are genuinely unknown after exploring the conversation conte
 
 6. **Write the artifact to** `MEMORY/WORK/<YYYYMMDD-HHMMSS>_<short-slug>/PRD.md`. Create the directory if needed. Use Bash `date` for the timestamp; pick the slug from the user's framing (kebab-case, ≤6 words).
 
-7. **Show Jm the PRD inline** and the artifact path. Offer to break into vertical-slice issues via the AGENT-BRIEF format (`skills/Automation/AutonomousWork/Templates/AGENT-BRIEF.md`) if the work is multi-step.
+7. **Show Jm the PRD inline** and the artifact path. Offer to break into vertical-slice issues via the AGENT-BRIEF format (`skills/Development/PRD/Templates/AGENT-BRIEF.md`) if the work is multi-step.
 
 ## Template
 
@@ -103,4 +103,4 @@ Anything else: constraints not visible in the code, references to ADRs, links to
 - **`/grillwithdocs`**: when the conversation lacks enough signal to write a coherent PRD, run grilling first to surface the missing decisions, then come back to `/prd`.
 - **`/improvecodebasearchitecture`**: if the PRD touches a deepening opportunity, propose the deepened module shape in the Implementation Decisions section.
 - **`/tdd`**: the Testing Decisions section should reference the public-interface-test discipline.
-- **`/work` AGENT-BRIEF**: a PRD becomes one or more AGENT-BRIEFs when broken into vertical-slice issues. The PRD lives at the feature level; AGENT-BRIEFs live at the slice level.
+- **AGENT-BRIEF** (`Templates/AGENT-BRIEF.md`): a PRD becomes one or more AGENT-BRIEFs when broken into vertical-slice issues. The PRD lives at the feature level; AGENT-BRIEFs live at the slice level.
