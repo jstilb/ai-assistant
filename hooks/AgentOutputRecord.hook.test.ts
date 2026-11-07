@@ -46,6 +46,7 @@ import { truncateForNtfy } from "./AgentOutputRecord.hook.ts";
 // whose hooks execute against this checkout) and nearly clobbered live state
 // — see the T7-08.4 handback report for the incident.
 import { registerAgent } from "./lib/agent-tracker.ts";
+import { defined } from "../lib/test/defined.ts";
 
 const HOOK_PATH = join(import.meta.dir, "AgentOutputRecord.hook.ts");
 
@@ -309,7 +310,7 @@ describe("verbatim capture — normal completion message", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    const content = readFileSync(files[0]!, "utf-8");
+    const content = readFileSync(defined(files[0]), "utf-8");
     // Verbatim: the ORIGINAL text (including the "🗣️ Engineer:" prefix) is
     // present unmodified. The deleted regex parser would have rewritten
     // this to "Engineer completed Fixed the auth bug..." and dropped the
@@ -319,7 +320,7 @@ describe("verbatim capture — normal completion message", () => {
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0]!.message).toBe(message);
+    expect(spool[0]?.message).toBe(message);
 
     const events = readObservabilityEvents();
     const ourEvent = events.find((e) => e.summary === message);
@@ -350,11 +351,11 @@ describe("anti-gaming: message matching none of the old completion-pattern regex
     // such gate — any non-empty output is captured.
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0]!.message).toBe(message);
+    expect(spool[0]?.message).toBe(message);
 
     const events = readObservabilityEvents();
     expect(events.find((e) => e.summary === message)).toBeDefined();
@@ -373,7 +374,7 @@ describe("anti-gaming: message matching none of the old completion-pattern regex
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
   });
 });
 
@@ -408,7 +409,7 @@ describe("whitespace-only completion output", () => {
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    expect(spool[0]!.message).toBe(message);
+    expect(spool[0]?.message).toBe(message);
   });
 });
 
@@ -434,7 +435,7 @@ describe("agentType — objective tool_input.subagent_type only, never regexed f
     // here because the filename's separate description slug is built from
     // the (verbatim) message text, so it legitimately contains the word
     // "haxxor" too; that's expected and not what this assertion is about.
-    const agentTypeToken = files[0]!.match(
+    const agentTypeToken = defined(files[0]).match(
       /_AGENT-([a-z0-9-]+?)_(?:RESEARCH|DECISION|IMPLEMENTATION|DESIGN|SECURITY)_/,
     )?.[1];
     expect(agentTypeToken).toBe("engineer");
@@ -480,14 +481,14 @@ describe("ntfy byte-truncation — mechanical protocol cut, not a rewrite", () =
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(longMessage);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(longMessage);
 
     const events = readObservabilityEvents();
     expect(events.find((e) => e.summary === longMessage)).toBeDefined();
 
     const spool = readDigestSpool();
     expect(spool).toHaveLength(1);
-    const spooledMessage = spool[0]!.message as string;
+    const spooledMessage = defined(spool[0]).message as string;
     expect(Buffer.byteLength(spooledMessage, "utf-8")).toBeLessThanOrEqual(4096);
     expect(spooledMessage.length).toBeLessThan(longMessage.length);
     expect(spooledMessage).toContain("[truncated for ntfy]");
@@ -516,7 +517,7 @@ describe("S-25: subagent tool_use named 'Agent' (Claude Code 2.1.263 rename)", (
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
   });
 
   it("still matches a legacy 'Task'-named tool_use (backward compatibility for old transcripts)", () => {
@@ -533,7 +534,7 @@ describe("S-25: subagent tool_use named 'Agent' (Claude Code 2.1.263 rename)", (
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
   });
 });
 
@@ -566,7 +567,7 @@ describe("S-25: async/background subagent — real output resolved from its own 
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    const content = readFileSync(files[0]!, "utf-8");
+    const content = readFileSync(defined(files[0]), "utf-8");
     // The real, resolved output is captured...
     expect(content).toContain(realOutput);
     // ...and the launch stub text is NOT what got written as the capture.
@@ -607,7 +608,7 @@ describe("T7-08.4: last_assistant_message payload fallback", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
 
     const debugLog = readDebugLog();
     expect(debugLog).toContain("invocation-found-no-result");
@@ -627,7 +628,7 @@ describe("T7-08.4: last_assistant_message payload fallback", () => {
 
     const files = findResearchFiles();
     expect(files).toHaveLength(1);
-    expect(readFileSync(files[0]!, "utf-8")).toContain(message);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(message);
 
     const debugLog = readDebugLog();
     expect(debugLog).toContain("transcript-fully-malformed");

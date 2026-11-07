@@ -29,6 +29,7 @@ import { join } from "node:path";
 import { runSessionRatingRecord, type SessionRatingDeps } from "./SessionRatingRecord.hook.ts";
 import type { InferenceResult } from "../lib/core/Inference.ts";
 import { SessionImplicitRatingSchema } from "../lib/core/LearningEntrySchema.ts";
+import { defined } from "../lib/test/defined.ts";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -147,7 +148,7 @@ describe("ISC-1: writes exactly one row with correct fields", () => {
     const rows = readRatings(ratingsPath);
     expect(rows).toHaveLength(1);
 
-    const row = rows[0]!;
+    const row = defined(rows[0]);
     expect(row.source).toBe("implicit");
     expect(row.rating).toBe(7);
     expect(row.session_id).toBe(SESSION_ID);
