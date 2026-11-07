@@ -318,10 +318,10 @@ Selector grammar: `skills` · `skill:<Category[/Child]>` · `commands` · `comma
 
 ## Task Definition Format
 
-Eval tasks are top-level YAML (not nested under a `task:` key) — see any file under `UseCases/**/*.yaml`, e.g. `UseCases/DailyBriefing/dailybriefing_no_fabricated_numbers.yaml`:
+Eval tasks are top-level YAML (not nested under a `task:` key) — see any file under `UseCases/**/*.yaml`, e.g. `UseCases/EventScout/eventscout_booking_classification.yaml`:
 
 ```yaml
-id: dailybriefing_no_fabricated_numbers
+id: eventscout_booking_classification
 description: "What this eval measures"
 type: regression        # or capability
 domain: general          # coding | conversational | research | computer_use | general

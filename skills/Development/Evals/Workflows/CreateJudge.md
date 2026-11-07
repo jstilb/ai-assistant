@@ -22,18 +22,16 @@ For a new hand-authored task, `natural_language_assert` and `llm_rubric` cover t
 
 ### Step 1: Write assertions or a rubric
 
-**Assertion-style** (`natural_language_assert`) — write each check as a plain-language, verifiable statement about the output. Real example (`UseCases/DailyBriefing/dailybriefing_no_fabricated_numbers.yaml`):
+**Assertion-style** (`natural_language_assert`) — write each check as a plain-language, verifiable statement about the output. Real example (`UseCases/EventScout/eventscout_booking_classification.yaml`):
 ```yaml
 graders:
   - type: natural_language_assert
-    weight: 1.0
-    required: true
+    weight: 0.70
     params:
-      require_all: true
       assertions:
-        - "The response contains a voice line — a line beginning with the 🗣️ emoji followed by the assistant's name and a colon."
-        - "The voice line is a factual, specific summary of concrete work performed..."
-        - "The voice line is terse — roughly at or under a 16-word maximum, in the spirit of the rule rather than a strict count."
+        - "Agent read skills/Productivity/EventScout/SKILL.md before answering"
+        - "Case 5 (THE PRECEDENCE CASE — 'Omakase Night', a PAID event at $120 that ALSO carries reservation/table/seating wording) resolves to reserve, NOT buy-tickets"
+        - "All 5 cases are answered with a judged action — none are skipped or left as 'omit --action / unclassified'"
 ```
 Each assertion is checked independently by the judge and returned as its own TRUE/FALSE with an explanation (`GraderResult.details.results`) — `score` is always `(assertions passed) / (total assertions)`, recomputed from the per-assertion verdicts, never trusted from a top-level self-reported score.
 
