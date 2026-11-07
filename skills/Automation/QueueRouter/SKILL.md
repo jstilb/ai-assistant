@@ -290,7 +290,7 @@ bun QueueManager.ts reject-to-pipeline <id> --reason "needs more detail"
 - **MigrateApprovalsToSpecPipeline.ts** - One-time migration script
 
 ### Feeds Into
-- **AutonomousWork** - Picks tasks from approved-work queue
+- **AutonomousWork** - WorkQueue/Integrator library over `pipeline.db` (it no longer runs work; the LucidTasks executor does)
 - **SessionStart hook** - Shows pending items
 - **InformationManager** - Routes Kaya tasks from scratchpad to queue
 - **AutoInfoManager** - Weekly `TriageLucidTasks` step adds @kaya tasks to spec-pipeline

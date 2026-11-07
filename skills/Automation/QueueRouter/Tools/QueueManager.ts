@@ -946,7 +946,7 @@ export class QueueManager {
       // Phase verification gate: if progress tracking is initialized,
       // all phases must be completed before marking the item done
       if (target.progress) {
-        const { phasesCompleted, totalPhases } = target.progress!;
+        const { phasesCompleted, totalPhases } = target.progress;
         if (phasesCompleted.length < totalPhases) {
           const missing = [];
           for (let p = 1; p <= totalPhases; p++) {
@@ -1536,12 +1536,12 @@ export class QueueManager {
         if (!target.progress) {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
-        if (phase < 1 || phase > target.progress!.totalPhases) {
-          throw new Error(`Phase ${phase} out of range (1-${target.progress!.totalPhases})`);
+        if (phase < 1 || phase > target.progress.totalPhases) {
+          throw new Error(`Phase ${phase} out of range (1-${target.progress.totalPhases})`);
         }
 
-        target.progress!.currentPhase = phase;
-        target.progress!.lastUpdated = new Date().toISOString();
+        target.progress.currentPhase = phase;
+        target.progress.lastUpdated = new Date().toISOString();
         target.updated = new Date().toISOString();
         saveQueueItems(queueName, items);
         return target;
@@ -1569,11 +1569,11 @@ export class QueueManager {
         if (!target.progress) {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
-        if (phase < 1 || phase > target.progress!.totalPhases) {
-          throw new Error(`Phase ${phase} out of range (1-${target.progress!.totalPhases})`);
+        if (phase < 1 || phase > target.progress.totalPhases) {
+          throw new Error(`Phase ${phase} out of range (1-${target.progress.totalPhases})`);
         }
 
-        const progress = target.progress!;
+        const progress = target.progress;
         if (!progress.phasesCompleted.includes(phase)) {
           progress.phasesCompleted.push(phase);
           progress.phasesCompleted.sort((a, b) => a - b);
@@ -1620,7 +1620,7 @@ export class QueueManager {
           throw new Error(`Progress not initialized for item ${id}. Call initProgress first.`);
         }
 
-        const progress = target.progress!;
+        const progress = target.progress;
         progress.iscStatus[criterion] = {
           completed,
           completedAt: completed ? new Date().toISOString() : undefined,
