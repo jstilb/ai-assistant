@@ -3,7 +3,7 @@
  *
  * Shared by:
  *   - UpgradeTriage.ts (writer)
- *   - DailyBriefing/Tools/EcosystemUpdatesBlock.ts (reader)
+ *   - no reader (the DailyBriefing reader is gone; skill deleted 2026-11-05)
  *
  * Bump the version literal in TriageSummarySchema only on breaking schema changes.
  */
@@ -29,7 +29,7 @@ export const TriageResultSchema = z.object({
 
 export type TriageResult = z.infer<typeof TriageResultSchema>;
 
-// Summary schema — written to latest-triage-result.json for DailyBriefing consumption.
+// Summary schema — written to latest-triage-result.json (no reader since DailyBriefing was deleted).
 // version is optional with default 1 for backward compatibility with pre-versioned files.
 export const TriageSummarySchema = z.object({
   version: z.literal(1).optional().default(1),
