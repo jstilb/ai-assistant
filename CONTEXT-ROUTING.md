@@ -9,7 +9,7 @@
 |---|---|---|
 | All hooks | hooks/ (directory — browse manually) | — |
 | Skill: Agents | skills/Agents/SKILL.md | 2026-11-05 |
-| Skill: Automation | skills/Automation/SKILL.md | 2026-10-27 |
+| Skill: Automation | skills/Automation/SKILL.md | 2026-11-05 |
 | Skill: Commerce | skills/Commerce/SKILL.md | 2026-10-04 |
 | Skill: Communication | skills/Communication/SKILL.md | 2026-09-28 |
 | Skill: Content | skills/Content/SKILL.md | 2026-11-04 |
@@ -17,7 +17,7 @@
 | Skill: Development | skills/Development/SKILL.md | 2026-10-04 |
 | Skill: Intelligence | skills/Intelligence/SKILL.md | 2026-10-04 |
 | Skill: Life | skills/Life/SKILL.md | 2026-11-04 |
-| Skill: Productivity | skills/Productivity/SKILL.md | 2026-11-04 |
+| Skill: Productivity | skills/Productivity/SKILL.md | 2026-11-05 |
 | Skill: System | skills/System/SKILL.md | 2026-11-04 |
 | Kaya hook system | docs/system/THEHOOKSYSTEM.md | 2026-11-05 |
 | Kaya pipelines | docs/system/PIPELINES.md | 2026-11-05 |
@@ -48,6 +48,7 @@
 | Topic / Need | File Path | Last Updated |
 |---|---|---|
 | Challenges | USER/TELOS/CHALLENGES.md | 2026-10-25 |
+| Glossary — goal words (Rock, Floor, Parked, Menu, IDs) | /Users/[user]/Desktop/obsidian/POS/Kaya Glossary.md | 2026-10-25 |
 | Goals | USER/TELOS/GOALS.md | 2026-10-25 |
 | Lead measures (S#) | USER/TELOS/LEAD-MEASURES.md | 2026-10-26 |
 | Mental frames | USER/TELOS/FRAMES.md | 2026-02-26 |
@@ -57,7 +58,7 @@
 | Opinions / beliefs | USER/TELOS/BELIEFS.md | 2026-02-26 |
 | Problems | USER/TELOS/PROBLEMS.md | 2026-02-26 |
 | Projects (telos-level) | USER/TELOS/PROJECTS.md | 2026-09-11 |
-| Status (current) | USER/TELOS/STATUS.md | 2026-11-04 |
+| Status (current) | USER/TELOS/STATUS.md | 2026-11-05 |
 | updates | USER/TELOS/updates.md | 2026-06-07 |
 
 ## Projects
@@ -76,7 +77,9 @@
 
 | Topic / Need | File Path | Last Updated |
 |---|---|---|
-| (none found) | — | — |
+| Memory index | MEMORY/index.json | 2026-09-21 |
+| Work queue state | MEMORY/QUEUES/state.json | 2026-11-05 |
+| Notifications | MEMORY/NOTIFICATIONS/notifications.jsonl | 2026-11-05 |
 
 ## Configuration
 

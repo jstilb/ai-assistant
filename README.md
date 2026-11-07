@@ -25,7 +25,7 @@ Kaya is the result: a skill-based architecture where each capability is a self-c
 kaya/
   skills/             # 11 categories and 70 leaf skills
     Automation/       # AutonomousWork, QueueRouter, AutoMaintenance
-    Productivity/     # LucidTasks, LifeOS, DailyBriefing
+    Productivity/     # LucidTasks, LifeOS, CalendarAssistant
     Development/      # Browser and engineering workflows
     ...               # 8 other categories
   bin/                # CLI tools and launchd job wrappers
@@ -38,7 +38,7 @@ kaya/
 ## Key Capabilities
 
 ### Autonomous Task Execution
-The `AutonomousWork` skill orchestrates parallel agent execution -- multiple Claude instances working on independent tasks simultaneously with branch-isolated git operations.
+The LucidTasks autonomous executor runs work: it picks tasks with `disposition=autonomous`, builds each one in its own git worktree, verifies it with a second agent, and merges to `main`.
 
 ### Skill Composition
 Skills are composable modules with standardized interfaces. Each skill exposes:
@@ -79,7 +79,7 @@ Examples below are illustrative, not exhaustive -- see each category's own `SKIL
 | **Development** | Browser, CreateSkill, TDD, ImproveCodebaseArchitecture, Evals, PRD | Engineering, CLI, codebase tools, and agent evals |
 | **Intelligence** | Research, ArgumentMapper, Graph, VaultGraph, AgentMetacognition | Research, analysis, and pattern synthesis |
 | **Life** | Cooking, Anki, Telos, DnD, InteriorDesign | Lifestyle, goals, and hobbies |
-| **Productivity** | CalendarAssistant, DailyBriefing, LucidTasks, LifeOS | Tasks, calendar, and daily planning |
+| **Productivity** | CalendarAssistant, LucidTasks, LifeOS | Tasks, calendar, and daily planning |
 | **System** | AgentMonitor, KayaUpgrade, PublicSync | System integrity, monitoring, and sync |
 
 ## Tech Stack
