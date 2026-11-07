@@ -1,11 +1,11 @@
 ---
 name: Productivity
-description: Task management, calendar, daily briefing, information management, and LifeOS learning. USE WHEN tasks, lucid tasks, calendar, daily briefing, information manager, learning, OR productivity tools.
+description: Task management, calendar, information management, and LifeOS learning. USE WHEN tasks, lucid tasks, calendar, information manager, learning, OR productivity tools.
 ---
 
 # Productivity
 
-Personal productivity tools — covering task management with Lucid, calendar assistance, daily briefings, information management, and LifeOS learning workflows.
+Personal productivity tools — covering task management with Lucid, calendar assistance, information management, and LifeOS learning workflows.
 
 ## Sub-Skills
 
@@ -13,7 +13,6 @@ Personal productivity tools — covering task management with Lucid, calendar as
 |-----------|----------|------|
 | **AppUsageTracker** | appusagetracker | `Productivity/AppUsageTracker/SKILL.md` |
 | **CalendarAssistant** | schedule meeting, calendar, list events, add event, find free time, time blocking, calendar agenda, kaya scheduler, calendar blocks, day plan | `Productivity/CalendarAssistant/SKILL.md` |
-| **DailyBriefing** | morning briefing, daily briefing, start my day, what's on my schedule, daily summary | `Productivity/DailyBriefing/SKILL.md` |
 | **EventScout** | find events, things to do, what's happening, concerts, shows, activities, comedy, sports, things this weekend, recommend an outing, events near me, free things to do, save an event to my list, anything to do in san diego, looking for something fun | `Productivity/EventScout/SKILL.md` |
 | **InformationManager** | gather context, refresh context, dtr, telos data, obsidian context, calendar events, sync calendar | `Productivity/InformationManager/SKILL.md` |
 | **LifeOS** | capturing habits, leads, experiences (ate/went/watched/read), ideas, tasks, decisions, insights, reflections, or calendar events;, when viewing the loop dashboard (the live web dashboard at http://localhost:31337);, when pre-populating a weekly/monthly/quarterly/annual review;, "what should i learn next", "resume learning", "where did i leave off in <piano/climbing/…>", "learning dashboard" (learning resume — http://localhost:31337/learn) | `Productivity/LifeOS/SKILL.md` |
