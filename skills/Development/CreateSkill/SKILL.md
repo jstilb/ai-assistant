@@ -10,7 +10,7 @@ MANDATORY skill creation framework for ALL skill creation requests.
 
 **Before creating ANY skill, READ:** `~/.claude/docs/system/SKILLSYSTEM.md`
 
-**Canonical example to follow:** `~/.claude/skills/Productivity/DailyBriefing/SKILL.md`
+**Canonical example to follow:** the Blogging skill in `~/.claude/docs/system/SKILLSYSTEM.md` ("Complete Canonical Example")
 
 ## TitleCase Naming Convention
 
@@ -79,8 +79,7 @@ User: "Eval the JobSearch skill"
 ## Integration
 
 ### Uses
-- **docs/system/SKILLSYSTEM.md** - Skill structure requirements and standards
-- **DailyBriefing/SKILL.md** - Canonical skill example
+- **docs/system/SKILLSYSTEM.md** - Skill structure requirements and standards, and the canonical skill example
 - **Glob/Grep** - File structure validation
 - **EvalGrader.md**, **EvalComparator.md**, **EvalAnalyzer.md** — Subagent instructions for eval workflows
 - **Tools/*.py** — Python scripts from Anthropic's skill-creator for benchmark aggregation, description optimization, and eval viewing

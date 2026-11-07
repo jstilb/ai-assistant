@@ -7,7 +7,7 @@ Create a new skill following the canonical structure with proper TitleCase namin
 **REQUIRED FIRST:**
 
 1. Read the skill system documentation: `~/.claude/docs/system/SKILLSYSTEM.md`
-2. Read the canonical example: `~/.claude/skills/Productivity/DailyBriefing/SKILL.md`
+2. Read the canonical example: the Blogging skill in `~/.claude/docs/system/SKILLSYSTEM.md` ("Complete Canonical Example")
 
 ## Step 2: Understand the Request
 
@@ -325,8 +325,8 @@ bun ToolName.ts \
 ```bash
 touch ~/.claude/skills/Daemon/Workflows/UpdateDaemonInfo.md
 touch ~/.claude/skills/Daemon/Workflows/UpdatePublicRepo.md
-touch ~/.claude/skills/Productivity/DailyBriefing/Workflows/Generate.md
-touch ~/.claude/skills/Productivity/DailyBriefing/Workflows/Configure.md
+touch ~/.claude/skills/Productivity/EventScout/Workflows/Generate.md
+touch ~/.claude/skills/Productivity/EventScout/Workflows/Configure.md
 ```
 
 ## Step 7: Verify TitleCase
