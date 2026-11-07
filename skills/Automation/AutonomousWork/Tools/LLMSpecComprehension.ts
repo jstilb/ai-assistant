@@ -17,7 +17,7 @@
  * WIRING: Not wired into prepare() yet — that is Phase 4c.
  */
 
-import type { InferenceFn } from "./SkepticalVerifier.ts";
+import type { InferenceFn } from "./Types.ts";
 import type { ComprehendedSpec, ComprehendedRow, ComprehendedPhase } from "./Types.ts";
 import { appendComprehensionFidelity } from "./ComprehensionFidelityLog.ts";
 

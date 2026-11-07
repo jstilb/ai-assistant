@@ -30,7 +30,7 @@ import { join, dirname } from "node:path";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
 import { MEMORY } from "../../../../lib/core/MemoryPaths.ts";
-import type { TechDebtInput } from "./CompletionPipeline.ts";
+import type { TechDebtInput } from "./Types.ts";
 import {
   PipelineRepository,
   ALLOWED_TRANSITIONS as CANONICAL_TRANSITIONS,
@@ -131,7 +131,7 @@ export interface WorkItemMetadata extends Record<string, unknown> {
   /** Git branch name for the feature worktree */
   worktreeBranch?: string;
   /** ISC rows for this item (persisted for cross-process access) */
-  iscRows?: import("./WorkOrchestrator.ts").ISCRow[];
+  iscRows?: import("./Types.ts").ISCRow[];
   /** Adversarial concerns raised by SkepticalVerifier Phase 2 */
   adversarialConcerns?: string[];
   /** Execution log entries (command, output, exitCode) from Builder agents */
@@ -226,7 +226,7 @@ export interface WorkItemMetadata extends Record<string, unknown> {
   debtIncurred?: TechDebtInput[];
   /** Slice 4: forward-stub loops for a multi-loop epic. The NEXT loop is auto-enqueued
    *  when this item verifies + completes; the remainder is carried onto the new item. */
-  followOnLoops?: import("./FollowOnLoops.ts").FollowOnLoop[];
+  followOnLoops?: import("./Types.ts").FollowOnLoop[];
   /** Slice 4: set true once this item's next follow-on loop has been enqueued (idempotency). */
   followOnEnqueued?: boolean;
   /** Slice 4: id of the follow-on loop item enqueued from this one. */
@@ -1155,8 +1155,12 @@ export class WorkQueue {
       const match = item.title.match(familyRegex);
       if (!match) continue;
       const family = (match[1] ?? "").trim();
-      if (!families.has(family)) families.set(family, []);
-      families.get(family)!.push({ item, phase: parseInt(match[2] ?? "", 10) });
+      let members = families.get(family);
+      if (!members) {
+        members = [];
+        families.set(family, members);
+      }
+      members.push({ item, phase: parseInt(match[2] ?? "", 10) });
     }
 
     let warned = 0;
@@ -1447,9 +1451,9 @@ Commands:
         console.error("Usage: update <id> <status> [result]");
         process.exit(1);
       }
-      // Block direct completion from CLI — must use WorkOrchestrator.ts report-done
+      // Block direct completion from CLI — completion needs verification provenance
       if (status === "completed") {
-        console.error("Direct completion disabled. Use WorkOrchestrator.ts report-done.");
+        console.error("Direct completion disabled. HUMAN proxy items resolve via JmTaskBridge.ts resolve.");
         process.exit(1);
       }
       try {

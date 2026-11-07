@@ -1,100 +1,84 @@
 /**
- * Types.ts — Shared types for the AutonomousWork tool layer.
+ * Types.ts — Shared types for the AutonomousWork library (WorkQueue,
+ * LLMSpecComprehension, Integrator).
  *
- * This file is the source of truth for types that cross module boundaries.
- * TaskOrchestrator.ts re-exports these for backwards compatibility with
- * class-importing test consumers.
+ * ISCRow, TechDebtInput, FollowOnLoop and InferenceFn moved here from the
+ * deleted orchestrator files (2026-11-05). They still describe persisted
+ * WorkItemMetadata fields and the comprehension inference seam.
  */
 
-import type { EffortLevel } from "./WorkQueue.ts";
-import type { FaultClass } from "./WorkOrchestrator.ts";
+import type { InferenceLevel } from "../../../../lib/core/Inference.ts";
 
 // ============================================================================
-// Effort Classification (deterministic — no LLM)
+// Persisted WorkItemMetadata shapes
 // ============================================================================
 
-/**
- * ISC 2: Per-effort-tier wall-clock caps.
- * Moved from TaskOrchestrator.ts (Phase 5c — class deleted).
- *
- * RIGOROUS is the spec's alias for THOROUGH — both map to 4h.
- */
-export const WALL_CLOCK_CAPS: Record<EffortLevel | "RIGOROUS", number> = {
-  TRIVIAL: 15 * 60 * 1000,
-  QUICK: 30 * 60 * 1000,
-  STANDARD: 2 * 60 * 60 * 1000,
-  THOROUGH: 4 * 60 * 60 * 1000,
-  RIGOROUS: 4 * 60 * 60 * 1000,
-  DETERMINED: 8 * 60 * 60 * 1000,
-};
+export type ISCRowExecutability = "automatable" | "human-required" | "deferred";
 
-/**
- * Maps each EffortLevel to the maximum number of Builder/Verifier iterations allowed.
- * Canonical location: Types.ts (moved here from EffortClassifier.ts — Phase 3b refactor).
- */
-export const ITERATION_LIMITS: Record<EffortLevel, number> = {
-  TRIVIAL: 1,
-  QUICK: 3,
-  STANDARD: 10,
-  THOROUGH: 25,
-  DETERMINED: 100,
-};
-
-/**
- * The single default effort cap applied at prepare() when no explicit
- * effortOverride is provided.
- *
- * Determinism-residue cleanup: the old deriveEffort() keyword heuristic
- * (greeting→TRIVIAL, "overnight"→DETERMINED, architectural-keywords→THOROUGH,
- * typo/rename→QUICK, else STANDARD) interpreted the request text to pick a tier.
- * Per "determinism must earn its place", iteration/wall-clock caps are plain
- * default numbers, not content-derived tiers — they exist only as a generous
- * loud-failing backstop, not a judgment. deriveEffort returned STANDARD for
- * nearly every real work item anyway, so STANDARD is the default; callers that
- * genuinely need a larger budget pass an explicit effortOverride.
- */
-export const DEFAULT_EFFORT: EffortLevel = "STANDARD";
-
-// ============================================================================
-// VerifierReport
-// ============================================================================
-
-export interface VerifierReport {
-  rows: Array<{
-    iscId: number;
-    verdict: "PASS" | "FAIL";
-    evidence: string;
-    linkedTest: string | null;
-    concern: string | null;
-  }>;
-  summary: string;
-  allPass: boolean;
+export interface ISCRow {
+  id: number;
+  description: string;
+  status: "PENDING" | "DONE" | "VERIFIED" | "EXECUTION_FAILED";
+  capability?: string;
+  parallel: boolean;
+  source?: "EXPLICIT" | "INFERRED" | "IMPLICIT" | "RESEARCH";
+  specSection?: string;
+  /** True when spec exists but parseSpec returned empty ISC, forcing template fallback */
+  specFallback?: boolean;
   /**
-   * S3a: structured fault class emitted by the Verifier agent for any failure.
-   * One of: item | infrastructure | environment | transient.
-   * Absent (undefined) on a passing report.
+   * Whether this row can be completed by automation or requires human action.
+   * Field name kept as `disposition` for compatibility with persisted `isc_rows`
+   * JSON; the concept is ISC Row Executability (ontology D2 — "disposition" is
+   * reserved for the LucidTask routing column).
    */
-  faultClass?: FaultClass;
-  /** Gate A + Gate B test execution results emitted by the Verifier sub-agent.
-   *  Carried through to ItemReviewSummary.testExecutionResults so Tier1 Check-17
-   *  and the RigorousVerifier path can consume them. */
-  testExecutionResults?: {
-    gateA?: {
-      command: string;
-      exitCode: number;
-      stdout: string;
-      testsPassed?: number;
-      testsFailed?: number;
-      verdict: "PASS" | "FAIL" | "SKIP";
-    };
-    gateB?: Array<{
-      file: string;
-      exitCode: number;
-      stdout: string;
-      verdict: "PASS" | "FAIL";
-    }>;
+  disposition?: ISCRowExecutability;
+  /** Test level classification from TestStrategy */
+  testLevel?: "unit" | "integration" | "e2e" | "manual";
+  /** Verification priority — smoke rows run first for fast-fail */
+  priority?: "smoke" | "full";
+  /** True when this row represents an infrastructure failure, not a work item fault */
+  infraFault?: boolean;
+  /** Optional evidence artifacts attached when row is marked done */
+  evidence?: { files?: string[]; commands?: string[]; summary?: string };
+  /** Human-readable instruction for manual ISC rows. */
+  verifyMethod?: string;
+  verification?: {
+    method: string;
+    command?: string;
+    success_criteria: string;
+    result?: "PASS" | "FAIL";
+    /** When true, non-zero exit = PASS and zero exit = FAIL (for "X is NOT present" assertions) */
+    invertExit?: boolean;
   };
 }
+
+export interface TechDebtInput {
+  description: string;
+  location: string;
+  category: string;
+}
+
+export interface FollowOnLoop {
+  /** Title for the next loop's work item. */
+  title: string;
+  /** Optional spec path for the next loop (resolved relative to KAYA_HOME if not absolute). */
+  specPath?: string;
+  /** Optional description override. */
+  description?: string;
+}
+
+// ============================================================================
+// Inference seam (LLMSpecComprehension)
+// ============================================================================
+
+/** Injectable inference function — allows test mocking without dynamic import */
+export type InferenceFn = (opts: {
+  systemPrompt: string;
+  userPrompt: string;
+  level: InferenceLevel;
+  expectJson: boolean;
+  timeout: number;
+}) => Promise<{ success: boolean; parsed?: unknown; output?: string; error?: string }>;
 
 // ============================================================================
 // LLM Spec Comprehension (Phase 4a)
