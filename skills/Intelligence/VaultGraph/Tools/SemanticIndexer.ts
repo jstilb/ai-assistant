@@ -21,11 +21,12 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
 import { z } from "zod";
 import { loadGraphState, buildEmptyGraphState } from "./KGPersistence.ts";
 import type { GraphState, SemanticIndexState, ConceptIndex, KeywordScore, SearchResult } from "./types.ts";
+import { getVaultPath } from "./VaultPath.ts";
 
 // ============================================
 // STOPWORDS
@@ -626,34 +627,6 @@ export async function loadIndex(path: string): Promise<SemanticIndexState> {
 const DEFAULT_GRAPH_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
 
 const DEFAULT_INDEX_PATH = join(getKayaHome(), "MEMORY", "State", "semantic-index.json");
-
-/**
- * Resolve the Obsidian vault path from env var or secrets.json.
- */
-function getVaultPath(): string {
-  const envPath = process.env.OBSIDIAN_VAULT;
-  if (envPath) return envPath;
-
-  try {
-    const secretsPath = join(defaultKayaHome(), "secrets.json");
-    if (existsSync(secretsPath)) {
-      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-      if (secrets.obsidian_vault && typeof secrets.obsidian_vault === "string") {
-        return secrets.obsidian_vault;
-      }
-    }
-  } catch (err) {
-    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
-    console.error(
-      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  throw new Error(
-    "OBSIDIAN_VAULT not configured. " +
-      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
-  );
-}
 
 function formatResults(results: SearchResult[]): string {
   if (results.length === 0) return "No results found.";

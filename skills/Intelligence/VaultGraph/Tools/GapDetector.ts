@@ -22,10 +22,10 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { loadTelosGoals as loadTelosGoalsData } from "../../../../lib/core/TelosGoals.ts";
 import { loadGraphState, buildEmptyGraphState } from "./KGPersistence.ts";
 import type { GraphState, KnowledgeGap, NoteTemplate, GapType } from "./types.ts";
+import { getVaultPath } from "./VaultPath.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 
 // ============================================
@@ -490,34 +490,6 @@ function formatGaps(gaps: KnowledgeGap[]): string {
 // ============================================
 
 const DEFAULT_STATE_PATH = join(getKayaHome(), "MEMORY", "State", "knowledge-graph.json");
-
-/**
- * Resolve the Obsidian vault path from env var or secrets.json.
- */
-function getVaultPath(): string {
-  const envPath = process.env.OBSIDIAN_VAULT;
-  if (envPath) return envPath;
-
-  try {
-    const secretsPath = join(defaultKayaHome(), "secrets.json");
-    if (existsSync(secretsPath)) {
-      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-      if (secrets.obsidian_vault && typeof secrets.obsidian_vault === "string") {
-        return secrets.obsidian_vault;
-      }
-    }
-  } catch (err) {
-    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
-    console.error(
-      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  throw new Error(
-    "OBSIDIAN_VAULT not configured. " +
-      'Set environment variable OBSIDIAN_VAULT or add "obsidian_vault": "/path/to/vault" to ~/.claude/secrets.json',
-  );
-}
 
 async function main() {
   const args = process.argv.slice(2);
