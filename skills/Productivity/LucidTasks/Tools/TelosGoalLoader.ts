@@ -261,6 +261,43 @@ export function clearCache(): void {
   _cacheTime = 0;
 }
 
+/** TELOS-derived inputs the task scorers (deterministic + AI) share. */
+export interface GoalScoringContext {
+  /** IDs of goals with status "In Progress". */
+  activeGoalIds: string[];
+  activeGoals: Array<{ id: string; title: string; status: string }>;
+  /** Every goal id → title (active or not). */
+  goalTitleMap: Record<string, string>;
+  /** Up to 5 "Mission: 2026 theme" lines for missions with an active goal. */
+  userFocusAreas: string[];
+}
+
+/**
+ * Build the scoring context from TELOS. Never throws: if TELOS cannot be
+ * read, every field is empty and scoring simply skips goal alignment.
+ * Shared by TaskManager (list/prioritize/review) and TaskAutomation.
+ */
+export function loadGoalScoringContext(): GoalScoringContext {
+  const ctx: GoalScoringContext = { activeGoalIds: [], activeGoals: [], goalTitleMap: {}, userFocusAreas: [] };
+  try {
+    const telosData = loadTelosData();
+    const active = telosData.goals.filter((g) => g.status === "In Progress");
+    ctx.activeGoalIds = active.map((g) => g.id);
+    ctx.activeGoals = active.map((g) => ({ id: g.id, title: g.title, status: g.status }));
+    for (const g of telosData.goals) {
+      ctx.goalTitleMap[g.id] = g.title;
+    }
+    ctx.userFocusAreas = telosData.missions
+      .filter((m) => m.goalIds.some((gid) => ctx.activeGoalIds.includes(gid)))
+      .map((m) => `${m.name}: ${m.theme2026}`)
+      .filter((s) => s.length > 3)
+      .slice(0, 5);
+  } catch {
+    // TELOS unavailable — skip goal alignment
+  }
+  return ctx;
+}
+
 // ============================================================================
 // CLI Interface
 // ============================================================================

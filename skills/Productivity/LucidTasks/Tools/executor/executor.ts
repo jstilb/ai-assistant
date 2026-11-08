@@ -710,6 +710,30 @@ export async function sweepPendingMerges(
  * All failTask + sendAlert loud-fail paths are preserved.
  * The `run <taskId>` CLI wrapper translates the result to an exit code.
  */
+/**
+ * A run failed: reset the task to inbox with an EXECUTOR_FAIL comment, page
+ * (one alert key per task), append the run record and log. Callers clean up
+ * the worktree first where one exists.
+ */
+async function failRun(db: TaskDB, taskId: string, title: string, reason: string): Promise<TaskResult> {
+  failTask(db, taskId, reason);
+  await sendAlert(`Autonomous executor failed: ${title} — ${reason}`, {
+    key: `executor-fail-${taskId}`,
+    tier: "page",
+    cooldownMs: 3600000,
+    fingerprint: reason.slice(0, 80),
+  });
+  appendRunRecord({
+    timestamp: new Date().toISOString(),
+    taskId,
+    title,
+    verdict: "failed",
+    reason,
+  });
+  process.stderr.write(`[executor] FAILED: ${reason}\n`);
+  return { taskId, status: "failed", reason };
+}
+
 export async function runTask(taskId: string, opts?: { isReEngagement?: boolean }): Promise<TaskResult> {
   const db = getTaskDB();
 
@@ -757,22 +781,7 @@ export async function runTask(taskId: string, opts?: { isReEngagement?: boolean 
     wtPath = wt.path;
   } catch (err) {
     const reason = `worktree setup failed: ${err instanceof Error ? err.message : err}`;
-    failTask(db, taskId, reason);
-    await sendAlert(`Autonomous executor failed: ${task.title} — ${reason}`, {
-      key: `executor-fail-${taskId}`,
-      tier: "page",
-      cooldownMs: 3600000,
-      fingerprint: reason.slice(0, 80),
-    });
-    appendRunRecord({
-      timestamp: new Date().toISOString(),
-      taskId,
-      title: task.title,
-      verdict: "failed",
-      reason,
-    });
-    process.stderr.write(`[executor] FAILED: ${reason}\n`);
-    return { taskId, status: "failed", reason };
+    return failRun(db, taskId, task.title, reason);
   }
   const headBefore = headSha(wtPath);
 
@@ -858,24 +867,7 @@ export async function runTask(taskId: string, opts?: { isReEngagement?: boolean 
       : baseFailReason;
 
     await cleanupWorktree(wtPath);
-    failTask(db, taskId, reason);
-    await sendAlert(`Autonomous executor failed: ${task.title} — ${reason}`, {
-      key: `executor-fail-${taskId}`,
-      tier: "page",
-      cooldownMs: 3600000,
-      fingerprint: reason.slice(0, 80),
-    });
-
-    appendRunRecord({
-      timestamp: new Date().toISOString(),
-      taskId,
-      title: task.title,
-      verdict: "failed",
-      reason,
-    });
-
-    process.stderr.write(`[executor] FAILED: ${reason}\n`);
-    return { taskId, status: "failed", reason };
+    return failRun(db, taskId, task.title, reason);
   }
 
   // 7. Parse verdict (loud-fail if the agent didn't report — this is NOT output verification,
@@ -884,24 +876,7 @@ export async function runTask(taskId: string, opts?: { isReEngagement?: boolean 
   if (!verdict) {
     const reason = "unparseable verdict — agent did not emit EXECUTOR_VERDICT_START/END block";
     await cleanupWorktree(wtPath);
-    failTask(db, taskId, reason);
-    await sendAlert(`Autonomous executor failed: ${task.title} — ${reason}`, {
-      key: `executor-fail-${taskId}`,
-      tier: "page",
-      cooldownMs: 3600000,
-      fingerprint: reason.slice(0, 80),
-    });
-
-    appendRunRecord({
-      timestamp: new Date().toISOString(),
-      taskId,
-      title: task.title,
-      verdict: "failed",
-      reason,
-    });
-
-    process.stderr.write(`[executor] FAILED: ${reason}\n`);
-    return { taskId, status: "failed", reason };
+    return failRun(db, taskId, task.title, reason);
   }
 
   // 7a. The verdict caps (5 deliverables, 20 forJm) drop extras — never silently.

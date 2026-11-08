@@ -551,7 +551,7 @@ export async function runPriorityRescore(
 
   try {
     const scoreTasksWithAI = scoreFn ?? (await import("./TaskAI.ts")).scoreTasksWithAI;
-    const { loadTelosData } = await import("./TelosGoalLoader.ts");
+    const { loadGoalScoringContext } = await import("./TelosGoalLoader.ts");
 
     const candidates = db.listTasks({
       status: ["next", "in_progress"],
@@ -562,27 +562,7 @@ export async function runPriorityRescore(
       return { count: 0, skipped: false };
     }
 
-    let activeGoalIds: string[] = [];
-    let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-    const goalTitleMap: Record<string, string> = {};
-    let userFocusAreas: string[] = [];
-    try {
-      const telosData = loadTelosData();
-      activeGoalIds = telosData.goals.filter((g) => g.status === "In Progress").map((g) => g.id);
-      activeGoals = telosData.goals
-        .filter((g) => g.status === "In Progress")
-        .map((g) => ({ id: g.id, title: g.title, status: g.status }));
-      for (const g of telosData.goals) {
-        goalTitleMap[g.id] = g.title;
-      }
-      userFocusAreas = telosData.missions
-        .filter((m) => m.goalIds.some((gid) => activeGoalIds.includes(gid)))
-        .map((m) => `${m.name}: ${m.theme2026}`)
-        .filter((s) => s.length > 3)
-        .slice(0, 5);
-    } catch {
-      // TELOS unavailable
-    }
+    const { activeGoalIds, activeGoals, goalTitleMap, userFocusAreas } = loadGoalScoringContext();
 
     // Build project name lookup
     const allProjects = db.listProjects();
@@ -871,16 +851,8 @@ async function generateAndSaveReview(
   const overdueTasks = db.getOverdueTasks();
   const stats = db.getStats();
 
-  let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-  try {
-    const { loadTelosData } = await import("./TelosGoalLoader.ts");
-    const telosData = loadTelosData();
-    activeGoals = telosData.goals
-      .filter((g) => g.status === "In Progress")
-      .map((g) => ({ id: g.id, title: g.title, status: g.status }));
-  } catch {
-    // TELOS unavailable
-  }
+  const { loadGoalScoringContext } = await import("./TelosGoalLoader.ts");
+  const { activeGoals } = loadGoalScoringContext();
 
   const reviewData: ReviewData = {
     period: { start: startDate, end: endDate },

@@ -51,7 +51,7 @@ import {
 } from "./TaskOutcome.ts";
 import { recordFailure } from "../../../../lib/core/FailureLog.ts";
 import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
-import { getAllGoalIds, getGoal, loadTelosData } from "./TelosGoalLoader.ts";
+import { getAllGoalIds, getGoal, loadGoalScoringContext } from "./TelosGoalLoader.ts";
 import {
   extractTaskMetadata,
   decomposeTask,
@@ -657,6 +657,47 @@ function formatDuration(minutes: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
+/**
+ * Resolve a CLI task argument: a `t-…` id, or a title fragment matched via
+ * FTS against tasks that are not done, cancelled or already `closedStatus`.
+ * Prints the reason (and the candidate list when ambiguous) to stderr and
+ * returns { error } when it cannot pick exactly one task.
+ */
+function resolveTaskArg(
+  db: ReturnType<typeof getTaskDB>,
+  arg: string,
+  closedStatus: "done" | "someday",
+  closedLabel: string,
+): { task: Task } | { error: string } {
+  if (/^t-/.test(arg)) {
+    const task = db.getTask(arg);
+    if (task) return { task };
+    const error = `Task not found: ${arg}`;
+    console.error(error);
+    return { error };
+  }
+
+  const candidates = db.searchTasks(arg, 5);
+  const active = candidates.filter((t) => t.status !== "done" && t.status !== "cancelled" && t.status !== closedStatus);
+
+  if (active.length === 1) return { task: active[0]! };
+
+  if (active.length === 0) {
+    const alreadyClosed = candidates.find((t) => t.status === closedStatus);
+    const error = alreadyClosed
+      ? `Task '${alreadyClosed.title}' (${alreadyClosed.id}) is already ${closedLabel}`
+      : `No match for '${arg}'`;
+    console.error(error);
+    return { error };
+  }
+
+  console.error(`Ambiguous match for '${arg}'. Did you mean?`);
+  for (const candidate of active) {
+    console.error(`  ${candidate.id}  ${candidate.title}`);
+  }
+  return { error: `Ambiguous match for '${arg}'` };
+}
+
 async function cmdIcebox(args: string[]): Promise<void> {
   // Collect all non-flag positional args (same multi-arg pattern as cmdDone)
   const taskArgs: string[] = [];
@@ -676,46 +717,12 @@ async function cmdIcebox(args: string[]): Promise<void> {
 
   for (const arg of taskArgs) {
     try {
-      const isTaskId = /^t-/.test(arg);
-      let resolvedTask: Task | null = null;
-
-      if (isTaskId) {
-        resolvedTask = db.getTask(arg);
-        if (!resolvedTask) {
-          failed.push({ input: arg, error: `Task not found: ${arg}` });
-          console.error(`Task not found: ${arg}`);
-          continue;
-        }
-      } else {
-        const candidates = db.searchTasks(arg, 5);
-        const activeCandidates = candidates.filter(
-          (t) => t.status !== "done" && t.status !== "cancelled" && t.status !== "someday",
-        );
-
-        if (activeCandidates.length === 0) {
-          const alreadyIced = candidates.find((t) => t.status === "someday");
-          if (alreadyIced) {
-            const msg = `Task '${alreadyIced.title}' (${alreadyIced.id}) is already iceboxed`;
-            failed.push({ input: arg, error: msg });
-            console.error(msg);
-          } else {
-            failed.push({ input: arg, error: `No match for '${arg}'` });
-            console.error(`No match for '${arg}'`);
-          }
-          continue;
-        } else if (activeCandidates.length === 1) {
-          const [only] = activeCandidates;
-          if (!only) throw new Error("unreachable: one candidate expected");
-          resolvedTask = only;
-        } else {
-          console.error(`Ambiguous match for '${arg}'. Did you mean?`);
-          for (const candidate of activeCandidates) {
-            console.error(`  ${candidate.id}  ${candidate.title}`);
-          }
-          failed.push({ input: arg, error: `Ambiguous match for '${arg}'` });
-          continue;
-        }
+      const resolved = resolveTaskArg(db, arg, "someday", "iceboxed");
+      if ("error" in resolved) {
+        failed.push({ input: arg, error: resolved.error });
+        continue;
       }
+      const resolvedTask = resolved.task;
 
       if (resolvedTask.status === "someday") {
         const msg = `Task '${resolvedTask.title}' (${resolvedTask.id}) is already iceboxed`;
@@ -794,50 +801,12 @@ async function cmdDone(args: string[]): Promise<void> {
 
   for (const arg of taskArgs) {
     try {
-      // Determine if arg is a task ID or title fragment
-      const isTaskId = /^t-/.test(arg);
-      let resolvedTask: Task | null = null;
-
-      if (isTaskId) {
-        resolvedTask = db.getTask(arg);
-        if (!resolvedTask) {
-          failed.push({ input: arg, error: `Task not found: ${arg}` });
-          console.error(`Task not found: ${arg}`);
-          continue;
-        }
-      } else {
-        // Fuzzy title match via FTS
-        const candidates = db.searchTasks(arg, 5);
-        // Filter out done/cancelled tasks
-        const activeCandidates = candidates.filter((t) => t.status !== "done" && t.status !== "cancelled");
-
-        if (activeCandidates.length === 0) {
-          // Check if all matches are already done
-          const doneCandidates = candidates.filter((t) => t.status === "done");
-          const [firstDone] = doneCandidates;
-          if (firstDone) {
-            const msg = `Task '${firstDone.title}' (${firstDone.id}) is already done`;
-            failed.push({ input: arg, error: msg });
-            console.error(msg);
-          } else {
-            failed.push({ input: arg, error: `No match for '${arg}'` });
-            console.error(`No match for '${arg}'`);
-          }
-          continue;
-        } else if (activeCandidates.length === 1) {
-          const [only] = activeCandidates;
-          if (!only) throw new Error("unreachable: one candidate expected");
-          resolvedTask = only;
-        } else {
-          // Ambiguous match
-          console.error(`Ambiguous match for '${arg}'. Did you mean?`);
-          for (const candidate of activeCandidates) {
-            console.error(`  ${candidate.id}  ${candidate.title}`);
-          }
-          failed.push({ input: arg, error: `Ambiguous match for '${arg}'` });
-          continue;
-        }
+      const resolved = resolveTaskArg(db, arg, "done", "done");
+      if ("error" in resolved) {
+        failed.push({ input: arg, error: resolved.error });
+        continue;
       }
+      const resolvedTask = resolved.task;
 
       // Check if already done
       if (resolvedTask.status === "done") {
@@ -1062,27 +1031,7 @@ export async function cmdNext(
   }
 
   // Build scoring context
-  let activeGoalIds: string[] = [];
-  const goalTitleMap: Record<string, string> = {};
-  let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-  let userFocusAreas: string[] = [];
-  try {
-    const telosData = loadTelosData();
-    activeGoalIds = telosData.goals.filter((g) => g.status === "In Progress").map((g) => g.id);
-    activeGoals = telosData.goals
-      .filter((g) => g.status === "In Progress")
-      .map((g) => ({ id: g.id, title: g.title, status: g.status }));
-    for (const g of telosData.goals) {
-      goalTitleMap[g.id] = g.title;
-    }
-    userFocusAreas = telosData.missions
-      .filter((m) => m.goalIds.some((gid) => activeGoalIds.includes(gid)))
-      .map((m) => `${m.name}: ${m.theme2026}`)
-      .filter((s) => s.length > 3)
-      .slice(0, 5);
-  } catch {
-    // TELOS not available, skip goal alignment scoring
-  }
+  const { activeGoalIds, activeGoals, goalTitleMap, userFocusAreas } = loadGoalScoringContext();
 
   // Build project name lookup
   const allProjects = db.listProjects();
@@ -2135,27 +2084,7 @@ async function cmdPrioritize(args: string[]): Promise<void> {
   }
 
   // Build deterministic scores first
-  let activeGoalIds: string[] = [];
-  let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-  const goalTitleMap: Record<string, string> = {};
-  let userFocusAreas: string[] = [];
-  try {
-    const telosData = loadTelosData();
-    activeGoalIds = telosData.goals.filter((g) => g.status === "In Progress").map((g) => g.id);
-    activeGoals = telosData.goals
-      .filter((g) => g.status === "In Progress")
-      .map((g) => ({ id: g.id, title: g.title, status: g.status }));
-    for (const g of telosData.goals) {
-      goalTitleMap[g.id] = g.title;
-    }
-    userFocusAreas = telosData.missions
-      .filter((m) => m.goalIds.some((gid) => activeGoalIds.includes(gid)))
-      .map((m) => `${m.name}: ${m.theme2026}`)
-      .filter((s) => s.length > 3)
-      .slice(0, 5);
-  } catch {
-    // TELOS unavailable
-  }
+  const { activeGoalIds, activeGoals, goalTitleMap, userFocusAreas } = loadGoalScoringContext();
 
   // Build project name lookup
   const prioritizeProjects = db.listProjects();
@@ -2415,15 +2344,7 @@ async function cmdReview(_args: string[]): Promise<void> {
   const overdueTasks = db.getOverdueTasks();
 
   // Active goals
-  let activeGoals: Array<{ id: string; title: string; status: string }> = [];
-  try {
-    const telosData = loadTelosData();
-    activeGoals = telosData.goals
-      .filter((g) => g.status === "In Progress")
-      .map((g) => ({ id: g.id, title: g.title, status: g.status }));
-  } catch {
-    // TELOS unavailable
-  }
+  const { activeGoals } = loadGoalScoringContext();
 
   const stats = db.getStats();
 
