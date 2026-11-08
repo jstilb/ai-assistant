@@ -36,6 +36,7 @@ import { dirname, join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir, packingStatePath } from "./AdventurePaths.ts";
 import { TRIP_TYPES, type TripType } from "./TripTracker.ts";
+import { parseFlags } from "./cliFlags.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -544,24 +545,6 @@ function renderConsole(list: PackingList): string {
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
-
-function parseFlags(args: string[]): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        out[key] = next;
-        i++;
-      } else {
-        out[key] = true;
-      }
-    }
-  }
-  return out;
-}
 
 const SEASONS: readonly Season[] = ["spring", "summer", "fall", "winter", "any"];
 

@@ -33,7 +33,9 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { daysBetween, isValidDay, todayISO } from "../../../../lib/core/CalendarDay.ts";
 import { tripsStatePath } from "./AdventurePaths.ts";
+import { parseFlags } from "./cliFlags.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,36 +101,8 @@ export interface TripsState {
 // Date helpers (calendar-day math, timezone-stable via UTC anchoring)
 // ---------------------------------------------------------------------------
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** Today's calendar day in the local timezone, YYYY-MM-DD. */
-export function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-/** Parse a YYYY-MM-DD string to UTC-midnight epoch ms (calendar-day anchor). */
-function parseDay(iso: string): number {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0]!;
-  const m = parts[1]!;
-  const d = parts[2]!;
-  return Date.UTC(y, m - 1, d);
-}
-
-/** Whole days from `a` to `b` (b − a); negative if b is before a. */
-export function daysBetween(a: string, b: string): number {
-  return Math.round((parseDay(b) - parseDay(a)) / 86_400_000);
-}
-
-/** True for a well-formed YYYY-MM-DD calendar day. */
-export function isValidDay(iso: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
-  const ms = parseDay(iso);
-  return new Date(ms).toISOString().slice(0, 10) === iso;
-}
+// Implemented once in lib/core/CalendarDay.ts; re-exported for existing importers.
+export { todayISO, daysBetween, isValidDay };
 
 // ---------------------------------------------------------------------------
 // State load / save (single owner of trips.json)
@@ -410,24 +384,6 @@ function renderTrip(trip: Trip, asOf: string): string {
 // ---------------------------------------------------------------------------
 // CLI arg parsing
 // ---------------------------------------------------------------------------
-
-function parseFlags(args: string[]): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        out[key] = next;
-        i++;
-      } else {
-        out[key] = true;
-      }
-    }
-  }
-  return out;
-}
 
 function asType(v: string | boolean | undefined): TripType | undefined {
   if (typeof v !== "string") return undefined;

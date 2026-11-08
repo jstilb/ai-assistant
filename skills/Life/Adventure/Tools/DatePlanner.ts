@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir } from "./AdventurePaths.ts";
+import { parseFlags } from "./cliFlags.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,24 +199,6 @@ export function writeObsidianDoc(dp: DatePlan): string {
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
-
-function parseFlags(args: string[]): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        out[key] = next;
-        i++;
-      } else {
-        out[key] = true;
-      }
-    }
-  }
-  return out;
-}
 
 const USAGE = `DatePlanner — grounded, thoughtful date plans (defaults to San Diego).
 

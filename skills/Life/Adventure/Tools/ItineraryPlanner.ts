@@ -26,6 +26,7 @@ import { join } from "node:path";
 import { inference } from "../../../../lib/core/Inference.ts";
 import { adventureVaultDir } from "./AdventurePaths.ts";
 import { loadState, saveState, updateTrip } from "./TripTracker.ts";
+import { parseFlags } from "./cliFlags.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -243,24 +244,6 @@ export function writeObsidianDoc(it: Itinerary, input: PlanInput): string {
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
-
-function parseFlags(args: string[]): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        out[key] = next;
-        i++;
-      } else {
-        out[key] = true;
-      }
-    }
-  }
-  return out;
-}
 
 const USAGE = `ItineraryPlanner — grounded day-by-day trip itineraries.
 
