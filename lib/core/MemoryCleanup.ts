@@ -593,66 +593,16 @@ export async function cleanWorkDirs(dryRun: boolean): Promise<WorkDirCleanupResu
   return result;
 }
 
-// ── ISC row 11: clean orphaned current-work-{uuid}.json files ─────────────
-export async function cleanOrphanedCurrentWork(dryRun: boolean): Promise<CleanupResult> {
-  const stateDir = path.join(getClaudeDir(), "MEMORY", "State");
-  const TTL_HOURS = 24;
-  const uuidPattern = /^current-work-[0-9a-f-]{36}\.json$/;
-
-  const result: CleanupResult = {
-    target: "current-work orphans",
-    filesRemoved: 0,
-    linesRemoved: 0,
-    bytesFreed: 0,
-    errors: [],
-  };
-
-  if (!fs.existsSync(stateDir)) return result;
-
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(stateDir).filter((f) => uuidPattern.test(f));
-  } catch (e) {
-    result.errors.push(`Failed to read ${stateDir}: ${e}`);
-    return result;
-  }
-
-  for (const file of entries) {
-    const fullPath = path.join(stateDir, file);
-    const ageHours = getFileAgeInDays(fullPath) * 24;
-    if (ageHours > TTL_HOURS) {
-      const size = fs.statSync(fullPath).size;
-      if (!dryRun) {
-        try {
-          fs.unlinkSync(fullPath);
-        } catch (e) {
-          result.errors.push(`Failed to delete ${fullPath}: ${e}`);
-          continue;
-        }
-      }
-      result.filesRemoved++;
-      result.bytesFreed += size;
-    }
-  }
-
-  return result;
-}
-
-// ── ISC row 12: clean stale prompt-context-*.json / context-session-*.json ──
 /**
- * Sweep stale context state files from MEMORY/State.
- *
- * These files accumulate indefinitely after sessions end. They are used for
- * cross-session context loading but have no value after ~14 days. Same dir as
- * current-work-{uuid}.json; same dry-run semantics.
+ * Delete MEMORY/State files whose name matches one of `patterns` and whose
+ * mtime is older than `maxAgeDays`. dryRun counts without deleting. Shared by
+ * cleanOrphanedCurrentWork and cleanStaleContextFiles.
  */
-export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupResult> {
+function sweepStateFiles(target: string, patterns: RegExp[], maxAgeDays: number, dryRun: boolean): CleanupResult {
   const stateDir = path.join(getClaudeDir(), "MEMORY", "State");
-  const TTL_DAYS = 14;
-  const patterns = [/^prompt-context-[0-9a-f-]{36}\.json$/, /^context-session-[0-9a-f-]{36}\.json$/];
 
   const result: CleanupResult = {
-    target: "stale context files",
+    target,
     filesRemoved: 0,
     linesRemoved: 0,
     bytesFreed: 0,
@@ -671,8 +621,7 @@ export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupRe
 
   for (const file of entries) {
     const fullPath = path.join(stateDir, file);
-    const ageDays = getFileAgeInDays(fullPath);
-    if (ageDays > TTL_DAYS) {
+    if (getFileAgeInDays(fullPath) > maxAgeDays) {
       const size = fs.statSync(fullPath).size;
       if (!dryRun) {
         try {
@@ -688,6 +637,29 @@ export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupRe
   }
 
   return result;
+}
+
+// ── ISC row 11: clean orphaned current-work-{uuid}.json files ─────────────
+/** current-work-{uuid}.json files older than 24 hours. */
+export async function cleanOrphanedCurrentWork(dryRun: boolean): Promise<CleanupResult> {
+  return sweepStateFiles("current-work orphans", [/^current-work-[0-9a-f-]{36}\.json$/], 1, dryRun);
+}
+
+// ── ISC row 12: clean stale prompt-context-*.json / context-session-*.json ──
+/**
+ * Sweep stale context state files from MEMORY/State.
+ *
+ * These files accumulate indefinitely after sessions end. They are used for
+ * cross-session context loading but have no value after ~14 days. Same dir as
+ * current-work-{uuid}.json; same dry-run semantics.
+ */
+export async function cleanStaleContextFiles(dryRun: boolean): Promise<CleanupResult> {
+  return sweepStateFiles(
+    "stale context files",
+    [/^prompt-context-[0-9a-f-]{36}\.json$/, /^context-session-[0-9a-f-]{36}\.json$/],
+    14,
+    dryRun,
+  );
 }
 
 // ── Folder retention: dated report/learning files, archived not deleted ────

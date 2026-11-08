@@ -4,11 +4,15 @@
  * Claude Code 2.1.302 statusline schema: .rate_limits.five_hour / .seven_day, resets_at in epoch seconds) against a
  * temp KAYA_DIR, and checks what lands in MEMORY/State/rate-limits.json. The real state file is never touched.
  */
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, setDefaultTimeout } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RateLimitsSchema } from "./MemoryPaths.ts";
+
+// One render of the real statusline script takes ~2-3 s on the Mac, and some
+// tests render twice, so Bun's 5 s default timed them out (the "flaky" fail).
+setDefaultTimeout(30_000);
 
 const SCRIPT = join(import.meta.dir, "..", "..", "statusline-command.sh");
 

@@ -143,3 +143,66 @@ export function installRedactingConsole(streams: readonly ConsoleStream[] = ["er
     }
   };
 }
+
+// ---------------------------------------------------------------------------
+// Output scrubbing — credential SHAPES with labelled placeholders.
+//
+// Distinct from redactSecrets() above (log masking of tokens we know exist):
+// these scrub user-facing output (rendered reports, chat replies) for any
+// string that looks like a credential, replacing it with a labelled marker so
+// the reader can tell something was removed. Shared by InteriorDesign's
+// OutputFormatter and the Telegram gateway Sanitizer (formerly two copies).
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace common credential shapes (key=value secrets, Bearer tokens, AWS
+ * keys, Anthropic and generic `sk-` keys) with `[..._REDACTED]` markers.
+ */
+export function scrubCredentials(text: string): string {
+  if (!text) return text;
+
+  let scrubbed = text;
+
+  // API keys (long alphanumeric strings with key-like prefixes)
+  scrubbed = scrubbed.replace(
+    /(?:api[_-]?key|apikey|api_secret|secret[_-]?key|access[_-]?token|auth[_-]?token|bearer)\s*[:=]\s*["']?[A-Za-z0-9_\-./]{20,}["']?/gi,
+    "[CREDENTIAL_REDACTED]",
+  );
+
+  // Bearer tokens in headers
+  scrubbed = scrubbed.replace(/Bearer\s+[A-Za-z0-9_\-./]{20,}/g, "Bearer [TOKEN_REDACTED]");
+
+  // AWS-style keys
+  scrubbed = scrubbed.replace(/(?:AKIA|ASIA)[A-Z0-9]{16}/g, "[AWS_KEY_REDACTED]");
+
+  // Anthropic API keys (sk-ant-xxx) -- check before generic sk_ pattern
+  scrubbed = scrubbed.replace(/\bsk-ant-[A-Za-z0-9_-]{20,}/g, "[ANTHROPIC_KEY_REDACTED]");
+
+  // Generic long secrets (sk-xxx, sk_xxx patterns)
+  scrubbed = scrubbed.replace(/\bsk[-_][A-Za-z0-9_-]{20,}/g, "[SECRET_KEY_REDACTED]");
+
+  return scrubbed;
+}
+
+/**
+ * scrubCredentials() plus the shapes Kaya's own messaging stack carries:
+ * Telegram bot tokens, Gemini (AIza…) keys and 32+ char lowercase hex keys
+ * (ElevenLabs). The hex rule also masks long hex IDs such as git SHAs, which
+ * is why it is opt-in rather than part of scrubCredentials().
+ */
+export function scrubMessagingCredentials(text: string): string {
+  if (!text) return text;
+
+  let scrubbed = scrubCredentials(text);
+
+  // Telegram bot tokens (numeric:alphanumeric pattern)
+  scrubbed = scrubbed.replace(/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g, "[TELEGRAM_TOKEN_REDACTED]");
+
+  // Gemini API keys (AIza pattern)
+  scrubbed = scrubbed.replace(/\bAIza[A-Za-z0-9_-]{30,}/g, "[GEMINI_KEY_REDACTED]");
+
+  // ElevenLabs API keys (all lowercase hex, 32+ chars)
+  scrubbed = scrubbed.replace(/\b[a-f0-9]{32,}\b/g, "[HEX_KEY_REDACTED]");
+
+  return scrubbed;
+}

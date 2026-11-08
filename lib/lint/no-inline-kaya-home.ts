@@ -25,22 +25,7 @@
  * Usage: called by lib/lint/run-all.ts
  */
 
-import { execFileSync } from "node:child_process";
-
-/** grep -rnE without a shell: patterns may contain quotes. Exit 1 (no match) → "". */
-function grepTree(pattern: string, rootDir: string): string {
-  try {
-    return execFileSync("grep", ["-rn", "-E", pattern, rootDir, "--include=*.ts", "--include=*.tsx"], {
-      encoding: "utf-8",
-      cwd: rootDir,
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch (err) {
-    if ((err as { status?: number }).status === 1) return "";
-    throw err;
-  }
-}
+import { grepTree } from "./StagedDiff.ts";
 
 export interface LintResult {
   errors: string[];

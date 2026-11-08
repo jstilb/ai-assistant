@@ -56,18 +56,8 @@
 
 import { z } from "zod";
 import { join, dirname, basename } from "node:path";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-  statSync,
-  unlinkSync,
-  openSync,
-  writeSync,
-  closeSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { FileLock } from "./FileLock.ts";
 
 // ============================================
 // TYPES
@@ -156,81 +146,6 @@ export interface StateManager<T> {
 // ============================================
 // INTERNAL HELPERS
 // ============================================
-
-/**
- * Simple file lock implementation using lock files
- */
-class FileLock {
-  private lockPath: string;
-  private locked = false;
-  private timeout: number;
-
-  constructor(filePath: string, timeout: number) {
-    this.lockPath = `${filePath}.lock`;
-    this.timeout = timeout;
-  }
-
-  async acquire(): Promise<void> {
-    const startTime = Date.now();
-
-    while (true) {
-      // Attempt atomic lock creation: O_CREAT|O_EXCL fails if file exists
-      let acquired = false;
-      try {
-        // openSync with 'wx' flag = O_WRONLY|O_CREAT|O_EXCL — fails atomically if exists
-        const fd = openSync(this.lockPath, "wx");
-        writeSync(fd, String(Date.now()));
-        closeSync(fd);
-        acquired = true;
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
-          // Unexpected error (e.g., EACCES, ENOENT for parent dir) — rethrow
-          throw new Error(`Lock file error: ${(err as Error).message}`);
-        }
-        // EEXIST: lock held by another process — check if stale
-      }
-
-      if (acquired) {
-        this.locked = true;
-        return;
-      }
-
-      // Lock exists: check if stale
-      try {
-        const lockContent = readFileSync(this.lockPath, "utf-8");
-        const lockTime = parseInt(lockContent, 10);
-        if (!Number.isNaN(lockTime) && Date.now() - lockTime > this.timeout * 2) {
-          // Stale lock — attempt removal. Another process may race us here;
-          // if unlink succeeds, we loop back and try to acquire atomically.
-          try {
-            unlinkSync(this.lockPath);
-          } catch {
-            /* another process removed it */
-          }
-        }
-      } catch {
-        // Lock file disappeared between our EEXIST error and this read — loop
-      }
-
-      if (Date.now() - startTime > this.timeout) {
-        throw new Error(`Lock acquisition timeout after ${this.timeout}ms`);
-      }
-
-      await Bun.sleep(10);
-    }
-  }
-
-  async release(): Promise<void> {
-    if (this.locked && existsSync(this.lockPath)) {
-      try {
-        unlinkSync(this.lockPath);
-      } catch {
-        // Ignore - lock may have been cleaned up
-      }
-      this.locked = false;
-    }
-  }
-}
 
 /**
  * Ensure directory exists
@@ -349,7 +264,7 @@ class StateManagerImpl<T> implements StateManager<T> {
     }
 
     // Acquire lock for writing
-    const lock = new FileLock(this.path, this.lockTimeout);
+    const lock = new FileLock(`${this.path}.lock`, this.lockTimeout);
     try {
       await lock.acquire();
       writeFileSync(this.path, JSON.stringify(stateToSave, null, 2));
@@ -362,7 +277,7 @@ class StateManagerImpl<T> implements StateManager<T> {
   }
 
   async update(fn: (current: T) => T | Promise<T>): Promise<T> {
-    const lock = new FileLock(this.path, this.lockTimeout);
+    const lock = new FileLock(`${this.path}.lock`, this.lockTimeout);
 
     try {
       await lock.acquire();
@@ -408,7 +323,7 @@ class StateManagerImpl<T> implements StateManager<T> {
   }
 
   async transaction<R>(fn: (state: T) => R | Promise<R>): Promise<R> {
-    const lock = new FileLock(this.path, this.lockTimeout);
+    const lock = new FileLock(`${this.path}.lock`, this.lockTimeout);
 
     try {
       await lock.acquire();
@@ -460,7 +375,7 @@ class StateManagerImpl<T> implements StateManager<T> {
   }
 
   async backup(): Promise<string> {
-    const lock = new FileLock(this.path, this.lockTimeout);
+    const lock = new FileLock(`${this.path}.lock`, this.lockTimeout);
     try {
       await lock.acquire();
       return await this.backupUnlocked();

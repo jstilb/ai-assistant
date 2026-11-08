@@ -284,41 +284,13 @@ function createNavyBanner(stats: SystemStats, width: number): string {
   };
 
   // Kaya logo - 2x scale (20 wide × 10 tall), same proportions
-  // Each unit is 4 chars wide, 2 rows tall
-  const B = "\u2588"; // Full block
-  const logo = [
-    // Row 1 (top bar) - 2 rows
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    // Row 2 (P stem + gap + A upper) - 2 rows
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.navy}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.navy}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    // Row 3 (middle bar) - 2 rows
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    // Row 4 (P stem + gap + A leg) - 2 rows
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    // Row 5 (P stem + gap + A leg) - 2 rows
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-  ];
+  const logo = getLargeLogo(C);
+
   const LOGO_WIDTH = 20;
   const SEPARATOR = `${C.steel}${BOX.v}${RESET}`;
 
-  // Info section with Unicode icons - meaningful symbols (10 lines for perfect centering with 10-row logo)
-  const infoLines = [
-    `${C.slate}"${RESET}${C.lightBlue}${stats.name}${RESET} ${C.slate}here, ready to go..."${RESET}`,
-    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    `${C.navy}\u2B22${RESET}  ${C.slate}Kaya${RESET}       ${C.silver}v${stats.version}${RESET}`, // ⬢ hexagon (tech/AI)
-    `${C.lightBlue}\u2726${RESET}  ${C.slate}Skills${RESET}    ${C.silver}${stats.skills}${RESET}`, // ✦ four-pointed star (capabilities)
-    `${C.skyBlue}\u21BB${RESET}  ${C.slate}Workflows${RESET} ${C.iceBlue}${stats.workflows}${RESET}`, // ↻ cycle (process flow)
-    `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`, // ↪ hook arrow
-    `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`, // ✦ star (user sentiment signals)
-    `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`, // ≡ identical to (files/menu)
-    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    ``, // empty line for centering
-  ];
+  // Info section (10 lines for perfect centering with 10-row logo)
+  const infoLines = getInfoLines(C, stats);
 
   // Layout with separator: logo | separator | info
   const gap = "   "; // Gap before separator
@@ -417,6 +389,46 @@ function getNavyColors() {
 }
 
 // Small logo (10x5) for compact layouts
+type LogoColors = Record<"navy" | "medBlue" | "lightBlue", string>;
+type InfoColors = LogoColors &
+  Record<"slate" | "steel" | "silver" | "skyBlue" | "iceBlue" | "royalBlue" | "periwinkle", string>;
+
+/** Kaya logo, 2x scale (20 wide × 10 tall): each unit is 4 chars wide, 2 rows tall. Full and medium banners. */
+function getLargeLogo(C: LogoColors): string[] {
+  const B = "\u2588"; // Full block
+  const bar = `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`;
+  const upper = `${C.navy}${B.repeat(4)}${RESET}        ${C.navy}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`;
+  const leg = `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`;
+  return [
+    bar,
+    bar, // Row 1 (top bar)
+    upper,
+    upper, // Row 2 (P stem + gap + A upper)
+    bar,
+    bar, // Row 3 (middle bar)
+    leg,
+    leg, // Row 4 (P stem + gap + A leg)
+    leg,
+    leg, // Row 5 (P stem + gap + A leg)
+  ];
+}
+
+/** The 10-line stats block beside the large logo (full and medium banners). */
+function getInfoLines(C: InfoColors, stats: SystemStats): string[] {
+  return [
+    `${C.slate}"${RESET}${C.lightBlue}${stats.name}${RESET} ${C.slate}here, ready to go..."${RESET}`,
+    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
+    `${C.navy}\u2B22${RESET}  ${C.slate}Kaya${RESET}       ${C.silver}v${stats.version}${RESET}`, // ⬢ hexagon (tech/AI)
+    `${C.lightBlue}\u2726${RESET}  ${C.slate}Skills${RESET}    ${C.silver}${stats.skills}${RESET}`, // ✦ four-pointed star (capabilities)
+    `${C.skyBlue}\u21BB${RESET}  ${C.slate}Workflows${RESET} ${C.iceBlue}${stats.workflows}${RESET}`, // ↻ cycle (process flow)
+    `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`, // ↪ hook arrow
+    `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`, // ✦ star (user sentiment signals)
+    `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`, // ≡ identical to (files/menu)
+    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
+    ``, // empty line for centering
+  ];
+}
+
 function getSmallLogo(C: ReturnType<typeof getNavyColors>) {
   const B = "\u2588";
   return [
@@ -431,36 +443,14 @@ function getSmallLogo(C: ReturnType<typeof getNavyColors>) {
 // Medium Banner (70-84 cols) - No border, full content
 function createNavyMediumBanner(stats: SystemStats, width: number): string {
   const C = getNavyColors();
-  const B = "\u2588";
 
   // Full logo (20x10)
-  const logo = [
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.navy}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.navy}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(16)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-    `${C.navy}${B.repeat(4)}${RESET}        ${C.medBlue}${B.repeat(4)}${RESET}${C.lightBlue}${B.repeat(4)}${RESET}`,
-  ];
+  const logo = getLargeLogo(C);
+
   const LOGO_WIDTH = 20;
   const SEPARATOR = `${C.steel}${BOX.v}${RESET}`;
 
-  const infoLines = [
-    `${C.slate}"${RESET}${C.lightBlue}${stats.name}${RESET} ${C.slate}here, ready to go..."${RESET}`,
-    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    `${C.navy}\u2B22${RESET}  ${C.slate}Kaya${RESET}       ${C.silver}v${stats.version}${RESET}`,
-    `${C.lightBlue}\u2726${RESET}  ${C.slate}Skills${RESET}    ${C.silver}${stats.skills}${RESET}`,
-    `${C.skyBlue}\u21BB${RESET}  ${C.slate}Workflows${RESET} ${C.iceBlue}${stats.workflows}${RESET}`,
-    `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`,
-    `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`,
-    `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`,
-    `${C.steel}${BOX.h.repeat(24)}${RESET}`,
-    ``,
-  ];
+  const infoLines = getInfoLines(C, stats);
 
   const gap = "   ";
   const gapAfter = "  ";

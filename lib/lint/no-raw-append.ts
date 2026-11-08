@@ -23,6 +23,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { addedLines, readStagedTsDiff } from "./StagedDiff.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -119,56 +120,20 @@ export async function checkNoRawAppendStaged(rootDir: string = process.cwd()): P
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  let diffOutput: string;
-  try {
-    // -U0 trims context, --diff-filter=ACMR limits to added/changed/copied/renamed
-    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"', {
-      encoding: "utf-8",
-      cwd: rootDir,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-  } catch (err) {
-    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
-    warnings.push(`no-raw-append: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`);
+  const staged = readStagedTsDiff(rootDir, "no-raw-append");
+  if ("warning" in staged) {
+    warnings.push(staged.warning);
     return { errors, warnings };
   }
 
-  let currentFile: string | null = null;
-  let currentLineNum = 0;
-
-  for (const rawLine of diffOutput.split("\n")) {
-    if (rawLine.startsWith("+++ b/")) {
-      currentFile = rawLine.slice(6);
-      continue;
+  for (const { file, line, text: added } of addedLines(staged.diff, isExempt)) {
+    if (APPEND_PATTERN.test(added) && !COMMENT_LINE.test(added) && !ALLOW_MARKER.test(added)) {
+      errors.push(
+        `${file}:${line}: Raw appendFileSync( introduced. ` +
+          `Use createAppendLog() from lib/core/AppendLog.ts instead — it ` +
+          `provides rotation and retention that raw appendFileSync does not.`,
+      );
     }
-    if (rawLine.startsWith("--- ")) continue;
-    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
-      currentFile = null;
-      continue;
-    }
-    if (rawLine.startsWith("@@")) {
-      // @@ -a,b +c,d @@  — c is the starting new-file line number
-      const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      currentLineNum = parseInt(match?.[1] ?? "0", 10);
-      continue;
-    }
-    if (!currentFile || isExempt(currentFile)) continue;
-
-    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-      const added = rawLine.slice(1);
-      if (APPEND_PATTERN.test(added) && !COMMENT_LINE.test(added) && !ALLOW_MARKER.test(added)) {
-        errors.push(
-          `${currentFile}:${currentLineNum}: Raw appendFileSync( introduced. ` +
-            `Use createAppendLog() from lib/core/AppendLog.ts instead — it ` +
-            `provides rotation and retention that raw appendFileSync does not.`,
-        );
-      }
-      currentLineNum++;
-    } else if (!rawLine.startsWith("-")) {
-      // context line — advances the new-file counter
-      currentLineNum++;
-    }
-    // '-' lines do not advance the new-file counter
   }
 
   return { errors, warnings };

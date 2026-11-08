@@ -184,6 +184,26 @@ let runtimeCacheTime: number = 0;
 let mergedSettingsCache: Settings | null = null;
 let mergedSettingsMtime: { settings: number; runtime: number } = { settings: 0, runtime: 0 };
 
+// Kaya dir the three settings caches above were filled from. The caches are
+// mtime-checked, and a missing file reports mtime 0, so a change of Kaya home
+// (KAYA_HOME re-pointed, setTestKayaDir) would otherwise keep serving the OLD
+// home's settings. Seen in tests: a suite pinned a temp KAYA_HOME, yet kept
+// reading the live settings.json (notifications.telegramPush.enabled=false).
+let settingsCacheDir: string | null = null;
+
+/** Drop the settings caches when the Kaya dir has changed since they were filled. */
+function invalidateSettingsCachesOnDirChange(): void {
+  const dir = getKayaDir();
+  if (dir === settingsCacheDir) return;
+  settingsCacheDir = dir;
+  settingsCache = null;
+  settingsCacheTime = 0;
+  runtimeCache = null;
+  runtimeCacheTime = 0;
+  mergedSettingsCache = null;
+  mergedSettingsMtime = { settings: 0, runtime: 0 };
+}
+
 // Cache for tiered configs
 const configCache = new Map<string, { data: unknown; time: number; path: string | null }>();
 
@@ -356,6 +376,7 @@ function applyEnvOverrides<T extends Record<string, unknown>>(config: T, prefix:
  * Use this when you need the base config file contents.
  */
 export function loadRawSettings(): Settings {
+  invalidateSettingsCachesOnDirChange();
   const settingsPath = getSettingsPath();
 
   // Check cache validity
@@ -390,6 +411,7 @@ export function loadRawSettings(): Settings {
  * Returns empty object if file is missing or malformed.
  */
 function loadRuntimeConfig(): Partial<Settings> {
+  invalidateSettingsCachesOnDirChange();
   const runtimePath = getRuntimeConfigPath();
 
   // Check cache validity
@@ -428,6 +450,7 @@ function loadRuntimeConfig(): Partial<Settings> {
  * Shallow merge at top-level keys.
  */
 export function loadSettings(): Settings {
+  invalidateSettingsCachesOnDirChange();
   const settingsPath = getSettingsPath();
   const runtimePath = getRuntimeConfigPath();
 

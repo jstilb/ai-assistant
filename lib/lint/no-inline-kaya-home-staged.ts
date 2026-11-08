@@ -18,7 +18,7 @@
  * Used by pre-commit (bin/lint-kaya-home-staged.sh).
  */
 
-import { execSync } from "node:child_process";
+import { addedLines, readStagedTsDiff } from "./StagedDiff.ts";
 import { BANNED_PATTERNS } from "./no-inline-kaya-home.ts";
 
 export interface LintResult {
@@ -55,62 +55,27 @@ export async function checkNoInlineKayaHomeStaged(rootDir: string = process.cwd(
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  let diffOutput: string;
-  try {
-    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"', {
-      encoding: "utf-8",
-      cwd: rootDir,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-  } catch (err) {
-    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
-    warnings.push(
-      `no-inline-kaya-home-staged: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  const staged = readStagedTsDiff(rootDir, "no-inline-kaya-home-staged");
+  if ("warning" in staged) {
+    warnings.push(staged.warning);
     return { errors, warnings };
   }
 
-  let currentFile: string | null = null;
-  let currentLineNum = 0;
-
-  for (const rawLine of diffOutput.split("\n")) {
-    if (rawLine.startsWith("+++ b/")) {
-      currentFile = rawLine.slice(6);
+  for (const { file, line, text: added } of addedLines(staged.diff, isExempt)) {
+    // Exempt: ScaffoldCLI's generated-CLI template strings — self-contained
+    // generated code that cannot import lib/core (see no-inline-kaya-home.ts).
+    // Anchored on the generated-audit signature so real generator code is
+    // still linted.
+    if (file.endsWith("CreateCLI/Tools/ScaffoldCLI.ts") && added.includes("cli-audit.jsonl")) {
       continue;
     }
-    if (rawLine.startsWith("--- ")) continue;
-    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
-      currentFile = null;
-      continue;
-    }
-    if (rawLine.startsWith("@@")) {
-      const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      currentLineNum = parseInt(match?.[1] ?? "0", 10);
-      continue;
-    }
-    if (!currentFile || isExempt(currentFile)) continue;
-
-    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-      const added = rawLine.slice(1);
-      // Exempt: ScaffoldCLI's generated-CLI template strings — self-contained
-      // generated code that cannot import lib/core (see no-inline-kaya-home.ts).
-      // Anchored on the generated-audit signature so real generator code is
-      // still linted.
-      if (currentFile.endsWith("CreateCLI/Tools/ScaffoldCLI.ts") && added.includes("cli-audit.jsonl")) {
-        currentLineNum++;
-        continue;
+    for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
+      if (pattern.test(added)) {
+        errors.push(
+          `${file}:${line}: Inline Kaya home path pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
+            `Use getKayaHome() from lib/core/KayaHome.ts.`,
+        );
       }
-      for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
-        if (pattern.test(added)) {
-          errors.push(
-            `${currentFile}:${currentLineNum}: Inline Kaya home path pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
-              `Use getKayaHome() from lib/core/KayaHome.ts.`,
-          );
-        }
-      }
-      currentLineNum++;
-    } else if (!rawLine.startsWith("-")) {
-      currentLineNum++;
     }
   }
 

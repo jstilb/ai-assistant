@@ -572,10 +572,12 @@ async function recordOnce(args: ParsedArgs): Promise<void> {
 }
 
 // Continuous recording loop
-async function startContinuous(args: ParsedArgs): Promise<void> {
-  const log = createLogger(args.verbose);
-
-  // Check if already running
+/**
+ * Shared start-up for the long-running modes (continuous, claude): exit if
+ * another instance's PID is alive (clearing a stale PID file otherwise),
+ * write our PID file, make the temp dir, and exit if sox's `rec` is missing.
+ */
+function claimSingleInstance(log: Logger): void {
   if (existsSync(CONFIG.pidFile)) {
     const pid = parseInt(readFileSync(CONFIG.pidFile, "utf-8").trim());
     try {
@@ -588,20 +590,23 @@ async function startContinuous(args: ParsedArgs): Promise<void> {
     }
   }
 
-  // Write PID file
   writeFileSync(CONFIG.pidFile, process.pid.toString());
 
-  // Ensure temp directory exists
   if (!existsSync(CONFIG.tempDir)) {
     mkdirSync(CONFIG.tempDir, { recursive: true });
   }
 
-  // Check dependencies
   if (!checkSox().available) {
     log.error("Required tool 'rec' (sox) not found. Install with: brew install sox");
     unlinkSync(CONFIG.pidFile);
     process.exit(1);
   }
+}
+
+async function startContinuous(args: ParsedArgs): Promise<void> {
+  const log = createLogger(args.verbose);
+
+  claimSingleInstance(log);
 
   log.info(`Continuous listening started (PID: ${process.pid})`);
   log.info("Press Ctrl+C to stop");
@@ -701,32 +706,7 @@ function checkStatus(): void {
 async function startClaudeMode(args: ParsedArgs): Promise<void> {
   const log = createLogger(args.verbose);
 
-  // Check if already running
-  if (existsSync(CONFIG.pidFile)) {
-    const pid = parseInt(readFileSync(CONFIG.pidFile, "utf-8").trim());
-    try {
-      process.kill(pid, 0);
-      log.error(`Already running (PID: ${pid}). Use 'stop' command first.`);
-      process.exit(1);
-    } catch {
-      unlinkSync(CONFIG.pidFile);
-    }
-  }
-
-  // Write PID file
-  writeFileSync(CONFIG.pidFile, process.pid.toString());
-
-  // Ensure temp directory exists
-  if (!existsSync(CONFIG.tempDir)) {
-    mkdirSync(CONFIG.tempDir, { recursive: true });
-  }
-
-  // Check dependencies
-  if (!checkSox().available) {
-    log.error("Required tool 'rec' (sox) not found. Install with: brew install sox");
-    unlinkSync(CONFIG.pidFile);
-    process.exit(1);
-  }
+  claimSingleInstance(log);
 
   console.error("\n╔════════════════════════════════════════════════════════════╗");
   console.error("║  🎙️  CLAUDE CODE VOICE INPUT - HANDS-FREE MODE             ║");

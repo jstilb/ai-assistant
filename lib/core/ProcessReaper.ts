@@ -29,7 +29,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { sep } from "node:path";
 
 /** Env key AgentSpawner sets on every spawn; its value is a per-run UUID. */
@@ -92,9 +92,18 @@ function listProcessEnvLinux(): ProcEnvRow[] {
   return rows;
 }
 
+/**
+ * lsof lives in /usr/sbin on macOS, which launchd jobs (the autonomous
+ * executor cron included) usually leave off PATH. Prefer PATH, then fall back
+ * to the system location, so the cwd sweep never fails for a PATH reason.
+ */
+function lsofPath(): string {
+  return Bun.which("lsof") ?? (existsSync("/usr/sbin/lsof") ? "/usr/sbin/lsof" : "lsof");
+}
+
 function listProcessCwdDarwin(): ProcCwdRow[] {
   // lsof exits 1 when some processes deny access; the output is still valid.
-  const res = spawnSync("lsof", ["-nP", "-d", "cwd", "-Fpn"], {
+  const res = spawnSync(lsofPath(), ["-nP", "-d", "cwd", "-Fpn"], {
     encoding: "utf-8",
     maxBuffer: 64 * 1024 * 1024,
   });

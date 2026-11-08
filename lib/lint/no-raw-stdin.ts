@@ -26,22 +26,7 @@
  * stdin reads in that file or any hook.
  */
 
-import { execSync, execFileSync } from "node:child_process";
-
-/** grep -rnE without a shell: patterns may contain quotes. Exit 1 (no match) → "". */
-function grepTree(pattern: string, rootDir: string): string {
-  try {
-    return execFileSync("grep", ["-rn", "-E", pattern, rootDir, "--include=*.ts", "--include=*.tsx"], {
-      encoding: "utf-8",
-      cwd: rootDir,
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch (err) {
-    if ((err as { status?: number }).status === 1) return "";
-    throw err;
-  }
-}
+import { addedLines, grepTree, readStagedTsDiff } from "./StagedDiff.ts";
 
 export interface LintResult {
   errors: string[];
@@ -121,57 +106,21 @@ export async function checkNoRawStdinStaged(rootDir: string = process.cwd()): Pr
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  let diffOutput: string;
-  try {
-    // -U0 trims context, --diff-filter=ACMR limits to added/changed/copied/renamed
-    diffOutput = execSync('git diff --cached -U0 --diff-filter=ACMR --no-color -- "*.ts" "*.tsx"', {
-      encoding: "utf-8",
-      cwd: rootDir,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-  } catch (err) {
-    // Fail open (the commit is not blocked) but visibly: a skipped check is not a clean pass.
-    warnings.push(`no-raw-stdin: check skipped, git failed: ${err instanceof Error ? err.message : String(err)}`);
+  const staged = readStagedTsDiff(rootDir, "no-raw-stdin");
+  if ("warning" in staged) {
+    warnings.push(staged.warning);
     return { errors, warnings };
   }
 
-  let currentFile: string | null = null;
-  let currentLineNum = 0;
-
-  for (const rawLine of diffOutput.split("\n")) {
-    if (rawLine.startsWith("+++ b/")) {
-      currentFile = rawLine.slice(6);
-      continue;
-    }
-    if (rawLine.startsWith("--- ")) continue;
-    if (rawLine.startsWith("diff ") || rawLine.startsWith("index ")) {
-      currentFile = null;
-      continue;
-    }
-    if (rawLine.startsWith("@@")) {
-      // @@ -a,b +c,d @@  — c is the starting new-file line number
-      const match = /\+(\d+)(?:,\d+)?/.exec(rawLine);
-      currentLineNum = parseInt(match?.[1] ?? "0", 10);
-      continue;
-    }
-    if (!currentFile || isExempt(currentFile)) continue;
-
-    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-      const added = rawLine.slice(1);
-      for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
-        if (pattern.test(added)) {
-          errors.push(
-            `${currentFile}:${currentLineNum}: Raw stdin pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
-              `Use the hook readers from lib/hook-utils.ts or readSecretInput from lib/core/SecretInput.ts for credentials.`,
-          );
-        }
+  for (const { file, line, text: added } of addedLines(staged.diff, isExempt)) {
+    for (const [i, pattern] of COMPILED_PATTERNS.entries()) {
+      if (pattern.test(added)) {
+        errors.push(
+          `${file}:${line}: Raw stdin pattern \`${BANNED_PATTERNS[i]}\` introduced. ` +
+            `Use the hook readers from lib/hook-utils.ts or readSecretInput from lib/core/SecretInput.ts for credentials.`,
+        );
       }
-      currentLineNum++;
-    } else if (!rawLine.startsWith("-")) {
-      // context line — advances the new-file counter
-      currentLineNum++;
     }
-    // '-' lines do not advance the new-file counter
   }
 
   return { errors, warnings };

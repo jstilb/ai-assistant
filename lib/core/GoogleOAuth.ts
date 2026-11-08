@@ -1,8 +1,9 @@
 /**
  * GoogleOAuth.ts — shared Google OAuth (Desktop client, loopback consent) helpers.
  *
- * Used by AppUsageTracker (Data Portability consent) and YouTubeCuration
- * (playlist-write consent). Both flows are the same code and differ only in the
+ * Used by AppUsageTracker (Data Portability consent), YouTubeCuration
+ * (playlist-write consent), lib/core/youtube-auth.ts and UnixCLI's
+ * reauth-sheets.ts. Both flows are the same code and differ only in the
  * scope list and the secrets keys they write. Extracted here so skills do not
  * import each other (ADR-006).
  *
@@ -11,8 +12,9 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
 
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -177,6 +179,12 @@ interface LoopbackConsentOptions {
   /** Extra console line printed after the URL, e.g. the requested scopes. */
   announce?: string;
   timeoutMs?: number;
+  /** Fixed loopback port (a client registered with an exact redirect URI needs one). Default: any free port. */
+  port?: number;
+  /** Callback path. "" means the bare origin (redirect_uri "http://localhost:PORT"). Default "/callback". */
+  callbackPath?: string;
+  /** Sentence under the success heading. Default names ~/.claude/secrets.json. */
+  successDetail?: string;
 }
 
 /**
@@ -187,6 +195,8 @@ interface LoopbackConsentOptions {
 export async function runLoopbackConsent(opts: LoopbackConsentOptions): Promise<TokenExchangeResult> {
   if (typeof Bun === "undefined" || !Bun.serve) throw new Error("Bun.serve unavailable — run with bun");
   const state = crypto.randomUUID();
+  const callbackPath = opts.callbackPath ?? "/callback";
+  const successDetail = opts.successDetail ?? "Token written to <code>~/.claude/secrets.json</code>.";
 
   let resolveCb: (r: { code: string; state: string }) => void = () => {};
   let rejectCb: (e: Error) => void = () => {};
@@ -200,10 +210,10 @@ export async function runLoopbackConsent(opts: LoopbackConsentOptions): Promise<
     // Google's loopback rules let any port through, but the hostname must
     // match the registered one — use `localhost`, not `127.0.0.1`.
     hostname: "localhost",
-    port: 0,
+    port: opts.port ?? 0,
     fetch(req: Request) {
       const u = new URL(req.url);
-      if (u.pathname !== "/callback") return new Response("not found", { status: 404 });
+      if (u.pathname !== (callbackPath || "/")) return new Response("not found", { status: 404 });
       const code = u.searchParams.get("code");
       const st = u.searchParams.get("state");
       const err = u.searchParams.get("error");
@@ -221,13 +231,13 @@ export async function runLoopbackConsent(opts: LoopbackConsentOptions): Promise<
       }
       resolveCb({ code, state: st });
       return new Response(
-        `<html><body style="font-family:system-ui;padding:2rem"><h2>${opts.successHeading} ✓</h2><p>You can close this tab. Token written to <code>~/.claude/secrets.json</code>.</p></body></html>`,
+        `<html><body style="font-family:system-ui;padding:2rem"><h2>${opts.successHeading} ✓</h2><p>You can close this tab. ${successDetail}</p></body></html>`,
         { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
       );
     },
   });
 
-  const redirectUri = `http://localhost:${server.port as number}/callback`;
+  const redirectUri = `http://localhost:${server.port as number}${callbackPath}`;
   const consentUrl = buildConsentUrl({ clientId: opts.clientId, redirectUri, scopes: opts.scopes, state });
 
   console.log(`Loopback server listening on ${redirectUri}`);
@@ -254,4 +264,21 @@ export async function runLoopbackConsent(opts: LoopbackConsentOptions): Promise<
     redirectUri,
     code: cb.code,
   });
+}
+
+/**
+ * Write tokens from runLoopbackConsent() as an authorized-user token file
+ * (access_token, refresh_token, scope, token_type, expiry_date in ms) — the
+ * shape Sheets.ts, YouTubeApi.ts and TokenHealth.ts read. Overwrites.
+ */
+export function writeTokenFile(path: string, tokens: TokenExchangeResult, now: number = Date.now()): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const token = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    scope: tokens.scope,
+    token_type: tokens.token_type,
+    expiry_date: now + tokens.expires_in * 1000,
+  };
+  writeFileSync(path, JSON.stringify(token, null, 2));
 }

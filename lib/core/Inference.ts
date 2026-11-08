@@ -53,6 +53,7 @@ import { existsSync, openSync, closeSync, readFileSync, statSync, unlinkSync } f
 import { join } from "node:path";
 import { loadSettings, loadTieredConfig } from "./ConfigLoader.ts";
 import { getKayaHome, defaultKayaHome } from "./KayaHome.ts";
+import { findClosingBracket } from "./JsonScan.ts";
 import { moonshotChat, KIMI_K3_MODEL, KIMI_K3_PRICING } from "./MoonshotClient.ts";
 import { z } from "zod";
 
@@ -397,37 +398,8 @@ export function detectJsonArraysInText(text: string): JsonArrayMatch[] {
     const openIdx = text.indexOf("[", searchFrom);
     if (openIdx === -1) break;
 
-    // Find the matching close bracket using a bracket depth counter
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    let closeIdx = -1;
-
-    for (let i = openIdx; i < text.length; i++) {
-      const ch = text[i];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (ch === "\\" && inString) {
-        escaped = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-
-      if (ch === "[") depth++;
-      else if (ch === "]") {
-        depth--;
-        if (depth === 0) {
-          closeIdx = i;
-          break;
-        }
-      }
-    }
+    // Find the matching close bracket (string-aware depth counter)
+    const closeIdx = findClosingBracket(text, openIdx);
 
     if (closeIdx === -1) {
       searchFrom = openIdx + 1;

@@ -11,11 +11,20 @@
  * - Type safety
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { z } from "zod";
+
+// _setTestPaths() pins ConfigLoader's Kaya dir process-wide. bun runs every
+// file of a suite in one process, so leaving it set made later files read
+// settings from this (deleted) temp dir — e.g. NotificationService.test.ts's
+// "Telegram push switch" saw no settings.json and sent anyway.
+afterAll(async () => {
+  const { _setTestPaths } = await import("./ConfigLoader.ts");
+  _setTestPaths(null);
+});
 
 // Test directory setup
 const TEST_DIR = join(tmpdir(), `config-loader-test-${Date.now()}`);
