@@ -13,6 +13,7 @@
  *   bun ContentDeduplicator.ts --test            Run self-test
  */
 
+import { jaccardSimilarity, tokenizeWords } from "../../../../lib/core/TextSimilarity.ts";
 import { normalizeUrl } from "./ContentCollector.ts";
 import type { ContentItem } from "./types.ts";
 
@@ -26,35 +27,7 @@ const TITLE_SIMILARITY_THRESHOLD = 0.65; // Jaccard coefficient threshold
 // Title Similarity
 // ============================================================================
 
-/**
- * Tokenize a title into normalized word set
- */
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .split(/\s+/)
-      .filter((w) => w.length > 2), // Skip very short words
-  );
-}
-
-/**
- * Jaccard similarity coefficient: |A intersect B| / |A union B|
- * Returns 0.0 (no overlap) to 1.0 (identical)
- */
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1.0;
-  if (a.size === 0 || b.size === 0) return 0.0;
-
-  let intersection = 0;
-  for (const word of a) {
-    if (b.has(word)) intersection++;
-  }
-
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
+const tokenize = tokenizeWords;
 
 /**
  * Check if two titles are similar enough to be considered duplicates
