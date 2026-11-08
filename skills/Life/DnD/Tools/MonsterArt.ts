@@ -10,9 +10,9 @@
  */
 
 import { join } from "node:path";
-import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { renderWithArtSkill } from "./shared/ArtGeneration.ts";
 
 // ============================================
 // TYPES
@@ -157,50 +157,11 @@ export function parseMonsterFile(monsterJson: MonsterJsonFile): MonsterArtOption
 // ============================================
 
 async function generateArt(prompt: string, outputPath: string, imageSize?: string): Promise<string> {
-  const dir = join(process.env.HOME!, "Downloads", "dnd-art");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  const generateScript = join(getKayaHome(), "skills", "Content", "Art", "Tools", "Generate.ts");
-
-  if (!existsSync(generateScript)) {
-    throw new Error(
-      `[MonsterArt] Art skill not found at expected path: ${generateScript}\n` +
-        `Check that the Content/Art skill is installed and the path is correct.`,
-    );
-  }
-
-  const size = imageSize || "2K";
-  const args = [
-    "run",
-    generateScript,
-    "--model",
-    "nano-banana-pro",
-    "--prompt",
-    prompt,
-    "--size",
-    size,
-    "--aspect-ratio",
-    "1:1",
-    "--output",
-    outputPath,
-  ];
-
-  const proc = Bun.spawn(["bun", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
+  return renderWithArtSkill(prompt, outputPath, {
+    ensureDir: join(process.env.HOME!, "Downloads", "dnd-art"),
+    imageSize,
+    label: "Art",
   });
-
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-
-  if (exitCode !== 0) {
-    throw new Error(`Art generation failed: ${stderr || stdout}`);
-  }
-
-  return outputPath;
 }
 
 // ============================================

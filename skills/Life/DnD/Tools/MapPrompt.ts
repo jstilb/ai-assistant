@@ -10,8 +10,8 @@
  */
 
 import { join, dirname } from "node:path";
-import { mkdirSync, existsSync, readFileSync } from "node:fs";
-import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { readFileSync } from "node:fs";
+import { renderWithArtSkill } from "./shared/ArtGeneration.ts";
 
 // ============================================
 // TYPES
@@ -199,43 +199,11 @@ export function getMapOutputPath(type: string, theme: string): string {
 // ============================================
 
 async function generateMap(prompt: string, outputPath: string, imageSize?: string): Promise<string> {
-  const dir = join(process.env.HOME!, "Downloads", "dnd-maps");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  const generateScript = join(getKayaHome(), "skills", "Content", "Art", "Tools", "Generate.ts");
-
-  const size = imageSize || "2K";
-  const args = [
-    "run",
-    generateScript,
-    "--model",
-    "nano-banana-pro",
-    "--prompt",
-    prompt,
-    "--size",
-    size,
-    "--aspect-ratio",
-    "1:1",
-    "--output",
-    outputPath,
-  ];
-
-  const proc = Bun.spawn(["bun", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
+  return renderWithArtSkill(prompt, outputPath, {
+    ensureDir: join(process.env.HOME!, "Downloads", "dnd-maps"),
+    imageSize,
+    label: "Map",
   });
-
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-
-  if (exitCode !== 0) {
-    throw new Error(`Map generation failed: ${stderr || stdout}`);
-  }
-
-  return outputPath;
 }
 
 // ============================================
