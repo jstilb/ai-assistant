@@ -18,13 +18,15 @@
  * ResultsPersistence.hermetic.test.ts), never live MEMORY/VALIDATION/evals.
  */
 import { describe, it, expect, afterAll, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { findSuiteRuns, loadRun } from "./ResultsUtils.ts";
 import { pinKayaHome, restoreKayaHome } from "../../../../../lib/test/pinKayaHome.ts";
+import { resultLine, aggregateLine, evalStore } from "./evalStoreFixture.ts";
 
 const TEST_DIR = pinKayaHome("results-utils-hermetic-");
 const STORE_ROOT = join(TEST_DIR, "MEMORY", "VALIDATION", "evals");
+const { writeDateFile } = evalStore(STORE_ROOT);
 
 afterAll(async () => {
   await restoreKayaHome();
@@ -59,46 +61,6 @@ afterEach(() => {
   warnSpy?.restore();
   warnSpy = null;
 });
-
-function writeDateFile(date: string, suite: string, lines: string[]): string {
-  const dir = join(STORE_ROOT, date);
-  mkdirSync(dir, { recursive: true });
-  const filePath = join(dir, `${suite}-results.jsonl`);
-  writeFileSync(filePath, lines.join("\n") + "\n", "utf-8");
-  return filePath;
-}
-
-function resultLine(opts: {
-  timestamp: string;
-  suite: string;
-  eval_name: string;
-  trial_scores: number[];
-  pass_rate?: number;
-}): string {
-  return JSON.stringify({
-    timestamp: opts.timestamp,
-    suite: opts.suite,
-    eval_name: opts.eval_name,
-    category: "kaya",
-    trial_scores: opts.trial_scores,
-    pass_rate: opts.pass_rate ?? 1,
-    pass_at_k: 1,
-    pass_all_k: 1,
-    grader_details: [],
-  });
-}
-
-function aggregateLine(opts: { timestamp: string; suite: string; total_evals: number }): string {
-  return JSON.stringify({
-    timestamp: opts.timestamp,
-    suite: opts.suite,
-    type: "aggregate",
-    total_evals: opts.total_evals,
-    passed_evals: opts.total_evals,
-    aggregate_pass_rate: 1,
-    per_category: { kaya: { total: opts.total_evals, passed: opts.total_evals, pass_rate: 1 } },
-  });
-}
 
 describe("ResultsUtils — real JSONL store (slice A4)", () => {
   it("returns no runs when the store directory does not exist at all", () => {

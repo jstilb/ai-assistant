@@ -49,6 +49,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "node:path";
 import { z } from "zod";
 import { findSuiteRuns, loadRun } from "./shared/ResultsUtils.ts";
+import { SuiteSummaryFileSchema, type SuiteSummaryFile } from "./shared/SuiteSummarySchema.ts";
 import { inference, extractJson, type InferenceLevel, type InferenceResult } from "../../../../lib/core/Inference.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { sendAlert } from "../../../../lib/core/AlertGate.ts";
@@ -127,37 +128,9 @@ export interface SuiteWindowSummary {
   tasks: TaskTrend[];
 }
 
-// last-suite-run/<suite>.json shape — duplicated locally from
-// EvalExecutor.ts's SuiteSummaryFile/SuiteSummaryTask (same convention
-// bin/kaya-evals-nightly.ts already established: the CONSUMER validates
-// what crossed the machine boundary at runtime via its own zod schema,
-// rather than trusting the PRODUCER's compile-time TS types).
-const SuiteSummaryTaskSchema = z.object({
-  task_id: z.string(),
-  status: z.enum(["passed", "failed", "infra_skipped", "error", "not_found"]),
-  mean_score: z.number(),
-  pass: z.boolean(),
-  pass_rate: z.number(),
-  infra_failures: z.number(),
-  n_trials: z.number(),
-  error: z.string().optional(),
-});
-const SuiteSummaryFileSchema = z.object({
-  suite: z.string(),
-  tasks: z.array(SuiteSummaryTaskSchema),
-  summary: z.object({
-    total: z.number(),
-    scored: z.number(),
-    passed: z.number(),
-    failed: z.number(),
-    infra_skipped: z.number(),
-    mean_score: z.number(),
-    started_at: z.string(),
-    finished_at: z.string(),
-    wall_ms: z.number(),
-  }),
-});
-export type SuiteSummaryFile = z.infer<typeof SuiteSummaryFileSchema>;
+// last-suite-run/<suite>.json shape: consumer-side zod schema shared with
+// bin/kaya-evals-nightly.ts (shared/SuiteSummarySchema.ts).
+export type { SuiteSummaryFile };
 
 export interface LastSuiteRunEntry {
   suite: string;
