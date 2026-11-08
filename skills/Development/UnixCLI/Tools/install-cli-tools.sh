@@ -6,38 +6,12 @@
 
 set -euo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging
+# Logging (log-helpers.sh tees every log_* line into LOG_FILE)
 LOG_DIR="${HOME}/.claude/logs"
 mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="${LOG_DIR}/unix-cli-install-${TIMESTAMP}.log"
-
-log() {
-    echo -e "${1}" | tee -a "$LOG_FILE"
-}
-
-log_info() {
-    log "${BLUE}[INFO]${NC} ${1}"
-}
-
-log_success() {
-    log "${GREEN}[SUCCESS]${NC} ${1}"
-}
-
-log_warning() {
-    log "${YELLOW}[WARNING]${NC} ${1}"
-}
-
-log_error() {
-    log "${RED}[ERROR]${NC} ${1}"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/log-helpers.sh"
 
 # Check prerequisites
 check_prerequisites() {
