@@ -19,10 +19,10 @@
  *   window; we filter to those where SDFC is the home team.
  */
 
-import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // ESPN scoreboard types (minimal — only fields we use)
@@ -62,19 +62,6 @@ const SCHEDULE_PAGE_URL = "https://www.sandiegofc.com/schedule/";
 /** How far ahead to look. MLS plays into Nov; home games can be 50+ days out
  *  (the Padres' 45-day window would miss the next SDFC home match), so widen. */
 const WINDOW_DAYS = 180;
-
-// ============================================================================
-// Stable ID — canonical(title) + startDate + venue (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
 
 // ============================================================================
 // Helpers

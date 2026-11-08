@@ -24,12 +24,12 @@
  * and does NOT write cache.
  */
 
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { defaultKayaHome } from "../../../../../lib/core/KayaHome.ts";
 import type { EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Constants
@@ -102,19 +102,6 @@ export function loadEdmtrainKey(): string {
     );
   }
   return key.trim();
-}
-
-// ============================================================================
-// Stable ID — canonical(title) + startDate + venue (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
 }
 
 // ============================================================================

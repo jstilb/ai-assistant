@@ -27,10 +27,10 @@
  * Pike13 studio is added (two adapters = a real seam).
  */
 
-import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
+import { stableId, stripHtml } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Pike13 front-API types (only the fields we use)
@@ -86,34 +86,10 @@ const API_HOST = `https://${SUBDOMAIN}.pike13.com`;
 const WINDOW_DAYS = 14;
 
 // ============================================================================
-// Stable ID — canonical(title) + startDate + venue (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
-
-// ============================================================================
 // Helpers — pure, unit-testable
 // ============================================================================
 
-/** Collapse Pike13's rich-text HTML description into a plain one-liner. */
-export function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#?[a-z0-9]+;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export { stripHtml };
 
 const STYLE_TAGS: Array<[RegExp, string]> = [
   [/hip ?hop/i, "hip-hop"],

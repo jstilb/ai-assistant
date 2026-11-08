@@ -52,10 +52,10 @@
  *   raw.image may be an object with a `url` string, or boolean false.
  */
 
-import { createHash } from "node:crypto";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { EventItemSchema, CategorySchema } from "../types.ts";
 import { utcIsoToLaIso, naiveLaToUtcMs } from "../lib/tz.ts";
+import { stableId, stripHtml } from "./AdapterUtil.ts";
 
 // ============================================================================
 // TEC API types (minimal — only fields we use; allow unknown extras)
@@ -125,19 +125,6 @@ const PER_PAGE = 50;
 const MAX_PAGES_SAFETY = 40;
 
 // ============================================================================
-// Stable ID — same convention as PadresAdapter (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venueOrUrl)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
-
-// ============================================================================
 // Date normalization
 //
 // TEC utc_start_date / utc_end_date format: "YYYY-MM-DD HH:MM:SS" (no T, no Z).
@@ -189,27 +176,6 @@ function parseTecDatetime(utcField: string | undefined, localField: string | und
   }
 
   return null;
-}
-
-// ============================================================================
-// HTML stripping
-//
-// Strip HTML tags from description. This is a best-effort approach for
-// the TEC event description field (e.g. "<p>Fun outdoor event</p>").
-// We do NOT import a full HTML parser to avoid adding a dependency.
-// ============================================================================
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ") // replace tags with spaces
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 // ============================================================================

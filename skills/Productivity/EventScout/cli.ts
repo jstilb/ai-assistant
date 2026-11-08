@@ -39,6 +39,7 @@
 
 import { dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { collectRepeatableFlag, parseFlags } from "../../../lib/core/CliFlags.ts";
 import { ingestSource, ingestAll } from "./Tools/Ingest.ts";
 import { queryHybrid, persistRefreshedEvents } from "./Tools/Query.ts";
 import { loadSources, addSource, updateLastFetched } from "./Tools/SourceManager.ts";
@@ -200,49 +201,8 @@ function deriveSourceName(url: string): string {
   }
 }
 
-/** Parse --key value pairs from args array, returning leftover positional args */
-export function parseFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
-  const flags: Record<string, string> = {};
-  const positional: string[] = [];
-  let i = 0;
-  while (i < args.length) {
-    const arg = args[i]!;
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      // Boolean flag: next token is absent or is itself a --flag
-      if (next === undefined || next.startsWith("--")) {
-        flags[key] = "true";
-        i += 1;
-      } else {
-        flags[key] = next;
-        i += 2;
-      }
-    } else {
-      positional.push(arg);
-      i++;
-    }
-  }
-  return { flags, positional };
-}
-
-/**
- * Scan the raw args array for every occurrence of `--flagName <value>` and
- * return the collected values, in order. Used for flags that may repeat
- * (--category, --time-of-day) — parseFlags' Record<string,string> can only
- * hold the LAST value for a repeated key, which would silently drop earlier
- * occurrences (e.g. "--category comedy --category music" → only "music").
- */
-function collectRepeatableFlag(args: string[], flagName: string): string[] {
-  const needle = `--${flagName}`;
-  const values: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === needle && i + 1 < args.length) {
-      values.push(args[i + 1]!);
-    }
-  }
-  return values;
-}
+// parseFlags / collectRepeatableFlag: lib/core/CliFlags.ts (shared with Cooking RecipeIndex).
+export { parseFlags };
 
 /** Thrown by buildQueryContext on any malformed/invalid query flag. */
 export class QueryFlagError extends Error {

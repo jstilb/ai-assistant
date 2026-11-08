@@ -27,11 +27,11 @@
  * No network calls. Pure function.
  */
 
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { EventItemSchema } from "../types.ts";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { isNaiveDatetime, naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Zod schema for raw schema.org Event (permissive — we only care about what we use)
@@ -84,23 +84,6 @@ const SchemaOrgEventSchema = z
   .passthrough();
 
 type SchemaOrgEvent = z.infer<typeof SchemaOrgEventSchema>;
-
-// ============================================================================
-// Stable ID — mirrors SPAAdapter convention
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
-  const utcNorm = (() => {
-    const ms = Date.parse(startDatetime);
-    return Number.isNaN(ms) ? startDatetime : new Date(ms).toISOString();
-  })();
-  const raw = `${canonical(title)}|${utcNorm}|${canonical(venueOrUrl)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
 
 // ============================================================================
 // Datetime coercion — same logic as SPAAdapter.coerceToIso
@@ -256,7 +239,7 @@ function schemaEventToItem(ev: SchemaOrgEvent, source: EventSource, now: string)
 
   // stable id
   const venueOrUrl = venue ?? source.url;
-  const id = stableId(title, startDatetime, venueOrUrl);
+  const id = stableId(title, startDatetime, venueOrUrl, { normalizeUtc: true });
 
   const item: EventItem = {
     id,

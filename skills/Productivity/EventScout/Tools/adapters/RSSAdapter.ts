@@ -28,7 +28,6 @@
  *   (Ingest.ts) handle cache writes.
  */
 
-import { createHash } from "node:crypto";
 // cross-skill-allowed: adapter wraps ContentAggregator's RSSParser by design — thin adapter over a shared parser
 import { parseRSSFeed } from "../../../../../skills/Content/ContentAggregator/Tools/RSSParser.ts";
 // cross-skill-allowed: adapter wraps ContentAggregator's RSSParser by design — thin adapter over a shared parser
@@ -36,20 +35,7 @@ import type { FeedItem } from "../../../../../skills/Content/ContentAggregator/T
 import type { EventItem, EventSource } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
 import { inference } from "../../../../../lib/core/Inference.ts";
-
-// ============================================================================
-// Stable ID — mirrors PadresAdapter convention (§4.1):
-//   canonical(title) + startDate + venue (or sourceUrl if no venue)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venueOrUrl)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // SD Reader enrichment — model-delegated extraction

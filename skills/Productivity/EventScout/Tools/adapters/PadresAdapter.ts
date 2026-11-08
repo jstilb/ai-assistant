@@ -21,10 +21,10 @@
  *   Padres teamId = 135
  */
 
-import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // MLB API types (minimal, only fields we use)
@@ -76,23 +76,6 @@ const PADRES_TEAM_NAME = "San Diego Padres";
 const SOURCE_ID = "padres-mlb";
 const BASE_URL = "https://statsapi.mlb.com/api/v1/schedule";
 const SCHEDULE_PAGE_URL = "https://www.mlb.com/padres/schedule";
-
-// ============================================================================
-// Stable ID computation
-//
-// Convention from SPEC §4.1: canonical(title) + startDate + venue
-// We normalise to lowercase, trim whitespace, and take the first 8 chars of
-// a SHA-256 hex digest (prefixed with "padres-") for readability.
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
 
 // ============================================================================
 // Status mapping

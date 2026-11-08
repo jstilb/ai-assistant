@@ -27,9 +27,9 @@
  * runner. fetchNineteenHzEvents() returns EventItem[]; it does NOT write cache.
  */
 
-import { createHash } from "node:crypto";
 import type { EventItem, EventSource } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso, utcMsToLaParts } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Constants
@@ -68,19 +68,6 @@ const SD_CITIES = [
   "spring valley",
   "lemon grove",
 ];
-
-// ============================================================================
-// Stable ID — canonical(title) + startDate + venue (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
 
 // ============================================================================
 // Pure parsers

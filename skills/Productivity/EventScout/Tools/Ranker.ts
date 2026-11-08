@@ -28,6 +28,8 @@ import type { InferenceResult } from "../../../../lib/core/Inference.ts";
 import type { EventItem, QueryContext, InterestProfile } from "./types.ts";
 import { loadSources } from "./SourceManager.ts";
 import { utcMsToLaParts } from "./lib/tz.ts";
+import { haversineMiles } from "./lib/geo.ts";
+import { runWithConcurrency } from "./lib/concurrency.ts";
 import { z } from "zod";
 
 // ============================================================================
@@ -73,42 +75,6 @@ function scoreConcurrency(): number {
  * How many top events get LLM why-lines. The tail gets a cheap deterministic why.
  */
 const WHY_TIER = 15;
-
-// ============================================================================
-// Haversine — kept for tiebreak (nearer wins on equal score+date)
-// ============================================================================
-
-const EARTH_RADIUS_MILES = 3958.8;
-
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
-function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return EARTH_RADIUS_MILES * 2 * Math.asin(Math.sqrt(a));
-}
-
-// ============================================================================
-// Bounded-concurrency worker pool
-// ============================================================================
-
-/**
- * Run `worker` over `items` with at most `limit` calls in flight at once.
- * A pull-based worker pool: each lane grabs the next index until the list drains.
- */
-async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
-  let idx = 0;
-  const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (idx < items.length) {
-      const i = idx++;
-      await worker(items[i]!);
-    }
-  });
-  await Promise.all(lanes);
-}
 
 // ============================================================================
 // ScoreBatchFn — injectable for tests
@@ -200,20 +166,6 @@ const ScoreBatchSchema = z.array(
 );
 
 // ============================================================================
-// Haversine utility (also used in buildScoringLine distance signal)
-// ============================================================================
-
-const EARTH_RADIUS_MILES_SL = 3958.8;
-
-function haversineMilesSL(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return EARTH_RADIUS_MILES_SL * 2 * Math.asin(Math.sqrt(a));
-}
-
-// ============================================================================
 // ScoringLineCtx — context for pure buildScoringLine
 // ============================================================================
 
@@ -300,7 +252,7 @@ export function buildScoringLine(event: EventItem, ctx: ScoringLineCtx): string 
   // --- Distance ---
   let distStr = "location unknown";
   if (event.lat !== undefined && event.lng !== undefined) {
-    const miles = haversineMilesSL(home.lat, home.lng, event.lat, event.lng);
+    const miles = haversineMiles(home.lat, home.lng, event.lat, event.lng);
     distStr = `${miles.toFixed(1)}mi`;
   }
 

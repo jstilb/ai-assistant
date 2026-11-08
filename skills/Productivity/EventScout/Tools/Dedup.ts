@@ -43,50 +43,16 @@
  *   dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlySet<string>): EventItem[]
  */
 
+import { jaccardSimilarity, stripDiacritics, tokenizeWords } from "../../../../lib/core/TextSimilarity.ts";
 import type { EventItem } from "./types.ts";
 
 // ============================================================================
 // Jaccard similarity — replicates ContentDeduplicator approach, tuned for events
 // ============================================================================
 
-/**
- * Strip diacritics so accented spellings compare equal to their ASCII form
- * ("Négociant" → "negociant"). Sources spell the same venue both ways, which
- * otherwise defeats both the containment and Jaccard checks below.
- */
-function stripDiacritics(text: string): string {
-  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-/**
- * Tokenize text into a normalised word set.
- * Mirrors ContentDeduplicator.tokenize: lowercase, strip diacritics + non-
- * alphanumeric, split on whitespace, skip tokens <= 2 chars (noise words).
- */
-function tokenize(text: string): Set<string> {
-  return new Set(
-    stripDiacritics(text.toLowerCase())
-      .replace(/[^a-z0-9\s]/g, "")
-      .split(/\s+/)
-      .filter((w) => w.length > 2),
-  );
-}
-
-/**
- * Jaccard similarity coefficient: |A ∩ B| / |A ∪ B|
- * Returns 0.0 (no overlap) to 1.0 (identical sets).
- * Mirrors ContentDeduplicator.jaccardSimilarity.
- */
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1.0;
-  if (a.size === 0 || b.size === 0) return 0.0;
-  let intersection = 0;
-  for (const word of a) {
-    if (b.has(word)) intersection++;
-  }
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
+// stripDiacritics / tokenize / jaccardSimilarity: lib/core/TextSimilarity.ts
+// (shared with ContentAggregator's ContentDeduplicator).
+const tokenize = tokenizeWords;
 
 /**
  * Thresholds for the split title/venue predicate.

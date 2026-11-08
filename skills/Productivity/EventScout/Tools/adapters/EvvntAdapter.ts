@@ -43,10 +43,10 @@
  *   stop when rawEvents is empty or shorter than hitsPerPage.
  */
 
-import { createHash } from "node:crypto";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { EventItemSchema } from "../types.ts";
 import { utcIsoToLaIso, naiveLaToUtcMs } from "../lib/tz.ts";
+import { stableId, stripHtml } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Evvnt API types (minimal — only fields we use; allow unknown extras)
@@ -106,19 +106,6 @@ const HITS_PER_PAGE = 50;
 const MAX_PAGES_SAFETY = 40;
 
 // ============================================================================
-// Stable ID — same convention as WordPressTecAdapter (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venueOrUrl)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
-
-// ============================================================================
 // Date normalization
 //
 // Evvnt start_time / end_time are already offset-aware ISO 8601 strings
@@ -154,23 +141,6 @@ function parseEvvntDatetime(
   }
 
   return null;
-}
-
-// ============================================================================
-// HTML stripping
-// ============================================================================
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 // ============================================================================

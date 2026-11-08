@@ -35,10 +35,10 @@
  * hypothetical seam; generalize further only when a second caller exists).
  */
 
-import { createHash } from "node:crypto";
 import { upsertEvents } from "../Cache.ts";
 import type { EventItem } from "../types.ts";
 import { laDateIso, utcMsToLaParts } from "../lib/tz.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Member.life get-data API types (only the fields we use)
@@ -102,19 +102,6 @@ const ADDRESS = "6380 El Cajon Blvd, San Diego, CA";
  * exactly one dated occurrence per timeslot (~45 timeslots -> ~45 events).
  */
 const WINDOW_DAYS = 7;
-
-// ============================================================================
-// Stable ID — canonical(title) + startDate + venue (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venue: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venue)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
 
 // ============================================================================
 // Helpers — pure, unit-testable

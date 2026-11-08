@@ -19,7 +19,6 @@
  *   bun .../ICSAdapter.ts <icsUrl>
  */
 
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ical, { expandRecurringEvent } from "node-ical";
@@ -29,6 +28,7 @@ import { Tier4Breaker } from "../../../../Data/BrightData/Tools/Tier4Breaker.ts"
 import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
 import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // VeventOccurrence — minimal occurrence shape, decoupled from node-ical types
@@ -90,15 +90,6 @@ function stripHtml(html: string): string {
     .replace(/&#(\d+);/gi, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrFallback: string): string {
-  const raw = `${canonical(title)}|${startDatetime}|${canonical(venueOrFallback)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
 }
 
 // ============================================================================

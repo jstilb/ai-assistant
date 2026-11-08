@@ -31,7 +31,6 @@
  *   If BrightData returns empty content on tier-1/2 we rely on tier-3 Playwright.
  */
 
-import { createHash } from "node:crypto";
 import { inference } from "../../../../../lib/core/Inference.ts";
 // cross-skill-allowed: adapter wraps Data/BrightData's fetch client by design — thin adapter over a shared client (tier-1/2/3 fetch strategy)
 import { BrightDataTool } from "../../../../Data/BrightData/Tools/BrightDataTool.ts";
@@ -41,26 +40,8 @@ import type { EventItem, EventSource, Category } from "../types.ts";
 import { z } from "zod";
 import { isNaiveDatetime, naiveLaToUtcMs, utcIsoToLaIso, utcMsToLaParts } from "../lib/tz.ts";
 import { withinHorizon, horizonDays } from "../Horizon.ts";
-
-// ============================================================================
-// Stable ID — mirrors PadresAdapter + RSSAdapter convention (SPEC §4.1)
-// ============================================================================
-
-function canonical(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function stableId(title: string, startDatetime: string, venueOrUrl: string): string {
-  // Normalise startDatetime to UTC ISO before hashing so that an offset-aware
-  // string ("-07:00") and a naive string converted to the same LA wall-clock
-  // both produce the same id.
-  const utcNorm = (() => {
-    const ms = Date.parse(startDatetime);
-    return Number.isNaN(ms) ? startDatetime : new Date(ms).toISOString();
-  })();
-  const raw = `${canonical(title)}|${utcNorm}|${canonical(venueOrUrl)}`;
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-}
+import { findClosingBracket } from "../../../../../lib/core/JsonScan.ts";
+import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
 // Raw LLM output schema — permissive input, strict output
@@ -229,7 +210,7 @@ export function normalizeExtracted(raw: unknown[], source: EventSource): EventIt
 
     // Step 6: stable id
     const venueOrUrl = r.venue ?? source.url;
-    const id = stableId(r.title, startDatetime, venueOrUrl);
+    const id = stableId(r.title, startDatetime, venueOrUrl, { normalizeUtc: true });
 
     // Step 7: assemble EventItem
     const item: EventItem = {
@@ -321,35 +302,7 @@ function extractJsonArray(text: string): unknown[] {
   // Strategy 3: greedy bracket match
   const openIdx = trimmed.indexOf("[");
   if (openIdx !== -1) {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    let closeIdx = -1;
-
-    for (let i = openIdx; i < trimmed.length; i++) {
-      const ch = trimmed[i];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (ch === "\\" && inString) {
-        escaped = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === "[") depth++;
-      else if (ch === "]") {
-        depth--;
-        if (depth === 0) {
-          closeIdx = i;
-          break;
-        }
-      }
-    }
+    const closeIdx = findClosingBracket(trimmed, openIdx);
 
     if (closeIdx !== -1) {
       try {
