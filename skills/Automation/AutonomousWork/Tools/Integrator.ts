@@ -3,7 +3,8 @@
 import { WorkQueue, type WorkItem } from "./WorkQueue.ts";
 import { parseArgs } from "node:util";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, mkdirSync, openSync, writeSync, closeSync, unlinkSync } from "node:fs"; // openSync/writeSync/closeSync used by IntegratorFileLock
+import { existsSync, readFileSync, statSync, mkdirSync } from "node:fs";
+import { FileLock } from "../../../../lib/core/FileLock.ts";
 import { join } from "node:path";
 import { getKayaHome, defaultKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
 import { getOrCreateWorktree, gcWorktreeForBranch } from "../../../../lib/core/WorktreeManager.ts";
@@ -54,75 +55,6 @@ export interface ReconcileResult {
 // Re-export for callers that imported from MergeOrchestrator
 export type { MergeStrategy, MergeResult, SingleMergeResult };
 export type { WorkItem };
-
-// ============================================================================
-// Inline FileLock (mirrors StateManager.ts FileLock — that class is private)
-// ============================================================================
-
-class IntegratorFileLock {
-  private lockPath: string;
-  private locked = false;
-  private timeoutMs: number;
-
-  constructor(lockPath: string, timeoutMs: number) {
-    this.lockPath = lockPath;
-    this.timeoutMs = timeoutMs;
-  }
-
-  async acquire(): Promise<void> {
-    const start = Date.now();
-    while (true) {
-      let acquired = false;
-      try {
-        const fd = openSync(this.lockPath, "wx");
-        writeSync(fd, String(Date.now()));
-        closeSync(fd);
-        acquired = true;
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
-          throw new Error(`Lock file error at ${this.lockPath}: ${(err as Error).message}`);
-        }
-      }
-
-      if (acquired) {
-        this.locked = true;
-        return;
-      }
-
-      // Stale lock? Remove if older than 2x timeout.
-      try {
-        const content = readFileSync(this.lockPath, "utf-8");
-        const lockTime = parseInt(content, 10);
-        if (!Number.isNaN(lockTime) && Date.now() - lockTime > this.timeoutMs * 2) {
-          try {
-            unlinkSync(this.lockPath);
-          } catch {
-            /* race — another process removed it */
-          }
-        }
-      } catch {
-        /* lock vanished between EEXIST and this read */
-      }
-
-      if (Date.now() - start > this.timeoutMs) {
-        throw new Error(`Integrator lock acquisition timeout after ${this.timeoutMs}ms`);
-      }
-
-      await Bun.sleep(10);
-    }
-  }
-
-  async release(): Promise<void> {
-    if (this.locked && existsSync(this.lockPath)) {
-      try {
-        unlinkSync(this.lockPath);
-      } catch {
-        /* ignore */
-      }
-      this.locked = false;
-    }
-  }
-}
 
 // ============================================================================
 // OAuth token loader (mirrors LiveVerifier.ts)
@@ -551,7 +483,7 @@ export class Integrator {
     const locksDir = join(runtimeDir(), "locks");
     mkdirSync(locksDir, { recursive: true });
 
-    const lock = new IntegratorFileLock(join(locksDir, "integrator.lock"), 30_000);
+    const lock = new FileLock(join(locksDir, "integrator.lock"), 30_000, "Integrator lock");
     await lock.acquire();
 
     const result: ReconcileResult = { merged: [], failed: [], skipped: [], outcomes: [] };
@@ -1095,14 +1027,14 @@ export class Integrator {
    * Internal callers that already hold the lock must use _mergeItemCore() /
    * _mergeCompletedCore() directly — those are the unlocked variants.
    *
-   * Lock is async (IntegratorFileLock with Bun.sleep) so it does not block the
+   * Lock is async (lib/core FileLock with Bun.sleep) so it does not block the
    * event loop, correctly yielding to concurrent async operations (including other
    * lock holders that need to run their release() path).
    */
   private async withIntegratorLock<T>(fn: () => Promise<T> | T): Promise<T> {
     const locksDir = join(runtimeDir(), "locks");
     mkdirSync(locksDir, { recursive: true });
-    const lock = new IntegratorFileLock(join(locksDir, "integrator.lock"), 30_000);
+    const lock = new FileLock(join(locksDir, "integrator.lock"), 30_000, "Integrator lock");
     await lock.acquire();
     try {
       return await fn();
