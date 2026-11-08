@@ -235,6 +235,37 @@ function writeInjectionReport(report: Omit<InjectionReport, "reportPath">): stri
   return reportPath;
 }
 
+/**
+ * Feed traces through `detector` and run a dry-run intervention for every
+ * anomaly it reports (intervention errors are logged, never fatal). Results
+ * are appended to the two output arrays. Shared by offline and live modes.
+ */
+async function runDetectionChain(
+  detector: ReturnType<typeof createAnomalyDetector>,
+  traces: AgentTrace[],
+  anomaliesDetected: Anomaly[],
+  interventionsTriggered: InterventionResult[],
+): Promise<void> {
+  // Force dryRun at construction (race-proof — survives the async config load)
+  const interventionManager = createInterventionManager({ dryRun: true });
+
+  for (const trace of traces) {
+    const detected = await detector.ingest(trace);
+    anomaliesDetected.push(...detected);
+
+    for (const anomaly of detected) {
+      try {
+        const result = await interventionManager.handleAnomaly(anomaly);
+        if (result) {
+          interventionsTriggered.push({ ...result, dryRun: true });
+        }
+      } catch (err) {
+        console.error(`[SyntheticInjector] synthetic intervention failed (non-fatal):`, err);
+      }
+    }
+  }
+}
+
 // ============================================================================
 // Main Export
 // ============================================================================
@@ -278,25 +309,7 @@ export async function injectScenario(
       teamDivergenceRatio: 3.0,
     });
 
-    // Force dryRun at construction (race-proof — survives the async config load)
-    const interventionManager = createInterventionManager({ dryRun: true });
-
-    for (const trace of traces) {
-      const detected = await detector.ingest(trace);
-      anomaliesDetected.push(...detected);
-
-      // Run intervention for each detected anomaly
-      for (const anomaly of detected) {
-        try {
-          const result = await interventionManager.handleAnomaly(anomaly);
-          if (result) {
-            interventionsTriggered.push({ ...result, dryRun: true });
-          }
-        } catch (err) {
-          console.error(`[SyntheticInjector] synthetic intervention failed (non-fatal):`, err);
-        }
-      }
-    }
+    await runDetectionChain(detector, traces, anomaliesDetected, interventionsTriggered);
   } else {
     // Live mode: write to temp file in traces dir, force interventionDryRun
     mkdirSync(TRACES_DIR, { recursive: true });
@@ -323,24 +336,7 @@ export async function injectScenario(
         messageFloodThreshold: 5,
       });
 
-      // Force dryRun at construction (race-proof — survives the async config load)
-      const interventionManager = createInterventionManager({ dryRun: true });
-
-      for (const trace of traces) {
-        const detected = await detector.ingest(trace);
-        anomaliesDetected.push(...detected);
-
-        for (const anomaly of detected) {
-          try {
-            const result = await interventionManager.handleAnomaly(anomaly);
-            if (result) {
-              interventionsTriggered.push({ ...result, dryRun: true });
-            }
-          } catch (err) {
-            console.error(`[SyntheticInjector] synthetic intervention failed (non-fatal):`, err);
-          }
-        }
-      }
+      await runDetectionChain(detector, traces, anomaliesDetected, interventionsTriggered);
     } finally {
       // Always clean up temp file (including on error)
       try {
