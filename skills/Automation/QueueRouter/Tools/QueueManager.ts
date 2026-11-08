@@ -587,6 +587,78 @@ async function saveState(state: QueueState): Promise<void> {
 }
 
 /**
+ * Archive terminal items (completed/failed/rejected) older than daysOld, with
+ * archive-before-delete. Items go to MEMORY/QUEUES/archive/{queueName}-archive.jsonl
+ * before being removed from active queue files, then their LucidTask back-links
+ * are released and state.lastCleanupAt is stamped for debounce.
+ *
+ * Only statuses in ARCHIVABLE_TERMINAL_STATUSES are ever archived — live
+ * working statuses (needs-grilling, awaiting-context, researching, …) are
+ * always kept regardless of age.
+ *
+ * Single implementation behind QueueManager.cleanup() and
+ * ArchiveManager.archiveOldItems().
+ *
+ * @param deps.releaseBacklinks - injectable for tests; defaults to releaseLucidTaskBacklinks
+ */
+export async function archiveOldTerminalItems(
+  daysOld: number = 30,
+  deps?: { releaseBacklinks?: (items: QueueItem[]) => Promise<number> },
+): Promise<{ removed: number; archived: number }> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysOld);
+
+  let removed = 0;
+  let archived = 0;
+  const queues = discoverQueues();
+  const allArchived: QueueItem[] = [];
+
+  for (const queueName of queues) {
+    const items = loadQueueItems(queueName);
+    const keep: QueueItem[] = [];
+    const toArchive: QueueItem[] = [];
+
+    for (const item of items) {
+      if (!ARCHIVABLE_TERMINAL_STATUSES.has(item.status)) {
+        keep.push(item);
+        continue;
+      }
+
+      const itemDate = new Date(item.result?.completedAt || item.updated);
+      if (itemDate < cutoff) {
+        toArchive.push(item);
+      } else {
+        keep.push(item);
+      }
+    }
+
+    if (toArchive.length > 0) {
+      // Archive FIRST (safe on crash — worst case is duplicate in archive)
+      archiveItems(queueName, toArchive);
+      archived += toArchive.length;
+      removed += toArchive.length;
+      // Rewrite active file without archived items
+      saveQueueItems(queueName, keep);
+      allArchived.push(...toArchive);
+    }
+  }
+
+  // Release LucidTask back-links so archived items can't orphan their tasks
+  // (triage skips any task whose queue_item_id is still set).
+  if (allArchived.length > 0) {
+    const release = deps?.releaseBacklinks ?? releaseLucidTaskBacklinks;
+    await release(allArchived);
+  }
+
+  // Record cleanup timestamp in state for debounce
+  const state = loadState();
+  state.lastCleanupAt = new Date().toISOString();
+  await saveState(state);
+
+  return { removed, archived };
+}
+
+/**
  * Synchronous state save fallback using atomic tmp-then-rename.
  * Use ONLY in sync CLI callers that cannot await. For class methods, use saveState().
  */
@@ -1330,57 +1402,7 @@ export class QueueManager {
     daysOld: number = 30,
     deps?: { releaseBacklinks?: (items: QueueItem[]) => Promise<number> },
   ): Promise<{ removed: number; archived: number }> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - daysOld);
-
-    let removed = 0;
-    let archived = 0;
-    const queues = discoverQueues();
-    const allArchived: QueueItem[] = [];
-
-    for (const queueName of queues) {
-      const items = loadQueueItems(queueName);
-      const keep: QueueItem[] = [];
-      const toArchive: QueueItem[] = [];
-
-      for (const item of items) {
-        if (!ARCHIVABLE_TERMINAL_STATUSES.has(item.status)) {
-          keep.push(item);
-          continue;
-        }
-
-        const itemDate = new Date(item.result?.completedAt || item.updated);
-        if (itemDate < cutoff) {
-          toArchive.push(item);
-        } else {
-          keep.push(item);
-        }
-      }
-
-      if (toArchive.length > 0) {
-        // Archive FIRST (safe on crash — worst case is duplicate in archive)
-        archiveItems(queueName, toArchive);
-        archived += toArchive.length;
-        removed += toArchive.length;
-        // Rewrite active file without archived items
-        saveQueueItems(queueName, keep);
-        allArchived.push(...toArchive);
-      }
-    }
-
-    // Release LucidTask back-links so archived items can't orphan their tasks
-    // (triage skips any task whose queue_item_id is still set).
-    if (allArchived.length > 0) {
-      const release = deps?.releaseBacklinks ?? releaseLucidTaskBacklinks;
-      await release(allArchived);
-    }
-
-    // Record cleanup timestamp in state for debounce
-    const state = loadState();
-    state.lastCleanupAt = new Date().toISOString();
-    await saveState(state);
-
-    return { removed, archived };
+    return archiveOldTerminalItems(daysOld, deps);
   }
 
   /**
@@ -2235,32 +2257,46 @@ export class QueueManager {
       },
     };
 
+    await this.commitSpecPipelineTransfer(item, items, index, deepCopied, {
+      action: "reject-to-pipeline",
+      category: "queue-rejection-to-pipeline",
+      failureSource: "QueueManager.rejectToSpecPipeline.memoryCapture",
+      details: { reason, reviewer, revisionCount: newRevisionCount, isEscalated },
+    });
+
+    return deepCopied;
+  }
+
+  /**
+   * Shared tail of rejectToSpecPipeline / rejectToGrill: move `moved` into
+   * spec-pipeline (write target first, then remove `item` from its source
+   * queue), record the decision to memory (non-fatal), and make sure
+   * spec-pipeline is registered in state.
+   */
+  private async commitSpecPipelineTransfer(
+    item: QueueItem,
+    items: QueueItem[],
+    index: number,
+    moved: QueueItem,
+    decision: { action: string; category: string; failureSource: string; details: Record<string, unknown> },
+  ): Promise<void> {
     // Atomic: write target first, then remove from source
-    appendQueueItem("spec-pipeline", deepCopied);
+    appendQueueItem("spec-pipeline", moved);
     items.splice(index, 1);
     saveQueueItems(item.queue, items);
 
-    // Capture rejection-to-pipeline decision to memory
     memoryStore
       .capture({
         type: "decision",
-        category: "queue-rejection-to-pipeline",
-        title: `Queue reject-to-pipeline: ${item.payload.title || item.id}`,
-        content: JSON.stringify({
-          itemId: item.id,
-          queue: item.queue,
-          action: "reject-to-pipeline",
-          reason,
-          reviewer,
-          revisionCount: newRevisionCount,
-          isEscalated,
-        }),
-        tags: ["queuerouter", "reject-to-pipeline", item.queue],
+        category: decision.category,
+        title: `Queue ${decision.action}: ${item.payload.title || item.id}`,
+        content: JSON.stringify({ itemId: item.id, queue: item.queue, action: decision.action, ...decision.details }),
+        tags: ["queuerouter", decision.action, item.queue],
         tier: "warm",
         source: "QueueRouter/QueueManager",
       })
       .catch((err) => {
-        recordFailure({ source: "QueueManager.rejectToSpecPipeline.memoryCapture", error: err, tier: "log" });
+        recordFailure({ source: decision.failureSource, error: err, tier: "log" });
       });
 
     const state = loadState();
@@ -2268,8 +2304,6 @@ export class QueueManager {
       state.queues.push("spec-pipeline");
     }
     await saveState(state);
-
-    return deepCopied;
   }
 
   /**
@@ -2329,37 +2363,12 @@ export class QueueManager {
       },
     };
 
-    // Atomic: write target first, then remove from source
-    appendQueueItem("spec-pipeline", deepCopied);
-    items.splice(index, 1);
-    saveQueueItems(item.queue, items);
-
-    // Capture intent-change rejection to memory
-    memoryStore
-      .capture({
-        type: "decision",
-        category: "queue-rejection-to-grill",
-        title: `Queue reject-to-grill: ${item.payload.title || item.id}`,
-        content: JSON.stringify({
-          itemId: item.id,
-          queue: item.queue,
-          action: "reject-to-grill",
-          feedback,
-          reviewer,
-        }),
-        tags: ["queuerouter", "reject-to-grill", item.queue],
-        tier: "warm",
-        source: "QueueRouter/QueueManager",
-      })
-      .catch((err) => {
-        recordFailure({ source: "QueueManager.rejectToGrill.memoryCapture", error: err, tier: "log" });
-      });
-
-    const state = loadState();
-    if (!state.queues.includes("spec-pipeline")) {
-      state.queues.push("spec-pipeline");
-    }
-    await saveState(state);
+    await this.commitSpecPipelineTransfer(item, items, index, deepCopied, {
+      action: "reject-to-grill",
+      category: "queue-rejection-to-grill",
+      failureSource: "QueueManager.rejectToGrill.memoryCapture",
+      details: { feedback, reviewer },
+    });
 
     return deepCopied;
   }

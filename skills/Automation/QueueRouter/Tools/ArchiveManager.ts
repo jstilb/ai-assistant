@@ -20,15 +20,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  archiveItems,
+  archiveOldTerminalItems,
   loadQueueItems,
   saveQueueItems,
-  loadState,
-  saveStateSync,
   discoverQueues,
   getArchiveDir,
-  ARCHIVABLE_TERMINAL_STATUSES,
-  releaseLucidTaskBacklinks,
 } from "./QueueManager.ts";
 import type { QueueItem } from "./QueueManager.ts";
 
@@ -49,57 +45,7 @@ export async function archiveOldItems(
   daysOld: number = 30,
   deps?: { releaseBacklinks?: (items: QueueItem[]) => Promise<number> },
 ): Promise<CleanupResult> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - daysOld);
-
-  let removed = 0;
-  let archived = 0;
-  const queues = discoverQueues();
-  const allArchived: QueueItem[] = [];
-
-  for (const queueName of queues) {
-    const items = loadQueueItems(queueName);
-    const keep: QueueItem[] = [];
-    const toArchive: QueueItem[] = [];
-
-    for (const item of items) {
-      if (!ARCHIVABLE_TERMINAL_STATUSES.has(item.status)) {
-        keep.push(item);
-        continue;
-      }
-
-      const itemDate = new Date(item.result?.completedAt || item.updated);
-      if (itemDate < cutoff) {
-        toArchive.push(item);
-      } else {
-        keep.push(item);
-      }
-    }
-
-    if (toArchive.length > 0) {
-      // Archive FIRST (safe on crash — worst case is duplicate in archive)
-      archiveItems(queueName, toArchive);
-      archived += toArchive.length;
-      removed += toArchive.length;
-      // Rewrite active file without archived items
-      saveQueueItems(queueName, keep);
-      allArchived.push(...toArchive);
-    }
-  }
-
-  // Release LucidTask back-links so archived items can't orphan their tasks
-  // (triage skips any task whose queue_item_id is still set).
-  if (allArchived.length > 0) {
-    const release = deps?.releaseBacklinks ?? releaseLucidTaskBacklinks;
-    await release(allArchived);
-  }
-
-  // Record cleanup timestamp in state for debounce
-  const state = loadState();
-  state.lastCleanupAt = new Date().toISOString();
-  saveStateSync(state);
-
-  return { removed, archived };
+  return archiveOldTerminalItems(daysOld, deps);
 }
 
 /**
