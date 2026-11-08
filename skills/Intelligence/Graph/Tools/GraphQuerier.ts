@@ -28,7 +28,7 @@ import { parseArgs } from "node:util";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import type { GraphNodeType, IngestionResult, IngestionSource } from "./types.ts";
+import type { GraphNode, GraphNodeType, IngestionResult, IngestionSource } from "./types.ts";
 import { ALL_NODE_TYPES, ALL_EDGE_TYPES } from "./types.ts";
 import { getGraphPersistence } from "./GraphPersistence.ts";
 import { EmbeddingQuerier } from "./EmbeddingQuerier.ts";
@@ -474,19 +474,7 @@ async function commandList(
     .slice(0, limit);
 
   if (jsonOutput) {
-    console.log(
-      JSON.stringify(
-        nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          title: n.title,
-          created_at: n.created_at,
-          tags: n.tags,
-        })),
-        null,
-        2,
-      ),
-    );
+    printNodeSummariesJson(nodes);
     return;
   }
 
@@ -501,6 +489,23 @@ async function commandList(
       console.log(`    Tags: ${node.tags.join(", ")}`);
     }
   }
+}
+
+/** --json output shared by `list` and `search`: id/type/title/created_at/tags per node. */
+function printNodeSummariesJson(nodes: GraphNode[]): void {
+  console.log(
+    JSON.stringify(
+      nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        created_at: n.created_at,
+        tags: n.tags,
+      })),
+      null,
+      2,
+    ),
+  );
 }
 
 // ============================================
@@ -636,19 +641,7 @@ async function commandSearch(
     .slice(0, limit);
 
   if (jsonOutput) {
-    console.log(
-      JSON.stringify(
-        nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          title: n.title,
-          created_at: n.created_at,
-          tags: n.tags,
-        })),
-        null,
-        2,
-      ),
-    );
+    printNodeSummariesJson(nodes);
     return;
   }
 

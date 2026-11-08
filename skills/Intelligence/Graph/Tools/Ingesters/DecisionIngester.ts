@@ -23,8 +23,10 @@ import { getSharedGraphDir, getKayaHome } from "../../../../../lib/core/KayaHome
 import { join } from "node:path";
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 
-const KAYA_HOME = getKayaHome();
-const MEMORY_DIR = join(KAYA_HOME, "MEMORY");
+/** Resolved per call, so a KAYA_HOME pinned after import (tests) takes effect. */
+function memoryDir(): string {
+  return join(getKayaHome(), "MEMORY");
+}
 
 /** Shape of the cursor file written between runs. */
 interface DecisionIngesterCursor {
@@ -129,7 +131,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromRatings(since?: string): GraphNode[] {
-    const ratingsFile = join(MEMORY_DIR, "LEARNING", "SIGNALS", "ratings.jsonl");
+    const ratingsFile = join(memoryDir(), "LEARNING", "SIGNALS", "ratings.jsonl");
     if (!existsSync(ratingsFile)) return [];
 
     const nodes: GraphNode[] = [];
@@ -172,7 +174,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromWorkItems(since?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const workDir = join(MEMORY_DIR, "WORK");
+    const workDir = join(memoryDir(), "WORK");
     if (!existsSync(workDir)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
@@ -233,7 +235,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromLearnings(since?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const algoDir = join(MEMORY_DIR, "LEARNING", "ALGORITHM");
+    const algoDir = join(memoryDir(), "LEARNING", "ALGORITHM");
     if (!existsSync(algoDir)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
@@ -300,7 +302,7 @@ export class DecisionIngester implements Ingester {
   }
 
   private extractFromISC(): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    const iscFile = join(MEMORY_DIR, "WORK", "current-isc.json");
+    const iscFile = join(memoryDir(), "WORK", "current-isc.json");
     if (!existsSync(iscFile)) return { nodes: [], edges: [] };
 
     const nodes: GraphNode[] = [];
