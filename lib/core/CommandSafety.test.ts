@@ -18,9 +18,7 @@ import {
   isCatastrophicCommand,
   isProtectedBranch,
   BASE_SAFE_EXECUTABLES,
-  VERIFIER_SCOPE,
   SELF_VERIFY_SCOPE,
-  COMMAND_RUNNER_SCOPE,
   buildExecutableAllowlist,
   isExecutableAllowed,
   primaryExecutable,
@@ -102,34 +100,6 @@ describe("BASE_SAFE_EXECUTABLES — true intersection of all 3 original allowlis
 });
 
 describe("buildExecutableAllowlist — per-context scope reconstruction", () => {
-  it("VERIFIER_SCOPE reconstructs the original 21-executable VERIFICATION_ALLOWED_EXECUTABLES set exactly", () => {
-    const set = buildExecutableAllowlist(VERIFIER_SCOPE);
-    const expected = new Set([
-      "bun",
-      "node",
-      "tsc",
-      "cat",
-      "ls",
-      "echo",
-      "wc",
-      "grep",
-      "find",
-      "test",
-      "true",
-      "false",
-      "git",
-      "jq",
-      "head",
-      "tail",
-      "diff",
-      "stat",
-      "file",
-      "which",
-      "pwd",
-    ]);
-    expect(set).toEqual(expected);
-  });
-
   it("SELF_VERIFY_SCOPE reconstructs the original 31-executable SELF_VERIFY_ALLOWED_EXECUTABLES set exactly", () => {
     const set = buildExecutableAllowlist(SELF_VERIFY_SCOPE);
     const expected = new Set([
@@ -167,87 +137,42 @@ describe("buildExecutableAllowlist — per-context scope reconstruction", () => 
     ]);
     expect(set).toEqual(expected);
   });
-
-  it("COMMAND_RUNNER_SCOPE reconstructs the original 13-executable ALLOWED_EXECUTABLES set exactly (git excluded — handled via subcommand scope)", () => {
-    const set = buildExecutableAllowlist(COMMAND_RUNNER_SCOPE);
-    const expected = new Set([
-      "bun",
-      "node",
-      "npx",
-      "grep",
-      "rg",
-      "test",
-      "diff",
-      "wc",
-      "jq",
-      "ls",
-      "cat",
-      "head",
-      "tail",
-    ]);
-    expect(set).toEqual(expected);
-    expect(set.has("git")).toBe(false);
-  });
-
-  it("COMMAND_RUNNER_SCOPE.git carries the original 6 safe git subcommands exactly", () => {
-    const git = COMMAND_RUNNER_SCOPE.git;
-    expect(typeof git).toBe("object");
-    if (typeof git === "object") {
-      expect([...git.subcommands].sort()).toEqual(["diff", "log", "show", "status", "rev-parse", "merge-base"].sort());
-    }
-  });
 });
 
 describe("isExecutableAllowed", () => {
-  it("allows executables unique to one scope only within that scope", () => {
+  it("allows the scope's extensions and the shared base", () => {
     expect(isExecutableAllowed("curl", SELF_VERIFY_SCOPE)).toBe(true);
-    expect(isExecutableAllowed("curl", VERIFIER_SCOPE)).toBe(false);
-    expect(isExecutableAllowed("curl", COMMAND_RUNNER_SCOPE)).toBe(false);
-
-    expect(isExecutableAllowed("rg", COMMAND_RUNNER_SCOPE)).toBe(true);
-    expect(isExecutableAllowed("rg", VERIFIER_SCOPE)).toBe(false);
-    expect(isExecutableAllowed("rg", SELF_VERIFY_SCOPE)).toBe(false);
-
-    expect(isExecutableAllowed("echo", VERIFIER_SCOPE)).toBe(true);
-    expect(isExecutableAllowed("echo", COMMAND_RUNNER_SCOPE)).toBe(false);
+    expect(isExecutableAllowed("echo", SELF_VERIFY_SCOPE)).toBe(true);
+    expect(isExecutableAllowed("bun", SELF_VERIFY_SCOPE)).toBe(true);
   });
 
   it("treats bare git per scope.git mode", () => {
-    expect(isExecutableAllowed("git", VERIFIER_SCOPE)).toBe(true); // "any"
     expect(isExecutableAllowed("git", SELF_VERIFY_SCOPE)).toBe(true); // "any"
-    expect(isExecutableAllowed("git", COMMAND_RUNNER_SCOPE)).toBe(false); // subcommand-scoped, not a bare-exe allow
+    expect(isExecutableAllowed("git", { ...SELF_VERIFY_SCOPE, git: "none" })).toBe(false);
   });
 
-  it("never allows 'claude' in any scope (defense-in-depth floor)", () => {
-    expect(isExecutableAllowed("claude", VERIFIER_SCOPE)).toBe(false);
+  it("never allows 'claude' (defense-in-depth floor)", () => {
     expect(isExecutableAllowed("claude", SELF_VERIFY_SCOPE)).toBe(false);
-    expect(isExecutableAllowed("claude", COMMAND_RUNNER_SCOPE)).toBe(false);
   });
 
-  it("rejects executables in none of the scopes", () => {
-    expect(isExecutableAllowed("python", VERIFIER_SCOPE)).toBe(false);
+  it("rejects executables not in the scope", () => {
     expect(isExecutableAllowed("python", SELF_VERIFY_SCOPE)).toBe(false);
-    expect(isExecutableAllowed("python", COMMAND_RUNNER_SCOPE)).toBe(false);
+    expect(isExecutableAllowed("rg", SELF_VERIFY_SCOPE)).toBe(false);
   });
 });
 
 describe("primaryExecutable", () => {
-  it("strips directory path when scope.stripExecutablePath is true", () => {
-    expect(primaryExecutable("/usr/local/bin/node script.js", VERIFIER_SCOPE)).toBe("node");
-    expect(primaryExecutable("/usr/local/bin/node script.js", SELF_VERIFY_SCOPE)).toBe("node");
-  });
-
-  it("does NOT strip directory path when scope.stripExecutablePath is false", () => {
-    expect(primaryExecutable("/usr/local/bin/node script.js", COMMAND_RUNNER_SCOPE)).toBe("/usr/local/bin/node");
+  it("strips the directory path to a basename", () => {
+    expect(primaryExecutable("/usr/local/bin/node script.js")).toBe("node");
   });
 
   it("rejects inline env-var-assignment prefixes (FOO=bar cmd)", () => {
-    expect(primaryExecutable("FOO=bar bun test", SELF_VERIFY_SCOPE)).toBeNull();
+    expect(primaryExecutable("FOO=bar bun test")).toBeNull();
   });
 
   it("returns null for empty/whitespace-only input", () => {
-    expect(primaryExecutable("", SELF_VERIFY_SCOPE)).toBeNull();
-    expect(primaryExecutable("   ", SELF_VERIFY_SCOPE)).toBeNull();
+    expect(primaryExecutable("")).toBeNull();
+    expect(primaryExecutable("   ")).toBeNull();
   });
 });
 

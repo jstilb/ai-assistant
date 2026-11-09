@@ -5,7 +5,7 @@
  * WHY: the 2026-07-03/07-07 appusage-nightly incident — a DuckDB SIGTRAP
  * crash (see Db.ts's transaction() doc) — fired on THREE separate nightly
  * cron invocations, each one independently crashing and retrying, burning
- * ~7h with nobody paged. RetryRunner already retries transient/timeout/
+ * ~7h with nobody paged. CronRun.ts's attempt loop already retries transient/timeout/
  * environment failures WITHIN one invocation (see FailureClassifier.ts), but
  * nothing tracked a deterministic 'bug'-class failure RECURRING ACROSS
  * separate invocations. This module closes that gap: it clones the

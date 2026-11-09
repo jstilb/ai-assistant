@@ -7,10 +7,13 @@
  * Run: bun test NotificationService.test.ts
  */
 
-import { describe, it, expect, afterAll, mock } from "bun:test";
+import { describe, it, expect, afterAll, afterEach, beforeEach, mock } from "bun:test";
 import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { FakeTelegram } from "./FakeTelegram.ts";
+import { clearAllCaches } from "./ConfigLoader.ts";
+import { defined } from "../test/defined.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: parsed JSON of mocked calls is asserted structurally in these tests
 type AnyJson = any;
@@ -34,8 +37,8 @@ type AnyJson = any;
 // cache (getKayaHome() caches after its first call anywhere in the
 // process) — setting the env vars and resetting that cache before the
 // first call keeps it pointed at the scratch dir for this whole suite,
-// so logNotification() and sendTelegram()'s secrets.json lookup never hit
-// the LIVE ~/.claude tree.
+// so logNotification(), the outbound ledger and the Telegram transport's
+// secrets.json / settings.json reads never hit the LIVE ~/.claude tree.
 //
 // Restored in afterAll: `bun test` runs every test file in one process, so
 // leaving process.env.KAYA_DIR/KAYA_HOME (or KayaHome.ts's cache) mutated
@@ -66,6 +69,50 @@ afterAll(() => {
 // the Discord channel against a mocked fetch instead.
 const DISCORD_WEBHOOK = "https://discord.test/webhook";
 const DISCORD = { discordWebhook: DISCORD_WEBHOOK, defaultChannel: "discord" as const };
+
+// Telegram tests: FakeTelegram answers at the transport's fetch port (ADR-036).
+// It throws on a non-Telegram URL or a wrong token, so no test can reach the network.
+const FAKE_TOKEN = "123:fake-notification-token";
+const FAKE_CHAT_ID = "4242";
+
+interface LogEntry {
+  event: string;
+  channel: string;
+  message: string;
+  error?: string;
+}
+
+function readNotificationLog(): LogEntry[] {
+  const logPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
+  if (!existsSync(logPath)) return [];
+  return readFileSync(logPath, "utf-8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+/** Write a temp secrets.json + settings.json (push switch on/off) and install FakeTelegram. */
+function setUpTelegram(pushEnabled: boolean): { fake: FakeTelegram; restore: () => void } {
+  writeFileSync(
+    join(scratchDir, "secrets.json"),
+    JSON.stringify({ telegram: { bot_token: FAKE_TOKEN, chat_id: FAKE_CHAT_ID } }),
+  );
+  writeFileSync(
+    join(scratchDir, "settings.json"),
+    JSON.stringify({ notifications: { telegramPush: { enabled: pushEnabled } } }),
+  );
+  clearAllCaches();
+  const fake = new FakeTelegram(FAKE_TOKEN);
+  return { fake, restore: fake.install() };
+}
+
+function tearDownTelegram(restore: () => void): void {
+  restore();
+  rmSync(join(scratchDir, "secrets.json"), { force: true });
+  rmSync(join(scratchDir, "settings.json"), { force: true });
+  clearAllCaches();
+}
 
 describe("NotificationService", () => {
   describe("createNotificationService()", () => {
@@ -223,78 +270,152 @@ describe("NotificationService", () => {
     });
   });
 
-  describe("sendTelegram — HTTP 400 parse_mode fallback", () => {
-    it("retries once WITHOUT parse_mode when Telegram returns HTTP 400, and reports delivered:true on that fallback success", async () => {
-      writeFileSync(
-        join(scratchDir, "secrets.json"),
-        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
-      );
+  describe("sendTelegram — through the Telegram transport (FakeTelegram)", () => {
+    let fake: FakeTelegram;
+    let restore: () => void = () => {};
 
+    beforeEach(() => {
+      ({ fake, restore } = setUpTelegram(true));
+    });
+
+    afterEach(() => {
+      tearDownTelegram(restore);
+    });
+
+    it("retries once WITHOUT parse_mode when Telegram returns HTTP 400, and logs Telegram's description", async () => {
       const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 400, description: "Bad Request: can't parse entities" });
 
-      const bodies: AnyJson[] = [];
-      globalThis.fetch = mock(async (_url: unknown, opts: AnyJson) => {
-        bodies.push(opts?.body ? JSON.parse(opts.body as string) : {});
-        if (bodies.length === 1) {
-          return { ok: false, status: 400 };
-        }
-        return { ok: true, status: 200 };
-      }) as unknown as typeof fetch;
-
-      const service = createNotificationService({ maxRetries: 0 });
-      const delivered = await service.notify("Digest with [unclosed bracket", { channel: "telegram" });
+      const message = `Digest with [unclosed bracket ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
 
       expect(delivered).toBe(true);
-      expect(bodies).toHaveLength(2);
-      expect(bodies[0].parse_mode).toBe("Markdown");
-      expect(bodies[1].parse_mode).toBeUndefined();
+      expect(fake.calls).toHaveLength(2);
+      expect(defined(fake.calls[0]).params.parse_mode).toBe("Markdown");
+      expect(defined(fake.calls[1]).params.parse_mode).toBeUndefined();
+      expect(defined(fake.calls[1]).params.chat_id).toBe(FAKE_CHAT_ID);
+      const retried = readNotificationLog().filter((e) => e.message === message && e.event === "retried");
+      expect(defined(retried[0]).error).toContain("can't parse entities");
     });
 
     it("reports delivered:false when both the parse_mode attempt AND the fallback attempt fail", async () => {
-      writeFileSync(
-        join(scratchDir, "secrets.json"),
-        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
-      );
-
       const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 400, description: "Bad Request: one" });
+      fake.failNext("sendMessage", { httpStatus: 400, description: "Bad Request: two" });
 
-      globalThis.fetch = mock(async () => ({ ok: false, status: 400 })) as unknown as typeof fetch;
-
-      const service = createNotificationService({ maxRetries: 0 });
-      const delivered = await service.notify("Still broken", { channel: "telegram" });
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify("Still broken", {
+        channel: "telegram",
+      });
 
       expect(delivered).toBe(false);
+      expect(fake.calls).toHaveLength(2);
     });
 
     it("applies escaping exactly ONCE in the send path (single backslash, not double-escaped) and preserves the *title* wrapper NotificationService itself adds (C1)", async () => {
-      writeFileSync(
-        join(scratchDir, "secrets.json"),
-        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
-      );
-
       const { createNotificationService } = await import("./NotificationService.ts");
 
-      const bodies: AnyJson[] = [];
-      globalThis.fetch = mock(async (_url: unknown, opts: AnyJson) => {
-        bodies.push(opts?.body ? JSON.parse(opts.body as string) : {});
-        return { ok: true, status: 200 }; // succeeds on the FIRST (parse_mode) attempt now that it's escaped
-      }) as unknown as typeof fetch;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(
+        '[STALE] "digest-job" (job-42) — no run in 3d',
+        { channel: "telegram", agentName: "Kaya" },
+      );
 
-      const service = createNotificationService({ maxRetries: 0 });
-      const delivered = await service.notify('[STALE] "digest-job" (job-42) — no run in 3d', {
+      expect(delivered).toBe(true);
+      expect(fake.calls).toHaveLength(1); // no 400 → no fallback resend
+      const text = String(defined(fake.calls[0]).params.text);
+      expect(defined(fake.calls[0]).params.parse_mode).toBe("Markdown");
+      // Message body escaped exactly once: one backslash before '[', not two.
+      expect(text).toContain("\\[STALE]");
+      expect(text).not.toContain("\\\\[STALE]");
+      // NotificationService's own bold-title wrapper survives UNESCAPED —
+      // only caller-supplied message content is escaped.
+      expect(text.startsWith("*Kaya*\n\n")).toBe(true);
+    });
+
+    it("sends a long message as N sendMessage calls, one per chunk, in order", async () => {
+      const { createNotificationService, chunkTelegramText, escapeLegacyMarkdown } = await import(
+        "./NotificationService.ts"
+      );
+      const message = ["a".repeat(3000), "b".repeat(3000), "c".repeat(3000)].join("\n");
+      const expected = chunkTelegramText(`*Kaya*\n\n${escapeLegacyMarkdown(message)}`);
+      expect(expected.length).toBeGreaterThan(1);
+
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, {
         channel: "telegram",
         agentName: "Kaya",
       });
 
       expect(delivered).toBe(true);
-      expect(bodies).toHaveLength(1); // no 400 → no fallback retry needed
-      expect(bodies[0].parse_mode).toBe("Markdown");
-      // Message body escaped exactly once: one backslash before '[', not two.
-      expect(bodies[0].text).toContain("\\[STALE]");
-      expect(bodies[0].text).not.toContain("\\\\[STALE]");
-      // NotificationService's own bold-title wrapper survives UNESCAPED —
-      // only caller-supplied message content is escaped.
-      expect(bodies[0].text.startsWith("*Kaya*\n\n")).toBe(true);
+      expect(fake.calls.map((c) => c.method)).toEqual(expected.map(() => "sendMessage"));
+      expect(fake.calls.map((c) => c.params.text)).toEqual(expected);
+    });
+
+    it("lets the transport retry a 429 once (no sendWithRetry retry, no failure logged)", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 429, description: "Too Many Requests", retryAfter: 0 });
+
+      const message = `429 probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(true);
+      expect(fake.calls).toHaveLength(2);
+      expect(fake.calls.every((c) => c.params.parse_mode === "Markdown")).toBe(true);
+      const events = readNotificationLog()
+        .filter((e) => e.message === message)
+        .map((e) => e.event);
+      expect(events).toEqual(["sent"]);
+    });
+
+    it("logs a network failure as failed and returns false, so sendWithRetry retries", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", "network");
+
+      const message = `network probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 1 }).notify(message, { channel: "telegram" });
+
+      // Attempt 1 fails in the transport; sendWithRetry retries; attempt 2 succeeds.
+      expect(delivered).toBe(true);
+      expect(fake.calls).toHaveLength(2);
+      const entries = readNotificationLog().filter((e) => e.message === message);
+      expect(entries.map((e) => e.event)).toEqual(["failed", "retried", "sent"]);
+      const failed = defined(entries[0]);
+      expect(failed.channel).toBe("telegram");
+      expect(failed.error).toContain("(network)");
+      expect(failed.error).not.toContain(FAKE_TOKEN);
+    });
+
+    it("logs a timeout as failed and reports delivered:false when no retry is left", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", "timeout");
+
+      const message = `timeout probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, {
+        channel: "telegram",
+        timeout: 50,
+      });
+
+      expect(delivered).toBe(false);
+      const failed = readNotificationLog().filter((e) => e.message === message && e.event === "failed");
+      expect(defined(failed[0]).error).toContain("(timeout)");
+    });
+
+    it("records each delivered chunk in the outbound ledger with source notification-service and the original text", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      const ledgerPath = join(scratchDir, "MEMORY", "TELEGRAM", "outbound.jsonl");
+      rmSync(ledgerPath, { force: true });
+
+      const message = `Ledger probe [x] ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(true);
+      const rows = readFileSync(ledgerPath, "utf-8")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l));
+      expect(rows).toHaveLength(1);
+      expect(defined(rows[0]).source).toBe("notification-service");
+      expect(defined(rows[0]).text).toBe(message);
+      expect(typeof defined(rows[0]).telegram_message_id).toBe("number");
     });
   });
 
@@ -556,23 +677,32 @@ describe("NotificationService", () => {
   });
 
   describe("fallback channels", () => {
+    let restore: () => void = () => {};
+
+    afterEach(() => {
+      tearDownTelegram(restore);
+    });
+
     it("should fallback to discord if telegram fails", async () => {
-      writeFileSync(
-        join(scratchDir, "secrets.json"),
-        JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
+      const telegram = setUpTelegram(true);
+      restore = telegram.restore;
+      telegram.fake.failNext("sendMessage", "network");
+      // FakeTelegram throws on a non-Telegram URL: route Discord to its own stub.
+      const fakeFetch = globalThis.fetch;
+      const discordUrls: string[] = [];
+      globalThis.fetch = Object.assign(
+        (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.startsWith("https://discord.com/")) {
+            discordUrls.push(url);
+            return Promise.resolve(new Response(null, { status: 204 }));
+          }
+          return fakeFetch(input, init);
+        },
+        { preconnect: fakeFetch.preconnect },
       );
 
       const { createNotificationService } = await import("./NotificationService.ts");
-
-      const calledUrls: string[] = [];
-      globalThis.fetch = mock(async (url) => {
-        calledUrls.push(url as string);
-        if ((url as string).includes("api.telegram.org")) {
-          throw new Error("Telegram down");
-        }
-        return { ok: true, status: 200 };
-      }) as unknown as typeof fetch;
-
       const service = createNotificationService({
         discordWebhook: "https://discord.com/api/webhooks/test-fallback",
         maxRetries: 0,
@@ -583,8 +713,8 @@ describe("NotificationService", () => {
       // telegram's fallback chain is ['discord'] (push/ntfy.sh removed in B6,
       // voice removed 2026-09-29).
       expect(delivered).toBe(true);
-      expect(calledUrls.some((u) => u.includes("api.telegram.org"))).toBe(true);
-      expect(calledUrls.some((u) => u.includes("discord.com"))).toBe(true);
+      expect(telegram.fake.calls.map((c) => c.method)).toEqual(["sendMessage"]);
+      expect(discordUrls).toEqual(["https://discord.com/api/webhooks/test-fallback"]);
     });
   });
 
@@ -814,35 +944,24 @@ describe("Module exports", () => {
 });
 
 describe("Telegram push switch (notifications.telegramPush.enabled)", () => {
+  let restore: () => void = () => {};
+
+  afterEach(() => {
+    tearDownTelegram(restore);
+  });
+
   it("suppresses the send, logs it, and reports handled when the switch is off", async () => {
-    const { clearAllCaches } = await import("./ConfigLoader.ts");
-    const settingsPath = join(scratchDir, "settings.json");
-    writeFileSync(settingsPath, JSON.stringify({ notifications: { telegramPush: { enabled: false } } }));
-    writeFileSync(
-      join(scratchDir, "secrets.json"),
-      JSON.stringify({ telegram: { bot_token: "test-bot-token", chat_id: "12345" } }),
-    );
-    clearAllCaches();
+    const telegram = setUpTelegram(false);
+    restore = telegram.restore;
 
-    try {
-      const { createNotificationService } = await import("./NotificationService.ts");
-      const mockFetch = mock(async () => ({ ok: true, status: 200 }));
-      globalThis.fetch = mockFetch as unknown as typeof fetch;
+    const { createNotificationService } = await import("./NotificationService.ts");
+    const message = `Push-off probe ${Date.now()}`;
+    const delivered = await createNotificationService().notify(message, { channel: "telegram", fallback: true });
 
-      const message = `Push-off probe ${Date.now()}`;
-      const delivered = await createNotificationService().notify(message, { channel: "telegram", fallback: true });
-
-      expect(delivered).toBe(true);
-      expect(mockFetch).not.toHaveBeenCalled();
-      const logPath = join(scratchDir, "MEMORY", "NOTIFICATIONS", "notifications.jsonl");
-      const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
-      const entry = JSON.parse(lines[lines.length - 1]!);
-      expect(entry.message).toBe(message);
-      expect(entry.channel).toBe("telegram");
-      expect(entry.event).toBe("suppressed");
-    } finally {
-      rmSync(settingsPath, { force: true });
-      clearAllCaches();
-    }
+    expect(delivered).toBe(true);
+    expect(telegram.fake.calls).toHaveLength(0);
+    const entries = readNotificationLog().filter((e) => e.message === message);
+    expect(entries.map((e) => e.event)).toEqual(["suppressed"]);
+    expect(defined(entries[0]).channel).toBe("telegram");
   });
 });

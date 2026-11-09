@@ -12,6 +12,7 @@
  * Rules:
  *   1. no-raw-append    — ban appendFileSync outside AppendLog.ts
  *   2. no-inline-kaya-home — ban inline Kaya home path construction
+ *   +  no-inline-secrets-file — only lib/core/Secrets.ts builds the secrets.json path (ADR-035)
  *   3. no-raw-stdin     — ban manual stdin reading outside hook-utils.ts (warning)
  *   4. no-unguarded-hook-main — require import.meta.main guard on hooks/*.hook.ts
  *   +  no-live-write-in-test — full-tree mode (warnings); the staged mode runs in pre-commit
@@ -21,6 +22,7 @@
 
 import { checkNoRawAppend } from "./no-raw-append.ts";
 import { checkNoInlineKayaHome } from "./no-inline-kaya-home.ts";
+import { checkNoInlineSecretsFile } from "./no-inline-secrets-file.ts";
 import { checkNoRawStdin } from "./no-raw-stdin.ts";
 import { checkNoUnguardedHookMain } from "./no-unguarded-hook-main.ts";
 import { checkNoCrossSkillImport } from "./no-cross-skill-import.ts";
@@ -36,6 +38,7 @@ console.log("");
 const results = await Promise.all([
   checkNoRawAppend(rootDir),
   checkNoInlineKayaHome(rootDir),
+  checkNoInlineSecretsFile(rootDir),
   checkNoRawStdin(rootDir),
   checkNoUnguardedHookMain(rootDir),
   checkNoCrossSkillImport(rootDir),
@@ -46,6 +49,7 @@ const results = await Promise.all([
 const [
   rawAppend,
   inlineKayaHome,
+  inlineSecretsFile,
   rawStdin,
   unguardedHookMain,
   crossSkillImport,
@@ -56,6 +60,7 @@ const [
 const allErrors = [
   ...rawAppend.errors.map((e) => `[no-raw-append] ${e}`),
   ...inlineKayaHome.errors.map((e) => `[no-inline-kaya-home] ${e}`),
+  ...inlineSecretsFile.errors.map((e) => `[no-inline-secrets-file] ${e}`),
   ...rawStdin.errors.map((e) => `[no-raw-stdin] ${e}`),
   ...unguardedHookMain.errors.map((e) => `[no-unguarded-hook-main] ${e}`),
   ...crossSkillImport.errors.map((e) => `[no-cross-skill-import] ${e}`),
@@ -66,6 +71,7 @@ const allErrors = [
 const allWarnings = [
   ...rawAppend.warnings.map((w) => `[no-raw-append] ${w}`),
   ...inlineKayaHome.warnings.map((w) => `[no-inline-kaya-home] ${w}`),
+  ...inlineSecretsFile.warnings.map((w) => `[no-inline-secrets-file] ${w}`),
   ...rawStdin.warnings.map((w) => `[no-raw-stdin] ${w}`),
   ...unguardedHookMain.warnings.map((w) => `[no-unguarded-hook-main] ${w}`),
   ...crossSkillImport.warnings.map((w) => `[no-cross-skill-import] ${w}`),

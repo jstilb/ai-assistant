@@ -26,12 +26,11 @@
  *     reversible-action boundaries (a read-only Explorer vs. a
  *     Bash/Read/Write/Edit/Task-enabled executor), so every caller must make an
  *     explicit, informed choice rather than inherit an arbitrary default.
- *   - The rate-limit gate (pre-spawn `isRateLimited()` + post-spawn
- *     `isRateLimitError()` on BOTH stdout and stderr) and the infra-vs-failure
- *     split (`isInfraUnavailable`) generalize
- *     `skills/Productivity/LucidTasks/Tools/executor/executor.ts`'s
- *     `isInfraUnavailable` so callers can distinguish "defer and retry" from
- *     "genuine task failure" without re-deriving the pattern-matching.
+ *   - The rate-limit gate (pre-spawn `isRateLimited()`) and the post-spawn
+ *     infra-vs-failure split (`classifyRunEnd` from ClaudeRunEnd.ts: stderr
+ *     under the machine tier, stdout under the prose-safe tier) let callers
+ *     distinguish "defer and retry" from "genuine task failure" without
+ *     re-deriving the pattern-matching.
  *   - The process-spawn function is injectable (`deps.spawnFn`) so unit tests
  *     never spawn a real process or call a real LLM; worktree resolution is
  *     likewise injectable (`deps.getOrCreateWorktreeFn`).
@@ -45,7 +44,8 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { ZodType } from "zod";
 import { CLAUDE_PATH, buildHardenedClaudeEnv, stripDangerousClaudeEnvKeys } from "./Inference.ts";
-import { isRateLimited, isRateLimitError, DEFAULT_THRESHOLD } from "./RateLimitGuard.ts";
+import { isRateLimited, DEFAULT_THRESHOLD } from "./RateLimitGuard.ts";
+import { classifyRunEnd, type RunEnd } from "./ClaudeRunEnd.ts";
 import { getKayaHome } from "./KayaHome.ts";
 import { getOrCreateWorktree } from "./WorktreeManager.ts";
 import type { CreateWorktreeOptions } from "./WorktreeManager.ts";
@@ -61,42 +61,16 @@ export const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
 /** Matches both reference implementations' spawnSync maxBuffer. */
 export const DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
 
-/**
- * Other "infra unavailable" signals beyond the rate/usage/session-limit wording
- * (owned by the shared RateLimitGuard `isRateLimitError` detector): credit-pool /
- * quota / overload notices that also warrant a retry-not-blame pause.
- * Ported verbatim from executor.ts's INFRA_UNAVAILABLE_PATTERN.
- */
-const INFRA_UNAVAILABLE_PATTERN = /exhaust|credit|pool|paused|monthly|quota|overloaded/i;
-
-/**
- * Node.js errno codes that indicate a DNS/network-layer failure reaching the
- * API, not a task failure. Sourced from `spawnSync`'s `error.code`.
- */
-const NETWORK_ERROR_CODES = new Set(["ENOTFOUND", "ECONNREFUSED", "ENETUNREACH", "EAI_AGAIN"]);
-
-/**
- * Matches network/DNS failure signals in stdout/stderr TEXT: the same errno
- * code strings (some CLI wrappers print the code into the text rather than
- * surfacing it via a structured `error.code`) plus the CLI's own literal
- * "Can't reach the API server" wording. This is the actual bug this slice
- * fixes — previously this text matched NO infra pattern and fell through to a
- * generic task failure, mislabeling a DNS/network outage as a task bug.
- * `.` (not a literal apostrophe) tolerates straight/curly-quote variants.
- */
-const NETWORK_UNAVAILABLE_TEXT_PATTERN =
-  /\b(ENOTFOUND|ECONNREFUSED|ENETUNREACH|EAI_AGAIN)\b|can.t reach the api server/i;
-
 // ============================================================================
 // Types
 // ============================================================================
 
 /**
- * WHY a spawn result is infra-unavailable (undefined when it isn't).
- * Precedence when a result could match more than one — timeout → network →
- * rate-limit → quota → no-output — is documented on `classifyInfraReason`.
+ * WHY a spawn result is infra-unavailable (undefined when it isn't): every
+ * run end except "ok" and "failed". Precedence is `classifyRunEnd`'s
+ * (lib/core/ClaudeRunEnd.ts).
  */
-export type InfraReason = "timeout" | "network" | "rate-limit" | "quota" | "no-output";
+export type InfraReason = Exclude<RunEnd, "ok" | "failed">;
 
 export interface AgentSpawnResult {
   /** True only when the process ran, exited 0, and did not time out. */
@@ -118,7 +92,7 @@ export interface AgentSpawnResult {
   /**
    * WHY infraUnavailable is true (undefined when it's false, and undefined for
    * the pre-spawn-gated early return, which has no InfraReason value of its own).
-   * See `classifyInfraReason` for the precedence order.
+   * See `classifyRunEnd` (ClaudeRunEnd.ts) for the precedence order.
    */
   infraReason?: InfraReason;
   /** Node.js errno code from a spawn-level error (e.g. "ENOTFOUND"), when present. */
@@ -143,7 +117,7 @@ export interface AgentSpawnOptions {
    * (`high` on Fable 5.1 / Opus 5 / Sonnet 5). Set `medium` for routine
    * exploration/verification lanes; leave unset for builders.
    */
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  effort?: AgentEffort;
   /** Comma-separated tool allowlist. Required — defines the reversible-action boundary. */
   allowedTools: string;
   /** Default: DEFAULT_TIMEOUT_MS (90 min, the proven executor Lane A default). */
@@ -194,6 +168,8 @@ export interface AgentSpawnOptions {
    * `KAYA_HEADLESS_TOOLS_ENFORCE` ("1" on / "0" off) → default OFF.
    */
   enforceTools?: boolean;
+  /** Default `isolated`. Which settings the agent loads — see `AgentSettings`. */
+  settings?: AgentSettings;
 }
 
 /**
@@ -275,6 +251,80 @@ export function buildGuardHookSettings(kayaDir: string): string {
   });
 }
 
+// ============================================================================
+// Agent argv builder (shared with the cron runner)
+// ============================================================================
+
+export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+/**
+ * Which settings a one-shot agent loads.
+ * - `isolated` (default): no user settings (`--setting-sources ""`), skip
+ *   permissions, optional inline guard hooks. AgentSpawner callers.
+ * - `kaya`: the user's settings.json supplies permissions and hooks (slash
+ *   commands, CLAUDE.md). Cron agent mode. No inline guard hooks: settings.json
+ *   already runs them, so they would run twice.
+ */
+export type AgentSettings = "isolated" | "kaya";
+
+export interface AgentArgsOptions {
+  prompt: string;
+  /** Omitted = no `--model` (CLI default). Only the cron builder omits it. */
+  model?: string;
+  effort?: AgentEffort;
+  allowedTools: string;
+  /** Default `isolated`. */
+  settings?: AgentSettings;
+  /** Explicit switch, else env `KAYA_HEADLESS_GUARD_HOOKS`. Ignored for `kaya`. */
+  guardHooks?: boolean;
+  /** Explicit switch, else env `KAYA_HEADLESS_TOOLS_ENFORCE`. Applies to both settings kinds. */
+  enforceTools?: boolean;
+}
+
+/**
+ * The `claude` argv for a one-shot agent, WITHOUT the binary. The prompt is
+ * always the last arg (never stdin). No side effects; it reads only the two
+ * env switches (via `resolveEnforceTools` / `resolveGuardHooks`) and, for
+ * guard hooks, the Kaya home.
+ */
+export function buildAgentArgs(o: AgentArgsOptions): string[] {
+  const isolated = (o.settings ?? "isolated") === "isolated";
+  // `--allowedTools` is a permission-system allow-list — under
+  // `--dangerously-skip-permissions` the permission system never runs, so it
+  // is INERT as a boundary (verified live, S-06 slice-3 probe 0b: a Bash-less
+  // `--allowedTools Read` agent ran Bash anyway). `--tools` is the flag that
+  // actually restricts the built-in tool set regardless of permission mode,
+  // so it is the real enforcement mechanism — passed alongside `--allowedTools`
+  // (kept: `kaya` runs do not skip permissions, so there it is live) rather
+  // than replacing it. Gated behind `enforceTools` (see `resolveEnforceTools`
+  // doc comment) — default OFF.
+  const args: string[] = [
+    "-p",
+    ...(o.model ? ["--model", o.model] : []),
+    ...(o.effort ? ["--effort", o.effort] : []),
+    ...(isolated ? ["--dangerously-skip-permissions"] : []),
+    "--allowedTools",
+    o.allowedTools,
+  ];
+
+  if (resolveEnforceTools(o.enforceTools, process.env)) {
+    args.push("--tools", o.allowedTools);
+  }
+
+  if (isolated) {
+    args.push("--setting-sources", ""); // disable hooks to prevent recursion
+  }
+  args.push("--output-format", "text");
+
+  if (isolated && resolveGuardHooks(o.guardHooks, process.env)) {
+    const kayaDir = getKayaHome(); // KAYA_HOME → KAYA_DIR → ~/.claude, same resolution the hooks and Integrator use
+    args.push("--settings", buildGuardHookSettings(kayaDir));
+  }
+
+  args.push(o.prompt); // ALWAYS last — never via stdin.
+  return args;
+}
+
 /** Raw shape returned by the injectable low-level process-spawn function. */
 export interface RawSpawnOutcome {
   stdout: string;
@@ -333,76 +383,6 @@ function buildSpawnEnv(extra?: Record<string, string>): Record<string, string> {
   if (extra) Object.assign(env, extra);
   stripDangerousClaudeEnvKeys(env);
   return env;
-}
-
-// ============================================================================
-// Infra-vs-failure classification
-// ============================================================================
-
-/** Pick shape shared by `classifyInfraReason` / `isInfraUnavailable`. */
-type InfraClassifiable = Pick<
-  AgentSpawnResult,
-  "success" | "stdout" | "stderr" | "timedOut" | "preSpawnGated" | "errorCode"
->;
-
-/**
- * Classify WHY a spawn result is an infrastructure/credit-pool pause (vs. a
- * real task failure) — or return undefined when it isn't one. Pure — exported
- * for tests and for callers that want to re-classify a result independently
- * (e.g. after batching).
- *
- * Precedence (first match wins) — documented here because a result can match
- * more than one bucket (e.g. a timed-out spawn can also have credit-pool text
- * in a partial stdout capture) and the order determines which reason callers
- * see:
- *   1. timeout    — process was killed/errored on timeout; any text present
- *                    is incidental, so this pre-empts everything else.
- *   2. network     — DNS/connection-layer failure (errno code OR the CLI's own
- *                    "Can't reach the API server" text). Checked next because
- *                    it is the most specific, actionable cause and — this is
- *                    the bug this slice fixes — previously matched NO pattern
- *                    at all, mislabeling a network outage as a task failure.
- *   3. rate-limit  — the shared RateLimitGuard rate/usage/session-limit wording.
- *   4. quota       — the broader credit/pool/quota/overloaded wording.
- *   5. no-output   — blank stdout AND blank stderr on a genuine failure (silent
- *                    infra shutdown); the catch-all, checked last since it only
- *                    applies when nothing more specific matched.
- *
- * Generalizes executor.ts's `isInfraUnavailable`: checks BOTH stdout and
- * stderr for the rate/usage/session-limit wording (the `--output-format text`
- * limit notice surfaces on stdout, not stderr — a stderr-only check would
- * mislabel a session-limit hit as a genuine failure).
- */
-export function classifyInfraReason(res: InfraClassifiable): InfraReason | undefined {
-  if (res.success) return undefined;
-  if (res.timedOut) return "timeout";
-  if (isNetworkFailure(res)) return "network";
-  const combined = `${res.stdout}\n${res.stderr}`;
-  if (isRateLimitError(combined)) return "rate-limit";
-  if (INFRA_UNAVAILABLE_PATTERN.test(combined)) return "quota";
-  if (res.stdout.trim() === "" && res.stderr.trim() === "") return "no-output";
-  return undefined;
-}
-
-/**
- * Boolean form of `classifyInfraReason`, plus the pre-spawn-gated case (which
- * has no InfraReason value of its own — the process never ran, so there is no
- * timeout/network/rate-limit/quota/no-output text to classify).
- */
-export function isInfraUnavailable(res: InfraClassifiable): boolean {
-  if (res.success) return false;
-  if (res.preSpawnGated) return true;
-  return classifyInfraReason(res) !== undefined;
-}
-
-/**
- * True when a spawn-level error code (e.g. ENOTFOUND from Node's DNS
- * resolver) or the stdout/stderr TEXT indicates a DNS/network-layer failure
- * reaching the API — as opposed to the agent's own task outcome.
- */
-function isNetworkFailure(res: Pick<AgentSpawnResult, "stdout" | "stderr" | "errorCode">): boolean {
-  if (res.errorCode && NETWORK_ERROR_CODES.has(res.errorCode)) return true;
-  return NETWORK_UNAVAILABLE_TEXT_PATTERN.test(`${res.stdout}\n${res.stderr}`);
 }
 
 // ============================================================================
@@ -473,42 +453,15 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
   const runId = randomUUID();
   const env = { ...buildSpawnEnv(opts.env), [AGENT_RUN_ENV_KEY]: runId };
 
-  // `--allowedTools` is a permission-system allow-list — under
-  // `--dangerously-skip-permissions` the permission system never runs, so it
-  // is INERT as a boundary (verified live, S-06 slice-3 probe 0b: a Bash-less
-  // `--allowedTools Read` agent ran Bash anyway). `--tools` is the flag that
-  // actually restricts the built-in tool set regardless of permission mode,
-  // so it is the real enforcement mechanism — passed alongside `--allowedTools`
-  // (kept, so permission semantics are unchanged if a future caller drops
-  // skip-permissions) rather than replacing it. Gated behind `enforceTools`
-  // (see `resolveEnforceTools` doc comment) — default OFF.
-  const args: string[] = [
-    "-p",
-    "--model",
-    opts.model,
-    ...(opts.effort ? ["--effort", opts.effort] : []),
-    "--dangerously-skip-permissions",
-    "--allowedTools",
-    opts.allowedTools,
-  ];
-
-  if (resolveEnforceTools(opts.enforceTools, process.env)) {
-    args.push("--tools", opts.allowedTools);
-  }
-
-  args.push(
-    "--setting-sources",
-    "", // disable hooks to prevent recursion
-    "--output-format",
-    "text",
-  );
-
-  if (resolveGuardHooks(opts.guardHooks, process.env)) {
-    const kayaDir = getKayaHome(); // KAYA_HOME → KAYA_DIR → ~/.claude, same resolution the hooks and Integrator use
-    args.push("--settings", buildGuardHookSettings(kayaDir));
-  }
-
-  args.push(opts.prompt); // ALWAYS last — never via stdin.
+  const args = buildAgentArgs({
+    prompt: opts.prompt,
+    model: opts.model,
+    effort: opts.effort,
+    allowedTools: opts.allowedTools,
+    settings: opts.settings,
+    guardHooks: opts.guardHooks,
+    enforceTools: opts.enforceTools,
+  });
 
   const spawnFn = deps.spawnFn ?? defaultSpawnFn;
   const raw = spawnFn(CLAUDE_PATH, args, { cwd, env, timeoutMs, maxBuffer });
@@ -534,8 +487,11 @@ export function spawnAgentSync(opts: AgentSpawnOptions, deps: AgentSpawnDeps = {
     errorCode: raw.error?.code,
     ...(reapedPids.length > 0 ? { reapedPids } : {}),
   };
-  result.infraReason = classifyInfraReason(result);
-  result.infraUnavailable = isInfraUnavailable(result);
+  const end = classifyRunEnd({ exitCode, timedOut, stdout: raw.stdout, stderr: raw.stderr, errorCode: raw.error?.code });
+  if (end !== "ok" && end !== "failed") {
+    result.infraReason = end;
+    result.infraUnavailable = true;
+  }
   return result;
 }
 

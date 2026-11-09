@@ -49,76 +49,33 @@
  */
 
 import { spawn, execSync } from "node:child_process";
-import { existsSync, openSync, closeSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, openSync, closeSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { loadSettings, loadTieredConfig } from "./ConfigLoader.ts";
-import { getKayaHome, defaultKayaHome } from "./KayaHome.ts";
+import { defaultKayaHome } from "./KayaHome.ts";
 import { findClosingBracket } from "./JsonScan.ts";
+import { optionalSecret, SecretError } from "./Secrets.ts";
 import { moonshotChat, KIMI_K3_MODEL, KIMI_K3_PRICING } from "./MoonshotClient.ts";
 import { z } from "zod";
 
 /**
- * Read CLAUDE_CODE_OAUTH_TOKEN from ~/.claude/secrets.json (cached).
+ * Read CLAUDE_CODE_OAUTH_TOKEN from the secrets file, fresh on every call, so a
+ * token synced by keychain-acl-watcher applies on the next call without a restart.
  * Used to inject auth into spawned `claude -p` subprocesses when interactive
  * Claude Code sessions don't inherit it from the shell env.
- * Returns undefined if secrets.json is missing/malformed/lacks the token.
- *
- * Cache invalidation: the module-level cache is discarded whenever secrets.json
- * mtime advances (e.g. after keychain-acl-watcher syncs a fresh login token).
- * Long-running processes pick up the updated token on their next call without
- * needing a restart. Fail-open on any fs error.
+ * Returns undefined if the file is missing, broken, or lacks the token.
  */
-let _oauthTokenCache: string | null | undefined;
-let _oauthTokenCacheMtime: number | null = null;
-let _oauthTokenCachePath: string | null = null;
 export function loadOAuthToken(): string | undefined {
-  const secretsPath = join(getKayaHome(), "secrets.json");
-
-  // Path-keyed: a KAYA_HOME override mid-process resolves a different
-  // secrets.json — the cached value belongs to the old path, discard it.
-  if (_oauthTokenCachePath !== null && _oauthTokenCachePath !== secretsPath) {
-    _oauthTokenCache = undefined;
-    _oauthTokenCacheMtime = null;
-  }
-
-  // Mtime-based invalidation: if secrets.json was modified since last read,
-  // discard the cache so the caller receives the freshly-synced token.
-  if (_oauthTokenCache !== undefined && _oauthTokenCacheMtime !== null) {
-    try {
-      const currentMtime = statSync(secretsPath).mtimeMs;
-      if (currentMtime > _oauthTokenCacheMtime) {
-        _oauthTokenCache = undefined;
-        _oauthTokenCacheMtime = null;
-      }
-    } catch {
-      /* stat failed (e.g. file deleted) — keep existing cache */
-    }
-  }
-
-  if (_oauthTokenCache !== undefined) return _oauthTokenCache ?? undefined;
   try {
-    if (existsSync(secretsPath)) {
-      const mtimeMs = statSync(secretsPath).mtimeMs;
-      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-      const token = typeof secrets.CLAUDE_CODE_OAUTH_TOKEN === "string" ? secrets.CLAUDE_CODE_OAUTH_TOKEN : null;
-      _oauthTokenCache = token;
-      _oauthTokenCacheMtime = mtimeMs;
-      _oauthTokenCachePath = secretsPath;
-      return token ?? undefined;
-    }
+    return optionalSecret("CLAUDE_CODE_OAUTH_TOKEN") ?? undefined;
   } catch (err) {
     // Fail open (caller falls back to the inherited env token), but say why: a malformed or
     // unreadable secrets.json otherwise looks like "no token" and ends in a stale-token 401.
-    console.error(
-      `Inference: cannot read OAuth token from ${secretsPath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    // SecretError messages hold no value and no parse text; any other error propagates.
+    if (!(err instanceof SecretError)) throw err;
+    console.error(`Inference: cannot read OAuth token: ${err.message}`);
+    return undefined;
   }
-  // Cache the miss with mtime 0 so a secrets.json created LATER (mtime > 0)
-  // invalidates it — otherwise the null would be sticky for process lifetime.
-  _oauthTokenCache = null;
-  _oauthTokenCacheMtime = 0;
-  _oauthTokenCachePath = secretsPath;
-  return undefined;
 }
 
 /** Max chars of stdout surfaced in an exit error. */

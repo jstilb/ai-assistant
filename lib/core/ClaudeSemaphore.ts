@@ -9,6 +9,11 @@
  *   - Each slot records its owner PID in slot-<i>/pid; a slot whose owner is no longer alive is
  *     pruned on the next acquire, so a SIGKILL'd holder can't deadlock the gate.
  *
+ * SCOPE (ADR 032): the slot is for the cron lane only. The cron runner (lib/cron/CronRun.ts) and
+ * the bash lane (bin/kaya-common.sh) share one slot dir. Completions (`inference()`) and one-shot
+ * agents (AgentSpawner) take no slot: a 300 s wait would break a Telegram reply, hooks call
+ * inference() inside interactive sessions, and there is no evidence of non-cron over-subscription.
+ *
  * POLICY: proceed-on-timeout. A backstop must NEVER deadlock a job or add a new failure mode.
  * acquireClaudeSlot resolves to a release fn whether or not a slot was obtained; check
  * `.acquired` only for logging. Staggering is the primary fix; this smooths bursts.
@@ -17,10 +22,14 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync, readFileSync } from "nod
 import { join } from "node:path";
 import { getKayaHome } from "./KayaHome.ts";
 
-// frozen at import (getKayaHome cached); no test re-pins this module
-const KAYA_HOME = getKayaHome();
-const SLOT_DIR = process.env.KAYA_CLAUDE_SLOT_DIR || join(KAYA_HOME, "MEMORY/MONITORING/state/claude-slots");
-const MAX_SLOTS = Math.max(1, Number(process.env.MAX_CLAUDE_SLOTS ?? "2") || 2);
+// Resolved per call, so tests that set KAYA_CLAUDE_SLOT_DIR / MAX_CLAUDE_SLOTS in one process don't race.
+function slotDir(): string {
+  return process.env.KAYA_CLAUDE_SLOT_DIR || join(getKayaHome(), "MEMORY/MONITORING/state/claude-slots");
+}
+
+function maxSlots(): number {
+  return Math.max(1, Number(process.env.MAX_CLAUDE_SLOTS ?? "2") || 2);
+}
 
 function pidAlive(pid: number): boolean {
   try {
@@ -32,10 +41,10 @@ function pidAlive(pid: number): boolean {
 }
 
 /** Remove slots whose recorded owner PID is no longer alive. */
-function pruneDead(): void {
+function pruneDead(dir: string): void {
   let entries: string[];
   try {
-    entries = readdirSync(SLOT_DIR);
+    entries = readdirSync(dir);
   } catch {
     return;
   }
@@ -43,13 +52,13 @@ function pruneDead(): void {
     if (!/^slot-\d+$/.test(name)) continue;
     let pid = 0;
     try {
-      pid = Number(readFileSync(join(SLOT_DIR, name, "pid"), "utf-8").trim());
+      pid = Number(readFileSync(join(dir, name, "pid"), "utf-8").trim());
     } catch {
       /* no pid file */
     }
     if (!pid || !pidAlive(pid)) {
       try {
-        rmSync(join(SLOT_DIR, name), { recursive: true, force: true });
+        rmSync(join(dir, name), { recursive: true, force: true });
       } catch {
         /* race */
       }
@@ -74,8 +83,10 @@ export async function acquireClaudeSlot(
   const timeoutMs = opts.timeoutMs ?? 120_000;
   const pollMs = opts.pollMs ?? 3_000;
   const owner = opts.owner ?? process.pid;
+  const dir = slotDir();
+  const max = maxSlots();
   try {
-    mkdirSync(SLOT_DIR, { recursive: true });
+    mkdirSync(dir, { recursive: true });
   } catch {
     /* exists */
   }
@@ -84,9 +95,9 @@ export async function acquireClaudeSlot(
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
-    pruneDead();
-    for (let i = 0; i < MAX_SLOTS; i++) {
-      const slot = join(SLOT_DIR, `slot-${i}`);
+    pruneDead(dir);
+    for (let i = 0; i < max; i++) {
+      const slot = join(dir, `slot-${i}`);
       try {
         mkdirSync(slot); // atomic: throws if the slot is held
         try {
@@ -113,28 +124,5 @@ export async function acquireClaudeSlot(
     }
     if (Date.now() >= deadline) return noop;
     await new Promise((r) => setTimeout(r, pollMs));
-  }
-}
-
-/**
- * Convenience: acquire a slot (waiting up to timeoutMs), run `fn`, then release. Proceeds
- * ungated on timeout (calls `onUngated` for logging). Always releases, even if `fn` throws.
- */
-export async function withClaudeSlot<T>(
-  opts: { timeoutMs?: number; pollMs?: number; owner?: number; onUngated?: () => void },
-  fn: () => Promise<T>,
-): Promise<T> {
-  const slot = await acquireClaudeSlot(opts);
-  if (!slot.acquired && opts.onUngated) {
-    try {
-      opts.onUngated();
-    } catch {
-      /* logging must not break the run */
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    slot.release();
   }
 }

@@ -120,7 +120,7 @@ export function isSleepInflated(wallMs: number, timeoutMs: number): boolean {
 /**
  * Spawn one process, wait for it to exit (or be killed on timeout), and
  * return its outcome. A single attempt — callers that want retry semantics
- * wrap this in their own loop (see RetryRunner.runWithRetry).
+ * wrap this in their own loop (see the attempt loop in CronRun.ts).
  *
  * Timeout behavior: kills the entire process group (spawned `detached: true`
  * so PGID === proc.pid) with SIGTERM, waits a 5s grace period, then SIGKILLs

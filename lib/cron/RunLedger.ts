@@ -7,7 +7,7 @@
  * process.env.KAYA_HOME per-test for hermeticity (no manual cache reset needed).
  *
  * Purpose (S3 — run-cron-job.ts hardening):
- *   - Idempotency: `lastOutcomeForSlot` lets run-cron-job.ts detect "this
+ *   - Idempotency: `lastOutcomeForSlot` lets CronRun.ts's runCronJob detect "this
  *     exact scheduled slot already succeeded" and skip a duplicate/coalesced
  *     launchd fire without re-spawning the job.
  *   - Forensics: every run (success/failure/timeout/deferred/skipped) gets a
@@ -40,8 +40,8 @@ interface RunLedgerRow {
 /**
  * Pure function: derive the slot key that identifies "this job's scheduled
  * run for this particular slot". The caller is responsible for resolving
- * `slot` to the ALREADY-matched cron slot Date (see run-cron-job.ts's
- * matchesCron loop) — this function does no cron-expression matching itself,
+ * `slot` to the ALREADY-matched cron slot Date (see CronRun.ts's runCronJob,
+ * which calls CronMatch.findMatchedSlot) — this function does no cron-expression matching itself,
  * keeping it trivially unit-testable without mocking time or I/O.
  */
 export function computeSlotKey(jobId: string, slot: Date): string {
@@ -50,7 +50,7 @@ export function computeSlotKey(jobId: string, slot: Date): string {
 
 /**
  * Append-only, best-effort write. Mirrors logEvent()'s try/catch-swallow
- * style in run-cron-job.ts and FailureLog.ts's recordFailure — a ledger
+ * style in CronRun.ts and FailureLog.ts's recordFailure — a ledger
  * write must never fail the job it's recording.
  */
 export function appendRunLedger(row: RunLedgerRow): void {
@@ -99,16 +99,4 @@ export function lastOutcomeForSlot(jobId: string, slotKey: string): RunOutcome |
     }
   }
   return mostRecent;
-}
-
-/**
- * Pure idempotency-gate decision: given the prior outcome (or undefined for
- * a slot with no ledger history), should run-cron-job.ts skip spawning this
- * run? Only a prior 'success' for the EXACT same slot skips — 'failure',
- * 'deferred', 'skipped', or no history at all all mean "proceed normally".
- * This guards against launchd coalescing duplicate fires and against a
- * future (S5) reconciler re-running an already-successful slot.
- */
-export function shouldSkipIdempotent(priorOutcome: RunOutcome | undefined): boolean {
-  return priorOutcome === "success";
 }

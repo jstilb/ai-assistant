@@ -1,31 +1,24 @@
 /**
- * CommandSafety.ts — single shared base for command-execution safety across
- * AutonomousWork's three independently-drifting allow/deny lists:
+ * CommandSafety.ts — command-execution safety data for agent prompts.
  *
- *   1. "verifier"       — SkepticalVerifier.ts's VERIFICATION_ALLOWED_EXECUTABLES
- *                          + VerificationUtils.ts's CATASTROPHIC_PATTERNS, consumed
- *                          by lib/verifier/Evidence.ts's gatherEvidence() security
- *                          gate (ISC verification evidence gathering).
- *   2. "self-verify"    — SelfVerifyRunner.ts's SELF_VERIFY_ALLOWED_EXECUTABLES +
- *                          SELF_VERIFY_CATASTROPHIC (Phase L self-verify harness).
- *   3. "command-runner" — CommandRunner.ts's ALLOWED_EXECUTABLES +
- *                          SAFE_GIT_SUBCOMMANDS (ISC verification command
- *                          execution).
+ * Born as the single shared base for AutonomousWork's three independently-
+ * drifting allow/deny lists ("verifier", "self-verify", "command-runner").
+ * The AutonomousWork verifiers and CommandRunner were deleted 2026-11-05, and
+ * their VERIFIER_SCOPE / COMMAND_RUNNER_SCOPE (and the git-subcommand and
+ * no-path-strip variants only they used) were removed 2026-11-08. One scope
+ * remains: SELF_VERIFY_SCOPE, which the LucidTasks executor renders into its
+ * verifier prompt via describeScopeForPrompt()
+ * (skills/Productivity/LucidTasks/Tools/executor/executorVerify.ts).
  *
- * Design: ONE shared catastrophic denylist (full-command-string regex scan,
- * the union of every pattern previously spread across the two prior denylists)
- * applied as an unconditional floor to all three scopes, plus a shared
- * BASE_SAFE_EXECUTABLES allowlist (the true intersection of all three original
- * executable sets — every context already trusted these, so inheriting them
- * widens nothing) with EXPLICIT per-context extensions declared below.
+ * Design: ONE shared catastrophic denylist (full-command-string regex scan)
+ * applied as an unconditional floor, plus a shared BASE_SAFE_EXECUTABLES
+ * allowlist with EXPLICIT per-scope extensions declared below.
  *
- * BINDING INVARIANT: consolidation must never silently widen any context's
- * effective allow/deny set — only identical or stricter. See
- * lib/core/CommandSafety.compat.test.ts for the old-vs-new proof per context
- * (each scope's reconstructed allowlist is asserted to equal the original
- * literal Set element-for-element). The only intentional deltas are additive
- * denylist entries (block MORE, never allow more) — see "Documented
- * narrowings" at the bottom of this file.
+ * BINDING INVARIANT: changes must never silently widen a scope's effective
+ * allow/deny set. lib/core/CommandSafety.compat.test.ts pins SELF_VERIFY_SCOPE
+ * to its original literal Set element-for-element. The only intentional
+ * deltas are additive denylist entries (block MORE, never allow more) — see
+ * "Documented narrowings" at the bottom of this file.
  */
 
 // ============================================================================
@@ -108,13 +101,12 @@ export function isProtectedBranch(branch: string): boolean {
 }
 
 // ============================================================================
-// Executable allowlists — shared safe base + EXPLICIT per-context extensions.
+// Executable allowlists — shared safe base + EXPLICIT per-scope extensions.
 // ============================================================================
 
 /**
- * The true intersection of all three original executable allowlists. Every
- * context already trusted every one of these executables, so folding them
- * into a shared base widens nothing.
+ * The true intersection of the three original executable allowlists (see the
+ * module doc). Every context trusted every one of these executables.
  */
 export const BASE_SAFE_EXECUTABLES = new Set([
   "bun",
@@ -130,44 +122,26 @@ export const BASE_SAFE_EXECUTABLES = new Set([
   "tail",
 ]);
 
-/** Executables that are NEVER allowed, in any scope. None of today's three
- * allowlists contained "claude" — this is a defense-in-depth restatement of
- * that fact (SelfVerifyRunner made it explicit; this makes it universal), not
- * a behavior change for any context. */
+/** Executables that are NEVER allowed, in any scope. No allowlist ever
+ * contained "claude" — this is a defense-in-depth restatement of that fact. */
 const NEVER_ALLOWED_EXECUTABLES = new Set(["claude"]);
 
 /**
  * How a scope treats the `git` executable:
- *   "none"                    — git never allowed.
- *   "any"                     — bare git allowed regardless of subcommand,
- *                                subject to the catastrophic-denylist floor
- *                                (matches "verifier" and "self-verify" today).
- *   { subcommands: [...] }    — only these git subcommands are safe (matches
- *                                "command-runner" today).
+ *   "none" — git never allowed.
+ *   "any"  — bare git allowed regardless of subcommand, subject to the
+ *            catastrophic-denylist floor.
  */
-type GitScope = "none" | "any" | { subcommands: readonly string[] };
+type GitScope = "none" | "any";
 
 interface CommandSafetyScope {
   name: string;
   /** Executables allowed in addition to BASE_SAFE_EXECUTABLES. */
   additionalExecutables: readonly string[];
   git: GitScope;
-  /** Strip leading directory components before checking the allowlist (e.g.
-   * "/usr/local/bin/node" -> "node"). Matches Evidence.ts's and
-   * SelfVerifyRunner's basename-based executable check; CommandRunner does
-   * NOT do this (exact-string match on the parsed token). */
-  stripExecutablePath: boolean;
 }
 
-/** Context 1 — SkepticalVerifier.ts / Evidence.ts (ISC evidence gathering). */
-export const VERIFIER_SCOPE: CommandSafetyScope = {
-  name: "verifier",
-  additionalExecutables: ["tsc", "echo", "find", "true", "false", "stat", "file", "which", "pwd"],
-  git: "any",
-  stripExecutablePath: true,
-};
-
-/** Context 2 — SelfVerifyRunner.ts (Phase L self-verify harness). */
+/** The executor's self-verify lane (originally SelfVerifyRunner.ts's Phase L harness). */
 export const SELF_VERIFY_SCOPE: CommandSafetyScope = {
   name: "self-verify",
   additionalExecutables: [
@@ -192,15 +166,6 @@ export const SELF_VERIFY_SCOPE: CommandSafetyScope = {
     "playwright",
   ],
   git: "any",
-  stripExecutablePath: true,
-};
-
-/** Context 3 — CommandRunner.ts (ISC verification command execution). */
-export const COMMAND_RUNNER_SCOPE: CommandSafetyScope = {
-  name: "command-runner",
-  additionalExecutables: ["npx", "rg"],
-  git: { subcommands: ["diff", "log", "show", "status", "rev-parse", "merge-base"] },
-  stripExecutablePath: false,
 };
 
 /** Resolve a scope's flat executable Set (base ∪ extensions ∪ "git" iff scope.git === "any"). */
@@ -214,10 +179,6 @@ export function buildExecutableAllowlist(scope: CommandSafetyScope): Set<string>
 
 export function isExecutableAllowed(executableName: string, scope: CommandSafetyScope): boolean {
   if (NEVER_ALLOWED_EXECUTABLES.has(executableName)) return false;
-  // Bare "git" is only allowed as a plain executable-name check when the scope
-  // trusts any subcommand ("any"). A { subcommands: [...] } scope validates
-  // git through a SEPARATE mechanism (subcommand membership, not bare-exe
-  // membership) — see COMMAND_RUNNER_SCOPE and CommandRunner.parseVerificationCommand.
   if (executableName === "git") return scope.git === "any";
   return buildExecutableAllowlist(scope).has(executableName);
 }
@@ -225,54 +186,36 @@ export function isExecutableAllowed(executableName: string, scope: CommandSafety
 /**
  * Extract the primary (first-token) executable from a command string.
  * Rejects inline env-var-assignment prefixes (`FOO=bar cmd`) — returns null.
- * Strips directory components to a basename when scope.stripExecutablePath.
+ * Strips directory components to a basename ("/usr/local/bin/node" -> "node").
  */
-export function primaryExecutable(cmd: string, scope: CommandSafetyScope): string | null {
+export function primaryExecutable(cmd: string): string | null {
   const first = cmd.trim().split(/\s+/)[0];
   if (!first) return null;
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(first)) return null;
-  return scope.stripExecutablePath ? (first.split("/").pop() ?? first) : first;
+  return first.split("/").pop() ?? first;
 }
 
 /**
- * Full command-safety check for scopes that validate the WHOLE command string
- * at once (catastrophic floor + primary-executable allowlist). Matches
- * SelfVerifyRunner's (pre-refactor) isSelfVerifyCommandSafe() and Evidence.ts's
- * inline gate composition.
+ * Full command-safety check on the WHOLE command string (catastrophic floor +
+ * primary-executable allowlist). Matches SelfVerifyRunner's (pre-refactor)
+ * isSelfVerifyCommandSafe().
  */
 export function isCommandSafe(cmd: string, scope: CommandSafetyScope): boolean {
   if (!cmd?.trim()) return false;
   if (isCatastrophicCommand(cmd).blocked) return false;
-  const exe = primaryExecutable(cmd, scope);
+  const exe = primaryExecutable(cmd);
   if (!exe) return false;
   return isExecutableAllowed(exe, scope);
 }
 
 // ============================================================================
-// Documented narrowings (see compat suite for the exhaustive proof)
+// Documented narrowings
 // ============================================================================
 //
-// 1. git_reset_hard_any / git_push_force_any: the shared catastrophic floor
-//    now blocks `git reset --hard <any-branch>` and `git push --force
-//    <any-branch>` everywhere (previously only main/master were blocked in
-//    the "verifier" context and in WorkOrchestrator.isCatastrophic; the
-//    "self-verify" context already blocked these broadly). No known caller
-//    or test relies on a non-main/master hard-reset or force-push being
-//    allowed through gatherEvidence or WorkOrchestrator.isCatastrophic.
-//
-// 2. fork_bomb / disk_overwrite patterns: net-new to the "verifier" and
-//    "command-runner" contexts. Provably a no-op there — neither context's
-//    allowlist ever admits the shell metacharacters (`(`, `)`, `{`, `}`,
-//    `;`, `>`) these patterns require, so no currently-passing command could
-//    ever have matched them anyway.
-//
-// 3. "command-runner" now also runs the shared catastrophic-pattern check
-//    (previously it relied solely on its strict allowlist + shell-operator
-//    rejection + git-subcommand scoping). This is additive defense-in-depth,
-//    not a behavior change: CommandRunner.ALLOWED_EXECUTABLES never included
-//    `rm`/`dd`/`mkfs`, and its git handling is restricted to
-//    diff/log/show/status/rev-parse/merge-base — none of which can match any
-//    catastrophic pattern.
+// The shared floor's broad git_reset_hard_any / git_push_force_any and
+// fork_bomb / disk_overwrite patterns were narrowings only for the deleted
+// "verifier" and "command-runner" contexts; "self-verify" already blocked
+// them before consolidation, so SELF_VERIFY_SCOPE has no deltas.
 
 // ============================================================================
 // Prompt-facing rendering (S12 — one source of truth for lane prose)
@@ -290,9 +233,7 @@ export function describeScopeForPrompt(scope: CommandSafetyScope): string {
   const gitLine =
     scope.git === "none"
       ? "git is NOT allowed."
-      : scope.git === "any"
-        ? "git is allowed (read/inspect freely), subject to the catastrophic-command floor."
-        : `git is allowed ONLY for: ${scope.git.subcommands.join(", ")}.`;
+      : "git is allowed (read/inspect freely), subject to the catastrophic-command floor.";
   return [
     `Allowed executables (scope "${scope.name}"): ${executables.join(", ")}.`,
     gitLine,

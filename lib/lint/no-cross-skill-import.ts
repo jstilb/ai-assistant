@@ -14,13 +14,20 @@
  * The marker is greppable, so the sanctioned surface is auditable:
  *   grep -rn 'cross-skill-allowed:' skills/
  *
- * Two shapes are checked:
+ * Three shapes are checked:
  *   1. Specifier imports: `from "<rel>"`, `import("<rel>")`, `require("<rel>")`.
  *   2. Hidden imports: `import(NAME)` where `const NAME = "<rel>"` (or an
  *      `import(\`<rel>...\`)` template) points into another skill. A variable
  *      specifier hides the dependency from tsc and from shape 1. Variable
  *      specifiers whose value is not a visible literal in the same file cannot
  *      be resolved statically; those are not flagged.
+ *   3. Another skill's database file (ADR-033): a path literal
+ *      `skills/<Cat>/<Skill>/Data/<x>.db` anywhere on a line (quoted or in a
+ *      template), or the join segments `"skills", "<Cat>", "<Skill>", "Data"`.
+ *      A skill's SQLite file is read only through its owner's module. Lowercase
+ *      `data` counts (macOS paths are case-insensitive). Whole-line comments are
+ *      skipped: they name a path but open nothing. This is a tripwire on
+ *      literals: a computed path (e.g. `join(dir, "pipeline.db")`) stays invisible.
  *
  * Modes:
  *   - checkNoCrossSkillImport(rootDir)       — full-tree scan; every unmarked
@@ -54,6 +61,17 @@ const TEMPLATE_IMPORT_RE = /import\s*\(\s*`(\.[^`$?]*)/g;
 
 // A line that starts an import/export statement (start of a multi-line import).
 const STATEMENT_START = /^\s*(?:import|export)\b/;
+
+// Shape 3a: a path literal to a skill's DB file, e.g. "skills/<Cat>/<Skill>/Data/x.db"
+// or `${KAYA_HOME}/skills/<Cat>/<Skill>/Data/x.db`. `data` too: macOS paths are
+// case-insensitive, so a lowercase literal opens the same file.
+const DB_PATH_RE = /skills\/([\w-]+)\/([\w-]+)\/[Dd]ata\/[^\s"'`]*\.db\b/g;
+
+// Shape 3b: join segments "skills", "<Cat>", "<Skill>", "Data" (either quote style).
+const DB_JOIN_RE = /["']skills["']\s*,\s*["']([\w-]+)["']\s*,\s*["']([\w-]+)["']\s*,\s*["'][Dd]ata["']/g;
+
+// A whole-line comment (`//`, `/*`, ` * `): it names a path but reads nothing.
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
 
 function resolveImport(fileRel: string, spec: string): string | null {
   if (!spec.startsWith(".")) return null; // package or absolute-alias import
@@ -125,7 +143,9 @@ export function findViolations(
   content: string,
 ): Array<{ key: string; line: number; message: string }> {
   const out: Array<{ key: string; line: number; message: string }> = [];
-  if (!SKILL_FILE.test(fileRel)) return out;
+  const own = SKILL_FILE.exec(fileRel);
+  if (!own) return out;
+  const ownSkill = `${own[1]}/${own[2]}`;
   const lines = content.split("\n");
 
   // Variable names holding a relative path literal, with the line they are declared on.
@@ -175,6 +195,19 @@ export function findViolations(
         message:
           `${fileRel}: variable-specifier import hides a cross-skill dependency (${t}: ${vm[1]} = "${decl.spec}"). ` +
           `Use a static specifier (tsc and this lint can then see it) and mark with "// ${MARKER} <reason>".`,
+      });
+    }
+
+    if (COMMENT_LINE.test(line)) continue;
+    for (const dm of [...line.matchAll(DB_PATH_RE), ...line.matchAll(DB_JOIN_RE)]) {
+      const owner = `${dm[1]}/${dm[2]}`;
+      if (owner === ownSkill || isMarked(lines, i)) continue;
+      out.push({
+        key: `${fileRel}|db|${dm[0]}`,
+        line: i + 1,
+        message:
+          `${fileRel}: reads another skill's database file (${ownSkill} -> ${owner}: ${dm[0]}). ` +
+          `Read through the owner skill's module (ADR-033) or mark with "// ${MARKER} <reason>".`,
       });
     }
   }

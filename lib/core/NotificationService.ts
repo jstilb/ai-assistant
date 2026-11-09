@@ -56,12 +56,12 @@
  * ============================================================================
  */
 
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { kayaHomePath, assertNotLiveHomeUnderTest } from "./KayaHome.ts";
 import { loadSettings as loadCanonicalSettings } from "./ConfigLoader.ts";
 import { createAppendLog } from "./AppendLog.ts";
-import { recordOutboundFromTelegramResponse, isTelegramPushEnabled } from "./TelegramOutboundLedger.ts";
+import { recordOutbound } from "./TelegramOutboundLedger.ts";
+import { telegramCall } from "./TelegramTransport.ts";
 
 // ============================================================================
 // Types
@@ -150,7 +150,7 @@ interface QueueItem {
 // ============================================================================
 //
 // NOTE: All Kaya-home-derived paths below (settings.json, the notifications
-// log dir, secrets.json) are resolved at CALL time via kayaHomePath(), never
+// log dir) are resolved at CALL time via kayaHomePath(), never
 // cached in a module-scope const. Bun caches modules on first import, so a
 // module-scope `const X = join(homedir(), ...)` freezes to whatever
 // KAYA_HOME/KAYA_DIR was set at the FIRST import across the whole process —
@@ -396,60 +396,10 @@ export function chunkTelegramText(text: string, maxUnits: number = TELEGRAM_CHUN
   return chunks;
 }
 
-/** First 200 chars of an error response body — Telegram's `description` field
- * says WHY a 400 happened (too long vs can't-parse-entities); discarding it
- * made the 2026-08-17 failure undiagnosable from the logs. */
-async function readBodySnippet(response: Response): Promise<string> {
-  try {
-    return (await response.text()).slice(0, 200);
-  } catch {
-    return "body unreadable";
-  }
-}
-
 /**
  * Send via Telegram Bot API
  */
 async function sendTelegram(message: string, config: NotificationConfig, options: NotifyOptions): Promise<boolean> {
-  // Push switch off (settings.json notifications.telegramPush.enabled=false):
-  // record the message and report it handled, so it does not retry, fall
-  // back, dead-letter or replay later.
-  if (!isTelegramPushEnabled()) {
-    logNotification("suppressed", "telegram", message, "notifications.telegramPush.enabled=false");
-    return true;
-  }
-
-  const secretsPath = kayaHomePath("secrets.json");
-  if (!existsSync(secretsPath)) {
-    logNotification("failed", "telegram", message, "secrets.json not found");
-    return false;
-  }
-
-  let secrets: Record<string, unknown>;
-  try {
-    secrets = JSON.parse(readFileSync(secretsPath, "utf-8"));
-  } catch (err) {
-    logNotification(
-      "failed",
-      "telegram",
-      message,
-      `Failed to parse secrets.json: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return false;
-  }
-
-  // Canonical location is the nested `telegram.{bot_token,chat_id}` object
-  // (what TelegramBot/TelegramClient use); the flat TELEGRAM_* keys are a
-  // legacy fallback this function originally expected but secrets.json never
-  // had — which left this channel silently broken until 2026-06-12.
-  const nested = (secrets.telegram as Record<string, string> | undefined) ?? {};
-  const botToken = nested.bot_token || (secrets.TELEGRAM_BOT_TOKEN as string | undefined);
-  const chatId = nested.chat_id || (secrets.TELEGRAM_CHAT_ID as string | undefined);
-  if (!botToken || !chatId) {
-    logNotification("failed", "telegram", message, "telegram.bot_token/chat_id (or TELEGRAM_* fallback) missing");
-    return false;
-  }
-
   const title = options.agentName || config.defaultAgentName || "Kaya";
   // Plain-text variant — used only for the (now rare, defense-in-depth)
   // no-parse_mode fallback below, where nothing needs escaping.
@@ -470,21 +420,39 @@ async function sendTelegram(message: string, config: NotificationConfig, options
   const mdChunks = chunkTelegramText(markdownText);
   const plainChunks = chunkTelegramText(text);
 
+  // The transport owns the push switch, credentials, Jm's chat, the timeout and
+  // one 429 retry (ADR-036). A TelegramTransportError (config, network,
+  // timeout, bad-response) lands in the catch below: logged `failed`, and
+  // `false` tells sendWithRetry to retry and then fall back.
   try {
     let needPlainResend = false;
-    for (let i = 0; i < mdChunks.length; i++) {
-      const response = await postTelegramMessage(botToken, chatId, mdChunks[i]!, timeout, true);
-      if (response.ok) {
+    for (const [i, chunk] of mdChunks.entries()) {
+      const outcome = await telegramCall(
+        "sendMessage",
+        { text: chunk, parse_mode: "Markdown" },
+        { timeoutMs: timeout },
+      );
+      if (outcome.status === "suppressed") {
+        // Push switch off (settings.json notifications.telegramPush.enabled=false):
+        // record the message and report it handled, so it does not retry, fall
+        // back, dead-letter or replay later.
+        logNotification("suppressed", "telegram", message, "notifications.telegramPush.enabled=false");
+        return true;
+      }
+      if (outcome.status === "ok") {
         // Phase A1 (outbound ledger): record each chunk's message_id so a
-        // reply to any chunk resolves its referent. Consumes the success
-        // body, which nothing else reads. The ORIGINAL message (pre-escape,
-        // pre-title-wrap) is what the reply-context reader should see.
-        await recordOutboundFromTelegramResponse(response, "notification-service", message);
+        // reply to any chunk resolves its referent. The ORIGINAL message
+        // (pre-escape, pre-title-wrap) is what the reply-context reader should see.
+        if (outcome.messageId !== null) {
+          recordOutbound({ messageId: outcome.messageId, source: "notification-service", text: message });
+        }
         if (i < mdChunks.length - 1) await Bun.sleep(200);
         continue;
       }
-      const body = await readBodySnippet(response);
-      if (response.status === 400) {
+      // Telegram's `description` says WHY a 400 happened (too long vs
+      // can't-parse-entities); discarding it made the 2026-08-17 failure
+      // undiagnosable from the logs.
+      if (outcome.httpStatus === 400) {
         // Legacy Markdown parse_mode rejects unbalanced entities (_, *, `, [)
         // in freeform content — resend the WHOLE message as plain text
         // (parse_mode off: nothing to balance). Whole-message, not per-chunk:
@@ -494,7 +462,7 @@ async function sendTelegram(message: string, config: NotificationConfig, options
           "retried",
           "telegram",
           message,
-          `HTTP 400 with parse_mode on chunk ${i + 1}/${mdChunks.length} (${body}) — retrying without parse_mode`,
+          `HTTP 400 with parse_mode on chunk ${i + 1}/${mdChunks.length} (${outcome.description}) — retrying without parse_mode`,
         );
         needPlainResend = true;
         break;
@@ -503,7 +471,7 @@ async function sendTelegram(message: string, config: NotificationConfig, options
         "failed",
         "telegram",
         message,
-        `HTTP ${response.status} on chunk ${i + 1}/${mdChunks.length} (${body})`,
+        `HTTP ${outcome.httpStatus} on chunk ${i + 1}/${mdChunks.length} (${outcome.description})`,
       );
       return false;
     }
@@ -518,19 +486,24 @@ async function sendTelegram(message: string, config: NotificationConfig, options
       return true;
     }
 
-    for (let i = 0; i < plainChunks.length; i++) {
-      const response = await postTelegramMessage(botToken, chatId, plainChunks[i]!, timeout, false);
-      if (!response.ok) {
-        const body = await readBodySnippet(response);
+    for (const [i, chunk] of plainChunks.entries()) {
+      const outcome = await telegramCall("sendMessage", { text: chunk }, { timeoutMs: timeout });
+      if (outcome.status === "suppressed") {
+        logNotification("suppressed", "telegram", message, "notifications.telegramPush.enabled=false");
+        return true;
+      }
+      if (outcome.status === "rejected") {
         logNotification(
           "failed",
           "telegram",
           message,
-          `HTTP ${response.status} (no-parse_mode fallback, chunk ${i + 1}/${plainChunks.length}) (${body})`,
+          `HTTP ${outcome.httpStatus} (no-parse_mode fallback, chunk ${i + 1}/${plainChunks.length}) (${outcome.description})`,
         );
         return false;
       }
-      await recordOutboundFromTelegramResponse(response, "notification-service", message);
+      if (outcome.messageId !== null) {
+        recordOutbound({ messageId: outcome.messageId, source: "notification-service", text: message });
+      }
       if (i < plainChunks.length - 1) await Bun.sleep(200);
     }
     logNotification("sent", "telegram", message, "Delivered without parse_mode after HTTP 400");
@@ -552,35 +525,6 @@ async function sendTelegram(message: string, config: NotificationConfig, options
  */
 export async function sendTelegramDirect(message: string, options: NotifyOptions = {}): Promise<boolean> {
   return sendTelegram(message, getDefaultConfig(), options);
-}
-
-/**
- * POST a single Telegram sendMessage request, optionally with parse_mode.
- * Extracted so sendTelegram can retry once without parse_mode on HTTP 400.
- */
-async function postTelegramMessage(
-  botToken: string,
-  chatId: string,
-  text: string,
-  timeoutMs: number,
-  useParseMode: boolean,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        ...(useParseMode ? { parse_mode: "Markdown" } : {}),
-      }),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
 }
 
 // ============================================================================

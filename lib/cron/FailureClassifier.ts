@@ -10,6 +10,8 @@
  * unit-testable without spawning real processes.
  */
 
+import { classifyText } from "../core/ClaudeRunEnd.ts";
+
 export type FailureClass = "environment" | "transient" | "timeout" | "auth" | "bug" | "detection";
 
 /**
@@ -20,10 +22,10 @@ export type FailureClass = "environment" | "transient" | "timeout" | "auth" | "b
  * a failure (never a silent success), but excluded from FailStreak
  * escalation (its predicate allowlists bug/timeout), retry (not in
  * RETRYABLE), the generic cron-health page, and incident-triage — the same
- * one-incident-one-page rationale as cron-health-monitor.ts's
- * SELF_ALERTING_JOBS, declared in-band by the job instead of hardcoded by
- * jobId. A sentinel that CRASHES, or whose AlertGate send throws, must still
- * exit 1 so the meta layer pages. Producers: FreshnessGuard.ts,
+ * one-incident-one-page rationale behind cron-health-monitor.ts's
+ * partitionSelfAlertingFailures, declared in-band by the job (the hardcoded
+ * jobId set it replaced was removed 2026-11-08). A sentinel that CRASHES,
+ * or whose AlertGate send throws, must still exit 1 so the meta layer pages. Producers: FreshnessGuard.ts,
  * LearningIntakeWatchdog.ts.
  */
 export const DETECTION_EXIT_CODE = 42;
@@ -52,98 +54,37 @@ export interface FailureInput {
   timedOut: boolean;
 }
 
-// Transient network/LLM-call patterns. Mirrors the shape of Inference.ts's
-// own timeout message plus common Node/Bun socket-failure signatures.
-// `/network/i` is a deliberately broad catch-all per the task spec's
-// judgment call — false positives here just mean an extra retry attempt,
-// which is safe (retries are capped, see item 4), whereas false negatives
-// mean a transient blip gets misclassified as 'bug' and never retried.
-const TRANSIENT_PATTERNS: RegExp[] = [
-  /Timeout after \d+ms/i,
-  /socket.*closed/i,
-  /ECONNRESET/i,
-  /ETIMEDOUT/i,
-  /EPIPE/i,
-  /network/i,
-];
-
-// Usage-limit / rate-limit exhaustion from the claude CLI or Anthropic API.
-// These arrive on STDOUT with an empty stderr (see FailureInput.stdout).
-// Classified 'transient': the bounded in-process retry is harmless, and the
-// hourly reconciler catch-up is the real recovery path once the pool frees
-// up — what matters is that this is NOT 'bug' (never-retried, feeds the
-// FailStreak heal-escalation pager). Machine-text carve-out per
-// feedback_determinism_earns_its_place ruling (i): regex over
-// machine-generated error text gating a bounded retry. First pattern is the
-// literal 2026-07-09 daily-upkeep/knowledge-daily production signature; the
-// others are known Anthropic CLI/API limit banners.
-export const USAGE_LIMIT_PATTERNS: RegExp[] = [
-  /hit your (usage|weekly|5-hour|session) limit/i,
-  /usage limit reached/i,
-  // The literal API error type only — NOT a loose /rate.?limit/i: several
-  // modules log the phrase "rate limit" in prose during normal self-handled
-  // 429 backoff, and a loose match would flip a later unrelated 'bug' crash
-  // in the same run to 'transient', suppressing the FailStreak escalation.
-  /rate_limit_error/i,
-  /credit balance is too low/i,
-  // 2026-08-29 production signature (31 rows in cron logs): "You've reached
-  // your Fable 5 limit. Switch to another model, ..." — matched nothing above,
-  // fell through to 'bug', never retried (18-failure streak). Per-model pool
-  // banners say "reached", not "hit".
-  /reached your (?:[a-z0-9.-]+ ){0,3}limit/i,
-];
-
-// Mirrors TokenHealth.ts's classifyReactiveFailure() substring checks
-// (Invalid Credentials / invalid_grant / token has been expired), minus its
-// bare '401'/'403' checks — those are too broad a catch-all here since a lot
-// of non-auth stderr could contain those digits incidentally (e.g. exit
-// codes, line numbers). Keep to the higher-signal string patterns.
-//
-// The last two entries are the 2026-07-15 401 auth-storm carve-out: the
-// claude CLI's dead-setup-token failure prints the literal 73-char string
-// "Failed to authenticate. API Error: 401 Invalid authentication
-// credentials" to stdout/stderr (confirmed byte-identical in both the
-// 2026-07-12 cron run records — MEMORY/daemon/cron/logs/*.jsonl,
-// execute.complete.error — and session transcript isApiErrorMessage/
-// apiErrorStatus:401 rows). Before this, that exact string matched no rule
-// and fell through to 'bug' — misclassified as a code defect (never
-// retried, but also never recognized as auth, so cron-health-monitor paged
-// it once per job per run instead of collapsing the whole outage into one
-// incident page — see bin/cron-health-monitor.ts's auth-incident handling).
-// Machine-text carve-out per feedback_determinism_earns_its_place ruling
-// (i): regex over machine-generated CLI/API error text, not free-form prose.
-const AUTH_PATTERNS: RegExp[] = [
-  /Invalid Credentials/i,
-  /invalid_grant/i,
-  /token has been expired/i,
-  /Failed to authenticate/i,
-  /Invalid authentication credentials/i,
-];
+// The text rules read the ONE CLI-text table (lib/core/ClaudeRunEnd.ts) under
+// the "log" tier, over stderr AND stdout combined. Not "machine": a cron
+// SCRIPT job's stderr and stdout are its own log text, where bare tokens
+// ("timeout", "401", "rate limit", "permission denied") appear in normal
+// self-handled runs and must not flip a real crash to 'transient'/'auth'
+// (the FailStreak 'bug' page would never fire). Not "any": script output
+// carries error wording ("read ECONNRESET", "Timeout after 30000ms",
+// "Invalid Credentials") that the prose-safe tier skips. Plan P02 S2.
 
 /**
  * Classify a completed (failed) run. Rules apply in priority order —
- * first match wins (pattern rules 3-5 run over stderr AND stdout combined —
- * see FailureInput.stdout):
+ * first match wins:
  *   1. timedOut === true                          -> 'timeout'
  *   2. wasOffline === true                         -> 'environment'
  *   3. exitCode === DETECTION_EXIT_CODE            -> 'detection'
- *      (before the text rules: an explicit exit-code contract beats
+ *      (before the text rule: an explicit exit-code contract beats
  *      pattern heuristics — a sentinel's stale-artifact listing may well
- *      contain words like "network" or "auth")
- *   4. text matches a transient network pattern    -> 'transient'
- *   5. text matches a usage/rate-limit pattern     -> 'transient'
- *   6. text matches an auth-failure pattern        -> 'auth'
- *   7. else (clean non-zero exit, no pattern)      -> 'bug'
+ *      contain error wording)
+ *   4. stderr + stdout under classifyText(…, "log"):
+ *      network / rate-limit / quota / timeout      -> 'transient'
+ *      auth                                        -> 'auth'
+ *   5. else (incl. blank output)                   -> 'bug'
  */
 export function classifyFailure(input: FailureInput): FailureClass {
   if (input.timedOut === true) return "timeout";
   if (input.wasOffline === true) return "environment";
   if (input.exitCode === DETECTION_EXIT_CODE) return "detection";
 
-  const text = `${input.stderr ?? ""}\n${input.stdout ?? ""}`;
-  if (TRANSIENT_PATTERNS.some((re) => re.test(text))) return "transient";
-  if (USAGE_LIMIT_PATTERNS.some((re) => re.test(text))) return "transient";
-  if (AUTH_PATTERNS.some((re) => re.test(text))) return "auth";
+  const end = classifyText(`${input.stderr ?? ""}\n${input.stdout ?? ""}`, "log");
+  if (end === "auth") return "auth";
+  if (end !== null) return "transient";
 
   return "bug";
 }

@@ -1,22 +1,16 @@
 /**
  * MoonshotClient.test.ts — hermetic tests for the Kimi K3 client.
  *
- * Every test injects `fetchFn` and `apiKey`, so nothing here touches the
- * network or reads the real secrets.json. That matters doubly for this module:
- * a live call costs real money.
+ * Every test injects `fetchFn`, and either `apiKey` or a temp KAYA_HOME, so
+ * nothing here touches the network or reads the real secrets.json. That
+ * matters doubly for this module: a live call costs real money.
  */
 
-import { describe, it, expect, beforeAll, afterAll, spyOn } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pinKayaHome, restoreKayaHome } from "../test/pinKayaHome.ts";
-import {
-  moonshotChat,
-  loadMoonshotApiKey,
-  MOONSHOT_BASE_URL,
-  KIMI_K3_MODEL,
-  type FetchLike,
-} from "./MoonshotClient.ts";
+import { moonshotChat, MOONSHOT_BASE_URL, KIMI_K3_MODEL, type FetchLike } from "./MoonshotClient.ts";
 
 /** Build a fake fetch returning a canned status + body, capturing the request. */
 function fakeFetch(
@@ -214,7 +208,7 @@ describe("moonshotChat — failure paths", () => {
   });
 });
 
-describe("loadMoonshotApiKey", () => {
+describe("moonshotChat — key read from a temp KAYA_HOME secrets.json", () => {
   let home: string;
   beforeAll(() => {
     home = pinKayaHome("moonshot-key-");
@@ -222,39 +216,33 @@ describe("loadMoonshotApiKey", () => {
   afterAll(async () => {
     await restoreKayaHome();
   });
-  const secretsPath = () => join(home, "secrets.json");
 
-  it("returns null when secrets.json does not exist", () => {
-    rmSync(secretsPath(), { force: true });
-    expect(loadMoonshotApiKey()).toBeNull();
-  });
-
-  it("returns null when secrets.json holds no MOONSHOT_API_KEY", () => {
-    writeFileSync(secretsPath(), JSON.stringify({ OTHER: "x" }));
-    expect(loadMoonshotApiKey()).toBeNull();
-  });
-
-  it("returns the trimmed key when present", () => {
-    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: "  sk-abc \n" }));
-    expect(loadMoonshotApiKey()).toBe("sk-abc");
-  });
-
-  it("returns null for a whitespace-only or non-string key", () => {
-    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: "   " }));
-    expect(loadMoonshotApiKey()).toBeNull();
-    writeFileSync(secretsPath(), JSON.stringify({ MOONSHOT_API_KEY: 42 }));
-    expect(loadMoonshotApiKey()).toBeNull();
-  });
-
-  it("returns null and warns on stderr when secrets.json is malformed", () => {
-    writeFileSync(secretsPath(), "{not json");
-    const warn = spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(loadMoonshotApiKey()).toBeNull();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0]?.[0])).toContain("secrets.json");
-    } finally {
-      warn.mockRestore();
+  it("reports the missing key when secrets.json is absent or lacks the key", async () => {
+    rmSync(join(home, "secrets.json"), { force: true });
+    const noFile = await moonshotChat({ systemPrompt: "s", userPrompt: "u" }, { fetchFn: fakeFetch(200, OK_BODY) });
+    writeFileSync(join(home, "secrets.json"), JSON.stringify({ OTHER: "x" }));
+    const noKey = await moonshotChat({ systemPrompt: "s", userPrompt: "u" }, { fetchFn: fakeFetch(200, OK_BODY) });
+    for (const res of [noFile, noKey]) {
+      expect(res.success).toBe(false);
+      expect(res.output).toBe("");
+      expect(res.error).toContain("MOONSHOT_API_KEY missing from secrets.json");
     }
+  });
+
+  it("reports file-malformed, not a missing key, and never echoes the file text", async () => {
+    writeFileSync(join(home, "secrets.json"), '{"MOONSHOT_API_KEY": sk_live_SENTINEL}');
+    let called = false;
+    const spyFetch: FetchLike = async () => {
+      called = true;
+      return { ok: true, status: 200, text: async () => OK_BODY };
+    };
+    const res = await moonshotChat({ systemPrompt: "s", userPrompt: "u" }, { fetchFn: spyFetch });
+    expect(res.success).toBe(false);
+    expect(res.output).toBe("");
+    expect(res.error).toContain("file-malformed");
+    expect(res.error).toContain("MOONSHOT_API_KEY");
+    expect(res.error).not.toContain("missing from secrets.json");
+    expect(res.error).not.toContain("SENTINEL");
+    expect(called).toBe(false);
   });
 });

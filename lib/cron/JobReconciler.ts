@@ -74,19 +74,6 @@ export interface DecideCatchUpInput {
   awake: boolean;
   /** Current time — unused by the pure decision itself but threaded through for future extension/logging symmetry. */
   now: Date;
-  /**
-   * Slice A (sleep-cascade remediation): true when
-   * job.desiredArtifact.staleIfFirstLineContains is set AND the artifact's
-   * first line (bounded read — see bin/job-reconciler.ts's checkStaleMarker)
-   * contains that marker. A marker-present artifact is treated as stale
-   * regardless of mtime freshness — this is how the reconciler tells a
-   * deterministic-fallback-authored artifact (e.g. daily-briefing's 07:45
-   * sentinel writes a fresh-by-mtime but not-the-real-thing artifact) apart
-   * from a genuine successful run. Always false when the job declares no
-   * marker (checkStaleMarker is only invoked when staleIfFirstLineContains
-   * is set — see bin/job-reconciler.ts's call site).
-   */
-  markerPresent: boolean;
 }
 
 /**
@@ -94,15 +81,13 @@ export interface DecideCatchUpInput {
  * freshness + conditions-gate policy.
  */
 export function decideCatchUp(input: DecideCatchUpInput): CatchUpDecision {
-  const { artifactExists, artifactAgeHrs, maxAgeHrs, online, awake, markerPresent } = input;
+  const { artifactExists, artifactAgeHrs, maxAgeHrs, online, awake } = input;
 
   // Conditions gate first: never attempt a re-run while offline or asleep,
   // regardless of how badly the job has drifted from desired state.
   if (!online || !awake) return "skip-offline";
 
-  // Slice A: a marker-present artifact (fallback-authored) is never fresh,
-  // even if its mtime is well within maxAgeHrs — see DecideCatchUpInput's doc.
-  const artifactFresh = artifactExists && artifactAgeHrs !== null && artifactAgeHrs <= maxAgeHrs && !markerPresent;
+  const artifactFresh = artifactExists && artifactAgeHrs !== null && artifactAgeHrs <= maxAgeHrs;
   return artifactFresh ? "skip-fresh" : "run";
 }
 

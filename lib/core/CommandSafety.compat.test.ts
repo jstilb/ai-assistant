@@ -20,66 +20,16 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import {
-  VERIFIER_SCOPE,
-  SELF_VERIFY_SCOPE,
-  COMMAND_RUNNER_SCOPE,
-  isExecutableAllowed,
-  primaryExecutable,
-  isCatastrophicCommand,
-  isCommandSafe,
-} from "./CommandSafety.ts";
+import { SELF_VERIFY_SCOPE, isCatastrophicCommand, isCommandSafe } from "./CommandSafety.ts";
 
 // ---------------------------------------------------------------------------
-// Context 1 — "verifier" (SkepticalVerifier.ts VERIFICATION_ALLOWED_EXECUTABLES
-// + VerificationUtils.ts CATASTROPHIC_PATTERNS, consumed by
-// lib/verifier/Evidence.ts's gatherEvidence security gate).
-//
-// Provenance: literal Set from SkepticalVerifier.ts (pre-refactor) + literal
-// CATASTROPHIC_PATTERNS array from VerificationUtils.ts (pre-refactor) +
-// examples from skills/Automation/AutonomousWork/Tools/__tests__/
-// AutonomousWork-isc1-18.testwriter.test.ts (ISC 1 "gatherEvidence security").
+// Shared catastrophic floor. These examples came from the deleted "verifier"
+// context (gatherEvidence / WorkOrchestrator.test.ts); the floor is
+// scope-independent, so they still pin it. The verifier and command-runner
+// scope blocks were removed with their scopes on 2026-11-08.
 // ---------------------------------------------------------------------------
 
-describe("compat: verifier context (SkepticalVerifier/Evidence.ts)", () => {
-  const allowedExecutables = [
-    "bun",
-    "node",
-    "tsc",
-    "cat",
-    "ls",
-    "echo",
-    "wc",
-    "grep",
-    "find",
-    "test",
-    "true",
-    "false",
-    "git",
-    "jq",
-    "head",
-    "tail",
-    "diff",
-    "stat",
-    "file",
-    "which",
-    "pwd",
-  ];
-  it.each(allowedExecutables)("executable allowed pre-refactor: %s", (exe) => {
-    expect(isExecutableAllowed(exe, VERIFIER_SCOPE)).toBe(true);
-  });
-
-  const deniedExecutables = ["curl", "python", "wget", "rm", "rg", "npx", "bunx", "npm", "sh", "bash"];
-  it.each(deniedExecutables)("executable denied pre-refactor: %s", (exe) => {
-    expect(isExecutableAllowed(exe, VERIFIER_SCOPE)).toBe(false);
-  });
-
-  // gatherEvidence's own "safe command executes" example (ISC 1).
-  it("allows: bun test src/index.test.ts", () => {
-    const exe = primaryExecutable("bun test src/index.test.ts", VERIFIER_SCOPE);
-    expect(exe && isExecutableAllowed(exe, VERIFIER_SCOPE)).toBe(true);
-  });
-
+describe("compat: shared catastrophic floor", () => {
   // gatherEvidence's own "catastrophic command blocked" example (ISC 1 + WorkOrchestrator.test.ts).
   const catastrophicExamples = [
     "rm -rf /tmp",
@@ -101,7 +51,7 @@ describe("compat: verifier context (SkepticalVerifier/Evidence.ts)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Context 2 — "self-verify" (SelfVerifyRunner.ts SELF_VERIFY_ALLOWED_EXECUTABLES
+// "self-verify" (SelfVerifyRunner.ts SELF_VERIFY_ALLOWED_EXECUTABLES
 // + SELF_VERIFY_CATASTROPHIC, exposed as isSelfVerifyCommandSafe()).
 //
 // Provenance: literal examples from SelfVerifyRunner.test.ts
@@ -141,80 +91,5 @@ describe("compat: self-verify context (CommandSafety SELF_VERIFY_SCOPE)", () => 
   ];
   it.each(deniedCatastrophic)("denied pre-refactor (catastrophic even with allowlisted first token): %s", (cmd) => {
     expect(isSelfVerifyCommandSafe(cmd)).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Context 3 — "command-runner" (CommandRunner.ts ALLOWED_EXECUTABLES +
-// SAFE_GIT_SUBCOMMANDS, consumed by parseVerificationCommand()).
-//
-// Provenance: literal examples from WorkOrchestrator.test.ts's
-// "parseVerificationCommand security" describe block (exercises the same
-// CommandRunner instance via WorkOrchestrator's delegate method) — copied
-// verbatim.
-// ---------------------------------------------------------------------------
-
-describe("compat: command-runner context (CommandRunner.ts parseVerificationCommand)", () => {
-  const allowedExecutables = [
-    "bun",
-    "node",
-    "npx",
-    "grep",
-    "rg",
-    "test",
-    "diff",
-    "wc",
-    "jq",
-    "ls",
-    "cat",
-    "head",
-    "tail",
-  ];
-  it.each(allowedExecutables)("executable allowed pre-refactor: %s", (exe) => {
-    expect(isExecutableAllowed(exe, COMMAND_RUNNER_SCOPE)).toBe(true);
-  });
-
-  const deniedExecutables = [
-    "curl",
-    "python",
-    "wget",
-    "rm",
-    "echo",
-    "tsc",
-    "bunx",
-    "npm",
-    "sh",
-    "bash",
-    "find",
-    "stat",
-  ];
-  it.each(deniedExecutables)("executable denied pre-refactor: %s", (exe) => {
-    expect(isExecutableAllowed(exe, COMMAND_RUNNER_SCOPE)).toBe(false);
-  });
-
-  it("bare git is NOT allowlisted as an executable (only specific read-only subcommands)", () => {
-    expect(isExecutableAllowed("git", COMMAND_RUNNER_SCOPE)).toBe(false);
-  });
-
-  const safeGitSubcommands = ["diff", "log", "show", "status", "rev-parse", "merge-base"];
-  it("safe git subcommands allowed pre-refactor", () => {
-    const scope = COMMAND_RUNNER_SCOPE.git;
-    expect(typeof scope).toBe("object");
-    if (typeof scope === "object") {
-      for (const sub of safeGitSubcommands) {
-        expect(scope.subcommands.includes(sub)).toBe(true);
-      }
-    }
-  });
-
-  const mutatingGitSubcommands = ["checkout", "reset", "push", "commit", "config", "branch", "clean"];
-  it("mutating git subcommands rejected pre-refactor", () => {
-    const scope = COMMAND_RUNNER_SCOPE.git;
-    expect(typeof scope).toBe("object");
-    if (typeof scope === "object") {
-      for (const sub of mutatingGitSubcommands) {
-        expect(scope.subcommands.includes(sub)).toBe(false);
-      }
-    }
   });
 });

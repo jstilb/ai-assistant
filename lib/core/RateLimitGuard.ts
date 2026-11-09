@@ -10,7 +10,7 @@
  *
  * Two safety layers:
  *   1. Pre-spawn: resolveModel() checks state file before spawning
- *   2. Post-spawn: isRateLimitError() pattern-matches agent output
+ *   2. Post-spawn: ClaudeRunEnd.ts (classifyRunEnd / isLimitText) classifies the run's text
  *
  * Usage:
  *   # CLI
@@ -19,12 +19,13 @@
  *   bun lib/core/RateLimitGuard.ts --check "You've hit your limit · resets Apr 10"
  *
  *   # Programmatic
- *   import { resolveModel, isRateLimitError, getFallbackModel } from './RateLimitGuard.ts';
+ *   import { resolveModel, getFallbackModel } from './RateLimitGuard.ts';
  */
 
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { MEMORY, type RateLimits, type RateLimitWindow } from "./MemoryPaths.ts";
+import { isLimitText, extractResetInfo } from "./ClaudeRunEnd.ts";
 
 // ============================================================================
 // Types
@@ -61,24 +62,6 @@ const FALLBACK_CHAIN: Record<ModelTier, ModelTier[]> = {
   // the executor chose (executor.ts FALLBACK_MODEL).
   fable: ["sonnet"],
 };
-
-/**
- * Pattern to detect rate limit errors in agent output.
- *
- * Matches Claude Code's rate/usage/session limit notices, e.g.
- *   "You've hit your limit · resets 3pm"
- *   "You've hit your session limit · resets 11:50pm (America/Los_Angeles)"
- *   "You've hit your usage limit"
- *
- * The first branch keys on the "hit your <qualifier> limit" phrasing (the
- * qualifier — session/usage/weekly/5-hour — is optional); the second is a
- * fallback for "<...> limit <...> resets" wording. Deliberately tight so prose
- * that merely mentions "rate limit" does not false-positive.
- */
-// "reached your <Model> limit" is the per-model-pool banner (2026-08-29:
-// "You've reached your Fable 5 limit. Switch to another model, ...").
-const RATE_LIMIT_PATTERN =
-  /hit your (?:[a-z0-9-]+ )?limit|reached your (?:[a-z0-9.-]+ ){0,3}limit|limit\b[^.\n]{0,40}resets/i;
 
 // ============================================================================
 // Core Functions
@@ -220,7 +203,7 @@ function getFallbackModel(current: ModelTier): ModelTier | null {
  * Pre-spawn heuristic: if rate limits are above threshold, walk the
  * fallback chain. Note that the state file tracks session-wide limits,
  * not per-model, so this is best-effort — the real safety net is
- * post-spawn detection via isRateLimitError().
+ * post-spawn classification (ClaudeRunEnd.ts).
  */
 function resolveModel(preferred: ModelTier, threshold: number = DEFAULT_THRESHOLD): ModelFallbackResult {
   const usage = assessUsage(getRateLimitState());
@@ -269,23 +252,6 @@ function resolveModel(preferred: ModelTier, threshold: number = DEFAULT_THRESHOL
     peak,
     known: true,
   };
-}
-
-/**
- * Check if a string (agent output) contains a rate limit error.
- * Use this for post-spawn detection.
- */
-function isRateLimitError(output: string): boolean {
-  return RATE_LIMIT_PATTERN.test(output);
-}
-
-/**
- * Extract rate limit reset info from an error message.
- * Returns null if the message doesn't match.
- */
-function extractResetInfo(output: string): string | null {
-  const match = output.match(/resets\s+(.+?)(?:\s*\(|$)/i);
-  return match?.[1]?.trim() ?? null;
 }
 
 // ============================================================================
@@ -351,9 +317,9 @@ OPTIONS:
   }
 
   if (values.check) {
-    const limited = isRateLimitError(values.check);
+    const limited = isLimitText(values.check);
     const reset = limited ? extractResetInfo(values.check) : null;
-    console.log(JSON.stringify({ isRateLimitError: limited, resetInfo: reset }));
+    console.log(JSON.stringify({ isLimitText: limited, resetInfo: reset }));
     return;
   }
 
@@ -384,15 +350,12 @@ if (import.meta.main) {
 export {
   resolveModel,
   isRateLimited,
-  isRateLimitError,
   getRateLimitState,
   getFallbackModel,
   getPeakUsage,
   assessUsage,
   describeGaps,
-  extractResetInfo,
   MAX_STALE_MS,
-  RATE_LIMIT_PATTERN,
   FALLBACK_CHAIN,
   DEFAULT_THRESHOLD,
   type ModelTier,

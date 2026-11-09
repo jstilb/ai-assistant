@@ -24,12 +24,11 @@ import { pinKayaHome, restoreKayaHome } from "../test/pinKayaHome.ts";
 import {
   spawnAgentSync,
   spawnAgent,
-  isInfraUnavailable,
-  classifyInfraReason,
   parseVerdictBlock,
   resolveGuardHooks,
   buildGuardHookSettings,
   resolveEnforceTools,
+  buildAgentArgs,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_MAX_BUFFER,
 } from "./AgentSpawner.ts";
@@ -320,6 +319,65 @@ describe("resolveEnforceTools (pure)", () => {
 });
 
 // ============================================================================
+// buildAgentArgs — the shared agent argv (P02 S4)
+// ============================================================================
+
+describe("buildAgentArgs", () => {
+  const base = { prompt: "do it", model: "sonnet", allowedTools: "Read,Grep", guardHooks: false, enforceTools: false };
+
+  it("isolated (default) = skip-permissions + --setting-sources '' + text output, prompt last", () => {
+    expect(buildAgentArgs(base)).toEqual([
+      "-p",
+      "--model",
+      "sonnet",
+      "--dangerously-skip-permissions",
+      "--allowedTools",
+      "Read,Grep",
+      "--setting-sources",
+      "",
+      "--output-format",
+      "text",
+      "do it",
+    ]);
+  });
+
+  it("isolated with guardHooks appends inline --settings before the prompt", () => {
+    const args = buildAgentArgs({ ...base, guardHooks: true });
+    expect(args[args.length - 3]).toBe("--settings");
+    expect(args[args.length - 1]).toBe("do it");
+  });
+
+  it("kaya = no skip-permissions, no --setting-sources, no inline --settings even with guardHooks", () => {
+    expect(buildAgentArgs({ ...base, settings: "kaya", effort: "medium", guardHooks: true })).toEqual([
+      "-p",
+      "--model",
+      "sonnet",
+      "--effort",
+      "medium",
+      "--allowedTools",
+      "Read,Grep",
+      "--output-format",
+      "text",
+      "do it",
+    ]);
+  });
+
+  it("omitted model → no --model flag", () => {
+    expect(buildAgentArgs({ ...base, model: undefined, settings: "kaya" })).not.toContain("--model");
+    expect(buildAgentArgs({ ...base, model: undefined })).not.toContain("--model");
+  });
+
+  it("--tools follows enforceTools for both settings kinds", () => {
+    for (const settings of ["isolated", "kaya"] as const) {
+      const on = buildAgentArgs({ ...base, settings, enforceTools: true });
+      expect(on[on.indexOf("--tools") + 1]).toBe("Read,Grep");
+      expect(on[on.length - 1]).toBe("do it");
+      expect(buildAgentArgs({ ...base, settings, enforceTools: false })).not.toContain("--tools");
+    }
+  });
+});
+
+// ============================================================================
 // spawnAgentSync — guardHooks (S-06 slice-3)
 // ============================================================================
 
@@ -588,14 +646,68 @@ describe("spawnAgentSync — post-spawn infra classification", () => {
     expect(result.infraReason).toBe("no-output");
   });
 
-  it("flags infraUnavailable for a credit-pool/quota/overloaded notice", () => {
-    const { fn } = makeFakeSpawn({ status: 1, stdout: "The monthly credit pool is exhausted, try later" });
+  it("flags infraUnavailable/quota for the credit-balance banner", () => {
+    const { fn } = makeFakeSpawn({ status: 1, stdout: "Credit balance is too low" });
     const result = spawnAgentSync(
       { prompt: "p", model: "sonnet", allowedTools: "Read" },
       { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
     );
     expect(result.infraUnavailable).toBe(true);
     expect(result.infraReason).toBe("quota");
+  });
+
+  it("flags infraUnavailable/rate-limit for the rate_limit_error API type (was a task failure before P02 S1)", () => {
+    const { fn } = makeFakeSpawn({
+      status: 1,
+      stderr: 'API Error: 429 {"type":"error","error":{"type":"rate_limit_error","message":"Rate limited"}}',
+    });
+    const result = spawnAgentSync(
+      { prompt: "p", model: "sonnet", allowedTools: "Read" },
+      { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
+    );
+    expect(result.infraUnavailable).toBe(true);
+    expect(result.infraReason).toBe("rate-limit");
+  });
+
+  it("flags infraUnavailable/rate-limit for the real 529 Overloaded banner on STDOUT (executor falls back to sonnet)", () => {
+    const { fn } = makeFakeSpawn({
+      status: 1,
+      stdout:
+        "API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.",
+    });
+    const result = spawnAgentSync(
+      { prompt: "p", model: "sonnet", allowedTools: "Read" },
+      { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
+    );
+    expect(result.infraUnavailable).toBe(true);
+    expect(result.infraReason).toBe("rate-limit");
+  });
+
+  it("flags infraUnavailable/auth for the 401 auth banner (was a task failure before P02 S1)", () => {
+    const { fn } = makeFakeSpawn({
+      status: 1,
+      stdout: "Failed to authenticate. API Error: 401 Invalid authentication credentials",
+    });
+    const result = spawnAgentSync(
+      { prompt: "p", model: "sonnet", allowedTools: "Read" },
+      { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
+    );
+    expect(result.infraUnavailable).toBe(true);
+    expect(result.infraReason).toBe("auth");
+  });
+
+  it("does NOT flag agent prose on STDOUT with the old quota words (monthly … pool) — a real task failure", () => {
+    const { fn } = makeFakeSpawn({
+      status: 1,
+      stdout: "I could not finish the monthly report from the pool table: the credit column is empty.",
+    });
+    const result = spawnAgentSync(
+      { prompt: "p", model: "sonnet", allowedTools: "Read" },
+      { spawnFn: fn, isRateLimitedFn: NEVER_LIMITED },
+    );
+    expect(result.success).toBe(false);
+    expect(result.infraUnavailable).toBe(false);
+    expect(result.infraReason).toBeUndefined();
   });
 
   it("flags infraUnavailable/network for a DNS resolution error surfaced via raw.error.code (ENOTFOUND)", () => {
@@ -708,64 +820,6 @@ describe("spawnAgentSync — pre-spawn rate-limit gate (real RateLimitGuard, no 
 
     expect(result.preSpawnGated).toBe(false);
     expect(calls).toHaveLength(1);
-  });
-});
-
-// ============================================================================
-// isInfraUnavailable — pure classification
-// ============================================================================
-
-describe("isInfraUnavailable (pure classification)", () => {
-  const base = { success: false, stdout: "", stderr: "", timedOut: false, preSpawnGated: false };
-
-  it("is false when success is true, regardless of other fields", () => {
-    expect(isInfraUnavailable({ ...base, success: true, timedOut: true })).toBe(false);
-  });
-
-  it("is true when preSpawnGated is true", () => {
-    expect(isInfraUnavailable({ ...base, preSpawnGated: true })).toBe(true);
-  });
-
-  it("is true when timedOut is true, with infraReason 'timeout'", () => {
-    expect(isInfraUnavailable({ ...base, timedOut: true })).toBe(true);
-    expect(classifyInfraReason({ ...base, timedOut: true })).toBe("timeout");
-  });
-
-  it("is true on blank stdout+stderr with a failure, with infraReason 'no-output'", () => {
-    expect(isInfraUnavailable({ ...base })).toBe(true);
-    expect(classifyInfraReason({ ...base })).toBe("no-output");
-  });
-
-  it("is false for a genuine failure with real diagnostic output", () => {
-    expect(isInfraUnavailable({ ...base, stdout: "SyntaxError: unexpected token" })).toBe(false);
-    expect(classifyInfraReason({ ...base, stdout: "SyntaxError: unexpected token" })).toBeUndefined();
-  });
-
-  it("is true (infraReason 'network') for an ENOTFOUND errorCode, even with blank stdout+stderr", () => {
-    expect(isInfraUnavailable({ ...base, errorCode: "ENOTFOUND" })).toBe(true);
-    expect(classifyInfraReason({ ...base, errorCode: "ENOTFOUND" })).toBe("network");
-  });
-
-  it(
-    "is true (infraReason 'network') for \"Can't reach the API server\" text with non-blank output " +
-      "(REGRESSION — before this slice this text matched NO infra pattern, i.e. isInfraUnavailable returned false)",
-    () => {
-      const stdout = "Error: Can't reach the API server. Please check your network connection.";
-      expect(isInfraUnavailable({ ...base, stdout })).toBe(true);
-      expect(classifyInfraReason({ ...base, stdout })).toBe("network");
-    },
-  );
-
-  it("is true (infraReason 'rate-limit') for rate/usage/session-limit wording", () => {
-    const stdout = "You've hit your limit · resets 11:50pm (America/Los_Angeles)";
-    expect(isInfraUnavailable({ ...base, stdout })).toBe(true);
-    expect(classifyInfraReason({ ...base, stdout })).toBe("rate-limit");
-  });
-
-  it("is true (infraReason 'quota') for credit/pool/quota wording", () => {
-    const stdout = "The monthly credit pool is exhausted, try later";
-    expect(isInfraUnavailable({ ...base, stdout })).toBe(true);
-    expect(classifyInfraReason({ ...base, stdout })).toBe("quota");
   });
 });
 
@@ -944,7 +998,6 @@ describe("AgentSpawner exports", () => {
   it("exports the expected public functions", () => {
     expect(typeof spawnAgentSync).toBe("function");
     expect(typeof spawnAgent).toBe("function");
-    expect(typeof isInfraUnavailable).toBe("function");
     expect(typeof parseVerdictBlock).toBe("function");
   });
 });

@@ -19,13 +19,15 @@
  * subscription). Every call here costs money — $3.00/M input ($0.30/M cached),
  * $15.00/M output as of 2026-07-24.
  *
- * AUTH: `MOONSHOT_API_KEY` in ~/.claude/secrets.json. Absent key fails LOUD —
+ * AUTH: `MOONSHOT_API_KEY` in secrets.json, read through Secrets.ts on every
+ * call. Absent key fails LOUD —
  * never a silent fallback to a Claude level, because a silent downgrade would
- * hide that the tier Jm asked for is not actually running.
+ * hide that the tier Jm asked for is not actually running. A broken
+ * secrets.json fails with the SecretError kind (e.g. `file-malformed`), not as
+ * a missing key.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { kayaHomePath } from "./KayaHome.ts";
+import { optionalSecret, SecretError } from "./Secrets.ts";
 
 /** Moonshot's OpenAI-compatible base URL. */
 export const MOONSHOT_BASE_URL = "https://api.moonshot.ai/v1";
@@ -81,32 +83,6 @@ interface MoonshotResponse {
   usage?: MoonshotUsage;
 }
 
-/**
- * Read MOONSHOT_API_KEY from secrets.json.
- *
- * Resolved at CALL time (not module load) so a KAYA_HOME override or a
- * mid-process secrets.json write is picked up — the same discipline
- * NotificationService uses. Returns null when absent or malformed; callers
- * must fail loud rather than substitute another provider.
- */
-export function loadMoonshotApiKey(): string | null {
-  const secretsPath = kayaHomePath("secrets.json");
-  try {
-    if (!existsSync(secretsPath)) return null;
-    const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-    const key = secrets.MOONSHOT_API_KEY;
-    if (typeof key !== "string") return null;
-    const trimmed = key.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  } catch (err) {
-    // A malformed or unreadable secrets.json still means "no usable key" (the caller's
-    // error message names the file), but say why on stderr so it is not mistaken for a
-    // missing key.
-    console.error(`MoonshotClient: cannot read ${secretsPath}: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
-  }
-}
-
 /** Shape of the OpenAI-compatible response we depend on. */
 interface ChatCompletionShape {
   choices?: Array<{ message?: { content?: unknown } }>;
@@ -121,18 +97,31 @@ function toFiniteNumber(value: unknown): number {
 /**
  * One-shot chat completion against Kimi K3.
  *
- * Never throws — every failure path (missing key, HTTP error, malformed body,
- * timeout, network error) resolves to `{ success: false, error }` so the
- * Inference layer can map it onto InferenceResult uniformly.
+ * Never throws on an expected failure — every failure path (missing key,
+ * broken secrets.json, HTTP error, malformed body, timeout, network error)
+ * resolves to `{ success: false, error }` so the Inference layer can map it
+ * onto InferenceResult uniformly.
  */
 export async function moonshotChat(
   req: MoonshotRequest,
   deps: { fetchFn?: FetchLike; apiKey?: string | null } = {},
 ): Promise<MoonshotResponse> {
-  // Trim here too, not just in loadMoonshotApiKey: an injected/env-sourced key
-  // of pure whitespace is truthy and would otherwise send `Bearer    ` and come
-  // back as an opaque 401 instead of the actionable message below.
-  const resolved = deps.apiKey !== undefined ? deps.apiKey : loadMoonshotApiKey();
+  let resolved = deps.apiKey;
+  if (resolved === undefined) {
+    try {
+      resolved = optionalSecret("MOONSHOT_API_KEY");
+    } catch (err) {
+      if (!(err instanceof SecretError)) throw err;
+      return {
+        success: false,
+        output: "",
+        error: `${err.message} — the kimi level cannot run. Refusing to silently fall back to a Claude level.`,
+      };
+    }
+  }
+  // Trim every key, stored or injected: a key of pure whitespace is truthy and
+  // would otherwise send `Bearer    ` and come back as an opaque 401 instead of
+  // the actionable message below.
   const apiKey = typeof resolved === "string" ? resolved.trim() : resolved;
   if (!apiKey) {
     return {

@@ -15,16 +15,16 @@ Scheduling now happens entirely via launchd + a jobs manifest:
   (see that directory's README); formally retired jobs live in
   `MEMORY/daemon/cron/jobs.retired/`.
 - **Runner**: `bin/run-cron-job.ts <job-id>` is what every plist actually
-  invokes. It reads the job's yaml, re-validates the schedule, and spawns the
-  job.
+  invokes. It is an argv-to-exit-code shim over `CronRun.ts`'s `runCronJob`,
+  which reads the job's yaml, re-validates the schedule, and spawns the job.
 
 ## Files in this directory
 
 | File | Purpose |
 |------|---------|
+| `CronRun.ts` | The Cron Run module: the whole lifecycle of one job execution behind `runCronJob` (ADR-034) |
 | `JobSpec.ts` | Canonical Zod schema for a job definition (`JobSpecSchema`) |
-| `JobSpawner.ts` | Shared spawn+timeout+classify primitive used by `run-cron-job.ts` |
-| `RetryRunner.ts` / `RetryPolicy.ts` | Retry-on-failure loop and policy |
+| `JobSpawner.ts` | Shared spawn+timeout+classify primitive used by `CronRun.ts` |
 | `PowerState.ts` | Reads system power/sleep state to gate retries |
 | `NetworkPrecondition.ts` | Checks network reachability before running a job |
 | `FailureClassifier.ts` | Classifies a failed run (timeout, network, crash, ...) |

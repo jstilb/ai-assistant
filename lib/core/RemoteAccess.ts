@@ -14,9 +14,7 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { getKayaHome } from "./KayaHome.ts";
-import { join } from "node:path";
+import { optionalSecret } from "./Secrets.ts";
 
 export const LOOPBACK = "127.0.0.1";
 
@@ -27,8 +25,6 @@ export interface RemoteAccessOptions {
   bindEnv: string;
   /** Env var that overrides the token (and enforces auth even on loopback). */
   tokenEnv: string;
-  /** Test seam: secrets.json path. */
-  secretsPath?: string;
   /** Test seam: environment. */
   env?: Record<string, string | undefined>;
 }
@@ -46,11 +42,9 @@ export interface RemoteAccess {
  */
 export function resolveRemoteAccess(opts: RemoteAccessOptions): RemoteAccess {
   const env = opts.env ?? process.env;
-  const secretsPath = opts.secretsPath ?? join(getKayaHome(), "secrets.json");
-  const bind = env[opts.bindEnv] || readSecretString(secretsPath, `${opts.secretPrefix}_bind`) || LOOPBACK;
+  const bind = env[opts.bindEnv] || optionalSecret(`${opts.secretPrefix}_bind`) || LOOPBACK;
   const envToken = env[opts.tokenEnv] || null;
-  const token =
-    bind === LOOPBACK ? envToken : (envToken ?? readSecretString(secretsPath, `${opts.secretPrefix}_token`));
+  const token = bind === LOOPBACK ? envToken : (envToken ?? optionalSecret(`${opts.secretPrefix}_token`));
   if (bind !== LOOPBACK && token === null) {
     throw new Error(
       `bind=${bind} requires a token (env ${opts.tokenEnv} or ${opts.secretPrefix}_token in ` +
@@ -106,21 +100,6 @@ export function withRemoteAuth(
     if (auth.setCookie) res.headers.set("set-cookie", auth.setCookie);
     return res;
   };
-}
-
-function readSecretString(path: string, key: string): string | null {
-  try {
-    const v = (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>)[key];
-    return typeof v === "string" && v.length > 0 ? v : null;
-  } catch (err) {
-    // A missing file is the normal "not configured" case; a malformed or unreadable one is not.
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error(
-        `RemoteAccess: cannot read ${key} from ${path}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    return null;
-  }
 }
 
 function timingSafeEq(a: string, b: string): boolean {

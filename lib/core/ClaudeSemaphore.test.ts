@@ -2,9 +2,9 @@
  * ClaudeSemaphore.test.ts — counting-semaphore behaviour: cap, proceed-on-timeout,
  * release, and dead-owner pruning.
  *
- * Env (slot dir + MAX) is set BEFORE a dynamic import so the module's module-level
- * constants bind to an isolated temp dir. Owners default to process.pid (alive), so held
- * slots are never falsely pruned mid-test.
+ * Env (slot dir + MAX) points the module at an isolated temp dir; the module reads it per
+ * call. Owners default to process.pid (alive), so held slots are never falsely pruned
+ * mid-test.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { rmSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";

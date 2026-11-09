@@ -3,11 +3,15 @@
  *
  * Extracted from bin/run-cron-job.ts (which top-level-executes main() and so
  * can't be imported by tests) so the tool-list/model wiring is unit-testable.
+ * Every agent-mode job gets DEFAULT_AGENT_TOOLS and the CLI-default model; the
+ * per-job agentTools/agentModel overrides were removed 2026-11-08 (only the
+ * deleted DailyBriefing jobs ever set them).
  * Direct-mode (execute:) jobs never come through here — their command/args
  * pass through verbatim.
  */
 
-import { classifyInfraReason } from "../core/AgentSpawner.ts";
+import { buildAgentArgs } from "../core/AgentSpawner.ts";
+import { classifyRunEnd } from "../core/ClaudeRunEnd.ts";
 import type { JobSpec } from "./JobSpec.ts";
 import type { SpawnJobResult } from "./JobSpawner.ts";
 
@@ -40,53 +44,47 @@ export function buildAgentSpawnArgs(
   claudeBin: string,
   opts: AgentSpawnArgOptions = {},
 ): string[] {
-  const args = [
+  const prompt = [
+    "You are executing a scheduled Kaya cron job.",
+    `Job ID: ${jobId}`,
+    `Task: ${job.task}`,
+    `Output mode: ${job.output}`,
+    "Execute the task and provide a concise summary of what you accomplished.",
+  ].join("\n");
+  // Cron agent jobs run slash commands (`task: /knowledge daily`), so they
+  // load the user's settings (`kaya`). The model is omitted except on the
+  // post-fallback attempt — `buildAgentArgs` then adds no `--model` and the
+  // CLI default applies.
+  return [
     claudeBin,
-    "-p",
-    [
-      "You are executing a scheduled Kaya cron job.",
-      `Job ID: ${jobId}`,
-      `Task: ${job.task}`,
-      `Output mode: ${job.output}`,
-      "Execute the task and provide a concise summary of what you accomplished.",
-    ].join("\n"),
-    "--allowedTools",
-    job.agentTools ?? DEFAULT_AGENT_TOOLS,
-    "--effort",
-    job.agentEffort ?? DEFAULT_AGENT_EFFORT,
+    ...buildAgentArgs({
+      prompt,
+      model: opts.modelOverride,
+      effort: job.agentEffort ?? DEFAULT_AGENT_EFFORT,
+      allowedTools: DEFAULT_AGENT_TOOLS,
+      settings: "kaya",
+    }),
   ];
-  // --model only when explicitly set — omitting the flag lets the claude CLI
-  // use its own configured default, which is the right behavior for the
-  // majority of jobs that don't care.
-  const model = opts.modelOverride ?? job.agentModel;
-  if (model) {
-    args.push("--model", model);
-  }
-  return args;
 }
 
 /**
  * Decide whether a failed agent-mode attempt should re-spawn on
  * FALLBACK_AGENT_MODEL. Only rate-limit/quota infra reasons qualify — those
  * are pool-specific, so switching pools helps; timeout/network/no-output are
- * not fixed by a different model. Jobs pinned to a non-Fable model never fall
- * back (they are already off the Fable pool). Returns undefined when the
- * attempt should be retried as-is (or not at all — RetryPolicy decides that).
+ * not fixed by a different model. Returns undefined when the
+ * attempt should be retried as-is (or not at all — CronRun.ts's attempt loop decides that).
  *
  * 2026-08-29: 18 consecutive agent-mode failures on "You've reached your
  * Fable 5 limit. Switch to another model" with no model change between
  * attempts — the case this exists for.
  */
-export function fallbackModelFor(job: JobSpec, result: SpawnJobResult): string | undefined {
+export function fallbackModelFor(result: SpawnJobResult): string | undefined {
   if (result.success) return undefined;
-  if (job.agentModel && !/fable/i.test(job.agentModel)) return undefined;
-  const reason = classifyInfraReason({
-    success: result.success,
+  const end = classifyRunEnd({
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
     stdout: result.stdout,
     stderr: result.stderr,
-    timedOut: result.timedOut,
-    preSpawnGated: false,
-    errorCode: undefined,
   });
-  return reason === "rate-limit" || reason === "quota" ? FALLBACK_AGENT_MODEL : undefined;
+  return end === "rate-limit" || end === "quota" ? FALLBACK_AGENT_MODEL : undefined;
 }

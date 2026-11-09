@@ -8,13 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  recordOutbound,
-  recordOutboundFromTelegramResponse,
-  findByMessageId,
-  recentOutbound,
-  isTelegramPushEnabled,
-} from "./TelegramOutboundLedger.ts";
+import { recordOutbound, findByMessageId, recentOutbound, isTelegramPushEnabled } from "./TelegramOutboundLedger.ts";
 import { clearAllCaches } from "./ConfigLoader.ts";
 
 let tempHome: string;
@@ -93,30 +87,6 @@ describe("recentOutbound", () => {
 
   it("returns empty when the ledger does not exist", () => {
     expect(recentOutbound()).toHaveLength(0);
-  });
-});
-
-describe("recordOutboundFromTelegramResponse", () => {
-  it("parses a Bot API success body and records the message_id", async () => {
-    const response = new Response(JSON.stringify({ ok: true, result: { message_id: 555 } }), { status: 200 });
-    await recordOutboundFromTelegramResponse(response, "notification-service", "Alert: disk full");
-
-    const found = findByMessageId(555);
-    expect(found).not.toBeNull();
-    expect(found!.source).toBe("notification-service");
-    expect(found!.text).toBe("Alert: disk full");
-  });
-
-  it("records nothing on a non-ok body and does not throw", async () => {
-    const response = new Response(JSON.stringify({ ok: false, description: "bad" }), { status: 200 });
-    await recordOutboundFromTelegramResponse(response, "s", "t");
-    expect(recentOutbound({ windowMs: 60_000 })).toHaveLength(0);
-  });
-
-  it("tolerates a non-JSON body without throwing", async () => {
-    const response = new Response("<html>gateway error</html>", { status: 200 });
-    await recordOutboundFromTelegramResponse(response, "s", "t");
-    expect(recentOutbound({ windowMs: 60_000 })).toHaveLength(0);
   });
 });
 

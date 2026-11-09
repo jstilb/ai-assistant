@@ -15,7 +15,8 @@ import {
   isExternalApiLevel,
   type InferenceLevel,
 } from "./Inference.ts";
-import { loadMoonshotApiKey, KIMI_K3_PRICING } from "./MoonshotClient.ts";
+import { KIMI_K3_PRICING } from "./MoonshotClient.ts";
+import { optionalSecret } from "./Secrets.ts";
 
 describe("isExternalApiLevel", () => {
   it("marks kimi as the non-subprocess level", () => {
@@ -69,7 +70,7 @@ describe("kimi pricing", () => {
 
 describe("inference(level: kimi) — no key provisioned", () => {
   it("fails loud with an actionable error instead of falling back to Claude", async () => {
-    if (loadMoonshotApiKey() !== null) {
+    if (optionalSecret("MOONSHOT_API_KEY") !== null) {
       // A key has since been provisioned; this assertion no longer applies and a
       // real call would cost money, so skip rather than spend.
       return;
@@ -91,7 +92,7 @@ describe("inference(level: kimi) — no key provisioned", () => {
   });
 
   it("reports latency and the kimi level even on the failure path", async () => {
-    if (loadMoonshotApiKey() !== null) return;
+    if (optionalSecret("MOONSHOT_API_KEY") !== null) return;
 
     const result = await inference({
       systemPrompt: "s",
@@ -106,7 +107,7 @@ describe("inference(level: kimi) — no key provisioned", () => {
   });
 
   it("does not retry a missing key into a spend loop", async () => {
-    if (loadMoonshotApiKey() !== null) return;
+    if (optionalSecret("MOONSHOT_API_KEY") !== null) return;
 
     // retries>0 must still terminate promptly; a missing key is not transient.
     const started = Date.now();

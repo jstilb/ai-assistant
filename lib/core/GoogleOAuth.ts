@@ -7,7 +7,7 @@
  * scope list and the secrets keys they write. Extracted here so skills do not
  * import each other (ADR-006).
  *
- * Pure helpers (buildConsentUrl, exchangeCodeForTokens, mergeSecretsFile) take an
+ * Pure helpers (buildConsentUrl, exchangeCodeForTokens) take an
  * injectable HttpFetcher so tests need no network.
  */
 
@@ -126,19 +126,6 @@ export async function exchangeCodeForTokens(
   return parsed as TokenExchangeResult;
 }
 
-export function mergeSecretsFile(path: string, keys: Record<string, string>): void {
-  let existing: Record<string, unknown> = {};
-  if (existsSync(path)) {
-    try {
-      existing = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    } catch {
-      existing = {};
-    }
-  }
-  const merged = { ...existing, ...keys };
-  writeFileSync(path, JSON.stringify(merged, null, 2) + "\n", { mode: 0o600 });
-}
-
 export interface OAuthClient {
   clientId: string;
   clientSecret: string;
@@ -190,7 +177,7 @@ interface LoopbackConsentOptions {
 /**
  * Interactive loopback consent: starts a localhost server, opens the consent
  * URL in the browser, waits for Google's redirect, exchanges the code for
- * tokens. Callers persist the tokens (mergeSecretsFile) under their own keys.
+ * tokens. Callers persist the tokens (Secrets.updateSecrets) under their own keys.
  */
 export async function runLoopbackConsent(opts: LoopbackConsentOptions): Promise<TokenExchangeResult> {
   if (typeof Bun === "undefined" || !Bun.serve) throw new Error("Bun.serve unavailable — run with bun");

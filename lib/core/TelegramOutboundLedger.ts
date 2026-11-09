@@ -8,14 +8,14 @@
  * notification ("This has been completed") Kaya had no idea what "this" was —
  * the verified first-touch adoption killer (both Aug-2026 sessions died on it).
  *
- * Every send seam that talks to the Telegram Bot API records
- * {telegram_message_id, timestamp, source, text} here; the gateway's
+ * Every push lane records {telegram_message_id, timestamp, source, text} here
+ * after lib/core/TelegramTransport.ts (the one Bot API call, ADR-036) reports
+ * a delivered message; the gateway's
  * ReplyContext resolver reads it to give replies their referent.
  *
- * Seams instrumented (audit §1-A1 named the first three):
- *   - TelegramClient.sendTextMessage()      (CLI + in-process senders)
+ * Seams instrumented:
+ *   - TelegramClient.sendTextMessage()      (CLI + in-process senders, incl. approval nudges)
  *   - NotificationService.sendTelegram()    (AlertGate pages & all notify() traffic)
- *   - TelegramGatewayImpl.notify()
  *
  * Lives in lib/core (not the Telegram skill) because NotificationService —
  * lib/core itself — is one of the writers, and lib/core must not import from
@@ -78,34 +78,12 @@ export function recordOutbound(entry: { messageId: number; source: string; text:
 }
 
 /**
- * Parse a Telegram Bot API sendMessage Response and record its message_id.
- * For seams that raw-fetch the API and don't otherwise read the success body.
- * Consumes the response body — callers must not need it afterwards.
- */
-export async function recordOutboundFromTelegramResponse(
-  response: Response,
-  source: string,
-  text: string,
-): Promise<void> {
-  try {
-    const raw = (await response.json()) as { ok?: boolean; result?: { message_id?: number } };
-    const messageId = raw?.result?.message_id;
-    if (raw?.ok && typeof messageId === "number") {
-      recordOutbound({ messageId, source, text });
-    }
-  } catch (err) {
-    // Body unreadable/not-JSON — the send itself already succeeded upstream.
-    console.error("[TelegramOutboundLedger] could not parse send response for ledger:", err);
-  }
-}
-
-/**
- * Push switch: settings.json `notifications.telegramPush.enabled`. Every
+ * Push switch: settings.json `notifications.telegramPush.enabled`.
+ * lib/core/TelegramTransport.ts checks it before every `send*` call, so every
  * Kaya-initiated (push) seam — the ones listed in this file's header, plus
- * approvals.sendApprovalNudge() and DeliveryUtils voice delivery — checks it
- * before calling the Bot API. Jm set it false on 2026-10-26 ("shut down all
+ * approvals.sendApprovalNudge() — is gated there, not by its own check (ADR-036). Jm set it false on 2026-10-26 ("shut down all
  * telegram messages"). Bot replies to Jm's own messages (TelegramBot
- * ctx.reply, sendVoiceBuffer) are not pushes and are not gated.
+ * ctx.reply, ctx.replyWithVoice) are not pushes and are not gated.
  *
  * Read per call (ConfigLoader re-reads settings.json on mtime change), so a
  * flip needs no restart. Unset → enabled. A settings load failure is logged

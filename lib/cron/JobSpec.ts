@@ -179,20 +179,6 @@ export type Retry = z.infer<typeof RetrySchema>;
 export const DesiredArtifactSchema = z.object({
   path: z.string(),
   maxAgeHrs: z.number(),
-  // NEW (sleep-cascade remediation, Slice A) — optional substring marker.
-  // When set, JobReconciler.ts's decideCatchUp treats the artifact as stale
-  // whenever its first line (a bounded read — see bin/job-reconciler.ts's
-  // checkStaleMarker) contains this substring, REGARDLESS of mtime-based
-  // freshness. This closes the gap where a deterministic-fallback-authored
-  // artifact satisfies the plain maxAgeHrs check trivially — it was just
-  // written — so the reconciler never re-runs the real agent that day.
-  // The motivating job (daily-briefing's 07:45 sentinel) was deleted
-  // 2026-11-05; no manifest declares this field or pendingSuffix now.
-  staleIfFirstLineContains: z.string().optional(),
-  pendingSuffix: z
-    .string()
-    .regex(/^\.[a-zA-Z0-9._-]+$/)
-    .optional(),
 });
 export type DesiredArtifact = z.infer<typeof DesiredArtifactSchema>;
 
@@ -258,12 +244,6 @@ const JobSpecObjectSchema = z
     // (seconds). See module doc: generator does not yet emit StartInterval.
     intervalSeconds: z.number().optional(),
 
-    // NEW (dailybriefing markdown-first, ADR-022) — agent-mode spawn overrides.
-    // agentTools replaces the default --allowedTools list (comma-separated,
-    // passed through verbatim); agentModel adds --model to the claude -p spawn.
-    // Both ignored in execute (direct) mode. See lib/cron/AgentSpawnArgs.ts.
-    agentTools: z.string().optional(),
-    agentModel: z.string().optional(),
     // agentEffort sets --effort on the claude -p spawn (Fable 5.1 tuning,
     // 2026-09-05). Omitted = DEFAULT_AGENT_EFFORT (medium) in AgentSpawnArgs.ts —
     // scheduled upkeep/ingest work does not need the CLI default (high).

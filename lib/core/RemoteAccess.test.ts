@@ -1,35 +1,70 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkRemoteAuth, resolveRemoteAccess, withRemoteAuth } from "./RemoteAccess.ts";
+import { SecretError } from "./Secrets.ts";
 
-function secrets(obj: Record<string, string>): string {
-  const p = join(mkdtempSync(join(tmpdir(), "remote-access-")), "secrets.json");
-  writeFileSync(p, JSON.stringify(obj));
-  return p;
+const savedHome = process.env.KAYA_HOME;
+let home: string | null = null;
+
+/** Point KAYA_HOME at a temp dir whose secrets.json holds `content`. */
+function secrets(content: Record<string, string> | string): void {
+  home = mkdtempSync(join(tmpdir(), "remote-access-"));
+  writeFileSync(join(home, "secrets.json"), typeof content === "string" ? content : JSON.stringify(content));
+  process.env.KAYA_HOME = home;
 }
+afterEach(() => {
+  if (savedHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = savedHome;
+  if (home !== null) rmSync(home, { recursive: true, force: true });
+  home = null;
+});
 const opts = { secretPrefix: "svc", bindEnv: "SVC_BIND", tokenEnv: "SVC_TOKEN" };
 
 describe("resolveRemoteAccess", () => {
   test("defaults to loopback with auth off", () => {
-    expect(resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_token: "t" }) })).toEqual({
+    secrets({ svc_token: "t" });
+    expect(resolveRemoteAccess({ ...opts, env: {} })).toEqual({
       bind: "127.0.0.1",
       token: null,
     });
   });
   test("secrets bind activates secrets token", () => {
-    expect(
-      resolveRemoteAccess({ ...opts, env: {}, secretsPath: secrets({ svc_bind: "0.0.0.0", svc_token: "t" }) }),
-    ).toEqual({ bind: "0.0.0.0", token: "t" });
+    secrets({ svc_bind: "0.0.0.0", svc_token: "t" });
+    expect(resolveRemoteAccess({ ...opts, env: {} })).toEqual({ bind: "0.0.0.0", token: "t" });
   });
   test("non-loopback bind without a token throws", () => {
-    expect(() => resolveRemoteAccess({ ...opts, env: { SVC_BIND: "0.0.0.0" }, secretsPath: secrets({}) })).toThrow(
-      /requires a token/,
-    );
+    secrets({});
+    expect(() => resolveRemoteAccess({ ...opts, env: { SVC_BIND: "0.0.0.0" } })).toThrow(/requires a token/);
   });
   test("env token enforces auth on loopback", () => {
-    expect(resolveRemoteAccess({ ...opts, env: { SVC_TOKEN: "e" }, secretsPath: secrets({}) }).token).toBe("e");
+    secrets({});
+    expect(resolveRemoteAccess({ ...opts, env: { SVC_TOKEN: "e" } }).token).toBe("e");
+  });
+  test("missing secrets file: loopback with auth off", () => {
+    home = mkdtempSync(join(tmpdir(), "remote-access-"));
+    process.env.KAYA_HOME = home;
+    expect(resolveRemoteAccess({ ...opts, env: {} })).toEqual({ bind: "127.0.0.1", token: null });
+  });
+  test("malformed secrets file throws SecretError file-malformed with no secret text", () => {
+    secrets('{"svc_bind": sk_live_SENTINEL');
+    let caught: unknown;
+    try {
+      resolveRemoteAccess({ ...opts, env: {} });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(SecretError);
+    expect(caught instanceof SecretError ? caught.kind : null).toBe("file-malformed");
+    expect(String(caught)).not.toContain("SENTINEL");
+  });
+  test("env bind skips the secrets file (malformed file not read)", () => {
+    secrets("{not json");
+    expect(resolveRemoteAccess({ ...opts, env: { SVC_BIND: "127.0.0.1" } })).toEqual({
+      bind: "127.0.0.1",
+      token: null,
+    });
   });
 });
 
