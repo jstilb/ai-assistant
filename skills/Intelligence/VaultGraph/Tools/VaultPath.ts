@@ -5,9 +5,7 @@
  * (formerly four identical copies of getVaultPath()).
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
 
 /**
  * Resolve the Obsidian vault path from:
@@ -20,21 +18,9 @@ export function getVaultPath(): string {
   const envPath = process.env.OBSIDIAN_VAULT;
   if (envPath) return envPath;
 
-  // 2. secrets.json
-  try {
-    const secretsPath = join(defaultKayaHome(), "secrets.json");
-    if (existsSync(secretsPath)) {
-      const secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-      if (secrets.obsidian_vault && typeof secrets.obsidian_vault === "string") {
-        return secrets.obsidian_vault;
-      }
-    }
-  } catch (err) {
-    // A broken secrets.json must not look like "vault not configured": say what failed, then fall through.
-    console.error(
-      `Could not read obsidian_vault from secrets.json: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
+  // 2. secrets.json (a broken file throws a SecretError: it must not look like "vault not configured")
+  const secretPath = optionalSecret("obsidian_vault");
+  if (secretPath !== null) return secretPath;
 
   // 3. No fallback — fail clearly
   throw new Error(
