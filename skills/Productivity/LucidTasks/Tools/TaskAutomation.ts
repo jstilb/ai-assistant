@@ -22,7 +22,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getTaskDB, calculateNextDueDate, generateTaskId } from "./TaskDB.ts";
+import { getTaskDB, calculateNextDueDate, generateTaskId, OPEN_TASK_STATUSES } from "./TaskDB.ts";
 import type { Task } from "./TaskDB.ts";
 import { loadTrustConfig } from "./TaskAI.ts";
 import type { TrustConfig, ReviewData, WeeklyReview } from "./TaskAI.ts";
@@ -693,18 +693,14 @@ export async function runEvening(options: { dryRun?: boolean } = {}): Promise<Ev
 function detectStaleInProgress(
   db: ReturnType<typeof getTaskDB>,
 ): Array<{ id: string; title: string; startedHoursAgo: number }> {
-  const rawDb = db.getRawDb();
   const cutoff = new Date(Date.now() - STALE_IN_PROGRESS_HOURS * 60 * 60 * 1000).toISOString();
 
-  const staleTasks = rawDb
-    .prepare(
-      `SELECT id, title, started_at FROM tasks
-       WHERE status = 'in_progress'
-         AND started_at IS NOT NULL
-         AND started_at <= $cutoff
-       ORDER BY started_at ASC`,
-    )
-    .all({ $cutoff: cutoff }) as Array<{ id: string; title: string; started_at: string }>;
+  // `between` guarantees started_at is set. Sort in SQLite BINARY order; the stable sort keeps
+  // "oldest" order (created_at, rowid) for ties.
+  const staleTasks = db
+    .listTasks({ status: "in_progress", between: { field: "started_at", to: cutoff }, order: "oldest" })
+    .flatMap((t) => (t.started_at === null ? [] : [{ id: t.id, title: t.title, started_at: t.started_at }]))
+    .sort((a, b) => Buffer.compare(Buffer.from(a.started_at), Buffer.from(b.started_at)));
 
   return staleTasks.map((t) => ({
     id: t.id,
@@ -726,47 +722,24 @@ function getDateAfterTomorrow(): string {
 }
 
 function gatherDailyStats(db: ReturnType<typeof getTaskDB>, today: string): DailyStatsEntry {
-  const rawDb = db.getRawDb();
-
   const startOfDay = `${today}T00:00:00.000Z`;
   const endOfDay = `${today}T23:59:59.999Z`;
 
-  const completed = (
-    rawDb
-      .prepare(
-        `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'done' AND completed_at >= $start AND completed_at <= $end`,
-      )
-      .get({ $start: startOfDay, $end: endOfDay }) as { count: number }
-  ).count;
+  const completed = db.countTasks({
+    status: "done",
+    between: { field: "completed_at", from: startOfDay, to: endOfDay },
+  });
+  const added = db.countTasks({ between: { field: "created_at", from: startOfDay, to: endOfDay } });
 
-  const added = (
-    rawDb
-      .prepare(
-        `SELECT COUNT(*) as count FROM tasks
-         WHERE created_at >= $start AND created_at <= $end`,
-      )
-      .get({ $start: startOfDay, $end: endOfDay }) as { count: number }
-  ).count;
+  // Not getOverdueTasks(): it cuts at its own clock date, and the passed `today` must decide.
+  // Not done/cancelled, due strictly before `today` (SQLite BINARY order).
+  const overdue = db
+    .listTasks({ status: [...OPEN_TASK_STATUSES, "someday"] })
+    .filter((t) => t.due_date !== null && Buffer.compare(Buffer.from(t.due_date), Buffer.from(today)) < 0).length;
 
-  const overdue = (
-    rawDb
-      .prepare(
-        `SELECT COUNT(*) as count FROM tasks
-         WHERE due_date IS NOT NULL AND due_date < $today
-           AND status NOT IN ('done', 'cancelled')`,
-      )
-      .get({ $today: today }) as { count: number }
-  ).count;
-
-  const inbox = (rawDb.prepare("SELECT COUNT(*) as count FROM tasks WHERE status = 'inbox'").get() as { count: number })
-    .count;
-
-  const active = (
-    rawDb.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('next', 'in_progress', 'waiting')").get() as {
-      count: number;
-    }
-  ).count;
+  const byStatus = db.countTasks({}, "status");
+  const inbox = byStatus.get("inbox") ?? 0;
+  const active = (byStatus.get("next") ?? 0) + (byStatus.get("in_progress") ?? 0) + (byStatus.get("waiting") ?? 0);
 
   return { date: today, completed, added, overdue, inbox, active };
 }
@@ -945,52 +918,31 @@ function generateStatsOnlyReview(data: ReviewData): string {
 }
 
 function buildGoalAlignmentReport(db: ReturnType<typeof getTaskDB>, _today: string): GoalAlignmentEntry[] {
-  const rawDb = db.getRawDb();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Get all active goal IDs from tasks
-  const goalIds = rawDb
-    .prepare(
-      `SELECT DISTINCT goal_id FROM tasks
-       WHERE goal_id IS NOT NULL AND status NOT IN ('done', 'cancelled')`,
-    )
-    .all() as { goal_id: string }[];
+  // Remaining (not done/cancelled) tasks per goal; its keys are the active goals.
+  const remainingByGoal = db.countTasks({ status: [...OPEN_TASK_STATUSES, "someday"] }, "goal_id");
+  // Both weeks from ONE statement (one snapshot), split at weekAgo in SQLite BINARY order:
+  // every row is already >= twoWeeksAgo, so "< weekAgo" is exactly main's [twoWeeksAgo, weekAgo).
+  const thisWeekByGoal = new Map<string, number>();
+  const lastWeekByGoal = new Map<string, number>();
+  for (const t of db.listTasks({ status: "done", between: { field: "completed_at", from: twoWeeksAgo } })) {
+    if (t.goal_id === null || t.completed_at === null) continue;
+    const week =
+      Buffer.compare(Buffer.from(t.completed_at), Buffer.from(weekAgo)) >= 0 ? thisWeekByGoal : lastWeekByGoal;
+    week.set(t.goal_id, (week.get(t.goal_id) ?? 0) + 1);
+  }
+
+  // goal_id ASC in SQLite BINARY (UTF-8 byte) order: the order the old DISTINCT scan of idx_tasks_goal_id gave.
+  const goalIds = [...remainingByGoal.keys()].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
 
   const entries: GoalAlignmentEntry[] = [];
 
-  for (const { goal_id } of goalIds) {
-    // Tasks completed this week for this goal
-    const thisWeek = (
-      rawDb
-        .prepare(
-          `SELECT COUNT(*) as count FROM tasks
-           WHERE goal_id = $goal_id AND status = 'done'
-             AND completed_at >= $week_ago`,
-        )
-        .get({ $goal_id: goal_id, $week_ago: weekAgo }) as { count: number }
-    ).count;
-
-    // Tasks completed last week for this goal
-    const lastWeek = (
-      rawDb
-        .prepare(
-          `SELECT COUNT(*) as count FROM tasks
-           WHERE goal_id = $goal_id AND status = 'done'
-             AND completed_at >= $two_weeks_ago AND completed_at < $week_ago`,
-        )
-        .get({ $goal_id: goal_id, $two_weeks_ago: twoWeeksAgo, $week_ago: weekAgo }) as { count: number }
-    ).count;
-
-    // Remaining active tasks for this goal
-    const remaining = (
-      rawDb
-        .prepare(
-          `SELECT COUNT(*) as count FROM tasks
-           WHERE goal_id = $goal_id AND status NOT IN ('done', 'cancelled')`,
-        )
-        .get({ $goal_id: goal_id }) as { count: number }
-    ).count;
+  for (const goal_id of goalIds) {
+    const thisWeek = thisWeekByGoal.get(goal_id) ?? 0;
+    const lastWeek = lastWeekByGoal.get(goal_id) ?? 0;
+    const remaining = remainingByGoal.get(goal_id) ?? 0;
 
     let velocity: GoalAlignmentEntry["velocity"];
     if (thisWeek > lastWeek) {
@@ -1021,26 +973,10 @@ function buildGoalAlignmentReport(db: ReturnType<typeof getTaskDB>, _today: stri
 }
 
 function detectStaleTasks(db: ReturnType<typeof getTaskDB>): WeeklySummary["staleTasks"] {
-  const rawDb = db.getRawDb();
   const cutoff = new Date(Date.now() - STALE_TASK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const staleNext = (
-    rawDb
-      .prepare(
-        `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'next' AND updated_at <= $cutoff`,
-      )
-      .get({ $cutoff: cutoff }) as { count: number }
-  ).count;
-
-  const staleSomeday = (
-    rawDb
-      .prepare(
-        `SELECT COUNT(*) as count FROM tasks
-         WHERE status = 'someday' AND updated_at <= $cutoff`,
-      )
-      .get({ $cutoff: cutoff }) as { count: number }
-  ).count;
+  const staleNext = db.countTasks({ status: "next", between: { field: "updated_at", to: cutoff } });
+  const staleSomeday = db.countTasks({ status: "someday", between: { field: "updated_at", to: cutoff } });
 
   return { next: staleNext, someday: staleSomeday };
 }

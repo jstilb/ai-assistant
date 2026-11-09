@@ -22,7 +22,14 @@ import { getQueueClient } from "../../../../lib/interfaces/QueueTaskIntegration.
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
 // Import cycle with TaskOutcome.ts (it imports TaskDB): safe only while these are used inside function bodies.
-import { agentOutcomeProblem, HUMAN_CLOSE_ACTORS, OutcomeRequiredError, readOutcome } from "./TaskOutcome.ts";
+import {
+  agentOutcomeProblem,
+  HUMAN_CLOSE_ACTORS,
+  OutcomeRequiredError,
+  readOutcome,
+  serializeOutcome,
+  systemOutcome,
+} from "./TaskOutcome.ts";
 
 // ============================================================================
 // Configuration
@@ -106,6 +113,18 @@ export const TaskSchema = z.object({
 });
 export type Task = z.infer<typeof TaskSchema>;
 
+/** Why an agent closed a task with nothing to link (queue item finished, escalation resolved, ...). */
+export interface BookkeepingNote {
+  /** What finished; clipped to 200 by systemOutcome. */
+  headline: string;
+  /** Why there is no artifact; clipped to 300. */
+  reason: string;
+}
+export type BookkeepingCloseResult =
+  | { closed: true; task: Task; outcome: "kept" | "recorded" }
+  | { closed: false; reason: "not-found"; task: null }
+  | { closed: false; reason: "already-closed"; task: Task };
+
 export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
@@ -142,6 +161,40 @@ export interface ActivityLogEntry {
   created_at: string;
 }
 
+/** One row of the task event log, with `changes` decoded. */
+export interface TaskEvent {
+  id: number;
+  taskId: string;
+  action: string;
+  actor: string;
+  /** Parsed JSON object; null when the column is NULL, malformed, or not a plain object. */
+  changes: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+/** Filter for `listTaskEvents`. `from`/`to` bound `created_at`, both inclusive, both optional. */
+export interface TaskEventQuery {
+  taskId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  /** Order is by id (insertion order), never created_at: created_at has 1-second ties. */
+  newestFirst?: boolean;
+  limit?: number;
+}
+
+function decodeEventChanges(raw: string | null): Record<string, unknown> | null {
+  if (raw === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null; // malformed JSON reads as "no changes"; every caller skips such rows
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  return Object.fromEntries(Object.entries(parsed));
+}
+
 export interface TaskFilter {
   status?: TaskStatus | TaskStatus[];
   project_id?: string;
@@ -149,9 +202,43 @@ export interface TaskFilter {
   due_before?: string;
   scheduled_date?: string;
   parent_task_id?: string | null;
+  /** Rows whose `field` is set and lies in [from, to] (both bounds inclusive, both optional). */
+  between?: { field: TaskTimeField; from?: string; to?: string };
+  /** A value matches `disposition = value`; `null` matches untriaged rows (`disposition IS NULL`). */
+  disposition?: Disposition | null;
+  /** Row order; default `"priority"`. See `TASK_ORDER_SQL`. */
+  order?: TaskOrder;
   limit?: number;
   offset?: number;
 }
+
+/** Task timestamp columns a `TaskFilter.between` may range over. */
+export type TaskTimeField = "created_at" | "completed_at" | "updated_at" | "started_at";
+const TASK_TIME_COLUMN: Record<TaskTimeField, string> = {
+  created_at: "created_at",
+  completed_at: "completed_at",
+  updated_at: "updated_at",
+  started_at: "started_at",
+};
+
+/**
+ * Orders a `TaskFilter.order` may pick. `tasks` is a rowid table, so `rowid` is insertion
+ * order: it breaks ties that `created_at` / `updated_at` leave (equal timestamps).
+ */
+export type TaskOrder = "priority" | "oldest" | "recent";
+const TASK_ORDER_SQL: Record<TaskOrder, string> = {
+  priority: "priority ASC, due_date ASC NULLS LAST, created_at DESC",
+  oldest: "created_at ASC, rowid ASC",
+  recent: "updated_at DESC, rowid DESC",
+};
+
+/** Columns `countTasks` may group by. A fixed lookup: caller input never reaches the SQL text. */
+export type TaskCountGroup = "status" | "project_id" | "goal_id";
+const TASK_COUNT_COLUMN: Record<TaskCountGroup, string> = {
+  status: "status",
+  project_id: "project_id",
+  goal_id: "goal_id",
+};
 
 export interface TaskStats {
   total: number;
@@ -345,6 +432,11 @@ export function withRetry<T>(fn: () => T, maxRetries = 3): T {
  * triggers queue item archival when a queue_item_id is present.
  */
 export const CLOSED_TASK_STATUSES: ReadonlySet<TaskStatus> = new Set(["done", "cancelled", "someday"]);
+
+/** Statuses not in CLOSED_TASK_STATUSES: inbox, next, in_progress, waiting. Derived, so the two cannot drift. */
+export const OPEN_TASK_STATUSES: readonly TaskStatus[] = TaskStatus.options.filter(
+  (s) => !CLOSED_TASK_STATUSES.has(s),
+);
 
 /**
  * Statuses in which a Priority-list pin (manual_rank) survives a status change.
@@ -544,7 +636,11 @@ export class TaskDB {
   private db: Database;
   private _queueArchiveHook: QueueArchiveHook | null = null;
 
-  constructor(dbPath: string = defaultDbPath()) {
+  constructor(dbPath: string = defaultDbPath(), opts: { readOnly?: boolean } = {}) {
+    // A reader never creates the DB or its directory.
+    if (opts.readOnly && !existsSync(dbPath)) {
+      throw new Error(`lucidtasks.db not found: ${dbPath}`);
+    }
     // Ensure data directory exists
     const dir = dirname(dbPath);
     if (!existsSync(dir)) {
@@ -552,21 +648,31 @@ export class TaskDB {
     }
 
     this.db = new Database(dbPath);
-    // Arm busy_timeout FIRST so it covers every subsequent statement — including
-    // the WAL switch and schema init, which can hit SQLITE_BUSY_RECOVERY when many
-    // connections open the same DB at once. Without this ordering, rapid concurrent
-    // `kaya-cli tasks edit` / board PATCH writes silently drop on lock contention.
-    this.db.exec("PRAGMA busy_timeout=5000");
-    this.db.exec("PRAGMA journal_mode=WAL");
-    this.db.exec("PRAGMA foreign_keys=ON");
-    this.initSchema();
+    try {
+      // Arm busy_timeout FIRST so it covers every subsequent statement — including
+      // the WAL switch and schema init, which can hit SQLITE_BUSY_RECOVERY when many
+      // connections open the same DB at once. Without this ordering, rapid concurrent
+      // `kaya-cli tasks edit` / board PATCH writes silently drop on lock contention.
+      this.db.exec("PRAGMA busy_timeout=5000");
+      // A reader keeps the file's journal mode: switching it rewrites header bytes.
+      if (!opts.readOnly) this.db.exec("PRAGMA journal_mode=WAL");
+      this.db.exec("PRAGMA foreign_keys=ON");
+      this.initSchema(opts.readOnly === true);
+      // Reader: schema init (incl. migrations) ran above; from here every write throws.
+      // Not bun's { readonly: true } — SQLITE_OPEN_READONLY fails lazily on some copies (BacklogTriage.ts).
+      if (opts.readOnly) this.db.exec("PRAGMA query_only=ON");
+    } catch (err) {
+      // Release the handle so a failed open never leaks a connection, then fail loud.
+      this.db.close();
+      throw err;
+    }
   }
 
   // --------------------------------------------------------------------------
   // Schema Initialization
   // --------------------------------------------------------------------------
 
-  private initSchema(): void {
+  private initSchema(readOnly: boolean): void {
     // D10 (ontology 2026-09-21): activity_log -> task_events. Runs before the
     // CREATE below so an existing activity_log is renamed, never shadowed.
     migrateActivityLogToTaskEvents(this.db);
@@ -669,8 +775,8 @@ export class TaskDB {
       }
     }
 
-    // Prune task_events entries older than 90 days on DB open
-    this.db.exec(`DELETE FROM task_events WHERE datetime(created_at) < datetime('now', '-90 days')`);
+    // Prune task_events entries older than 90 days on DB open (writers only: a reader never deletes)
+    if (!readOnly) this.db.exec(`DELETE FROM task_events WHERE datetime(created_at) < datetime('now', '-90 days')`);
 
     // Full-text search virtual table
     this.db.exec(`
@@ -1081,6 +1187,34 @@ export class TaskDB {
   }
 
   /**
+   * Bookkeeping close: an agent close with nothing to link, because other work finished.
+   * Already done/cancelled -> no write. A stored outcome an agent would accept is kept; else a
+   * system outcome is recorded. The write goes through updateTask (gate, completed_at, the
+   * `completed` Task event, recurrence, queue reverse-sync). Read, decision and write run in one
+   * IMMEDIATE transaction; SQLite errors propagate.
+   */
+  bookkeepingClose(id: string, note: BookkeepingNote, actor: string): BookkeepingCloseResult {
+    const run = this.db.transaction((): BookkeepingCloseResult => {
+      const existing = this.getTask(id);
+      if (!existing) return { closed: false, reason: "not-found", task: null };
+      if (existing.status === "done" || existing.status === "cancelled") {
+        return { closed: false, reason: "already-closed", task: existing };
+      }
+      const keep = agentOutcomeProblem(readOutcome(existing.outcome).outcome) === null;
+      const updates: Partial<Omit<Task, "id" | "created_at">> = keep
+        ? { status: "done" }
+        : {
+            status: "done",
+            outcome: serializeOutcome(systemOutcome({ by: actor, headline: note.headline, noArtifact: note.reason })),
+          };
+      const task = this.updateTask(id, updates, actor);
+      if (!task) throw new Error(`bookkeepingClose: task ${id} vanished inside its own transaction`);
+      return { closed: true, task, outcome: keep ? "kept" : "recorded" };
+    });
+    return run.immediate();
+  }
+
+  /**
    * Create the next instance of a recurring task after completion.
    * Records a habit_completion entry and creates a new task with calculated due date.
    */
@@ -1169,7 +1303,12 @@ export class TaskDB {
   // Task Queries
   // --------------------------------------------------------------------------
 
-  listTasks(filter: TaskFilter = {}): Task[] {
+  /**
+   * The WHERE clause (with a leading space, or "") and its params for a TaskFilter.
+   * One builder for listTasks and countTasks, so both read the filter the same way.
+   * Ignores limit, offset and order.
+   */
+  private taskWhere(filter: TaskFilter): { where: string; params: SqlNamedParams } {
     const conditions: string[] = [];
     const params: SqlNamedParams = {};
 
@@ -1215,11 +1354,35 @@ export class TaskDB {
       }
     }
 
-    let sql = "SELECT * FROM tasks";
-    if (conditions.length > 0) {
-      sql += ` WHERE ${conditions.join(" AND ")}`;
+    if (filter.between) {
+      const col = TASK_TIME_COLUMN[filter.between.field];
+      conditions.push(`${col} IS NOT NULL`);
+      if (filter.between.from !== undefined) {
+        conditions.push(`${col} >= $between_from`);
+        params.$between_from = filter.between.from;
+      }
+      if (filter.between.to !== undefined) {
+        conditions.push(`${col} <= $between_to`);
+        params.$between_to = filter.between.to;
+      }
     }
-    sql += " ORDER BY priority ASC, due_date ASC NULLS LAST, created_at DESC";
+
+    if (filter.disposition !== undefined) {
+      if (filter.disposition === null) {
+        conditions.push("disposition IS NULL");
+      } else {
+        conditions.push("disposition = $disposition");
+        params.$disposition = filter.disposition;
+      }
+    }
+
+    return { where: conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "", params };
+  }
+
+  listTasks(filter: TaskFilter = {}): Task[] {
+    const { where, params } = this.taskWhere(filter);
+    let sql = `SELECT * FROM tasks${where}`;
+    sql += ` ORDER BY ${TASK_ORDER_SQL[filter.order ?? "priority"]}`;
 
     if (filter.limit) {
       sql += ` LIMIT ${filter.limit}`;
@@ -1229,6 +1392,25 @@ export class TaskDB {
     }
 
     return this.db.prepare(sql).all(params) as Task[];
+  }
+
+  /**
+   * Count the tasks `listTasks` returns for the same filter (limit, offset and order are ignored).
+   * With `by`, count per value of that column; rows whose value is NULL are omitted.
+   */
+  countTasks(filter?: TaskFilter): number;
+  countTasks(filter: TaskFilter, by: TaskCountGroup): Map<string, number>;
+  countTasks(filter: TaskFilter = {}, by?: TaskCountGroup): number | Map<string, number> {
+    const { where, params } = this.taskWhere(filter);
+    if (by === undefined) {
+      const row = this.db.prepare(`SELECT COUNT(*) AS n FROM tasks${where}`).get(params) as { n: number };
+      return row.n;
+    }
+    const col = TASK_COUNT_COLUMN[by];
+    const notNull = `${col} IS NOT NULL`;
+    const sql = `SELECT ${col} AS k, COUNT(*) AS n FROM tasks${where ? `${where} AND ${notNull}` : ` WHERE ${notNull}`} GROUP BY ${col}`;
+    const rows = this.db.prepare(sql).all(params) as { k: string; n: number }[];
+    return new Map(rows.map((r) => [r.k, r.n]));
   }
 
   /**
@@ -1405,6 +1587,51 @@ export class TaskDB {
     return this.db
       .prepare("SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at DESC LIMIT ?")
       .all(taskId, limit) as ActivityLogEntry[];
+  }
+
+  /** Task events matching `q`, ordered by id (oldest first, or newest first). */
+  listTaskEvents(q: TaskEventQuery): TaskEvent[] {
+    const where: string[] = [];
+    const params: SqlNamedParams = {};
+    if (q.taskId !== undefined) {
+      where.push("task_id = $task_id");
+      params.$task_id = q.taskId;
+    }
+    if (q.action !== undefined) {
+      where.push("action = $action");
+      params.$action = q.action;
+    }
+    if (q.from !== undefined) {
+      where.push("created_at >= $from");
+      params.$from = q.from;
+    }
+    if (q.to !== undefined) {
+      where.push("created_at <= $to");
+      params.$to = q.to;
+    }
+    let sql = `SELECT id, task_id, action, actor, changes, created_at FROM ${TASK_EVENTS_TABLE}`;
+    if (where.length > 0) sql += ` WHERE ${where.join(" AND ")}`;
+    sql += q.newestFirst ? " ORDER BY id DESC" : " ORDER BY id ASC";
+    if (q.limit !== undefined) {
+      sql += " LIMIT $limit";
+      params.$limit = q.limit;
+    }
+    const rows = this.db.prepare(sql).all(params) as {
+      id: number;
+      task_id: string;
+      action: string;
+      actor: string;
+      changes: string | null;
+      created_at: string;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      taskId: r.task_id,
+      action: r.action,
+      actor: r.actor,
+      changes: decodeEventChanges(r.changes),
+      createdAt: r.created_at,
+    }));
   }
 
   /**
@@ -2108,8 +2335,9 @@ export class TaskDB {
 
   close(): void {
     this.db.close();
-    // Clear singleton so next getTaskDB() creates a fresh connection
-    _instance = null;
+    // Clear the singleton only when it is this connection, so closing a
+    // private (e.g. read-only) TaskDB never orphans the shared one.
+    if (this === _instance) _instance = null;
   }
 
   /**
@@ -2126,6 +2354,15 @@ export class TaskDB {
 
 let _instance: TaskDB | null = null;
 let _lastPath: string | undefined;
+
+/**
+ * Open a private read-only TaskDB (not the singleton). Throws if the file is
+ * missing and never creates it or its directory. Runs schema init (migrations)
+ * first, then PRAGMA query_only so any write throws. The caller closes it.
+ */
+export function openTaskDBReadOnly(dbPath?: string): TaskDB {
+  return new TaskDB(dbPath ?? defaultDbPath(), { readOnly: true });
+}
 
 export function getTaskDB(dbPath?: string): TaskDB {
   if (!_instance) {

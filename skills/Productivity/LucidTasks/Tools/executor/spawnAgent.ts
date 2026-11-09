@@ -34,7 +34,7 @@
  * SLICE S13: `infraUnavailable`/`preSpawnGated` are now forwarded verbatim from
  * spawnAgentSync's result (previously dropped at this wrapper boundary) so executor.ts can
  * consume AgentSpawner's OWN infra-vs-failure classification directly instead of maintaining a
- * second copy of the same rate/usage/credit-pool regex — see AgentSpawner.isInfraUnavailable
+ * second copy of the same rate/usage/credit-pool regex — see classifyRunEnd (lib/core/ClaudeRunEnd.ts)
  * for the canonical classifier and executor.ts's call site for how the forwarded field is used.
  * This is a deliberate behavior change from the pre-S13 split: AgentSpawner's classifier treats
  * ANY timeout as infra-unavailable (defer/retry), whereas the old executor-local copy did not
@@ -64,8 +64,8 @@ export interface SpawnAgentResult {
   /**
    * WHY infraUnavailable is true (undefined when it's false, or for the
    * pre-spawn-gated case, which has no InfraReason of its own). Forwarded
-   * verbatim from AgentSpawner — see AgentSpawner.classifyInfraReason for the
-   * precedence order (timeout → network → rate-limit → quota → no-output).
+   * verbatim from AgentSpawner — see classifyRunEnd (lib/core/ClaudeRunEnd.ts)
+   * for the precedence order.
    */
   infraReason?: InfraReason;
 }

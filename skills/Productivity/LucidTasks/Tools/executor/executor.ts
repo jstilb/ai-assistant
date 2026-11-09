@@ -330,47 +330,25 @@ export function externalArtifacts(verdict: { artifacts: string[]; deliverables: 
  * Pure-ish (no spawning) — safe for unit tests.
  */
 export function selectTasks(db: TaskDB, limit = 3): SelectedTask[] {
-  const raw = db.getRawDb();
-
   // Work tasks: autonomous, inbox or next — fresh AND retry land here uniformly.
-  const workRows = raw
-    .prepare(
-      `SELECT id FROM tasks
-       WHERE disposition = 'autonomous'
-         AND status IN ('inbox','next')
-       ORDER BY created_at ASC`,
-    )
-    .all() as { id: string }[];
+  const workRows = db.listTasks({ disposition: "autonomous", status: ["inbox", "next"], order: "oldest" });
 
   // Re-engagements: autonomous + waiting.
   // We check the newest COMMENT (action='comment') to decide whether Jm has responded.
   // ORDER BY id DESC is insertion-order — created_at has 1-second precision and is
   // unreliable when multiple writes land within the same second.
-  const waitingRows = raw
-    .prepare(
-      `SELECT id FROM tasks
-       WHERE disposition = 'autonomous'
-         AND status = 'waiting'
-       ORDER BY created_at ASC`,
-    )
-    .all() as { id: string }[];
-
-  // Prepared statement: newest COMMENT (action='comment') by insertion order
-  const newestCommentActorStmt = raw.prepare(
-    `SELECT actor FROM task_events
-     WHERE task_id = ? AND action = 'comment'
-     ORDER BY id DESC LIMIT 1`,
-  );
+  const waitingRows = db.listTasks({ disposition: "autonomous", status: "waiting", order: "oldest" });
 
   const reEngagements: SelectedTask[] = [];
   for (const row of waitingRows) {
-    const newest = newestCommentActorStmt.get(row.id) as { actor: string } | null;
+    // Newest COMMENT (action='comment') by insertion order
+    const newest = db.listTaskEvents({ taskId: row.id, action: "comment", newestFirst: true, limit: 1 })[0];
     // Only re-engage if there IS a comment AND the newest one is from a non-executor
     // (i.e. Jm or system left feedback since the last delivery).
     if (newest && newest.actor !== "executor") {
       reEngagements.push({ taskId: row.id, isReEngagement: true });
     }
-    // newest === null → no comments → SKIP (state unknown, don't double-run)
+    // newest === undefined → no comments → SKIP (state unknown, don't double-run)
     // newest.actor === 'executor' → awaiting Jm's review → SKIP
   }
 
@@ -435,16 +413,7 @@ export interface ZombieReclaimDeps {
 export function sweepZombieTasks(db: TaskDB, deps: ZombieReclaimDeps = {}): ZombieReclaimResult[] {
   const staleHours = deps.staleHours ?? ZOMBIE_STALE_HOURS;
   const now = (deps.nowMs ?? Date.now)();
-  const raw = db.getRawDb();
-
-  const rows = raw
-    .prepare(
-      `SELECT id, title, updated_at FROM tasks
-       WHERE disposition = 'autonomous'
-         AND status = 'in_progress'
-       ORDER BY created_at ASC`,
-    )
-    .all() as { id: string; title: string; updated_at: string }[];
+  const rows = db.listTasks({ disposition: "autonomous", status: "in_progress", order: "oldest" });
 
   const reclaimed: ZombieReclaimResult[] = [];
   for (const row of rows) {
@@ -525,25 +494,14 @@ const LEGACY_DEFERRED_SUMMARY =
  * Pure (DB reads only) — exported for tests.
  */
 export function detectPendingMerge(db: TaskDB, taskId: string): PendingMergeCandidate | null {
-  const raw = db.getRawDb();
-  const rows = raw
-    .prepare(
-      `SELECT actor, changes FROM task_events
-       WHERE task_id = ? AND action = 'comment'
-       ORDER BY id DESC LIMIT 20`,
-    )
-    .all(taskId) as { actor: string; changes: string | null }[];
+  const rows = db.listTaskEvents({ taskId, action: "comment", newestFirst: true, limit: 20 });
 
   for (const row of rows) {
     if (row.actor !== "executor") break; // human intervened since — not the sweep's job
 
-    let text: string;
-    try {
-      text = (JSON.parse(row.changes ?? "{}").text as string | undefined) ?? "";
-    } catch {
-      // malformed activity JSON: skip this row
-      continue;
-    }
+    // NULL / malformed activity JSON decodes to null: no text, so no marker — skip this row
+    const text = row.changes?.text;
+    if (typeof text !== "string") continue;
 
     if (text.startsWith(MERGE_FAILED_PREFIX)) return null; // existing human-review path owns this
 
@@ -565,10 +523,7 @@ export function detectPendingMerge(db: TaskDB, taskId: string): PendingMergeCand
  * safe for unit tests.
  */
 export function findPendingMergeCandidates(db: TaskDB, limit: number): PendingMergeCandidate[] {
-  const raw = db.getRawDb();
-  const waitingRows = raw
-    .prepare(`SELECT id FROM tasks WHERE disposition = 'autonomous' AND status = 'waiting' ORDER BY created_at ASC`)
-    .all() as { id: string }[];
+  const waitingRows = db.listTasks({ disposition: "autonomous", status: "waiting", order: "oldest" });
 
   const candidates: PendingMergeCandidate[] = [];
   for (const row of waitingRows) {
@@ -803,7 +758,7 @@ export async function runTask(taskId: string, opts?: { isReEngagement?: boolean 
   //
   // 6a. CREDIT-POOL / INFERENCE-UNAVAILABLE branch — checked FIRST.
   //     Condition: res.infraUnavailable, forwarded verbatim from AgentSpawner's OWN
-  //     classification (see lib/core/AgentSpawner.ts's isInfraUnavailable — the canonical
+  //     classification (see classifyRunEnd in lib/core/ClaudeRunEnd.ts — the canonical
   //     detector, no longer duplicated here as of slice S13). True when the spawn did not
   //     succeed AND any of: pre-spawn-gated, timed out, blank-blank output (silent infra
   //     shutdown), a network/DNS failure reaching the API, a rate/usage/session-limit
@@ -814,11 +769,15 @@ export async function runTask(taskId: string, opts?: { isReEngagement?: boolean 
   //     The alert key/fingerprint stay fixed regardless of reason (preserves the
   //     AlertGate cooldown state across reasons) — only the human-facing text below
   //     varies, distinguishing a network/DNS outage (res.infraReason === "network")
-  //     from every other infra-unavailable reason. See AgentSpawner.classifyInfraReason
+  //     and a Claude auth failure ("auth") from every other infra-unavailable reason. See classifyRunEnd
   //     for the full reason set and its precedence order.
   if (res.infraUnavailable) {
     const baseReasonText =
-      res.infraReason === "network" ? "API unreachable (network/DNS)" : "inference/credit-pool unavailable";
+      res.infraReason === "network"
+        ? "API unreachable (network/DNS)"
+        : res.infraReason === "auth"
+          ? "Claude authentication failed (token)"
+          : "inference/credit-pool unavailable";
     // When we get here after a fallback, BOTH models were infra-unavailable — say so, so Jm
     // can tell a primary-only overload (fallback handles it) from a full pool/network outage.
     const infraReasonText = spawnOutcome.fellBack

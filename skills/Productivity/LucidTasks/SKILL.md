@@ -55,7 +55,7 @@ CONTEXT: /abs/path/doc.md (section, ~line) | ~/.kaya/memory/x.md | https://... |
 ```
 
 - **Proportional.** A personal quick-capture ("buy vitamix") needs only what real context exists; link the plan/research note if one exists, otherwise a short WHAT and `NEEDS JM: <what is unknown>`. Never pad, never fabricate.
-- **Keep Jm's words** (2026-10-23, after the `/learn` incident `t-mvfkuj9e-1v6obq`). When a task comes from Jm's own words (Scratch Pad, Telegram, voice, chat), quote them verbatim on an `ORIGINAL: '...'` line. DONE WHEN carries his quality words as checks, not only the functions: "simple" → one primary action per view; "easy to pick up" → resume in one click. For UI work add "renders cleanly at desktop and phone width and meets the UI bar in `Tools/executor/qualityBar.ts`". If you edit Jm's words later, update DONE WHEN to match. The executor's builder and verifier treat ORIGINAL as the spec and DONE WHEN as the minimum.
+- **Keep Jm's words** (2026-10-23, after the `/learn` incident `t-mvfkuj9e-1v6obq`). When a task comes from Jm's own words (Scratch Pad, Telegram, voice, chat), quote them verbatim on an `ORIGINAL: '...'` line. DONE WHEN carries his quality words as checks, not only the functions: "simple" → one primary action per view; "easy to pick up" → resume in one click. For UI work add "renders cleanly at desktop and phone width and meets the UI bar in `Tools/executor/qualityBar.ts`". If you edit Jm's words later, update DONE WHEN to match. The executor's builder and verifier treat ORIGINAL as the spec and DONE WHEN as the minimum. A curriculum request becomes a Learn task whose HOW names `Learning/<Subject>/` and `learn standard`.
 - **Machine-created tasks always carry a CONTEXT link** (spec path, queue item, parent task, plan doc). "Context: ~/.kaya/memory/x.md" alone does NOT meet the standard: pull the what/how/options out of that file and link the deeper plan docs it points to.
 - **Enforcement is a lint, not a gate.** `tasks add` warns when the description has no openable link; `tasks context-lint` lists every open task that fails; the board renders paths, URLs and task ids as clickable chips (paths open via `GET /api/open`). Subtasks from `decompose`, queue `split`, and board AI reorganize inherit the parent's `CONTEXT:` lines.
 - Helpers: `hasContextLink()`, `inheritedContextLines()` in `Tools/TaskDB.ts`.
@@ -72,7 +72,8 @@ An outcome has five parts:
 - **For Jm:** things only Jm can do next.
 - **Details:** the full report, folded by default.
 
-- **The rule.** An agent is every actor except the board and Telegram. It cannot close a task without a headline AND at least one link or a `--no-artifact` reason. The database refuses the close with an error that names the missing part and the command to fix it.
+- **The rule.** An agent is every actor except the board, Telegram and the LifeOS home. It cannot close a task without a headline AND at least one link or a `--no-artifact` reason. The database refuses the close with an error that names the missing part and the command to fix it.
+- **Nothing to link.** If an agent closes a task because other work finished (queue item done, escalation resolved), use `TaskDB.bookkeepingClose`. It keeps an acceptable outcome or records a system one, and never re-closes a done or cancelled task (ADR-031).
 - **For-Jm items** become child tasks in the `needs-jm` state.
 - **Executor tasks.** The executor records the outcome by itself. Do not add it again.
 - **Where it shows.** The board drawer shows an outcome card. The task row shows the headline.

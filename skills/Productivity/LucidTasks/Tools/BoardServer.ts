@@ -55,7 +55,6 @@ import { scoreTask, type ScoringContext } from "./TaskScorer.ts";
 import { buildPriorityList } from "./PriorityList.ts";
 import { loadTelosData } from "./TelosGoalLoader.ts";
 import {
-  agentOutcomeProblem,
   createForJmTasks,
   readOutcome,
   serializeOutcome,
@@ -64,9 +63,10 @@ import {
   type OutcomeLink,
 } from "./TaskOutcome.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
 import { timingSafeEqual } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as joinPath, resolve as resolvePath } from "node:path";
 
@@ -697,30 +697,29 @@ export async function defaultReorganize(
       return;
     }
 
-    if (Object.keys(validation.updates).length > 0) {
-      const updates: Partial<Task> = { ...validation.updates };
-      // "kaya" is a gated actor. A close Jm asked for in his board comment records that as its outcome,
-      // in the SAME update as the status change.
-      if (
-        updates.status === "done" &&
-        task.status !== "done" &&
-        updates.outcome === undefined &&
-        agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null
-      ) {
-        const quoted = commentText.replace(/\s+/g, " ").trim();
-        const clipped = quoted.length > 110 ? `${quoted.slice(0, 109).trimEnd()}…` : quoted;
-        updates.outcome = serializeOutcome({
-          v: 1,
-          headline: `Closed at Jm's request: "${clipped}"`,
-          links: [],
-          noArtifact: "closed from Jm's board comment",
-          forJm: [],
-          by: "kaya",
-          at: new Date().toISOString(),
-          source: "board",
-        });
-      }
+    const updates: Partial<Task> = { ...validation.updates };
+    // A close Jm asked for in his board comment is a bookkeeping close: the edits land first,
+    // then TaskDB.bookkeepingClose keeps an acceptable outcome or records his words.
+    const closeRequested = updates.status === "done";
+    if (closeRequested) delete updates.status;
+    if (Object.keys(updates).length > 0) {
       withRetry(() => db.updateTask(taskId, updates, "kaya"));
+    }
+    let reply = result.reply;
+    if (closeRequested) {
+      const quoted = commentText.replace(/\s+/g, " ").trim();
+      const clipped = quoted.length > 110 ? `${quoted.slice(0, 109).trimEnd()}…` : quoted;
+      const closed = withRetry(() =>
+        db.bookkeepingClose(
+          taskId,
+          { headline: `Closed at Jm's request: "${clipped}"`, reason: "closed from Jm's board comment" },
+          "kaya",
+        ),
+      );
+      // A bookkeeping close never overrides a cancel (B3); say so in the reply instead of claiming a close.
+      if (!closed.closed && closed.reason === "already-closed" && closed.task.status === "cancelled") {
+        reply = `${reply}\nNot closed: this task is cancelled. Set it to done on the board if you want it done.`;
+      }
     }
 
     if (result.subtasks && result.subtasks.length > 0) {
@@ -740,7 +739,7 @@ export async function defaultReorganize(
       }
     }
 
-    db.addComment(taskId, result.reply, "kaya");
+    db.addComment(taskId, reply, "kaya");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     try {
@@ -823,7 +822,7 @@ async function handleCreateTask(db: TaskDB, req: Request): Promise<Response> {
  */
 export function loadBoardToken(): string | null {
   if (process.env.BOARD_TOKEN) return process.env.BOARD_TOKEN;
-  return readSecretString("lucidtasks_board_token");
+  return optionalSecret("lucidtasks_board_token");
 }
 
 /**
@@ -834,7 +833,7 @@ export function loadBoardToken(): string | null {
  */
 export function loadBoardBind(): string {
   if (process.env.BOARD_BIND) return process.env.BOARD_BIND;
-  return readSecretString("lucidtasks_board_bind") ?? HOST;
+  return optionalSecret("lucidtasks_board_bind") ?? HOST;
 }
 
 export type StartupAuth = { ok: true; token: string | null } | { ok: false; error: string };
@@ -865,17 +864,6 @@ export function resolveStartupAuth(
     };
   }
   return { ok: true, token };
-}
-
-function readSecretString(key: string): string | null {
-  try {
-    const j = JSON.parse(readFileSync(joinPath(getKayaHome(), "secrets.json"), "utf8"));
-    const v = (j as Record<string, unknown>)[key];
-    return typeof v === "string" && v.length > 0 ? v : null;
-  } catch {
-    // optional secrets file: missing or invalid JSON means no key
-    return null;
-  }
 }
 
 function timingSafeEq(a: string, b: string): boolean {

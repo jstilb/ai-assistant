@@ -41,9 +41,7 @@ import {
   createForJmTasks,
   HUMAN_CLOSE_ACTORS,
   linkFromTarget,
-  readOutcome,
   serializeOutcome,
-  systemOutcome,
   OutcomeRequiredError,
   OutcomeSchema,
   type Outcome,
@@ -2628,19 +2626,21 @@ export function syncQueueStatus(taskId: string, queueStatus: string): void {
 
   const newStatus = QUEUE_STATUS_TO_LUCID_TASK_STATUS[queueStatus];
   if (newStatus && task.status !== newStatus) {
-    const updates: Partial<Task> = { status: newStatus };
-    // A queue item completing closes the task: record a truthful system outcome (the gate needs one),
-    // but never overwrite a real outcome the task already has.
-    if (newStatus === "done" && agentOutcomeProblem(readOutcome(task.outcome).outcome) !== null) {
-      updates.outcome = serializeOutcome(
-        systemOutcome({
-          by: "queue",
+    if (newStatus === "done") {
+      // A queue item completing is a bookkeeping close: bookkeepingClose keeps a real outcome or records a
+      // system one, and never reopens a cancelled task.
+      const result = db.bookkeepingClose(
+        taskId,
+        {
           headline: `Closed when work-queue item finished: ${task.title}`,
-          noArtifact: `status synced from work-queue item ${task.queue_item_id ?? "(unlinked)"}`,
-        }),
+          reason: `status synced from work-queue item ${task.queue_item_id ?? "(unlinked)"}`,
+        },
+        "queue",
       );
+      if (!result.closed) return;
+    } else {
+      db.updateTask(taskId, { status: newStatus }, "queue");
     }
-    db.updateTask(taskId, updates, "queue");
     db.logActivity(taskId, "status_sync", JSON.stringify({ from: task.status, to: newStatus, queueStatus }), "queue");
   }
 }
