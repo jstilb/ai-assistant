@@ -22,12 +22,8 @@ import { memoryStore } from "../../../../lib/core/MemoryStore.ts";
 import { appendEvalSignal } from "../../../../lib/core/EvalSignals.ts";
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
 import { notifySync } from "../../../../lib/core/NotificationService.ts";
-import {
-  extractTriageResult,
-  sanitizeForSubagent,
-  TriageSummarySchema,
-  type TriageResult,
-} from "./TriageResultSchema.ts";
+import { spawnAgent } from "../../../../lib/core/AgentSpawner.ts";
+import { extractTriageResult, sanitizeForSubagent, type TriageResult } from "./TriageResultSchema.ts";
 
 // ============================================================================
 // Types
@@ -329,7 +325,7 @@ async function triageFindings(
   anthropicFindings: AnthropicFindings,
   youtubeFindings: YouTubeFindings,
   level: ClaudeLevel,
-): Promise<TriageResult> {
+): Promise<TriageResult & { infraDeferred?: true }> {
   const totalInputs = anthropicFindings.updates.length + youtubeFindings.videos.length;
 
   if (totalInputs === 0) {
@@ -476,44 +472,36 @@ After investigation, output ONLY a single JSON block (no other text before or af
 Quality over quantity. Zero actionable items is a perfectly valid outcome.`;
 
   try {
-    const { CLAUDE_PATH } = await import("../../../../lib/core/Inference.ts");
-    const proc = Bun.spawn(
-      [CLAUDE_PATH, "--model", MODEL_MAP[level], "-p", triagePrompt, "--allowedTools", "Bash,Read,Glob,Grep"],
-      {
-        cwd: KAYA_HOME,
-        stdout: "pipe",
-        stderr: "pipe",
-        env: { ...process.env, KAYA_HOME },
-      },
-    );
-
-    // 10 minute timeout for triage subagent (it evaluates many findings)
-    const TRIAGE_TIMEOUT_MS = 10 * 60 * 1000;
-    const timeoutId = setTimeout(() => {
-      proc.kill();
-    }, TRIAGE_TIMEOUT_MS);
-
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
-    clearTimeout(timeoutId);
+    // The agent door owns the launch policy (hardened env, pre-spawn rate gate,
+    // classified failure). `kaya` settings: settings.json supplies permissions + hooks.
+    // 10 minute timeout for triage subagent (it evaluates many findings).
+    const run = await spawnAgent({
+      prompt: triagePrompt,
+      model: MODEL_MAP[level],
+      allowedTools: "Bash,Read,Glob,Grep",
+      timeoutMs: 10 * 60 * 1000,
+      cwd: KAYA_HOME,
+      env: { KAYA_HOME },
+      settings: "kaya",
+    });
+    const output = run.stdout;
 
     // Clean up temp file
     try {
       unlinkSync(tmpFindingsPath);
     } catch {}
 
-    if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
-      if (exitCode === null || exitCode === 137 || exitCode === 143) {
-        console.error(`Triage subagent timed out after ${TRIAGE_TIMEOUT_MS / 1000}s`);
-      } else {
-        console.error(`Triage subagent exited ${exitCode}: ${stderr.slice(0, 500)}`);
-      }
+    if (!run.success) {
+      const why = run.preSpawnGated ? "rate-gated before spawn" : (run.infraReason ?? `exit ${run.exitCode}`);
+      const narrative = `Triage subagent failed (${why}). stderr: ${run.stderr.slice(-300)} stdout tail: ${run.stdout.slice(-300)}`;
+      console.error(narrative);
       return {
         actionableItems: [],
-        narrative: `Triage subagent failed (exit ${exitCode}): ${stderr.slice(0, 200)}`,
+        narrative,
         dismissedCount: 0,
         dismissalReasoning: "",
+        // Infra end (gate, limit, timeout, auth, network): the findings were never judged.
+        ...(run.preSpawnGated || run.infraReason ? { infraDeferred: true as const } : {}),
       };
     }
 
@@ -772,40 +760,18 @@ async function main() {
     console.log("\n\ud83d\udce4 Routing results...");
     const routedIds = await routeResults(triage);
 
-    // Record all triage decisions so next run skips these findings
-    await recordTriageDecisions(triage, newAnthro, newYT, routedIds);
-    console.log(
-      `\ud83d\udcbe Recorded ${newAnthro.updates.length + newYT.videos.length} triage decision(s) to history`,
-    );
-
-    // Persist triage result to state (versioned schema shared with EcosystemUpdatesBlock.ts)
-    const triageState = createStateManager<z.infer<typeof TriageSummarySchema>>({
-      path: join(STATE_DIR, "latest-triage-result.json"),
-      schema: TriageSummarySchema,
-      defaults: () => ({
-        version: 1 as const,
-        timestamp: "",
-        level: "",
-        actionableCount: 0,
-        dismissedCount: 0,
-        items: [],
-      }),
-    });
-
-    await triageState.save({
-      version: 1,
-      timestamp: new Date().toISOString(),
-      level: LEVEL,
-      actionableCount: triage.actionableItems.length,
-      dismissedCount: triage.dismissedCount,
-      items: triage.actionableItems.map((i) => ({
-        title: i.title,
-        priority: i.priority,
-        effort: i.estimatedEffort,
-        description: i.description,
-        sourceUrls: i.sourceUpdates,
-      })),
-    });
+    // Record all triage decisions so next run skips these findings — unless the
+    // triage never judged them (infra end): then they stay new for the next run.
+    if (triage.infraDeferred) {
+      console.warn(
+        `\u26a0\ufe0f Triage ended on infra (${triage.narrative.slice(0, 120)}); ${newAnthro.updates.length + newYT.videos.length} finding(s) deferred to the next run, no decisions recorded`,
+      );
+    } else {
+      await recordTriageDecisions(triage, newAnthro, newYT, routedIds);
+      console.log(
+        `\ud83d\udcbe Recorded ${newAnthro.updates.length + newYT.videos.length} triage decision(s) to history`,
+      );
+    }
 
     console.log("\u2705 Triage complete and results routed");
   } else {

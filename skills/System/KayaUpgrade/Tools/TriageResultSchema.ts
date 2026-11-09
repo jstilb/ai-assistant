@@ -1,11 +1,9 @@
 /**
  * TriageResultSchema.ts — Shared Zod schema for KayaUpgrade triage results
  *
- * Shared by:
- *   - UpgradeTriage.ts (writer)
- *   - no reader (the DailyBriefing reader is gone; skill deleted 2026-11-05)
- *
- * Bump the version literal in TriageSummarySchema only on breaking schema changes.
+ * Used by UpgradeTriage.ts to validate the triage subagent's output. The
+ * State/latest-triage-result.json summary (and its TriageSummarySchema) was
+ * removed 2026-11-08: its only reader, DailyBriefing, was deleted 2026-11-05.
  */
 
 import { z } from "zod";
@@ -28,25 +26,6 @@ export const TriageResultSchema = z.object({
 });
 
 export type TriageResult = z.infer<typeof TriageResultSchema>;
-
-// Summary schema — written to latest-triage-result.json (no reader since DailyBriefing was deleted).
-// version is optional with default 1 for backward compatibility with pre-versioned files.
-export const TriageSummarySchema = z.object({
-  version: z.literal(1).optional().default(1),
-  timestamp: z.string(),
-  level: z.string(),
-  actionableCount: z.number(),
-  dismissedCount: z.number(),
-  items: z.array(
-    z.object({
-      title: z.string(),
-      priority: z.number(),
-      effort: z.string(),
-      description: z.string().optional(),
-      sourceUrls: z.array(z.string()).optional(),
-    }),
-  ),
-});
 
 /**
  * Extract the last valid TriageResult JSON block from subagent output.

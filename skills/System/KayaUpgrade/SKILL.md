@@ -156,7 +156,6 @@ YouTube channels are configured via `youtube-channels.json` in the KayaUpgrade s
 - `State/youtube-videos.json` - YouTube state
 - `State/latest-anthropic-findings.json` - Raw findings from last Anthropic check
 - `State/latest-youtube-findings.json` - Raw findings from last YouTube check
-- `State/latest-triage-result.json` - AI triage output (read by DailyBriefing)
 
 **YouTube Channels:** `youtube-channels.json` in skill directory
 
@@ -175,7 +174,7 @@ The skill has four complementary workflows:
 
 **Typical flow:**
 1. Run **CheckForUpgrades** — collects data, runs AI triage, queues actionable items
-2. Review queued items in `/queue list` (or DailyBriefing Ecosystem Updates section)
+2. Review queued items in `/queue list`
 3. Use **ResearchUpgrade** to dig deeper on interesting items
 4. Use **FindSources** to expand monitoring over time
 
@@ -196,7 +195,6 @@ The skill has four complementary workflows:
 
 - **QueueRouter** — Actionable upgrade items queued for Jm review → spec-pipeline → AutonomousWork
 - **AgentMetacognition** — Triage insights via `memoryStore.capture()` → MEMORY/entries/
-- **DailyBriefing** — `EcosystemUpdatesBlock` reads `State/latest-triage-result.json`
 - **Daemon Cron** — Weekly automated run via `MEMORY/daemon/cron/manifests/kayaupgrade-weekly.yaml`
 
 ## Customization
