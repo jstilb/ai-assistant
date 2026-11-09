@@ -14,6 +14,8 @@ Kaya is a multi-context repo: domain glossaries (**Skill Glossaries**) live next
 - [Adventure — Experiences & Plans](./skills/Life/Adventure/CONTEXT.md) — experience ideas, plans, and recorded outings.
 - [Cooking — Recipes & Cuisine Practice](./skills/Life/Cooking/CONTEXT.md) — recipes, cuisine projects, and cooking practice.
 - [LucidTasks — Task State & Routing](./skills/Productivity/LucidTasks/CONTEXT.md) — task status, disposition, priority, Icebox parking, and the Task Executor (Lane A).
+- [EventScout — Event Ingest](./skills/Productivity/EventScout/CONTEXT.md) — pulls San Diego events from many Event Sources into one cache through one Source Adapter seam (Prefetch, Hybrid Refresh, Horizon). Stands apart from the pipeline above.
+- [Evals — Agent Evaluation](./skills/Development/Evals/CONTEXT.md) — tasks, trials, graders and the **Run Verdict** (counts / no signal / pass) shared by the suite summary, the persisted results store, the nightly alert and Ablation. Stands apart from the pipeline above.
 
 ## How they relate
 
