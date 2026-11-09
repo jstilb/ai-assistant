@@ -32,9 +32,9 @@ afterEach(() => {
 });
 
 describe("resolveDailyCeiling", () => {
-  test("unset or blank means no ceiling (current behavior)", () => {
-    expect(resolveDailyCeiling({})).toBe(Number.POSITIVE_INFINITY);
-    expect(resolveDailyCeiling({ BRIGHTDATA_TIER4_DAILY_CEILING: " " })).toBe(Number.POSITIVE_INFINITY);
+  test("unset or blank means the default ceiling of 20 (switched on 2026-11-08)", () => {
+    expect(resolveDailyCeiling({})).toBe(20);
+    expect(resolveDailyCeiling({ BRIGHTDATA_TIER4_DAILY_CEILING: " " })).toBe(20);
   });
 
   test("numeric value is used; 0 is a valid hard stop", () => {
@@ -42,10 +42,10 @@ describe("resolveDailyCeiling", () => {
     expect(resolveDailyCeiling({ BRIGHTDATA_TIER4_DAILY_CEILING: "0" })).toBe(0);
   });
 
-  test("invalid value falls back to no ceiling but says so on stderr", () => {
+  test("invalid value falls back to the default ceiling (fail safe) and says so on stderr", () => {
     const spy = spyOn(process.stderr, "write").mockImplementation((() => true) as typeof process.stderr.write);
     try {
-      expect(resolveDailyCeiling({ BRIGHTDATA_TIER4_DAILY_CEILING: "abc" })).toBe(Number.POSITIVE_INFINITY);
+      expect(resolveDailyCeiling({ BRIGHTDATA_TIER4_DAILY_CEILING: "abc" })).toBe(20);
       expect(spy).toHaveBeenCalled();
     } finally {
       spy.mockRestore();
@@ -54,11 +54,15 @@ describe("resolveDailyCeiling", () => {
 });
 
 describe("Tier4Breaker", () => {
-  test("default (no ceiling) never trips on the daily rule, however many calls", async () => {
+  test("default ceiling (20, env unset) allows 20 calls and trips the daily rule after them", async () => {
     const b = make();
-    for (let i = 0; i < 50; i++) await b.recordUse(`d${i}.example.com`);
+    for (let i = 0; i < 19; i++) await b.recordUse(`d${i}.example.com`);
     expect((await b.check("fresh.example.com")).allowed).toBe(true);
-    expect(alerts).toHaveLength(0);
+    await b.recordUse("d19.example.com");
+    const tripped = await b.check("fresh.example.com");
+    expect(tripped.allowed).toBe(false);
+    if (!tripped.allowed) expect(tripped.kind).toBe("daily");
+    expect(alerts).toHaveLength(1);
   });
 
   test("per-domain cooldown trips after one use and clears after the cooldown", async () => {

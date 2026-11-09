@@ -313,8 +313,8 @@ describe("BrightDataTool — tier 4 (Web Unlocker REST)", () => {
 
   beforeEach(() => {
     kayaHome = mkdtempSync(join(tmpdir(), "brightdata-tier4-test-"));
-    // loadBrightDataToken resolves secrets via getKayaHome() (env-keyed cache,
-    // re-resolves per call) — point it at the tmp home.
+    // lib/core/Secrets.ts resolves secrets via getKayaHome() on every call —
+    // point it at the tmp home.
     process.env["KAYA_HOME"] = kayaHome;
   });
 
@@ -330,6 +330,20 @@ describe("BrightDataTool — tier 4 (Web Unlocker REST)", () => {
     const result = await tool.scrape("https://walled.example.com", { startTier: 4, forceTier4: true });
     expect(result.success).toBe(false);
     expect(result.error).toContain("BRIGHTDATA_API_TOKEN");
+  });
+
+  test("malformed secrets.json fails tier 4 as file-malformed (no fetch, no value in the error)", async () => {
+    writeFileSync(join(kayaHome, "secrets.json"), '{"BRIGHTDATA_API_TOKEN": "SENTINEL-bd-0001",');
+    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async () => {
+      throw new Error("fetch must not run when the secrets file is malformed");
+    }) as unknown as typeof fetch);
+
+    const tool = new BrightDataTool({ kayaHome });
+    const result = await tool.scrape("https://walled.example.com", { startTier: 4, forceTier4: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("file-malformed");
+    expect(result.error).not.toContain("SENTINEL");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   test("unlocker success records winningTier 4, brightDataUsed, and the tier-4 breaker stamp", async () => {

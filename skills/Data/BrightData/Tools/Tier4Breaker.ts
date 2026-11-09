@@ -7,11 +7,13 @@
  *   1. Per-domain cooldown (default 1 hour) - same rule BrightDataTool has always had.
  *   2. Global daily call ceiling - catches fan-out across many domains.
  *
- * DEFAULT BEHAVIOR IS UNCHANGED: the daily ceiling is OFF unless a caller
- * passes `dailyCeiling` or sets BRIGHTDATA_TIER4_DAILY_CEILING. The approved
- * interim value (decisions log T2-11) is 20 per day: set BRIGHTDATA_TIER4_DAILY_CEILING=20 to apply it.
- * It is a placeholder, not a verified dollar figure: Jm must confirm the real
- * cap from the Bright Data dashboard, then switch the default on.
+ * DEFAULT: a daily ceiling of 20 calls (DEFAULT_DAILY_CEILING), the approved
+ * interim value (decisions log T2-11), switched on 2026-11-08 by Jm's "you do
+ * all of these" (Kaya session 6dabcf). Observed real use 11-02..11-08: 4-8 per
+ * day. A caller's `dailyCeiling` or BRIGHTDATA_TIER4_DAILY_CEILING overrides it
+ * (0 = hard stop). An invalid value falls back to the default, not to "no
+ * ceiling": a money guard fails safe. 20 is a placeholder, not a verified
+ * dollar figure: replace it when Jm reads the real cap on the Bright Data dashboard.
  *
  * A trip is never silent: check() returns a reason, and the alert hook pages
  * (key 'brightdata-tier4-breaker-tripped', tier 'page'). Trips self-heal: the
@@ -56,16 +58,20 @@ interface Tier4BreakerOptions {
   alert?: BreakerAlertFn;
 }
 
-/** Read BRIGHTDATA_TIER4_DAILY_CEILING; unset or invalid means no daily ceiling. */
+/** Daily Tier-4 call ceiling when BRIGHTDATA_TIER4_DAILY_CEILING is unset, blank or invalid. */
+export const DEFAULT_DAILY_CEILING = 20;
+
+/** Read BRIGHTDATA_TIER4_DAILY_CEILING; unset, blank or invalid gives DEFAULT_DAILY_CEILING. */
+
 export function resolveDailyCeiling(env: Record<string, string | undefined> = process.env): number {
   const raw = env["BRIGHTDATA_TIER4_DAILY_CEILING"];
-  if (raw === undefined || raw.trim() === "") return Number.POSITIVE_INFINITY;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_DAILY_CEILING;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) {
     process.stderr.write(
-      `[Tier4Breaker] Ignoring invalid BRIGHTDATA_TIER4_DAILY_CEILING=${JSON.stringify(raw)}; daily ceiling stays off.\n`,
+      `[Tier4Breaker] Ignoring invalid BRIGHTDATA_TIER4_DAILY_CEILING=${JSON.stringify(raw)}; using the default ceiling ${DEFAULT_DAILY_CEILING}.\n`,
     );
-    return Number.POSITIVE_INFINITY;
+    return DEFAULT_DAILY_CEILING;
   }
   return n;
 }

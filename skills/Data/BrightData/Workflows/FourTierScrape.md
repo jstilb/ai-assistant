@@ -144,6 +144,8 @@ curl -L -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 
 **Description:** Use Bright Data MCP's professional scraping service with bot detection bypass
 
+**Spend pre-check (Tier 4 costs credits):** before any `mcp__Brightdata__*` call, run `bun ~/.claude/skills/Data/BrightData/Tools/Tier4Breaker.ts check --domain=<host>`. Exit 2 = hard stop: do not call Tier 4 (the per-domain cooldown or the daily ceiling, default 20 calls, is reached). Code cannot gate the MCP path, so this check is advisory and you must obey it.
+
 **Actions:**
 ```
 Use mcp__Brightdata__scrape_as_markdown tool with:

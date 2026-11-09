@@ -18,12 +18,13 @@
 import { join } from "node:path";
 // cross-skill-allowed: tier 3 renders via the Browser skill's Playwright — its node_modules owns the dependency; a lib seam waits for a second consumer (one adapter = hypothetical seam)
 import type { PlaywrightBrowser } from "../../../Development/Browser/index.ts";
-import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { z } from "zod";
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { requireSecret } from "../../../../lib/core/Secrets.ts";
 import { Tier4Breaker } from "./Tier4Breaker.ts";
 
 // ============================================================================
@@ -107,33 +108,6 @@ const BOT_BLOCK_PATTERNS =
 
 export function looksLikeBotBlockPage(content: string): boolean {
   return content.length < BOT_BLOCK_MAX_LENGTH && BOT_BLOCK_PATTERNS.test(content);
-}
-
-// ============================================================================
-// BRIGHT DATA TOKEN (tier 4)
-// ============================================================================
-
-/**
- * Read BRIGHTDATA_API_TOKEN from ~/.claude/secrets.json at call time.
- * Mirrors EventScout ICSAdapter's loadBrightDataToken (kept local — the
- * dependency arrow must not point from this shared tool into a skill).
- */
-export function loadBrightDataToken(): string {
-  const secretsPath = join(getKayaHome(), "secrets.json");
-  if (!existsSync(secretsPath)) {
-    throw new Error(`Tier 4 unlocker needs secrets.json (not found at ${secretsPath}) with BRIGHTDATA_API_TOKEN set.`);
-  }
-  let secrets: Record<string, unknown>;
-  try {
-    secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-  } catch (err) {
-    throw new Error(`Tier 4 unlocker: failed to parse ${secretsPath}: ${(err as Error).message}`);
-  }
-  const token = secrets["BRIGHTDATA_API_TOKEN"];
-  if (typeof token !== "string" || token.trim() === "") {
-    throw new Error(`Tier 4 unlocker: BRIGHTDATA_API_TOKEN is missing or empty in ${secretsPath}.`);
-  }
-  return token.trim();
 }
 
 // ============================================================================
@@ -718,7 +692,7 @@ export class BrightDataTool {
     const TIER4_FETCH_TIMEOUT_MS = 90_000;
     let token: string;
     try {
-      token = loadBrightDataToken();
+      token = requireSecret("BRIGHTDATA_API_TOKEN", "Tier 4 unlocker needs BRIGHTDATA_API_TOKEN set.").trim();
     } catch (err) {
       return {
         success: false,
