@@ -25,7 +25,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node
 import { join, dirname } from "node:path";
 import { execSync, execFileSync } from "node:child_process";
 import { createStateManager } from "../../../../lib/core/StateManager.ts";
-import { defaultKayaHome, getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
 import { redactSecrets } from "../../../../lib/core/Redactor.ts";
 import { z } from "zod";
 
@@ -55,18 +56,11 @@ const STAGING_DIR = "/tmp/kaya-public-staging";
 const SKILL_DIR = join(SOURCE_DIR, "skills", "System", "PublicSync");
 
 // Load GitHub token for HTTPS auth (SSH unavailable in launchd).
-// getKayaHome() (not defaultKayaHome()) so a test that pins KAYA_HOME never
-// reads the real secrets.json; the launchd plist sets KAYA_HOME=~/.claude.
+// Secrets.ts resolves KAYA_HOME, so a test that pins it never reads the real
+// secrets.json; the launchd plist sets KAYA_HOME=~/.claude. A malformed or
+// unreadable file throws a SecretError instead of falling back to SSH.
 export function loadGithubToken(): string | undefined {
-  const secretsPath = join(getKayaHome(), "secrets.json");
-  try {
-    const secretsRaw = readFileSync(secretsPath, "utf-8");
-    const secrets = JSON.parse(secretsRaw);
-    const token = secrets.GITHUB_TOKEN;
-    return typeof token === "string" && token.length > 0 ? token : undefined;
-  } catch {
-    return undefined;
-  }
+  return optionalSecret("GITHUB_TOKEN") ?? undefined;
 }
 export function getRemoteUrl(token: string | undefined): string {
   // Test seam: point the whole pipeline at a local bare repo so the fresh /

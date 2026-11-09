@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { SecretError } from "../../../../lib/core/Secrets.ts";
 
 const FAKE_TOKEN = "FAKE_TOKEN_1234567890abcdefghij";
 
@@ -44,6 +45,21 @@ describe("loadGithubToken", () => {
     expect(loadGithubToken() === undefined).toBe(true); // empty temp KAYA_HOME
     writeFileSync(join(TEST_KAYA_HOME, "secrets.json"), JSON.stringify({ GITHUB_TOKEN: FAKE_TOKEN }));
     expect(loadGithubToken() === FAKE_TOKEN).toBe(true);
+  });
+
+  test("malformed secrets.json throws SecretError file-malformed (no silent SSH fallback)", () => {
+    writeFileSync(join(TEST_KAYA_HOME, "secrets.json"), '{"GITHUB_TOKEN": sk_live_SENTINEL');
+    let caught: unknown;
+    try {
+      loadGithubToken();
+    } catch (err) {
+      caught = err;
+    } finally {
+      rmSync(join(TEST_KAYA_HOME, "secrets.json"), { force: true });
+    }
+    expect(caught).toBeInstanceOf(SecretError);
+    expect(caught instanceof SecretError ? caught.kind : null).toBe("file-malformed");
+    expect(String(caught)).not.toContain("SENTINEL");
   });
 });
 
