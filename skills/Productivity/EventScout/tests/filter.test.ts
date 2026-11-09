@@ -24,7 +24,7 @@
  *   bun test skills/Productivity/EventScout/tests/filter.test.ts
  */
 
-import { test } from "bun:test";
+import { test, expect } from "bun:test";
 import { filterEvents } from "../Tools/Filter.ts";
 import type { EventItem, QueryContext } from "../Tools/types.ts";
 import { defined } from "../../../../lib/test/defined.ts";
@@ -97,6 +97,32 @@ const WINDOW_ALL = { start: "2000-01-01T00:00:00-08:00", end: "2100-01-01T23:59:
  *  active" (mirrors the old ConstraintSet-omitted-near behavior for coordless
  *  fixtures, and mathematically never excludes a coordful one either). */
 const NO_RADIUS = Infinity;
+
+test("explicit cancelled status alone excludes events and preserves distinct noncancelled rows", () => {
+  const events = Array.from({ length: 16 }, (_, index) => makeEvent({
+    id: `retained-${index}`, title: index < 2 ? "Same performance title" : `Retained ${index}`,
+    startDatetime: `2026-06-05T${String(index + 1).padStart(2, "0")}:00:00-07:00`,
+  }));
+  const unknownStatuses: unknown[] = ["postponed", "unknown", "canceled", "CANCELLED", undefined, null];
+  for (const [index, status] of unknownStatuses.entries()) {
+    Object.defineProperty(defined(events[index + 2]), "status", { value: status, enumerable: true });
+  }
+  Reflect.deleteProperty(defined(events[8]), "status");
+  defined(events[9]).title = "Cancellation policy workshop";
+  defined(events[9]).description = "The source discusses cancelled events; this event is scheduled.";
+  const cancelled = [
+    makeEvent({ id: "cancelled-timed", status: "cancelled", startDatetime: "2026-06-05T18:00:00-07:00" }),
+    makeEvent({ id: "cancelled-all-day", status: "cancelled", allDay: true, startDatetime: "2026-06-05T00:00:00-07:00" }),
+  ];
+  const input = [defined(cancelled[0]), ...events, defined(cancelled[1])];
+  const before = JSON.stringify(input);
+  const context: QueryContext = { window: WINDOW_ALL, home: HOME, radiusMiles: NO_RADIUS, rawQuery: "test" };
+  const result = filterEvents(input, context);
+  expect(result.map(event => event.id)).toEqual(events.map(event => event.id));
+  expect(result.length).toBe(16);
+  expect(JSON.stringify(input)).toBe(before);
+  expect(filterEvents(cancelled, context)).toEqual([]);
+});
 
 // ============================================================================
 // Test 1 — Date window: in-range vs out-of-range
@@ -202,7 +228,7 @@ test("3b. Category absent → no filtering; category present hard-filters", () =
     rawQuery: "community events",
   };
   const explicitResult = filterEvents([community, music], explicit);
-  assert(explicitResult.length === 1 && explicitResult[0]!.id === "comm", "Category present hard-filters");
+  assert(explicitResult.length === 1 && defined(explicitResult[0]).id === "comm", "Category present hard-filters");
 });
 
 // ============================================================================
@@ -549,4 +575,39 @@ test("15. Far event (~9mi): excluded at r=5, included at r=15", () => {
 
   assert(filterEvents([farEvent], c5).length === 0, "Far event excluded at 5mi");
   assert(filterEvents([farEvent], c15).length === 1, "Far event included at 15mi");
+});
+
+test("interval overlap includes earlier starts and preserves timed exclusive ends", () => {
+  const context: QueryContext = { rawQuery: "events during October 30", window: { start: "2026-10-30T00:00:00-07:00", end: "2026-10-30T23:59:59-07:00" }, home: HOME, radiusMiles: NO_RADIUS };
+  const events = [
+    makeEvent({ id: "ongoing", startDatetime: "2026-10-29T22:00:00-07:00", endDatetime: "2026-10-30T02:00:00-07:00" }),
+    makeEvent({ id: "ended-at-start", startDatetime: "2026-10-29T22:00:00-07:00", endDatetime: context.window.start }),
+    makeEvent({ id: "starts-at-end", startDatetime: context.window.end }),
+    makeEvent({ id: "after", startDatetime: "2026-10-31T00:00:00-07:00", endDatetime: "2026-11-01T00:00:00-07:00" }),
+  ];
+  expect(filterEvents(events, context).map(e => e.id)).toEqual(["ongoing", "starts-at-end"]);
+});
+
+test("all-day inclusive final date overlaps; the following date does not", () => {
+  const event = makeEvent({ id: "range", allDay: true, startDatetime: "2026-10-29T00:00:00-07:00", endDatetime: "2026-10-30T23:59:59-07:00" });
+  const context: QueryContext = { rawQuery: "test", window: { start: "2026-10-30T00:00:00-07:00", end: "2026-10-30T23:59:59-07:00" }, home: HOME, radiusMiles: NO_RADIUS };
+  expect(filterEvents([event], context)).toHaveLength(1);
+  expect(filterEvents([event], { ...context, window: { start: "2026-10-31T00:00:00-07:00", end: "2026-10-31T23:59:59-07:00" } })).toHaveLength(0);
+  expect(filterEvents([{ ...event, endDatetime: context.window.start }], context)).toHaveLength(1);
+});
+
+test("missing, malformed, impossible, reversed and zero ends cannot invent ongoing duration", () => {
+  const context: QueryContext = { rawQuery: "test", window: { start: "2026-03-01T00:00:00-08:00", end: "2026-03-01T23:59:59-08:00" }, home: HOME, radiusMiles: NO_RADIUS };
+  for (const endDatetime of [undefined, "not-a-date", "2026-02-30T23:59:59-08:00", "2026-02-27T00:00:00-08:00", "2026-02-28T00:00:00-08:00"]) {
+    expect(filterEvents([makeEvent({ id: "earlier", startDatetime: "2026-02-28T00:00:00-08:00", endDatetime })], context)).toHaveLength(0);
+    expect(filterEvents([makeEvent({ id: "point", startDatetime: context.window.start, endDatetime })], context)).toHaveLength(1);
+  }
+});
+
+test("DST interval overlap keeps other hard constraints", () => {
+  const context: QueryContext = { rawQuery: "free events during DST day", window: { start: "2026-11-01T00:00:00-07:00", end: "2026-11-01T23:59:59-08:00" }, home: HOME, radiusMiles: 15, free: true };
+  const event = makeEvent({ id: "dst", allDay: true, startDatetime: "2026-10-31T00:00:00-07:00", endDatetime: "2026-11-02T23:59:59-08:00", isFree: true, lat: HOME.lat, lng: HOME.lng });
+  expect(filterEvents([event], context)).toHaveLength(1);
+  expect(filterEvents([{ ...event, isFree: false }], context)).toHaveLength(0);
+  expect(filterEvents([{ ...event, lat: 34.0522, lng: -118.2437 }], context)).toHaveLength(0);
 });

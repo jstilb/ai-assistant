@@ -45,19 +45,27 @@
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     margin-top: 11px;
   }
-  input[type="search"], input[type="date"], select {
+  input[type="search"], input[type="date"], #maxPrice, .location-input, select {
     font: inherit; color: var(--ink);
     border: 1px solid var(--line); border-radius: var(--radius);
     background: var(--panel); padding: 6px 9px;
   }
   input[type="search"] { min-width: 240px; }
-  input[type="search"]:focus, input[type="date"]:focus, select:focus,
+  input[type="search"]:focus, input[type="date"]:focus, #maxPrice:focus, .location-input:focus, select:focus,
   details > summary:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
     outline-offset: 1px;
   }
   .field { display: flex; align-items: center; gap: 6px; }
   .field label { color: var(--muted); font-size: 12px; }
+
+  #maxPrice, #radiusMiles { width: 100px; }
+  .location-input { width: 125px; }
+  #locationPanel .field { margin: 6px 0; }
+  #locationPanel label { width: 65px; }
+  .price-help { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  #priceError, #locationError { color: #b42318; }
+  .mobile-price { display: none; }
 
   .ckbox { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; }
 
@@ -131,6 +139,7 @@
   td { padding: 8px 10px; vertical-align: top; }
   td.date { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; width: 1%; }
   td.title { font-weight: 500; }
+  .source-hint { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; margin-top: 3px; }
   td.venue { color: var(--muted); }
   td.cat { width: 1%; }
   td.src { color: var(--muted); white-space: nowrap; width: 1%; }
@@ -164,6 +173,12 @@
   .detail-main h3 { margin: 0 0 4px; font-size: 15px; }
   .detail-when { color: var(--muted); margin-bottom: 10px; font-size: 13px; }
   .detail-desc { color: #3a3a36; white-space: pre-wrap; margin: 8px 0; max-height: 220px; overflow: auto; }
+  .source-evidence { margin-top: 12px; font-size: 13px; overflow-wrap: anywhere; }
+  .source-evidence h4 { font-size: 13px; margin: 0 0 4px; }
+  .source-evidence p { margin: 6px 0; }
+  .source-evidence .source-caveat { color: var(--muted); }
+  .source-evidence summary { cursor: pointer; color: var(--accent); padding: 5px 0; }
+  .source-recurrence { font-size: 13px; color: var(--muted); margin: 8px 0; overflow-wrap: anywhere; }
   .kv { display: grid; grid-template-columns: 88px 1fr; gap: 3px 10px; font-size: 13px; margin-top: 8px; }
   .kv dt { color: var(--faint); }
   .kv dd { margin: 0; color: var(--ink); }
@@ -191,6 +206,7 @@
     #srcRefresh { flex: 1; min-width: 0; }
     th[data-sort="category"], th[data-sort="source"], th[data-sort="price"],
     td.cat, td.src, td.price { display: none; }
+    .mobile-price { display: block; }
     td, thead th { padding: 7px 5px; }
     .detail-inner { flex-direction: column; gap: 12px; }
     .detail-side { width: auto; }
@@ -234,10 +250,31 @@
       <div class="dd-panel" id="srcPanel"></div>
     </details>
 
+    <div class="field">
+      <label for="maxPrice">Max price ($)</label>
+      <input type="text" inputmode="decimal" id="maxPrice" placeholder="Any" autocomplete="off" aria-describedby="priceHelp priceError" />
+    </div>
+    <div class="field">
+      <label for="radiusMiles">Radius (mi)</label>
+      <input class="location-input" type="text" inputmode="decimal" id="radiusMiles" placeholder="Any" autocomplete="off" aria-describedby="locationHelp locationError" />
+    </div>
+    <details class="dd" id="locationDD">
+      <summary>Origin</summary>
+      <div class="dd-panel" id="locationPanel">
+        <div class="field"><label for="originLat">Latitude</label><input class="location-input" type="text" inputmode="decimal" id="originLat" autocomplete="off" aria-describedby="locationHelp locationError" /></div>
+        <div class="field"><label for="originLng">Longitude</label><input class="location-input" type="text" inputmode="decimal" id="originLng" autocomplete="off" aria-describedby="locationHelp locationError" /></div>
+      </div>
+    </details>
     <label class="ckbox"><input type="checkbox" id="freeOnly" /> Free only</label>
     <label class="ckbox" title="Show only events you saved"><input type="checkbox" id="savedOnly" /> ★ Saved<span id="savedCount"></span></label>
     <button class="linkbtn" id="clearFilters">Clear filters</button>
   </div>
+  <p class="price-help" id="priceHelp">Maximum uses the lowest advertised price, not the checkout total. Ranges and admission conditions still apply. Unknown prices are excluded while a maximum is set.</p>
+  <p class="price-help" id="priceError" role="status" hidden>Enter a price of zero or more, such as 0 or 6.50.</p>
+  <p class="price-help" id="locationHelp">Distances use a straight line from the origin, not a travel route. Unknown distances stay in the results and are not verified within the radius. Location edits apply only to this page. Clear filters removes the radius and restores the configured origin.</p>
+  <p class="price-help" id="locationSummary" role="status"></p>
+  <p class="price-help" id="recurrenceStatus" role="status" hidden></p>
+  <p class="price-help" id="locationError" role="status" hidden>Enter latitude from −90 to 90, longitude from −180 to 180, and a radius of zero or more. A radius requires both coordinates.</p>
 </header>
 
 <div id="status">
@@ -271,6 +308,7 @@ const dayFmt  = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "num
 const timeFmt = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: PT });
 const ymdFmt  = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: PT });
 const longFmt = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: PT });
+const dateFmt = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: PT });
 
 let STATE = { events: [], sources: [], lastUpdated: "", saved: [] };
 let srcNames = {};            // id -> friendly name
@@ -279,29 +317,74 @@ let savedAtById = {};         // event id -> savedAt ISO
 let sort = { key: "date", dir: 1 };
 let renderLimit = 150;
 const PAGE = 150;
+let configuredLocation = null;
+let locationInitialized = false;
+let dataRequest = 0;
+let recurrencePending = false;
+let recurrenceFetchError = "";
 const openRows = new Set();   // event ids currently expanded
 
 const $ = (s) => document.querySelector(s);
 
 // ---- load ----
 async function loadData() {
-  const r = await fetch("/api/data");
-  STATE = await r.json();
-  srcNames = {};
-  for (const s of STATE.sources) srcNames[s.id] = s.name;
-  for (const e of STATE.events) augment(e);
-  refreshSavedIndex();
-  buildSourceRefreshDropdown();
-  buildCategoryFilter();
-  buildSourceFilter();
-  setFreshness();
+  const request = ++dataRequest;
+  recurrencePending = true;
+  recurrenceFetchError = "";
+  if (STATE.cachedEventIds) {
+    const cachedIds = new Set(STATE.cachedEventIds);
+    STATE.events = STATE.events.filter(event => cachedIds.has(event.id));
+  }
   apply();
+  try {
+    const params = new URLSearchParams({ from: $("#from").value, to: $("#to").value });
+    const r = await fetch("/api/data?" + params);
+    if (!r.ok) throw new Error("Data request failed");
+    const next = await r.json();
+    if (!Array.isArray(next.events) || !Array.isArray(next.sources)) throw new Error("Invalid data response");
+    if (request !== dataRequest) return;
+    const selectedCats = new Set(checkedValues("catck"));
+    const selectedSources = new Set(checkedValues("srcck"));
+    STATE = next;
+    if (!locationInitialized) {
+      configuredLocation = STATE.locationDefaults || null;
+      restoreOrigin();
+      $("#radiusMiles").value = configuredLocation ? String(configuredLocation.radiusMiles) : "";
+      locationInitialized = true;
+    }
+    srcNames = {};
+    for (const s of STATE.sources) srcNames[s.id] = s.name;
+    for (const e of STATE.events) augment(e);
+    refreshSavedIndex();
+    buildSourceRefreshDropdown();
+    buildCategoryFilter();
+    buildSourceFilter();
+    document.querySelectorAll(".catck").forEach(control => control.checked = selectedCats.has(control.value));
+    document.querySelectorAll(".srcck").forEach(control => control.checked = selectedSources.has(control.value));
+    updateCatLabel(); updateSrcLabel();
+    setFreshness();
+  } catch {
+    if (request !== dataRequest) return;
+    recurrenceFetchError = "Recurring dates could not be loaded. Displayed results contain cached dates only. Retry the date selection.";
+    $("#freshness").textContent = `${STATE.events.length} cached events · data request failed`;
+  } finally {
+    if (request === dataRequest) {
+      recurrencePending = false;
+      apply();
+    }
+  }
 }
 
 function augment(e) {
   const d = new Date(e.startDatetime);
   e._t = d.getTime();
   e._ymd = isNaN(e._t) ? "" : ymdFmt.format(d);          // YYYY-MM-DD in PT
+  const end = new Date(e.endDatetime);
+  const endDate = e.endDatetime?.slice(0, 10);
+  const calendarEnd = new Date(`${endDate}T12:00:00Z`);
+  const validEndDate = /^\d{4}-\d{2}-\d{2}$/.test(endDate || "") && Number.isFinite(calendarEnd.getTime()) && calendarEnd.toISOString().slice(0, 10) === endDate;
+  e._endT = validEndDate && end.getTime() > e._t ? end.getTime() : NaN;
+  e._lastYmd = Number.isFinite(e._endT) ? ymdFmt.format(new Date(e._endT - (e.allDay ? 0 : 1))) : e._ymd;
   e._dateLabel = isNaN(e._t) ? "—" : dayFmt.format(d);
   e._timeLabel = (isNaN(e._t) || e.allDay) ? "" : timeFmt.format(d).replace(/\s/g, "").toLowerCase();
   e._srcIds = (e.sources || []).map((s) => s.sourceId);
@@ -411,6 +494,50 @@ function apply() {
   render();
 }
 
+function maximumPrice() {
+  const value = $("#maxPrice").value.trim();
+  if (!value) return undefined;
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return NaN;
+  const price = Number(value);
+  return Number.isFinite(price) ? price : NaN;
+}
+
+function restoreOrigin() {
+  $("#originLat").value = configuredLocation ? String(configuredLocation.home.lat) : "";
+  $("#originLng").value = configuredLocation ? String(configuredLocation.home.lng) : "";
+}
+
+function hasCoordinates(point) {
+  return Number.isFinite(point?.lat) && Math.abs(point.lat) <= 90
+    && Number.isFinite(point?.lng) && Math.abs(point.lng) <= 180;
+}
+
+function locationSettings() {
+  const latText = $("#originLat").value.trim();
+  const lngText = $("#originLng").value.trim();
+  const radiusText = $("#radiusMiles").value.trim();
+  const number = value => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) ? Number(value) : NaN;
+  const origin = latText || lngText ? { lat: number(latText), lng: number(lngText) } : null;
+  const radius = radiusText ? number(radiusText) : undefined;
+  const invalid = (origin !== null && !hasCoordinates(origin))
+    || (radius !== undefined && (!Number.isFinite(radius) || radius < 0 || origin === null));
+  return { origin, radius, invalid };
+}
+
+function distanceMiles(event, origin) {
+  if (!hasCoordinates(event) || !hasCoordinates(origin)) return undefined;
+  const rad = degrees => degrees * Math.PI / 180;
+  const a = Math.sin(rad(event.lat - origin.lat) / 2) ** 2
+    + Math.cos(rad(origin.lat)) * Math.cos(rad(event.lat)) * Math.sin(rad(event.lng - origin.lng) / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.sqrt(a));
+}
+
+function distanceLabel(event) {
+  const location = locationSettings();
+  const miles = location.invalid ? undefined : distanceMiles(event, location.origin);
+  return miles === undefined ? "Distance unknown (unverified)" : `${miles.toFixed(2)} mi from origin (straight line)`;
+}
+
 function currentFiltered() {
   const q = $("#q").value.trim().toLowerCase();
   const terms = q ? q.split(/\s+/) : [];
@@ -419,6 +546,8 @@ function currentFiltered() {
   const cats = new Set(checkedValues("catck"));
   const srcs = new Set(checkedValues("srcck"));
   const freeOnly = $("#freeOnly").checked;
+  const maxPrice = maximumPrice();
+  const location = locationSettings();
   const savedOnly = $("#savedOnly").checked;
 
   // Saved view draws from the saved store (fresh cache copy when it exists,
@@ -438,7 +567,11 @@ function currentFiltered() {
     if (cats.size && !cats.has(e.category)) return false;
     if (srcs.size && !e._srcIds.some((id) => srcs.has(id))) return false;
     if (freeOnly && !e.isFree) return false;
-    if (from && e._ymd && e._ymd < from) return false;
+    if (Number.isNaN(maxPrice) || location.invalid) return false;
+    const distance = distanceMiles(e, location.origin);
+    if (location.radius !== undefined && distance !== undefined && distance > location.radius) return false;
+    if (maxPrice !== undefined && !e.isFree && !((e.priceMin ?? e.priceMax ?? Infinity) <= maxPrice)) return false;
+    if (from && e._lastYmd && e._lastYmd < from) return false;
     if (to && e._ymd && e._ymd > to) return false;
     if (terms.length && !terms.every((t) => e._blob.includes(t))) return false;
     return true;
@@ -461,7 +594,27 @@ function currentFiltered() {
 }
 
 function render() {
+  const projection = STATE.recurrenceProjection;
+  const recurrenceText = recurrencePending
+    ? "Loading source recurrence dates. Displayed results contain cached dates only."
+    : recurrenceFetchError || STATE.recurrenceError || (projection
+      ? `Source recurrence projection: ${projection.from} through ${projection.to}. ${projection.openEnd ? "To is unset; projection stops at the date above. Recurring dates beyond it are not expanded. " : ""}Occurrence dates are not independently confirmed. Cached dated listings outside this projection interval remain available.`
+      : "");
+  $("#recurrenceStatus").textContent = recurrenceText;
+  $("#recurrenceStatus").hidden = !recurrenceText;
+  const invalidPrice = Number.isNaN(maximumPrice());
+  $("#maxPrice").setAttribute("aria-invalid", String(invalidPrice));
+  $("#priceError").hidden = !invalidPrice;
+  $("#empty").textContent = invalidPrice ? "Correct the maximum price to see matching events." : "No events match these filters.";
+  const location = locationSettings();
+  $("#locationError").hidden = !location.invalid;
+  for (const id of ["#originLat", "#originLng", "#radiusMiles"]) $(id).setAttribute("aria-invalid", String(location.invalid));
+  if (location.invalid) $("#empty").textContent = "Correct the origin and radius to see matching events.";
   const filtered = currentFiltered();
+  const unverified = filtered.filter(event => distanceMiles(event, location.origin) === undefined).length;
+  const configured = configuredLocation && location.origin?.lat === configuredLocation.home.lat && location.origin?.lng === configuredLocation.home.lng;
+  const originLabel = configured ? `Configured home: ${configuredLocation.home.label}` : location.origin && !location.invalid ? `Origin: ${location.origin.lat}, ${location.origin.lng}` : "No valid origin set";
+  $("#locationSummary").textContent = `${STATE.locationError ? STATE.locationError + " " : ""}${originLabel} · Radius: ${location.radius === undefined ? "Any" : location.invalid ? "invalid" : location.radius + " mi"} · ${location.radius !== undefined && !location.invalid ? (filtered.length - unverified) + " results with known distance within radius; " : ""}${unverified} results with unverified distance${location.radius !== undefined ? " retained; these are not verified within the radius" : ""}.`;
   const tbody = $("#rows");
   tbody.innerHTML = "";
   $("#empty").style.display = filtered.length ? "none" : "block";
@@ -495,10 +648,13 @@ function rowFor(e) {
   tr.className = "ev" + (openRows.has(e.id) ? " open" : "");
   const srcShort = e._srcIds.length > 1 ? `${srcNames[e._srcIds[0]] || e._srcIds[0]} +${e._srcIds.length - 1}` : e._srcLabel;
   const on = savedIds.has(e.id);
+  const provenance = e.recurrenceRule
+    ? (e.recurrenceOverride ? "Explicit source recurrence override · not independently confirmed" : "Source recurrence projection · not independently confirmed")
+    : (e.sourceDescription ? "Source description available" : "");
   tr.innerHTML =
     `<td class="starcell"><button class="starbtn${on ? " on" : ""}" title="${on ? "Unsave" : "Save"}">${on ? "★" : "☆"}</button></td>` +
     `<td class="date">${esc(e._dateLabel)}${e._timeLabel ? ` <span style="color:var(--faint)">${esc(e._timeLabel)}</span>` : ""}</td>` +
-    `<td class="title">${esc(e.title)}</td>` +
+    `<td class="title">${esc(e.title)}<span class="source-hint mobile-price">Price: ${esc(e._price === "—" ? "unknown" : e._price)}</span>${e.admissionNote ? `<span class="source-hint admission-note">${esc(e.admissionNote)}</span>` : ""}<span class="source-hint">${esc(distanceLabel(e))}</span>${provenance ? `<span class="source-hint">${esc(provenance)}</span>` : ""}</td>` +
     `<td class="venue">${esc(e.venue || "")}</td>` +
     `<td class="cat"><span class="chip c-${e.category}">${e.category}</span></td>` +
     `<td class="src">${esc(srcShort)}</td>` +
@@ -514,7 +670,22 @@ function detailFor(e) {
   const td = document.createElement("td");
   td.colSpan = 7;
 
-  const when = isNaN(e._t) ? esc(e.startDatetime) : longFmt.format(new Date(e.startDatetime));
+  const whenFmt = e.allDay ? dateFmt : longFmt;
+  const when = isNaN(e._t) ? esc(e.startDatetime) : whenFmt.format(new Date(e._t))
+    + (Number.isFinite(e._endT) ? ` – ${whenFmt.format(new Date(e._endT))}` : "")
+    + (e.allDay ? " · All day" : "");
+  const recurrence = e.recurrenceRule
+    ? `<div class="source-recurrence"><b>${e.recurrenceOverride ? "Explicit source recurrence override" : "Source recurrence projection"}</b>: ${e.recurrenceOverride ? "The source supplies this occurrence date. Series rule: " : ""}${esc(e.recurrenceRule)}. Occurrence not independently confirmed.</div>`
+    : "";
+  const sourceDescription = e.sourceDescription?.trim();
+  const sourceEvidence = sourceDescription
+    ? `<section class="source-evidence" aria-label="Source description">
+        <h4>Source description</h4>
+        <p class="source-caveat">Calendar text may disagree with the date or place above. Neither is independently confirmed.</p>
+        <p>${esc(sourceDescription.slice(0, 500))}${sourceDescription.length > 500 ? " … (excerpt)" : ""}</p>
+        ${sourceDescription.length > 500 ? `<details><summary>Read complete source description</summary><p>${esc(sourceDescription)}</p></details>` : ""}
+      </section>`
+    : "";
   const links = [];
   if (e.ticketUrl) links.push(`<a class="linkrow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">🎟  Tickets / event page →</a>`);
   if (e.sourceUrl && e.sourceUrl !== e.ticketUrl) links.push(`<a class="linkrow" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">🔗  Source page →</a>`);
@@ -528,6 +699,8 @@ function detailFor(e) {
   if (e.address) kv.push(["Address", esc(e.address)]);
   kv.push(["Category", `<span class="chip c-${e.category}">${e.category}</span>`]);
   kv.push(["Price", esc(e._price)]);
+  kv.push(["Distance", esc(distanceLabel(e))]);
+  if (e.admissionNote) kv.push(["Admission", esc(e.admissionNote)]);
   if (e.performersOrTeams) kv.push(["Lineup", esc(e.performersOrTeams)]);
   if (e.status && e.status !== "scheduled") kv.push(["Status", `<b style="color:#c0392b">${esc(e.status)}</b>`]);
   if (savedAtById[e.id]) kv.push(["Saved", esc(dayFmt.format(new Date(savedAtById[e.id])))]);
@@ -538,9 +711,10 @@ function detailFor(e) {
       <div class="detail-main">
         <h3>${esc(e.title)}</h3>
         <div class="detail-when">${when}</div>
+        ${recurrence}
         <dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
         ${e.tags && e.tags.length ? `<div class="tags">${e.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}
-        ${e.description ? `<div class="detail-desc">${esc(e.description)}</div>` : ""}
+        ${sourceEvidence || (e.description ? `<div class="detail-desc">${esc(e.description)}</div>` : "")}
       </div>
       <div class="detail-side">
         ${e.imageUrl ? `<img src="${esc(e.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'"/>` : ""}
@@ -606,8 +780,10 @@ async function poll() {
 // ---- wire up ----
 function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 $("#q").addEventListener("input", debounce(apply, 160));
-$("#from").addEventListener("change", apply);
-$("#to").addEventListener("change", apply);
+$("#from").addEventListener("change", loadData);
+$("#to").addEventListener("change", loadData);
+$("#maxPrice").addEventListener("input", apply);
+for (const id of ["#originLat", "#originLng", "#radiusMiles"]) $(id).addEventListener("input", apply);
 $("#freeOnly").addEventListener("change", apply);
 $("#savedOnly").addEventListener("change", apply);
 $("#showMore").addEventListener("click", () => { renderLimit += PAGE; render(); });
@@ -616,9 +792,12 @@ $("#srcRefreshGo").addEventListener("click", startRefreshSource);
 $("#clearFilters").addEventListener("click", () => {
   $("#q").value = ""; $("#from").value = todayPT(); $("#to").value = "";
   document.querySelectorAll(".catck, .srcck").forEach((c) => c.checked = false);
+  $("#maxPrice").value = "";
+  $("#radiusMiles").value = "";
+  restoreOrigin();
   $("#freeOnly").checked = false;
   $("#savedOnly").checked = false;
-  updateCatLabel(); updateSrcLabel(); apply();
+  updateCatLabel(); updateSrcLabel(); loadData();
 });
 document.querySelectorAll("#headRow th").forEach((th) => th.addEventListener("click", () => {
   const k = th.dataset.sort;

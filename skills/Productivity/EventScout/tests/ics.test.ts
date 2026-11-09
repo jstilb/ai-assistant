@@ -12,7 +12,8 @@
  *   bun test skills/Productivity/EventScout/tests/ics.test.ts
  */
 
-import { test } from "bun:test";
+import { test, expect, setSystemTime } from "bun:test";
+import ical from "node-ical";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,9 +22,9 @@ import {
   isFutureWithin,
   expandHorizonDays,
   fetchICSEvents,
-  loadBrightDataToken,
   MAX_EVENTS_SAFETY,
 } from "../Tools/adapters/ICSAdapter.ts";
+import { SecretError } from "../../../../lib/core/Secrets.ts";
 import type { VeventOccurrence } from "../Tools/adapters/ICSAdapter.ts";
 import type { EventSource } from "../Tools/types.ts";
 import { defined } from "../../../../lib/test/defined.ts";
@@ -454,10 +455,32 @@ test("30. unblock:true throws a clear error when BRIGHTDATA_API_TOKEN is absent"
   });
 });
 
-test("31. loadBrightDataToken reads secrets.json from KAYA_HOME, not os.homedir()", async () => {
-  await withTempSecrets("fake-token-from-kaya-home", async () => {
-    assert(loadBrightDataToken() === "fake-token-from-kaya-home", "31. token comes from the KAYA_HOME secrets.json");
-  });
+test("31. unblock:true with a malformed secrets.json throws SecretError file-malformed (no fetch, no value)", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKayaHome = process.env.KAYA_HOME;
+  const dir = mkdtempSync(join(tmpdir(), "es-ics-secrets-bad-"));
+  let fetched = false;
+  let caught: unknown = null;
+  try {
+    writeFileSync(join(dir, "secrets.json"), '{"BRIGHTDATA_API_TOKEN": "SENTINEL-ics-0001",');
+    process.env.KAYA_HOME = dir;
+    globalThis.fetch = fakeFetch(async () => {
+      fetched = true;
+      return new Response(buildICSFeed(1), { status: 200, headers: { "Content-Type": "text/calendar" } });
+    });
+    await fetchICSEvents(UNBLOCK_SOURCE);
+  } catch (err) {
+    caught = err;
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKayaHome === undefined) delete process.env.KAYA_HOME;
+    else process.env.KAYA_HOME = originalKayaHome;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  assert(caught instanceof SecretError, "31a. malformed secrets file throws a SecretError");
+  assert(caught instanceof SecretError && caught.kind === "file-malformed", "31b. kind is file-malformed");
+  assert(caught instanceof Error && !caught.message.includes("SENTINEL"), "31c. message holds no secret value");
+  assert(!fetched, "31d. no fetch is made");
 });
 
 /** Adds Bun's `fetch.preconnect` so a plain function satisfies `typeof fetch`. */
@@ -527,4 +550,168 @@ test("33. unblock:true fails loudly and sends no request when the breaker is ope
     assert(fetched === 0, `33b. no unlocker request when open, got ${fetched}`);
     assert(recorded === 0, `33c. nothing recorded when no request was made, got ${recorded}`);
   });
+});
+
+test("native DATE metadata preserves calendar dates and exclusive DTEND in LA and UTC", () => {
+  const previousTZ = process.env.TZ;
+  try {
+    for (const zone of ["America/Los_Angeles", "UTC"]) {
+      process.env.TZ = zone;
+      const parsed = ical.sync.parseICS("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:native-date\r\nDTSTART;VALUE=DATE:20261029\r\nDTEND;VALUE=DATE:20261031\r\nSUMMARY:Native DATE\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+      const event = parsed["native-date"];
+      if (!event || event.type !== "VEVENT") throw new Error("Native parser did not return VEVENT");
+      expect(event.start.dateOnly).toBe(true);
+      const mapped = mapVeventToItem({ uid: event.uid, summary: String(event.summary), start: event.start, end: event.end }, TEST_SOURCE);
+      expect(mapped).toMatchObject({ allDay: true, startDatetime: "2026-10-29T00:00:00-07:00", endDatetime: "2026-10-30T23:59:59-07:00" });
+    }
+  } finally {
+    if (previousTZ === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTZ;
+  }
+});
+
+test("native DATE without an explicit occurrence end does not invent a mapper duration", () => {
+  const parsed = ical.sync.parseICS("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:date-no-end\r\nDTSTART;VALUE=DATE:20261029\r\nSUMMARY:Date no end\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+  const event = parsed["date-no-end"];
+  if (!event || event.type !== "VEVENT") throw new Error("Native parser did not return VEVENT");
+  const mapped = mapVeventToItem({ uid: event.uid, summary: String(event.summary), start: event.start }, TEST_SOURCE);
+  expect(mapped.allDay).toBe(true);
+  expect(mapped.endDatetime).toBeUndefined();
+});
+
+test("actual recurring DATE adapter path retains metadata without network", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousTZ = process.env.TZ;
+  try {
+    process.env.TZ = "UTC";
+    setSystemTime(new Date("2026-10-28T12:00:00Z"));
+    globalThis.fetch = fakeFetch(async () => new Response("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:date-recurring\r\nDTSTART;VALUE=DATE:20261029\r\nDTEND;VALUE=DATE:20261030\r\nRRULE:FREQ=DAILY;COUNT=2\r\nSUMMARY:Recurring DATE\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"));
+    const events = await fetchICSEvents(TEST_SOURCE);
+    expect(events).toHaveLength(2);
+    expect(events.map(event => event.recurrenceRule)).toEqual(["RRULE:FREQ=DAILY;COUNT=2", "RRULE:FREQ=DAILY;COUNT=2"]);
+    expect(events.every(event => event.allDay)).toBe(true);
+    expect(events.map(event => event.startDatetime)).toEqual(["2026-10-29T00:00:00-07:00", "2026-10-30T00:00:00-07:00"]);
+    expect(events.map(event => event.endDatetime)).toEqual(["2026-10-29T23:59:59-07:00", "2026-10-30T23:59:59-07:00"]);
+  } finally {
+    setSystemTime();
+    globalThis.fetch = originalFetch;
+    if (previousTZ === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTZ;
+  }
+});
+
+async function coordinateFeed(properties: string[], overrideProperties?: string[]): Promise<ReturnType<typeof mapVeventToItem>[]> {
+  const originalFetch = globalThis.fetch;
+  const recurring = overrideProperties !== undefined;
+  const override = recurring ? ["BEGIN:VEVENT", "UID:coordinate-contract", "RECURRENCE-ID:20261030T120000Z", "DTSTART:20261030T140000Z", "DTEND:20261030T150000Z", "SUMMARY:Override", ...overrideProperties, "END:VEVENT"] : [];
+  const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:coordinate-contract", "DTSTART:20261029T120000Z", "DTEND:20261029T130000Z", "SUMMARY:Coordinate contract", "LOCATION:Master venue", ...(recurring ? ["RRULE:FREQ=DAILY;COUNT=2"] : []), ...properties, "END:VEVENT", ...override, "END:VCALENDAR"].join("\r\n");
+  try {
+    setSystemTime(new Date("2026-10-28T00:00:00Z"));
+    globalThis.fetch = fakeFetch(async () => new Response(body));
+    return await fetchICSEvents(TEST_SOURCE);
+  } finally {
+    globalThis.fetch = originalFetch;
+    setSystemTime();
+  }
+}
+
+test("native Apple literal coordinate strings, wrappers and folded values survive the adapter", async () => {
+  for (const property of [
+    "X-APPLE-STRUCTURED-LOCATION:geo:32.75,-117.15",
+    "X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-TITLE=Master venue:geo:32.75,-117.15",
+    "X-APPLE-STRUCTURED-LOCATION;VALUE=URI:geo:32.75,\r\n -117.15",
+  ]) {
+    const events = await coordinateFeed([property]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ lat: 32.75, lng: -117.15, venue: "Master venue", isFree: false });
+  }
+  const zero = await coordinateFeed(["X-APPLE-STRUCTURED-LOCATION:geo:0,+0"]);
+  expect(zero[0]).toMatchObject({ lat: 0, lng: 0 });
+  const boundary = await coordinateFeed(["X-APPLE-STRUCTURED-LOCATION:geo:-90,180"]);
+  expect(boundary[0]).toMatchObject({ lat: -90, lng: 180 });
+});
+
+test("native unsupported, invalid, repeated and standard GEO properties remain unknown", async () => {
+  const propertySets = [
+    [], ["GEO:;"], ["GEO:32.75;-117.15"], ["GEO:32.75;-117.15", "GEO:33;-118"],
+    ["X-APPLE-STRUCTURED-LOCATION:geo:32.75,-117.15", "GEO:32.75;-117.15"],
+    ["X-APPLE-STRUCTURED-LOCATION:geo:32.75,-117.15", "X-APPLE-STRUCTURED-LOCATION:geo:33,-118"],
+    ...["", "geo:", "geo:32.75,", "geo:,-117.15", "geo:NaN,-117", "geo:32,Infinity", "geo:91,-117", "geo:32,-181", "geo:32,-117,10", "geo:32,-117;u=10", "geo:3e1,-117", "https://example.com/geo:32,-117"].map(value => [`X-APPLE-STRUCTURED-LOCATION:${value}`]),
+  ];
+  for (const properties of propertySets) {
+    const events = await coordinateFeed(properties);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.lat).toBeUndefined();
+    expect(events[0]?.lng).toBeUndefined();
+  }
+});
+
+test("recurrence inherits master coordinates only when override venue evidence permits it", async () => {
+  const master = ["X-APPLE-STRUCTURED-LOCATION:geo:32.75,-117.15"];
+  for (const override of [[], ["LOCATION:Master venue"], ["LOCATION: Master venue "]]) {
+    const events = await coordinateFeed(master, override);
+    expect(events).toHaveLength(2);
+    expect(events.every(event => event.lat === 32.75 && event.lng === -117.15)).toBe(true);
+    expect(events[1]?.startDatetime).toBe("2026-10-30T07:00:00-07:00");
+  }
+  const own = await coordinateFeed(master, ["LOCATION:Changed venue", "X-APPLE-STRUCTURED-LOCATION:geo:33,-118"]);
+  expect(own[0]).toMatchObject({ lat: 32.75, lng: -117.15 });
+  expect(own[1]).toMatchObject({ lat: 33, lng: -118, venue: "Changed venue" });
+  for (const override of [
+    ["LOCATION:Changed venue"], ["LOCATION:"], ["X-APPLE-STRUCTURED-LOCATION:invalid"],
+    ["GEO:;"], ["X-APPLE-STRUCTURED-LOCATION:geo:33,-118", "GEO:33;-118"],
+    ["X-APPLE-STRUCTURED-LOCATION:geo:33,-118", "X-APPLE-STRUCTURED-LOCATION:geo:34,-119"],
+  ]) {
+    const events = await coordinateFeed(master, override);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ lat: 32.75, lng: -117.15 });
+    expect(events[1]?.lat).toBeUndefined();
+    expect(events[1]?.lng).toBeUndefined();
+  }
+});
+
+test("ICS recurrence provenance preserves exception and override dates without marking single events", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    setSystemTime(new Date("2026-11-04T22:00:08.488Z"));
+    const rule = "RRULE:FREQ=WEEKLY;UNTIL=20261120T075959Z;BYDAY=FR";
+    globalThis.fetch = fakeFetch(async () => new Response([
+      "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:weekly-provenance",
+      "DTSTART;TZID=America/Los_Angeles:20261030T190000",
+      "DTEND;TZID=America/Los_Angeles:20261030T200000", rule,
+      "EXDATE;TZID=America/Los_Angeles:20261113T190000", "SUMMARY:Weekly source", "END:VEVENT",
+      "BEGIN:VEVENT", "UID:weekly-provenance", "RECURRENCE-ID;TZID=America/Los_Angeles:20261106T190000",
+      "DTSTART;TZID=America/Los_Angeles:20261107T200000", "DTEND;TZID=America/Los_Angeles:20261107T210000",
+      "SUMMARY:Moved source", "END:VEVENT", "BEGIN:VEVENT", "UID:single-provenance",
+      "DTSTART;TZID=America/Los_Angeles:20261115T120000", "SUMMARY:Explicit date", "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n")));
+    const events = await fetchICSEvents(TEST_SOURCE);
+    expect(events).toHaveLength(2);
+    const moved = events.find(event => event.title === "Moved source");
+    expect(moved).toMatchObject({ startDatetime: "2026-11-07T20:00:00-08:00", endDatetime: "2026-11-07T21:00:00-08:00", recurrenceRule: rule, recurrenceOverride: true });
+    expect(events.find(event => event.title === "Explicit date")?.recurrenceRule).toBeUndefined();
+  } finally {
+    setSystemTime();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ICS source-description evidence stays complete without changing the ranking description", () => {
+  const sourceDescription = "Calendar source text ".repeat(40) + "conflicting source detail";
+  const event = mapVeventToItem({ ...OCC_FULL, description: `<p>${sourceDescription}</p>` }, TEST_SOURCE);
+  expect(event.sourceDescription).toBe(sourceDescription);
+  expect(event.description).toBe(sourceDescription.slice(0, 500));
+  expect(mapVeventToItem(OCC_FULL, TEST_SOURCE).sourceDescription).toBeUndefined();
+});
+
+test("pure mapper emits a complete valid coordinate pair or neither axis", () => {
+  expect(mapVeventToItem({ ...OCC_FULL, coordinates: { lat: 0, lng: 0 } }, TEST_SOURCE)).toMatchObject({ lat: 0, lng: 0 });
+  for (const coordinates of [{ lat: 91, lng: -117 }, { lat: 32, lng: NaN }, { lat: 32 }, { lat: null, lng: -117 }]) {
+    const occurrence = { ...OCC_FULL };
+    Object.defineProperty(occurrence, "coordinates", { value: coordinates });
+    const event = mapVeventToItem(occurrence, TEST_SOURCE);
+    expect(event.lat).toBeUndefined();
+    expect(event.lng).toBeUndefined();
+  }
 });

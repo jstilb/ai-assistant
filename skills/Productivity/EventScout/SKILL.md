@@ -29,7 +29,7 @@ EVENTSCOUT_DISABLE_RERANK=1                # skip the LLM rerank (deterministic
 EVENTSCOUT_REFRESH_TIMEOUT_MS=360000       # per-source live-refresh timeout
                                            # (default 360s). Backstop against a
                                            # hung source — sized to NOT pre-empt the
-                                           # inner LLM retry budget (Apify/Playwright
+                                           # inner LLM retry budget (Playwright
                                            # + a stalled-socket extraction retry).
 EVENTSCOUT_REFRESH_CONCURRENCY=8           # max sources fetched at once during a
                                            # query's live refresh (default 8). The
@@ -128,7 +128,7 @@ bun skills/Productivity/EventScout/cli.ts add-source https://example.com/events
 bun skills/Productivity/EventScout/cli.ts add-source https://example.com/events \
   --tier html-llm --category music --name "My Venue"
 ```
-Validates the URL and schema, then appends a new `EventSource` to `sources.json`. Defaults: `tier=html-llm`, `pollInterval=720` (12 hours), `enabled=true`. Valid tiers: `api | rss | ics | shopify | spa | html-llm | wp-tribe | evvnt | apify | pike13 | ctycms | activenet | dancestudio-pro | nineteenhz | sitemap-llm`. Valid categories: `music | comedy | theater | sports | arts | community | festival | talk | film | food | other`.
+Validates the URL and schema, then appends a new `EventSource` to `sources.json`. Defaults: `tier=html-llm`, `pollInterval=720` (12 hours), `enabled=true`. Valid tiers: `api | rss | ics | spa | html-llm | wp-tribe | evvnt | pike13 | ctycms | activenet | dancestudio-pro | nineteenhz | sitemap-llm`. Valid categories: `music | comedy | theater | sports | arts | community | festival | talk | film | food | other`.
 
 ### refresh — live-ingest one source
 ```bash
@@ -161,6 +161,19 @@ The `EventSource` field table, the `InterestProfile.json` rules and the hybrid r
 ## Booking Notices (discover → calendar → *book*)
 
 Many events need a booking action (tickets, reservation, RSVP) before a deadline. The agent judges `--action` and `--book-by`, not the code. For the rules and the judging guide, read `Workflows/BookingNotices.md` before you put such an event on the calendar. See also `docs/BOOKING_PROCESS.md`.
+
+## The Thursday plan (weekend holds on Jm's calendar)
+
+Every Thursday at 16:30 the weekend-digest job (`Tools/WeekendDigest.ts`) ranks the coming Saturday and Sunday once, then `Tools/WeekendHolds.ts` puts **at most 3** picks on Jm's primary Google Calendar as `EventScout hold: <title>` entries. Each hold is tentative, shows as free, has no reminders (no notification), and carries the source link, place, price and a "Return visit" line when the venue is in his history (activity_log or his calendar, last 8 weeks). Jm drops a hold by deleting it; the next run records it as dropped and never puts it back (one placement per weekend). A weekend with 3 or more of his own timed entries (10:00–23:00) gets no holds.
+
+- Calendar writes go through `Tools/CalendarApi.ts` (Calendar REST API with gcalcli's stored login, via `Tools/gcal_token.py`) and the shared calendar write log. Holds are found again by a private tag (`eventscoutHold`, `eventscoutWeekend`, `eventscoutEventId`), never by title.
+- Recurring groups first (`Tools/Community.ts`, ALIGNMENT G2): the whole cache is grouped into series (title without dates + venue). A series recurs when its dates fall on one weekday with gaps of 6+ days, or a source gives a weekly/monthly rule. One Sonnet call per run judges which recurring series are communities (classes, clubs, pickup sports, dance socials, open mics, volunteer groups) and which are not (watch-only shows, residencies, exhibits, kids-only or seniors-only programs). Communities with score ≥ 40 come before one-off shows; their holds carry "Recurring group: meets weekly on Saturdays (EventScout found it on N dates, …)" — or, with only 2 dates or uneven gaps, "the sources list it on 2 Saturdays: Nov 7, Nov 14" (no "every" claim). If that call fails, the holds follow score order and the job exits 1 ("community check FAILED" in the log).
+- Pre-hold source check (`Tools/SourceCheck.ts`, product review 1, 2026-11-08): for picks from a public Google Calendar feed (e.g. the Daylight calendar), the job reads that calendar's weekend through the Calendar API just before placement. Found → the hold links to the event's own page and adds "Organizer page: …" and "Checked on the source: …"; gone → no hold, the next pick takes its place. If the read fails, those picks keep the calendar-view link and the job exits 1 ("source check FAILED"). Other sources are not re-checked yet.
+- Weeknight hold (product review 1, 2026-11-08): most recurring groups meet Mon–Fri, so the same run also plans this Friday and next Monday–Thursday. It ranks only evening events (17:00+) from recurring series (about 60 events, ~2 scoring calls; never the whole week), sends them through the same community call, and places at most 1 weeknight hold, for a community only. That hold takes the last of the 3 slots and is never the same group or place as a weekend pick. If the weeknight ranking fails, the weekend holds still go out and the job exits 1 ("weeknight ranking FAILED"). Kill switch: `EVENTSCOUT_WEEKNIGHT=off`.
+- Follow-up (ALIGNMENT G3 slice 1, 2026-11-08): each hold ends with "After you go: how was it, and anyone you want to see again? Tell Kaya in one line with a rating …". Such a line routes through the LifeOS Router to activity_log (no push channel).
+- Ledger: `State/holds-ledger.json` (placed / kept / dropped per weekend — the real-use counter; each hold also records `community` and `seriesKey`).
+- Dry run: `KAYA_ALERT_DRY_RUN=1 EVENTSCOUT_HOLDS_DRY_RUN=1 bun skills/Productivity/EventScout/Tools/WeekendDigest.ts`. Kill switch: `EVENTSCOUT_HOLDS=off`.
+- Scope (Jm, 2026-11-08): tentative holds only. Never invite anyone, send a message or buy a ticket.
 
 ## Architecture, Integration
 

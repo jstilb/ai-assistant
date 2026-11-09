@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * RaCoAdapter.ts — Resident Advisor San Diego (ra.co GraphQL) → EventItem.
  *
@@ -31,7 +30,6 @@
  * seam).
  */
 
-import { upsertEvents } from "../Cache.ts";
 import { horizonDays } from "../Horizon.ts";
 import type { EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
@@ -76,7 +74,7 @@ interface RaListingsResponse {
 // Constants — Resident Advisor, San Diego area
 // ============================================================================
 
-const SOURCE_ID = "ra-co-sandiego";
+export const SOURCE_ID = "ra-co-sandiego";
 const GRAPHQL_URL = "https://ra.co/graphql";
 const LISTINGS_PAGE_URL = "https://ra.co/events/us/sandiego";
 const AREA_ID = 309; // ra.co area "sandiego" (US)
@@ -275,33 +273,4 @@ export async function fetchRaCoEvents(): Promise<EventItem[]> {
       (skipped > 0 ? ` (skipped ${skipped} missing title/date)` : ""),
   );
   return [...events.values()];
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("RaCoAdapter.ts") || process.argv[1].endsWith("RaCoAdapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching Resident Advisor San Diego listings (GraphQL)...\n`);
-  try {
-    const events = await fetchRaCoEvents();
-    upsertEvents(events);
-    console.log(`Upserted ${events.length} RA event(s) to cache.\n`);
-    for (const e of events.slice(0, 15)) {
-      console.log(
-        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          ` (${e.isFree ? "Free" : e.priceMin != null ? `$${e.priceMin}` : "$?"})`,
-      );
-    }
-    console.log(`\nSource: ${SOURCE_ID}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

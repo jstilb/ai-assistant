@@ -293,9 +293,24 @@ export async function fetchSitemapLlmEvents(source: EventSource): Promise<EventI
   // call count.
   const batches = batchBlocks(blocks);
   console.log(`[SitemapLlm] ${source.id}: ${blocks.length} pages in ${batches.length} extraction batch(es)`);
+  // Same rule as the page fetches above: a failed batch is logged and
+  // tolerated; every batch failing fails the source (Source Adapter contract).
   const events: EventItem[] = [];
-  for (const batch of batches) {
-    events.push(...(await extractEventsFromContent(batch, source)));
+  let batchFailures = 0;
+  let lastBatchError = "";
+  for (const [i, batch] of batches.entries()) {
+    try {
+      events.push(...(await extractEventsFromContent(batch, source)));
+    } catch (err) {
+      batchFailures++;
+      lastBatchError = err instanceof Error ? err.message : String(err);
+      console.warn(`[SitemapLlm] ${source.id}: extraction batch ${i + 1}/${batches.length} failed: ${lastBatchError}`);
+    }
+  }
+  if (batches.length > 0 && batchFailures === batches.length) {
+    throw new Error(
+      `[SitemapLlm] ${source.id}: all ${batches.length} extraction batch(es) failed: ${lastBatchError}`,
+    );
   }
   return attributeTicketUrls(events, blocks);
 }

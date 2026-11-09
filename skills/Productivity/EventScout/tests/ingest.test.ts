@@ -6,8 +6,8 @@
  * (throw, timeout, 0 events) MUST NOT abort the whole run. Every source
  * must appear in the per-source report, whether as a count or a failure reason.
  *
- * Tests use stub adapters injected via the exported `ingestAllWithAdapters`
- * function (no network, deterministic) — every call below passes
+ * Tests use stub adapters injected via `ingestAll(sources, { adapterFor })`
+ * (no network, deterministic) — every call below passes
  * `skipCacheWrite: true`, so the real sources.json and cache are never
  * touched and nothing here reaches the KAYA_HOME-derived cache path in
  * Tools/Cache.ts. No live-service gate is needed in this file.
@@ -37,11 +37,18 @@
  */
 
 import { test, describe, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { ingestAllWithAdapters } from "../Tools/Ingest.ts";
-import type { EventSource, EventItem } from "../Tools/types.ts";
+import { z } from "zod";
+import { adapterFor, ingestAll, ingestSource } from "../Tools/Ingest.ts";
+import { EventSourceSchema } from "../Tools/types.ts";
+import type { AdapterResolver, EventSource, EventItem, SourceAdapter } from "../Tools/types.ts";
+import { fetchRSSEvents } from "../Tools/adapters/RSSAdapter.ts";
+import { fetchSPAEvents } from "../Tools/adapters/SPAAdapter.ts";
+import { fetchSitemapLlmEvents } from "../Tools/adapters/SitemapLlmAdapter.ts";
+import { fetchRaCoEvents, SOURCE_ID as RACO_ID } from "../Tools/adapters/RaCoAdapter.ts";
+import { fetchEdmtrainEvents, SOURCE_ID as EDMTRAIN_ID } from "../Tools/adapters/EdmtrainAdapter.ts";
+import { SOURCE_ID as PADRES_ID } from "../Tools/adapters/PadresAdapter.ts";
 
 // ============================================================================
 // Assertion helpers — throw on failure so bun:test reports real pass/fail
@@ -125,6 +132,15 @@ function makeEvent(sourceId: string, n: number): EventItem {
   };
 }
 
+/** Fake AdapterResolver: the stub Source Adapter keyed by source id. */
+function fakeResolver(map: Record<string, SourceAdapter>): AdapterResolver {
+  return (source) => {
+    const adapter = map[source.id];
+    if (!adapter) throw new Error(`fakeResolver: no stub for "${source.id}"`);
+    return adapter;
+  };
+}
+
 // ============================================================================
 // Test 1: All-success — all 3 sources yield events
 // ============================================================================
@@ -138,7 +154,7 @@ test("Test 1: all-success — 3 sources all yield events", async () => {
     "source-c": async () => [makeEvent("source-c", 1), makeEvent("source-c", 2), makeEvent("source-c", 3)],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   assertEq(result.perSource["source-a"], 2, "source-a: 2 events");
   assertEq(result.perSource["source-b"], 1, "source-b: 1 event");
@@ -164,7 +180,7 @@ test("Test 2: one source throws — others continue, failure recorded", async ()
     "ok-2": async () => [makeEvent("ok-2", 1), makeEvent("ok-2", 2)],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   assertEq(result.perSource["ok-1"], 1, "ok-1: 1 event despite thrower");
   assertEq(result.perSource["ok-2"], 2, "ok-2: 2 events despite thrower");
@@ -195,7 +211,8 @@ test("Test 3: one source times out — others continue, timeout recorded", async
   };
 
   // Use a very short per-source timeout (200ms) to make the test fast
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
     perSourceTimeoutMs: 200,
   });
@@ -221,7 +238,7 @@ test("Test 4: source returns 0 events — not a failure, count = 0", async () =>
     "empty-source": async () => [],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   assertEq(result.perSource["empty-source"], 0, "empty-source: count = 0");
   assert(!result.failureReasons?.["empty-source"], "empty-source: no failure reason (0 events is OK)");
@@ -246,7 +263,7 @@ test("Test 5: no silent drop — all enabled sources appear in perSource", async
     },
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   const reportedIds = Object.keys(result.perSource);
   for (const source of sources) {
@@ -269,7 +286,7 @@ test("Test 6: failureReasons only set for failed sources, not succeeded ones", a
     },
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   assert(!result.failureReasons?.["good"], "good: no failure reason (succeeded)");
   assert(typeof result.failureReasons?.["bad"] === "string", "bad: failureReason is a string");
@@ -287,7 +304,7 @@ test("Test 7: written count = total events (no dedup in stub scenario)", async (
     y: async () => [makeEvent("y", 1)],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   // 3 total events, distinct ids → 0 merges → written = 3
   assert(result.written >= 3, `written >= 3 (got ${result.written})`);
@@ -306,7 +323,7 @@ test("Test 8: disabled source is skipped — not in perSource", async () => {
     disabled: async () => [makeEvent("disabled", 1)], // would work but should be skipped
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, { skipCacheWrite: true });
+  const result = await ingestAll(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
 
   assert("active" in result.perSource, "active source appears in perSource");
   assert(!("disabled" in result.perSource), "disabled source NOT in perSource (skipped)");
@@ -346,7 +363,8 @@ test("Test 9 (Slice 8): concurrency cap respected — max in-flight bounded AND 
     adapters[id] = makeTrackedAdapter(id);
   }
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
     concurrency: cap,
   });
@@ -377,7 +395,8 @@ test("Test 10 (Slice 8): failure isolation — one throws, others succeed, run c
     "fi-good-3": async () => [makeEvent("fi-good-3", 1)],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
     concurrency: 3,
   });
@@ -415,7 +434,8 @@ test("Test 11 (Slice 8): each adapter called exactly once — no double-fetch", 
     adapters[id] = makeOnceAdapter(id);
   }
 
-  await ingestAllWithAdapters(sources, adapters, {
+  await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
     concurrency: 4,
   });
@@ -442,7 +462,8 @@ test("Test 12 (Slice 8): timeout isolation — one hangs, others complete under 
     "ti-fast-2": async () => [makeEvent("ti-fast-2", 1)],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
     concurrency: 3,
     perSourceTimeoutMs: 150,
@@ -458,126 +479,199 @@ test("Test 12 (Slice 8): timeout isolation — one hangs, others complete under 
 });
 
 // ============================================================================
-// T2-09 — apify-tier per-source health streaks wired into ingestAllCore().
-// The streak/tier DECISION logic itself is unit-tested in isolation in
-// ApifyHealth.test.ts (with an injected sendAlertFn spy); these tests prove
-// only the WIRING — that ingestAllCore() actually calls trackApifySourceHealth()
-// for fetchTier "apify" sources on both the success and catch branches, and
-// leaves every other tier (this file's 12 tests above, all "html-llm") alone.
-// KAYA_HOME is pinned to a mkdtemp sandbox (never the live tree) and
-// KAYA_ALERT_DRY_RUN=1 is set so recordFailure()'s AlertGate bridge never
-// reaches the network — scoped to this describe block only via local
-// beforeEach/afterEach so the 12 tests above are unaffected.
+// Source Adapter seam (P05 S1) — adapterFor / ingestSource / ingestAll only.
+// Resolve-only for production adapters: no adapter is ever called here.
 // ============================================================================
 
-describe("T2-09: apify-tier health streaks wired into ingestAllCore()", () => {
-  const tmpHome = join(tmpdir(), `eventscout-ingest-apify-test-${Date.now()}`);
-  const failureLogPath = join(tmpHome, "MEMORY/MONITORING/failure-log.jsonl");
+describe("Source Adapter seam", () => {
+  const prevHorizon = process.env["EVENTSCOUT_HORIZON_DAYS"];
+  beforeEach(() => {
+    delete process.env["EVENTSCOUT_HORIZON_DAYS"];
+  });
+  afterEach(() => {
+    if (prevHorizon === undefined) delete process.env["EVENTSCOUT_HORIZON_DAYS"];
+    else process.env["EVENTSCOUT_HORIZON_DAYS"] = prevHorizon;
+  });
 
-  function readFailureLogLines(): Array<Record<string, unknown>> {
-    if (!existsSync(failureLogPath)) return [];
-    return readFileSync(failureLogPath, "utf-8")
-      .trim()
-      .split("\n")
-      .filter((l) => l.length > 0)
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+  /** An event `days` from the real now, stamped by `sourceId`. */
+  function eventInDays(sourceId: string, days: number, title: string): EventItem {
+    const start = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    return { ...makeEvent(sourceId, 1), id: `${sourceId}-${title}`, title, startDatetime: start };
   }
 
-  beforeEach(() => {
-    process.env.KAYA_HOME = tmpHome;
-    process.env.KAYA_ALERT_DRY_RUN = "1";
-    mkdirSync(tmpHome, { recursive: true });
+  test("dispatch by tier: adapterFor picks the tier's adapter", () => {
+    assert(adapterFor(makeSource("t-rss", { fetchTier: "rss" })) === fetchRSSEvents, "rss → fetchRSSEvents");
+    assert(adapterFor(makeSource("t-spa", { fetchTier: "spa" })) === fetchSPAEvents, "spa → fetchSPAEvents");
+    assert(adapterFor(makeSource("t-html", { fetchTier: "html-llm" })) === fetchSPAEvents, "html-llm → fetchSPAEvents");
+    assert(
+      adapterFor(makeSource("t-sitemap", { fetchTier: "sitemap-llm" })) === fetchSitemapLlmEvents,
+      "sitemap-llm → fetchSitemapLlmEvents",
+    );
   });
 
-  afterEach(() => {
-    delete process.env.KAYA_HOME;
-    delete process.env.KAYA_ALERT_DRY_RUN;
-    if (existsSync(tmpHome)) rmSync(tmpHome, { recursive: true, force: true });
+  test("dispatch by id for api: adapterFor picks the adapter keyed by its SOURCE_ID", () => {
+    assert(adapterFor(makeSource(RACO_ID, { fetchTier: "api" })) === fetchRaCoEvents, `${RACO_ID} → fetchRaCoEvents`);
+    assert(
+      adapterFor(makeSource(EDMTRAIN_ID, { fetchTier: "api" })) === fetchEdmtrainEvents,
+      `${EDMTRAIN_ID} → fetchEdmtrainEvents`,
+    );
+    const padres = adapterFor(makeSource(PADRES_ID, { fetchTier: "api" }));
+    assert(padres !== fetchRaCoEvents && padres !== fetchEdmtrainEvents, "padres-mlb resolves to its own adapter");
   });
 
-  test("3 consecutive hard-fails on an apify source, across 3 separate ingestAllWithAdapters() calls, reach the page threshold", async () => {
-    const apifySource = makeSource("apify-dead", { fetchTier: "apify" });
-    const adapters: Record<string, () => Promise<EventItem[]>> = {
-      "apify-dead": async () => {
-        throw new Error("status=TIMED-OUT");
-      },
+  test("unknown api id: failureReasons names it, other sources still run", async () => {
+    const stubs = fakeResolver({ "ok-1": async () => [makeEvent("ok-1", 1)] });
+    const resolve: AdapterResolver = (s) => (s.id === "no-such-api" ? adapterFor(s) : stubs(s));
+    const sources = [makeSource("no-such-api", { fetchTier: "api" }), makeSource("ok-1")];
+
+    const result = await ingestAll(sources, { adapterFor: resolve, skipCacheWrite: true });
+
+    assertEq(result.perSource["ok-1"], 1, "ok-1 still ran");
+    assertEq(result.perSource["no-such-api"], 0, "unknown api source reports 0");
+    assertEq(
+      result.failureReasons?.["no-such-api"],
+      '[Ingest] no Source Adapter for api source "no-such-api"',
+      "failureReasons carries the adapterFor error",
+    );
+  });
+
+  test("foreign sourceId: that source fails with both ids, even beyond the horizon", async () => {
+    const sources = [makeSource("drifter"), makeSource("ok-2")];
+    const result = await ingestAll(sources, {
+      adapterFor: fakeResolver({
+        // Beyond the 120-day horizon: the identity check must run first.
+        drifter: async () => [eventInDays("renamed-id", 400, "Drifted Event")],
+        "ok-2": async () => [makeEvent("ok-2", 1)],
+      }),
+      skipCacheWrite: true,
+    });
+
+    const reason = result.failureReasons?.["drifter"] ?? "";
+    assert(reason.includes('"renamed-id"') && reason.includes('"drifter"'), `reason names both ids: ${reason}`);
+    assertEq(
+      reason,
+      '[Ingest] Source Adapter for "html-llm" stamped sourceId "renamed-id" on source "drifter"',
+      "exact identity error text",
+    );
+    assertEq(result.perSource["ok-2"], 1, "ok-2 unaffected");
+  });
+
+  test("horizon applied once, via ingestSource", async () => {
+    const stub = fakeResolver({
+      "hz-src": async () => [eventInDays("hz-src", 10, "Near Event"), eventInDays("hz-src", 200, "Far Event")],
+    });
+
+    const direct = await ingestSource(makeSource("hz-src"), stub);
+    assertEq(
+      direct.map((e) => e.title),
+      ["Near Event"],
+      "ingestSource drops the far event",
+    );
+
+    const logged: string[] = [];
+    const realLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
     };
+    try {
+      const result = await ingestAll([makeSource("hz-src")], { adapterFor: stub, skipCacheWrite: true });
+      assertEq(result.perSource["hz-src"], 1, "ingestAll keeps 1");
+    } finally {
+      console.log = realLog;
+    }
+    const drops = logged.filter((l) => l.includes("hz-src") && l.includes("horizon"));
+    assertEq(drops.length, 1, "the horizon drop is logged once per source (one pass)");
+  });
 
-    for (let i = 0; i < 3; i++) {
-      const result = await ingestAllWithAdapters([apifySource], adapters, { skipCacheWrite: true });
-      assertEq(result.perSource["apify-dead"], 0, `run ${i + 1}: apify-dead still reports 0 events`);
-      assert(
-        (result.failureReasons?.["apify-dead"] ?? "").includes("TIMED-OUT"),
-        `run ${i + 1}: apify-dead failureReason still populated (unchanged existing behavior)`,
-      );
+  test("registry: every enabled source in sources.json resolves via adapterFor", () => {
+    const raw = JSON.parse(readFileSync(join(import.meta.dir, "../Tools/sources.json"), "utf-8")) as unknown;
+    const enabled = z
+      .array(EventSourceSchema)
+      .parse(raw)
+      .filter((s) => s.enabled);
+    assert(enabled.length > 0, "sources.json has enabled sources");
+    for (const source of enabled) {
+      assert(typeof adapterFor(source) === "function", `${source.id} (${source.fetchTier}) resolves`);
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Error mode (P05 S4): the Source Adapter contract (CONTEXT.md) — a failed
+  // primary fetch throws, never a silent []. One real sources.json entry per
+  // fetch-based adapter, resolved through the production adapterFor, with
+  // globalThis.fetch stubbed. Excluded (plan §6 S4): SPA (BrightData +
+  // Playwright transport, not fetch) and Edmtrain (key gate reads secrets.json
+  // before any fetch). The message match stops a pre-fetch error from passing.
+  // --------------------------------------------------------------------------
+  describe("error mode", () => {
+    const registry = z
+      .array(EventSourceSchema)
+      .parse(JSON.parse(readFileSync(join(import.meta.dir, "../Tools/sources.json"), "utf-8")) as unknown);
+    function registryEntry(id: string): EventSource {
+      const entry = registry.find((s) => s.id === id);
+      if (!entry) throw new Error(`sources.json has no entry "${id}"`);
+      return entry;
     }
 
-    const lines = readFailureLogLines().filter(
-      (l) =>
-        l["source"] === "EventScout:ApifyIngest" &&
-        (l["context"] as Record<string, unknown>)["sourceId"] === "apify-dead" &&
-        (l["context"] as Record<string, unknown>)["channel"] === "hard-fail",
-    );
-    assertEq(lines.length, 3, "3 hard-fail forensic entries recorded, one per run");
-    const streaks = lines.map((l) => (l["context"] as Record<string, unknown>)["streak"]);
-    assertEq(streaks, [1, 2, 3], "streak climbs 1 -> 2 -> 3 across the 3 runs");
-  });
-
-  test("a real fetch success (events.length > 0) does not trigger any apify-health forensic entry", async () => {
-    const apifySource = makeSource("apify-healthy", { fetchTier: "apify" });
-    const adapters: Record<string, () => Promise<EventItem[]>> = {
-      "apify-healthy": async () => [makeEvent("s4", 1)],
-    };
-
-    const result = await ingestAllWithAdapters([apifySource], adapters, { skipCacheWrite: true });
-    assertEq(result.perSource["apify-healthy"], 1, "apify-healthy: 1 event, unchanged existing behavior");
-
-    const lines = readFailureLogLines().filter(
-      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "apify-healthy",
-    );
-    assertEq(lines.length, 0, "a clean success writes no failure-log entry at all");
-  });
-
-  test("3 consecutive zero-result runs on an apify source reach digest tier without ever paging", async () => {
-    const apifySource = makeSource("apify-quiet", { fetchTier: "apify" });
-    const adapters: Record<string, () => Promise<EventItem[]>> = {
-      "apify-quiet": async () => [],
-    };
-
-    for (let i = 0; i < 3; i++) {
-      const result = await ingestAllWithAdapters([apifySource], adapters, { skipCacheWrite: true });
-      assertEq(result.perSource["apify-quiet"], 0, `run ${i + 1}: 0 events`);
-      assert(
-        result.failureReasons?.["apify-quiet"] === undefined,
-        `run ${i + 1}: 0 events with no exception is NOT a failureReason (existing scenario-4 invariant, unchanged)`,
-      );
-    }
-
-    const lines = readFailureLogLines().filter(
-      (l) =>
-        l["source"] === "EventScout:ApifyIngest" &&
-        (l["context"] as Record<string, unknown>)["sourceId"] === "apify-quiet" &&
-        (l["context"] as Record<string, unknown>)["channel"] === "zero-result",
-    );
-    assertEq(lines.length, 3, "3 zero-result forensic entries recorded, one per run");
-    assertEq(lines[0]!["tier"], undefined, "run 1: tier 'log' (field omitted)");
-    assertEq(lines[1]!["tier"], undefined, "run 2: tier 'log' (field omitted)");
-    assertEq(lines[2]!["tier"], "digest", "run 3: escalates to 'digest'");
-  });
-
-  test("non-apify sources (the other 35 tiers) are completely untouched by this wiring", async () => {
-    const htmlLlmSource = makeSource("not-apify", { fetchTier: "html-llm" });
-    const adapters: Record<string, () => Promise<EventItem[]>> = {
-      "not-apify": async () => {
-        throw new Error("some non-apify failure");
+    // [adapter, sources.json id] — ICS uses an entry without `unblock`.
+    const ADAPTER_SOURCES: ReadonlyArray<readonly [string, string]> = [
+      ["ActiveNet", "sdparkandrec-activenet"],
+      ["Ctycms", "liberty-station"],
+      ["DanceStudioPro", "thedancehouse-schedule"],
+      ["Evvnt", "inewsource-events"],
+      ["ICS", "daylight-sd"],
+      ["MemberLife", "majestyinmotion-classes"],
+      ["NineteenHz", "19hz-socal"],
+      ["Padres", "padres-mlb"],
+      ["Pike13", "cultureshock-sd"],
+      ["RaCo", "ra-co-sandiego"],
+      ["RSS", "sd-press-club"],
+      ["Sdfc", "sandiego-fc"],
+      ["SitemapLlm", "sdwritersink-classes"],
+      ["WordPressTec", "balboa-park"],
+    ];
+    const FAILURES = [
+      {
+        failure: "HTTP 500",
+        stub: async (): Promise<Response> => new Response("", { status: 500 }),
+        // The status, not a URL value such as Pike13's `per_page=500`.
+        expected: /(?<![=\d])500(?!\d)/,
       },
-    };
-
-    await ingestAllWithAdapters([htmlLlmSource], adapters, { skipCacheWrite: true });
-
-    const lines = readFailureLogLines().filter(
-      (l) => (l["context"] as Record<string, unknown>)?.["sourceId"] === "not-apify",
+      {
+        failure: "network throw",
+        stub: async (): Promise<Response> => {
+          throw new TypeError("p05 network down");
+        },
+        expected: /p05 network down/,
+      },
+    ];
+    const CASES = ADAPTER_SOURCES.flatMap(([adapter, id]) =>
+      FAILURES.map(({ failure, stub, expected }) => ({ adapter, id, failure, stub, expected })),
     );
-    assertEq(lines.length, 0, "a non-apify-tier failure never reaches FailureLog via this new wiring");
+
+    const realFetch = globalThis.fetch;
+    afterEach(() => {
+      globalThis.fetch = realFetch;
+    });
+
+    test.each(CASES)(
+      "error mode: $adapter $failure",
+      async ({ id, stub, expected }) => {
+        const source = registryEntry(id);
+        assert(source.unblock !== true, `${id}: test entry must not use the unblocker`);
+        globalThis.fetch = Object.assign(stub, { preconnect: realFetch.preconnect });
+        let caught: unknown;
+        try {
+          await ingestSource(source);
+        } catch (err) {
+          caught = err;
+        }
+        assert(caught !== undefined, `${id}: adapter resolved instead of rejecting`);
+        const message = caught instanceof Error ? caught.message : String(caught);
+        assert(expected.test(message), `${id}: reject "${message}" does not match ${expected}`);
+      },
+      // ICS retries 3 times with real sleeps (~750 + 1500 ms) before it throws.
+      15_000,
+    );
   });
 });

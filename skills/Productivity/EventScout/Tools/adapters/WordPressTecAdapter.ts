@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * WordPressTecAdapter.ts — Generic adapter for WordPress sites running
  * "The Events Calendar" (TEC) plugin, which exposes a REST API at
@@ -19,9 +18,7 @@
  *       deduplicates by id, and returns the array.
  *       Throws on HTTP/JSON failure so Ingest records the failure reason.
  *
- * Script mode (bun .../WordPressTecAdapter.ts):
- *   Requires EVENTSCOUT_TEC_URL env var (or defaults to balboapark.org).
- *   Fetches live, prints a summary. Does NOT write to cache in script mode.
+ * Live probe: bun Tools/Ingest.ts --source balboa-park
  *
  * Date handling:
  *   TEC API returns `utc_start_date` as "YYYY-MM-DD HH:MM:SS" (space-separated,
@@ -474,50 +471,4 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
   }
 
   return allItems;
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("WordPressTecAdapter.ts") || process.argv[1].endsWith("WordPressTecAdapter"));
-
-if (IS_SCRIPT) {
-  const sourceUrl = process.env["EVENTSCOUT_TEC_URL"] ?? "https://balboapark.org/events/";
-
-  const testSource: EventSource = {
-    id: "balboa-park",
-    url: sourceUrl,
-    name: "Balboa Park",
-    fetchTier: "wp-tribe",
-    categoryHint: "arts",
-    pollInterval: 720,
-    enabled: true,
-  };
-
-  console.log(`\nFetching TEC events from: ${new URL(testSource.url).origin}\n`);
-
-  try {
-    const events = await fetchWordPressTecEvents(testSource);
-
-    console.log(`Fetched ${events.length} event(s).\n`);
-
-    const preview = events.slice(0, 5);
-    if (preview.length === 0) {
-      console.log("No events found.");
-    } else {
-      console.log("First 5 events:");
-      for (const e of preview) {
-        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`);
-      }
-    }
-
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

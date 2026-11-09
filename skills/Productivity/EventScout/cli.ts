@@ -114,7 +114,7 @@ Subcommands:
 
   add-source <url>  [--tier <fetchTier>] [--category <cat>] [--name <name>]
       Append a new source to sources.json.
-      Fetch tiers: api | rss | ics | shopify | spa | html-llm (default)
+      Fetch tiers: api | rss | ics | spa | html-llm (default)
       Categories: music | comedy | theater | sports | arts | community |
                   festival | talk | film | other
 
@@ -610,7 +610,7 @@ async function cmdAddSource(args: string[]): Promise<void> {
   const tierRaw = flags["tier"] ?? "html-llm";
   const tierParsed = FetchTierSchema.safeParse(tierRaw);
   if (!tierParsed.success) {
-    console.error(`Invalid tier "${tierRaw}". Valid tiers: api | rss | ics | shopify | spa | html-llm`);
+    console.error(`Invalid tier "${tierRaw}". Valid tiers: api | rss | ics | spa | html-llm`);
     process.exit(1);
   }
   const tier = tierParsed.data as FetchTier;

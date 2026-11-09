@@ -1,28 +1,23 @@
-#!/usr/bin/env bun
 /**
  * PadresAdapter.ts — Slice 2: MLB StatsAPI → EventItem adapter for the Padres.
  *
  * Exports:
  *   mapGameToEvent(game: MlbGame): EventItem     — pure mapper (unit-testable, no network)
- *   fetchPadresEvents(startDate?, endDate?): Promise<EventItem[]>
- *       fetches the upcoming window (default: today → +45 days), maps, and returns EventItem[].
+ *   fetchPadresEvents(source): Promise<EventItem[]>
+ *       fetches the upcoming window (today → +45 days), maps, and returns EventItem[].
  *
- * Script mode (bun .../PadresAdapter.ts):
- *   Fetches live, upserts to cache, prints a summary.
+ * Live probe: bun Tools/Ingest.ts --source padres-mlb
  *
  * Cache integration:
  *   fetchPadresEvents() returns the EventItem[]; it does NOT write to cache.
- *   The script entry point calls upsertEvents(items) after fetching.
- *   This lets callers (e.g. a future pipeline runner) handle cache writes themselves
- *   while the script mode provides a self-contained "fetch + cache + summarise" workflow.
+ *   Callers (the prefetch runner) handle cache writes themselves.
  *
  * API:
  *   https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  *   Padres teamId = 135
  */
 
-import { upsertEvents } from "../Cache.ts";
-import type { EventItem } from "../types.ts";
+import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
 
@@ -72,8 +67,7 @@ interface MlbScheduleResponse {
 // ============================================================================
 
 const PADRES_TEAM_ID = 135;
-const PADRES_TEAM_NAME = "San Diego Padres";
-const SOURCE_ID = "padres-mlb";
+export const SOURCE_ID = "padres-mlb";
 const BASE_URL = "https://statsapi.mlb.com/api/v1/schedule";
 const SCHEDULE_PAGE_URL = "https://www.mlb.com/padres/schedule";
 
@@ -133,13 +127,13 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export async function fetchPadresEvents(startDate?: string, endDate?: string): Promise<EventItem[]> {
+export async function fetchPadresEvents(_source: EventSource): Promise<EventItem[]> {
   const today = new Date();
   const defaultEnd = new Date(today);
   defaultEnd.setDate(today.getDate() + 45);
 
-  const start = startDate ?? formatDate(today);
-  const end = endDate ?? formatDate(defaultEnd);
+  const start = formatDate(today);
+  const end = formatDate(defaultEnd);
 
   const url = `${BASE_URL}?sportId=1&teamId=${PADRES_TEAM_ID}&startDate=${start}&endDate=${end}`;
 
@@ -158,40 +152,4 @@ export async function fetchPadresEvents(startDate?: string, endDate?: string): P
   }
 
   return events;
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("PadresAdapter.ts") || process.argv[1].endsWith("PadresAdapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching upcoming Padres games (today → +45 days)...\n`);
-
-  try {
-    const events = await fetchPadresEvents();
-    upsertEvents(events);
-
-    console.log(`Upserted ${events.length} game(s) to cache.\n`);
-
-    const preview = events.slice(0, 3);
-    if (preview.length === 0) {
-      console.log("No games found in this window.");
-    } else {
-      console.log("First 3 games:");
-      for (const e of preview) {
-        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"} (${e.status})`);
-      }
-    }
-
-    console.log(`\nTeam: ${PADRES_TEAM_NAME} | Source: ${SOURCE_ID}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * ActiveNetAdapter.ts — SD Parks & Rec (ActiveNet/ActiveCommunities) → EventItem.
  *
@@ -43,7 +42,6 @@
  * = a real seam).
  */
 
-import { upsertEvents } from "../Cache.ts";
 import type { Category, EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId, stripHtml } from "./AdapterUtil.ts";
@@ -409,32 +407,4 @@ export async function fetchActiveNetEvents(): Promise<EventItem[]> {
       `${skipped.ended} ended, ${skipped.youth} youth-only)`,
   );
   return events;
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("ActiveNetAdapter.ts") || process.argv[1].endsWith("ActiveNetAdapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching SD Parks & Rec activities (ActiveNet catalog)...\n`);
-  try {
-    const events = await fetchActiveNetEvents();
-    upsertEvents(events);
-    console.log(`Upserted ${events.length} activity event(s) to cache.\n`);
-    for (const e of events.slice(0, 15)) {
-      console.log(
-        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` + ` (${e.isFree ? "Free" : `$${e.priceMin ?? "?"}`})`,
-      );
-    }
-    console.log(`\nSource: ${SOURCE_ID}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

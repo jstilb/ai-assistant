@@ -363,7 +363,7 @@
     "geoHint": "San Diego, CA",
     "pollInterval": 720,
     "maxLlmWindows": 20,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "sdcl-library-events",

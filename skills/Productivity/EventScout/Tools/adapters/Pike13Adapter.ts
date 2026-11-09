@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * Pike13Adapter.ts — Culture Shock San Diego dance classes → EventItem.
  *
@@ -27,8 +26,7 @@
  * Pike13 studio is added (two adapters = a real seam).
  */
 
-import { upsertEvents } from "../Cache.ts";
-import type { EventItem } from "../types.ts";
+import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId, stripHtml } from "./AdapterUtil.ts";
 
@@ -183,13 +181,13 @@ function ymd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export async function fetchPike13Events(from?: string, to?: string): Promise<EventItem[]> {
+export async function fetchPike13Events(_source: EventSource): Promise<EventItem[]> {
   const today = new Date();
   const end = new Date(today);
   end.setDate(today.getDate() + WINDOW_DAYS);
 
-  const fromStr = from ?? ymd(today);
-  const toStr = to ?? ymd(end);
+  const fromStr = ymd(today);
+  const toStr = ymd(end);
 
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
@@ -211,33 +209,4 @@ export async function fetchPike13Events(from?: string, to?: string): Promise<Eve
   return (data.event_occurrences ?? [])
     .filter((o) => o.state !== "canceled" && o.state !== "cancelled")
     .map(mapOccurrenceToEvent);
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("Pike13Adapter.ts") || process.argv[1].endsWith("Pike13Adapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching Culture Shock SD classes (today → +${WINDOW_DAYS} days)...\n`);
-  try {
-    const events = await fetchPike13Events();
-    upsertEvents(events);
-    console.log(`Upserted ${events.length} class occurrence(s) to cache.\n`);
-    for (const e of events.slice(0, 12)) {
-      console.log(
-        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          (e.performersOrTeams ? ` (${e.performersOrTeams})` : ""),
-      );
-    }
-    console.log(`\nSource: ${SOURCE_ID} | Pike13 ${SUBDOMAIN} loc ${LOCATION_IDS.join(",")}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

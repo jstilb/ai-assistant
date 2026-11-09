@@ -273,8 +273,18 @@ export async function enrichWithGeo(events: EventItem[]): Promise<EventItem[]> {
   let failed = 0;
 
   const result: EventItem[] = [];
+  // Progress at most once a minute: live lookups run at 1/s, and a silent
+  // ~34-min geocode phase looked hung from outside (F-002, 2026-11-08).
+  let lastProgressMs = Date.now();
 
   for (const event of events) {
+    if (Date.now() - lastProgressMs >= 60_000) {
+      lastProgressMs = Date.now();
+      console.log(
+        `[Geocoder] enrichWithGeo progress: ${result.length}/${events.length} events ` +
+          `(${cacheHits} cache-hits, ${enriched} live, ${failed} failed/no-result)`,
+      );
+    }
     // Skip if already has coords
     if (event.lat !== undefined && event.lng !== undefined) {
       result.push(event);

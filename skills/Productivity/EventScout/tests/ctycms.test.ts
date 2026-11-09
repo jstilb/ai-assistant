@@ -93,6 +93,26 @@ test("parseCards: skips a block with no parseable date box", () => {
   assert(parseCards(bad).length === 0, "card without date box is skipped");
 });
 
+test("parseCards: reads the renamed evcard markup (site change seen 2026-11-08)", () => {
+  const evcard = `<a class="evcard" href="/do/wild-wonders">
+	<div class="evcard-image"><div class="evcard-image-image lazyload image-square" data-src="https://img.ctykit.com/cdn/ca-liberty-station/images/y.jpg"></div></div>
+	<div class="evcard-content">
+		<div class="evcard-content-headline">Wild Wonders &amp; More</div>
+		<div class="evcard-content-time"><span><i class="far fa-clock"></i></span> 11am - 3pm</div>
+		<div class="evcard-content-venue"><span><i class="far fa-location-dot"></i></span>San Diego Watercolor Society</div>
+	</div>
+	<div class="evcard-date-box">		<div class="evcard-date-dow">Sun</div>		<div class="evcard-date-day">8</div>		<div class="evcard-date-month">Nov</div>	</div>
+</a>`;
+  const [card, extra] = parseCards(evcard + FIXTURE);
+  assert(card?.slug === "wild-wonders", `slug ${card?.slug}`);
+  assert(card?.title === "Wild Wonders & More", `title ${card?.title}`);
+  assert(card?.venue === "San Diego Watercolor Society", `venue ${card?.venue}`);
+  assert(card?.timeText === "11am - 3pm", `time ${card?.timeText}`);
+  assert(card?.day === 8 && card?.month === 10 && card?.dow === "Sun", "date box");
+  assert(card?.imageUrl?.endsWith("/y.jpg") === true, "image captured");
+  assert(extra?.slug === "cyanotype", "old pcrd cards still parse next to evcard");
+});
+
 // ============================================================================
 // classifyPerformanceTitle
 // ============================================================================

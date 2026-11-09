@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * MemberLifeAdapter.ts — Majesty in Motion (salsa/bachata studio) → EventItem.
  *
@@ -28,15 +27,13 @@
  *
  * Mirrors Pike13Adapter/SdfcAdapter: pure mappers (unit-testable, no
  * network) + a fetch runner. fetchMemberLifeEvents() returns EventItem[]; it
- * does NOT write to cache. `nameShort` is a parameter (not hardcoded) so a
- * second Member.life studio can reuse this adapter by passing its own
- * name_short — venue/address/category stay as Majesty-in-Motion-specific
- * constants until a second studio actually shows up (one adapter =
- * hypothetical seam; generalize further only when a second caller exists).
+ * does NOT write to cache. The studio short name, venue, address and category
+ * stay Majesty-in-Motion-specific constants until a second studio actually
+ * shows up (one adapter = hypothetical seam; generalize only when a second
+ * caller exists).
  */
 
-import { upsertEvents } from "../Cache.ts";
-import type { EventItem } from "../types.ts";
+import type { EventItem, EventSource } from "../types.ts";
 import { laDateIso, utcMsToLaParts } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
 
@@ -90,7 +87,7 @@ export interface MemberLifeGetDataResponse {
 // Constants — Majesty in Motion (San Diego)
 // ============================================================================
 
-const SOURCE_ID = "majestyinmotion-classes";
+export const SOURCE_ID = "majestyinmotion-classes";
 const DEFAULT_NAME_SHORT = "majestyinmotion";
 const API_ENDPOINT = "https://member.life/api/get-data";
 const SCHEDULE_URL = "https://member.life/majestyinmotion/schedule";
@@ -257,17 +254,14 @@ export function mapClassesResponseToEvents(
 // Runner — fetches from Member.life and returns projected EventItem[]
 // ============================================================================
 
-export async function fetchMemberLifeEvents(
-  nameShort: string = DEFAULT_NAME_SHORT,
-  windowDays: number = WINDOW_DAYS,
-): Promise<EventItem[]> {
+export async function fetchMemberLifeEvents(_source: EventSource): Promise<EventItem[]> {
   const res = await fetch(API_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       "User-Agent": "Mozilla/5.0 (EventScout; Kaya personal assistant)",
     },
-    body: new URLSearchParams({ name_short: nameShort, classes: "1" }).toString(),
+    body: new URLSearchParams({ name_short: DEFAULT_NAME_SHORT, classes: "1" }).toString(),
   });
   if (!res.ok) {
     throw new Error(`Member.life request failed: ${res.status} ${res.statusText} — ${API_ENDPOINT}`);
@@ -280,34 +274,5 @@ export async function fetchMemberLifeEvents(
 
   const todayLa = utcMsToLaParts(Date.now());
   const windowStart = { year: todayLa.year, month: todayLa.month, day: todayLa.day };
-  return mapClassesResponseToEvents(data, windowStart, windowDays);
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("MemberLifeAdapter.ts") || process.argv[1].endsWith("MemberLifeAdapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching Majesty in Motion classes (today → +${WINDOW_DAYS} days)...\n`);
-  try {
-    const events = await fetchMemberLifeEvents();
-    upsertEvents(events);
-    console.log(`Upserted ${events.length} class occurrence(s) to cache.\n`);
-    for (const e of events.slice(0, 12)) {
-      console.log(
-        `  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"}` +
-          (e.performersOrTeams ? ` (${e.performersOrTeams})` : ""),
-      );
-    }
-    console.log(`\nSource: ${SOURCE_ID} | Member.life ${DEFAULT_NAME_SHORT}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
+  return mapClassesResponseToEvents(data, windowStart, WINDOW_DAYS);
 }

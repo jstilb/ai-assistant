@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * EvvntAdapter.ts — Generic adapter for the Evvnt events-discovery platform.
  *
@@ -33,7 +32,7 @@
  *   keyword-match against our Category enum.
  *
  * Price:
- *   Evvnt home-page feed carries no reliable free/paid signal; isFree = false.
+ *   Preserve structured offers and supported USD ranges; isFree = false.
  *
  * Image:
  *   images entries may be objects { url: string } or bare URL strings; we guard both.
@@ -69,6 +68,8 @@ export interface EvvntEvent {
   venue?: EvvntVenue | null;
   category_name?: string;
   description?: string;
+  prices?: Record<string, unknown> | null;
+  country?: { iso_code?: string } | null;
   // Live API returns nested image objects ({ original:{url}, featured:{url} }) or strings.
   images?: unknown;
   // Live API returns a DICT { "Tickets": url, "Website": url } — not an array.
@@ -293,6 +294,21 @@ export function mapEvvntEventToItem(raw: EvvntEvent, source: EventSource): Event
   // --- Source URL ---
   const sourceUrl = ticketUrl ?? source.url;
 
+  const offers = raw.prices && typeof raw.prices === "object" && !Array.isArray(raw.prices)
+    ? Object.entries(raw.prices)
+    : [];
+  const admissionNote = offers.length
+    ? "Source offers: " + offers.map(([label, value]) => `${label}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join("; ") + ". Conditions are in the offer labels; availability is unconfirmed."
+    : undefined;
+  const amounts = offers.flatMap(([, value]) => {
+    if (typeof value !== "string") return [];
+    const match = value.trim().match(/^USD\s+(\d+(?:\.\d+)?)$/)
+      ?? (raw.country?.iso_code === "US" ? value.trim().match(/^\$(\d+(?:\.\d+)?)$/) : null);
+    if (!match) return [];
+    const amount = Number(match[1]);
+    return Number.isFinite(amount) ? [amount] : [];
+  });
+
   // --- Compose EventItem ---
   const item: EventItem = {
     id,
@@ -305,10 +321,13 @@ export function mapEvvntEventToItem(raw: EvvntEvent, source: EventSource): Event
     category,
     tags,
     isFree: false,
+    ...(amounts.length ? { priceMin: Math.min(...amounts), priceMax: Math.max(...amounts), currency: "USD" } : {}),
+    ...(admissionNote !== undefined ? { admissionNote } : {}),
     ...(ticketUrl !== undefined ? { ticketUrl } : {}),
     sourceUrl,
     sources: [{ sourceId: source.id, url: sourceUrl }],
     ...(description !== undefined ? { description } : {}),
+    ...(raw.description ? { sourceDescription: stripHtml(raw.description) } : {}),
     ...(imageUrl !== undefined ? { imageUrl } : {}),
     fetchedAt: new Date().toISOString(),
     status: "scheduled",
@@ -411,54 +430,4 @@ export async function fetchEvvntEvents(source: EventSource): Promise<EventItem[]
   }
 
   return allItems;
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("EvvntAdapter.ts") || process.argv[1].endsWith("EvvntAdapter"));
-
-if (IS_SCRIPT) {
-  const publisherId = process.env["EVVNT_PUBLISHER_ID"] ?? "11515";
-  const sourceUrl =
-    process.env["EVVNT_SOURCE_URL"] ??
-    `https://discovery.evvnt.com/api/publisher/${publisherId}/home_page_events` +
-      `?hitsPerPage=${HITS_PER_PAGE}&multipleEventInstances=true&page=0&publisher_id=${publisherId}`;
-
-  const testSource: EventSource = {
-    id: `evvnt-${publisherId}`,
-    url: sourceUrl,
-    name: "Evvnt (inewsource)",
-    fetchTier: "evvnt",
-    categoryHint: "community",
-    pollInterval: 720,
-    enabled: true,
-  };
-
-  console.log(`\nFetching Evvnt events (publisher_id=${publisherId})\n`);
-
-  try {
-    const events = await fetchEvvntEvents(testSource);
-
-    console.log(`Fetched ${events.length} event(s).\n`);
-
-    const preview = events.slice(0, 5);
-    if (preview.length === 0) {
-      console.log("No events found.");
-    } else {
-      console.log("First 5 events:");
-      for (const e of preview) {
-        console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"} (${e.category})`);
-      }
-    }
-
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

@@ -2,31 +2,35 @@
 /**
  * Ingest.ts — EventScout ingest pipeline (Slice 3+9).
  *
- * Dispatches each EventSource to the correct adapter by fetchTier, runs
- * dedupeAndMerge on the combined results, then upserts into the cache.
+ * Resolves each Event Source to its Source Adapter, checks source identity,
+ * applies the horizon once, runs dedupeAndMerge on the combined results, then
+ * upserts into the cache. Vocabulary: ../CONTEXT.md; decision:
+ * ../docs/adr/0001-source-adapter-seam.md.
  *
  * Exports:
- *   ingestSource(source: EventSource): Promise<EventItem[]>
- *       Fetch a single source. Returns raw EventItem[] (no cache write).
- *       - "api" + id === "padres-mlb"  → PadresAdapter.fetchPadresEvents()
- *       - "rss"                        → RSSAdapter.fetchRSSEvents()
- *       - "spa" | "html-llm"           → SPAAdapter.fetchSPAEvents()
- *       - other tiers                  → throws "not yet implemented"
+ *   adapterFor(source): SourceAdapter
+ *       The production AdapterResolver: TIER_ADAPTERS by fetchTier, or
+ *       API_ADAPTERS by source id for the "api" tier. Throws for an "api"
+ *       source with no adapter.
  *
- *   ingestAll(sources?: EventSource[]): Promise<IngestResult>
+ *   ingestSource(source, resolve = adapterFor): Promise<EventItem[]>
+ *       Fetch one source: resolve → call → identity check → horizon.
+ *       No cache write.
+ *
+ *   ingestAll(sources?, opts?): Promise<IngestResult>
  *       Ingest all enabled sources, dedupe+merge, upsert to cache.
  *       Best-effort: each source is wrapped in a per-source timeout; one
  *       failure/timeout does NOT abort the pipeline. Failures are recorded
  *       in IngestResult.failureReasons.
  *       If sources not provided, reads from the co-located sources.json.
+ *       Tests pass opts.adapterFor (a fake resolver) and skipCacheWrite.
  *
- *   ingestAllWithAdapters(sources, adapters, opts): Promise<IngestResult>
- *       Testable overload — injects per-source adapter functions so unit
- *       tests can run without any network calls. Used exclusively in tests.
- *
- * Script mode (bun Tools/Ingest.ts):
- *   Ingests all sources from sources.json, prints per-source counts
- *   + merge count, exits 0 on success.
+ * Script mode:
+ *   bun Tools/Ingest.ts               — ingest all sources from sources.json,
+ *                                       print per-source counts + merge count.
+ *   bun Tools/Ingest.ts --source <id> — probe one source: one ingestSource,
+ *                                       print count + 3 samples, no cache
+ *                                       write, exit 1 on throw.
  *
  * Cache env:
  *   Set EVENTSCOUT_CACHE_PATH=/tmp/test-cache.json to avoid touching the
@@ -36,31 +40,29 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchPadresEvents } from "./adapters/PadresAdapter.ts";
-import { fetchSdfcEvents } from "./adapters/SdfcAdapter.ts";
+import { fetchPadresEvents, SOURCE_ID as PADRES_ID } from "./adapters/PadresAdapter.ts";
+import { fetchSdfcEvents, SOURCE_ID as SDFC_ID } from "./adapters/SdfcAdapter.ts";
 import { fetchPike13Events } from "./adapters/Pike13Adapter.ts";
-import { fetchMemberLifeEvents } from "./adapters/MemberLifeAdapter.ts";
+import { fetchMemberLifeEvents, SOURCE_ID as MEMBERLIFE_ID } from "./adapters/MemberLifeAdapter.ts";
 import { fetchRSSEvents } from "./adapters/RSSAdapter.ts";
 import { fetchSPAEvents } from "./adapters/SPAAdapter.ts";
 import { fetchWordPressTecEvents } from "./adapters/WordPressTecAdapter.ts";
 import { fetchEvvntEvents } from "./adapters/EvvntAdapter.ts";
 import { fetchICSEvents } from "./adapters/ICSAdapter.ts";
-import { fetchApifyEvents } from "./adapters/ApifyAdapter.ts";
-import { trackApifySourceHealth } from "./ApifyHealth.ts";
 import { fetchCtycmsEvents } from "./adapters/CtycmsAdapter.ts";
 import { fetchActiveNetEvents } from "./adapters/ActiveNetAdapter.ts";
 import { fetchDanceStudioProEvents } from "./adapters/DanceStudioProAdapter.ts";
 import { fetchNineteenHzEvents } from "./adapters/NineteenHzAdapter.ts";
 import { fetchSitemapLlmEvents } from "./adapters/SitemapLlmAdapter.ts";
-import { fetchEdmtrainEvents } from "./adapters/EdmtrainAdapter.ts";
-import { fetchRaCoEvents } from "./adapters/RaCoAdapter.ts";
+import { fetchEdmtrainEvents, SOURCE_ID as EDMTRAIN_ID } from "./adapters/EdmtrainAdapter.ts";
+import { fetchRaCoEvents, SOURCE_ID as RACO_ID } from "./adapters/RaCoAdapter.ts";
 import { dedupeAndMerge } from "./Dedup.ts";
 import { enrichWithGeo } from "./Geocoder.ts";
 import { upsertEventsDeduped } from "./Cache.ts";
 import { withinHorizon, horizonDays } from "./Horizon.ts";
 import { runWithConcurrency } from "./lib/concurrency.ts";
 import { EventSourceSchema } from "./types.ts";
-import type { EventItem, EventSource } from "./types.ts";
+import type { AdapterResolver, EventItem, EventSource, FetchTier, SourceAdapter } from "./types.ts";
 import { z } from "zod";
 
 // ============================================================================
@@ -118,9 +120,11 @@ function prefetchConcurrency(): number {
 }
 
 /**
- * Options for ingestAllWithAdapters (test-injection overload).
+ * Options for ingestAll.
  */
-export interface IngestWithAdaptersOpts {
+export interface IngestOpts {
+  /** Source Adapter resolver. Default: adapterFor. Tests pass a fake resolver. */
+  adapterFor?: AdapterResolver;
   /** Skip writing to the cache (for unit tests). Default: false. */
   skipCacheWrite?: boolean;
   /** Per-source timeout in ms. Default: DEFAULT_PER_SOURCE_TIMEOUT_MS. */
@@ -166,26 +170,73 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 // ============================================================================
 
 /**
- * Fetch events for a single source, then apply the horizon filter.
+ * Source Adapters keyed by Fetch Tier. `satisfies` makes the map exhaustive
+ * at compile time: a new tier without an adapter does not compile.
+ * ICS is wrapped so its optional `deps` (a Tier-4 breaker that tests
+ * inject) keeps its production default.
  *
- * This is the TRUE single chokepoint for all production paths:
- *   - Scheduled prefetch:    ingestAll → ingestAllCore → ingestSource
- *   - Query-time refresh:    queryHybrid → ingestSource (directly)
- *
- * Both paths receive horizon-filtered results. The post-adapter cap in
- * ingestAllCore handles the injected-adapter test path (where adapters bypass
- * this function entirely).
- *
- * Slice 9: both "spa" and "html-llm" now route to SPAAdapter.fetchSPAEvents(),
- * which uses BrightData tiered fetch + LLM extraction. The distinction between
- * the two tiers is informational (html-llm = no JS required, spa = may need
- * Playwright) but the same adapter handles both gracefully.
+ * "spa" and "html-llm" share SPAAdapter (BrightData tiered fetch + LLM
+ * extraction); the distinction is informational (html-llm = no JS required,
+ * spa = may need Playwright).
  */
-export async function ingestSource(source: EventSource): Promise<EventItem[]> {
-  const rawEvents = await fetchRawEvents(source);
+const TIER_ADAPTERS = {
+  rss: fetchRSSEvents,
+  ics: (source) => fetchICSEvents(source),
+  spa: fetchSPAEvents,
+  "html-llm": fetchSPAEvents,
+  "wp-tribe": fetchWordPressTecEvents,
+  evvnt: fetchEvvntEvents,
+  pike13: fetchPike13Events,
+  ctycms: fetchCtycmsEvents,
+  activenet: fetchActiveNetEvents,
+  "dancestudio-pro": fetchDanceStudioProEvents,
+  nineteenhz: fetchNineteenHzEvents,
+  "sitemap-llm": fetchSitemapLlmEvents,
+} satisfies Record<Exclude<FetchTier, "api">, SourceAdapter>;
 
-  // Horizon filter — uniform post-adapter cap. Applied here (not just in
-  // ingestAllCore) so queryHybrid's direct ingestSource calls are also bounded.
+/** Source Adapters for the "api" tier, keyed by each adapter's own SOURCE_ID. */
+const API_ADAPTERS: Record<string, SourceAdapter> = {
+  [PADRES_ID]: fetchPadresEvents,
+  [SDFC_ID]: fetchSdfcEvents,
+  [MEMBERLIFE_ID]: fetchMemberLifeEvents,
+  [RACO_ID]: fetchRaCoEvents,
+  [EDMTRAIN_ID]: fetchEdmtrainEvents,
+};
+
+/** The production AdapterResolver: pick the Source Adapter for one Event Source. */
+export function adapterFor(source: EventSource): SourceAdapter {
+  if (source.fetchTier !== "api") return TIER_ADAPTERS[source.fetchTier];
+  const adapter = API_ADAPTERS[source.id];
+  if (!adapter) throw new Error(`[Ingest] no Source Adapter for api source "${source.id}"`);
+  return adapter;
+}
+
+/**
+ * Fetch one Event Source: resolve → call → identity check → horizon.
+ *
+ * This is the single chokepoint for every path:
+ *   - Scheduled prefetch:    ingestAll → ingestSource
+ *   - Query-time refresh:    queryHybrid → ingestSource (directly)
+ *   - Tests:                 ingestAll(…, { adapterFor: fake }) → ingestSource
+ *
+ * The identity check runs before the horizon, so drift fails even when every
+ * item lies beyond the horizon. It guards the api-tier dedup exemption
+ * (Dedup.ts), which matches `sources[0].sourceId` against sources.json ids.
+ */
+export async function ingestSource(
+  source: EventSource,
+  resolve: AdapterResolver = adapterFor,
+): Promise<EventItem[]> {
+  const rawEvents = await resolve(source)(source);
+
+  const foreign = rawEvents.find((e) => e.sources[0]?.sourceId !== source.id);
+  if (foreign) {
+    throw new Error(
+      `[Ingest] Source Adapter for "${source.fetchTier}" stamped sourceId "${String(foreign.sources[0]?.sourceId)}" on source "${source.id}"`,
+    );
+  }
+
+  // Horizon filter — applied once, here, for every path.
   // withinHorizon takes `now` explicitly so it stays unit-testable.
   const days = horizonDays();
   const events = withinHorizon(rawEvents, new Date(), days);
@@ -194,110 +245,6 @@ export async function ingestSource(source: EventSource): Promise<EventItem[]> {
     console.log(`  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`);
   }
   return events;
-}
-
-/**
- * Dispatch a source to its adapter and return raw (unfiltered) events.
- * Private to this module — callers use ingestSource which applies the horizon.
- */
-async function fetchRawEvents(source: EventSource): Promise<EventItem[]> {
-  switch (source.fetchTier) {
-    case "api": {
-      if (source.id === "padres-mlb") {
-        return fetchPadresEvents();
-      }
-      if (source.id === "sandiego-fc") {
-        return fetchSdfcEvents();
-      }
-      if (source.id === "majestyinmotion-classes") {
-        return fetchMemberLifeEvents();
-      }
-      if (source.id === "ra-co-sandiego") {
-        return fetchRaCoEvents();
-      }
-      if (source.id === "edmtrain-sd") {
-        return fetchEdmtrainEvents();
-      }
-      throw new Error(`[Ingest] API source "${source.id}" has no adapter yet`);
-    }
-
-    case "rss": {
-      return fetchRSSEvents(source);
-    }
-
-    case "spa":
-    case "html-llm": {
-      // Both SPA (JS-rendered) and html-llm (static HTML + LLM extract) use
-      // the same BrightData tiered fetch + Inference extraction pipeline.
-      // SPAAdapter escalates to Playwright only when lighter tiers fail.
-      return fetchSPAEvents(source);
-    }
-
-    case "wp-tribe": {
-      return fetchWordPressTecEvents(source);
-    }
-
-    case "ics": {
-      return fetchICSEvents(source);
-    }
-
-    case "evvnt": {
-      return fetchEvvntEvents(source);
-    }
-
-    case "apify": {
-      return fetchApifyEvents(source);
-    }
-
-    case "pike13": {
-      // Pike13 widget API (dance/fitness studio schedules). One source today
-      // (Culture Shock SD); the adapter holds its studio-specific config.
-      return fetchPike13Events();
-    }
-
-    case "ctycms": {
-      // ctycms "Picnic" calendar widget (community/arts district sites). One
-      // source today (Liberty Station); tag→category config keyed by source id.
-      return fetchCtycmsEvents(source);
-    }
-
-    case "activenet": {
-      // ActiveNet/ActiveCommunities rec catalog (paginated JSON list API). One
-      // source today (SD Parks & Rec); the adapter holds its city-specific config.
-      return fetchActiveNetEvents();
-    }
-
-    case "dancestudio-pro": {
-      // DanceStudio-Pro studio schedule widget (AJAX POST + shared LLM
-      // extraction). One source today (The Dancehouse); the studio id/s
-      // params come from the source's own url.
-      return fetchDanceStudioProEvents(source);
-    }
-
-    case "sitemap-llm": {
-      // XML-sitemap-enumerated detail pages + shared LLM extraction, for
-      // sites with no events page/feed at all (San Diego Writers, Ink CPT
-      // sitemaps). The adapter walks each fresh detail page for the exact
-      // TIME/VENUE/PRICE blocks the listing pages omit.
-      return fetchSitemapLlmEvents(source);
-    }
-
-    case "nineteenhz": {
-      // 19hz.info structured chronological table — deterministic row parser,
-      // no LLM (the dense listing chronically blew the LLM window budget).
-      // SoCal-wide page; the adapter keeps only San Diego-county rows.
-      return fetchNineteenHzEvents(source);
-    }
-
-    case "shopify":
-      throw new Error(`[Ingest] fetchTier "shopify" for source "${source.id}" is not yet implemented`);
-
-    default: {
-      // TypeScript exhaustiveness guard
-      const _: never = source.fetchTier;
-      throw new Error(`[Ingest] Unknown fetchTier: ${String(_)}`);
-    }
-  }
 }
 
 // ============================================================================
@@ -324,39 +271,11 @@ function loadDefaultSources(): EventSource[] {
  * the pipeline. Failures are recorded in result.failureReasons.
  *
  * @param sources - Optional explicit list. Defaults to sources.json.
+ * @param opts    - Resolver (tests pass a fake), cache write, timeout, concurrency.
  */
-export async function ingestAll(sources?: EventSource[]): Promise<IngestResult> {
+export async function ingestAll(sources?: EventSource[], opts: IngestOpts = {}): Promise<IngestResult> {
   const allSources = sources ?? loadDefaultSources();
-  return ingestAllCore(allSources, undefined, {});
-}
-
-/**
- * Testable overload: inject per-source adapter functions.
- * Each key in `adapters` is a source.id; the value is a factory that returns
- * a Promise<EventItem[]> for that source. Sources not in `adapters` fall back
- * to the real ingestSource() — this keeps the test focused and minimal.
- *
- * @param sources  - Full list of EventSource objects.
- * @param adapters - Map of sourceId → adapter factory.
- * @param opts     - Options for test isolation.
- */
-export async function ingestAllWithAdapters(
-  sources: EventSource[],
-  adapters: Record<string, () => Promise<EventItem[]>>,
-  opts: IngestWithAdaptersOpts = {},
-): Promise<IngestResult> {
-  return ingestAllCore(sources, adapters, opts);
-}
-
-// ============================================================================
-// Core implementation shared by ingestAll + ingestAllWithAdapters
-// ============================================================================
-
-async function ingestAllCore(
-  allSources: EventSource[],
-  adapters: Record<string, () => Promise<EventItem[]>> | undefined,
-  opts: IngestWithAdaptersOpts,
-): Promise<IngestResult> {
+  const resolve = opts.adapterFor ?? adapterFor;
   const enabledSources = allSources.filter((s) => s.enabled);
   // Respect the caller-supplied concurrency (test injection) or read from env
   const concurrencyLimit = opts.concurrency ?? prefetchConcurrency();
@@ -374,73 +293,23 @@ async function ingestAllCore(
   // write race — all per-source results are collected first.
   await runWithConcurrency(enabledSources, concurrencyLimit, async (source) => {
     try {
-      // Use injected adapter if provided, otherwise dispatch normally
-      const fetchFn = adapters?.[source.id] ? adapters[source.id]! : () => ingestSource(source);
-
-      const rawEvents = await withTimeout(fetchFn(), timeoutMs, source.id);
-
-      // Horizon filter — applied here for injected-adapter test paths that bypass
-      // ingestSource. When the production fetchFn delegates to ingestSource(), the
-      // filter has already run inside ingestSource; applying it again is harmless
-      // (all events are already within horizon, so nothing extra gets dropped).
-      // withinHorizon takes `now` explicitly so it stays unit-testable.
-      const days = horizonDays();
-      const events = withinHorizon(rawEvents, new Date(), days);
-      const dropped = rawEvents.length - events.length;
-      if (dropped > 0) {
-        console.log(`  [ingest] ${source.id}: dropped ${dropped} event(s) beyond ${days}-day horizon`);
-      }
+      const events = await withTimeout(ingestSource(source, resolve), timeoutMs, source.id);
 
       perSource[source.id] = events.length;
       allEvents.push(...events);
       console.log(`  [ingest] ${source.id}: fetched ${events.length} event(s)`);
-
-      // Apify-tier per-source health streaks (T2-09) — scoped to fetchTier
-      // "apify" only; the other 35 tiers are out of scope for this slice.
-      // Wrapped in its own try/catch, separate from the fetch-failure catch
-      // below: a bug in the health-tracking side-channel must never get
-      // misattributed as a fetch failure for a source that actually
-      // succeeded (which would corrupt perSource/failureReasons).
-      if (source.fetchTier === "apify") {
-        try {
-          await trackApifySourceHealth(
-            source.id,
-            source.url,
-            events.length === 0 ? { kind: "zero-result" } : { kind: "success", count: events.length },
-          );
-        } catch (healthErr) {
-          console.error(
-            `[Ingest] apify-health tracking failed for "${source.id}" (fetch itself succeeded) — ` +
-              `streak counters NOT updated this run:`,
-            healthErr,
-          );
-        }
-      }
     } catch (err) {
       const message = (err as Error).message ?? String(err);
       perSource[source.id] = 0;
       failureReasons[source.id] = message;
       console.error(`  [ingest] ${source.id}: FAILED — ${message}`);
-
-      if (source.fetchTier === "apify") {
-        try {
-          await trackApifySourceHealth(source.id, source.url, { kind: "hard-fail", error: err });
-        } catch (healthErr) {
-          console.error(
-            `[Ingest] apify-health tracking failed for "${source.id}" (hard-fail branch) — ` +
-              `streak counters NOT updated this run:`,
-            healthErr,
-          );
-        }
-      }
     }
   });
 
   // api-tier sources (fetchTier === "api") are exempt from fuzzy dedup — see
   // Dedup.ts's "api-tier exemption" note. Computed from `allSources` (the
   // actual list this run is ingesting — respects test injection) rather than
-  // re-reading sources.json, so ingestAllWithAdapters' test-supplied sources
-  // are honored exactly.
+  // re-reading sources.json, so test-supplied sources are honored exactly.
   const apiTierSourceIds = new Set(allSources.filter((s) => s.fetchTier === "api").map((s) => s.id));
 
   const beforeDedup = allEvents.length;
@@ -483,7 +352,34 @@ const IS_SCRIPT =
   process.argv[1] != null &&
   (process.argv[1].endsWith("Ingest.ts") || process.argv[1].endsWith("Ingest"));
 
-if (IS_SCRIPT) {
+/**
+ * Probe one Event Source through the seam: one ingestSource (identity check +
+ * horizon included), no cache write. Prints the count and 3 samples.
+ */
+async function probeSource(id: string): Promise<void> {
+  const source = loadDefaultSources().find((s) => s.id === id);
+  if (!source) throw new Error(`[Ingest] no source "${id}" in sources.json`);
+  console.log(`\nEventScout — probe ${source.id} (${source.fetchTier})\n`);
+  const events = await ingestSource(source);
+  console.log(`${source.id}: ${events.length} event(s)`);
+  for (const e of events.slice(0, 3)) {
+    console.log(`  - ${e.title} | ${e.startDatetime} | ${e.sources[0]?.sourceId ?? "(no sourceId)"}`);
+  }
+}
+
+const sourceFlag = process.argv.indexOf("--source");
+
+if (IS_SCRIPT && sourceFlag !== -1) {
+  const id = process.argv[sourceFlag + 1];
+  try {
+    if (!id) throw new Error("[Ingest] --source needs a source id");
+    await probeSource(id);
+    process.exit(0);
+  } catch (err) {
+    console.error(`\nFATAL: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+} else if (IS_SCRIPT) {
   console.log("\nEventScout — Ingest Pipeline (Slice 3)\n");
 
   try {

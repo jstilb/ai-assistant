@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * RSSAdapter.ts — Slice 3: RSS/Atom feed → EventItem adapter.
  *
@@ -23,9 +22,8 @@
  *   publish-date fallbacks may cause false positives / misses. Geocoding and
  *   LLM ranking passes should be aware of this limitation.
  *
- * Script mode (bun .../RSSAdapter.ts --source <id>):
- *   Fetches live and prints a summary. Does NOT write to cache — callers
- *   (Ingest.ts) handle cache writes.
+ * Live probe: bun Tools/Ingest.ts --source <id>
+ *   Does NOT write to cache — callers (Ingest.ts) handle cache writes.
  */
 
 // cross-skill-allowed: adapter wraps ContentAggregator's RSSParser by design — thin adapter over a shared parser
@@ -336,70 +334,4 @@ export async function fetchRSSEvents(source: EventSource): Promise<EventItem[]> 
 
   const enrichments = await extractReaderEnrichments(feed.items);
   return feed.items.map((item, i) => mapFeedItemToEvent(item, source, enrichments.get(i)));
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("RSSAdapter.ts") || process.argv[1].endsWith("RSSAdapter"));
-
-if (IS_SCRIPT) {
-  const args = process.argv.slice(2);
-
-  if (args.includes("--help")) {
-    console.log(`
-RSSAdapter — Fetch RSS feed → EventItem[]
-
-Usage:
-  bun RSSAdapter.ts --url <feed-url> [--source-id <id>] [--category <hint>]
-
-Examples:
-  bun Tools/adapters/RSSAdapter.ts --url https://sdpressclub.org/category/news-events/feed/
-`);
-    process.exit(0);
-  }
-
-  const urlIdx = args.indexOf("--url");
-  const feedUrl =
-    (urlIdx !== -1 ? args[urlIdx + 1] : undefined) ?? "https://sdpressclub.org/category/news-events/feed/";
-  const sourceIdIdx = args.indexOf("--source-id");
-  const sourceId = (sourceIdIdx !== -1 ? args[sourceIdIdx + 1] : undefined) ?? "rss-script";
-  const catIdx = args.indexOf("--category");
-  const categoryArg = (catIdx !== -1 ? args[catIdx + 1] : undefined) ?? "community";
-
-  const scriptSource: EventSource = {
-    id: sourceId,
-    name: feedUrl,
-    url: feedUrl,
-    fetchTier: "rss",
-    categoryHint: categoryArg as EventSource["categoryHint"],
-    pollInterval: 720,
-    enabled: true,
-  };
-
-  console.log(`\nFetching RSS feed: ${feedUrl}\n`);
-  try {
-    const events = await fetchRSSEvents(scriptSource);
-    console.log(`Fetched ${events.length} item(s).\n`);
-
-    const preview = events.slice(0, 3);
-    if (preview.length === 0) {
-      console.log("No items found.");
-    } else {
-      console.log("First 3 items:");
-      for (const e of preview) {
-        console.log(`  [${e.startDatetime}] ${e.title}`);
-        console.log(`    URL: ${e.sourceUrl}`);
-        console.log(`    Category: ${e.category}`);
-      }
-    }
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

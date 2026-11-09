@@ -24,6 +24,10 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readEvents } from "./Cache.ts";
+import { loadProfile } from "./InterestProfile.ts";
+import { projectNineteenHzOccurrences } from "./adapters/NineteenHzAdapter.ts";
+import { buildDefaultWindow, parseIsoDateStrict } from "./Window.ts";
+import { laDateIso } from "./lib/tz.ts";
 import { loadSources } from "./SourceManager.ts";
 import { readSaved, saveEvent, unsaveEvent } from "./SavedEvents.ts";
 import { resolveRemoteAccess, withRemoteAuth } from "../../../../lib/core/RemoteAccess.ts";
@@ -127,8 +131,31 @@ function startRefresh(kind: "all" | "source", sourceId?: string): { ok: boolean;
 // API payload
 // ----------------------------------------------------------------------------
 
-function buildData(): string {
-  const events = readEvents();
+async function buildData(params: URLSearchParams = new URLSearchParams(), now: Date = new Date()): Promise<string> {
+  const cachedEvents = readEvents();
+  let events = cachedEvents;
+  let recurrenceProjection: { from: string; to: string; openEnd: boolean; added: number } | null = null;
+  let recurrenceError: string | null = null;
+  const seeds = cachedEvents.filter(event => event.recurrenceRule && event.tags.includes("19hz"));
+  if (seeds.length) {
+    try {
+      const from = params.get("from") || "";
+      const to = params.get("to") || "";
+      const defaultWindow = buildDefaultWindow(now).window;
+      const earliestSeed = new Date(Math.min(...seeds.map(event => Date.parse(event.startDatetime))));
+      const fromDate = from || (to ? buildDefaultWindow(earliestSeed).window.start : defaultWindow.start).slice(0, 10);
+      const startParts = parseIsoDateStrict(fromDate);
+      const start = laDateIso(startParts.year, startParts.month, startParts.day, 0, 0, 0);
+      const toDate = to || buildDefaultWindow(new Date(start)).window.end.slice(0, 10);
+      const endParts = parseIsoDateStrict(toDate);
+      const end = laDateIso(endParts.year, endParts.month, endParts.day, 23, 59, 59);
+      if (Date.parse(end) < Date.parse(start)) throw new Error("Inverted date range");
+      events = projectNineteenHzOccurrences(cachedEvents, { start, end });
+      recurrenceProjection = { from: fromDate, to: toDate, openEnd: !to, added: events.length - cachedEvents.length };
+    } catch {
+      recurrenceError = "Recurring dates are unavailable for this date range. Enter valid dates with From on or before To. Displayed results contain cached dates only.";
+    }
+  }
   const sources = loadSources().map((s) => ({
     id: s.id,
     name: s.name,
@@ -140,7 +167,19 @@ function buildData(): string {
   // instead derive freshness from the newest fetchedAt we have.
   // biome-ignore lint/complexity/useMathMinMax: string (ISO timestamp) compare, not numbers
   const newestFetched = events.reduce<string>((acc, e) => (e.fetchedAt > acc ? e.fetchedAt : acc), "");
-  return JSON.stringify({ events, sources, lastUpdated: newestFetched, saved: readSaved() });
+  let locationDefaults: { home: { lat: number; lng: number; label: string }; radiusMiles: number } | null = null;
+  let locationError: string | null = null;
+  try {
+    const profile = await loadProfile();
+    const { lat, lng } = profile.homeLocation;
+    const radius = profile.defaultRadiusMiles;
+    if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lng) || Math.abs(lng) > 180
+      || !Number.isFinite(radius) || radius < 0) throw new Error("Invalid location defaults");
+    locationDefaults = { home: profile.homeLocation, radiusMiles: radius };
+  } catch {
+    locationError = "Configured home and radius are unavailable. Enter an origin and radius to filter by distance.";
+  }
+  return JSON.stringify({ events, sources, lastUpdated: newestFetched, saved: readSaved(), locationDefaults, locationError, cachedEventIds: cachedEvents.map(event => event.id), recurrenceProjection, recurrenceError });
 }
 
 // ----------------------------------------------------------------------------
@@ -185,7 +224,7 @@ export function startUiServer(): ReturnType<typeof Bun.serve> {
       }
 
       if (pathname === "/api/data") {
-        return new Response(buildData(), {
+        return new Response(await buildData(url.searchParams), {
           headers: { "content-type": "application/json" },
         });
       }

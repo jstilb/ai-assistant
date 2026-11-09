@@ -281,6 +281,54 @@ test("22. Fixture 2 id is non-empty and distinct from Fixture 1", () => {
   assert(item1.id !== item2.id, `Fixture 1 and 2 should have different ids`);
 });
 
+test("structured USD offers retain exact labels, values and conditional range", () => {
+  const prices = {
+    "Early Bird - Limited": "USD 45.0",
+    "General Admission": "USD 55.0",
+    "Last Minute) - Few Remaining": "USD 90.0",
+    "Door Sales (Cash only)": "USD 150.0",
+  };
+  const item = mapEvvntEventToItem({ ...FIXTURE_1, prices }, TEST_SOURCE);
+  assert(item.priceMin === 45 && item.priceMax === 150 && item.currency === "USD", "Expected exact USD range");
+  for (const [label, value] of Object.entries(prices)) {
+    assert(item.admissionNote?.includes(`${label}: ${value}`) === true, "Expected exact source offer");
+  }
+  assert(item.admissionNote?.includes("availability is unconfirmed") === true, "Expected availability limit");
+});
+
+test("dollar offers require explicit US country", () => {
+  const raw = { ...FIXTURE_1, prices: { Participant: "$30.00" } };
+  const us = mapEvvntEventToItem({ ...raw, country: { iso_code: "US" } }, TEST_SOURCE);
+  assert(us.priceMin === 30 && us.priceMax === 30 && us.currency === "USD", "Expected US dollars");
+  for (const country of [undefined, { iso_code: "CA" }]) {
+    const item = mapEvvntEventToItem({ ...raw, country }, TEST_SOURCE);
+    assert(item.priceMin === undefined && item.currency === undefined, "Ambiguous dollars remain unknown");
+    assert(item.admissionNote?.includes("Participant: $30.00") === true, "Preserve unparsed source offer");
+  }
+});
+
+test("missing, mixed and malformed offers do not invent numeric prices", () => {
+  for (const prices of [undefined, null, {}, { Fee: "EUR 20.0" }, { Fee: "USD 10 donation" }, { Fee: "USD -5" }, { Fee: 30 }]) {
+    const item = mapEvvntEventToItem({ ...FIXTURE_1, prices }, TEST_SOURCE);
+    assert(item.priceMin === undefined && item.priceMax === undefined, "Expected unknown numeric price");
+    assert(!item.isFree, "Unknown admission does not prove free");
+  }
+});
+
+test("zero restricted offer does not assert unconditional free admission", () => {
+  const item = mapEvvntEventToItem({ ...FIXTURE_1, prices: { "Members only": "USD 0.0", Public: "USD 20.0" } }, TEST_SOURCE);
+  assert(item.priceMin === 0 && item.priceMax === 20 && !item.isFree, "Preserve conditional zero without free claim");
+  assert(item.admissionNote?.includes("Members only: USD 0.0") === true, "Preserve zero condition");
+});
+
+test("full source prose preserves price disagreements and separate free components", () => {
+  const description = "Intro ".repeat(100) + "General Admission $25; $30 at the door. A separate expo is free.";
+  const item = mapEvvntEventToItem({ ...FIXTURE_1, description, prices: { "General Admission": "USD 19.98" } }, TEST_SOURCE);
+  assert(item.priceMin === 19.98 && !item.isFree, "Only structured admission sets price");
+  assert(item.sourceDescription?.endsWith("A separate expo is free.") === true, "Preserve complete source prose");
+  assert(item.description?.endsWith("…") === true, "Keep existing summary bound");
+});
+
 // ============================================================================
 // Pagination tests (Slice 6) — fetchEvvntEvents with mocked fetch
 //

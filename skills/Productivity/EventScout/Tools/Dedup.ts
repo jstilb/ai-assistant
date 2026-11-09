@@ -4,7 +4,7 @@
  * Algorithm (mirrors SPEC §2 decision 4):
  *   1. Bucket events by calendar day (YYYY-MM-DD derived from startDatetime).
  *   2. Within each bucket, two events are duplicates iff ALL three hold:
- *      (a) Same calendar day (bucket guarantee).
+ *      (a) Same calendar day (bucket guarantee), with no disjoint valid timed intervals.
  *      (b) Venue-compatible: normalized venues are equal, one contains the other,
  *          OR venue-only Jaccard >= 0.6. Special cases: if BOTH lack a venue,
  *          skip venue check and apply stricter title rule (>= 0.8 or containment);
@@ -87,7 +87,7 @@ const VENUE_THRESHOLD = 0.6;
  * before the "T" — this is correct when the datetime already carries a local
  * offset (as PadresAdapter and RSSAdapter both produce).
  */
-function calendarDay(isoDatetime: string): string {
+export function calendarDay(isoDatetime: string): string {
   // Bucket by America/Los_Angeles calendar day so the SAME instant expressed in
   // different representations lands in ONE bucket. Adapters emit a mix of UTC
   // ("2026-06-05T03:30:00Z") and offset-local ("2026-06-04T20:30:00-07:00")
@@ -98,14 +98,20 @@ function calendarDay(isoDatetime: string): string {
   if (!isoDatetime.includes("T")) return isoDatetime.slice(0, 10);
   const d = new Date(isoDatetime);
   if (Number.isNaN(d.getTime())) return isoDatetime.slice(0, 10);
-  // en-CA renders as YYYY-MM-DD; timeZone converts the instant to the LA local day.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
+  return LA_DAY.format(d);
 }
+
+/**
+ * en-CA renders as YYYY-MM-DD; timeZone converts the instant to the LA local day.
+ * Built ONCE (F-002, 2026-11-08): a new Intl.DateTimeFormat per call, twice per
+ * compared pair, cost minutes of CPU and GBs of memory in the daily prefetch.
+ */
+const LA_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 // ============================================================================
 // Separate title and venue similarity checks
@@ -147,15 +153,66 @@ function venueCore(venue: string): string {
  * (areDuplicates), so a looser venue match never merges two genuinely different
  * shows at the same place — the title gate stops that.
  */
-function venueCompatible(a: string, b: string): boolean {
-  const na = normalizeVenue(a);
-  const nb = normalizeVenue(b);
+/**
+ * Per-event comparison inputs, computed once per event per dedupeAndMerge call
+ * (F-002, 2026-11-08: they were recomputed for every same-day pair — millions
+ * of throwaway strings and Sets in a ~5,000-event prefetch). The same functions
+ * on the same fields, so every predicate gives the same answer as before.
+ */
+interface DedupFeatures {
+  day: string;
+  startMs: number;
+  endMs: number;
+  venueNorm: string;
+  venueCore: string;
+  venueTokens: Set<string>;
+  titleNorm: string;
+  titleTokens: Set<string>;
+  performers: Set<string>;
+}
+
+function computeFeatures(e: EventItem): DedupFeatures {
+  const venue = e.venue ?? "";
+  return {
+    day: calendarDay(e.startDatetime),
+    startMs: Date.parse(e.startDatetime),
+    endMs: e.endDatetime ? Date.parse(e.endDatetime) : Number.NaN,
+    venueNorm: normalizeVenue(venue),
+    venueCore: venueCore(venue),
+    venueTokens: tokenize(venue),
+    titleNorm: stripDiacritics(e.title.toLowerCase())
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+    titleTokens: tokenize(e.title),
+    performers: performerSet(e.performersOrTeams),
+  };
+}
+
+type FeatureOf = (e: EventItem) => DedupFeatures;
+
+/** A per-call cache (events are not mutated during one dedupeAndMerge run). */
+function featureCache(): FeatureOf {
+  const cache = new Map<EventItem, DedupFeatures>();
+  return (e) => {
+    let f = cache.get(e);
+    if (!f) {
+      f = computeFeatures(e);
+      cache.set(e, f);
+    }
+    return f;
+  };
+}
+
+function venueCompatible(fa: DedupFeatures, fb: DedupFeatures): boolean {
+  const na = fa.venueNorm;
+  const nb = fb.venueNorm;
   if (na === nb) return true;
   if (na.includes(nb) || nb.includes(na)) return true;
-  const ca = venueCore(a);
-  const cb = venueCore(b);
+  const ca = fa.venueCore;
+  const cb = fb.venueCore;
   if (ca.length > 0 && cb.length > 0 && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true;
-  return jaccardSimilarity(tokenize(a), tokenize(b)) >= VENUE_THRESHOLD;
+  return jaccardSimilarity(fa.venueTokens, fb.venueTokens) >= VENUE_THRESHOLD;
 }
 
 /**
@@ -170,19 +227,13 @@ function venueCompatible(a: string, b: string): boolean {
  *      observatory, north, park}.
  *   3. Title-only token Jaccard >= threshold.
  */
-function titleSimilar(a: string, b: string, threshold: number): boolean {
-  const na = stripDiacritics(a.toLowerCase())
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const nb = stripDiacritics(b.toLowerCase())
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function titleSimilar(fa: DedupFeatures, fb: DedupFeatures, threshold: number): boolean {
+  const na = fa.titleNorm;
+  const nb = fb.titleNorm;
   if (na.includes(nb) || nb.includes(na)) return true;
 
-  const ta = tokenize(a);
-  const tb = tokenize(b);
+  const ta = fa.titleTokens;
+  const tb = fb.titleTokens;
 
   // Subset check: all tokens of the smaller set appear in the larger set
   const [smaller, larger] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
@@ -223,10 +274,10 @@ function performerSet(perf: string | undefined): Set<string> {
  * carrying the same headliner. Combined with a compatible venue + same LA day,
  * a shared performer is strong evidence of one event.
  */
-function sharePerformer(a: EventItem, b: EventItem): boolean {
-  const pa = performerSet(a.performersOrTeams);
+function sharePerformer(fa: DedupFeatures, fb: DedupFeatures): boolean {
+  const pa = fa.performers;
   if (pa.size === 0) return false;
-  const pb = performerSet(b.performersOrTeams);
+  const pb = fb.performers;
   if (pb.size === 0) return false;
   for (const name of pa) {
     if (pb.has(name)) return true;
@@ -247,9 +298,25 @@ function sharePerformer(a: EventItem, b: EventItem): boolean {
  *   - Both lack venue → skip venue check, apply stricter title threshold (0.8).
  *   - Exactly one lacks venue → venue is incompatible → no merge.
  */
-function areDuplicates(a: EventItem, b: EventItem): boolean {
-  if (calendarDay(a.startDatetime) !== calendarDay(b.startDatetime)) {
+function areDuplicates(a: EventItem, b: EventItem, featureOf: FeatureOf): boolean {
+  const fa = featureOf(a);
+  const fb = featureOf(b);
+  if (fa.day !== fb.day) {
     return false;
+  }
+
+  if (!a.allDay && !b.allDay && a.endDatetime && b.endDatetime) {
+    const aStart = fa.startMs;
+    const aEnd = fa.endMs;
+    const bStart = fb.startMs;
+    const bEnd = fb.endMs;
+    if (
+      Number.isFinite(aStart) && Number.isFinite(aEnd) && aEnd > aStart &&
+      Number.isFinite(bStart) && Number.isFinite(bEnd) && bEnd > bStart &&
+      (aEnd <= bStart || bEnd <= aStart)
+    ) {
+      return false;
+    }
   }
 
   const aHasVenue = Boolean(a.venue);
@@ -260,14 +327,13 @@ function areDuplicates(a: EventItem, b: EventItem): boolean {
     // performer/team). The performer signal collapses cross-source twins whose
     // titles diverge but who share a headliner at the same venue on the same day.
     return (
-      venueCompatible(a.venue as string, b.venue as string) &&
-      (titleSimilar(a.title, b.title, TITLE_THRESHOLD) || sharePerformer(a, b))
+      venueCompatible(fa, fb) && (titleSimilar(fa, fb, TITLE_THRESHOLD) || sharePerformer(fa, fb))
     );
   }
 
   if (!aHasVenue && !bHasVenue) {
     // Neither has venue: skip venue check, require stricter title similarity
-    return titleSimilar(a.title, b.title, TITLE_STRICT_THRESHOLD);
+    return titleSimilar(fa, fb, TITLE_STRICT_THRESHOLD);
   }
 
   // Exactly one has venue → cannot confirm same location → not duplicates
@@ -393,6 +459,7 @@ export function dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlyS
   }
 
   const result: EventItem[] = [];
+  const featureOf = featureCache();
 
   // Within each bucket, do pairwise merge
   for (const bucket of buckets.values()) {
@@ -402,7 +469,7 @@ export function dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlyS
     for (const candidate of bucket) {
       let didMerge = false;
       for (const [i, existing] of merged.entries()) {
-        if (areDuplicates(existing, candidate)) {
+        if (areDuplicates(existing, candidate, featureOf)) {
           merged[i] = mergeEvents(existing, candidate);
           didMerge = true;
           break;

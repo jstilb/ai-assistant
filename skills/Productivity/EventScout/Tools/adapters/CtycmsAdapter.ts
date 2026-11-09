@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * CtycmsAdapter.ts — adapter for the ctycms "Picnic" events calendar widget.
  *
@@ -32,8 +31,7 @@
  *   mapCardToEvent(card, category, source, refMs): EventItem  — PURE
  *   fetchCtycmsEvents(source): Promise<EventItem[]> — fetch + parse + merge
  *
- * Script mode (bun .../CtycmsAdapter.ts): fetches Liberty Station live and
- * prints a summary. Does NOT write to cache.
+ * Live probe: bun Tools/Ingest.ts --source liberty-station
  */
 
 import type { EventItem, EventSource, Category } from "../types.ts";
@@ -154,27 +152,30 @@ interface PicnicCard {
  */
 export function parseCards(html: string): PicnicCard[] {
   const cards: PicnicCard[] = [];
-  const blockRe = /<a\s+class="pcrd"\s+href="([^"]+)"[\s\S]*?<\/a>/gi;
+  // The site renamed the card class from "pcrd" to "evcard" (seen 2026-11-08);
+  // the inner structure is the same, so both prefixes parse.
+  const blockRe = /<a\s+class="(pcrd|evcard)"\s+href="([^"]+)"[\s\S]*?<\/a>/gi;
   for (const m of html.matchAll(blockRe)) {
-    const block = m[0]!;
-    const href = m[1]!.trim();
+    const [block, p, rawHref] = m;
+    if (!p || !rawHref) continue;
+    const href = rawHref.trim();
 
-    const title = pickDiv(block, "pcrd-content-headline");
+    const title = pickDiv(block, `${p}-content-headline`);
     if (!title) continue;
 
     // Date box: dow / day / month (no year).
-    const dowM = block.match(/class="pcrd-date-dow"[^>]*>([^<]+)</i);
-    const dayM = block.match(/class="pcrd-date-day"[^>]*>([^<]+)</i);
-    const monM = block.match(/class="pcrd-date-month"[^>]*>([^<]+)</i);
+    const dowM = block.match(new RegExp(`class="${p}-date-dow"[^>]*>([^<]+)<`, "i"));
+    const dayM = block.match(new RegExp(`class="${p}-date-day"[^>]*>([^<]+)<`, "i"));
+    const monM = block.match(new RegExp(`class="${p}-date-month"[^>]*>([^<]+)<`, "i"));
     if (!dayM || !monM) continue;
     const day = parseInt(dayM[1]!.trim(), 10);
     const month = MONTHS[monM[1]!.trim().slice(0, 3).toLowerCase()];
     if (!Number.isFinite(day) || month === undefined) continue;
 
-    const venue = pickDiv(block, "pcrd-content-venue");
-    const timeText = pickDiv(block, "pcrd-content-time");
+    const venue = pickDiv(block, `${p}-content-venue`);
+    const timeText = pickDiv(block, `${p}-content-time`);
 
-    const imgM = block.match(/pcrd-image-image[^"]*"[^>]*data-src="([^"]+)"/i);
+    const imgM = block.match(new RegExp(`${p}-image-image[^"]*"[^>]*data-src="([^"]+)"`, "i"));
 
     const slug = href.split("?")[0]!.replace(/\/+$/, "").split("/").pop() ?? href;
 
@@ -329,19 +330,57 @@ function ymd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-async function fetchTag(origin: string, refererUrl: string, ds: string, de: string, ti: number): Promise<string> {
-  const url = `${origin}/_templates/_picnic_list_ajax.php?ds=${ds}&de=${de}&ti=${ti}`;
+const USER_AGENT = "Mozilla/5.0 (EventScout; Kaya personal assistant)";
+
+/**
+ * GET the calendar page once and return its session cookie ("name=value").
+ * Since 2026-11 the AJAX endpoint reads session keys that the page sets; with
+ * no session it answers HTTP 200 with PHP warnings and zero cards.
+ */
+async function primeSession(pageUrl: string): Promise<string> {
+  const res = await fetch(pageUrl, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok) {
+    throw new Error(`ctycms calendar page request failed: ${res.status} ${res.statusText} — ${pageUrl}`);
+  }
+  await res.text();
+  const cookie = res.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0]?.trim() ?? "")
+    .find((c) => c.startsWith("PHPSESSID="));
+  if (!cookie) {
+    throw new Error(`ctycms calendar page set no PHPSESSID cookie — ${pageUrl}`);
+  }
+  return cookie;
+}
+
+async function fetchTag(
+  origin: string,
+  refererUrl: string,
+  cookie: string,
+  rt: number,
+  ds: string,
+  de: string,
+  ti: number,
+): Promise<string> {
+  const url = `${origin}/_templates/_picnic_list_ajax.php?rt=${rt}&ds=${ds}&de=${de}&ti=${ti}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (EventScout; Kaya personal assistant)",
+      "User-Agent": USER_AGENT,
       "X-Requested-With": "XMLHttpRequest",
       Referer: refererUrl,
+      Cookie: cookie,
     },
   });
   if (!res.ok) {
     throw new Error(`ctycms picnic request failed: ${res.status} ${res.statusText} — ${url}`);
   }
-  return res.text();
+  const body = await res.text();
+  // A broken request still answers 200, with PHP warnings and no cards. Fail
+  // loudly so Ingest records an error instead of "fetched 0 event(s)".
+  if (/<b>(?:Warning|Notice|Fatal error)<\/b>:/i.test(body)) {
+    throw new Error(`ctycms picnic response contains PHP errors (session or params changed?) — ${url}`);
+  }
+  return body;
 }
 
 /**
@@ -380,65 +419,33 @@ export async function fetchCtycmsEvents(source: EventSource): Promise<EventItem[
     }
   };
 
+  // 0) Session cookie (throws on failure → Ingest records it).
+  const cookie = await primeSession(refererUrl);
+
   // 1) Base "all" set (throws on failure → Ingest records it).
-  applyCards(await fetchTag(origin, refererUrl, ds, de, cfg.allTi), () => defaultCategory);
+  applyCards(await fetchTag(origin, refererUrl, cookie, cfg.allTi, ds, de, cfg.allTi), () => defaultCategory);
 
   // 2) Performance grab-bag, classified by title.
   if (cfg.performanceTi !== undefined) {
     try {
-      applyCards(await fetchTag(origin, refererUrl, ds, de, cfg.performanceTi), (c) =>
+      applyCards(await fetchTag(origin, refererUrl, cookie, cfg.allTi, ds, de, cfg.performanceTi), (c) =>
         classifyPerformanceTitle(c.title),
       );
-    } catch {
-      /* non-fatal: base set already populated */
+    } catch (err) {
+      // non-fatal: base set already populated (secondary fetch — logged degrade)
+      console.warn(`[CtycmsAdapter] ${source.id}: performance tag ${cfg.performanceTi} fetch failed: ${err}`);
     }
   }
 
   // 3) Authoritative category tags (override title/default).
   for (const { ti, category } of cfg.tags) {
     try {
-      applyCards(await fetchTag(origin, refererUrl, ds, de, ti), () => category);
-    } catch {
-      /* non-fatal: keep what we have */
+      applyCards(await fetchTag(origin, refererUrl, cookie, cfg.allTi, ds, de, ti), () => category);
+    } catch (err) {
+      // non-fatal: keep what we have (secondary fetch — logged degrade)
+      console.warn(`[CtycmsAdapter] ${source.id}: tag ${ti} (${category}) fetch failed: ${err}`);
     }
   }
 
   return [...byId.values()];
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("CtycmsAdapter.ts") || process.argv[1].endsWith("CtycmsAdapter"));
-
-if (IS_SCRIPT) {
-  const source: EventSource = {
-    id: "liberty-station",
-    url: "https://libertystation.com/events/calendar",
-    name: "Liberty Station",
-    fetchTier: "ctycms",
-    categoryHint: "community",
-    geoHint: "Liberty Station, San Diego, CA 92106",
-    pollInterval: 720,
-    enabled: true,
-  };
-  console.log(`\nFetching Liberty Station events (today → +${HORIZON_DAYS} days)...\n`);
-  try {
-    const events = await fetchCtycmsEvents(source);
-    console.log(`Parsed ${events.length} event(s).\n`);
-    const byCat: Record<string, number> = {};
-    for (const e of events) byCat[e.category] = (byCat[e.category] ?? 0) + 1;
-    console.log("By category:", byCat, "\n");
-    for (const e of events.slice(0, 15)) {
-      console.log(`  [${e.startDatetime}] (${e.category}) ${e.title} — ${e.venue ?? "TBD"}`);
-    }
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

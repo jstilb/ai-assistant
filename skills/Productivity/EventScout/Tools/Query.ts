@@ -23,17 +23,17 @@
  */
 
 import { filterEvents } from "./Filter.ts";
+import { projectNineteenHzOccurrences } from "./adapters/NineteenHzAdapter.ts";
 import { renderTiered } from "./Render.ts";
 import { readEvents, upsertEventsDeduped } from "./Cache.ts";
 import { rankEvents } from "./Ranker.ts";
 import { loadProfile } from "./InterestProfile.ts";
 import { selectRefreshSources } from "./RefreshIntent.ts";
-import { ingestSource } from "./Ingest.ts";
 import { dedupeAndMerge } from "./Dedup.ts";
 import { enrichWithGeo } from "./Geocoder.ts";
 import { loadSources, loadApiTierSourceIds, updateLastFetchedBatch } from "./SourceManager.ts";
 import { runWithConcurrency } from "./lib/concurrency.ts";
-import type { QueryContext, EventItem, InterestProfile } from "./types.ts";
+import type { QueryContext, QueryCoverage, EventItem, InterestProfile } from "./types.ts";
 import type { RankedEvent } from "./Ranker.ts";
 
 // ============================================================================
@@ -50,6 +50,7 @@ export interface HybridQueryResult {
   refreshedSources: string[];
   /** Sources that were eligible but skipped due to the cap */
   skippedSources: string[];
+  coverage: QueryCoverage;
 }
 
 /**
@@ -88,7 +89,7 @@ export async function persistRefreshedEvents(events: EventItem[]): Promise<numbe
  * hung source (network black hole) — NOT a latency budget. Sized to NEVER
  * pre-empt the inner inference retry budget: one LLM extraction window can spend
  * up to ~2 fresh-spawn retries (≈120s each) recovering from a stalled socket, on
- * top of the BrightData/Apify fetch. 360s clears that worst-realistic path
+ * top of the BrightData fetch. 360s clears that worst-realistic path
  * (fetch ~60s + stall-and-recover extraction) so a slow-but-progressing source
  * is waited out, not dropped. Tune via EVENTSCOUT_REFRESH_TIMEOUT_MS.
  */
@@ -147,7 +148,7 @@ export async function queryHybrid(
   const skippedSources: string[] = [];
 
   if (!refresh) {
-    console.log("[hybrid] cache-only — reading cache (pass --refresh or say 'latest/update' to fetch live)");
+    console.log("[hybrid] cache-only — reading cache (pass --refresh to request a refresh)");
   } else if (toRefresh.length > 0) {
     console.log(
       `[hybrid] Refreshing ${toRefresh.length} source(s) live ` +
@@ -156,6 +157,8 @@ export async function queryHybrid(
   }
 
   const refreshedSources: string[] = [];
+  const failedSources: string[] = [];
+  let persistenceFailed = false;
   const refreshedEvents: EventItem[] = [];
   const lastFetchedUpdates: Record<string, string> = {};
   const timeoutMs = refreshTimeoutMs();
@@ -164,6 +167,7 @@ export async function queryHybrid(
     console.log(`[hybrid]   refreshing: ${source.id} (${source.url})`);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      const { ingestSource } = await import("./Ingest.ts");
       const result = await Promise.race([
         ingestSource(source),
         new Promise<never>((_, reject) => {
@@ -178,6 +182,7 @@ export async function queryHybrid(
       refreshedSources.push(source.id);
       console.log(`[hybrid]   done: ${source.id} — ${fetched.length} event(s) fetched`);
     } catch (err) {
+      failedSources.push(source.id);
       const msg = (err as Error).message;
       console.warn(`[hybrid]   skipped: ${source.id} — ${msg}`);
     } finally {
@@ -185,26 +190,31 @@ export async function queryHybrid(
     }
   });
 
-  // Single atomic write for all sources refreshed this query.
-  if (Object.keys(lastFetchedUpdates).length > 0) {
-    updateLastFetchedBatch(lastFetchedUpdates);
-  }
-
-  // Persist what we just fetched so it actually reaches ranking (and warms the
-  // cache for later queries). Best-effort: a cache-write failure must not sink
-  // the query — we still rank over whatever the on-disk cache already holds.
+  // Keep the original rows before persistence can partially change the cache.
+  let allEvents = readEvents();
   if (refreshedEvents.length > 0) {
     try {
       const persisted = await persistRefreshedEvents(refreshedEvents);
+      allEvents = readEvents();
       console.log(`[hybrid] Persisted ${persisted} refreshed event(s) to cache`);
     } catch (err) {
-      console.warn(`[hybrid] Persist failed (ranking from existing cache): ${(err as Error).message}`);
+      persistenceFailed = true;
+      const apiTierSourceIds = loadApiTierSourceIds();
+      const byId = new Map(allEvents.map(event => [event.id, event]));
+      for (const event of dedupeAndMerge(refreshedEvents, apiTierSourceIds)) {
+        byId.set(event.id, event);
+      }
+      allEvents = dedupeAndMerge([...byId.values()], apiTierSourceIds);
+      console.warn(`[hybrid] Persist failed (ranking fetched and cached events in memory): ${(err as Error).message}`);
     }
   }
 
-  // ---- filter + rank + render from (updated) cache ----
-  const allEvents = readEvents();
-  const events = filterEvents(allEvents, context);
+  if (!persistenceFailed && Object.keys(lastFetchedUpdates).length > 0) {
+    updateLastFetchedBatch(lastFetchedUpdates);
+  }
+
+  // ---- filter + rank + render ----
+  const events = filterEvents(projectNineteenHzOccurrences(allEvents, context.window), context);
 
   let profile: InterestProfile;
   try {
@@ -217,7 +227,14 @@ export async function queryHybrid(
   }
 
   const rankedEvents = await rankEvents(events, context, profile, limit);
-  const markdown = renderTiered(rankedEvents, context);
+  const coverage: QueryCoverage = {
+    mode: refresh ? "refresh" : "cache",
+    attemptedSources: toRefresh.map(source => source.id),
+    refreshedSources,
+    failedSources: toRefresh.filter(source => failedSources.includes(source.id)).map(source => source.id),
+    persistenceFailed,
+  };
+  const markdown = renderTiered(rankedEvents, context, coverage);
 
-  return { context, events, rankedEvents, markdown, refreshedSources, skippedSources };
+  return { context, events, rankedEvents, markdown, refreshedSources, skippedSources, coverage };
 }

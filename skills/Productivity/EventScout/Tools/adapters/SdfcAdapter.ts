@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * SdfcAdapter.ts — San Diego FC (MLS) → EventItem adapter via the ESPN API.
  *
@@ -19,8 +18,7 @@
  *   window; we filter to those where SDFC is the home team.
  */
 
-import { upsertEvents } from "../Cache.ts";
-import type { EventItem } from "../types.ts";
+import type { EventItem, EventSource } from "../types.ts";
 import { utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
 
@@ -56,7 +54,7 @@ interface EspnScoreboardResponse {
 // ============================================================================
 
 const SDFC_TEAM_ID = "22529";
-const SOURCE_ID = "sandiego-fc";
+export const SOURCE_ID = "sandiego-fc";
 const SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard";
 const SCHEDULE_PAGE_URL = "https://www.sandiegofc.com/schedule/";
 /** How far ahead to look. MLS plays into Nov; home games can be 50+ days out
@@ -126,13 +124,13 @@ function compactDate(d: Date): string {
   return `${y}${m}${day}`;
 }
 
-export async function fetchSdfcEvents(startDate?: string, endDate?: string): Promise<EventItem[]> {
+export async function fetchSdfcEvents(_source: EventSource): Promise<EventItem[]> {
   const today = new Date();
   const end = new Date(today);
   end.setDate(today.getDate() + WINDOW_DAYS);
 
-  const start = startDate ?? compactDate(today);
-  const endStr = endDate ?? compactDate(end);
+  const start = compactDate(today);
+  const endStr = compactDate(end);
 
   const url = `${SCOREBOARD_URL}?dates=${start}-${endStr}&limit=1000`;
   const res = await fetch(url, {
@@ -147,30 +145,4 @@ export async function fetchSdfcEvents(startDate?: string, endDate?: string): Pro
 
   const data = (await res.json()) as EspnScoreboardResponse;
   return (data.events ?? []).filter(isSdfcHome).map(mapMatchToEvent);
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("SdfcAdapter.ts") || process.argv[1].endsWith("SdfcAdapter"));
-
-if (IS_SCRIPT) {
-  console.log(`\nFetching upcoming San Diego FC HOME matches (today → +${WINDOW_DAYS} days)...\n`);
-  try {
-    const events = await fetchSdfcEvents();
-    upsertEvents(events);
-    console.log(`Upserted ${events.length} home match(es) to cache.\n`);
-    for (const e of events.slice(0, 10)) {
-      console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "TBD"} (${e.status})`);
-    }
-    console.log(`\nSource: ${SOURCE_ID} | ESPN team ${SDFC_TEAM_ID}`);
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

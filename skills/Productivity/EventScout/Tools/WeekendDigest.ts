@@ -10,10 +10,16 @@
  * morning digest, never pages. Fingerprinted on the weekend's Saturday so
  * re-runs within the same weekend don't re-spool.
  *
- * Scheduled Friday 07:35 via com.kaya.cron.eventscout-weekend-digest
+ * Scheduled Thursday 16:30 (was Friday 07:35 until 2026-11-08) via
+ * com.kaya.cron.eventscout-weekend-digest
  * (manifest: MEMORY/daemon/cron/manifests/eventscout-weekend-digest.yaml,
  * wrapper: bin/eventscout-weekend-digest.sh). Safe to run by hand; set
  * KAYA_ALERT_DRY_RUN=1 to compute + print without sending.
+ *
+ * The Thursday plan (ALIGNMENT G1): after the ranking, WeekendHolds.ts puts
+ * at most 3 picks on Jm's calendar as tentative holds (no reminders, no
+ * push). EVENTSCOUT_HOLDS_DRY_RUN=1 prints the picks without writing;
+ * EVENTSCOUT_HOLDS=off skips the step.
  *
  * "Query is everything": the ONLY tuning lever is WEEKEND_QUERY below —
  * there is deliberately no taste profile (SKILL.md, Ranking).
@@ -27,6 +33,14 @@ import { sendAlert } from "../../../../lib/core/AlertGate.ts";
 import type { AlertResult } from "../../../../lib/core/AlertGate.ts";
 import type { RankedEvent } from "./Ranker.ts";
 import type { QueryContext } from "./types.ts";
+import { createCalendarClient } from "./CalendarApi.ts";
+import { runWeekendHolds } from "./WeekendHolds.ts";
+import type { HoldsOutcome } from "./WeekendHolds.ts";
+import { readEvents } from "./Cache.ts";
+import { detectSeries, makeClassifier, seriesKey } from "./Community.ts";
+import { filterEvents } from "./Filter.ts";
+import { rankEvents } from "./Ranker.ts";
+import type { EventItem, InterestProfile } from "./types.ts";
 
 // ============================================================================
 // Constants
@@ -34,8 +48,22 @@ import type { QueryContext } from "./types.ts";
 
 /** The standing query — edit THIS to change what the digest surfaces. */
 const WEEKEND_QUERY =
-  "fun things to do this weekend — a varied mix across live music, dance, comedy, " +
-  "arts, food, and community; favor free or cheap, social, and near Ocean Beach";
+  "social things to do this weekend where I can meet people and could become a regular — " +
+  "recurring groups, meetups, classes, clubs, pickup sports, open mics, community events — " +
+  "plus a varied mix across live music, dance, comedy, arts, and food; favor free or cheap, " +
+  "social, and near Ocean Beach";
+
+/**
+ * Weeknight holds (product review 1, 2026-11-08): only recurring evening groups
+ * are ranked for the weeknights, never the whole week (scoring is 40 events per
+ * LLM call; a week is ~90 calls, the recurring evening subset ~2).
+ */
+const WEEKNIGHT_QUERY =
+  "a weekday-evening group where I can meet people and become a regular — recurring classes, clubs, " +
+  "pickup sports, run clubs, dance socials, open mics, workshops, meetups, volunteer or activist groups; " +
+  "favor free or cheap, social, and near Ocean Beach";
+/** Weeknight evenings start at or after this LA hour (Kaya's heuristic: after work). */
+const WEEKNIGHT_EARLIEST_HOUR = 17;
 
 const TOP_N = 10;
 const ALERT_KEY = "eventscout-weekend-digest";
@@ -82,6 +110,64 @@ function timeLabel(e: RankedEvent): string {
   return `${h12}${mm === "00" ? "" : `:${mm}`}${hh < 12 ? "am" : "pm"}`;
 }
 
+function addDays(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The weeknights a Thursday run plans: this Friday, then next Monday–Thursday (LA dates). */
+export function weeknightDays(satIso: string, sunIso: string): string[] {
+  return [addDays(satIso, -1), addDays(sunIso, 1), addDays(sunIso, 2), addDays(sunIso, 3), addDays(sunIso, 4)];
+}
+
+/**
+ * Evening events on `days` that belong to a recurring series of the WHOLE
+ * cache (Community.detectSeries needs every date, not only this window) —
+ * the only weeknight candidates worth ranking.
+ */
+export function weeknightPool(inWindow: EventItem[], days: readonly string[], cache: readonly EventItem[]): EventItem[] {
+  const series = detectSeries(cache);
+  return inWindow.filter((e) => {
+    if (e.allDay || !days.includes(e.startDatetime.slice(0, 10))) return false; // LA-offset ISO
+    if (parseInt(e.startDatetime.slice(11, 13), 10) < WEEKNIGHT_EARLIEST_HOUR) return false;
+    const key = seriesKey(e);
+    return key !== null && series.has(key);
+  });
+}
+
+async function rankWeeknights(
+  days: string[],
+  home: { lat: number; lng: number },
+  radiusMiles: number,
+): Promise<RankedEvent[]> {
+  const ymd = (iso: string): [number, number, number] => {
+    const [y = Number.NaN, m = Number.NaN, d = Number.NaN] = iso.split("-").map((n) => parseInt(n, 10));
+    return [y, m, d];
+  };
+  const [fy, fm, fd] = ymd(days[0] ?? "");
+  const [ly, lm, ld] = ymd(days[days.length - 1] ?? "");
+  const context: QueryContext = {
+    rawQuery: WEEKNIGHT_QUERY,
+    window: { start: laDateIso(fy, fm, fd, 0, 0, 0), end: laDateIso(ly, lm, ld, 23, 59, 59) },
+    home,
+    radiusMiles,
+  };
+  const cache = readEvents();
+  const pool = weeknightPool(filterEvents(cache, context), days, cache);
+  if (pool.length === 0) return [];
+  let profile: InterestProfile;
+  try {
+    profile = await loadProfile();
+  } catch {
+    profile = { homeLocation: { lat: home.lat, lng: home.lng, label: "home" }, defaultRadiusMiles: radiusMiles };
+  }
+  console.log(`[weekend-holds] weeknight ranking: ${pool.length} recurring evening event(s) on ${days.join(", ")}`);
+  return rankEvents(pool, context, profile);
+}
+
+function weekdayLabel(iso: string): string {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+}
+
 function humanDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "short",
@@ -97,7 +183,9 @@ export function renderWeekendDigest(ranked: RankedEvent[], satIso: string, sunIs
     `🎉 Weekend picks — ${humanDate(satIso)} + ${humanDate(sunIso)} (${ranked.length} match${ranked.length === 1 ? "" : "es"})`,
   ];
   for (const e of ranked.slice(0, TOP_N)) {
-    const day = e.startDatetime.slice(0, 10) === satIso ? "Sat" : "Sun";
+    // The real LA weekday: a Friday-night event that runs past midnight is in
+    // the window too, and must not read "Sun". startDatetime is LA-offset ISO.
+    const day = weekdayLabel(e.startDatetime.slice(0, 10));
     const parts = [`${day}${timeLabel(e) ? ` ${timeLabel(e)}` : ""} — ${e.title}`, e.venue ?? "", priceLabel(e)].filter(
       Boolean,
     );
@@ -118,6 +206,10 @@ export interface WeekendDigestOutcome {
   sent: boolean;
   result?: AlertResult;
   markdown?: string;
+  holds?: HoldsOutcome;
+  holdsError?: string;
+  /** Set when the weeknight ranking failed; the weekend holds still ran. */
+  weeknightError?: string;
 }
 
 export async function runWeekendDigest(now: Date = new Date()): Promise<WeekendDigestOutcome> {
@@ -163,7 +255,7 @@ export async function runWeekendDigest(now: Date = new Date()): Promise<WeekendD
     // fingerprint and are edge-trigger-deduped by AlertGate.
     fingerprint: satIso,
   });
-  return {
+  const outcome: WeekendDigestOutcome = {
     satIso,
     sunIso,
     matches: ranked.length,
@@ -171,6 +263,41 @@ export async function runWeekendDigest(now: Date = new Date()): Promise<WeekendD
     result: alertResult,
     markdown,
   };
+
+  // The Thursday plan: holds from the same ranking. A failure is reported
+  // (non-zero exit in the CLI) but never undoes the digest above.
+  if (process.env["EVENTSCOUT_HOLDS"] !== "off") {
+    // Review 1: one weeknight community hold (kill switch EVENTSCOUT_WEEKNIGHT=off).
+    // A failed weeknight ranking is loud (CLI exit 1) but never costs the weekend.
+    let weeknight: { ranked: RankedEvent[]; days: string[] } | undefined;
+    if (process.env["EVENTSCOUT_WEEKNIGHT"] !== "off") {
+      const days = weeknightDays(satIso, sunIso);
+      try {
+        weeknight = { ranked: await rankWeeknights(days, home, radiusMiles), days };
+      } catch (err) {
+        outcome.weeknightError = (err as Error).message;
+        console.error(`[weekend-holds] weeknight ranking FAILED (weekend holds only): ${outcome.weeknightError}`);
+      }
+    }
+    try {
+      outcome.holds = await runWeekendHolds(ranked, satIso, sunIso, {
+        ...(weeknight && { weeknight }),
+        client: createCalendarClient(),
+        now,
+        dryRun: process.env["EVENTSCOUT_HOLDS_DRY_RUN"] === "1",
+        // G2: recurring communities first; series facts need the whole cache.
+        community: { loadCache: readEvents, classify: makeClassifier() },
+        // Review 1: public-calendar picks link to their own event page, and an
+        // event that left its source calendar gets no hold.
+        sourceCheck: {
+          list: (calendarId, timeMin, timeMax) => createCalendarClient(calendarId).listEvents({ timeMin, timeMax }),
+        },
+      });
+    } catch (err) {
+      outcome.holdsError = (err as Error).message;
+    }
+  }
+  return outcome;
 }
 
 // ============================================================================
@@ -185,5 +312,53 @@ if (import.meta.main) {
       `sent=${outcome.sent}${outcome.result ? ` (${outcome.result})` : ""}` +
       (process.env["KAYA_ALERT_DRY_RUN"] === "1" ? " (DRY RUN — nothing sent)" : ""),
   );
+  const h = outcome.holds;
+  if (h) {
+    console.log(
+      `[weekend-holds] weekend=${h.weekend} placed=${h.placed}${h.dryRun ? " (DRY RUN)" : ""} — ${h.reason}; ` +
+        `past holds kept=${h.reconciled.kept} dropped=${h.reconciled.dropped}`,
+    );
+    if (h.communityCheck) {
+      const c = h.communityCheck;
+      console.log(`[weekend-holds] community check: ${c.communities} of ${c.candidates} recurring series are communities`);
+      for (const v of c.verdicts) console.log(`    ${v.community ? "yes" : "no "} | ${v.kind} | ${v.title}`);
+    }
+    if (h.sourceCheck) {
+      const s = h.sourceCheck;
+      console.log(
+        `[weekend-holds] source check: ${s.checked} calendar-source candidate(s) checked, ${s.gone} gone from the source, ` +
+          `${s.doubtful} with a date rule that does not fit` +
+          (s.skipped.length ? ` — skipped: ${s.skipped.join("; ")}` : ""),
+      );
+    }
+    if (h.weeknight) {
+      const w = h.weeknight;
+      console.log(`[weekend-holds] weeknight: ${w.picked} hold(s) from ${w.candidates} community candidate(s) — ${w.reason}`);
+    }
+    for (const p of h.picks) {
+      console.log(
+        `  - ${p.start} | ${p.title} | ${p.venue ?? "?"} | score ${p.score} | return visit: ${p.returnVisit ?? "no"} | ` +
+          `community: ${p.community ?? "no"} | source check: ${p.sourceCheck ?? "not checked"} | ${p.link}`,
+      );
+    }
+  }
+  if (outcome.holdsError) {
+    console.error(`[weekend-holds] FAILED: ${outcome.holdsError}`);
+    process.exit(1);
+  }
+  if (outcome.weeknightError) {
+    console.error(`[weekend-holds] weeknight ranking FAILED: ${outcome.weeknightError}`);
+    process.exit(1);
+  }
+  if (h?.sourceCheckError) {
+    // Those picks kept the calendar-view link; exit non-zero so the cron log shows it.
+    console.error(`[weekend-holds] source check FAILED: ${h.sourceCheckError}`);
+    process.exit(1);
+  }
+  if (h?.communityError) {
+    // The holds went out in score order; exit non-zero so the cron log shows the degraded run.
+    console.error(`[weekend-holds] community check FAILED: ${h.communityError}`);
+    process.exit(1);
+  }
   process.exit(0);
 }

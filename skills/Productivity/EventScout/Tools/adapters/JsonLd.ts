@@ -27,6 +27,7 @@
  * No network calls. Pure function.
  */
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { EventItemSchema } from "../types.ts";
 import type { EventItem, EventSource, Category } from "../types.ts";
@@ -57,15 +58,25 @@ const SchemaOrgLocationSchema = z
   })
   .passthrough();
 
-const SchemaOrgOfferSchema = z
-  .object({
-    "@type": z.string().optional(),
-    price: z.union([z.string(), z.number()]).optional(),
-    lowPrice: z.union([z.string(), z.number()]).optional(),
-    priceCurrency: z.string().optional(),
-    url: z.string().optional(),
-  })
-  .passthrough();
+const SchemaOrgCoordinateSchema = z.union([
+  z.number(),
+  z.string().trim().regex(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i)
+    .transform(value => Number(value)),
+]).pipe(z.number().finite());
+
+const SchemaOrgGeoSchema = z.object({
+  latitude: SchemaOrgCoordinateSchema.pipe(z.number().min(-90).max(90)),
+  longitude: SchemaOrgCoordinateSchema.pipe(z.number().min(-180).max(180)),
+});
+
+const SchemaOrgOfferSchema = z.object({
+  "@type": z.string().optional(),
+  price: z.union([z.string(), z.number()]).optional(),
+  lowPrice: z.union([z.string(), z.number()]).optional(),
+  highPrice: z.union([z.string(), z.number()]).optional(),
+  priceCurrency: z.string().optional(),
+  url: z.string().optional(),
+}).passthrough();
 
 const SchemaOrgOffersField = z.union([SchemaOrgOfferSchema, z.array(SchemaOrgOfferSchema)]);
 
@@ -84,6 +95,127 @@ const SchemaOrgEventSchema = z
   .passthrough();
 
 type SchemaOrgEvent = z.infer<typeof SchemaOrgEventSchema>;
+
+const EventbriteTimeSchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  url: z.string(),
+  timezone: z.literal("America/Los_Angeles"),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  hide_start_date: z.boolean().optional(),
+  hide_end_date: z.boolean().optional(),
+});
+type EventbriteTime = z.infer<typeof EventbriteTimeSchema>;
+
+function isEventbriteUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && (
+      url.hostname === "eventbrite.com" || url.hostname.endsWith(".eventbrite.com") ||
+      url.hostname === "eventbrite.ca" || url.hostname.endsWith(".eventbrite.ca")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function eventbriteId(raw: string | undefined): string | undefined {
+  if (!raw || !isEventbriteUrl(raw)) return undefined;
+  return new URL(raw).pathname.match(/^\/e\/[^/]+-(\d+)\/?$/)?.[1];
+}
+
+function extractEventbriteTimes(html: string, source: EventSource): Map<string, EventbriteTime> {
+  const times = new Map<string, EventbriteTime>();
+  if (!isEventbriteUrl(source.url)) return times;
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+  const assignments = scripts.flatMap(script => {
+    const content = script[1] ?? "";
+    return [...content.matchAll(/(?:^|[;\n])\s*window\.__SERVER_DATA__\s*=\s*(\{)/g)]
+      .flatMap(match => (match.index === undefined ? [] : [{ content, start: match.index + match[0].length - 1 }]));
+  });
+  const [assignment] = assignments;
+  if (assignments.length !== 1 || !assignment) return times;
+  const { content, start } = assignment;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let end = start;
+  for (; end < content.length; end++) {
+    const char = content[end];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) break;
+  }
+  try {
+    const state = z.object({ search_data: z.object({ events: z.object({ results: z.array(z.unknown()) }) }) })
+      .safeParse(JSON.parse(content.slice(start, end + 1)));
+    if (!state.success) return times;
+    const seen = new Set<string>();
+    for (const raw of state.data.search_data.events.results) {
+      const identity = z.object({ id: z.string().regex(/^\d+$/) }).safeParse(raw);
+      if (!identity.success) continue;
+      const id = identity.data.id;
+      if (seen.has(id)) {
+        times.delete(id);
+        continue;
+      }
+      seen.add(id);
+      const parsed = EventbriteTimeSchema.safeParse(raw);
+      if (parsed.success && eventbriteId(parsed.data.url) === id) times.set(id, parsed.data);
+    }
+  } catch {
+    return times;
+  }
+  return times;
+}
+
+function eventbriteDatetime(date: string | undefined, time: string | undefined): string | undefined {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !time || !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(time)) return undefined;
+  const day = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(day) || new Date(day).toISOString().slice(0, 10) !== date) return undefined;
+  const naive = `${date}T${time.length === 5 ? `${time}:00` : time}`;
+  const utc = naiveLaToUtcMs(naive);
+  if (!Number.isFinite(utc)) return undefined;
+  const matches = [utc - 3_600_000, utc, utc + 3_600_000]
+    .filter(ms => utcIsoToLaIso(new Date(ms).toISOString()).slice(0, 19) === naive);
+  return matches.length === 1 ? naive : undefined;
+}
+
+function withEventbriteTimes(event: SchemaOrgEvent, times: Map<string, EventbriteTime>): SchemaOrgEvent {
+  const id = eventbriteId(event.url);
+  const row = id ? times.get(id) : undefined;
+  if (!row) return event;
+  const start = row.hide_start_date === false && event.startDate === row.start_date
+    ? eventbriteDatetime(row.start_date, row.start_time) : undefined;
+  const end = row.hide_end_date === false && event.endDate === row.end_date
+    ? eventbriteDatetime(row.end_date, row.end_time) : undefined;
+  const augmented = { ...event, ...(start && { startDate: start }), ...(end && { endDate: end }) };
+  const startMs = augmented.startDate ? Date.parse(coerceToIso(augmented.startDate) ?? "") : NaN;
+  const endMs = augmented.endDate ? Date.parse(coerceToIso(augmented.endDate) ?? "") : NaN;
+  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs < startMs ? event : augmented;
+}
+
+// ============================================================================
+// Stable ID — shared recipe, plus the Eventbrite occurrence form
+// ============================================================================
+
+/**
+ * Without an occurrence id: the shared AdapterUtil recipe (UTC-normalized).
+ * With an Eventbrite occurrence id: hash the occurrence id and its UTC start,
+ * so two dates of one Eventbrite series never collapse into one id.
+ */
+function jsonLdStableId(title: string, startDatetime: string, venueOrUrl: string, occurrenceId?: string): string {
+  if (!occurrenceId) return stableId(title, startDatetime, venueOrUrl, { normalizeUtc: true });
+  const ms = Date.parse(startDatetime);
+  const utcNorm = Number.isNaN(ms) ? startDatetime : new Date(ms).toISOString();
+  return createHash("sha256").update(`eventbrite|${occurrenceId}|${utcNorm}`).digest("hex").slice(0, 16);
+}
 
 // ============================================================================
 // Datetime coercion — same logic as SPAAdapter.coerceToIso
@@ -110,6 +242,8 @@ function coerceToIso(raw: string): string | null {
 
 interface PriceInfo {
   priceMin?: number;
+  priceMax?: number;
+  currency?: string;
   isFree: boolean;
 }
 
@@ -121,26 +255,36 @@ function extractPriceInfo(offers: z.infer<typeof SchemaOrgOffersField> | undefin
 
   // Use first offer for price extraction
   const offer = offerList[0]!;
+  const rawMax = offer.highPrice;
+  const max = typeof rawMax === "number"
+    ? rawMax
+    : typeof rawMax === "string" && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(rawMax.trim())
+      ? Number(rawMax)
+      : NaN;
+  const range = {
+    ...(Number.isFinite(max) && max >= 0 && { priceMax: max }),
+    ...(offer.priceCurrency !== undefined && { currency: offer.priceCurrency }),
+  };
   const rawPrice = offer.price ?? offer.lowPrice;
 
   if (rawPrice === undefined || rawPrice === null) {
-    return { isFree: false };
+    return { ...range, isFree: false };
   }
 
   const priceStr = String(rawPrice).trim().toLowerCase();
 
   // "Free" / "free" → isFree
   if (priceStr === "free") {
-    return { isFree: true, priceMin: undefined };
+    return { ...range, isFree: true, priceMin: undefined };
   }
 
   // Numeric price
   const num = parseFloat(priceStr.replace(/[^0-9.]/g, ""));
   if (!Number.isNaN(num)) {
-    return { isFree: num === 0, priceMin: num };
+    return { ...range, ...(max < num && { priceMax: undefined }), isFree: num === 0, priceMin: num };
   }
 
-  return { isFree: false };
+  return { ...range, isFree: false };
 }
 
 // ============================================================================
@@ -221,6 +365,7 @@ function schemaEventToItem(ev: SchemaOrgEvent, source: EventSource, now: string)
   const locationRaw = Array.isArray(ev.location) ? ev.location[0] : ev.location;
   const venue = locationRaw?.name?.trim() || undefined;
   const address = formatAddress(locationRaw?.address);
+  const coordinates = SchemaOrgGeoSchema.safeParse(locationRaw?.geo);
 
   // price
   const priceInfo = extractPriceInfo(ev.offers);
@@ -239,20 +384,25 @@ function schemaEventToItem(ev: SchemaOrgEvent, source: EventSource, now: string)
 
   // stable id
   const venueOrUrl = venue ?? source.url;
-  const id = stableId(title, startDatetime, venueOrUrl, { normalizeUtc: true });
+  const id = jsonLdStableId(title, startDatetime, venueOrUrl, eventbriteId(ev.url));
 
   const item: EventItem = {
     id,
     title,
     startDatetime,
     ...(endDatetime !== undefined && { endDatetime }),
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(ev.startDate.trim()) && { startTimeKnown: false }),
+    ...(endDatetime !== undefined && ev.endDate !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(ev.endDate.trim()) && { endTimeKnown: false }),
     allDay: false,
     ...(venue !== undefined && { venue }),
     ...(address !== undefined && { address }),
+    ...(coordinates.success && { lat: coordinates.data.latitude, lng: coordinates.data.longitude }),
     category,
     tags: [],
     isFree: priceInfo.isFree,
     ...(priceInfo.priceMin !== undefined && { priceMin: priceInfo.priceMin }),
+    ...(priceInfo.priceMax !== undefined && { priceMax: priceInfo.priceMax }),
+    ...(priceInfo.currency !== undefined && { currency: priceInfo.currency }),
     ...(ticketUrl !== undefined && { ticketUrl }),
     sourceUrl: source.url,
     sources: [{ sourceId: source.id, url: source.url }],
@@ -350,6 +500,7 @@ function collectEventCandidates(value: unknown): unknown[] {
 export function extractJsonLdEvents(html: string, source: EventSource): EventItem[] {
   const now = new Date().toISOString();
   const results: EventItem[] = [];
+  const eventbriteTimes = extractEventbriteTimes(html, source);
 
   // Extract all <script type="application/ld+json"> block contents
   const scriptRegex = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -377,7 +528,7 @@ export function extractJsonLdEvents(html: string, source: EventSource): EventIte
         continue;
       }
 
-      const item = schemaEventToItem(schemaResult.data, source, now);
+      const item = schemaEventToItem(withEventbriteTimes(schemaResult.data, eventbriteTimes), source, now);
       if (item !== null) {
         results.push(item);
       }

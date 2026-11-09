@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { upcomingWeekend, renderWeekendDigest } from "../Tools/WeekendDigest.ts";
+import { upcomingWeekend, renderWeekendDigest, weeknightDays, weeknightPool } from "../Tools/WeekendDigest.ts";
 import type { RankedEvent } from "../Tools/Ranker.ts";
 
 function ranked(overrides: Partial<RankedEvent>): RankedEvent {
@@ -78,6 +78,11 @@ describe("renderWeekendDigest", () => {
     expect(md).toContain("$20–35");
   });
 
+  test("a Friday-night event in the window reads Fri, not Sun (review 1, 2026-11-08)", () => {
+    const fri = ranked({ title: "Fridays Salsa", startDatetime: "2026-08-21T20:30:00-07:00", venue: "Tango Del Rey" });
+    expect(renderWeekendDigest([fri], "2026-08-22", "2026-08-23")).toContain("• Fri 8:30pm — Fridays Salsa");
+  });
+
   test("caps at top 10 but reports the full count", () => {
     const many = Array.from({ length: 25 }, (_, i) => ranked({ title: `E${i}` }));
     const bigMd = renderWeekendDigest(many, "2026-08-22", "2026-08-23");
@@ -87,5 +92,31 @@ describe("renderWeekendDigest", () => {
 
   test("footer hands the agent the exact follow-up query window", () => {
     expect(md).toContain("--from 2026-08-22 --to 2026-08-23");
+  });
+});
+
+describe("weeknights (review 1, 2026-11-08)", () => {
+  test("a Thursday run plans this Friday and next Monday–Thursday", () => {
+    expect(weeknightDays("2026-11-14", "2026-11-15")).toEqual([
+      "2026-11-13",
+      "2026-11-16",
+      "2026-11-17",
+      "2026-11-18",
+      "2026-11-19",
+    ]);
+  });
+
+  test("the pool keeps only evening events of a recurring series of the whole cache", () => {
+    const days = weeknightDays("2026-11-14", "2026-11-15");
+    const club = ranked({ id: "c1", title: "Run Club", venue: "Pier", startDatetime: "2026-11-17T18:30:00-08:00" });
+    const later = { ...club, id: "c2", startDatetime: "2026-11-24T18:30:00-08:00" }; // outside the window
+    const lunch = ranked({ id: "l1", title: "Lunch Yoga", venue: "Studio", startDatetime: "2026-11-17T12:00:00-08:00" });
+    const lunch2 = { ...lunch, id: "l2", startDatetime: "2026-11-24T12:00:00-08:00" };
+    const oneOff = ranked({ id: "o1", title: "Concert", venue: "Hall", startDatetime: "2026-11-18T19:00:00-08:00" });
+    const sat = ranked({ id: "s1", title: "Saturday Social", venue: "Bar", startDatetime: "2026-11-14T18:30:00-08:00" });
+    const sat2 = { ...sat, id: "s2", startDatetime: "2026-11-21T18:30:00-08:00" };
+    const inWindow = [club, lunch, oneOff, sat];
+    const pool = weeknightPool(inWindow, days, [...inWindow, later, lunch2, sat2]);
+    expect(pool.map((e) => e.id)).toEqual(["c1"]);
   });
 });

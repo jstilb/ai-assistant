@@ -37,6 +37,8 @@ export const EventItemSchema = z.object({
   /** ISO 8601, America/Los_Angeles */
   startDatetime: z.string(),
   endDatetime: z.string().optional(),
+  startTimeKnown: z.boolean().optional(),
+  endTimeKnown: z.boolean().optional(),
   allDay: z.boolean(),
   /** e.g. "The Observatory North Park" */
   venue: z.string().optional(),
@@ -51,6 +53,9 @@ export const EventItemSchema = z.object({
   isFree: z.boolean(),
   priceMin: z.number().optional(),
   priceMax: z.number().optional(),
+  admissionNote: z.string().optional(),
+  recurrenceRule: z.string().optional(),
+  recurrenceOverride: z.boolean().optional(),
   currency: z.string().optional(),
   ticketUrl: z.string().optional(),
   /** Page it was extracted from */
@@ -65,6 +70,7 @@ export const EventItemSchema = z.object({
   /** "Padres vs Dodgers" / "Tycho" */
   performersOrTeams: z.string().optional(),
   description: z.string().optional(),
+  sourceDescription: z.string().optional(),
   imageUrl: z.string().optional(),
   /** ISO timestamp of when this record was fetched */
   fetchedAt: z.string(),
@@ -179,12 +185,10 @@ export const FetchTierSchema = z.enum([
   "api",
   "rss",
   "ics",
-  "shopify",
   "spa",
   "html-llm",
   "wp-tribe",
   "evvnt",
-  "apify",
   "pike13",
   "ctycms",
   "activenet",
@@ -244,6 +248,16 @@ export const EventSourceSchema = z.object({
 export type EventSource = z.infer<typeof EventSourceSchema>;
 
 // ============================================================================
+// Source Adapter seam (see CONTEXT.md, docs/adr/0001-source-adapter-seam.md)
+// ============================================================================
+
+/** Fetch one Event Source. Every item it returns carries `sources[0].sourceId === source.id`. */
+export type SourceAdapter = (source: EventSource) => Promise<EventItem[]>;
+
+/** Pick the Source Adapter for one Event Source. Production: `adapterFor` in Ingest.ts. */
+export type AdapterResolver = (source: EventSource) => SourceAdapter;
+
+// ============================================================================
 // Cache store shape (used internally by Cache.ts)
 // ============================================================================
 
@@ -252,6 +266,14 @@ export const EventCacheSchema = z.object({
   lastUpdated: z.string(),
 });
 export type EventCache = z.infer<typeof EventCacheSchema>;
+
+export interface QueryCoverage {
+  mode: "cache" | "refresh";
+  attemptedSources: string[];
+  refreshedSources: string[];
+  failedSources: string[];
+  persistenceFailed: boolean;
+}
 
 // ============================================================================
 // Saved-events store shape (used by SavedEvents.ts)

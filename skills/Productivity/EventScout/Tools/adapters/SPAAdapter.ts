@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * SPAAdapter.ts — Slice 4: JS SPA venue page → EventItem adapter.
  *
@@ -35,6 +34,7 @@ import { inference } from "../../../../../lib/core/Inference.ts";
 // cross-skill-allowed: adapter wraps Data/BrightData's fetch client by design — thin adapter over a shared client (tier-1/2/3 fetch strategy)
 import { BrightDataTool } from "../../../../Data/BrightData/Tools/BrightDataTool.ts";
 import { extractJsonLdEvents } from "./JsonLd.ts";
+import { extractBiblioCommonsEvents } from "./BiblioCommons.ts";
 import { EventItemSchema, CategorySchema } from "../types.ts";
 import type { EventItem, EventSource, Category } from "../types.ts";
 import { z } from "zod";
@@ -600,9 +600,9 @@ If no events are found, return an empty array: []`;
 /**
  * Run the full JSON-LD pre-pass → LLM extraction pipeline on pre-fetched content.
  *
- * This is the shared extraction kernel used by both the SPA/html-llm fetch path
- * and the Apify fetch tier. Keeping logic single-sourced ensures the two tiers
- * behave identically and tests only need to cover one place.
+ * This is the shared extraction kernel used by the SPA/html-llm fetch path and
+ * the dancestudio-pro and sitemap-llm tiers. Keeping logic single-sourced ensures
+ * the tiers behave identically and tests only need to cover one place.
  *
  * Pipeline:
  *   1. JSON-LD pre-pass (deterministic, schema.org Event extraction).
@@ -619,6 +619,9 @@ export async function extractEventsFromContent(content: string, source: EventSou
   if (jsonLdEvents.length > 0) {
     return jsonLdEvents;
   }
+
+  const biblioCommonsEvents = extractBiblioCommonsEvents(content, source);
+  if (biblioCommonsEvents !== null) return biblioCommonsEvents;
 
   // Fallback to LLM extraction (trimToContentStart + chunking)
   return extractViaLLM(content, source);
@@ -687,7 +690,8 @@ async function extractChunkViaLLM(chunk: string, source: EventSource): Promise<E
  * each in PARALLEL (wall-clock stays ~one inference, not N×), then merges and
  * dedups by stable id. For pages <= one window this is identical to the prior
  * single-slice behaviour. A chunk whose inference fails is skipped (logged),
- * not fatal — the surviving chunks still contribute.
+ * not fatal — the surviving chunks still contribute. Throws when EVERY window
+ * fails (Source Adapter error-mode contract).
  */
 async function extractViaLLM(content: string, source: EventSource): Promise<EventItem[]> {
   const trimmed = trimToContentStart(content);
@@ -703,12 +707,20 @@ async function extractViaLLM(content: string, source: EventSource): Promise<Even
 
   const all: EventItem[] = [];
   let failures = 0;
+  let lastError = "";
   for (const r of settled) {
     if (r.status === "fulfilled") all.push(...r.value);
     else {
       failures++;
-      console.warn(`[SPAAdapter] window extraction skipped: ${(r.reason as Error)?.message ?? r.reason}`);
+      lastError = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      console.warn(`[SPAAdapter] window extraction skipped: ${lastError}`);
     }
+  }
+  // Source Adapter contract (CONTEXT.md): every window failed → throw, never a silent [].
+  if (failures > 0 && failures === settled.length) {
+    throw new Error(
+      `[SPAAdapter] every LLM window failed for ${source.url} (${failures}/${settled.length}): ${lastError}`,
+    );
   }
 
   const deduped = dedupById(all);
@@ -788,6 +800,10 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
 
   // --- Step 2 (only if we have content): JSON-LD pre-pass + LLM ---
   let events: EventItem[] = [];
+  // Extraction attempts vs failures — every attempt failing is a source failure.
+  let extractAttempts = 0;
+  let extractFailures = 0;
+  let lastExtractError = "";
 
   if (content) {
     const jsonLdCount = extractJsonLdEvents(content, source).length;
@@ -795,10 +811,13 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
     if (jsonLdCount === 0) {
       console.log("[SPAAdapter] JSON-LD yielded 0 — falling back to LLM extraction...");
     }
+    extractAttempts++;
     try {
       events = await extractEventsFromContent(content, source);
     } catch (err) {
-      console.warn(`[SPAAdapter] extraction error: ${(err as Error).message}`);
+      extractFailures++;
+      lastExtractError = err instanceof Error ? err.message : String(err);
+      console.warn(`[SPAAdapter] extraction error: ${lastExtractError}`);
     }
   }
 
@@ -806,31 +825,42 @@ async function fetchEventsForUrl(url: string, source: EventSource): Promise<Even
   // Escalate if: (a) content was thin/absent, or (b) both JSON-LD and LLM yielded 0
   const needsEscalation = thinContent || events.length === 0;
 
+  let pwContent: string | null = null;
   if (needsEscalation) {
-    const pwContent = await escalateToPlaywright(url, tool);
+    pwContent = await escalateToPlaywright(url, tool);
     escalated = true;
 
     if (pwContent) {
       console.log("[SPAAdapter] Post-Playwright extraction...");
+      extractAttempts++;
       try {
         const pwEvents = await extractEventsFromContent(pwContent, source);
         if (pwEvents.length > 0) {
           events = pwEvents;
         }
       } catch (err) {
-        console.warn(`[SPAAdapter] Post-Playwright extraction error: ${(err as Error).message}`);
+        extractFailures++;
+        lastExtractError = err instanceof Error ? err.message : String(err);
+        console.warn(`[SPAAdapter] Post-Playwright extraction error: ${lastExtractError}`);
       }
     }
   }
 
   console.log(`[SPAAdapter] ${events.length} valid EventItem(s) ` + `(escalated=${escalated})`);
 
-  // If nothing worked at all, throw so callers can record the failure
-  if (!content && !escalated) {
+  // Source Adapter contract (CONTEXT.md): no transport returned content → throw.
+  if (!content && !pwContent) {
     throw new Error(
-      `[SPAAdapter] Failed to fetch ${url} — ` +
+      `[SPAAdapter] ${source.id}: no content from any transport for ${url} — ` +
         `tiers attempted: ${scrapeResult.tiersAttempted.join(",")} — ` +
-        `error: ${scrapeResult.error ?? "no content returned"}`,
+        `error: ${scrapeResult.error ?? "no content returned"}; Playwright returned no content`,
+    );
+  }
+  // Every extraction attempt threw → throw with the last error, never a silent [].
+  if (extractAttempts > 0 && extractFailures === extractAttempts) {
+    throw new Error(
+      `[SPAAdapter] ${source.id}: every extraction attempt failed for ${url} ` +
+        `(${extractFailures}/${extractAttempts}): ${lastExtractError}`,
     );
   }
 
@@ -930,7 +960,13 @@ export async function fetchSPAEventsWithPageFn(
     try {
       pageEvents = await pageFn(pageUrl, source);
     } catch (err) {
-      console.warn(`[SPAAdapter] page ${p} failed: ${(err as Error).message} — stopping pagination`);
+      // Source Adapter contract: the first page failing fails the source;
+      // a later page failing stops pagination and keeps the earlier pages.
+      if (pagesFetched === 0) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[SPAAdapter] page ${p} failed: ${message} — stopping pagination, keeping ${all.length} event(s) from earlier pages`,
+      );
       break;
     }
     pagesFetched++;
@@ -1003,47 +1039,4 @@ export async function fetchSPAEventsWithPageFn(
  */
 export async function fetchSPAEvents(source: EventSource): Promise<EventItem[]> {
   return fetchSPAEventsWithPageFn(source, (url, src) => fetchEventsForUrl(url, src));
-}
-
-// ============================================================================
-// Script entry point — live test
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("SPAAdapter.ts") || process.argv[1].endsWith("SPAAdapter"));
-
-if (IS_SCRIPT) {
-  const sourcesPath = new URL("../sources.json", import.meta.url).pathname;
-  const { readFileSync } = await import("node:fs");
-  const { z } = await import("zod");
-  const { EventSourceSchema } = await import("../types.ts");
-
-  const sources = z.array(EventSourceSchema).parse(JSON.parse(readFileSync(sourcesPath, "utf-8")));
-
-  const spaSources = sources.filter((s) => s.fetchTier === "spa" && s.enabled);
-  if (spaSources.length === 0) {
-    console.error("No enabled SPA sources found in sources.json");
-    process.exit(1);
-  }
-
-  const source = spaSources[0]!;
-  console.log(`\nEventScout — SPA Adapter Live Test\nSource: ${source.id} (${source.url})\n`);
-
-  try {
-    const events = await fetchSPAEvents(source);
-    console.log(`\nExtracted ${events.length} event(s):\n`);
-    for (const ev of events.slice(0, 5)) {
-      console.log(`  - ${ev.title}`);
-      console.log(`    start: ${ev.startDatetime}`);
-      if (ev.venue) console.log(`    venue: ${ev.venue}`);
-      if (ev.ticketUrl) console.log(`    tickets: ${ev.ticketUrl}`);
-      console.log();
-    }
-    if (events.length > 5) console.log(`  ... and ${events.length - 5} more.`);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

@@ -27,7 +27,7 @@
  * runner. fetchNineteenHzEvents() returns EventItem[]; it does NOT write cache.
  */
 
-import type { EventItem, EventSource } from "../types.ts";
+import type { EventItem, EventSource, QueryContext } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso, utcMsToLaParts } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
 
@@ -87,8 +87,8 @@ export interface NineteenHzRow {
   linksHtml: string;
   /**
    * "2026-08-21" (from the dated table's shrink div), or null for the
-   * recurring-weeklies table (6 cells, no date column) — resolved to the
-   * next occurrence by mapRowToItem.
+   * recurring-weeklies table — resolved to the next occurrence by mapRowToItem.
+   * A six-cell dated row can instead use its matching explicit primary-URL date.
    */
   date: string | null;
 }
@@ -105,11 +105,40 @@ function stripTags(html: string): string {
     .trim();
 }
 
+function dateFromPrimaryUrl(dayTime: string, eventHtml: string): string | null {
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const visible = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat):\s*([A-Za-z]{3})\s+(\d{1,2})(?=\s*\(|$)/i.exec(stripTags(dayTime));
+  const url = parseEventCell(eventHtml)?.url;
+  if (!visible || !url) return null;
+  const [, visibleWeekday, visibleMonth, visibleDay] = visible;
+  if (!visibleWeekday || !visibleMonth || !visibleDay) return null;
+  let path: string;
+  try {
+    path = decodeURIComponent(new URL(url).pathname);
+  } catch {
+    return null;
+  }
+  const dates = [...path.matchAll(/(?:^|[^a-z0-9])(?:(\d{1,2})[-_]([a-z]{3})[-_](\d{4})|(\d{4})[-_](\d{2})[-_](\d{2}))(?=$|[^a-z0-9])/gi)];
+  if (dates.length !== 1) return null;
+  const match = dates[0];
+  const year = match?.[3] ?? match?.[4];
+  if (!match || !year) return null;
+  const month = match[2] ? months.indexOf(match[2].toLowerCase()) + 1 : Number(match[5]);
+  const day = Number(match[1] ?? match[6]);
+  const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const parsed = new Date(`${date}T12:00:00Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return null;
+  if (month !== months.indexOf(visibleMonth.toLowerCase()) + 1 || day !== Number(visibleDay)) return null;
+  const weekday = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][parsed.getUTCDay()];
+  return weekday === visibleWeekday.toLowerCase() ? date : null;
+}
+
 /**
  * Split the page into row objects. Tolerant of the site's unclosed td in the
  * event cell: cells are delimited by `<td` openings, never by closing tags.
  * 7 cells = the dated listing tables (last cell holds a full YYYY/MM/DD);
- * 6 cells = the recurring-weeklies table (no date column) → date: null.
+ * Six-cell dated rows require matching visible and primary-URL date evidence.
+ * Recurring-weekly rows have no date column → date: null.
  * Anything else (headers, separators) is skipped.
  */
 export function parseRows(html: string): NineteenHzRow[] {
@@ -122,20 +151,24 @@ export function parseRows(html: string): NineteenHzRow[] {
       .slice(1)
       .map((c) => c.replace(/<\/td>.*$/is, "").trim());
     if (cells.length !== 7 && cells.length !== 6) continue;
+    const [dayTime, eventHtml, genres, priceAge, organizer, linksHtml, dateCell] = cells;
+    if (dayTime === undefined || eventHtml === undefined || genres === undefined || priceAge === undefined || organizer === undefined || linksHtml === undefined) continue;
 
     let date: string | null = null;
     if (cells.length === 7) {
-      const dateMatch = /(\d{4})\/(\d{2})\/(\d{2})/.exec(cells[6]!);
+      const dateMatch = /(\d{4})\/(\d{2})\/(\d{2})/.exec(dateCell ?? "");
       if (!dateMatch) continue;
       date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    } else {
+      date = dateFromPrimaryUrl(dayTime, eventHtml);
     }
     rows.push({
-      dayTime: cells[0]!,
-      eventHtml: cells[1]!,
-      genres: stripTags(cells[2]!),
-      priceAge: stripTags(cells[3]!),
-      organizer: stripTags(cells[4]!),
-      linksHtml: cells[5]!,
+      dayTime,
+      eventHtml,
+      genres: stripTags(genres),
+      priceAge: stripTags(priceAge),
+      organizer: stripTags(organizer),
+      linksHtml,
       date,
     });
   }
@@ -177,9 +210,9 @@ export function nextOccurrenceDate(dayLabel: string, todayIso: string): string |
   }
 
   const nth = parseInt(m[1], 10);
-  // Check this month, then up to 2 more (a missing 5th occurrence rolls on).
+  // A missing fifth weekday can require more than three months.
   let [year, month] = [parseInt(todayIso.slice(0, 4), 10), parseInt(todayIso.slice(5, 7), 10)];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 12; i++) {
     const first = `${year}-${String(month).padStart(2, "0")}-01`;
     const offsetToWeekday = (weekday - isoWeekday(first) + 7) % 7;
     const candidate = isoAddDays(first, offsetToWeekday + (nth - 1) * 7);
@@ -223,15 +256,17 @@ export function parsePriceAge(priceAge: string): {
   priceMin?: number;
   priceMax?: number;
   ageTag?: string;
+  admissionNote?: string;
 } {
   // No trailing \b — a word boundary can never match right after the "+"
   // (both neighbors are non-word characters), so "21+" would never be caught.
   const age = /\b(\d{2}\+|all ages)/i.exec(priceAge);
   const ageTag = age ? age[1]!.toLowerCase() : undefined;
   const pricePart = priceAge.split("|")[0]!.trim();
-  const out: { isFree: boolean; priceMin?: number; priceMax?: number; ageTag?: string } = {
-    isFree: /\bfree\b/i.test(pricePart),
+  const out: { isFree: boolean; priceMin?: number; priceMax?: number; ageTag?: string; admissionNote?: string } = {
+    isFree: /^free$/i.test(pricePart),
   };
+  if (!out.isFree && /\bfree\b/i.test(pricePart)) out.admissionNote = pricePart;
   if (ageTag) out.ageTag = ageTag;
   const m = /\$\s*([\d,]+(?:\.\d+)?)(?:\s*[-–]\s*\$?\s*([\d,]+(?:\.\d+)?))?/.exec(pricePart);
   if (m) {
@@ -304,7 +339,7 @@ export function mapRowToItem(
     .split(",")
     .map((g) => g.trim().toLowerCase())
     .filter(Boolean);
-  const { isFree, priceMin, priceMax, ageTag } = parsePriceAge(row.priceAge);
+  const { isFree, priceMin, priceMax, ageTag, admissionNote } = parsePriceAge(row.priceAge);
 
   const tags = ["electronic", "nightlife", "19hz", ...genres];
   if (ageTag) tags.push(ageTag);
@@ -338,12 +373,55 @@ export function mapRowToItem(
     item.currency = "USD";
   }
   if (priceMax !== undefined) item.priceMax = priceMax;
+  if (admissionNote) item.admissionNote = admissionNote;
+  if (recurring) item.recurrenceRule = stripTags(row.dayTime);
 
   const descParts: string[] = [];
   if (recurring) descParts.push(`Recurring: ${stripTags(row.dayTime)}`);
   if (row.organizer) descParts.push(`Presented by ${row.organizer}`);
   if (descParts.length > 0) item.description = descParts.join(". ").slice(0, 300);
   return item;
+}
+
+export function projectNineteenHzOccurrences(
+  events: EventItem[],
+  window: QueryContext["window"]
+): EventItem[] {
+  const startMs = Date.parse(window.start);
+  const endMs = Date.parse(window.end);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return events;
+  const firstDate = isoAddDays(utcIsoToLaIso(new Date(startMs).toISOString()).slice(0, 10), -1);
+  const lastDate = utcIsoToLaIso(new Date(endMs).toISOString()).slice(0, 10);
+  const projected = [...events];
+  const seen = new Set(events.map(event => event.id));
+  for (const event of events) {
+    if (!event.recurrenceRule || !event.tags.includes("19hz")) continue;
+    const seedMs = Date.parse(event.startDatetime);
+    if (!Number.isFinite(seedMs)) continue;
+    const seedDate = utcIsoToLaIso(new Date(seedMs).toISOString()).slice(0, 10);
+    const time = parseTimeRange(event.recurrenceRule);
+    // biome-ignore lint/complexity/useMathMinMax: string (ISO date) compare, not numbers
+    let date = nextOccurrenceDate(event.recurrenceRule, firstDate > seedDate ? firstDate : seedDate);
+    while (date && date <= lastDate) {
+      const startDatetime = laIso(date, time?.start.hour ?? 0, time?.start.minute ?? 0);
+      let endDatetime: string | undefined;
+      if (time?.end) {
+        const crossesMidnight = time.end.hour < time.start.hour ||
+          (time.end.hour === time.start.hour && time.end.minute <= time.start.minute);
+        endDatetime = laIso(crossesMidnight ? isoAddDays(date, 1) : date, time.end.hour, time.end.minute);
+      }
+      const occurrenceStart = Date.parse(startDatetime);
+      const overlapsWindow = occurrenceStart >= startMs ||
+        (endDatetime !== undefined && Date.parse(endDatetime) > startMs);
+      const id = stableId(event.title, startDatetime, event.venue ?? "");
+      if (occurrenceStart <= endMs && overlapsWindow && !seen.has(id)) {
+        projected.push({ ...event, id, startDatetime, endDatetime });
+        seen.add(id);
+      }
+      date = nextOccurrenceDate(event.recurrenceRule, isoAddDays(date, 1));
+    }
+  }
+  return projected;
 }
 
 // ============================================================================

@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * ICSAdapter.ts — Generic ICS/iCal adapter for EventScout.
  *
@@ -15,19 +14,17 @@
  *   mapVeventToItem(occ, source) — pure mapper, unit-testable
  *   fetchICSEvents(source)  — network-enabled fetcher
  *
- * Script mode:
- *   bun .../ICSAdapter.ts <icsUrl>
+ * Live probe:
+ *   bun Tools/Ingest.ts --source <id>
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import ical, { expandRecurringEvent } from "node-ical";
 import type { VEvent } from "node-ical";
 // cross-skill-allowed: shared Tier-4 spend breaker (T2-11)
 import { Tier4Breaker } from "../../../../Data/BrightData/Tools/Tier4Breaker.ts";
 import type { EventItem, EventSource } from "../types.ts";
-import { utcIsoToLaIso } from "../lib/tz.ts";
-import { getKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { laDateIso, utcIsoToLaIso } from "../lib/tz.ts";
+import { requireSecret } from "../../../../../lib/core/Secrets.ts";
 import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
@@ -42,6 +39,9 @@ export interface VeventOccurrence {
   location?: string;
   description?: string;
   url?: string;
+  coordinates?: { lat: number; lng: number };
+  recurrenceRule?: string;
+  recurrenceOverride?: boolean;
 }
 
 // ============================================================================
@@ -73,6 +73,20 @@ function extractString(v: unknown): string {
     if (typeof obj.val === "string") return obj.val;
   }
   return "";
+}
+
+function coordinatePair(lat: unknown, lng: unknown): { lat: number; lng: number } | undefined {
+  if (typeof lat !== "number" || !Number.isFinite(lat) || Math.abs(lat) > 90
+    || typeof lng !== "number" || !Number.isFinite(lng) || Math.abs(lng) > 180) return undefined;
+  return { lat, lng };
+}
+
+function appleCoordinates(event: VEvent): { lat: number; lng: number } | undefined {
+  // Native GEO coercion discards invalid lexical values and duplicate evidence.
+  if ("geo" in event) return undefined;
+  const value = extractString(event["APPLE-STRUCTURED-LOCATION"]).trim();
+  const match = /^geo:([+-]?(?:\d+(?:\.\d+)?|\.\d+)),([+-]?(?:\d+(?:\.\d+)?|\.\d+))$/i.exec(value);
+  return match ? coordinatePair(Number(match[1]), Number(match[2])) : undefined;
 }
 
 /**
@@ -113,15 +127,22 @@ export function mapVeventToItem(occ: VeventOccurrence, source: EventSource): Eve
     throw new Error("[ICSAdapter] mapVeventToItem: summary is empty");
   }
 
-  const startDatetime = utcIsoToLaIso(occ.start.toISOString());
-  const endDatetime = occ.end != null ? utcIsoToLaIso(occ.end.toISOString()) : undefined;
+  const allDay = "dateOnly" in occ.start && occ.start.dateOnly === true;
+  const dateOnlyStart = (date: Date): string => laDateIso(date.getFullYear(), date.getMonth() + 1, date.getDate(), 0, 0, 0);
+  const startDatetime = allDay ? dateOnlyStart(occ.start) : utcIsoToLaIso(occ.start.toISOString());
+  // Native DATE values use calendar components; RFC 5545 DTEND is exclusive.
+  const endDatetime = occ.end == null ? undefined : allDay && "dateOnly" in occ.end && occ.end.dateOnly === true
+    ? utcIsoToLaIso(new Date(Date.parse(dateOnlyStart(occ.end)) - 1000).toISOString())
+    : utcIsoToLaIso(occ.end.toISOString());
   const venue = occ.location?.trim() || undefined;
   const ticketUrl = occ.url || undefined;
+  const coordinates = coordinatePair(occ.coordinates?.lat, occ.coordinates?.lng);
 
   let description: string | undefined;
+  let sourceDescription: string | undefined;
   if (occ.description) {
-    const stripped = stripHtml(occ.description).slice(0, 500);
-    description = stripped || undefined;
+    sourceDescription = stripHtml(occ.description) || undefined;
+    description = sourceDescription?.slice(0, 500);
   }
 
   const sourceUrl = occ.url || source.url;
@@ -131,8 +152,9 @@ export function mapVeventToItem(occ: VeventOccurrence, source: EventSource): Eve
     title,
     startDatetime,
     endDatetime,
-    allDay: false,
+    allDay,
     venue,
+    ...coordinates,
     category: source.categoryHint ?? "other",
     tags: [],
     isFree: false,
@@ -140,6 +162,9 @@ export function mapVeventToItem(occ: VeventOccurrence, source: EventSource): Eve
     sourceUrl,
     sources: [{ sourceId: source.id, url: occ.url || source.url }],
     description,
+    sourceDescription,
+    recurrenceRule: occ.recurrenceRule,
+    recurrenceOverride: occ.recurrenceOverride,
     fetchedAt: new Date().toISOString(),
     status: "scheduled",
   };
@@ -155,11 +180,13 @@ function extractOccurrences(event: VEvent, now: Date, horizon: Date): VeventOccu
   const rawLocation = extractString(event.location);
   const rawDescription = extractString(event.description);
   const url = typeof event.url === "string" ? event.url : undefined;
+  const coordinates = appleCoordinates(event);
 
   const duration = event.start != null && event.end != null ? event.end.getTime() - event.start.getTime() : 0;
 
   // Recurring event: use expandRecurringEvent (handles exdate + recurrence overrides)
   if (event.rrule != null) {
+    const recurrenceRule = event.rrule.toString().split(/\r?\n/).find(line => line.startsWith("RRULE:"));
     const instances = expandRecurringEvent(event, {
       from: now,
       to: horizon,
@@ -176,9 +203,18 @@ function extractOccurrences(event: VEvent, now: Date, horizon: Date): VeventOccu
       // Use override's summary/location/description if available
       const instSummary = extractString(inst.summary) || rawSummary;
       const instEvent = inst.event;
-      const instLocation = extractString(instEvent.location) || rawLocation;
-      const instDescription = extractString(instEvent.description) || rawDescription;
-      const instUrl = typeof instEvent.url === "string" ? instEvent.url : url;
+      const instLocation =
+        extractString(instEvent.location) || rawLocation;
+      const instDescription =
+        extractString(instEvent.description) || rawDescription;
+      const instUrl =
+        typeof instEvent.url === "string" ? instEvent.url : url;
+      const hasOwnCoordinates = "geo" in instEvent || "APPLE-STRUCTURED-LOCATION" in instEvent;
+      const ownLocation = extractString(instEvent.location).trim();
+      const inheritsLocation = !("location" in instEvent)
+        || (ownLocation !== "" && ownLocation === rawLocation.trim());
+      const instCoordinates = hasOwnCoordinates ? appleCoordinates(instEvent)
+        : inheritsLocation ? coordinates : undefined;
 
       // Compute end from duration if inst.end is not meaningful
       const instEnd =
@@ -196,6 +232,9 @@ function extractOccurrences(event: VEvent, now: Date, horizon: Date): VeventOccu
         location: instLocation || undefined,
         description: instDescription || undefined,
         url: instUrl,
+        coordinates: instCoordinates,
+        recurrenceRule,
+        recurrenceOverride: inst.isOverride || undefined,
       });
     }
     return occs;
@@ -215,6 +254,7 @@ function extractOccurrences(event: VEvent, now: Date, horizon: Date): VeventOccu
       location: rawLocation || undefined,
       description: rawDescription || undefined,
       url,
+      coordinates,
     },
   ];
 }
@@ -265,42 +305,15 @@ const BRIGHTDATA_UNLOCKER_ENDPOINT = "https://api.brightdata.com/request";
 const BRIGHTDATA_UNLOCKER_ZONE = "mcp_unlocker";
 
 /**
- * Read BRIGHTDATA_API_TOKEN from `<KAYA_HOME>/secrets.json` (defaults to `~/.claude`).
- *
- * Mirrors `loadApifyToken()` in ApifyAdapter — reads at call time (no caching).
- * Throws a clear error when the file is missing/malformed or the token is absent.
- */
-export function loadBrightDataToken(): string {
-  const secretsPath = join(getKayaHome(), "secrets.json");
-  if (!existsSync(secretsPath)) {
-    throw new Error(
-      `[ICSAdapter] secrets.json not found at ${secretsPath}. ` +
-        `Add BRIGHTDATA_API_TOKEN to that file to fetch unblock:true sources.`,
-    );
-  }
-  let secrets: Record<string, unknown>;
-  try {
-    secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-  } catch (err) {
-    throw new Error(`[ICSAdapter] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`);
-  }
-  const token = secrets["BRIGHTDATA_API_TOKEN"];
-  if (typeof token !== "string" || token.trim() === "") {
-    throw new Error(
-      `[ICSAdapter] BRIGHTDATA_API_TOKEN is missing or empty in ${secretsPath}. ` +
-        `Set it to your Bright Data API token to fetch unblock:true sources.`,
-    );
-  }
-  return token.trim();
-}
-
-/**
  * Fetch raw ICS text through the Bright Data Web Unlocker REST API, with the
  * same bounded linear-backoff retry as the plain path. Used for feeds whose
  * WAF rejects datacenter fetch/curl (e.g. Songkick per-user calendars → 406).
  */
 async function fetchICSTextViaUnblocker(url: string, attempts = 3, deps: ICSFetchDeps = {}): Promise<string> {
-  const token = loadBrightDataToken();
+  const token = requireSecret(
+    "BRIGHTDATA_API_TOKEN",
+    "Set it to your Bright Data API token to fetch unblock:true sources.",
+  ).trim();
   const breaker = deps.breaker ?? new Tier4Breaker();
   const domain = new URL(url).hostname;
   let lastErr: unknown;
@@ -402,46 +415,4 @@ export async function fetchICSEvents(source: EventSource, deps: ICSFetchDeps = {
   }
 
   return deduped;
-}
-
-// ============================================================================
-// Script entry point
-// ============================================================================
-
-const IS_SCRIPT =
-  typeof process !== "undefined" &&
-  process.argv[1] != null &&
-  (process.argv[1].endsWith("ICSAdapter.ts") || process.argv[1].endsWith("ICSAdapter"));
-
-if (IS_SCRIPT) {
-  const icsUrl = process.argv[2];
-  if (!icsUrl) {
-    console.error("Usage: bun ICSAdapter.ts <icsUrl>");
-    process.exit(1);
-  }
-
-  const source: EventSource = {
-    id: "ics-adhoc",
-    url: icsUrl,
-    name: "Ad-hoc ICS",
-    fetchTier: "ics",
-    pollInterval: 720,
-    enabled: true,
-  };
-
-  try {
-    console.log(`\nFetching ICS feed: ${icsUrl}\n`);
-    const events = await fetchICSEvents(source);
-    console.log(`Found ${events.length} upcoming event(s) (next ${expandHorizonDays} days):\n`);
-    for (const e of events.slice(0, 10)) {
-      console.log(`  [${e.startDatetime}] ${e.title} — ${e.venue ?? "no venue"}`);
-    }
-    if (events.length > 10) {
-      console.log(`  ... and ${events.length - 10} more`);
-    }
-    process.exit(0);
-  } catch (err) {
-    console.error(`FATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
 }

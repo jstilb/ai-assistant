@@ -5,7 +5,9 @@
  *
  * Applies all active hard constraints from the QueryContext (the agent-resolved,
  * structured query intake — see types.ts):
- *   - window:    startDatetime in [window.start, window.end] (inclusive day bounds).
+ *   - window:    explicit intervals overlap [window.start, window.end]. Timed
+ *                ends are exclusive; all-day ends are inclusive. Missing or
+ *                invalid intervals retain starts-within behavior.
  *                Always active — QueryContext.window is never undefined (the CLI
  *                defaults it to the next 14 days when --from/--to are omitted).
  *   - home/radiusMiles: haversine miles from c.home to event ≤ radiusMiles.
@@ -30,6 +32,7 @@
 import type { EventItem, QueryContext } from "./types.ts";
 import { utcMsToLaParts } from "./lib/tz.ts";
 import { haversineMiles } from "./lib/geo.ts";
+import { parseIsoDateStrict } from "./Window.ts";
 
 // ============================================================================
 // TimeOfDay band check
@@ -74,7 +77,10 @@ function inTimeOfDayBand(startDatetime: string, band: TimeOfDay): boolean {
  * Result is sorted by startDatetime ascending.
  */
 export function filterEvents(events: EventItem[], c: QueryContext): EventItem[] {
-  let result = events;
+  // ---- cancelled filter ---------------------------------------------------
+  // Only the explicit source status "cancelled" removes an event. Other or
+  // unknown statuses, and text that mentions cancellation, stay in.
+  let result = events.filter((e) => e.status !== "cancelled");
 
   // ---- window filter --------------------------------------------------------
   // Always active — QueryContext.window is never undefined (cli.ts defaults it
@@ -84,7 +90,16 @@ export function filterEvents(events: EventItem[], c: QueryContext): EventItem[] 
     const windowEnd = new Date(c.window.end).getTime();
     result = result.filter((e) => {
       const t = new Date(e.startDatetime).getTime();
-      return t >= windowStart && t <= windowEnd;
+      if (t >= windowStart && t <= windowEnd) return true;
+      if (!Number.isFinite(t) || t > windowEnd || !e.endDatetime) return false;
+      try {
+        parseIsoDateStrict(e.endDatetime.slice(0, 10));
+      } catch {
+        return false;
+      }
+      const end = new Date(e.endDatetime).getTime();
+      if (!Number.isFinite(end) || end <= t) return false;
+      return e.allDay ? end >= windowStart : end > windowStart;
     });
   }
 

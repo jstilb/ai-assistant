@@ -18,8 +18,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { EventItemSchema, EventCacheSchema, DEFAULT_CACHE_PATH } from "./types.ts";
 import type { EventItem, EventCache } from "./types.ts";
-import { dedupeAndMerge } from "./Dedup.ts";
-import { loadApiTierSourceIds } from "./SourceManager.ts";
+import { calendarDay, dedupeAndMerge } from "./Dedup.ts";
+import { loadSources } from "./SourceManager.ts";
 
 // ============================================================================
 // Internal helpers
@@ -184,9 +184,165 @@ export function upsertEvents(incoming: EventItem[]): void {
  * after the afternoon prefetch.
  */
 export function upsertEventsDeduped(incoming: EventItem[]): void {
+  const sources = loadSources();
+  const apiTierSourceIds = new Set(sources.filter((s) => s.fetchTier === "api").map((s) => s.id));
+  const icsSourceIds = new Set(sources.filter((s) => s.fetchTier === "ics").map((s) => s.id));
+
+  // Superseded rows go BEFORE the id upsert and the whole-cache dedup: once a
+  // stale row sits next to its fresh twin, dedupeAndMerge can merge them with
+  // the stale time winning (2026-11-08: a weekly demonstration moved
+  // 14:00 → 13:30 on its source; the table kept 14:00 on 5 future dates).
+  const cached = readEvents();
+  const superseded = supersededRowIds(cached, incoming, icsSourceIds);
+  if (superseded.ids.size > 0) {
+    writeEvents(cached.filter((e) => !superseded.ids.has(e.id)));
+    console.log(
+      `[cache] dropped ${superseded.ids.size} superseded row(s): ${superseded.sameDay} same-day (newest fetch wins), ` +
+        `${superseded.leftFeed} left an ICS feed`,
+    );
+  }
+
   upsertEvents(incoming);
-  writeEvents(dedupeAndMerge(readEvents(), loadApiTierSourceIds()));
+  writeEvents(dedupeAndMerge(readEvents(), apiTierSourceIds));
   pruneExpired(new Date(Date.now() - PRUNE_GRACE_MS));
 }
 
 const PRUNE_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export interface SupersededRows {
+  ids: Set<string>;
+  /** Dropped by rule 1: the source re-listed the same title on the same LA day at another time. */
+  sameDay: number;
+  /** Dropped by rule 2: an ICS feed returned events through a later date, but not this one. */
+  leftFeed: number;
+}
+
+/**
+ * A row not seen for this long while its source re-lists the same title that
+ * day is stale (Kaya's heuristic, 2026-11-08): a daily prefetch that misses one
+ * session 7 runs in a row is not a chance miss.
+ */
+const STALE_ROW_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * ICSAdapter's MAX_EVENTS_SAFETY: a feed that hits it is truncated in feed
+ * order, so its latest start does not bound what it covered (rule 2 skips it).
+ * tests/cache.test.ts pins this to the adapter's constant.
+ */
+export const ICS_FEED_CAP = 3000;
+
+/** Lowercase letters and digits of any script — the same-source title match for rule 1. */
+function titleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** "<sourceId>|<title>|<LA day>", or null when the title has no letters or digits. */
+function sessionKey(sourceId: string, event: EventItem): string | null {
+  const title = titleKey(event.title);
+  return title === "" ? null : `${sourceId}|${title}|${calendarDay(event.startDatetime)}`;
+}
+
+function addStart(map: Map<string, Set<number>>, key: string, startMs: number): void {
+  let starts = map.get(key);
+  if (!starts) {
+    starts = new Set<number>();
+    map.set(key, starts);
+  }
+  starts.add(startMs);
+}
+
+/**
+ * Cached rows that this run's fetch makes stale (pure; no I/O).
+ *
+ * A cached row is a candidate only when ONE source lists it, it starts after
+ * `now`, and this run did not return its id. Rows of a source that failed or
+ * returned 0 events never qualify (the source is absent from `incoming`), and a
+ * row another source also lists keeps that source's independent evidence.
+ *
+ * Rule 1 (every source) — the session moved: the row's source re-listed the
+ * same title on the same LA day this run, AND either it lists at least as many
+ * start times that day as the cache holds (a moved time keeps the count), or
+ * the row was last fetched ≥ 7 days ago. A scraped source that returns only one
+ * of two real sessions (fewer times than the cache holds) keeps the other row.
+ *
+ * Rule 2 (ICS feeds only) — the event left the feed: the source returned events
+ * through a date at or after this row's start, but not this row. A calendar
+ * feed lists every event, so absence means cancelled or moved. Not applied to
+ * LLM/scrape tiers: their runs miss events by chance (2026-11-08 live cache:
+ * eventbrite-sd alone had 328 future rows its latest run did not return).
+ */
+export function supersededRowIds(
+  cached: readonly EventItem[],
+  incoming: readonly EventItem[],
+  icsSourceIds: ReadonlySet<string>,
+  now: Date = new Date(),
+): SupersededRows {
+  const incomingIds = new Set<string>();
+  const freshStarts = new Map<string, Set<number>>();
+  const incomingCount = new Map<string, number>();
+  const icsLatestStartMs = new Map<string, number>();
+
+  for (const event of incoming) {
+    incomingIds.add(event.id);
+    const startMs = new Date(event.startDatetime).getTime();
+    for (const sourceId of new Set(event.sources.map((s) => s.sourceId))) {
+      incomingCount.set(sourceId, (incomingCount.get(sourceId) ?? 0) + 1);
+      if (!Number.isFinite(startMs)) continue;
+      const key = sessionKey(sourceId, event);
+      if (key !== null) addStart(freshStarts, key, startMs);
+      if (icsSourceIds.has(sourceId)) {
+        icsLatestStartMs.set(sourceId, Math.max(icsLatestStartMs.get(sourceId) ?? -Infinity, startMs));
+      }
+    }
+  }
+
+  // Start times the cache holds per session key (only keys this run re-listed).
+  const cachedStarts = new Map<string, Set<number>>();
+  for (const row of cached) {
+    const startMs = new Date(row.startDatetime).getTime();
+    if (!Number.isFinite(startMs)) continue;
+    for (const sourceId of new Set(row.sources.map((s) => s.sourceId))) {
+      const key = sessionKey(sourceId, row);
+      if (key !== null && freshStarts.has(key)) addStart(cachedStarts, key, startMs);
+    }
+  }
+
+  const result: SupersededRows = { ids: new Set<string>(), sameDay: 0, leftFeed: 0 };
+  const nowMs = now.getTime();
+
+  for (const row of cached) {
+    if (incomingIds.has(row.id)) continue;
+    const rowSourceIds = new Set(row.sources.map((s) => s.sourceId));
+    if (rowSourceIds.size !== 1) continue;
+    const [sourceId] = rowSourceIds;
+    if (sourceId === undefined) continue;
+    const startMs = new Date(row.startDatetime).getTime();
+    if (!Number.isFinite(startMs) || startMs <= nowMs) continue;
+    const returned = incomingCount.get(sourceId) ?? 0;
+    if (returned === 0) continue; // the source failed or returned nothing this run
+
+    const key = sessionKey(sourceId, row);
+    const fresh = key === null ? undefined : freshStarts.get(key);
+    if (key !== null && fresh) {
+      const held = cachedStarts.get(key)?.size ?? 0;
+      const fetchedMs = new Date(row.fetchedAt).getTime();
+      const old = Number.isFinite(fetchedMs) && nowMs - fetchedMs >= STALE_ROW_AGE_MS;
+      if (fresh.size >= held || old) {
+        result.ids.add(row.id);
+        result.sameDay++;
+        continue;
+      }
+    }
+
+    const latestMs = icsLatestStartMs.get(sourceId);
+    if (latestMs !== undefined && returned < ICS_FEED_CAP && startMs <= latestMs) {
+      result.ids.add(row.id);
+      result.leftFeed++;
+    }
+  }
+
+  return result;
+}

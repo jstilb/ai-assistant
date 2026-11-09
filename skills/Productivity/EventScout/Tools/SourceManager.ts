@@ -93,7 +93,7 @@ export function loadSources(): EventSource[] {
  * Dedup.ts's `apiTierSourceIds` param needs to exempt structured api-tier
  * events from fuzzy merge (2026-07-10 remedy, option (a)). Reads sources.json
  * fresh each call (same freshness contract as loadSources()); callers that
- * already have an EventSource[] in hand (e.g. Ingest.ts's ingestAllCore,
+ * already have an EventSource[] in hand (e.g. Ingest.ts's ingestAll,
  * which may run against an injected test list rather than the on-disk file)
  * should filter that list directly instead of calling this.
  */

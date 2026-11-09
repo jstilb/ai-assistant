@@ -7,7 +7,7 @@
  *     Keeps past events (not horizon's job). Keeps unparseable startDatetime.
  *   - horizonDays: reads EVENTSCOUT_HORIZON_DAYS, defaults to 120.
  *     NaN / 0 / negative all fall back to 120.
- *   - Integration: via ingestAllWithAdapters, far-future events are NOT
+ *   - Integration: via ingestAll({ adapterFor }), far-future events are NOT
  *     returned/written after the horizon filter is applied in ingestSource.
  *
  * Run:
@@ -16,8 +16,8 @@
 
 import { test } from "bun:test";
 import { withinHorizon, horizonDays } from "../Tools/Horizon.ts";
-import { ingestAllWithAdapters } from "../Tools/Ingest.ts";
-import type { EventItem, EventSource } from "../Tools/types.ts";
+import { ingestAll } from "../Tools/Ingest.ts";
+import type { AdapterResolver, EventItem, EventSource, SourceAdapter } from "../Tools/types.ts";
 
 // ============================================================================
 // Test harness
@@ -49,7 +49,7 @@ function isoOffset(days: number): string {
 
 /**
  * ISO 8601 string for REAL now + offsetDays. Section 3 (integration through
- * ingestAllWithAdapters) MUST use this: Ingest.ts calls
+ * ingestAll) MUST use this: Ingest.ts calls
  * `withinHorizon(events, new Date(), days)` with the real clock, so fixtures
  * anchored to the fixed NOW rot as calendar time advances past it (this
  * exact failure happened: NOW+50d slid inside the real 30-day horizon on
@@ -77,6 +77,20 @@ function makeEvent(startDatetime: string, overrides: Partial<EventItem> = {}): E
     fetchedAt: NOW.toISOString(),
     status: "scheduled",
     ...overrides,
+  };
+}
+
+/** Override that stamps an event with its source id (ingestSource checks identity). */
+function stampedBy(sourceId: string): Partial<EventItem> {
+  return { sources: [{ sourceId, url: `https://example.com/${sourceId}` }] };
+}
+
+/** Fake AdapterResolver: the stub adapter keyed by source id. */
+function fakeResolver(map: Record<string, SourceAdapter>): AdapterResolver {
+  return (source) => {
+    const adapter = map[source.id];
+    if (!adapter) throw new Error(`fakeResolver: no stub for "${source.id}"`);
+    return adapter;
   };
 }
 
@@ -198,7 +212,7 @@ test("2.5: env=-30 → 120", () => {
 });
 
 // ============================================================================
-// Section 3: Integration — ingestAllWithAdapters applies horizon filter
+// Section 3: Integration — ingestAll (via ingestSource) applies horizon filter
 // ============================================================================
 
 test("3.1: far-future events from adapter dropped in result", async () => {
@@ -206,15 +220,16 @@ test("3.1: far-future events from adapter dropped in result", async () => {
   const prevEnv = process.env["EVENTSCOUT_HORIZON_DAYS"];
   delete process.env["EVENTSCOUT_HORIZON_DAYS"];
 
-  const inHorizon = makeEvent(isoOffsetReal(30));
-  const beyondHorizon = makeEvent(isoOffsetReal(200));
+  const inHorizon = makeEvent(isoOffsetReal(30), stampedBy("test-horizon-src"));
+  const beyondHorizon = makeEvent(isoOffsetReal(200), stampedBy("test-horizon-src"));
 
   const sources = [makeSource("test-horizon-src")];
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "test-horizon-src": async () => [inHorizon, beyondHorizon],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
   });
 
@@ -229,16 +244,17 @@ test("3.2: all in-horizon events returned (none dropped incorrectly)", async () 
   const prevEnv = process.env["EVENTSCOUT_HORIZON_DAYS"];
   delete process.env["EVENTSCOUT_HORIZON_DAYS"];
 
-  const e1 = makeEvent(isoOffsetReal(10));
-  const e2 = makeEvent(isoOffsetReal(50));
-  const e3 = makeEvent(isoOffsetReal(90));
+  const e1 = makeEvent(isoOffsetReal(10), stampedBy("all-in-horizon"));
+  const e2 = makeEvent(isoOffsetReal(50), stampedBy("all-in-horizon"));
+  const e3 = makeEvent(isoOffsetReal(90), stampedBy("all-in-horizon"));
 
   const sources = [makeSource("all-in-horizon")];
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "all-in-horizon": async () => [e1, e2, e3],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
   });
 
@@ -252,10 +268,10 @@ test("3.3: multi-source — horizon applied to each independently", async () => 
   const prevEnv = process.env["EVENTSCOUT_HORIZON_DAYS"];
   delete process.env["EVENTSCOUT_HORIZON_DAYS"];
 
-  const srcA_in = makeEvent(isoOffsetReal(5));
-  const srcA_out = makeEvent(isoOffsetReal(180));
-  const srcB_in = makeEvent(isoOffsetReal(45));
-  const srcB_out = makeEvent(isoOffsetReal(300));
+  const srcA_in = makeEvent(isoOffsetReal(5), stampedBy("multi-src-a"));
+  const srcA_out = makeEvent(isoOffsetReal(180), stampedBy("multi-src-a"));
+  const srcB_in = makeEvent(isoOffsetReal(45), stampedBy("multi-src-b"));
+  const srcB_out = makeEvent(isoOffsetReal(300), stampedBy("multi-src-b"));
 
   const sources = [makeSource("multi-src-a"), makeSource("multi-src-b")];
   const adapters: Record<string, () => Promise<EventItem[]>> = {
@@ -263,7 +279,8 @@ test("3.3: multi-source — horizon applied to each independently", async () => 
     "multi-src-b": async () => [srcB_in, srcB_out],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
   });
 
@@ -278,15 +295,16 @@ test("3.4: EVENTSCOUT_HORIZON_DAYS=30 env knob respected in integration", async 
   const prevEnv = process.env["EVENTSCOUT_HORIZON_DAYS"];
   process.env["EVENTSCOUT_HORIZON_DAYS"] = "30";
 
-  const eIn30 = makeEvent(isoOffsetReal(20)); // kept: 20 ≤ 30
-  const eOut30 = makeEvent(isoOffsetReal(50)); // dropped: 50 > 30
+  const eIn30 = makeEvent(isoOffsetReal(20), stampedBy("knob-test-src")); // kept: 20 ≤ 30
+  const eOut30 = makeEvent(isoOffsetReal(50), stampedBy("knob-test-src")); // dropped: 50 > 30
 
   const sources = [makeSource("knob-test-src")];
   const adapters: Record<string, () => Promise<EventItem[]>> = {
     "knob-test-src": async () => [eIn30, eOut30],
   };
 
-  const result = await ingestAllWithAdapters(sources, adapters, {
+  const result = await ingestAll(sources, {
+    adapterFor: fakeResolver(adapters),
     skipCacheWrite: true,
   });
 

@@ -11,7 +11,7 @@ Sources are defined in `Tools/sources.json`. Each entry is an `EventSource`:
 | `id` | string | Unique stable identifier |
 | `url` | string | Canonical page or feed URL |
 | `name` | string | Display name |
-| `fetchTier` | enum | How to fetch: `api \| rss \| ics \| shopify \| spa \| html-llm \| wp-tribe \| evvnt \| apify \| pike13 \| ctycms \| activenet \| dancestudio-pro \| nineteenhz` |
+| `fetchTier` | enum | How to fetch: `api \| rss \| ics \| spa \| html-llm \| wp-tribe \| evvnt \| pike13 \| ctycms \| activenet \| dancestudio-pro \| nineteenhz \| sitemap-llm` |
 | `categoryHint` | Category? | Category most events from this source belong to |
 | `geoHint` | string? | Default neighborhood when events lack an address |
 | `pollInterval` | number | Minutes between refreshes (720 = 12 hours) |

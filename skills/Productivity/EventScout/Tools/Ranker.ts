@@ -23,7 +23,6 @@
  * Testability: pass opts.scoreBatch to inject a deterministic fake scorer.
  */
 
-import { inference } from "../../../../lib/core/Inference.ts";
 import type { InferenceResult } from "../../../../lib/core/Inference.ts";
 import type { EventItem, QueryContext, InterestProfile } from "./types.ts";
 import { loadSources } from "./SourceManager.ts";
@@ -31,6 +30,11 @@ import { utcMsToLaParts } from "./lib/tz.ts";
 import { haversineMiles } from "./lib/geo.ts";
 import { runWithConcurrency } from "./lib/concurrency.ts";
 import { z } from "zod";
+
+const inference: typeof import("../../../../lib/core/Inference.ts").inference = async (options) => {
+  const provider = await import("../../../../lib/core/Inference.ts");
+  return provider.inference(options);
+};
 
 // ============================================================================
 // RankedEvent type

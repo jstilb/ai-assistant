@@ -24,9 +24,7 @@
  * and does NOT write cache.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { defaultKayaHome } from "../../../../../lib/core/KayaHome.ts";
+import { requireSecret } from "../../../../../lib/core/Secrets.ts";
 import type { EventItem } from "../types.ts";
 import { naiveLaToUtcMs, utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
@@ -35,7 +33,7 @@ import { stableId } from "./AdapterUtil.ts";
 // Constants
 // ============================================================================
 
-const SOURCE_ID = "edmtrain-sd";
+export const SOURCE_ID = "edmtrain-sd";
 const API_BASE = "https://edmtrain.com/api";
 const LISTINGS_PAGE_URL = "https://edmtrain.com/san-diego";
 const FETCH_TIMEOUT_MS = 30_000;
@@ -74,35 +72,10 @@ interface EdmtrainResponse<T> {
   message?: string;
 }
 
-// ============================================================================
-// Key loading — EDMTRAIN_API_KEY from ~/.claude/secrets.json
-// ============================================================================
-
-/** Mirrors loadBrightDataToken() in ICSAdapter — read at call time, fail loud. */
-export function loadEdmtrainKey(): string {
-  const secretsPath = join(defaultKayaHome(), "secrets.json");
-  if (!existsSync(secretsPath)) {
-    throw new Error(
-      `[Edmtrain] secrets.json not found at ${secretsPath}. ` +
-        `Add EDMTRAIN_API_KEY (free key: https://edmtrain.com/developer-api).`,
-    );
-  }
-  let secrets: Record<string, unknown>;
-  try {
-    secrets = JSON.parse(readFileSync(secretsPath, "utf-8")) as Record<string, unknown>;
-  } catch (err) {
-    throw new Error(`[Edmtrain] Failed to parse secrets.json at ${secretsPath}: ${(err as Error).message}`);
-  }
-  const key = secrets["EDMTRAIN_API_KEY"];
-  if (typeof key !== "string" || key.trim() === "") {
-    throw new Error(
-      `[Edmtrain] EDMTRAIN_API_KEY is missing or empty in ${secretsPath}. ` +
-        `Sign up for the free key at https://edmtrain.com/developer-api (NEEDS-JM), ` +
-        `then set fetchTier: "api" on the "${SOURCE_ID}" source.`,
-    );
-  }
-  return key.trim();
-}
+/** Fix hint for a missing EDMTRAIN_API_KEY (the key is read at call time via Secrets.ts). */
+const EDMTRAIN_KEY_HINT =
+  `Sign up for the free key at https://edmtrain.com/developer-api (NEEDS-JM), ` +
+  `then set fetchTier: "api" on the "${SOURCE_ID}" source.`;
 
 // ============================================================================
 // Pure mappers
@@ -189,7 +162,7 @@ async function apiGet<T>(path: string, key: string): Promise<T> {
 }
 
 export async function fetchEdmtrainEvents(): Promise<EventItem[]> {
-  const key = loadEdmtrainKey();
+  const key = requireSecret("EDMTRAIN_API_KEY", EDMTRAIN_KEY_HINT).trim();
 
   const locations = await apiGet<Array<{ id: number; city: string | null }>>(
     "/locations?state=california&city=san%20diego",

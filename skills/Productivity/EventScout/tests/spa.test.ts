@@ -20,16 +20,19 @@
  *   bun test skills/Productivity/EventScout/tests/spa.test.ts
  */
 
-import { test } from "bun:test";
+import { test, expect } from "bun:test";
 import {
   normalizeExtracted,
   fetchSPAEventsWithPageFn,
   todayLaDateString,
   buildExtractionSystemPrompt,
+  extractEventsFromContent,
 } from "../Tools/adapters/SPAAdapter.ts";
+import { extractBiblioCommonsEvents } from "../Tools/adapters/BiblioCommons.ts";
 import { EventItemSchema } from "../Tools/types.ts";
 import type { EventSource, EventItem } from "../Tools/types.ts";
 import { utcMsToLaParts } from "../Tools/lib/tz.ts";
+import { defined } from "../../../../lib/test/defined.ts";
 
 // ============================================================================
 // Test harness
@@ -61,6 +64,48 @@ const mockSource: EventSource = {
   pollInterval: 720,
   enabled: true,
 };
+
+const librarySource: EventSource = { ...mockSource, id: "county-library", url: "https://sdcl.bibliocommons.com/v2/events", categoryHint: "community" };
+const libraryId = "694889622c65973d0013cb6e";
+function libraryHtml(description = "Free parking and free resources.", start = "2026-10-30", cancelled = false): string {
+  return `<script data-iso-key="_0" type="application/json">${JSON.stringify({
+    entities: {
+      events: { [libraryId]: { id: libraryId, definition: { title: "Library class", start, end: start, branchLocationId: "36", isCancelled: cancelled, description } } },
+      locations: { "36": { name: "Vista", address: { number: "700", street: "Eucalyptus Avenue", city: "Vista", state: "CA", zip: "92084" }, mapLocation: { timeZone: "America/Los_Angeles", centrePoint: { lat: 33.2, lng: -117.2 } } } },
+    }, events: { eventsSearch: { results: [libraryId], featuredEvent: libraryId } },
+  })}</script>`;
+}
+
+test("BiblioCommons inert state reaches extraction kernel without recurrence expansion", async () => {
+  const events = await extractEventsFromContent(libraryHtml(), librarySource);
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ title: "Library class", startDatetime: "2026-10-30T00:00:00-07:00", endDatetime: "2026-10-30T23:59:59-07:00", allDay: true, venue: "Vista", address: "700 Eucalyptus Avenue, Vista, CA, 92084", lat: 33.2, lng: -117.2, isFree: false });
+  expect(defined(events[0]).priceMin).toBeUndefined();
+  expect(defined(events[0]).ticketUrl).toBe(`https://sdcl.bibliocommons.com/v2/events/${libraryId}`);
+});
+
+test("BiblioCommons preserves explicit free lessons and cancellation", () => {
+  const events = extractBiblioCommonsEvents(libraryHtml("&lt;p&gt;Free English Lessons for Adults&lt;/p&gt;", "2026-10-30", true), librarySource);
+  expect(events?.[0]).toMatchObject({ isFree: true, priceMin: 0, status: "cancelled" });
+});
+
+test("BiblioCommons does not infer admission from benefits or conditional and negated claims", () => {
+  for (const description of ["Free supplies", "Free parking", "Free books", "Free play", "Free resources", "Not free admission", "Free admission for members", "Paid event.\nFree English lessons"]) {
+    const event = extractBiblioCommonsEvents(libraryHtml(description), librarySource)?.[0];
+    expect(event?.isFree).toBe(false);
+    expect(event?.priceMin).toBeUndefined();
+  }
+});
+
+test("BiblioCommons rejects malformed state, missing branches, and impossible dates visibly", async () => {
+  expect(() => extractBiblioCommonsEvents(libraryHtml().replace('"36":{', '"37":{'), librarySource)).toThrow();
+  expect(() => extractBiblioCommonsEvents(libraryHtml("", "2026-02-30"), librarySource)).toThrow("Invalid local date");
+  await expect(extractEventsFromContent('<script type="application/json" data-iso-key="_0">{broken}</script>', librarySource)).rejects.toThrow();
+  expect(extractBiblioCommonsEvents(libraryHtml(), mockSource)).toBeNull();
+  expect(extractBiblioCommonsEvents(libraryHtml(), { ...librarySource, url: "https://other.bibliocommons.com/v2/events" })).toBeNull();
+  expect(extractBiblioCommonsEvents(libraryHtml(), { ...librarySource, url: "https://sdcl.bibliocommons.com/account" })).toBeNull();
+  expect(extractBiblioCommonsEvents("<html></html>", librarySource)).toBeNull();
+});
 
 // ============================================================================
 // Raw input: 2 valid + 1 missing title + 1 bad date
@@ -125,8 +170,8 @@ test("Section 4: sources[] populated from EventSource", () => {
   const items = normalizeExtracted(rawInput, mockSource);
   for (const item of items) {
     assert(item.sources.length >= 1, `"${item.title}" has at least 1 source`);
-    assertEq(item.sources[0]!.sourceId, mockSource.id, `"${item.title}" sources[0].sourceId === "${mockSource.id}"`);
-    assertEq(item.sources[0]!.url, mockSource.url, `"${item.title}" sources[0].url === source.url`);
+    assertEq(defined(item.sources[0]).sourceId, mockSource.id, `"${item.title}" sources[0].sourceId === "${mockSource.id}"`);
+    assertEq(defined(item.sources[0]).url, mockSource.url, `"${item.title}" sources[0].url === source.url`);
   }
 });
 
@@ -144,8 +189,8 @@ test("Section 6: id is non-empty + deterministic", () => {
   const items1 = normalizeExtracted(rawInput, mockSource);
   const items2 = normalizeExtracted(rawInput, mockSource);
   for (let i = 0; i < items1.length; i++) {
-    assert(items1[i]!.id.length > 0, `"${items1[i]!.title}" id is non-empty`);
-    assertEq(items1[i]!.id, items2[i]!.id, `"${items1[i]!.title}" id is deterministic across two calls`);
+    assert(defined(items1[i]).id.length > 0, `"${defined(items1[i]).title}" id is non-empty`);
+    assertEq(defined(items1[i]).id, defined(items2[i]).id, `"${defined(items1[i]).title}" id is deterministic across two calls`);
   }
 });
 
@@ -184,7 +229,7 @@ test("Section 10a: naive datetime → correct LA wall-clock", () => {
   const raw: unknown[] = [{ title: "TZ Test Naive", startDatetime: "2026-06-05T19:00:00", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10a: naive datetime → 1 valid item");
-  const item = items[0]!;
+  const item = defined(items[0]);
   const utcMs = new Date(item.startDatetime).getTime();
   // Must be a valid time
   assert(!Number.isNaN(utcMs), "10a: startDatetime parses as valid Date");
@@ -206,7 +251,7 @@ test("Section 10b: offset-aware datetime → same UTC instant as naive", () => {
   const raw: unknown[] = [{ title: "TZ Test Offset", startDatetime: "2026-06-05T19:00:00-07:00", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10b: offset-aware datetime → 1 valid item");
-  const item = items[0]!;
+  const item = defined(items[0]);
   const utcMs = new Date(item.startDatetime).getTime();
   // 2026-06-05T19:00:00-07:00 = 2026-06-06T02:00:00.000Z
   assertEq(
@@ -223,7 +268,7 @@ test("Section 10c: Z datetime → that exact UTC instant preserved", () => {
   const raw: unknown[] = [{ title: "TZ Test Z", startDatetime: "2026-06-06T02:00:00Z", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10c: Z datetime → 1 valid item");
-  const item = items[0]!;
+  const item = defined(items[0]);
   const utcMs = new Date(item.startDatetime).getTime();
   assertEq(
     new Date(utcMs).toISOString(),
@@ -237,7 +282,7 @@ test("Section 10d: date-only input → LA local midnight", () => {
   const raw: unknown[] = [{ title: "TZ Test DateOnly", startDatetime: "2026-06-05", isFree: false }];
   const items = normalizeExtracted(raw, mockSource);
   assertEq(items.length, 1, "10d: date-only → 1 valid item");
-  const item = items[0]!;
+  const item = defined(items[0]);
   const utcMs = new Date(item.startDatetime).getTime();
   assert(!Number.isNaN(utcMs), "10d: date-only startDatetime parses as valid Date");
   const la = utcMsToLaParts(utcMs);
@@ -266,7 +311,7 @@ test("Section 10e: naive and offset-aware for same event → identical id (deter
   const aware = normalizeExtracted(rawAware, mockSource);
   assertEq(naive.length, 1, "10e: naive produced exactly 1 item (prerequisite)");
   assertEq(aware.length, 1, "10e: aware produced exactly 1 item (prerequisite)");
-  assertEq(naive[0]!.id, aware[0]!.id, "10e: naive and offset-aware same event → identical stable id");
+  assertEq(defined(naive[0]).id, defined(aware[0]).id, "10e: naive and offset-aware same event → identical stable id");
 });
 
 // ============================================================================
@@ -630,4 +675,55 @@ test("14c: no drops → no drop-related log line (quiet on the happy path)", () 
   }
   const hasDropLog = cap.messages.some((m) => m.toLowerCase().includes("drop"));
   assert(!hasDropLog, `14c: no drop occurred, so no drop log expected — got: ${cap.messages.join(" | ")}`);
+});
+
+// ============================================================================
+// Section 15 — P05 S4: Source Adapter error-mode contract on the paginated path
+// The first page failing fails the source; a later page failing stops
+// pagination and keeps the earlier pages (logged).
+// ============================================================================
+
+test("15a: paginated source, first page fails → rejects with the page error", async () => {
+  let callCount = 0;
+  const pageFn = async (_url: string): Promise<EventItem[]> => {
+    callCount++;
+    throw new Error("p05 page 1 down");
+  };
+  const cap = captureConsole();
+  let caught: unknown;
+  try {
+    await fetchSPAEventsWithPageFn(makePaginatedSource(), pageFn, HORIZON_NOW);
+  } catch (err) {
+    caught = err;
+  } finally {
+    cap.restore();
+  }
+  assert(caught instanceof Error, "15a: first page fails → the source rejects (no silent [])");
+  assert(
+    caught instanceof Error && caught.message.includes("p05 page 1 down"),
+    "15a: the reject keeps the page error",
+  );
+  assertEq(callCount, 1, "15a: no further page is fetched");
+});
+
+test("15b: paginated source, page 2 fails → resolves with page 1's events, logged", async () => {
+  const page1 = [makePaginationEvent("p1-a", futureIso(5)), makePaginationEvent("p1-b", futureIso(6))];
+  let callCount = 0;
+  const pageFn = async (_url: string): Promise<EventItem[]> => {
+    callCount++;
+    if (callCount === 1) return page1;
+    throw new Error("p05 page 2 down");
+  };
+  const cap = captureConsole();
+  let result: EventItem[] = [];
+  try {
+    result = await fetchSPAEventsWithPageFn(makePaginatedSource(), pageFn, HORIZON_NOW);
+  } finally {
+    cap.restore();
+  }
+  assertEq(result.map((e) => e.id).join(","), "p1-a,p1-b", "15b: page 1's events are kept");
+  assert(
+    cap.messages.some((m) => m.includes("p05 page 2 down") && m.includes("stopping pagination")),
+    `15b: the page-2 failure is logged — got: ${cap.messages.join(" | ")}`,
+  );
 });
