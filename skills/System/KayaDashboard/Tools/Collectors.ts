@@ -25,6 +25,8 @@ import { spawnSync } from "node:child_process";
 import { Database } from "bun:sqlite";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { tailFile, listJobs, type Job } from "./Jobs.ts";
+// cross-skill-allowed: TaskDB task-store lane (ADR-030)
+import { openTaskDBReadOnly, OPEN_TASK_STATUSES } from "../../../Productivity/LucidTasks/Tools/TaskDB.ts";
 
 export function kayaHome(): string {
   return getKayaHome();
@@ -537,9 +539,10 @@ export function telegram(jobs?: Job[]): {
 
 // ── Projects + work ─────────────────────────────────────────────────────────
 
-function lucidDb(): Database | null {
-  const p = join(kayaHome(), "skills", "Productivity", "LucidTasks", "Data", "lucidtasks.db");
-  return existsSync(p) ? new Database(p, { readonly: true }) : null;
+/** SQLite's ascending order for a nullable number: NULL before every number. */
+function nullsFirst(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : -1;
+  return b === null ? 1 : a - b;
 }
 
 export function projects(): {
@@ -562,23 +565,24 @@ export function projects(): {
       });
     }
   }
-  const db = lucidDb();
-  let lucid: { id: string; name: string; status: string; open: number; done: number }[] = [];
-  if (db) {
-    try {
-      lucid = db
-        .query(
-          `SELECT p.id, p.name, p.status,
-             SUM(CASE WHEN t.status IN ('inbox','next','in_progress','waiting') THEN 1 ELSE 0 END) AS open,
-             SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done
-           FROM projects p LEFT JOIN tasks t ON t.project_id = p.id
-           WHERE p.status IN ('active','paused')
-           GROUP BY p.id ORDER BY open DESC, p.sort_order`,
-        )
-        .all() as typeof lucid;
-    } finally {
-      db.close();
-    }
+  const db = openTaskDBReadOnly();
+  let lucid: { id: string; name: string; status: string; open: number; done: number }[];
+  try {
+    const open = db.countTasks({ status: [...OPEN_TASK_STATUSES] }, "project_id");
+    const done = db.countTasks({ status: "done" }, "project_id");
+    lucid = [...db.listProjects("active"), ...db.listProjects("paused")]
+      .map((p) => ({ p, open: open.get(p.id) ?? 0 }))
+      // The old SQL order: open DESC, then sort_order with NULL first (the column allows NULL
+      // though zod types it number), then id as the GROUP BY p.id scan gave ties (BINARY = UTF-8 bytes).
+      .sort(
+        (a, b) =>
+          b.open - a.open ||
+          nullsFirst(a.p.sort_order, b.p.sort_order) ||
+          Buffer.compare(Buffer.from(a.p.id), Buffer.from(b.p.id)),
+      )
+      .map(({ p, open: n }) => ({ id: p.id, name: p.name, status: p.status, open: n, done: done.get(p.id) ?? 0 }));
+  } finally {
+    db.close();
   }
   const links = [
     { name: "LucidTasks board", url: "http://127.0.0.1:7777", note: "tasks kanban + triage" },
@@ -604,20 +608,21 @@ export function recentWork(): {
   executor: { timestamp: string; taskId: string; title: string; verdict: string; branch: string; verify?: string }[];
   commits: { sha: string; date: string; subject: string }[];
 } {
-  const db = lucidDb();
-  let tasks: ReturnType<typeof recentWork>["tasks"] = [];
-  if (db) {
-    try {
-      tasks = db
-        .query(
-          `SELECT t.id, t.title, t.status, p.name AS project, t.disposition, t.updated_at, t.completed_at
-           FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
-           ORDER BY t.updated_at DESC LIMIT 30`,
-        )
-        .all() as typeof tasks;
-    } finally {
-      db.close();
-    }
+  const db = openTaskDBReadOnly();
+  let tasks: ReturnType<typeof recentWork>["tasks"];
+  try {
+    const projectName = new Map(db.listProjects().map((p) => [p.id, p.name]));
+    tasks = db.listTasks({ order: "recent", limit: 30 }).map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      project: t.project_id === null ? null : (projectName.get(t.project_id) ?? null),
+      disposition: t.disposition,
+      updated_at: t.updated_at,
+      completed_at: t.completed_at,
+    }));
+  } finally {
+    db.close();
   }
   const executor = readJsonl<{
     timestamp: string;
