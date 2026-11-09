@@ -3,7 +3,7 @@
  *
  * Covers: cycle detection, getReadyItems with dependency filtering,
  * status transitions, getParallelBatch safety, legacy JSONL import,
- * WorkItemMetadata (workSurface).
+ * WorkItemMetadata.
  */
 
 import { describe, it, expect, beforeEach, afterAll, spyOn } from "bun:test";
@@ -1342,50 +1342,12 @@ describe("WorkQueue.deleteMetadata()", () => {
 });
 
 // ---------------------------------------------------------------------------
-// WorkItemMetadata type (ISC 8320)
-//
-// ISC rows covered:
-//   8320 - WorkItemMetadata includes workSurface? field
-//   (workSurfaceMismatch field removed — heuristic deleted in S0 de-determinization)
-//
-// Merged from the __tests__/WorkQueue.test.ts addendum (S1.9 iteration-2).
+// WorkItemMetadata — typed keys round-trip; legacy untyped keys still pass
+// through (the orchestrator-era keys were dropped from the type 2026-11-08).
 // ---------------------------------------------------------------------------
 
-describe("WorkItemMetadata type (ISC 8320)", () => {
-  it("accepts workSurface: browser in metadata", () => {
-    const meta: WorkItemMetadata = {
-      workSurface: "browser",
-    };
-    expect(meta.workSurface).toBe("browser");
-  });
-
-  it("accepts workSurface: cli in metadata", () => {
-    const meta: WorkItemMetadata = {
-      workSurface: "cli",
-    };
-    expect(meta.workSurface).toBe("cli");
-  });
-
-  it("accepts workSurface: api in metadata", () => {
-    const meta: WorkItemMetadata = {
-      workSurface: "api",
-    };
-    expect(meta.workSurface).toBe("api");
-  });
-
-  it("accepts workSurface: integration in metadata", () => {
-    const meta: WorkItemMetadata = {
-      workSurface: "integration",
-    };
-    expect(meta.workSurface).toBe("integration");
-  });
-
-  it("allows workSurface to be absent (optional)", () => {
-    const meta: WorkItemMetadata = {};
-    expect(meta.workSurface).toBeUndefined();
-  });
-
-  it("setMetadata persists workSurface on a WorkItem", () => {
+describe("WorkItemMetadata", () => {
+  it("setMetadata persists a typed key and a legacy untyped key", () => {
     const item: WorkItem = {
       id: "test-wq-001",
       title: "Test",
@@ -1398,11 +1360,11 @@ describe("WorkItemMetadata type (ISC 8320)", () => {
     };
     const queue = WorkQueue._createForTesting([item]);
 
-    queue.setMetadata("test-wq-001", {
-      workSurface: "browser",
-    });
+    const meta: WorkItemMetadata = { worktreeBranch: "feature/x", workSurface: "browser" };
+    queue.setMetadata("test-wq-001", meta);
 
     const updated = queue.getItem("test-wq-001");
+    expect(updated?.metadata?.worktreeBranch).toBe("feature/x");
     expect(updated?.metadata?.workSurface).toBe("browser");
   });
 });

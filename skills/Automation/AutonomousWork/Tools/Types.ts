@@ -2,9 +2,10 @@
  * Types.ts — Shared types for the AutonomousWork library (WorkQueue,
  * LLMSpecComprehension, Integrator).
  *
- * ISCRow, TechDebtInput, FollowOnLoop and InferenceFn moved here from the
- * deleted orchestrator files (2026-11-05). They still describe persisted
- * WorkItemMetadata fields and the comprehension inference seam.
+ * ISCRow and InferenceFn moved here from the deleted orchestrator files
+ * (2026-11-05). ISCRow describes the persisted WorkItemMetadata.iscRows
+ * field; TechDebtInput and FollowOnLoop went with their metadata fields on
+ * 2026-11-08 (no reader left).
  */
 
 import type { InferenceLevel } from "../../../../lib/core/Inference.ts";
@@ -13,58 +14,16 @@ import type { InferenceLevel } from "../../../../lib/core/Inference.ts";
 // Persisted WorkItemMetadata shapes
 // ============================================================================
 
-export type ISCRowExecutability = "automatable" | "human-required" | "deferred";
-
+/**
+ * One persisted ISC row. Rows written by the deleted WorkOrchestrator carry
+ * more keys (status, capability, disposition, verification, ...); only the
+ * keys a live reader uses are typed here (Integrator.requiresHumanApproval
+ * reads description and source).
+ */
 export interface ISCRow {
   id: number;
   description: string;
-  status: "PENDING" | "DONE" | "VERIFIED" | "EXECUTION_FAILED";
-  capability?: string;
-  parallel: boolean;
   source?: "EXPLICIT" | "INFERRED" | "IMPLICIT" | "RESEARCH";
-  specSection?: string;
-  /** True when spec exists but parseSpec returned empty ISC, forcing template fallback */
-  specFallback?: boolean;
-  /**
-   * Whether this row can be completed by automation or requires human action.
-   * Field name kept as `disposition` for compatibility with persisted `isc_rows`
-   * JSON; the concept is ISC Row Executability (ontology D2 — "disposition" is
-   * reserved for the LucidTask routing column).
-   */
-  disposition?: ISCRowExecutability;
-  /** Test level classification from TestStrategy */
-  testLevel?: "unit" | "integration" | "e2e" | "manual";
-  /** Verification priority — smoke rows run first for fast-fail */
-  priority?: "smoke" | "full";
-  /** True when this row represents an infrastructure failure, not a work item fault */
-  infraFault?: boolean;
-  /** Optional evidence artifacts attached when row is marked done */
-  evidence?: { files?: string[]; commands?: string[]; summary?: string };
-  /** Human-readable instruction for manual ISC rows. */
-  verifyMethod?: string;
-  verification?: {
-    method: string;
-    command?: string;
-    success_criteria: string;
-    result?: "PASS" | "FAIL";
-    /** When true, non-zero exit = PASS and zero exit = FAIL (for "X is NOT present" assertions) */
-    invertExit?: boolean;
-  };
-}
-
-export interface TechDebtInput {
-  description: string;
-  location: string;
-  category: string;
-}
-
-export interface FollowOnLoop {
-  /** Title for the next loop's work item. */
-  title: string;
-  /** Optional spec path for the next loop (resolved relative to KAYA_HOME if not absolute). */
-  specPath?: string;
-  /** Optional description override. */
-  description?: string;
 }
 
 // ============================================================================

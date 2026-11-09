@@ -2,14 +2,13 @@
 
 import { WorkQueue, type WorkItem } from "./WorkQueue.ts";
 import { parseArgs } from "node:util";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, mkdirSync } from "node:fs";
 import { FileLock } from "../../../../lib/core/FileLock.ts";
 import { join } from "node:path";
-import { getKayaHome, defaultKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
+import { getKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
 import { getOrCreateWorktree, gcWorktreeForBranch } from "../../../../lib/core/WorktreeManager.ts";
-import { resolveGuardHooks, buildGuardHookSettings, resolveEnforceTools } from "../../../../lib/core/AgentSpawner.ts";
-import { AGENT_RUN_ENV_KEY, reapAgentRun } from "../../../../lib/core/ProcessReaper.ts";
+import { spawnAgentSync, type AgentSpawnDeps } from "../../../../lib/core/AgentSpawner.ts";
 import {
   revParseRef,
   changedFilesBetween,
@@ -55,28 +54,6 @@ export interface ReconcileResult {
 // Re-export for callers that imported from MergeOrchestrator
 export type { MergeStrategy, MergeResult, SingleMergeResult };
 export type { WorkItem };
-
-// ============================================================================
-// OAuth token loader (mirrors LiveVerifier.ts)
-// ============================================================================
-
-function loadOAuthToken(): string | undefined {
-  const candidates = [
-    join(defaultKayaHome(), ".credentials.json"), // real-home creds — env-independent
-    join(process.env.HOME ?? "", ".config", "claude", "credentials.json"),
-  ];
-  for (const p of candidates) {
-    if (!existsSync(p)) continue;
-    try {
-      const data = JSON.parse(readFileSync(p, "utf-8"));
-      const token = data?.claudeAiOauth?.accessToken ?? data?.access_token;
-      if (token) return token as string;
-    } catch {
-      /* corrupt, skip */
-    }
-  }
-  return undefined;
-}
 
 // ============================================================================
 // Main class
@@ -477,7 +454,7 @@ export class Integrator {
    * main. Only one reconcile runs at a time (global FileLock).
    */
   async reconcile(
-    opts: { branch?: string; _conflictResolverForTest?: () => { status: number | null; stderr?: string } } = {},
+    opts: { branch?: string; spawnDeps?: AgentSpawnDeps } = {},
   ): Promise<ReconcileResult> {
     const repoRoot = getKayaHome();
     const locksDir = join(runtimeDir(), "locks");
@@ -663,67 +640,23 @@ export class Integrator {
             `Do NOT commit. Just resolve the conflicts and stage the files.`,
           ].join("\n");
 
-          const env: Record<string, string> = {};
-          for (const [k, v] of Object.entries(process.env)) {
-            if (v !== undefined) env[k] = v;
-          }
-          delete env.ANTHROPIC_API_KEY;
-          delete env.CLAUDECODE;
-          for (const key of Object.keys(env)) {
-            if (key.startsWith("CLAUDE_CODE_") && key !== "CLAUDE_CODE_OAUTH_TOKEN") delete env[key];
-          }
-          if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
-            const token = loadOAuthToken();
-            if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-          }
-
-          // S-06 slice-3: honor the same two headless-spawn switches as
-          // AgentSpawner.spawnAgentSync — guardHooks (SecurityValidator +
-          // PromptInjectionDefender via inline --settings) and enforceTools
-          // (the real tool boundary; --allowedTools is inert under
-          // --dangerously-skip-permissions, see AgentSpawner.ts's doc
-          // comment). Both resolve via the SAME helpers AgentSpawner exports
-          // (explicit option → env var → default OFF) — no duplicated JSON,
-          // no duplicated env-var parsing. Neither is plumbed through
-          // `opts` here (env-var-only control), matching this call site's
-          // existing all-env-driven configuration.
-          const conflictResolverAllowedTools = "Bash,Read,Edit";
-          const conflictResolverArgs: string[] = [
-            "-p",
-            "--model",
-            "sonnet",
-            "--dangerously-skip-permissions",
-            "--allowedTools",
-            conflictResolverAllowedTools,
-          ];
-          if (resolveEnforceTools(undefined, process.env)) {
-            conflictResolverArgs.push("--tools", conflictResolverAllowedTools);
-          }
-          conflictResolverArgs.push("--setting-sources", "");
-          if (resolveGuardHooks(undefined, process.env)) {
-            conflictResolverArgs.push("--settings", buildGuardHookSettings(getKayaHome()));
-          }
-          conflictResolverArgs.push("--output-format", "text", conflictResolverPrompt);
-
-          // Same leftover-process sweep as AgentSpawner.spawnAgentSync (ProcessReaper.ts).
-          const runId = crypto.randomUUID();
-          env[AGENT_RUN_ENV_KEY] = runId;
-          const agentResult = opts._conflictResolverForTest
-            ? opts._conflictResolverForTest()
-            : spawnSync("claude", conflictResolverArgs, {
-                cwd: wtPath,
-                encoding: "utf-8",
-                timeout: 120_000,
-                env,
-                maxBuffer: 32 * 1024 * 1024,
-              });
-          if (!opts._conflictResolverForTest) {
-            const reaped = reapAgentRun(runId);
-            if (reaped.length > 0) {
-              console.warn(
-                `[Integrator] conflict resolver left ${reaped.length} process(es) running; ended pids ${reaped.join(", ")}`,
-              );
-            }
+          // The agent door owns the launch policy (hardened env, pre-spawn
+          // rate gate, isolated flags, guard-hook/--tools switches, reap).
+          const agentResult = spawnAgentSync(
+            {
+              prompt: conflictResolverPrompt,
+              model: "sonnet",
+              allowedTools: "Bash,Read,Edit",
+              cwd: wtPath,
+              timeoutMs: 120_000,
+              maxBuffer: 32 * 1024 * 1024,
+            },
+            opts.spawnDeps,
+          );
+          if (agentResult.preSpawnGated) {
+            // The agent never ran, so the conflict markers stay and the
+            // "conflicts remain" path below aborts the merge.
+            console.warn(`[Integrator] conflict resolver for ${branch} not started: pre-spawn rate gate`);
           }
 
           // Check if conflicts remain
@@ -742,7 +675,7 @@ export class Integrator {
 
           const conflictsRemain = postAgentStatus.split("\n").some((line) => /^(UU|AA|DD|AU|UA) /.test(line));
 
-          if (agentResult.status !== 0 || conflictsRemain) {
+          if (!agentResult.success || conflictsRemain) {
             // Agent failed or conflicts remain — abort
             try {
               execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
@@ -753,9 +686,15 @@ export class Integrator {
             result.outcomes.push({
               branch,
               status: "failed",
-              reason: conflictsRemain
+              // A failed agent names its cause even when conflicts remain
+              // (gate block, timeout, limit banner leave the conflicts untouched).
+              reason: agentResult.success
                 ? "Conflict resolution agent ran but conflicts remain"
-                : `Conflict resolver agent exited non-zero (exit ${agentResult.status ?? "?"}): ${agentResult.stderr?.slice(0, 200) ?? ""}`,
+                : `${
+                    agentResult.preSpawnGated
+                      ? "Conflict resolution agent not started (rate-gated)"
+                      : `Conflict resolution agent failed (exit ${agentResult.exitCode}${agentResult.infraReason ? `, ${agentResult.infraReason}` : ""}): ${(agentResult.stderr || agentResult.stdout).slice(-200)}`
+                  }${conflictsRemain ? (agentResult.preSpawnGated ? ": conflicts remain" : "; conflicts remain") : ""}`,
             });
             console.error(`[Integrator] FAIL ${branch}: conflict not resolved`);
             continue;
@@ -1097,7 +1036,7 @@ export class Integrator {
    * `gh pr create` — isolated as its own method (rather than inlined at both "pr" strategy call
    * sites) so tests can override just the external `gh` CLI call on an instance, the same idiom
    * this file uses elsewhere (checkInteractiveSessionLock, verifyDirectMergeLanded,
-   * reconcile()'s _conflictResolverForTest) — `gh` talks to real GitHub and has no hermetic
+   * reconcile()'s spawnDeps) — `gh` talks to real GitHub and has no hermetic
    * fake-able equivalent, whereas every git command around it (push/fetch/ancestor-check in
    * verifyPrMergeLanded) is real and runs against a real repo in tests.
    */

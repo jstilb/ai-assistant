@@ -30,7 +30,6 @@ import { join, dirname } from "node:path";
 import { generateId } from "../../../../lib/core/GenerateId.ts";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
 import { MEMORY } from "../../../../lib/core/MemoryPaths.ts";
-import type { TechDebtInput } from "./Types.ts";
 import {
   PipelineRepository,
   ALLOWED_TRANSITIONS as CANONICAL_TRANSITIONS,
@@ -115,42 +114,26 @@ export interface WorkItemAttempt {
 }
 
 /**
- * ISC 16: Typed metadata bag for WorkItem.metadata.
- * At least 15 named fields replacing Record<string, unknown> escape hatches.
- * Extends Record<string, unknown> to remain open for legacy/unknown keys.
+ * Typed metadata bag for WorkItem.metadata. Extends Record<string, unknown>
+ * so legacy keys already persisted in the queue stay readable.
+ *
+ * 2026-11-08: trimmed to the keys a live reader uses. The orchestrator-era
+ * keys (workSurface, runtimeTestCommand, startSha, adversarialConcerns,
+ * executionLog, verificationHistory, infraErrors, environmentBlock*,
+ * manualRows, humanProxyIds, gitDiffStat, repoContexts, specPath,
+ * testExecutionResults, liveVerificationTranscript, debtIncurred,
+ * followOnLoops/followOnEnqueued/nextLoopItemId/epicOriginItemId,
+ * comprehendedSpec) lost their last writer and reader when WorkOrchestrator
+ * and the AW verifiers were deleted on 2026-11-05. Old rows may still carry
+ * them; they pass through untyped.
  */
 export interface WorkItemMetadata extends Record<string, unknown> {
-  /** Surface classification for the work item (set by WorkOrchestrator.prepare()) */
-  workSurface?: "browser" | "cli" | "api" | "integration" | "native" | "docs";
-  /** Per-repo test-runner override for RuntimeVerifier (e.g. pnpm/vitest monorepos) */
-  runtimeTestCommand?: string;
-  /** Absolute path to the worktree for this work item */
+  /** Worktree for this item. Readers: Integrator (PR creation), vocabulary.ts (pipeline worktree_path). */
   worktreePath?: string;
-  /** Git SHA at work start (for diff computation) */
-  startSha?: string;
-  /** Git branch name for the feature worktree */
+  /** Feature branch for this item. Readers: Integrator (merge), vocabulary.ts (pipeline worktree_branch). */
   worktreeBranch?: string;
-  /** ISC rows for this item (persisted for cross-process access) */
+  /** ISC rows. Readers: Integrator.requiresHumanApproval, vocabulary.ts (pipeline isc_rows). */
   iscRows?: import("./Types.ts").ISCRow[];
-  /** Adversarial concerns raised by SkepticalVerifier Phase 2 */
-  adversarialConcerns?: string[];
-  /** Execution log entries (command, output, exitCode) from Builder agents */
-  executionLog?: Array<{ command: string; output: string; exitCode: number; timestamp?: string }>;
-  /** History of verification attempts for this item */
-  verificationHistory?: Array<{ timestamp: string; verdict: string; concerns: string[]; tiersExecuted?: number[] }>;
-  /** Infrastructure errors that are NOT the item's fault (parseSpec failures, tool crashes) */
-  infraErrors?: string[];
-  /** Count of environment blocks (verification could not run here) — see Principle B2 / Slice 2.
-   *  Re-stages do NOT consume the retry counter; this bounds persistent blocks before escalation. */
-  environmentBlockCount?: number;
-  /** ISO timestamp of the most recent environment block. */
-  lastEnvironmentBlock?: string;
-  /** Reason string of the most recent environment block (for triage). */
-  lastEnvironmentBlockReason?: string;
-  /** ISC row IDs classified as human-required (subset of iscRows) */
-  manualRows?: number[];
-  /** WorkItem IDs of created HUMAN proxy items */
-  humanProxyIds?: string[];
   /** Merge status from Integrator.
    *  - "pending_approval": verified-locally, waiting on a human merge approval (Slice 3)
    *  - "approved":         approval granted; eligible for the approval-gated drain
@@ -180,64 +163,6 @@ export interface WorkItemMetadata extends Record<string, unknown> {
   /** Diagnostics for a detected merge conflict. */
   conflictDetectedAt?: string;
   conflictReason?: string;
-  /** Git diff stat for surface classification (set after first verify attempt) */
-  gitDiffStat?: string;
-  /** Repo contexts for multi-repo work items */
-  repoContexts?: Array<{ name: string; cwd: string; startSha?: string; pathFilter?: string[] }>;
-  /** Absolute path to spec file (for re-reading on retry) */
-  specPath?: string;
-  /** Gate A + Gate B test execution results from the Verifier sub-agent.
-   *  Stored here so WorkOrchestrator.verify() can populate ItemReviewSummary.testExecutionResults. */
-  testExecutionResults?: {
-    gateA?: {
-      command: string;
-      exitCode: number;
-      stdout: string;
-      testsPassed?: number;
-      testsFailed?: number;
-      verdict: "PASS" | "FAIL" | "SKIP";
-    };
-    gateB?: Array<{
-      file: string;
-      exitCode: number;
-      stdout: string;
-      verdict: "PASS" | "FAIL";
-    }>;
-  };
-  /**
-   * Builder self-verification (Step 1.5): the live-interaction transcript the
-   * BUILDING agent produced by actually running/exercising its own work each
-   * iteration. Cheap early-catch; the independent Phase L gate re-runs live
-   * exercise regardless and never trusts this transcript. Threaded into
-   * ItemReviewSummary for Phase 2 context.
-   */
-  liveVerificationTranscript?: Array<{
-    iteration: number;
-    surface: string;
-    /** What the builder actually ran. */
-    command: string;
-    /** Real observed output (stdout/stderr/screenshot path). */
-    observed: string;
-    exitCode?: number;
-    verdict: "PASS" | "FAIL";
-    timestamp?: string;
-  }>;
-  /** ISC 4: Tech debt incurred during this work item, persisted for cross-process visibility. */
-  debtIncurred?: TechDebtInput[];
-  /** Slice 4: forward-stub loops for a multi-loop epic. The NEXT loop is auto-enqueued
-   *  when this item verifies + completes; the remainder is carried onto the new item. */
-  followOnLoops?: import("./Types.ts").FollowOnLoop[];
-  /** Slice 4: set true once this item's next follow-on loop has been enqueued (idempotency). */
-  followOnEnqueued?: boolean;
-  /** Slice 4: id of the follow-on loop item enqueued from this one. */
-  nextLoopItemId?: string;
-  /** Slice 4: the epic's origin item id, threaded through the loop chain for traceability. */
-  epicOriginItemId?: string;
-  /**
-   * LLM-comprehended spec result from comprehendSpec() / generateISC().
-   * Set by WorkOrchestrator.prepare(); comprehension is the sole ISC source.
-   */
-  comprehendedSpec?: import("./Types.ts").ComprehendedSpec;
 }
 
 export interface WorkItem {

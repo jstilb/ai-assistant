@@ -27,13 +27,6 @@ async function getLucidTaskDB() {
   return getTaskDB();
 }
 
-/** The outcome JmTaskBridge attaches when it closes a task after Jm resolved the human action. */
-async function resolveCloseOutcome(headline: string, noArtifact: string): Promise<string> {
-  // cross-skill-allowed: outcome contract for the closes this file writes — the outcome gate (OutcomeRequiredError) refuses an agent close without one; seam candidate: TaskClient
-  const { serializeOutcome, systemOutcome } = await import("../../../Productivity/LucidTasks/Tools/TaskOutcome.ts");
-  return serializeOutcome(systemOutcome({ by: "JmTaskBridge", headline, noArtifact }));
-}
-
 /**
  * Emit a digest-tier alert for sync-path failures — routed through AlertGate
  * per ADR-004 (docs/decisions/004-notification-traffic-through-alertgate.md)
@@ -162,15 +155,15 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
     try {
       const db = await getLucidTaskDB();
       const escTaskId = `manual-${queueItemId}`;
-      const escTask = db.getTask(escTaskId);
-      if (escTask && escTask.status !== "done" && escTask.status !== "cancelled") {
-        const outcome = await resolveCloseOutcome(
-          "Escalation closed: the human action was resolved",
-          `closed by JmTaskBridge when the human action for work item ${queueItemId} was resolved via the resolve command`,
-        );
-        db.updateTask(escTaskId, { status: "done", outcome }, "JmTaskBridge");
-        console.log(`Escalation task closed: ${escTaskId}`);
-      }
+      const result = db.bookkeepingClose(
+        escTaskId,
+        {
+          headline: "Escalation closed: the human action was resolved",
+          reason: `closed by JmTaskBridge when the human action for work item ${queueItemId} was resolved via the resolve command`,
+        },
+        "JmTaskBridge",
+      );
+      if (result.closed) console.log(`Escalation task closed: ${escTaskId}`);
       db.close();
     } catch (err) {
       // Non-fatal — proxy resolution is the critical path, but not silent.
@@ -184,19 +177,20 @@ export async function cmdResolve(lucidTaskId?: string, queueItemId?: string): Pr
   if (lucidTaskId) {
     try {
       const db = await getLucidTaskDB();
-      const task = db.getTask(lucidTaskId);
-      if (task && task.status !== "done" && task.status !== "cancelled") {
-        const outcome = await resolveCloseOutcome(
-          "Human action closed: Jm resolved it",
-          `closed by JmTaskBridge when the human action ${lucidTaskId} was resolved via the resolve command`,
-        );
-        db.updateTask(lucidTaskId, { status: "done", outcome }, "JmTaskBridge");
-        console.log(`Human action task closed: ${lucidTaskId}`);
-      }
+      const result = db.bookkeepingClose(
+        lucidTaskId,
+        {
+          headline: "Human action closed: Jm resolved it",
+          reason: `closed by JmTaskBridge when the human action ${lucidTaskId} was resolved via the resolve command`,
+        },
+        "JmTaskBridge",
+      );
+      if (result.closed) console.log(`Human action task closed: ${lucidTaskId}`);
       db.logActivity(lucidTaskId, "work_unblocked", JSON.stringify({ proxyItemId, queueItemId }), "bridge");
       db.close();
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      // Non-fatal — proxy resolution is the critical path, but not silent.
+      await alertSyncFailure("human action task close", err);
     }
   }
 }

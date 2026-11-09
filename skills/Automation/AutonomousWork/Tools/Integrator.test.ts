@@ -24,6 +24,7 @@ import { worktreesDir, repoSlug } from "../../../../lib/core/WorktreeManager.ts"
 import type { DiskVerifyResult } from "../../../../lib/core/MergeSafety.ts";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import type { AgentSpawnDeps } from "../../../../lib/core/AgentSpawner.ts";
 
 // Hermetic: WorkQueue seeding and Integrator write failure logs under KAYA_HOME.
 pinKayaHome("integrator-test-");
@@ -305,8 +306,11 @@ describe("reconcile() — clean merge success path (stubbed)", () => {
   });
 });
 
-describe("reconcile() — conflict path with agent returning failure", () => {
-  it("records branch as failed and calls merge --abort when agent exits non-zero", async () => {
+describe("reconcile() — conflict path through the agent door (fake spawnFn)", () => {
+  type SpawnCall = { args: string[]; cwd: string; env: Record<string, string> };
+
+  /** Builds a repo whose `feat/conflict-branch` conflicts with main, runs reconcile, cleans up. */
+  async function reconcileConflict(spawnDeps: AgentSpawnDeps) {
     const tmpDir = mkdtempSync(join(tmpdir(), "integrator-conflict-fail-"));
     const origRuntime = process.env.KAYA_RUNTIME;
     const origKayaHome = process.env.KAYA_HOME;
@@ -336,19 +340,8 @@ describe("reconcile() — conflict path with agent returning failure", () => {
       mkdirSync(join(tmpDir, "worktrees"), { recursive: true });
 
       const integrator = new Integrator(WorkQueue._createForTesting([]));
-      // Stub the conflict-resolver agent so the test is hermetic and fast
-      // (real `claude` would succeed here and take ~35s; we want deterministic failure).
-      const result = await integrator.reconcile({
-        branch: "feat/conflict-branch",
-        _conflictResolverForTest: () => ({ status: 1, stdout: "", stderr: "mock agent failure" }),
-      });
-
-      // Agent exited non-zero → branch must land in failed (not merged).
-      const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
-      expect(outcome).toBeDefined();
-      expect(outcome!.status).toBe("failed");
-      expect(result.merged).not.toContain("feat/conflict-branch");
-      expect(result.failed).toContain("feat/conflict-branch");
+      const result = await integrator.reconcile({ branch: "feat/conflict-branch", spawnDeps });
+      return { result, wtPath: join(worktreesDir(), repoSlug(tmpDir)) };
     } finally {
       if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
       else process.env.KAYA_RUNTIME = origRuntime;
@@ -366,6 +359,71 @@ describe("reconcile() — conflict path with agent returning failure", () => {
         /* best effort */
       }
     }
+  }
+
+  it("spawns sonnet with isolated flags in the integration worktree; a failing agent → failed", async () => {
+    const calls: SpawnCall[] = [];
+    const { result, wtPath } = await reconcileConflict({
+      isRateLimitedFn: () => false,
+      reapFn: () => [],
+      spawnFn: (_claudePath, args, o) => {
+        calls.push({ args, cwd: o.cwd, env: o.env });
+        return { stdout: "", stderr: "mock agent failure", status: 1, signal: null };
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    const call = calls[0];
+    if (!call) throw new Error("resolver was not spawned");
+    const { args, cwd, env } = call;
+    expect(args[0]).toBe("-p");
+    expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
+    expect(args[args.indexOf("--allowedTools") + 1]).toBe("Bash,Read,Edit");
+    expect(args).toContain("--dangerously-skip-permissions");
+    expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
+    expect(args[args.length - 1]).toContain("You are resolving git merge conflicts in:");
+    expect(cwd.startsWith(wtPath)).toBe(true);
+    expect(env.KAYA_AUTONOMOUS).toBe("1");
+    expect(env.CLAUDECODE).toBeUndefined();
+
+    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.reason).toBe("Conflict resolution agent failed (exit 1): mock agent failure; conflicts remain");
+    expect(result.merged).not.toContain("feat/conflict-branch");
+    expect(result.failed).toContain("feat/conflict-branch");
+  });
+
+  it("a rate-gated resolver never spawns and falls through to 'conflicts remain'", async () => {
+    let spawned = 0;
+    const { result } = await reconcileConflict({
+      isRateLimitedFn: () => true,
+      reapFn: () => [],
+      spawnFn: () => {
+        spawned++;
+        return { stdout: "", stderr: "", status: 0, signal: null };
+      },
+    });
+
+    expect(spawned).toBe(0);
+    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.reason).toBe("Conflict resolution agent not started (rate-gated): conflicts remain");
+    expect(result.failed).toContain("feat/conflict-branch");
+  });
+
+  it("an agent that exits 1 with a limit banner names rate-limit and the banner, conflicts untouched", async () => {
+    const banner = "You've hit your limit · resets 3pm";
+    const { result } = await reconcileConflict({
+      isRateLimitedFn: () => false,
+      reapFn: () => [],
+      spawnFn: () => ({ stdout: banner, stderr: "", status: 1, signal: null }),
+    });
+
+    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.reason).toContain("rate-limit");
+    expect(outcome?.reason).toContain(banner);
+    expect(outcome?.reason).toContain("conflicts remain");
   });
 });
 
