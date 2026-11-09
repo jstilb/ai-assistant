@@ -24,12 +24,9 @@
  * duration is selected by Jm in the browser — we don't request it via param.
  */
 
-import { homedir } from "node:os";
-import { loadGoogleOAuthClient, mergeSecretsFile, runLoopbackConsent } from "../../../../lib/core/GoogleOAuth.ts";
+import { loadGoogleOAuthClient, runLoopbackConsent } from "../../../../lib/core/GoogleOAuth.ts";
+import { secretsFilePath, updateSecrets } from "../../../../lib/core/Secrets.ts";
 import { logFailure } from "./Db.ts";
-
-const HOME = process.env.HOME ?? homedir();
-const SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 
 // The default scopes we want consent for. Chrome history is included so we
 // can resolve the phone-Chrome blind spot from
@@ -60,14 +57,15 @@ async function main(): Promise<void> {
     successHeading: "Kaya OAuth grant captured",
   });
 
-  mergeSecretsFile(SECRETS_PATH, {
+  updateSecrets((doc) => ({
+    ...doc,
     GOOGLE_DPA_REFRESH_TOKEN: tokens.refresh_token,
     GOOGLE_DPA_ACCESS_TOKEN: tokens.access_token,
     GOOGLE_DPA_ACCESS_TOKEN_EXPIRES_AT: String(Math.floor(Date.now() / 1000) + tokens.expires_in),
     GOOGLE_DPA_GRANTED_SCOPES: tokens.scope ?? DEFAULT_SCOPES.join(" "),
-  });
+  }));
 
-  console.log(`Refresh token saved to ${SECRETS_PATH}`);
+  console.log(`Refresh token saved to ${secretsFilePath()}`);
   console.log(`Granted scopes: ${tokens.scope ?? "(not reported by Google)"}`);
   console.log(`Done. You can now run: bun Tools/YouTubeDataPortability.ts`);
 }

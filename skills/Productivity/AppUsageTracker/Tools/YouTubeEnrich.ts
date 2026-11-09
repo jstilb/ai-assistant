@@ -20,12 +20,9 @@
  * we'd use 200 units — comfortably within budget.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret, secretsFilePath } from "../../../../lib/core/Secrets.ts";
 import { Db, logFailure } from "./Db.ts";
 
-const SECRETS_PATH = join(defaultKayaHome(), "secrets.json");
 const API_BASE = "https://www.googleapis.com/youtube/v3/videos";
 const BATCH_SIZE = 50;
 const DEFAULT_LIMIT = 1000;
@@ -70,21 +67,6 @@ export function parseIsoDuration(iso: string): number | null {
   return parseInt(h ?? "0", 10) * 3600 + parseInt(mn ?? "0", 10) * 60 + parseInt(s ?? "0", 10);
 }
 
-function loadApiKey(): string | null {
-  if (!existsSync(SECRETS_PATH)) return null;
-  try {
-    const raw = readFileSync(SECRETS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    // Accept both casings — secrets.json convention is uppercase env-var
-    // style; older docs may have suggested lowercase.
-    const key = parsed.YOUTUBE_API_KEY ?? parsed.youtube_api_key;
-    return typeof key === "string" && key.length > 0 ? key : null;
-  } catch {
-    // optional secrets file: missing or invalid JSON means no API key
-    return null;
-  }
-}
-
 interface ApiVideo {
   id: string;
   snippet?: {
@@ -111,8 +93,11 @@ interface ApiResponse {
  */
 export const defaultVideoFetcher: VideoFetcher = async (ids) => {
   if (ids.length === 0) return [];
-  const apiKey = loadApiKey();
-  if (!apiKey) throw new Error(`youtube_api_key missing from ${SECRETS_PATH} — see YouTubeEnrich.ts header for setup`);
+  // Both casings: the uppercase env-var style is the convention; older docs suggested lowercase.
+  const apiKey = optionalSecret("YOUTUBE_API_KEY") ?? optionalSecret("youtube_api_key");
+  if (!apiKey) {
+    throw new Error(`youtube_api_key missing from ${secretsFilePath()} — see YouTubeEnrich.ts header for setup`);
+  }
   const url = `${API_BASE}?part=contentDetails,snippet&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url);
   if (!res.ok) {

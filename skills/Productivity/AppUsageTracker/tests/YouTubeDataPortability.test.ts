@@ -30,12 +30,16 @@ const CFG: DPAConfig = {
 };
 
 let dest: string;
+const savedKayaHome = process.env.KAYA_HOME;
 
 beforeEach(() => {
   dest = mkdtempSync(join(tmpdir(), "dpa-test-"));
+  process.env.KAYA_HOME = dest;
 });
 
 afterEach(() => {
+  if (savedKayaHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = savedKayaHome;
   if (dest) rmSync(dest, { recursive: true, force: true });
 });
 
@@ -205,9 +209,8 @@ test("loadGoogleOAuthClient: throws when client_id is empty/absent", () => {
 test("loadDPAConfig: composes gcalcli client + secrets.json refresh_token", () => {
   const clientPath = join(dest, "client_secret.json");
   writeFileSync(clientPath, JSON.stringify({ installed: { client_id: "cid", client_secret: "sec" } }));
-  const secretsPath = join(dest, "secrets.json");
-  writeFileSync(secretsPath, JSON.stringify({ GOOGLE_DPA_REFRESH_TOKEN: "1//refresh", OTHER: "x" }));
-  const cfg = loadDPAConfig(secretsPath, clientPath);
+  writeFileSync(join(dest, "secrets.json"), JSON.stringify({ GOOGLE_DPA_REFRESH_TOKEN: "1//refresh", OTHER: "x" }));
+  const cfg = loadDPAConfig(clientPath);
   expect(cfg.clientId).toBe("cid");
   expect(cfg.clientSecret).toBe("sec");
   expect(cfg.refreshToken).toBe("1//refresh");
@@ -216,7 +219,6 @@ test("loadDPAConfig: composes gcalcli client + secrets.json refresh_token", () =
 test("loadDPAConfig: throws when GOOGLE_DPA_REFRESH_TOKEN missing", () => {
   const clientPath = join(dest, "client_secret.json");
   writeFileSync(clientPath, JSON.stringify({ installed: { client_id: "cid", client_secret: "sec" } }));
-  const secretsPath = join(dest, "secrets.json");
-  writeFileSync(secretsPath, JSON.stringify({ UNRELATED: "x" }));
-  expect(() => loadDPAConfig(secretsPath, clientPath)).toThrow(/GOOGLE_DPA_REFRESH_TOKEN/);
+  writeFileSync(join(dest, "secrets.json"), JSON.stringify({ UNRELATED: "x" }));
+  expect(() => loadDPAConfig(clientPath)).toThrow(/key-missing.*GOOGLE_DPA_REFRESH_TOKEN.*OAuthBootstrap\.ts/);
 });

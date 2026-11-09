@@ -17,6 +17,16 @@
 # the classifier kept events.db locked, and the parent shell stayed "alive"
 # forever — for 2+ days in one observed incident — so launchd never restarted
 # it. Per-step timeouts make any hang self-recovering by the next nightly run.
+#
+# `timeout` alone did not bound wall time: runs still took 12-33 h (2026-09/10)
+# against a 2 h budget. So step() also polls the timeout child against its own
+# wall-clock hard ceiling (secs + HARD_CEILING_GRACE). On a breach it SIGKILLs
+# the child's process group, marks the run failed and moves on, without waiting
+# on a child that will not die. Each step appends one JSON row (UTC start/end,
+# rc, timedOutHard, durationSec) to STEPS_LOG, so a long run shows which step
+# took the time. The poll runs about once per awake second, so a durationSec
+# far above the ceiling means the Mac slept during that step; a real hang ends
+# near the ceiling.
 
 set -uo pipefail
 
@@ -24,6 +34,10 @@ set -uo pipefail
 BUN="${BUN:-$([ -x /opt/homebrew/bin/bun ] && echo /opt/homebrew/bin/bun || command -v bun || echo /opt/homebrew/bin/bun)}"
 TIMEOUT_BIN="${TIMEOUT_BIN:-$([ -x /opt/homebrew/bin/timeout ] && echo /opt/homebrew/bin/timeout || command -v timeout || command -v gtimeout || echo /opt/homebrew/bin/timeout)}"
 TOOLS="$HOME/.claude/skills/Productivity/AppUsageTracker/Tools"
+STEPS_LOG="$HOME/.claude/MEMORY/AppUsage/nightly-pipeline-steps.jsonl"
+# Seconds past a step's own timeout before step() stops waiting on it. Covers
+# timeout's --kill-after=15s plus reaping, with margin.
+HARD_CEILING_GRACE=60
 
 # Run from /tmp: the inference helper spawns `claude -p`, which detects Claude
 # Code nesting (and misbehaves) if the working directory is ~/.claude.
@@ -33,18 +47,61 @@ fail=0
 step() {
   local name="$1"
   local secs="$2"; shift 2
-  echo "=== $(date '+%Y-%m-%d %H:%M:%S') ${name} (timeout ${secs}s) ==="
-  "$TIMEOUT_BIN" --kill-after=15s "${secs}" "$@"
-  local rc=$?
-  if [ "$rc" -ne 0 ]; then
-    if [ "$rc" -eq 124 ]; then
-      echo "!!! STEP TIMED OUT: ${name} after ${secs}s"
-    else
-      echo "!!! STEP FAILED: ${name} (exit ${rc})"
+  local ceiling=$((secs + HARD_CEILING_GRACE))
+  local started_at t0 pid rc tries timed_out_hard=false
+  started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  t0=$SECONDS
+  echo "=== $(date '+%Y-%m-%d %H:%M:%S') ${name} (timeout ${secs}s, hard ceiling ${ceiling}s) ==="
+  "$TIMEOUT_BIN" --kill-after=15s "${secs}" "$@" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ $((SECONDS - t0)) -ge "$ceiling" ]; then
+      timed_out_hard=true
+      break
     fi
+    sleep 1
+  done
+  if [ "$timed_out_hard" = true ]; then
+    echo "!!! STEP HIT HARD CEILING: ${name} still running after ${ceiling}s wall; SIGKILL to pid ${pid} and its process group"
+    # GNU timeout leads its own process group, so -pid also kills the step
+    # under it. Fall back to the pid alone when no such group exists.
+    kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "$pid"
+    tries=0
+    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 5 ]; do
+      sleep 1
+      tries=$((tries + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "!!! STEP DID NOT DIE AFTER SIGKILL: ${name} (pid ${pid}); proceeding without waiting further"
+      rc=null
+    else
+      wait "$pid"
+      rc=$?
+    fi
+    fail=1
+  else
+    wait "$pid"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      if [ "$rc" -eq 124 ]; then
+        echo "!!! STEP TIMED OUT: ${name} after ${secs}s"
+      else
+        echo "!!! STEP FAILED: ${name} (exit ${rc})"
+      fi
+      fail=1
+    fi
+  fi
+  if ! { mkdir -p "${STEPS_LOG%/*}" &&
+    printf '{"step":"%s","startedAt":"%s","finishedAt":"%s","rc":%s,"timedOutHard":%s,"durationSec":%d}\n' \
+      "$name" "$started_at" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$rc" "$timed_out_hard" "$((SECONDS - t0))" \
+      >> "$STEPS_LOG"; }; then
+    echo "!!! STEP LOG WRITE FAILED: ${name} -> ${STEPS_LOG}"
     fail=1
   fi
 }
+
+# Sourced (tests): stop after the definitions, before any step runs.
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
 # 1. Pull aw-watcher foreground events (Mac window-watcher).
 step "AWPoller"            120  "$BUN" run "$TOOLS/AWPoller.ts" --device=mac

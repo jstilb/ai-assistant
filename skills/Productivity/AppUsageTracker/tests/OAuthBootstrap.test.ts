@@ -1,31 +1,12 @@
 /**
  * OAuthBootstrap.test.ts — verifies pure helpers in OAuthBootstrap.ts.
  * The loopback browser flow is not exercised in CI (requires a real Google
- * consent screen); we cover URL building + code exchange + secrets merge.
+ * consent screen); we cover URL building + code exchange. The secrets write
+ * (updateSecrets) is covered in lib/core/Secrets.test.ts.
  */
 
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  buildConsentUrl,
-  exchangeCodeForTokens,
-  mergeSecretsFile,
-  type HttpFetcher,
-} from "../../../../lib/core/GoogleOAuth.ts";
-
-let tmp: string;
-let secretsPath: string;
-
-beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "oauth-bootstrap-"));
-  secretsPath = join(tmp, "secrets.json");
-});
-
-afterEach(() => {
-  if (tmp) rmSync(tmp, { recursive: true, force: true });
-});
+import { expect, test } from "bun:test";
+import { buildConsentUrl, exchangeCodeForTokens, type HttpFetcher } from "../../../../lib/core/GoogleOAuth.ts";
 
 test("buildConsentUrl: encodes scopes, redirect_uri, access_type=offline, prompt=consent", () => {
   const url = buildConsentUrl({
@@ -98,24 +79,4 @@ test("exchangeCodeForTokens: surfaces error from token endpoint with HTTP status
   await expect(
     exchangeCodeForTokens({ clientId: "x", clientSecret: "y", redirectUri: "http://127.0.0.1/cb", code: "bad" }, http),
   ).rejects.toThrow(/invalid_grant|Bad code|400/);
-});
-
-test("mergeSecretsFile: preserves unrelated keys, adds new ones, overwrites duplicates", () => {
-  writeFileSync(secretsPath, JSON.stringify({ EXISTING: "x", YOUTUBE_API_KEY: "AIza" }, null, 2));
-  mergeSecretsFile(secretsPath, {
-    GOOGLE_DPA_CLIENT_ID: "client-id-123",
-    GOOGLE_DPA_CLIENT_SECRET: "secret-xyz",
-    GOOGLE_DPA_REFRESH_TOKEN: "1//refresh",
-  });
-  const merged = JSON.parse(readFileSync(secretsPath, "utf8")) as Record<string, unknown>;
-  expect(merged.EXISTING).toBe("x");
-  expect(merged.YOUTUBE_API_KEY).toBe("AIza");
-  expect(merged.GOOGLE_DPA_CLIENT_ID).toBe("client-id-123");
-  expect(merged.GOOGLE_DPA_REFRESH_TOKEN).toBe("1//refresh");
-});
-
-test("mergeSecretsFile: creates file when missing", () => {
-  mergeSecretsFile(secretsPath, { GOOGLE_DPA_REFRESH_TOKEN: "1//refresh" });
-  const created = JSON.parse(readFileSync(secretsPath, "utf8")) as Record<string, unknown>;
-  expect(created.GOOGLE_DPA_REFRESH_TOKEN).toBe("1//refresh");
 });

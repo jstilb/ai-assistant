@@ -44,13 +44,13 @@
  */
 
 import { homedir } from "node:os";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type OAuthClient, loadGoogleOAuthClient } from "../../../../lib/core/GoogleOAuth.ts";
+import { requireSecret } from "../../../../lib/core/Secrets.ts";
 import { logFailure } from "./Db.ts";
 
 const HOME = process.env.HOME ?? homedir();
-const SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 // Reuse the OAuth client gcalcli already registered for project kaya-484418.
 // Same project where Data Portability API is enabled. Avoids forcing Jm to
 // create a second Desktop OAuth client.
@@ -119,19 +119,9 @@ export type HttpFetcher = (req: HttpRequest) => Promise<HttpResponse>;
 // Shared with YouTubeCuration via lib/core/GoogleOAuth.ts (ADR-006: no cross-skill import).
 export { loadGoogleOAuthClient, type OAuthClient };
 
-export function loadDPAConfig(
-  secretsPath: string = SECRETS_PATH,
-  clientPath: string = GCALCLI_CLIENT_SECRET_PATH,
-): DPAConfig {
+export function loadDPAConfig(clientPath: string = GCALCLI_CLIENT_SECRET_PATH): DPAConfig {
   const client = loadGoogleOAuthClient(clientPath);
-  if (!existsSync(secretsPath)) {
-    throw new Error(`secrets file missing at ${secretsPath}`);
-  }
-  const parsed = JSON.parse(readFileSync(secretsPath, "utf8")) as Record<string, unknown>;
-  const refreshToken = parsed.GOOGLE_DPA_REFRESH_TOKEN;
-  if (typeof refreshToken !== "string" || !refreshToken) {
-    throw new Error(`secrets.json missing GOOGLE_DPA_REFRESH_TOKEN — run OAuthBootstrap.ts first`);
-  }
+  const refreshToken = requireSecret("GOOGLE_DPA_REFRESH_TOKEN", "Run OAuthBootstrap.ts first.");
   return { clientId: client.clientId, clientSecret: client.clientSecret, refreshToken };
 }
 
