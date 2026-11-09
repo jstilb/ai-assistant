@@ -10,7 +10,7 @@ kaya-cli sheets list                              # List recent spreadsheets
 kaya-cli sheets create "Budget 2026"              # Create new spreadsheet
 kaya-cli sheets read <id> [range]                 # Read data
 kaya-cli sheets write <id> <range> '<json>'       # Write data
-kaya-cli sheets append <id> '<json>'              # Append rows
+kaya-cli sheets append <id> '<json>' [--sheet="Name"]  # Append rows (to the named sheet; first sheet if omitted)
 kaya-cli sheets clear <id> <range>                # Clear range
 kaya-cli sheets delete-rows <id> <sheet> 5:10     # Delete rows
 cat data.csv | kaya-cli sheets import <id>        # Import CSV

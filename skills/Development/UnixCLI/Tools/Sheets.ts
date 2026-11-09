@@ -7,7 +7,7 @@
  *   kaya-cli sheets create <name>             - Create new spreadsheet
  *   kaya-cli sheets read <id> [range]         - Read data from sheet
  *   kaya-cli sheets write <id> <range> <json> - Write data to sheet
- *   kaya-cli sheets append <id> <json>        - Append rows to sheet
+ *   kaya-cli sheets append <id> <json> [--sheet="Name"] - Append rows to sheet
  *   kaya-cli sheets clear <id> <range>        - Clear range without deleting
  *   kaya-cli sheets delete-rows <id> <sheet> 5:10 - Delete specific rows
  *   kaya-cli sheets import <id> [sheet] < data.csv - Import CSV/TSV
@@ -139,6 +139,12 @@ export async function writeStdoutDrained(text: string): Promise<void> {
 /** Value of a `--name=value` argument: everything after the first "=" (so values may contain "="). */
 function flagValue(arg: string): string {
   return arg.slice(arg.indexOf("=") + 1);
+}
+
+/** Sheet name from a `--sheet="Name"` argument (quotes stripped); undefined when absent. Remediation T1-09. */
+export function parseSheetFlag(args: string[]): string | undefined {
+  const sheetArg = args.find((a) => a.startsWith("--sheet="));
+  return sheetArg ? flagValue(sheetArg).replace(/^["']|["']$/g, "") : undefined;
 }
 
 export function buildOAuth2Client(
@@ -1882,12 +1888,12 @@ async function main() {
         const dataStr = filteredArgs[2];
 
         if (!spreadsheetId || !dataStr) {
-          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets append <id> <json-data>`);
+          console.error(`${COLORS.red}Error:${COLORS.nc} Usage: sheets append <id> <json-data> [--sheet="Name"]`);
           process.exit(1);
         }
 
         const values = JSON.parse(dataStr);
-        const result = await appendToSheet(spreadsheetId, values);
+        const result = await appendToSheet(spreadsheetId, values, parseSheetFlag(args));
 
         if (jsonOutput) {
           console.log(JSON.stringify(result, null, 2));

@@ -10,10 +10,8 @@
  *   kaya-cli places types                - List available place types
  */
 
-import { homedir } from "node:os";
-import { z } from "zod";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
-import { createStateManager } from "../../../../lib/core/StateManager.ts";
+import { optionalSecret, secretsFilePath } from "../../../../lib/core/Secrets.ts";
 import { maybeEncode } from "../../../../lib/core/ToonHelper.ts";
 
 const COLORS = {
@@ -25,38 +23,17 @@ const COLORS = {
   nc: "\x1b[0m",
 };
 
-const SECRETS_PATH = `${homedir()}/.claude/secrets.json`;
-
-const PlacesSecretsSchema = z
-  .object({
-    GOOGLE_PLACES_API_KEY: z.string().optional(),
-    GOOGLE_API_KEY: z.string().optional(),
-  })
-  .passthrough();
-
-const placesSecretsManager = createStateManager({
-  path: SECRETS_PATH,
-  schema: PlacesSecretsSchema,
-  defaults: {},
-});
-
 // Cache the API key after first load
 let _cachedApiKey: string | null = null;
 
 async function getApiKeyAsync(): Promise<string> {
   if (_cachedApiKey) return _cachedApiKey;
 
-  if (!(await placesSecretsManager.exists())) {
-    console.error(`${COLORS.red}Error:${COLORS.nc} secrets.json not found`);
-    console.error(`Add GOOGLE_PLACES_API_KEY to ~/.claude/secrets.json`);
-    process.exit(1);
-  }
-
-  const secrets = await placesSecretsManager.load();
-  const key = secrets.GOOGLE_PLACES_API_KEY || secrets.GOOGLE_API_KEY;
+  // A missing file or key exits; a broken file throws a SecretError.
+  const key = optionalSecret("GOOGLE_PLACES_API_KEY") ?? optionalSecret("GOOGLE_API_KEY");
 
   if (!key) {
-    console.error(`${COLORS.red}Error:${COLORS.nc} GOOGLE_PLACES_API_KEY not found in secrets.json`);
+    console.error(`${COLORS.red}Error:${COLORS.nc} GOOGLE_PLACES_API_KEY not found in ${secretsFilePath()}`);
     process.exit(1);
   }
 
