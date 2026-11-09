@@ -54,6 +54,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, statSync, renameSyn
 import { join, dirname } from "node:path";
 import { kayaPath } from "./lib/paths.ts";
 import { createAppendLog } from "../lib/core/AppendLog.ts";
+import { isLimitText } from "../lib/core/ClaudeRunEnd.ts";
 import { readObservabilityHookInput } from "../lib/hook-utils.ts";
 import {
   type ObservabilityEvent,
@@ -585,20 +586,27 @@ async function main() {
   // content filtering) - kept as-is, but now checked independently of
   // verbatim capture so a rate-limited failure still gets its special
   // system-reminder + audit-trail capture instead of flowing through as a
-  // normal completion.
-  const rateLimitPattern = /You[''\u2019]ve hit your limit|hit your limit.*resets/i;
-  const rateLimitMatch = taskOutput.match(rateLimitPattern);
-  if (rateLimitMatch) {
-    debug(`⚠️ RATE LIMIT DETECTED in agent output: ${rateLimitMatch[0]}`);
+  // normal completion. The banner (usage/model limit, credit, or a 529
+  // overload) is one line; the shared matcher is lib/core/ClaudeRunEnd.ts.
+  // Only a SHORT output is a banner: a real report may quote one in prose
+  // (2026-10-17 RESEARCH capture quoting `rate_limit_error`). Same 400-char
+  // rule as eval-lab Cell's exit-0 limit backstop.
+  const trimmedOutput = taskOutput.trim();
+  const rateLimitLine =
+    trimmedOutput.length < 400 && isLimitText(trimmedOutput)
+      ? trimmedOutput.split("\n").find(isLimitText)?.trim()
+      : undefined;
+  if (rateLimitLine) {
+    debug(`⚠️ RATE LIMIT DETECTED in agent output: ${rateLimitLine}`);
     const agentLabel = description || toolInput?.subagent_type || "unknown";
     const modelLabel = toolInput?.model || "sonnet";
     console.log(`<system-reminder>
-⚠️ Agent "${agentLabel}" failed due to rate limit: ${rateLimitMatch[0]}
+⚠️ Agent "${agentLabel}" failed due to a usage limit or overload: ${rateLimitLine}
 The ${modelLabel} model is exhausted. Use model: "opus" for subsequent agent spawns, or wait for the limit to reset.
 </system-reminder>`);
     // Still capture the output for audit trail, then exit
     try {
-      await captureAgentOutput("rate-limited", `RATE LIMITED: ${rateLimitMatch[0]}`, taskOutput, transcriptPath);
+      await captureAgentOutput("rate-limited", `RATE LIMITED: ${rateLimitLine}`, taskOutput, transcriptPath);
     } catch (err) {
       // best effort
       console.error(

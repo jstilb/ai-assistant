@@ -329,6 +329,32 @@ describe("verbatim capture — normal completion message", () => {
   });
 });
 
+describe("limit banner — only a short output is a banner (P02 S2)", () => {
+  for (const banner of [
+    "You've hit your limit · resets 3pm",
+    "API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment.",
+    "You've reached your Fable 5 limit. Switch to another model, or manage usage credits at claude.ai/settings",
+  ]) {
+    it(`flags the short banner: ${banner.slice(0, 30)}`, () => {
+      writeTranscriptFixture({ subagentType: "engineer", runInBackground: true, resultText: banner });
+      const r = runHook({ session_id: "limit-banner", transcript_path: transcriptPath });
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toContain("failed due to a usage limit or overload");
+    });
+  }
+
+  it("does NOT flag a long report that quotes rate_limit_error in prose — it is captured normally", () => {
+    const report = `Both fixes landed. The CLI returned {"type":"error","error":{"type":"rate_limit_error"}} once during the run, and the retry handled it. ${"Details of the change follow. ".repeat(20)}`;
+    writeTranscriptFixture({ subagentType: "engineer", runInBackground: true, resultText: report });
+    const r = runHook({ session_id: "limit-prose", transcript_path: transcriptPath });
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).not.toContain("usage limit or overload");
+    const files = findResearchFiles();
+    expect(files).toHaveLength(1);
+    expect(readFileSync(defined(files[0]), "utf-8")).toContain(report);
+  });
+});
+
 // ── (b) anti-gaming: messages matching NONE of the old completion patterns ─
 
 describe("anti-gaming: message matching none of the old completion-pattern regexes", () => {

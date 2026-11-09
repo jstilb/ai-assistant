@@ -178,6 +178,22 @@ async function main() {
       console.error("📋 Active work found from previous sessions");
     }
 
+    // EventScout G3 (2026-11-08): after a calendar hold's date, ask Jm once how it
+    // went. Interactive sessions only: a bg job (CLAUDE_JOB_DIR) or a headless
+    // `claude -p` (entrypoint sdk-*) must not see or consume the question.
+    const headless = (process.env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk-");
+    if (!process.env.CLAUDE_JOB_DIR && !headless) {
+      try {
+        const { followUpContext, followUpPaths } = await import(
+          "../skills/Productivity/EventScout/Tools/FollowUp.ts"
+        );
+        const block = followUpContext(new Date(), followUpPaths(kayaDir));
+        if (block) console.log(block);
+      } catch (e) {
+        console.error(`[LoadContext] EventScout follow-up skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     console.error("✅ Kaya context injected into session");
     process.exit(0);
   } catch (error) {
