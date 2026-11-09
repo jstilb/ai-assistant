@@ -11,7 +11,7 @@ Data collection, web assessment, and data science — covering Apify's actor-run
 
 | Sub-Skill | Triggers | Load |
 |-----------|----------|------|
-| **Apify** | apify actor run, apify dataset, eventscout apify fetch tier, calling apify's api directly in code | `Data/Apify/SKILL.md` |
+| **Apify** | apify actor run, apify dataset, calling apify's api directly in code | `Data/Apify/SKILL.md` |
 | **BrightData** | bright data, scrape url, web scraping tiers, serp api, linkedin scraping, bot-blocked content, proxy scraping | `Data/BrightData/SKILL.md` |
 | **DataScience** | analyze a dataset, explore data, data profiling, summary statistics, distribution, missing values, outliers, correlation, correlate columns, hypothesis test, t-test, anova, chi-square, statistical significance, p-value, regression, linear regression, logistic regression, predict, or model a relationship in data | `Data/DataScience/SKILL.md` |
 | **WebAssessment** | web assessment, pentest, security testing, vulnerability scan, osint recon, bug bounty, threat model, nuclei scan, security audit | `Data/WebAssessment/SKILL.md` |
