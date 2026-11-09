@@ -11,11 +11,15 @@ Sessions run on the 1M context window with compaction off. Quality drops long be
 
 **Rule:** a session past 50% starts no new work. It runs the steps below, reports, and stops. If Jm is live in the session, the flow is the same: Jm opens the next session with `claude attach <name>`.
 
+**A finished phase is not a stop.** If the work reached its "done when" but the plan has more (a later phase, batch or slice, a "Not in v1" list, a "next ="), hand off to the next item with the same steps, at any context level. A gate that waits on Jm is not a stop either: put the question with a default in the report, and hand off to the work that does not need him. Only Jm stops a plan (`~/.claude/CLAUDE.md`, "Only Jm stops a plan"; Jm, 2026-11-08).
+
 ## Steps
 
 1. **Reach a clean point.** Finish or revert the current edit. Leave tests in a known state: green, or red with the reason written in the handoff. If subagents still run, wait for their results; a result that arrives after this session stops is lost.
 
-2. **Save the work.** In a worktree: commit, then `git push -u origin <branch>` if the repo has a remote. Do not merge unless the task already reached its merge step (Kaya: `bin/merge-to-main.sh`). Stop any dev servers this session started, then check that none remain: `ps -axo pid,ppid,command | grep <worktree path>` (a background `npm exec wrangler dev` outlives the session as an orphan; four did on 2026-10-27).
+2. **Save the work.** In a worktree: commit, then `git push -u origin <branch>` if the repo has a remote. Do not merge unless the task already reached its merge step (Kaya: `bin/merge-to-main.sh`).
+   - **Free the memory** (Jm, 2026-11-08: the loops must clean up "work memory that is no longer needed"; the Mac has 16 GB for all loops). Stop every process this session started that the next session does not need: dev servers, renders, test runners, headless browsers, Android emulators, Gradle daemons (`./gradlew --stop`), background waits (`until … sleep`). Then check that none remain: `ps -axo pid,ppid,etime,command | grep -E '<worktree path>|<project path>'`. Orphans outlive their session: four `npm exec wrangler dev` on 2026-10-27; an `until grep … sleep 5` wait for 25 h on 2026-11-07.
+   - **Move work out of the job folder.** `claude stop` deletes `$CLAUDE_JOB_DIR` (`~/.claude/jobs/<id>/`) and its `tmp`. Move each file that the next session needs (helpers, data, clones) to the worktree or the project folder, and write the new path in the handoff.
 
 3. **Write the handoff file** with the template below. Write it for a reader with no context: absolute paths, branch names, exact commands.
    - If the project already keeps one (example: Intake `tracker/HANDOFF.md`), update that file and commit it.
@@ -30,6 +34,7 @@ Sessions run on the 1M context window with compaction off. Quality drops long be
    - The script drops this session's nesting vars and keeps the auth vars, then runs `claude --bg -n <name>-<n+1>` with a prompt that points at the handoff file.
    - Name the chain `<name>-2`, `<name>-3`, … so `claude agents` shows the order.
    - The new session gets the same settings (1M model, same hooks), so it hands off again at 40%.
+   - **A project on the project standard** (an `AGENTS.md` in its folder): `<workdir>` is the project folder, never `~/.claude`, so that `AGENTS.md` loads. Put state in the handoff. Change `AGENTS.md` only at a product review (`skills/Development/ProjectStandard/SKILL.md`).
 
 5. **Check the start.** `claude agents` lists the new session, and `claude logs <id>` shows that it read the handoff. If it did not start, tell Jm with the error. Do not retry more than once.
 
@@ -47,6 +52,7 @@ What Jm asked, in Jm's words, and the source (LucidTasks id, spec path, PR, conv
 
 ## Done when
 The finish line and how to verify it.
+After it: the plan's next item (phase, batch, "Not in v1"), or "whole plan done (evidence)", or "stopped by Jm (his words, date)".
 
 ## State
 Worktree: <absolute path> · Branch: <branch> · PR: <url or none>
@@ -73,9 +79,13 @@ Traps hit and approaches that failed (with the reason), so the next session does
 1. Read the handoff file first.
 2. If the handoff names a worktree and your cwd is not that worktree, call `EnterWorktree` with its `path`.
 3. Check the state before new work: `git log --oneline -5`, `git status`, and the tests the handoff names. If the state differs from the handoff, trust the repo and note the difference.
-4. **Remove the previous session's worktree** if you work in a different one. Each chain session that starts its own worktree leaves the old one behind; on 2026-10-29 that was ~130 worktrees (Kaya and Intake), ~30 GB, and a 98%-full disk. Remove it only when all of these hold:
+4. **Stop the previous session.** After its report it stays alive, idle, and holds ~300-450 MB plus its MCP servers. The spawn prompt names its id; else find `<name>-<n>` in `claude agents --json`.
+   - First copy each file that the handoff names under `~/.claude/jobs/<previous id>/` to your worktree or the project folder: the stop deletes that folder.
+   - If `claude agents --json` shows it `idle`, run `claude stop <previous id>`. Its conversation stays; `claude attach <id>` resumes it. If it is `busy`, try again at your next context check.
+   - Never stop a session of another chain, or one that waits on Jm (`blocked`).
+5. **Remove the previous session's worktree** if you work in a different one. Each chain session that starts its own worktree leaves the old one behind; on 2026-10-29 that was ~130 worktrees (Kaya and Intake), ~30 GB, and a 98%-full disk. Remove it only when all of these hold:
    - its branch is merged (Kaya: `git merge-base --is-ancestor <branch> main`) or pushed (`git -C <path> rev-parse HEAD` equals `origin/<branch>`);
    - neither the handoff nor a watcher still uses it (`lsof -d cwd -Fn | grep <path>` is empty).
 
    Then run `git worktree remove <path>` without `--force`: git refuses a tree with changes, and the branch stays. If git refuses, leave the tree and name it in your report.
-5. Continue from **Next steps**. Keep the same rules. At the next guard note, run this skill again with `<n+1>`.
+6. Continue from **Next steps**. Keep the same rules. At the next guard note, run this skill again with `<n+1>`.
