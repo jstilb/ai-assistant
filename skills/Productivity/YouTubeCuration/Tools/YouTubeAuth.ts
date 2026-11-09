@@ -21,20 +21,15 @@
  * needlessly rewrite secrets.json on every call.
  */
 
-import { homedir } from "node:os";
-import { existsSync, readFileSync } from "node:fs";
 import {
   GOOGLE_TOKEN_URL as TOKEN_URL,
   type HttpFetcher,
   defaultHttp,
   loadGoogleOAuthClient,
-  mergeSecretsFile,
 } from "../../../../lib/core/GoogleOAuth.ts";
+import { optionalSecret, secretsFilePath, updateSecrets } from "../../../../lib/core/Secrets.ts";
 
 export type { HttpFetcher, HttpRequest, HttpResponse } from "../../../../lib/core/GoogleOAuth.ts";
-
-const HOME = process.env.HOME ?? homedir();
-const DEFAULT_SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 
 // Refresh this many seconds before the cached token's actual expiry, so a
 // token that's technically still valid but about to expire mid-batch
@@ -42,8 +37,6 @@ const DEFAULT_SECRETS_PATH = `${HOME}/.claude/secrets.json`;
 const EXPIRY_SKEW_SEC = 60;
 
 interface GetAccessTokenOptions {
-  /** Defaults to ~/.claude/secrets.json; override in tests with an mkdtemp path. */
-  secretsPath?: string;
   /** Defaults to the gcalcli client_secret.json path (loadGoogleOAuthClient's own default). */
   clientPath?: string;
   http?: HttpFetcher;
@@ -53,30 +46,6 @@ interface GetAccessTokenOptions {
 
 const RECONSENT_POINTER =
   "run `bun skills/Productivity/YouTubeCuration/Tools/YouTubeOAuthBootstrap.ts` to (re-)grant playlist-write consent";
-
-interface StoredSecrets {
-  GOOGLE_YOUTUBE_REFRESH_TOKEN?: unknown;
-  GOOGLE_YOUTUBE_ACCESS_TOKEN?: unknown;
-  GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT?: unknown;
-}
-
-function readSecrets(path: string): StoredSecrets {
-  if (!existsSync(path)) {
-    throw new Error(
-      `secrets file missing at ${path} — no YouTube playlist-write consent has ever been granted; ${RECONSENT_POINTER}`,
-    );
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch (err) {
-    throw new Error(`secrets file at ${path} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`secrets file at ${path} did not parse to an object`);
-  }
-  return parsed as StoredSecrets;
-}
 
 interface RefreshTokenResponse {
   access_token: string;
@@ -95,20 +64,19 @@ interface RefreshTokenResponse {
  * Both cases point the caller at YouTubeOAuthBootstrap.ts to re-consent.
  */
 export async function getYouTubeAccessToken(opts: GetAccessTokenOptions = {}): Promise<string> {
-  const secretsPath = opts.secretsPath ?? DEFAULT_SECRETS_PATH;
   const http = opts.http ?? defaultHttp;
   const now = opts.now ?? (() => Date.now());
   const nowSec = Math.floor(now() / 1000);
 
-  const secrets = readSecrets(secretsPath);
-  const refreshToken = secrets.GOOGLE_YOUTUBE_REFRESH_TOKEN;
-  if (typeof refreshToken !== "string" || !refreshToken) {
-    throw new Error(`GOOGLE_YOUTUBE_REFRESH_TOKEN missing from ${secretsPath} — ${RECONSENT_POINTER}`);
+  // optionalSecret: null when the file or key is missing; a SecretError when the file is broken.
+  const refreshToken = optionalSecret("GOOGLE_YOUTUBE_REFRESH_TOKEN");
+  if (refreshToken === null) {
+    throw new Error(`GOOGLE_YOUTUBE_REFRESH_TOKEN missing from ${secretsFilePath()} — ${RECONSENT_POINTER}`);
   }
 
-  const cachedToken = secrets.GOOGLE_YOUTUBE_ACCESS_TOKEN;
-  const cachedExpiresAt = Number(secrets.GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT ?? 0);
-  if (typeof cachedToken === "string" && cachedToken && cachedExpiresAt - EXPIRY_SKEW_SEC > nowSec) {
+  const cachedToken = optionalSecret("GOOGLE_YOUTUBE_ACCESS_TOKEN");
+  const cachedExpiresAt = Number(optionalSecret("GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT") ?? 0);
+  if (cachedToken !== null && cachedExpiresAt - EXPIRY_SKEW_SEC > nowSec) {
     return cachedToken;
   }
 
@@ -138,10 +106,13 @@ export async function getYouTubeAccessToken(opts: GetAccessTokenOptions = {}): P
     );
   }
 
-  mergeSecretsFile(secretsPath, {
-    GOOGLE_YOUTUBE_ACCESS_TOKEN: parsed.access_token,
-    GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: String(nowSec + parsed.expires_in),
-  });
+  const accessToken = parsed.access_token;
+  const expiresAt = String(nowSec + parsed.expires_in);
+  updateSecrets((doc) => ({
+    ...doc,
+    GOOGLE_YOUTUBE_ACCESS_TOKEN: accessToken,
+    GOOGLE_YOUTUBE_ACCESS_TOKEN_EXPIRES_AT: expiresAt,
+  }));
 
   return parsed.access_token;
 }

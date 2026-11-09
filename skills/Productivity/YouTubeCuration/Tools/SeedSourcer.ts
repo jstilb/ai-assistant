@@ -35,9 +35,9 @@
  * this exact seam).
  */
 
-import { homedir } from "node:os";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { inference, type InferenceOptions, type InferenceResult } from "../../../../lib/core/Inference.ts";
+import { optionalSecret, secretsFilePath } from "../../../../lib/core/Secrets.ts";
 import {
   errMessage,
   isLockContention,
@@ -58,24 +58,13 @@ const DEFAULT_MAX_SEARCH_RESULTS = 25;
 /** spec.md §7: "top each topic playlist up to ~10 unwatched items." */
 export const TARGET_CANDIDATE_COUNT = 10;
 
-const HOME = process.env.HOME ?? homedir();
-const DEFAULT_SECRETS_PATH = `${HOME}/.claude/secrets.json`;
-
 // ----------------------------------------------------------------------------
 // API key (search.list/videos.list only — NOT the OAuth token, see header)
 // ----------------------------------------------------------------------------
 
-/** Mirrors YouTubeEnrich.ts's loadApiKey() — same secrets.json key, same dual-casing fallback. Not imported from there: that module doesn't export it, and this is 6 lines, not worth a cross-skill seam for. */
-export function loadYouTubeApiKey(secretsPath: string = DEFAULT_SECRETS_PATH): string | null {
-  if (!existsSync(secretsPath)) return null;
-  try {
-    const parsed = JSON.parse(readFileSync(secretsPath, "utf8")) as Record<string, unknown>;
-    const key = parsed.YOUTUBE_API_KEY ?? parsed.youtube_api_key;
-    return typeof key === "string" && key.length > 0 ? key : null;
-  } catch {
-    // optional secrets file: missing or invalid JSON means no API key
-    return null;
-  }
+/** Same key and dual-casing fallback as YouTubeEnrich.ts (no cross-skill import). Used by the 3 API callers below. */
+function loadYouTubeApiKey(): string | null {
+  return optionalSecret("YOUTUBE_API_KEY") ?? optionalSecret("youtube_api_key");
 }
 
 // ----------------------------------------------------------------------------
@@ -143,7 +132,7 @@ export async function searchTopicVideoIds(topic: string, options: SearchOptions 
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
     throw new Error(
-      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${secretsFilePath()} — see YouTubeEnrich.ts header for setup`,
     );
   }
   const maxResults = options.maxResults ?? DEFAULT_MAX_SEARCH_RESULTS;
@@ -199,7 +188,7 @@ export async function getVideosMetadata(videoIds: string[], options: SearchOptio
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
     throw new Error(
-      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${secretsFilePath()} — see YouTubeEnrich.ts header for setup`,
     );
   }
 
@@ -274,7 +263,7 @@ export async function getChannelDossiers(channelIds: string[], options: SearchOp
   const apiKey = options.apiKey ?? loadYouTubeApiKey();
   if (!apiKey) {
     throw new Error(
-      `SeedSourcer: YOUTUBE_API_KEY missing from ${DEFAULT_SECRETS_PATH} — see YouTubeEnrich.ts header for setup`,
+      `SeedSourcer: YOUTUBE_API_KEY missing from ${secretsFilePath()} — see YouTubeEnrich.ts header for setup`,
     );
   }
 

@@ -1,22 +1,26 @@
 /**
  * YouTubeAuth.test.ts — getYouTubeAccessToken(): refresh, cache reuse, and
- * fail-loud paths. Hermetic: secrets.json is an mkdtemp path, HTTP is a
- * stub, the gcalcli client file is an mkdtemp fixture — no live tree, no
+ * fail-loud paths. Hermetic: KAYA_HOME is an mkdtemp dir (so secrets.json
+ * is a temp file), HTTP is a stub, the gcalcli client file is an mkdtemp fixture — no live tree, no
  * real network.
  */
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SecretError } from "../../../../lib/core/Secrets.ts";
 import { getYouTubeAccessToken, type HttpFetcher } from "../Tools/YouTubeAuth.ts";
 
 let tmp: string;
 let secretsPath: string;
 let clientPath: string;
+let savedKayaHome: string | undefined;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "yt-auth-test-"));
+  savedKayaHome = process.env.KAYA_HOME;
+  process.env.KAYA_HOME = tmp;
   secretsPath = join(tmp, "secrets.json");
   clientPath = join(tmp, "client_secret.json");
   writeFileSync(
@@ -28,6 +32,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedKayaHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = savedKayaHome;
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -43,7 +49,7 @@ test("getYouTubeAccessToken: refreshes when no cached token, returns access_toke
     };
   };
 
-  const token = await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => 1_000_000_000 });
+  const token = await getYouTubeAccessToken({ clientPath, http, now: () => 1_000_000_000 });
 
   expect(token).toBe("ya29.fresh");
   expect(seen).toHaveLength(1);
@@ -61,7 +67,7 @@ test("getYouTubeAccessToken: caches the refreshed token to secrets.json (expiry 
   });
   const nowSec = 1_000_000_000;
 
-  await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => nowSec * 1000 });
+  await getYouTubeAccessToken({ clientPath, http, now: () => nowSec * 1000 });
 
   const written = JSON.parse(await Bun.file(secretsPath).text()) as Record<string, unknown>;
   expect(written.GOOGLE_YOUTUBE_ACCESS_TOKEN).toBe("ya29.fresh");
@@ -85,7 +91,7 @@ test("getYouTubeAccessToken: reuses cached access token when not near expiry, ma
     throw new Error("must not be called — cache should be reused");
   };
 
-  const token = await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => nowSec * 1000 });
+  const token = await getYouTubeAccessToken({ clientPath, http, now: () => nowSec * 1000 });
 
   expect(token).toBe("ya29.cached");
   expect(calls).toBe(0);
@@ -112,7 +118,7 @@ test("getYouTubeAccessToken: refreshes when cached token is within the expiry-sk
     };
   };
 
-  const token = await getYouTubeAccessToken({ secretsPath, clientPath, http, now: () => nowSec * 1000 });
+  const token = await getYouTubeAccessToken({ clientPath, http, now: () => nowSec * 1000 });
 
   expect(calls).toBe(1);
   expect(token).toBe("ya29.renewed");
@@ -126,7 +132,7 @@ test("getYouTubeAccessToken: fails loud with the re-consent pointer when refresh
     return { status: 200, headers: {}, body: "{}" };
   };
 
-  await expect(getYouTubeAccessToken({ secretsPath, clientPath, http })).rejects.toThrow(
+  await expect(getYouTubeAccessToken({ clientPath, http })).rejects.toThrow(
     /GOOGLE_YOUTUBE_REFRESH_TOKEN missing.*YouTubeOAuthBootstrap\.ts/s,
   );
   expect(calls).toBe(0);
@@ -140,16 +146,36 @@ test("getYouTubeAccessToken: fails loud with the re-consent pointer when the ref
     body: JSON.stringify({ error: "invalid_grant", error_description: "Token has been expired or revoked." }),
   });
 
-  await expect(getYouTubeAccessToken({ secretsPath, clientPath, http })).rejects.toThrow(
+  await expect(getYouTubeAccessToken({ clientPath, http })).rejects.toThrow(
     /invalid_grant.*YouTubeOAuthBootstrap\.ts/s,
   );
 });
 
 test("getYouTubeAccessToken: fails loud (not a silent empty-string return) when secrets.json is entirely missing", async () => {
-  const missingPath = join(tmp, "does-not-exist.json");
-  await expect(getYouTubeAccessToken({ secretsPath: missingPath, clientPath })).rejects.toThrow(
-    /secrets file missing.*YouTubeOAuthBootstrap\.ts/s,
+  await expect(getYouTubeAccessToken({ clientPath })).rejects.toThrow(
+    /GOOGLE_YOUTUBE_REFRESH_TOKEN missing from .*secrets\.json.*YouTubeOAuthBootstrap\.ts/s,
   );
+});
+
+test("getYouTubeAccessToken: a malformed secrets.json throws file-malformed, makes no HTTP call, leaves the file bytes unchanged", async () => {
+  const bytes = '{ "GOOGLE_YOUTUBE_REFRESH_TOKEN": "1//yt-refresh", ';
+  writeFileSync(secretsPath, bytes);
+  let calls = 0;
+  const http: HttpFetcher = async () => {
+    calls += 1;
+    return {
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ access_token: "ya29.fresh", expires_in: 3600, token_type: "Bearer" }),
+    };
+  };
+
+  const err = await getYouTubeAccessToken({ clientPath, http }).catch((e: unknown) => e);
+
+  expect(err).toBeInstanceOf(SecretError);
+  expect(err instanceof SecretError ? err.kind : null).toBe("file-malformed");
+  expect(calls).toBe(0);
+  expect(readFileSync(secretsPath, "utf8")).toBe(bytes);
 });
 
 test("getYouTubeAccessToken: a refresh preserves unrelated secrets.json keys including DPA keys", async () => {
@@ -168,7 +194,7 @@ test("getYouTubeAccessToken: a refresh preserves unrelated secrets.json keys inc
     body: JSON.stringify({ access_token: "ya29.fresh", expires_in: 3600, token_type: "Bearer" }),
   });
 
-  await getYouTubeAccessToken({ secretsPath, clientPath, http });
+  await getYouTubeAccessToken({ clientPath, http });
 
   const written = JSON.parse(await Bun.file(secretsPath).text()) as Record<string, unknown>;
   expect(written.GOOGLE_YOUTUBE_ACCESS_TOKEN).toBe("ya29.fresh");

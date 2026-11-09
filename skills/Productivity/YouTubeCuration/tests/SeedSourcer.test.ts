@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 // cross-skill-allowed: test seeds a fixture events.db through AppUsageTracker's real Db/schema so the already-watched check runs against a real table shape, not a hand-rolled mock
 import { Db } from "../../AppUsageTracker/Tools/Db.ts";
+import { SecretError } from "../../../../lib/core/Secrets.ts";
 import { LedgerLockError } from "../Tools/LedgerReader.ts";
 import {
   type ApiGetFetcher,
@@ -168,6 +169,78 @@ test("searchTopicVideoIds(): throws loud on a non-2xx response", async () => {
 test("searchTopicVideoIds(): throws loud when no API key is available (never silently no-ops)", async () => {
   const http: ApiGetFetcher = async () => jsonResponse(200, { items: [] });
   await expect(searchTopicVideoIds("x", { http, apiKey: "" })).rejects.toThrow(/YOUTUBE_API_KEY/);
+});
+
+/** Runs `fn` with KAYA_HOME pointed at a fresh temp dir holding `secretsBody` (or no secrets.json when null); restores KAYA_HOME after. */
+async function withSecretsHome(secretsBody: string | null, fn: () => Promise<void>): Promise<void> {
+  const home = mkdtempSync(join(TMP, "home-"));
+  if (secretsBody !== null) writeFileSync(join(home, "secrets.json"), secretsBody);
+  const saved = process.env.KAYA_HOME;
+  process.env.KAYA_HOME = home;
+  try {
+    await fn();
+  } finally {
+    if (saved === undefined) delete process.env.KAYA_HOME;
+    else process.env.KAYA_HOME = saved;
+  }
+}
+
+test("searchTopicVideoIds(): with no apiKey option, reads YOUTUBE_API_KEY from KAYA_HOME secrets", async () => {
+  const calls: ApiGetRequest[] = [];
+  const http: ApiGetFetcher = async (req) => {
+    calls.push(req);
+    return jsonResponse(200, { items: [] });
+  };
+  await withSecretsHome(JSON.stringify({ YOUTUBE_API_KEY: "upper-key" }), async () => {
+    await searchTopicVideoIds("x", { http });
+  });
+  expect(calls[0]?.url).toContain("key=upper-key");
+});
+
+test("searchTopicVideoIds(): falls back to lowercase youtube_api_key", async () => {
+  const calls: ApiGetRequest[] = [];
+  const http: ApiGetFetcher = async (req) => {
+    calls.push(req);
+    return jsonResponse(200, { items: [] });
+  };
+  await withSecretsHome(JSON.stringify({ youtube_api_key: "lower-key" }), async () => {
+    await searchTopicVideoIds("x", { http });
+  });
+  expect(calls[0]?.url).toContain("key=lower-key");
+});
+
+test("searchTopicVideoIds(): no secrets file throws the YOUTUBE_API_KEY missing error with zero HTTP calls", async () => {
+  let calls = 0;
+  const http: ApiGetFetcher = async () => {
+    calls++;
+    return jsonResponse(200, { items: [] });
+  };
+  await withSecretsHome(null, async () => {
+    await expect(searchTopicVideoIds("x", { http })).rejects.toThrow(/YOUTUBE_API_KEY missing from .*secrets\.json/);
+  });
+  expect(calls).toBe(0);
+});
+
+test("searchTopicVideoIds(): a malformed secrets file throws SecretError file-malformed (no silent null), zero HTTP calls, no value leak", async () => {
+  let calls = 0;
+  const http: ApiGetFetcher = async () => {
+    calls++;
+    return jsonResponse(200, { items: [] });
+  };
+  await withSecretsHome('{"YOUTUBE_API_KEY": "SENTINEL-yt-key", ', async () => {
+    let caught: unknown;
+    try {
+      await searchTopicVideoIds("x", { http });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(SecretError);
+    if (!(caught instanceof SecretError)) throw new Error("expected SecretError");
+    expect(caught.kind).toBe("file-malformed");
+    expect(caught.message).not.toContain("SENTINEL");
+    expect(String(caught.stack)).not.toContain("SENTINEL");
+  });
+  expect(calls).toBe(0);
 });
 
 // ----------------------------------------------------------------------------
