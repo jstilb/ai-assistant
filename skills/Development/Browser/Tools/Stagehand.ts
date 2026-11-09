@@ -30,7 +30,8 @@ import { parseArgs } from "node:util";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadSettings } from "../../../../lib/core/ConfigLoader.ts";
-import { getKayaHome, defaultKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
 import { z } from "zod";
 import { Stagehand, type V3Options, type ModelConfiguration } from "@browserbasehq/stagehand";
 import { BROWSER_CDP_PORT } from "./types.ts";
@@ -42,7 +43,6 @@ import { BROWSER_CDP_PORT } from "./types.ts";
 const CDP_PORT = BROWSER_CDP_PORT;
 const CACHE_DIR = join(getKayaHome(), "MEMORY", "stagehand-cache");
 const CACHE_STATS_FILE = join(CACHE_DIR, "stats.json");
-const SECRETS_FILE = join(defaultKayaHome(), "secrets.json");
 
 // ============================================
 // SETTINGS & SECRETS
@@ -55,36 +55,8 @@ interface StagehandSettings {
   fallbackModel: string;
 }
 
-interface Secrets {
-  GEMINI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  [key: string]: unknown;
-}
-
-const SecretsSchema = z
-  .object({
-    GEMINI_API_KEY: z.string().optional(),
-    ANTHROPIC_API_KEY: z.string().optional(),
-  })
-  .passthrough();
-
-function loadSecrets(): Secrets {
-  try {
-    if (existsSync(SECRETS_FILE)) {
-      // Synchronous load via blocking read — secrets file is small and startup-only
-      const raw = readFileSync(SECRETS_FILE, "utf-8");
-      return SecretsSchema.parse(JSON.parse(raw)) as Secrets;
-    }
-  } catch (err) {
-    // Unreadable or invalid secrets file: report it, then use env vars as fallback.
-    console.error(`Stagehand: could not load secrets file: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return {};
-}
-
 function getStagehandConfig(): { model: ModelConfiguration; apiKey: string } {
   const settings = loadSettings();
-  const secrets = loadSecrets();
 
   const stagehandSettings = (settings.stagehand as StagehandSettings | undefined) ?? {
     provider: "google",
@@ -98,8 +70,8 @@ function getStagehandConfig(): { model: ModelConfiguration; apiKey: string } {
   // Get API key based on provider
   const apiKey =
     stagehandSettings.provider === "gemini" || stagehandSettings.provider === "google"
-      ? (secrets.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "")
-      : (secrets.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? "");
+      ? (optionalSecret("GEMINI_API_KEY") ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "")
+      : (optionalSecret("ANTHROPIC_API_KEY") ?? process.env.ANTHROPIC_API_KEY ?? "");
 
   // Set env var so Stagehand can pick it up via providerEnvVarMap
   if (stagehandSettings.provider === "gemini" || stagehandSettings.provider === "google") {
@@ -478,15 +450,13 @@ async function runAgent(task: string, opts: InitOptions): Promise<void> {
   console.log(`Stagehand: Running autonomous multi-step task (CUA mode)...`);
 
   // Resolve CUA provider API keys
-  const secrets = loadSecrets();
-
   // Try Anthropic key from secrets.json or env
   if (!process.env.ANTHROPIC_API_KEY) {
-    const key = secrets.ANTHROPIC_API_KEY ?? "";
+    const key = optionalSecret("ANTHROPIC_API_KEY") ?? "";
     if (key) process.env.ANTHROPIC_API_KEY = key;
   }
   if (!process.env.OPENAI_API_KEY) {
-    const key = typeof secrets.OPENAI_API_KEY === "string" ? secrets.OPENAI_API_KEY : "";
+    const key = optionalSecret("OPENAI_API_KEY") ?? "";
     if (key) process.env.OPENAI_API_KEY = key;
   }
 
