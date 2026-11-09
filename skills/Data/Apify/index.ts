@@ -43,10 +43,11 @@ export const ActorRunSchema = z
 /**
  * Validate an actor-run response against ActorRunSchema.
  *
- * WARN-LOUD-AND-PASS, not hard-reject: EventScout's ApifyAdapter imports
- * this class directly as a live, cron-wired fetch tier for 2 real sources.
+ * WARN-LOUD-AND-PASS, not hard-reject: this was chosen while EventScout's
+ * ApifyAdapter used this class as a cron-wired fetch tier (that tier and
+ * adapter were deleted in P05 S2, 2026-11-08; no in-repo caller remains).
  * A `.parse()` that throws on any mismatch would turn an API shape drift
- * into a hard production failure on every run. Failures are logged loudly
+ * into a hard failure on every run. Failures are logged loudly
  * (console.error) so drift is visible — the fear ISC-600 exists to guard
  * against — without adding a new failure mode on the paid, cron-wired path.
  */
@@ -186,11 +187,9 @@ export class Apify {
   constructor(token?: string) {
     // ISC-603 restore: canonical token resolution — APIFY_TOKEN only, no
     // APIFY_API_KEY fallback — and fail loud when no token resolves at all.
-    // Safe on the live path: EventScout's ApifyAdapter always passes an
-    // explicit token loaded from secrets.json, so this throw cannot fire
-    // on the cron-wired seam. It only changes behavior for the dead
-    // actor-wrapper library's bare `new Apify()` call sites, which have 0
-    // consumers today.
+    // Callers pass an explicit token loaded from secrets.json (as EventScout's
+    // ApifyAdapter did before P05 S2 deleted it, 2026-11-08); a bare
+    // `new Apify()` with no APIFY_TOKEN fails loud here.
     const resolvedToken = token ?? process.env.APIFY_TOKEN;
     if (!resolvedToken) {
       throw new Error(
@@ -443,9 +442,8 @@ export class ApifyDataset {
    * TestWriter spec (Apify.testwriter.test.ts) and Tools/ApifyTool.ts's
    * `dataset` command, which already called `getAllItems({ maxPages,
    * pageSize })` and was type-broken against the pre-restore 0-arg
-   * signature. EventScout's live ApifyAdapter never calls this method (it
-   * reads via `listItems({ limit: 1 })` directly), so this cannot affect
-   * the live cron-wired seam.
+   * signature. (EventScout's ApifyAdapter, deleted in P05 S2 on 2026-11-08,
+   * read via `listItems({ limit: 1 })` and never called this method.)
    *
    * @returns Array of all items up to the cap
    */

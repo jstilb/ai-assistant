@@ -6,9 +6,9 @@ Progressive disclosure interface for web scraping and automation via the Apify p
 
 ## Status (2026-07-31)
 
-The `Apify`/`ApifyDataset` client documented below is **live** — EventScout's
-`skills/Productivity/EventScout/Tools/adapters/ApifyAdapter.ts` imports it
-directly for 2 cron-wired sources. This skill previously also shipped a
+The `Apify`/`ApifyDataset` client documented below has **no in-repo consumer**:
+EventScout's `ApifyAdapter.ts`, its only caller, was deleted in P05 S2
+(2026-11-08) after its tier had 0 sources since 2026-08-20. This skill previously also shipped a
 9-actor preset wrapper library (`actors/**`, `Tools/ApifyTool.ts`, example
 scripts) that had zero consumers since March 2026 — it was deleted as dead
 code (decision: kill, `plans/audits/remediation/theme3-apify-wrapper-kill.md`).

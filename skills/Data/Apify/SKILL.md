@@ -1,6 +1,6 @@
 ---
 name: Apify
-description: Apify actor-run and dataset client — EventScout's JS-rendering/Cloudflare-bypass fetch tier. USE WHEN Apify actor run, Apify dataset, EventScout Apify fetch tier, calling Apify's API directly in code.
+description: Apify actor-run and dataset client. USE WHEN Apify actor run, Apify dataset, calling Apify's API directly in code.
 context: fork
 ---
 ## Voice Notification
@@ -13,20 +13,15 @@ context: fork
 Running the **WorkflowName** workflow in the **Apify** skill to ACTION...
 ```
 
-# Apify - EventScout's Apify fetch client
+# Apify - Apify actor-run and dataset client
 
 `index.ts` exports the `Apify`/`ApifyDataset` client — a thin TypeScript
-wrapper around the Apify platform's actor-run and dataset APIs. It is **LIVE**:
-EventScout's `skills/Productivity/EventScout/Tools/adapters/ApifyAdapter.ts`
-imports it directly (`cross-skill-allowed`) as a cron-wired fetch tier for 2
-sources (`sandiego-org-events`, `bandsintown-sd`) that need JS rendering +
-Cloudflare bypass and can't run through BrightData's keyless tiers unattended.
-That nightly cron run is the only thing this skill currently serves.
+wrapper around the Apify platform's actor-run and dataset APIs. It has **no
+in-repo consumer**: EventScout's Apify fetch tier (`ApifyAdapter.ts`, its only
+caller) had 0 sources since 2026-08-20 and was deleted in P05 S2 (2026-11-08).
 
-If you're here because something scrapes JS-heavy pages for EventScout, this
-is the right place — see `ApifyAdapter.ts` for the calling convention (`new
-Apify(token)`, `apify.callActor(...)`, `apify.getDataset(...)`,
-`dataset.listItems(...)`).
+Calling convention: `new Apify(token)`, `apify.callActor(...)`,
+`apify.getDataset(...)`, `dataset.listItems(...)`.
 
 ## API reference
 
