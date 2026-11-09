@@ -58,8 +58,8 @@ import { basename, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import type { Task } from "../Types/index.ts";
-import { matchKnownInfraSignature, INFRA_SIGNATURE_GROUPS } from "./TrialRunner.ts";
-import { USAGE_LIMIT_PATTERNS } from "../../../../lib/cron/FailureClassifier.ts";
+import { matchKnownInfraSignature } from "./TrialRunner.ts";
+import { RUN_END_SIGNATURES } from "../../../../lib/core/ClaudeRunEnd.ts";
 
 // ============================================================================
 // Destructive verb patterns
@@ -193,14 +193,10 @@ const INCIDENT_CITATION =
   "under --permission-mode bypassPermissions with only the subprocess cwd relocated (never the " +
   "target path); the real directory survived 4 live firings only because the model itself refused.";
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
  * Replace every substring TrialRunner's matchKnownInfraSignature() would
- * treat as an infra-failure signal (imported from TrialRunner.ts's
- * INFRA_SIGNATURE_GROUPS — one source of truth, never a second
+ * treat as an infra-failure signal (lib/core/ClaudeRunEnd.ts's
+ * RUN_END_SIGNATURES — one source of truth, never a second
  * hand-maintained copy of this list) with a neutral placeholder.
  *
  * WHY THIS EXISTS: `path`/`snippet` on a DestructiveScenarioMatch are
@@ -213,7 +209,9 @@ function escapeRegExp(s: string): string {
  * "timeout" or "authentication" — even coincidentally, e.g. a trailing
  * comment `# ignore any timeout` — would cause a REAL refusal to be
  * misclassified as a transient infra blip: excluded from pass_rate,
- * invisible as a failure. Case-insensitive; only the matched span is
+ * invisible as a failure. Each row keeps its own case rule (most rows are
+ * case-insensitive; a few, e.g. `API Error: 529`, are case-sensitive) — the
+ * same rule matchKnownInfraSignature() applies; only the matched span is
  * replaced, surrounding text is preserved.
  *
  * Exported (remediation-p1p5 E2/F2) so EvalExecutor.ts's setup_commands
@@ -224,20 +222,21 @@ function escapeRegExp(s: string): string {
  */
 export function redactInfraSignatures(text: string): string {
   let redacted = text;
-  for (const group of INFRA_SIGNATURE_GROUPS) {
-    for (const substring of group.substrings) {
-      redacted = redacted.replace(new RegExp(escapeRegExp(substring), "gi"), "[redacted:infra-signature]");
+  // matchKnownInfraSignature() reads every row of RUN_END_SIGNATURES (the
+  // "machine" tier), so every row is redacted, in table order. One pass can
+  // create a new match ("Timeout429" → "[redacted:…]429" now has a \b before
+  // 429), so the pass repeats until the text stops changing. It terminates:
+  // each change replaces signature text with the placeholder, which matches no row.
+  let before: string;
+  do {
+    before = redacted;
+    for (const { pattern } of RUN_END_SIGNATURES) {
+      redacted = redacted.replace(
+        new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`),
+        "[redacted:infra-signature]",
+      );
     }
-  }
-  // matchKnownInfraSignature() also matches USAGE_LIMIT_PATTERNS (regexes, not
-  // substrings) — redact those too or a refusal quoting "credit balance is too
-  // low" would be laundered into an infra failure.
-  for (const pattern of USAGE_LIMIT_PATTERNS) {
-    redacted = redacted.replace(
-      new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`),
-      "[redacted:infra-signature]",
-    );
-  }
+  } while (redacted !== before);
   return redacted;
 }
 

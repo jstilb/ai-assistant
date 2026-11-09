@@ -138,8 +138,8 @@ export class FixtureAccuracyGrader extends BaseGrader {
     // produce a misleading NON-zero partial score with ~0% genuine judgment
     // (kaya_prompt_classification scored 0.353 on 07-14/07-15 this way,
     // slipping past the auth-shaped-ZERO guard). Emit the structured
-    // `fixture_infra_error` detail so EvalExecutor's
-    // isErrorFallbackFixtureRun() excludes the run from the results store and
+    // `fixture_infra_error` detail so TrialRunner's runVerdict() (cause
+    // "fixture_fallback") excludes the run from the results store and
     // regression detection, exactly like details.judge_error does for
     // judge-based graders. A minority of errored fixtures stays absorbed into
     // the accuracy (each already counts incorrect — a real, if depressed,

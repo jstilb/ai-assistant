@@ -8,7 +8,7 @@ import type { Task, Trial, EvalRun, Transcript, InfraFailureType } from "../Type
 import { createGrader, runGraders, type GraderContext } from "../Graders/Base.ts";
 import { TranscriptCapture } from "./TranscriptCapture.ts";
 import { parseArgs } from "node:util";
-import { USAGE_LIMIT_PATTERNS } from "../../../../lib/cron/FailureClassifier.ts";
+import { classifyText, type TextEnd } from "../../../../lib/core/ClaudeRunEnd.ts";
 
 // Import graders to register them
 import "../Graders/CodeBased/index.ts";
@@ -52,33 +52,25 @@ export type TaskExecutor = (
 
 export interface TrialRunnerConfig {
   task: Task;
-  /** Custom executor function. If not provided, uses default EvalExecutor */
-  executor?: TaskExecutor;
+  /** Runs one trial. Production passes EvalExecutor's trialExecutor(). */
+  executor: TaskExecutor;
   onTrialComplete?: (trial: Trial) => void;
 }
 
 /**
- * The narrow, known infra-failure signature groups, checked in this order
- * (first match wins) by matchKnownInfraSignature(). Exported as data (not
- * just the classifier function) — evals-rebuild slice B6's
- * DestructiveScenarioGuard.ts imports this SAME list to redact these exact
- * substrings out of untrusted task-author text (a scenario_prompt/
- * setup_commands snippet) before echoing it into a thrown refusal error,
- * rather than hand-maintaining a second, driftable copy of "what counts as
- * an infra signature". One source of truth for both "classify" and
- * "redact".
+ * P02's run-end classes → the Evals InfraFailureType labels. A credit/quota
+ * banner is a limit, not a bug, so it is bucketed as 'rate_limit'. Network
+ * texts (ENOTFOUND, ECONNREFUSED, ECONNRESET, socket closed, …) map to
+ * 'timeout'; some of them had no label under the old substring list (plan
+ * P10 B3, adopted by Jm 2026-11-08).
  */
-export const INFRA_SIGNATURE_GROUPS: { type: InfraFailureType; substrings: string[] }[] = [
-  {
-    type: "rate_limit",
-    substrings: ["rate limit", "429", "too many requests", "overloaded", "hit your limit", "you've hit your limit"],
-  },
-  { type: "timeout", substrings: ["timeout", "timed out", "etimedout", "econnreset"] },
-  {
-    type: "auth_error",
-    substrings: ["401", "403", "unauthorized", "authentication", "invalid api key", "permission denied"],
-  },
-];
+const TEXT_END_TO_INFRA: Record<TextEnd, InfraFailureType> = {
+  "rate-limit": "rate_limit",
+  quota: "rate_limit",
+  auth: "auth_error",
+  network: "timeout",
+  timeout: "timeout",
+};
 
 /**
  * Match text against a narrow, known set of infra-failure signatures.
@@ -93,22 +85,13 @@ export const INFRA_SIGNATURE_GROUPS: { type: InfraFailureType; substrings: strin
  * belt-and-suspenders final check on its assembled (thrown) message, since
  * that message is caught by this same module's catch block further down.
  *
- * Credit / quota / plan-limit wording ("Credit balance is too low", "You've
- * reached your Fable 5 limit", ...) is matched through lib/cron/
- * FailureClassifier.ts's USAGE_LIMIT_PATTERNS (reused, not copied — cron's
- * retry logic and this classifier must agree on what a limit message is).
- * B1 (2026-10-17) made inference() errors message-first (`exit 1: Credit
- * balance is too low`), which exposed that none of the substring groups
- * below knew that wording. Bucketed as 'rate_limit' (the nearest existing
- * InfraFailureType: a limit, not a bug).
+ * The signatures are lib/core/ClaudeRunEnd.ts's ONE table, read through
+ * classifyText(text, "machine") (plan P10 slice 5) — cron's retry logic and
+ * this classifier must agree on what a limit/auth/timeout message is.
  */
 export function matchKnownInfraSignature(text: string): InfraFailureType | null {
-  if (USAGE_LIMIT_PATTERNS.some((re) => re.test(text))) return "rate_limit";
-  const t = text.toLowerCase();
-  for (const group of INFRA_SIGNATURE_GROUPS) {
-    if (group.substrings.some((s) => t.includes(s))) return group.type;
-  }
-  return null;
+  const end = classifyText(text, "machine");
+  return end === null ? null : TEXT_END_TO_INFRA[end];
 }
 
 /**
@@ -146,7 +129,7 @@ function classifyInfraFailure(signals: InfraSignals): InfraFailureType | null {
 /** Every grader result of the trial carries the structured `details.judge_error`
  *  marker (the judge failed to produce a verdict). False for a trial with no
  *  grader results. */
-export function isJudgeFailedTrial(trial: Trial): boolean {
+function isJudgeFailedTrial(trial: Trial): boolean {
   return (
     trial.grader_results.length > 0 && trial.grader_results.every((g) => typeof g.details?.["judge_error"] === "string")
   );
@@ -157,34 +140,199 @@ function judgeErrorOf(trial: Trial): string {
   return typeof e === "string" ? e : "unknown";
 }
 
+// ============================================================================
+// Run Verdict — "does this run count, and did it pass?"
+// ============================================================================
+
+/** Why a run carries no behavioral signal. Persisted as `status: "infra_skipped"`. */
+export type NoSignalCause = "all_trials_infra" | "judge_failure" | "fixture_fallback";
+
+/**
+ * The Run Verdict: a run either counts (and passes or fails) or carries no
+ * behavioral signal (a cause plus the reason text persisted as `infra_reason`).
+ * Computed from the EvalRun, never stored on it — see
+ * skills/Development/Evals/docs/adr/0001-run-verdict-computed-not-stored.md.
+ */
+export type RunVerdict = { counts: true; pass: boolean } | { counts: false; cause: NoSignalCause; reason: string };
+
+/**
+ * A task run whose EVERY trial was an infra failure (transient inference
+ * timeout, econnreset, etc.) carries NO behavioral signal. Falls back to the
+ * run's own counters, so an EvalRun without `trials` is still classified.
+ */
+function isAllTrialsInfraRun(run: EvalRun): boolean {
+  return run.infra_failures >= run.n_trials;
+}
+
+/**
+ * Trials that reached the graders. Defensive: an EvalRun built without a
+ * `trials` array (minimal summary fixtures) has none — never a throw.
+ */
+function behavioralTrialsOf(run: EvalRun): Trial[] {
+  if (!Array.isArray(run.trials)) return [];
+  return run.trials.filter((t) => t.status !== "infra_failure");
+}
+
+/**
+ * A run whose zero score is entirely explained by the JUDGE's OWN nested
+ * inference() call failing — not by the agent-under-test's behavior. First
+ * built for the S5 401 auth-storm (2026-07-15), widened by B2 (2026-10-17) to
+ * ANY judge failure. The all-trials-infra check only sees the TOP-LEVEL agent
+ * spawn's signals (classifyInfraFailure(), fed by executeTask()'s exitCode/
+ * stderr/resultIsError). It cannot see a judge-based grader's SEPARATE nested
+ * `claude -p` spawn inside runGraders() — the agent spawn can exit 0 (or even
+ * be skipped entirely, e.g. fixture_accuracy/nightly_judge "static input"
+ * tasks) while that second, judge-scoring spawn fails, landing a real
+ * `score: 0` with no infra_failure_type at all.
+ *
+ * Every judge-based grader that wraps Graders/JudgeProtocol.ts's
+ * judgeInference() (LLMRubric, NaturalLanguageAssert, NightlyJudge) sets
+ * GraderResult.details.judge_error ONLY when the judge failed to produce a
+ * usable verdict: the nested inference() call failed (non-zero exit, empty
+ * output, timeout, limit/credit text, auth) or its reply was not valid
+ * JSON/schema — never on a real, successfully-judged verdict. A score of 0
+ * next to a judge_error is therefore "nobody judged", never a judgement of
+ * the agent. That's a STRUCTURED, machine-authored marker (a field's mere
+ * presence), not agent output/answer text — checking it is NOT the
+ * keyword-sniffing anti-pattern the evals-rebuild spine eliminated (see
+ * classifyInfraFailure's own doc comment).
+ *
+ * WHY presence, not matchKnownInfraSignature(judge_error): the original rule
+ * required the judge_error TEXT to match the auth signature. The
+ * 2026-10-13..10-17 outage's text was `Process exited with code 1` (an
+ * empty-stderr `claude -p` exit), which matched nothing, so 9 of 12 nightly
+ * tasks persisted as real zeros and poisoned the rolling baselines. Any
+ * text-based allow-list will keep missing the next outage shape (credit
+ * text, empty output, ...); the marker already says everything needed.
+ *
+ * A partial judge failure (some trials judged) never reaches here as such:
+ * TrialRunner.run() converts those trials to infra trials first.
+ */
+function isAllJudgesFailedRun(run: EvalRun): boolean {
+  const behavioralTrials = behavioralTrialsOf(run);
+  if (behavioralTrials.length === 0) return false;
+  return behavioralTrials.every((trial) => isJudgeFailedTrial(trial));
+}
+
+/**
+ * A fixture_accuracy task run whose score is error-fallback noise, not
+ * judgment (S5 residual, 401-storm 2026-07-16). The runner's per-fixture live
+ * inference() calls fail inside setup_commands (agent spawn is skipped for
+ * these tasks, so no infra_failure_type; no judge grader, so no
+ * judge_error), and the runner's catch-block fallback `actual` can
+ * coincidentally match negative-class fixtures' expected values — a
+ * misleading NON-zero partial score with 0% genuine judgment.
+ *
+ * Classification keys on GraderResult.details.fixture_infra_error — a
+ * STRUCTURED, machine-authored marker FixtureAccuracy.ts emits ONLY when a
+ * strict majority of the record's fixtures carry the runner's own
+ * `infra_error` field. Same doctrine as details.judge_error: a field's
+ * presence, not output-text sniffing. A minority of errored fixtures does NOT
+ * trip this — each already counts incorrect in the record, a real (if
+ * depressed) behavioral signal.
+ */
+function isFixtureFallbackRun(run: EvalRun): boolean {
+  const behavioralTrials = behavioralTrialsOf(run);
+  if (behavioralTrials.length === 0) return false;
+  return behavioralTrials.every((trial) => {
+    if (trial.grader_results.length === 0) return false;
+    return trial.grader_results.every((g) => g.details?.["fixture_infra_error"] !== undefined);
+  });
+}
+
+/**
+ * THE answer to "does this run count, and did it pass?" for every caller:
+ * runSuite()'s task records and console lines, the persisted JSONL
+ * (`status: "infra_skipped"` + `infra_reason`), the `run` CLI exit code,
+ * summarizeSuiteRuns() and AblationRunner. Pure: no I/O, clock or env.
+ *
+ * Order (first match wins): all trials infra → judge failure → fixture
+ * fallback → counts.
+ *
+ * Pass rule (only when the run counts): unanimity, `pass_rate >= 1`.
+ * Task.pass_threshold is applied EXACTLY ONCE, upstream, inside runGraders()
+ * (Graders/Base.ts) — it gates whether each individual TRIAL's `passed`
+ * field is true. This asks a DIFFERENT question — "were ALL trials of this
+ * task consistent" — so it requires unanimity rather than re-applying a
+ * second, independent score threshold. For the live corpus (trials ∈
+ * {1,2,3}) this is identical to the old `pass_rate >= 0.75` check; it only
+ * matters for a task with 4+ trials, where it demands ALL trials pass.
+ */
+export function runVerdict(run: EvalRun): RunVerdict {
+  if (isAllTrialsInfraRun(run)) {
+    const cause = run.trials?.find((t) => t.error)?.error;
+    return {
+      counts: false,
+      cause: "all_trials_infra",
+      reason: `all ${run.infra_failures}/${run.n_trials} trial(s) infra-failed${cause ? `: ${cause}` : ""}`,
+    };
+  }
+  if (isAllJudgesFailedRun(run)) {
+    const first = run.trials
+      .flatMap((t) => t.grader_results)
+      .map((g) => g.details?.["judge_error"])
+      .find((e): e is string => typeof e === "string");
+    return { counts: false, cause: "judge_failure", reason: `judge failure: ${first ?? "unknown"}` };
+  }
+  if (isFixtureFallbackRun(run)) {
+    return {
+      counts: false,
+      cause: "fixture_fallback",
+      reason: "fixture-runner infra failure (majority of fixtures errored)",
+    };
+  }
+  return { counts: true, pass: run.pass_rate >= 1 };
+}
+
+/**
+ * Suite-level summary, a fold over runVerdict(). A run that does not count
+ * (any NoSignalCause) is excluded from pass/mean through ONE counter, so the
+ * console summary and runSuite()'s persisted payload can never disagree on
+ * the denominator (MEMORY/SkillAudits/evals-infra-audit-2026-07-09/gap.md
+ * finding 2). The `ok` flag requires real signal (`scored > 0`) so an
+ * all-infra suite still FAILs (no `0 === 0` false-pass). Genuine
+ * `error`-status trials (e.g. a code crash) are NOT infra failures and stay
+ * counted.
+ */
+export function summarizeSuiteRuns(runs: EvalRun[]): {
+  passed: number;
+  failed: number;
+  total: number;
+  meanScore: number;
+  infraSkipped: number;
+  ok: boolean;
+} {
+  let passed = 0;
+  let totalScore = 0;
+  let scored = 0;
+  let infraSkipped = 0;
+  for (const run of runs) {
+    const v = runVerdict(run);
+    if (!v.counts) {
+      infraSkipped++;
+      continue;
+    }
+    scored++;
+    if (v.pass) passed++;
+    totalScore += run.mean_score;
+  }
+  return {
+    passed,
+    failed: scored - passed,
+    total: scored,
+    meanScore: scored > 0 ? totalScore / scored : 0,
+    infraSkipped,
+    ok: scored > 0 && passed === scored,
+  };
+}
+
 export class TrialRunner {
   private config: TrialRunnerConfig;
   private executor: TaskExecutor;
 
   constructor(config: TrialRunnerConfig) {
     this.config = config;
-    // Use provided executor or lazy-load default
-    this.executor = config.executor || this.getDefaultExecutor();
-  }
-
-  /**
-   * Get the default executor (lazy-loaded to avoid circular deps)
-   */
-  private getDefaultExecutor(): TaskExecutor {
-    return async (task, trialNumber) => {
-      // Dynamically import to avoid circular dependency
-      const { executeTask } = await import("./EvalExecutor.ts");
-      const result = await executeTask(task, trialNumber);
-      return {
-        output: result.output,
-        transcript: result.transcript,
-        outcome: result.exitCode === 0 ? "success" : "failure",
-        exitCode: result.exitCode,
-        stderr: result.stderr,
-        resultIsError: result.resultIsError,
-        resultErrorSubtype: result.resultErrorSubtype,
-      };
-    };
+    this.executor = config.executor;
   }
 
   /**
@@ -306,11 +454,11 @@ export class TrialRunner {
     }
 
     // B2: a trial whose behavioral graders ALL failed to judge (details.judge_error
-    // — see EvalExecutor.isJudgeFailureRun for why that marker means "nobody
-    // judged") carries no signal, so when OTHER trials of the same run did get
-    // judged it is an infra trial like any other: out of mean, pass_rate, pass@k.
-    // If EVERY trial is judge-failed the run is left as-is for
-    // isJudgeFailureRun() (whole-run skip) — not converted here, so a judge
+    // — see isAllJudgesFailedRun for why that marker means "nobody judged")
+    // carries no signal, so when OTHER trials of the same run did get judged it
+    // is an infra trial like any other: out of mean, pass_rate, pass@k.
+    // If EVERY trial is judge-failed the run is left as-is for runVerdict()
+    // (cause "judge_failure", whole-run skip) — not converted here, so a judge
     // outage doesn't feed the suite circuit breaker (agent spawns succeeded).
     const judgeFailedTrials = trials.filter((t) => t.status !== "infra_failure" && isJudgeFailedTrial(t));
     if (

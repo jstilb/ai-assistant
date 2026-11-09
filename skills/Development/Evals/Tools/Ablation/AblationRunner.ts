@@ -40,7 +40,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { runSuite, taskPassedInSuite, isInfraSkippedRun } from "../EvalExecutor.ts";
+import { runSuite } from "../EvalExecutor.ts";
+import { runVerdict, type NoSignalCause } from "../TrialRunner.ts";
 import { loadSuite } from "../SuiteManager.ts";
 import type { EvalRun } from "../../Types/index.ts";
 import {
@@ -89,6 +90,9 @@ export interface TaskCellResult {
   cache_read_tokens: number;
   duration_ms: number;
   run_id: string;
+  /** Why the run carried no signal; set only for status "infra_skipped".
+   *  Absent in reports stored before P10 slice 2. */
+  no_signal_cause?: NoSignalCause;
 }
 
 export interface CellResult {
@@ -145,11 +149,14 @@ export function extractTaskCell(run: EvalRun): TaskCellResult {
       cacheTok += Number(o.cacheReadTokens ?? 0) || 0;
     }
   }
-  const infraSkipped = isInfraSkippedRun(run);
+  // A run that does not count (any NoSignalCause: all trials infra, judge
+  // failure, fixture fallback) is skipped, the same rule runSuite applies.
+  const v = runVerdict(run);
+  const infraSkipped = !v.counts;
   return {
     task_id: run.task_id,
     status: infraSkipped ? "infra_skipped" : "scored",
-    pass: !infraSkipped && taskPassedInSuite(run),
+    pass: v.counts && v.pass,
     pass_rate: run.pass_rate,
     mean_score: run.mean_score,
     n_trials: run.n_trials,
@@ -160,6 +167,7 @@ export function extractTaskCell(run: EvalRun): TaskCellResult {
     cache_read_tokens: cacheTok,
     duration_ms: run.total_duration_ms,
     run_id: run.id,
+    ...(v.counts ? {} : { no_signal_cause: v.cause }),
   };
 }
 
@@ -251,7 +259,11 @@ export function renderReport(file: AblationRunFile): string {
       const cols = profiles.map((p) => {
         const t = cellOf(p, m)?.tasks.find((x) => x.task_id === id);
         if (!t) return "_—_";
-        if (t.status === "infra_skipped") return `⚠️ infra (${t.infra_failures}/${t.n_trials})`;
+        if (t.status === "infra_skipped") {
+          if (t.no_signal_cause === "judge_failure") return "⚠️ judge failure";
+          if (t.no_signal_cause === "fixture_fallback") return "⚠️ fixture fallback";
+          return `⚠️ infra (${t.infra_failures}/${t.n_trials})`;
+        }
         const delta =
           baseT && p !== file.baseline && baseT.status === "scored"
             ? ` (${fmtDelta(t.mean_score - baseT.mean_score)})`
@@ -291,7 +303,7 @@ export function renderReport(file: AblationRunFile): string {
   }
   lines.push("");
   lines.push(
-    "Cells with `infra-skipped` tasks carry no behavioral signal for those tasks (spawn/auth failures, not agent behavior) — re-run with `--resume` before drawing conclusions from them.",
+    "Cells with `infra-skipped` tasks carry no behavioral signal for those tasks (spawn/auth failures, judge failures or fixture fallbacks, not agent behavior) — re-run with `--resume` before drawing conclusions from them.",
   );
   return lines.join("\n");
 }

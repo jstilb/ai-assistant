@@ -48,7 +48,7 @@ The Eval Lab (compare harnesses, models and setup pieces) moved on 2026-10-23 to
 | **Regression eval** | `type: regression` — quality gate against backsliding; every task and every suite in the live corpus is pinned at `pass_threshold: 0.80` |
 | **pass@k** | Trial-level: did at least one trial pass (`TrialRunner.calculatePassAtK`) |
 | **pass^k** | Trial-level: fraction of trials that passed (`TrialRunner.calculatePassToK`) |
-| **Suite-level pass** | A task "passes in a suite" only when `pass_rate === 1` — ALL of its (behavioral, non-infra-failed) trials cleared their own `pass_threshold` (`EvalExecutor.taskPassedInSuite()`, evals-rebuild slice B1) |
+| **Suite-level pass** | A task "passes in a suite" only when `pass_rate === 1` — ALL of its (behavioral, non-infra-failed) trials cleared their own `pass_threshold` (`TrialRunner.runVerdict()`, evals-rebuild slice B1) |
 
 ---
 

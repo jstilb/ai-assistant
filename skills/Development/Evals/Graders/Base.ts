@@ -28,7 +28,7 @@ export interface GraderContext {
    * EvalExecutor.ts's suite-level "did the task pass" check also read a
    * `run.pass_threshold` property that never existed on EvalRun, always
    * silently falling back to a second, unrelated hardcoded 0.75 — see
-   * EvalExecutor.ts's taskPassedInSuite() doc comment for how that
+   * TrialRunner.ts's runVerdict() doc comment (pass rule) for how that
    * double-threshold bug was resolved by making THIS the one authoritative
    * place pass_threshold is applied).
    */

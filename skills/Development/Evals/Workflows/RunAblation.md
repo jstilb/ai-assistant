@@ -68,7 +68,7 @@ bun AblationRunner.ts run --suite setup-ablation --profiles clean,full,lean --ba
 3. **Per-task** — which specific behavior moved (identity/voice line, routing, skills, scope discipline, raw coding).
 4. **Model comparison on the baseline** — "did the new model change the picture?"
 
-Sanity check FIRST: `ablation_identity` must fail on `clean` and pass on `full`. Both passing = the profile is leaking the live config; both failing = the model is ignoring CLAUDE.md. Either way, stop and debug before reading anything else. Then discount any cell with `infra-skipped` tasks (spawn/auth failures — no behavioral signal) and `--resume` it.
+Sanity check FIRST: `ablation_identity` must fail on `clean` and pass on `full`. Both passing = the profile is leaking the live config; both failing = the model is ignoring CLAUDE.md. Either way, stop and debug before reading anything else. Then discount any cell with `infra-skipped` tasks (spawn/auth failures, judge failures or fixture fallbacks — no behavioral signal) and `--resume` it.
 
 ### Step 5: Act — and keep the evidence
 
