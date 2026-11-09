@@ -48,9 +48,12 @@ const TEST_VOICE_AUTH_TOKEN = "test-voice-auth-token";
 const configSpy = spyOn(VoiceCommon, "getRealtimeVoiceConfig").mockImplementation(() =>
   VoiceCommon.RealtimeVoiceConfigSchema.parse({ macOsSayFallback: false }),
 );
-const secretsSpy = spyOn(VoiceCommon, "loadSecrets").mockImplementation(() => ({
-  voice_auth_token: TEST_VOICE_AUTH_TOKEN,
-}));
+// The server reads its auth token at import (in beforeEach below): point
+// KAYA_HOME at a temp fixture secrets.json first (restored in afterAll).
+const secretsHome = mkdtempSync(join(tmpdir(), "voice-server-test-"));
+writeFileSync(join(secretsHome, "secrets.json"), JSON.stringify({ voice_auth_token: TEST_VOICE_AUTH_TOKEN }));
+const savedKayaHome = process.env.KAYA_HOME;
+process.env.KAYA_HOME = secretsHome;
 
 // CaptureGate: this suite exercises the STT->LLM->TTS voice pipeline, not
 // LifeOS capture routing (skills/Productivity/LifeOS/tests/capture-gate.e2e.ts
@@ -112,7 +115,9 @@ const spawnSpy = spyOn(childProcess, "spawn").mockImplementation(((
 
 afterAll(() => {
   configSpy.mockRestore();
-  secretsSpy.mockRestore();
+  if (savedKayaHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = savedKayaHome;
+  rmSync(secretsHome, { recursive: true, force: true });
   captureGateSpy.mockRestore();
   polishSpy.mockRestore();
   spawnSpy.mockRestore();

@@ -36,7 +36,8 @@ import { z } from "zod";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { CLAUDE_PATH, buildHardenedClaudeEnv } from "../../../../lib/core/Inference.ts";
-import { getRealtimeVoiceConfig, loadSecrets } from "./VoiceCommon.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
+import { getRealtimeVoiceConfig } from "./VoiceCommon.ts";
 import { SentenceChunker } from "./SentenceChunker.ts";
 import { polishTranscription } from "./STTPolishPipeline.ts";
 import { buildVoiceSystemPrompt, getMinimalContext } from "./VoiceSystemPrompt.ts";
@@ -69,13 +70,11 @@ const ALLOWED_ORIGINS: ReadonlyArray<string> = [
   "http://127.0.0.1:8882",
 ];
 
-// Load the pre-shared voice auth token via VoiceCommon.loadSecrets().
+// Load the pre-shared voice auth token via the Secrets module (path follows KAYA_HOME).
 // Clients must pass ?key=<token> on WebSocket upgrade.
-// Uses the shared abstraction so both this server and other voice tools resolve
-// secrets.json via the same KAYA_HOME path (not a separate process.env.HOME lookup).
-const secrets = loadSecrets();
-const VOICE_AUTH_TOKEN = secrets.voice_auth_token;
-if (!VOICE_AUTH_TOKEN || typeof VOICE_AUTH_TOKEN !== "string") {
+// A missing key exits; a broken secrets file throws a SecretError at import.
+const VOICE_AUTH_TOKEN = optionalSecret("voice_auth_token");
+if (VOICE_AUTH_TOKEN === null) {
   console.error("[Auth] FATAL: voice_auth_token not found in secrets.json");
   process.exit(1);
 }

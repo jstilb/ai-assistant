@@ -16,7 +16,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
-import { KAYA_HOME, VOICE_INPUT_TOOL, ensureTempDir, getVoiceInteractionConfig, getSecret } from "./VoiceCommon.ts";
+import { requireSecret } from "../../../../lib/core/Secrets.ts";
+import { KAYA_HOME, VOICE_INPUT_TOOL, ensureTempDir, getVoiceInteractionConfig } from "./VoiceCommon.ts";
 import { polishTranscription } from "./STTPolishPipeline.ts";
 import { buildWhisperPrompt } from "./VocabularyStore.ts";
 
@@ -127,7 +128,7 @@ async function transcribeWithWhisper(audioPath: string, model?: string): Promise
  */
 async function transcribeWithGemini(audioBase64: string, mimeType: string = "audio/ogg"): Promise<TranscriptionResult> {
   const startTime = Date.now();
-  const apiKey = getSecret("GEMINI_API_KEY");
+  const apiKey = requireSecret("GEMINI_API_KEY");
 
   const response = await httpClient.fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,

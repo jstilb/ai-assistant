@@ -1,4 +1,7 @@
 import { describe, it, expect, afterAll, spyOn } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as VoiceCommon from "./VoiceCommon.ts";
 
 // STT and TTS both live on one host. A circuit breaker keyed on hostname
@@ -20,10 +23,12 @@ const tts = Bun.serve({
 });
 const ttsUrl = `http://127.0.0.1:${tts.port}/v1/audio/speech`;
 
-// The server reads its auth token from secrets.json at import time: inject a fake.
-const secretsSpy = spyOn(VoiceCommon, "loadSecrets").mockImplementation(() => ({
-  voice_auth_token: "test-voice-auth-token",
-}));
+// The server reads its auth token from secrets.json at import time: point
+// KAYA_HOME at a temp fixture first (restored in afterAll).
+const secretsHome = mkdtempSync(join(tmpdir(), "voice-breaker-test-"));
+writeFileSync(join(secretsHome, "secrets.json"), JSON.stringify({ voice_auth_token: "test-voice-auth-token" }));
+const savedKayaHome = process.env.KAYA_HOME;
+process.env.KAYA_HOME = secretsHome;
 const configSpy = spyOn(VoiceCommon, "getRealtimeVoiceConfig").mockImplementation(() =>
   VoiceCommon.RealtimeVoiceConfigSchema.parse({ sttUrl, ttsUrl, macOsSayFallback: false }),
 );
@@ -34,7 +39,9 @@ const server = (await import(
 
 afterAll(async () => {
   configSpy.mockRestore();
-  secretsSpy.mockRestore();
+  if (savedKayaHome === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = savedKayaHome;
+  rmSync(secretsHome, { recursive: true, force: true });
   await tts.stop(true);
 });
 

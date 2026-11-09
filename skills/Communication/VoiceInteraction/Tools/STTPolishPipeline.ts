@@ -28,6 +28,7 @@ import { z } from "zod";
 import { createStateManager, type StateManager } from "../../../../lib/core/StateManager.ts";
 import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
+import { optionalSecret } from "../../../../lib/core/Secrets.ts";
 import { createAppendLog, type AppendLog } from "../../../../lib/core/AppendLog.ts";
 import { buildPolishVocabSection } from "./VocabularyStore.ts";
 
@@ -240,10 +241,15 @@ async function polishViaOllama(model: string, text: string, config: PolishConfig
  * Only used when Ollama is unreachable.
  */
 async function polishViaClaude(text: string): Promise<string | null> {
+  // A missing key degrades to the raw transcript; a broken secrets file throws (SecretError), outside the try.
+  const apiKey = optionalSecret("ANTHROPIC_API_KEY");
+  if (apiKey === null) {
+    console.error(
+      "[STTPolish] Polish request failed, using raw transcript: ANTHROPIC_API_KEY not found in secrets.json",
+    );
+    return null;
+  }
   try {
-    const { getSecret } = await import("./VoiceCommon.ts");
-    const apiKey = getSecret("ANTHROPIC_API_KEY");
-
     const response = await httpClient.fetch("https://api.anthropic.com/v1/messages", {
       cache: "none",
       method: "POST",

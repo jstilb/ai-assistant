@@ -5,12 +5,11 @@
  * Consolidates duplicated patterns across VoiceInteraction tools:
  * - Shared constants (paths, directories)
  * - Config loading via ConfigLoader (replaces raw JSON.parse(readFileSync()))
- * - Secrets loading (replaces raw JSON.parse(readFileSync(secrets.json)))
  * - StateManager instances for session, interruption, and schedule state
  * - Shared types used across multiple tools
  *
  * Usage:
- *   import { KAYA_HOME, TEMP_DIR, loadSecrets, getVoiceInteractionConfig, ... } from "./VoiceCommon.ts";
+ *   import { KAYA_HOME, TEMP_DIR, getVoiceInteractionConfig, ... } from "./VoiceCommon.ts";
  */
 
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
@@ -232,51 +231,6 @@ export function getIdentity(): { assistantName: string; userName: string } {
   } catch {
     return { assistantName: "Kaya", userName: "Jm" };
   }
-}
-
-// ============================================
-// SECRETS LOADING (replaces raw JSON.parse of secrets.json)
-// ============================================
-
-// Cache secrets with a TTL to support long-running servers (e.g., RealtimeVoiceServer).
-// A 5-minute TTL means rotated credentials take effect within 5 minutes without restart.
-const SECRETS_CACHE_TTL_MS = 5 * 60 * 1000;
-let _cachedSecrets: Record<string, unknown> | null = null;
-let _secretsCachedAt = 0;
-
-/**
- * Load secrets from secrets.json with TTL-based caching.
- * Replaces raw JSON.parse(readFileSync(secrets.json)) pattern.
- * For long-running servers: cache expires every 5 minutes so rotated tokens
- * are picked up without requiring a process restart.
- */
-export function loadSecrets(): Record<string, unknown> {
-  const now = Date.now();
-  if (_cachedSecrets && now - _secretsCachedAt < SECRETS_CACHE_TTL_MS) {
-    return _cachedSecrets;
-  }
-
-  const secretsPath = join(KAYA_HOME, "secrets.json");
-  if (!existsSync(secretsPath)) {
-    throw new Error("secrets.json not found at " + secretsPath);
-  }
-
-  const secretsRaw = readFileSync(secretsPath, "utf-8");
-  _cachedSecrets = JSON.parse(secretsRaw) as Record<string, unknown>;
-  _secretsCachedAt = now;
-  return _cachedSecrets;
-}
-
-/**
- * Get a specific secret by key. Throws if not found.
- */
-export function getSecret(key: string): string {
-  const secrets = loadSecrets();
-  const value = secrets[key];
-  if (!value || typeof value !== "string") {
-    throw new Error(`${key} not found in secrets.json or is not a string`);
-  }
-  return value;
 }
 
 // ============================================
