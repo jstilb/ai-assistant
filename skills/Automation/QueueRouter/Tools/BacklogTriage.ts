@@ -18,11 +18,11 @@
  * Execution (clearing stamps, killing/merging/downgrading items) is H2, a
  * Jm-in-session checkpoint that consumes the JSON output this tool writes.
  *
- * Read-only architecture: every DB read goes through a `{ readonly: true }`
- * bun:sqlite connection (structurally cannot write — SQLite raises
- * "attempt to write a readonly database" on any mutation attempt). This is a
- * stronger guarantee than "we didn't call a write method" — it's enforced by
- * the database engine itself.
+ * Read-only architecture: the pipeline DB goes through a `PRAGMA query_only`
+ * bun:sqlite connection and the lucid DB through `openTaskDBReadOnly` (same
+ * pragma) — SQLite raises "attempt to write a readonly database" on any
+ * mutation attempt. This is a stronger guarantee than "we didn't call a write
+ * method" — it's enforced by the database engine itself.
  *
  * Chunking follows KayaTaskClassifier's idiom exactly (CHUNK_SIZE=10,
  * per-chunk fault tolerance, throw only on total outage) — see
@@ -39,21 +39,13 @@ import { inference } from "../../../../lib/core/Inference.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 // cross-skill-allowed: shared classification engine, deliberate reuse of KayaTaskClassifier's chunk() idiom
 import { chunk } from "../../../Productivity/LucidTasks/Tools/KayaTaskClassifier.ts";
+// cross-skill-allowed: TaskDB task-store lane (ADR-030)
+import { OPEN_TASK_STATUSES, openTaskDBReadOnly, type TaskDB } from "../../../Productivity/LucidTasks/Tools/TaskDB.ts";
 import { defaultPipelineDbPath } from "./PipelineDB.ts";
 
 // ============================================================================
 // Path resolution
 // ============================================================================
-
-/**
- * Mirrors TaskDB.ts's (unexported) defaultDbPath(): lucidtasks.db lives under
- * KAYA_HOME/skills/Productivity/LucidTasks/Data/lucidtasks.db. Resolved at
- * call time, not module load, so tests that repoint KAYA_HOME still work.
- */
-function defaultLucidDbPath(): string {
-  const kayaHome = getKayaHome();
-  return join(kayaHome, "skills/Productivity/LucidTasks/Data/lucidtasks.db");
-}
 
 function getKayaHomeForOutput(): string {
   return getKayaHome();
@@ -221,33 +213,55 @@ export function loadNeedsGrillingItems(pipelineDbPath: string): PipelineItemRow[
   }
 }
 
-/**
- * The permanently-invisible cohort: LucidTasks with disposition='autonomous',
- * no queue_item_id (never graduated to the pipeline), a kaya_triage stamp
- * that predates the `scope` field (json_extract(...,'$.scope') IS NULL —
- * `hasValidTriageStamp()` skips these forever since their content hasn't
- * changed), a needs-grill/not-executable verdict, and an active task status.
- */
-const STAMPED_INVISIBLE_QUERY = `
-  SELECT id, title, description, status, disposition, created_at, kaya_triage
-  FROM tasks
-  WHERE disposition = 'autonomous'
-    AND queue_item_id IS NULL
-    AND kaya_triage IS NOT NULL
-    AND json_extract(kaya_triage, '$.scope') IS NULL
-    AND json_extract(kaya_triage, '$.verdict') IN ('needs-grill', 'not-executable')
-    AND status IN ('inbox', 'next', 'in_progress', 'waiting')
-  ORDER BY created_at ASC
-`;
+/** Stamp verdicts that park a task in the permanently-invisible cohort. */
+const INVISIBLE_STAMP_VERDICTS: ReadonlySet<string> = new Set(["needs-grill", "not-executable"]);
 
-export function loadStampedInvisibleTasks(lucidDbPath: string): StampedTaskRow[] {
-  if (!existsSync(lucidDbPath)) return [];
-  const db = openReadonly(lucidDbPath);
+/**
+ * True when a kaya_triage stamp predates the `scope` field (scope absent or
+ * null) and carries a needs-grill/not-executable verdict. Returns null when the
+ * stamp is not valid JSON (the caller skips the task with a warning).
+ */
+function isPreScopeParkedStamp(raw: string): boolean | null {
+  let parsed: unknown;
   try {
-    return db.query(STAMPED_INVISIBLE_QUERY).all() as StampedTaskRow[];
-  } finally {
-    db.close();
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
   }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return false;
+  const stamp = parsed as { scope?: unknown; verdict?: unknown };
+  if (stamp.scope !== undefined && stamp.scope !== null) return false;
+  return typeof stamp.verdict === "string" && INVISIBLE_STAMP_VERDICTS.has(stamp.verdict);
+}
+
+/**
+ * The permanently-invisible cohort: open LucidTasks with disposition='autonomous',
+ * no queue_item_id (never graduated to the pipeline), and a kaya_triage stamp
+ * that predates the `scope` field (`hasValidTriageStamp()` skips these forever
+ * since their content hasn't changed) with a needs-grill/not-executable verdict.
+ * Oldest first. The caller opens (read-only) and closes `db`.
+ */
+export function loadStampedInvisibleTasks(db: TaskDB): StampedTaskRow[] {
+  const rows: StampedTaskRow[] = [];
+  for (const t of db.listTasks({ disposition: "autonomous", status: [...OPEN_TASK_STATUSES], order: "oldest" })) {
+    if (t.queue_item_id !== null || t.kaya_triage === null) continue;
+    const parked = isPreScopeParkedStamp(t.kaya_triage);
+    if (parked === null) {
+      console.warn(`[BacklogTriage] skipped task ${t.id}: malformed kaya_triage stamp`);
+      continue;
+    }
+    if (!parked) continue;
+    rows.push({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      disposition: t.disposition,
+      created_at: t.created_at,
+      kaya_triage: t.kaya_triage,
+    });
+  }
+  return rows;
 }
 
 /** Truncate an executor comment to a prompt-safe snippet. */
@@ -256,45 +270,22 @@ function truncateSnippet(text: string, max = 240): string {
 }
 
 /**
- * LucidTasks' per-task history table. Renamed activity_log -> task_events by
- * ontology ruling D10; TaskDB migrates on open, but this readonly connection
- * can see a database no TaskDB has opened since, so fall back to the old name.
- */
-function taskEventsTable(db: Database): "task_events" | "activity_log" {
-  const row = db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_events'`).get();
-  return row ? "task_events" : "activity_log";
-}
-
-/**
  * Look up a task's status/disposition plus executor-delivered and
- * Jm-approved comment evidence, using an already-open readonly connection.
+ * Jm-approved comment evidence (comments in insertion order).
  * Returns null if the task doesn't exist in this db.
  */
-function queryTaskEvidence(db: Database, taskId: string): LinkedTaskEvidence | null {
-  const task = db.query(`SELECT status, disposition FROM tasks WHERE id = ?`).get(taskId) as {
-    status: string;
-    disposition: string | null;
-  } | null;
+function queryTaskEvidence(db: TaskDB, taskId: string): LinkedTaskEvidence | null {
+  const task = db.getTask(taskId);
   if (!task) return null;
-
-  const comments = db
-    .query(
-      `SELECT actor, changes FROM ${taskEventsTable(db)} WHERE task_id = ? AND action = 'comment' ORDER BY created_at ASC`,
-    )
-    .all(taskId) as { actor: string; changes: string }[];
 
   let executorDelivered = false;
   let executorEvidenceSnippet: string | null = null;
   let approvedByJm = false;
 
-  for (const c of comments) {
-    let text = "";
-    try {
-      const parsed = JSON.parse(c.changes) as { text?: string };
-      text = parsed.text ?? "";
-    } catch {
-      continue;
-    }
+  for (const c of db.listTaskEvents({ taskId, action: "comment" })) {
+    const text = c.changes?.text;
+    // A comment without a string text is skipped, as malformed JSON always was.
+    if (typeof text !== "string") continue;
     // "Deliverable" prefix distinguishes real deliveries from EXECUTOR_FAIL
     // comments (unparseable verdict / non-zero exit) — see executor.ts.
     if (c.actor === "executor" && text.startsWith("Deliverable")) {
@@ -315,10 +306,13 @@ function queryTaskEvidence(db: Database, taskId: string): LinkedTaskEvidence | n
   };
 }
 
-/** Standalone wrapper around queryTaskEvidence for direct/testing use — opens+closes its own connection. */
-export function loadLinkedTaskEvidence(lucidDbPath: string, taskId: string): LinkedTaskEvidence | null {
-  if (!existsSync(lucidDbPath)) return null;
-  const db = openReadonly(lucidDbPath);
+/**
+ * Standalone wrapper around queryTaskEvidence for direct/testing use — opens and
+ * closes its own read-only TaskDB. `lucidDbPath` undefined = TaskDB's default path.
+ * Throws "lucidtasks.db not found" if the file is missing.
+ */
+export function loadLinkedTaskEvidence(lucidDbPath: string | undefined, taskId: string): LinkedTaskEvidence | null {
+  const db = openTaskDBReadOnly(lucidDbPath);
   try {
     return queryTaskEvidence(db, taskId);
   } finally {
@@ -351,24 +345,25 @@ function parseTriageStamp(raw: string): { verdict: string; confidence: number; r
  * with deterministic pre-signals (age, linked-task status, executor-delivered
  * sibling evidence) for the LLM to judge — no thresholds, the LLM decides.
  *
- * Opens the lucid db ONCE and reuses the connection across all lookups
- * (rather than per-candidate) — still fully read-only, just avoids ~90
- * separate connection opens for a single batch run.
+ * Opens ONE read-only TaskDB (`lucidDbPath` undefined = TaskDB's default path)
+ * and reuses it across all lookups (rather than per-candidate) — avoids ~90
+ * separate connection opens for a single batch run. Throws "lucidtasks.db not
+ * found" if the file is missing (fail loud; the CLI exits non-zero).
  */
 export function buildCandidates(
   pipelineDbPath: string,
-  lucidDbPath: string,
+  lucidDbPath: string | undefined,
   now: Date = new Date(),
 ): TriageCandidate[] {
   const pipelineRows = loadNeedsGrillingItems(pipelineDbPath);
-  const stampedRows = loadStampedInvisibleTasks(lucidDbPath);
 
-  const lucidDb = existsSync(lucidDbPath) ? openReadonly(lucidDbPath) : null;
+  const lucidDb = openTaskDBReadOnly(lucidDbPath);
   try {
+    const stampedRows = loadStampedInvisibleTasks(lucidDb);
     const candidates: TriageCandidate[] = [];
 
     for (const row of pipelineRows) {
-      const evidence = row.lucid_task_id && lucidDb ? queryTaskEvidence(lucidDb, row.lucid_task_id) : null;
+      const evidence = row.lucid_task_id ? queryTaskEvidence(lucidDb, row.lucid_task_id) : null;
       candidates.push({
         id: row.id,
         kind: "pipeline-item",
@@ -392,7 +387,7 @@ export function buildCandidates(
       const stamp = parseTriageStamp(row.kaya_triage);
       // Check the task's OWN activity log too — it may have been delivered by
       // the Lane A executor directly despite never graduating into the pipeline.
-      const evidence = lucidDb ? queryTaskEvidence(lucidDb, row.id) : null;
+      const evidence = queryTaskEvidence(lucidDb, row.id);
       candidates.push({
         id: row.id,
         kind: "stamped-task",
@@ -414,7 +409,7 @@ export function buildCandidates(
 
     return candidates;
   } finally {
-    lucidDb?.close();
+    lucidDb.close();
   }
 }
 
@@ -907,7 +902,8 @@ export async function runCli(argv: string[]): Promise<RunCliResult> {
   const limitRaw = argValue(argv, "--limit");
   const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
   const pipelineDbPath = argValue(argv, "--pipeline-db") ?? defaultPipelineDbPath();
-  const lucidDbPath = argValue(argv, "--lucid-db") ?? defaultLucidDbPath();
+  const lucidDbPath = argValue(argv, "--lucid-db");
+  const lucidDbLabel = lucidDbPath ?? "LucidTasks default";
   const outDir = argValue(argv, "--out-dir") ?? defaultReportDir();
 
   const now = new Date();
@@ -916,14 +912,14 @@ export async function runCli(argv: string[]): Promise<RunCliResult> {
 
   console.log(
     `[BacklogTriage] ${candidates.length}/${allCandidates.length} candidate(s) selected for triage ` +
-      `(pipeline-db: ${pipelineDbPath}, lucid-db: ${lucidDbPath}).`,
+      `(pipeline-db: ${pipelineDbPath}, lucid-db: ${lucidDbLabel}).`,
   );
 
   const result = await runBacklogTriage(candidates);
   const grouped = groupProposals(candidates, result);
 
   const dateStr = now.toISOString().slice(0, 10);
-  const meta: TriageReportMeta = { generatedAt: now.toISOString(), pipelineDbPath, lucidDbPath };
+  const meta: TriageReportMeta = { generatedAt: now.toISOString(), pipelineDbPath, lucidDbPath: lucidDbLabel };
 
   const md = renderMarkdownReport(candidates, grouped, meta);
   const json = buildJsonOutput(candidates, grouped, meta);

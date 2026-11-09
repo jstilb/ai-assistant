@@ -13,7 +13,8 @@
  * approvals item, so the nudge kept asking Jm to approve completed work.
  * If the closed-task lookup fails, the run throws rather than nudging blind.
  *
- * Degrades gracefully if token/chatId missing (logs, doesn't crash).
+ * Missing Telegram credentials surface as the transport's loud `config`
+ * error on each send (logged per item; the item is not stamped).
  * Importing this module is safe — the CLI only runs under import.meta.main.
  */
 import { loadQueueItems, QueueManager } from "./QueueManager.ts";
@@ -23,29 +24,6 @@ import type { QueueItem } from "./QueueManager.ts";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const RENUDGE_COOLDOWN_MS = 72 * 60 * 60 * 1000;
-
-interface TelegramSecrets {
-  bot_token?: string;
-  chat_id?: string;
-}
-
-async function loadSecrets(): Promise<TelegramSecrets | null> {
-  try {
-    const { getKayaHome } = await import("../../../../lib/core/KayaHome.ts");
-    const home = getKayaHome();
-    const secrets = (await Bun.file(`${home}/secrets.json`).json()) as Record<string, unknown>;
-    const tg = secrets.telegram as TelegramSecrets | undefined;
-    return tg ?? null;
-  } catch (err) {
-    // A missing secrets.json is expected (no Telegram configured); a corrupt one is not.
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(
-        `[ApprovalNudge] could not read telegram secrets: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    return null;
-  }
-}
 
 export interface ApprovalNudgeDeps {
   loadItems?: () => QueueItem[];
@@ -63,16 +41,9 @@ export async function runApprovalNudge(deps: ApprovalNudgeDeps = {}): Promise<vo
 
   let sendNudge = deps.sendNudge;
   if (!sendNudge) {
-    const secrets = await loadSecrets();
-    if (!secrets?.bot_token || !secrets?.chat_id) {
-      console.log("[ApprovalNudge] telegram secrets missing — skipping nudge");
-      return;
-    }
     // cross-skill-allowed: ADR-004 bot lane (approvals surface)
     const { sendApprovalNudge } = await import("../../../Communication/Telegram/Server/handlers/approvals.ts");
-    const token = secrets.bot_token;
-    const chatId = secrets.chat_id;
-    sendNudge = (item) => sendApprovalNudge(token, chatId, item);
+    sendNudge = sendApprovalNudge;
   }
 
   const cutoff = new Date(now() - STALE_AFTER_MS);

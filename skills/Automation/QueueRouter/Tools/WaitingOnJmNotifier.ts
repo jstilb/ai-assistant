@@ -142,32 +142,6 @@ function saveCheckpoint(path: string, checkpoint: NotifierCheckpoint): void {
 }
 
 // ============================================================================
-// Secrets (mirrors ApprovalNudge.ts's loadSecrets — same shape, same file)
-// ============================================================================
-
-interface TelegramSecrets {
-  bot_token?: string;
-  chat_id?: string;
-}
-
-async function loadTelegramSecrets(): Promise<TelegramSecrets | null> {
-  try {
-    const home = getKayaHome();
-    const secrets = (await Bun.file(`${home}/secrets.json`).json()) as Record<string, unknown>;
-    const tg = secrets.telegram as TelegramSecrets | undefined;
-    return tg ?? null;
-  } catch (err) {
-    // A missing secrets.json is expected (no Telegram configured); a corrupt one is not.
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(
-        `[WaitingOnJmNotifier] could not read telegram secrets: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    return null;
-  }
-}
-
-// ============================================================================
 // Types
 // ============================================================================
 
@@ -210,8 +184,8 @@ export interface WaitingOnJmNotifierDeps {
 }
 
 // ============================================================================
-// Defaults — resolved lazily so tests that inject everything never load
-// secrets.json or dynamic-import approvals.ts.
+// Defaults — resolved lazily so tests that inject everything never
+// dynamic-import approvals.ts.
 // ============================================================================
 
 async function defaultSendApprovalNudge(): Promise<(item: QueueItem) => Promise<void>> {
@@ -220,18 +194,11 @@ async function defaultSendApprovalNudge(): Promise<(item: QueueItem) => Promise<
       console.log(`[WaitingOnJmNotifier] (dry-run) would nudge approval item ${item.id}`);
     };
   }
-  const secrets = await loadTelegramSecrets();
-  if (!secrets?.bot_token || !secrets?.chat_id) {
-    console.log("[WaitingOnJmNotifier] telegram secrets missing — approval nudges will be skipped");
-    return async (item) => {
-      console.warn(`[WaitingOnJmNotifier] cannot nudge ${item.id} — telegram secrets missing`);
-    };
-  }
+  // Missing credentials throw from the transport on each send; the per-event
+  // catch below records the failure and pins the event for retry.
   // cross-skill-allowed: ADR-004 bot lane (approvals surface)
   const { sendApprovalNudge } = await import("../../../Communication/Telegram/Server/handlers/approvals.ts");
-  const token = secrets.bot_token;
-  const chatId = secrets.chat_id;
-  return (item) => sendApprovalNudge(token, chatId, item);
+  return sendApprovalNudge;
 }
 
 function defaultNotifyGrilling(): (message: string) => Promise<void> {

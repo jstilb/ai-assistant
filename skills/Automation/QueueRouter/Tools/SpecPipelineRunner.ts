@@ -1014,9 +1014,9 @@ Start by searching the codebase. Do not skip verification.`;
     });
 
     if (!result.success) {
-      // Check timedOut FIRST: AgentSpawner.isInfraUnavailable() always sets
-      // infraUnavailable=true when timedOut=true (`if (res.preSpawnGated ||
-      // res.timedOut) return true;` in lib/core/AgentSpawner.ts) — an
+      // Check timedOut FIRST: AgentSpawner always sets infraUnavailable=true
+      // when timedOut=true (classifyRunEnd in lib/core/ClaudeRunEnd.ts
+      // returns "timeout" before any text check) — an
       // infra-first check would mislabel EVERY genuine research timeout as an
       // "infrastructure/rate-limit condition" and make the timedOut branch
       // below dead for real spawns. Both branches bounce the item gracefully
@@ -1906,25 +1906,14 @@ export async function closeEscalationIfOpen(itemId: string, note: string): Promi
   try {
     // cross-skill-allowed: closes the manual-<itemId> Needs-Jm escalation task directly via TaskDB, sharing lib/core/EscalationHelper's escalation id scheme by design (see docstring above); seam candidate: TaskClient escalation writes (deferred, see D3 log)
     const { getTaskDB } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
-    // cross-skill-allowed: outcome contract for the escalation close below — the outcome gate refuses an agent close without one; seam candidate: TaskClient
-    const { serializeOutcome, systemOutcome } = await import("../../../Productivity/LucidTasks/Tools/TaskOutcome.ts");
-    const db = getTaskDB();
-    const task = db.getTask(`manual-${itemId}`);
-    if (task && task.status !== "done" && task.status !== "cancelled") {
-      const outcome = serializeOutcome(
-        systemOutcome({
-          by: "SpecPipelineRunner",
-          headline: "Escalation closed: the spec pipeline moved past it",
-          noArtifact: `auto-closed by SpecPipelineRunner for item ${itemId}: ${note}`,
-        }),
-      );
-      db.updateTask(
-        `manual-${itemId}`,
-        { status: "done", description: `${task.description}\n\n[auto-closed] ${note}`, outcome },
-        "SpecPipelineRunner",
-      );
-      return true;
-    }
+    return getTaskDB().bookkeepingClose(
+      `manual-${itemId}`,
+      {
+        headline: "Escalation closed: the spec pipeline moved past it",
+        reason: `auto-closed by SpecPipelineRunner for item ${itemId}: ${note}`,
+      },
+      "SpecPipelineRunner",
+    ).closed;
   } catch (err) {
     console.error(
       `[spec-pipeline] closeEscalationIfOpen failed for ${itemId}: ${err instanceof Error ? err.message : err}`,
