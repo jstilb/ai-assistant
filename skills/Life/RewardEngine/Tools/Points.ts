@@ -44,6 +44,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
+// cross-skill-allowed: TaskDB task-store lane (ADR-030)
+import { openTaskDBReadOnly, type TaskDB } from "../../../Productivity/LucidTasks/Tools/TaskDB.ts";
 
 // ----------------------------------------------------------------------------
 // Types
@@ -684,39 +686,23 @@ export function loadRoutineCatalogue(
 // Source readers (READ-ONLY)
 // ----------------------------------------------------------------------------
 
-interface TaskRow {
-  id: string;
-  title: string;
-  priority: number | null;
-  estimated_minutes: number | null;
-  goal_id: string | null;
-  disposition: string | null;
-  completed_at: string;
-}
-
-export function readTaskCompletions(cfg: PointsConfig, dbPath: string): Completion[] {
-  if (!existsSync(dbPath)) return [];
-  const db = new Database(dbPath, { readonly: true });
-  try {
-    const rows = db
-      .prepare(
-        "SELECT id, title, priority, estimated_minutes, goal_id, disposition, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL",
-      )
-      .all() as TaskRow[];
-    const excluded = new Set(cfg.tasks.excludeDispositions);
-    return rows
-      .filter((r) => !(r.disposition && excluded.has(r.disposition)))
-      .map((r) => ({
-        source: "task" as const,
-        item: r.id,
-        day: localDayOf(new Date(r.completed_at)),
-        units: 1,
-        label: r.title,
-        task: { priority: r.priority ?? 2, estimatedMinutes: r.estimated_minutes, goalLinked: Boolean(r.goal_id) },
-      }));
-  } finally {
-    db.close();
+/** Done tasks with a completion time → completions. Order-free: scoreHistory sorts awards. */
+export function readTaskCompletions(cfg: PointsConfig, db: TaskDB): Completion[] {
+  const excluded = new Set(cfg.tasks.excludeDispositions);
+  const completions: Completion[] = [];
+  for (const t of db.listTasks({ status: "done", between: { field: "completed_at" } })) {
+    if (t.disposition && excluded.has(t.disposition)) continue;
+    if (t.completed_at === null) continue; // excluded by `between`; narrows the type
+    completions.push({
+      source: "task",
+      item: t.id,
+      day: localDayOf(new Date(t.completed_at)),
+      units: 1,
+      label: t.title,
+      task: { priority: t.priority ?? 2, estimatedMinutes: t.estimated_minutes, goalLinked: Boolean(t.goal_id) },
+    });
   }
+  return completions;
 }
 
 export interface HabitRow {
@@ -852,7 +838,8 @@ export function saveGoal(goal: PointsGoal | null): void {
 // ----------------------------------------------------------------------------
 
 export interface SourcePaths {
-  tasksDb: string;
+  /** LucidTasks DB; omitted = LucidTasks' own default path. */
+  tasksDb?: string;
   lifeosDb: string;
   dailyBehaviors: string;
   weeklyBehaviors: string;
@@ -861,7 +848,7 @@ export interface SourcePaths {
 export function defaultSourcePaths(): SourcePaths {
   const home = getKayaHome();
   return {
-    tasksDb: join(home, "skills/Productivity/LucidTasks/Data/lucidtasks.db"),
+    // cross-skill-allowed: read-only habit_log rows for reward points; RewardEngine never writes LifeOS
     lifeosDb: join(home, "skills/Productivity/LifeOS/Data/lifeos.db"),
     dailyBehaviors: DAILY_BEHAVIORS_PATH,
     weeklyBehaviors: WEEKLY_BEHAVIORS_PATH,
@@ -894,7 +881,14 @@ export async function gatherCompletions(
       return [];
     }
   };
-  const tasks = safe("LucidTasks", () => readTaskCompletions(cfg, paths.tasksDb));
+  const tasks = safe("LucidTasks", () => {
+    const db = openTaskDBReadOnly(paths.tasksDb);
+    try {
+      return readTaskCompletions(cfg, db);
+    } finally {
+      db.close();
+    }
+  });
   const habits = safe("habit_log", () => habitCompletions(cfg, readHabitRows(paths.lifeosDb), canonical));
   const checks = safe("routine checks", () => readRoutineChecks());
   const routineCadence: Record<string, Cadence> = {};

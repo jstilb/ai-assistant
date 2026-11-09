@@ -14,6 +14,8 @@ process.env.KAYA_HOME = TMP;
 delete process.env.KAYA_DIR;
 
 const P = await import("../Tools/Points.ts");
+// cross-skill-allowed: TaskDB task-store lane (ADR-030) — fixture builds a real lucidtasks.db
+const { TaskDB, openTaskDBReadOnly } = await import("../../../Productivity/LucidTasks/Tools/TaskDB.ts");
 type Completion = import("../Tools/Points.ts").Completion;
 type PointsConfig = import("../Tools/Points.ts").PointsConfig;
 
@@ -368,14 +370,15 @@ describe("habit sources", () => {
 describe("syncLedger end-to-end (temp DBs, read-only sources)", () => {
   const tasksDb = join(TMP, "tasks.db");
   const lifeosDb = join(TMP, "lifeos.db");
-  const t = new Database(tasksDb);
-  t.exec(
-    "CREATE TABLE tasks (id TEXT, title TEXT, status TEXT, priority INTEGER, estimated_minutes INTEGER, goal_id TEXT, disposition TEXT, completed_at TEXT)",
-  );
-  const ins = t.prepare("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?)");
-  ins.run("t-mine", "Call landlord", "done", 1, null, null, "personal-todo", "2026-10-06T18:00:00.000Z");
-  ins.run("t-agent", "Agent task", "done", 1, null, null, "autonomous", "2026-10-06T18:00:00.000Z");
-  ins.run("t-open", "Open task", "next", 1, null, null, null, null);
+  const t = new TaskDB(tasksDb);
+  t.createTask({ id: "t-mine", title: "Call landlord", status: "next", priority: 1, disposition: "personal-todo" });
+  t.createTask({ id: "t-agent", title: "Agent task", status: "next", priority: 1, disposition: "autonomous" });
+  t.createTask({ id: "t-open", title: "Open task", status: "next", priority: 1 });
+  const note = { headline: "fixture close", reason: "test fixture, no artifact" };
+  t.bookkeepingClose("t-mine", note, "test");
+  t.bookkeepingClose("t-agent", note, "test");
+  // Backdate the closes so the 2026-10-07 sync below scores them.
+  t.getRawDb().run("UPDATE tasks SET completed_at = '2026-10-06T18:00:00.000Z' WHERE status = 'done'");
   t.close();
   const l = new Database(lifeosDb);
   l.exec("CREATE TABLE habit_log (date TEXT, habit TEXT, value TEXT, notes TEXT)");
@@ -386,8 +389,20 @@ describe("syncLedger end-to-end (temp DBs, read-only sources)", () => {
   writeFileSync(join(TMP, "none.md"), "");
 
   test("readTaskCompletions excludes agent dispositions and open tasks", () => {
-    const out = P.readTaskCompletions(cfg, tasksDb);
-    expect(out.map((c) => c.item)).toEqual(["t-mine"]);
+    const db = openTaskDBReadOnly(tasksDb);
+    try {
+      const out = P.readTaskCompletions(cfg, db);
+      expect(out.map((c) => c.item)).toEqual(["t-mine"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("a missing tasks DB is a visible warning, not a silent empty source", async () => {
+    const missing = join(TMP, "absent", "lucidtasks.db");
+    const out = await P.gatherCompletions(cfg, { ...paths, tasksDb: missing });
+    expect(out.warnings).toContain(`LucidTasks unreadable: lucidtasks.db not found: ${missing}`);
+    expect(existsSync(join(TMP, "absent"))).toBe(false);
   });
 
   test("sync writes the ledger once; re-sync is a no-op; routine check adds points", async () => {
