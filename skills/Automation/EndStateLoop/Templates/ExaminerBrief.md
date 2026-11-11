@@ -18,7 +18,7 @@ The file that started you names the mode: a request in `<board folder>/requests/
 
 ## Privacy and safety rules of this project
 - Shared live budgets: <each free model pool or API limit that the live product also uses, its window, the cap for exam runs, and who counts it; or "none">. A copy of the data is not a copy of the quota.
-- Heavy runs: `~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <your session name> <command…>`.
+- Heavy runs: `~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <your session name> <command…>`. Memory-heavy runs (browsers, test suites, copy servers, fault runs): `<board folder>/RUN.lock`. Batches of model calls: `<board folder>/MODEL.lock`. A run with both: one call, the memory lock first: `runlock.sh <memory lock>,<model lock> <your session name> <command…>`. Never nest two runlock calls (refused). Lock each step, not a whole exam.
 <each rule with its source; examples: counts only from Jm's history; never write live rows; never call an endpoint that records an open; no secrets files>
 
 ## Tools that exist (you may use them; they are not proof)

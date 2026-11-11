@@ -17,6 +17,7 @@ Put a project on the end-state loop: write its scoreboard, its examiner brief an
    - Include Jm's own words about the product (his first request, his complaints). A row that no sentence of Jm or of the approved end state supports does not belong on the board.
    - One row per sentence, not per feature. Learn, 2026-11-09: every feature was green, and the sentence "coaches write the model live, in the session" had no test.
    - A sentence that needs a paused project still gets a row (`untested`, ranked last).
+   - A sentence that describes a change in Jm ("he understands more", "practice sessions per week") is not a row as written. Jm, 2026-11-10: "change the end state goals so they don't describe a change in me, but rather something verifiable without me that is an accurate representation of what I want (it can be as many metrics as we need)". Turn it into metrics of four kinds: **fit** (his own records are the answer key: held-out items from his history, his TELOS goals, his calendar), **truth** (planted items with a known answer), **effect** (a reader or learner agent that has his knowledge record; answers checked by code; the instrument passes its own test first), **ease** (taps, minutes, typed fields, ready by a time; counted by code). His use is an information line from the logs, never a row or a gate. A "what stays" sentence is a guard row: checked at each exam, never progress.
 
 3. **Give each row its test.** Search the loop's records for a test that needs no person and a pass rule that was written before a run. Copy the rule's numbers exactly, with the rule file. If no rule exists, leave `passRule` null and `kind` "none": the examiner writes the rule before the first run. Do not write a rule and present it as the loop's.
 
@@ -37,6 +38,13 @@ Put a project on the end-state loop: write its scoreboard, its examiner brief an
    - Add the line `Board: <absolute path>` to the project's `AGENTS.md` at its next product review (or ask the loop to do it).
 
 9. **Run the first exam** (Exam workflow, mode "baseline"): the examiner takes every `claimed` row. Report the board to Jm: `Board.ts show <board>`.
+
+## Change the end state of a live board (v2)
+
+1. Write `<board folder>/ENDSTATE-v2-DRAFT.md`: one line per metric with the sentence of Jm that it serves (`file:line`), its kind, a test that needs no person, a draft bar, and the v1 rows that it covers. Label Jm's words and Kaya's text.
+2. Start one examiner in mode "rules" (a request in `requests/`): it checks each metric's source, names a test that needs no person, sets a draft bar on a held-out set, and says "same test" or "new test" per v1 row. Output: `ENDSTATE-v2-RULES.md`. No board write.
+3. Send Jm the final text for approval (one word). The board does not change before his yes.
+4. Rebuild the rows. Keep every v1 row id: closed units name them, and closed units are not rewritten. Each v1 row takes the v2 sentence of its metric; new metrics get new ids. A row with the same test keeps its marks. A row with a new test gets a setup mark `untested` with the note "v2 test; earlier marks were for the v1 test". `Board.ts validate`, then tell the orchestrator.
 
 ## Done when
 

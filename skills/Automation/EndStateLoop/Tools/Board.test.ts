@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Board, type Mark, parseBoard, type Row } from "./Board.ts";
+import { type Board, localIso, type Mark, parseBoard, type Row } from "./Board.ts";
 
 const TOOL = join(import.meta.dir, "Board.ts");
 const ROOT = mkdtempSync(join(tmpdir(), "endstate-board-test-"));
@@ -57,6 +57,8 @@ function goodBoard(ev: string): Board {
         rowStatusAtOpen: null,
         moved: true,
         note: "",
+        kind: "product",
+        shipped: "abc1234 on main, live in the runner",
       },
     ],
   };
@@ -306,13 +308,13 @@ describe("lock", () => {
 });
 
 describe("units and gate", () => {
-  function openUnit(c: Case, rowId = "R2"): string {
-    const r = run("unit-open", c.path, "--row", rowId, "--contract", join(c.dir, "contract.md"), "--builder", "demo-build");
+  function openUnit(c: Case, rowId = "R2", kind = "product"): string {
+    const r = run("unit-open", c.path, "--row", rowId, "--contract", join(c.dir, "contract.md"), "--builder", "demo-build", "--kind", kind);
     expect(r.code).toBe(0);
     return r.out.trim();
   }
-  function closeUnit(c: Case, id: string, result = "fail"): Board {
-    expect(run("unit-close", c.path, "--unit", id, "--result", result, "--note", "n").code).toBe(0);
+  function closeUnit(c: Case, id: string, result = "fail", shipped = "def5678 on main, live in the service"): Board {
+    expect(run("unit-close", c.path, "--unit", id, "--result", result, "--shipped", shipped, "--note", "n").code).toBe(0);
     return read(c.path);
   }
   /** setup() with a pass rule on R3, so that R3 can be marked failed or claimed. */
@@ -332,24 +334,106 @@ describe("units and gate", () => {
     if (u === undefined) throw new Error(`no unit ${id}`);
     return u;
   }
+  /** Write a re-plan file with one "Re-plan at:" line per time (the file time is now). */
+  function stampFile(c: Case, name: string, ...isos: string[]): void {
+    writeFileSync(join(c.dir, name), `# re-plan\n\n${isos.map((t) => `Re-plan at: ${t}\n`).join("")}`);
+  }
+  /** The end of a RE-PLAN line that names the re-plan files which answer it. */
+  function answer(...rows: string[]): string {
+    return `; a re-plan in ${rows.map((r) => `REPLAN-${r}.md`).join(" or ")} with the line "Re-plan at: <date +%Y-%m-%dT%H:%M:%S%z>" answers it`;
+  }
 
   test("unit-open adds the next id as an open unit", () => {
     const c = setup();
     expect(openUnit(c)).toBe("U2");
     const u = unit(read(c.path), "U2");
-    expect(u).toMatchObject({ row: "R2", builder: "demo-build", result: "open", endedAt: null, moved: null, note: "", rowStatusAtOpen: "claimed" });
+    expect(u).toMatchObject({ row: "R2", builder: "demo-build", result: "open", endedAt: null, moved: null, note: "", rowStatusAtOpen: "claimed", kind: "product", shipped: null });
     expect(u.statusHashAtOpen).toMatch(/^[0-9a-f]{64}$/);
     expect(u.startedAt).toMatch(LOCAL_ISO);
   });
 
-  test("moved is true when the unit passed and its own row went up", () => {
+  test("moved is true when the unit passed, shipped a change, and its own row went up", () => {
     const c = ruled();
     const id = openUnit(c, "R3");
-    setupMark(c, "R3", "failed");
+    setupMark(c, "R3", "claimed");
     const u = unit(closeUnit(c, id, "pass"), id);
     expect(u.moved).toBe(true);
     expect(u.result).toBe("pass");
+    expect(u.shipped).toBe("def5678 on main, live in the service");
     expect(u.endedAt ?? "").toMatch(LOCAL_ISO);
+  });
+
+  test("moved is false with --shipped none, even when the row went up", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    setupMark(c, "R3", "claimed");
+    const r = run("unit-close", c.path, "--unit", id, "--result", "pass", "--shipped", "none", "--note", "n");
+    expect(r.out).toBe(`${id}: pass, moved false (R3 untested -> claimed; shipped none)\n`);
+    expect(unit(read(c.path), id)).toMatchObject({ moved: false, shipped: "none" });
+  });
+
+  test("moved is false for untested -> failed, even with a shipped change; failed -> claimed with a shipped change moves", () => {
+    const c = ruled();
+    const first = openUnit(c, "R3");
+    setupMark(c, "R3", "failed");
+    expect(unit(closeUnit(c, first, "pass"), first).moved).toBe(false);
+    const second = openUnit(c, "R3");
+    setupMark(c, "R3", "claimed");
+    expect(run("unit-close", c.path, "--unit", second, "--result", "pass", "--shipped", "f00 on main", "--note", "n").out).toBe(
+      `${second}: pass, moved true (R3 failed -> claimed; shipped a change)\n`,
+    );
+  });
+
+  test("unit-open needs --kind product|test; unit-close needs a non-empty --shipped", () => {
+    const c = setup();
+    const before = readFileSync(c.path);
+    const base = ["unit-open", c.path, "--row", "R2", "--contract", join(c.dir, "contract.md"), "--builder", "demo-build"];
+    for (const args of [base, [...base, "--kind", "docs"]]) {
+      const r = run(...args);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("usage: bun Board.ts");
+    }
+    expect(readFileSync(c.path).equals(before)).toBe(true);
+    const id = openUnit(c);
+    const opened = readFileSync(c.path);
+    for (const shipped of [null, "", "  "]) {
+      const args = ["unit-close", c.path, "--unit", id, "--result", "pass", "--note", "n", ...(shipped === null ? [] : ["--shipped", shipped])];
+      const r = run(...args);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain(shipped === null ? "missing flag --shipped" : "--shipped needs what went live");
+    }
+    expect(readFileSync(c.path).equals(opened)).toBe(true);
+  });
+
+  test("a second test unit on one row is refused; product units and a test unit on another row are fine", () => {
+    const c = ruled();
+    const t1 = openUnit(c, "R2", "test");
+    closeUnit(c, t1, "pass", "none");
+    const before = readFileSync(c.path);
+    const r = run("unit-open", c.path, "--row", "R2", "--contract", join(c.dir, "contract.md"), "--builder", "demo-build", "--kind", "test");
+    expect(r.code).toBe(1);
+    expect(r.err).toContain(`refused: row R2 already has the test unit ${t1}; put the test inside a product unit, or ask the examiner for a known-answer rule`);
+    expect(readFileSync(c.path).equals(before)).toBe(true);
+    const product = openUnit(c, "R2");
+    expect(unit(read(c.path), product).kind).toBe("product");
+    const other = openUnit(c, "R3", "test");
+    expect(unit(read(c.path), other).kind).toBe("test");
+  });
+
+  test("a unit with a kind: open needs shipped null, closed needs shipped set, a bad kind or empty shipped is an error", () => {
+    const cases: [(u: Board["units"][number]) => unknown, string][] = [
+      [(u) => ({ ...u, result: "open", endedAt: null, moved: null }), "U1: open unit must have shipped null"],
+      [(u) => ({ ...u, shipped: null }), "U1: closed unit with a kind (opened from release 11) must have shipped set"],
+      [(u) => ({ ...u, kind: "docs" }), 'board.units[0].kind: expected "product" | "test" or null, got "docs"'],
+      [(u) => ({ ...u, shipped: 7 }), "board.units[0].shipped: expected a string or null, got 7"],
+      [(u) => ({ ...u, shipped: " " }), 'U1.shipped: empty (use "none" when nothing went live)'],
+    ];
+    for (const [edit, message] of cases) {
+      const c = setup((b) => ({ ...b, units: [edit(unit(b, "U1"))] }));
+      const r = run("validate", c.path);
+      expect(r.err).toContain(message);
+      expect(r.code).toBe(1);
+    }
   });
 
   test("moved is false when a mark changed another row (a parallel exam)", () => {
@@ -378,24 +462,54 @@ describe("units and gate", () => {
 
   test("a unit from before rowStatusAtOpen: valid, and unit-close reads the row's marks before its start", () => {
     const c = ruled((b) => {
-      const open = { ...unit(b, "U1"), id: "U2", row: "R3", endedAt: null, result: "open", moved: null };
+      const open = { ...unit(b, "U1"), id: "U2", row: "R3", endedAt: null, result: "open", moved: null, shipped: null };
       return { ...b, units: [omit(unit(b, "U1"), "rowStatusAtOpen"), omit(open, "rowStatusAtOpen")] };
     });
     expect(run("validate", c.path).code).toBe(0);
-    setupMark(c, "R3", "failed");
-    expect(run("unit-close", c.path, "--unit", "U2", "--result", "pass", "--note", "n").out).toContain("moved true (R3 untested -> failed)");
+    setupMark(c, "R3", "claimed");
+    expect(run("unit-close", c.path, "--unit", "U2", "--result", "pass", "--shipped", "x", "--note", "n").out).toContain("moved true (R3 untested -> claimed; shipped a change)");
+  });
+
+  test("an old board without kind and shipped validates; its open unit closes with --shipped and keeps kind null", () => {
+    const c = ruled((b) => {
+      const old = (u: object) => omit(omit(omit(u, "kind"), "shipped"), "rowStatusAtOpen");
+      const open = { ...unit(b, "U1"), id: "U2", row: "R3", endedAt: null, result: "open", moved: null };
+      return { ...b, units: [old(unit(b, "U1")), old(open)] };
+    });
+    expect(run("validate", c.path)).toMatchObject({ code: 0, out: "OK: 3 rows, 2 units\n" });
+    expect(unit(read(c.path), "U1")).toMatchObject({ kind: null, shipped: null, moved: true });
+    setupMark(c, "R3", "claimed");
+    const b = closeUnit(c, "U2", "pass");
+    expect(unit(b, "U2")).toMatchObject({ kind: null, shipped: "def5678 on main, live in the service", moved: true });
+    expect(unit(b, "U1")).toMatchObject({ kind: null, shipped: null, moved: true });
+    expect(run("validate", c.path).code).toBe(0);
+  });
+
+  test("unit-open refuses a contract or builder name with another unit id; a name with no id or the right id is fine", () => {
+    const c = setup();
+    const before = readFileSync(c.path);
+    const open = (contract: string, builder: string) => run("unit-open", c.path, "--row", "R2", "--contract", join(c.dir, contract), "--builder", builder, "--kind", "product");
+    const badContract = open("U6-R2.md", "demo-unit-U2");
+    expect(badContract.code).toBe(1);
+    expect(badContract.err).toContain("refused: the contract name U6-R2.md says U6, but this unit gets the id U2");
+    const badBuilder = open("U2-R2.md", "demo-unit-U6");
+    expect(badBuilder.code).toBe(1);
+    expect(badBuilder.err).toContain("refused: the builder name demo-unit-U6 says U6, but this unit gets the id U2");
+    expect(readFileSync(c.path).equals(before)).toBe(true);
+    expect(open("U2-R2.md", "demo-unit-U2")).toMatchObject({ code: 0, out: "U2\n" });
+    expect(open("R18a-R2.md", "demo-unit-R18a")).toMatchObject({ code: 0, out: "U3\n" });
   });
 
   test("a unit that is not open cannot be closed", () => {
     const c = setup();
     const before = readFileSync(c.path);
-    const r = run("unit-close", c.path, "--unit", "U1", "--result", "pass", "--note", "n");
+    const r = run("unit-close", c.path, "--unit", "U1", "--result", "pass", "--shipped", "none", "--note", "n");
     expect(r.err).toContain("refused: unit U1 is not open");
     expect(r.code).toBe(1);
     expect(readFileSync(c.path).equals(before)).toBe(true);
   });
 
-  test("gate: GO at stall 1, RE-PLAN at stall 2, GO again after a moved unit; open units ignored", () => {
+  test("gate: GO at stall 1, RE-PLAN at stall 2 (unit-open refused), GO again after a moved unit; open units ignored", () => {
     const c = ruled();
     expect(run("gate", c.path)).toMatchObject({ code: 0, out: "GO: stall 0\n" });
     closeUnit(c, openUnit(c));
@@ -403,11 +517,17 @@ describe("units and gate", () => {
     closeUnit(c, openUnit(c));
     const replan = run("gate", c.path);
     expect(replan.code).toBe(5);
-    expect(replan.out).toBe("RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.\n");
+    expect(replan.out).toBe(`RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.${answer("R2")}\n`);
+    const before = readFileSync(c.path);
+    const refused = run("unit-open", c.path, "--row", "R3", "--contract", join(c.dir, "contract.md"), "--builder", "demo-build", "--kind", "product");
+    expect(refused.code).toBe(5);
+    expect(refused.err).toContain("refused: RE-PLAN: 2 units in a row with no board move");
+    expect(readFileSync(c.path).equals(before)).toBe(true);
+    stampFile(c, "REPLAN-R2.md", localIso());
     openUnit(c);
-    expect(run("gate", c.path).code).toBe(5);
+    expect(run("gate", c.path).code).toBe(0);
     const id = openUnit(c, "R3");
-    setupMark(c, "R3", "failed");
+    setupMark(c, "R3", "claimed");
     closeUnit(c, id, "pass");
     expect(run("gate", c.path)).toMatchObject({ code: 0, out: "GO: stall 0\n" });
   });
@@ -420,33 +540,80 @@ describe("units and gate", () => {
       return b;
     });
     expect(run("gate", c.path).code).toBe(5);
-    const replan = join(c.dir, "REPLAN-R2.md");
-    writeFileSync(replan, "# re-plan\n");
-    const at = new Date("2026-11-09T10:00:00-08:00");
-    utimesSync(replan, at, at);
+    stampFile(c, "REPLAN-R2.md", "2026-11-09T10:00:00-08:00");
     const go = run("gate", c.path);
     expect(go.code).toBe(0);
-    expect(go.out).toMatch(/^GO: stall 2; REPLAN-R2\.md written \S+; 0 unit\(s\) with no move since then\n$/);
+    expect(go.out).toBe("GO: stall 2; REPLAN-R2.md re-plan at 2026-11-09T10:00:00-08:00; 0 unit(s) with no move since then\n");
     closeUnit(c, openUnit(c));
     expect(run("gate", c.path).code).toBe(0);
     closeUnit(c, openUnit(c));
     const again = run("gate", c.path);
     expect(again.code).toBe(5);
-    expect(again.out).toMatch(/^RE-PLAN: 2 units with no board move since REPLAN-R2\.md written \S+; top red row R2: Sentence of R2\.\n$/);
+    expect(again.out).toBe(`RE-PLAN: 2 units with no board move since REPLAN-R2.md re-plan at 2026-11-09T10:00:00-08:00; top red row R2: Sentence of R2.${answer("R2")}\n`);
   });
 
-  test("gate: a re-plan older than the stall does not count", () => {
+  test("gate: the stamp counts, not the file time: an addendum or an unstamped file does not answer a later stall", () => {
     const c = ruled((b) => {
       const u1 = unit(b, "U1");
       u1.moved = false;
       b.units.push({ ...u1, id: "U2", endedAt: "2026-11-09T09:40:00-08:00" });
       return b;
     });
-    const replan = join(c.dir, "REPLAN-R2.md");
-    writeFileSync(replan, "# old re-plan\n");
-    const at = new Date("2026-11-09T08:00:00-08:00");
-    utimesSync(replan, at, at);
-    expect(run("gate", c.path)).toMatchObject({ code: 5, out: "RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.\n" });
+    const plain = `RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.${answer("R2")}\n`;
+    // written now (fresh file time), stamped before the stall: an addendum to an old re-plan
+    stampFile(c, "REPLAN-R2.md", "2026-11-09T08:00:00-08:00");
+    expect(run("gate", c.path)).toMatchObject({ code: 5, out: plain });
+    writeFileSync(join(c.dir, "REPLAN-R2.md"), "# re-plan with no stamp line\nRe-plan at: soon\n");
+    expect(run("gate", c.path)).toMatchObject({ code: 5, out: plain });
+  });
+
+  test("gate: the newest stamp in a file counts; an offset with no colon parses; a future stamp is ignored", () => {
+    const c = ruled((b) => {
+      const u1 = unit(b, "U1");
+      u1.moved = false;
+      b.units.push({ ...u1, id: "U2", endedAt: "2026-11-09T09:40:00-08:00" });
+      return b;
+    });
+    const go = "GO: stall 2; REPLAN-R2.md re-plan at 2026-11-09T10:00:00-08:00; 0 unit(s) with no move since then\n";
+    stampFile(c, "REPLAN-R2.md", "2026-11-09T09:35:00-08:00", "2026-11-09T10:00:00-0800");
+    expect(run("gate", c.path)).toMatchObject({ code: 0, out: go });
+    stampFile(c, "REPLAN-R2.md", "2026-11-09T10:00:00-08:00", "2099-01-01T00:00:00-08:00");
+    expect(run("gate", c.path)).toMatchObject({ code: 0, out: go });
+  });
+
+  test("gate: a re-plan of a row that a unit of the stall attacked answers it; the newest candidate counts; other rows do not", () => {
+    const c = ruled((b) => {
+      const u1 = unit(b, "U1");
+      u1.moved = false;
+      u1.row = "R3";
+      b.units.push({ ...u1, id: "U2", endedAt: "2026-11-09T09:40:00-08:00" });
+      return b;
+    });
+    stampFile(c, "REPLAN-R1.md", "2026-11-09T10:00:00-08:00");
+    expect(run("gate", c.path)).toMatchObject({
+      code: 5,
+      out: `RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.${answer("R2", "R3")}\n`,
+    });
+    stampFile(c, "REPLAN-R2.md", "2026-11-09T09:35:00-08:00");
+    stampFile(c, "REPLAN-R3.md", "2026-11-09T10:00:00-08:00");
+    const go = run("gate", c.path);
+    expect(go.code).toBe(0);
+    expect(go.out).toBe("GO: stall 2; REPLAN-R3.md re-plan at 2026-11-09T10:00:00-08:00; 0 unit(s) with no move since then\n");
+  });
+
+  test("gate: with a re-plan of a stall row in the middle of the stall, units after it count", () => {
+    const c = ruled((b) => {
+      const u1 = unit(b, "U1");
+      u1.moved = false;
+      b.units.push({ ...u1, id: "U2", row: "R3", endedAt: "2026-11-09T09:40:00-08:00" });
+      b.units.push({ ...u1, id: "U3", row: "R3", endedAt: "2026-11-09T09:50:00-08:00" });
+      return b;
+    });
+    stampFile(c, "REPLAN-R3.md", "2026-11-09T09:35:00-08:00");
+    expect(run("gate", c.path)).toMatchObject({
+      code: 5,
+      out: `RE-PLAN: 2 units with no board move since REPLAN-R3.md re-plan at 2026-11-09T09:35:00-08:00; top red row R2: Sentence of R2.${answer("R2", "R3")}\n`,
+    });
   });
 
   test("gate orders closed units by endedAt, not by array order", () => {
@@ -550,7 +717,7 @@ describe("set-test and show", () => {
   test("show --json", () => {
     const c = setup();
     const raw: unknown = JSON.parse(run("show", c.path, "--json").out);
-    expect(raw).toEqual({ project: "demo", counts: { proven: 1, claimed: 1, failed: 0, untested: 1, total: 3 }, stall: 0, next: "R2" });
+    expect(raw).toEqual({ project: "demo", counts: { proven: 1, claimed: 1, failed: 0, untested: 1, total: 3 }, stall: 0, next: "R2", nextUnit: "U2" });
   });
 });
 

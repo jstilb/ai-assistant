@@ -63,10 +63,12 @@ Jm's words (sources: `~/.claude/CLAUDE.md`, each project's `FEEDBACK.md`):
 Kaya's design rules (change them with evidence):
 - A test with a known answer comes first: planted faults, planted items, planted facts, held-out samples. A judge marks a row only after the judge passed its own test.
 - The pass rule is in the board before the run. A set is used once; after the run it is burned.
-- A unit fits one builder session. Two closed units in a row with no board move: the orchestrator re-plans the top red row with a different approach (`Board.ts gate` exits 5). A move is a unit that closed `pass` and whose own row went up (untested < failed < claimed < proven). A mark on another row is not a move (since 2026-11-09: the first rule counted any status change on the board, so parallel exams hid 4 failed units).
-- At most 2 builders per project at one time (16 GB Mac). One heavy run (a test suite over the product, a fault run, a batch of model calls) at a time per Mac: `Tools/runlock.sh <lock dir> <session name> <command…>`. Never remove a lock that you do not own.
+- A unit fits one builder session. Two closed units in a row with no board move: the orchestrator re-plans the top red row, or a row that the stalled units attacked, with a different approach (`Board.ts gate` exits 5, and `unit-open` refuses until a re-plan in `REPLAN-<row>.md` carries the line `Re-plan at: <time from date>`; the gate reads that line, not the file time). A move is a unit that closed `pass`, put a change live (`--shipped` is not `none`), and whose own row went up (untested = failed < claimed < proven). A mark on another row is not a move (since 2026-11-09: the first rule counted any status change on the board, so parallel exams hid 4 failed units). A test that ran and failed is not a move, and a unit that shipped nothing is not a move (release 11, 2026-11-10: Jm, "how do we fixe the endstateloopso these aren't just writing tests, making rows that change nothing?").
+- Each unit has a kind (`unit-open --kind`): `product` changes what Jm receives; `test` only builds the row's test harness, at most 1 per row (`unit-open` refuses a second). A row whose test failed twice gets a known-answer rule with planted items, not a third model judge. Each report to Jm lists the live product changes since the last report, with a before and after, not only row counts.
+- At most 2 builders per project at one time (16 GB Mac). Heavy runs go through `Tools/runlock.sh <lock dir> <session name> <command…>`, with two locks that the examiner brief names (Learn: `data/endstate/RUN.lock` and `data/endstate/MODEL.lock`): one memory-heavy run at a time (a browser, a test suite over the product, a copy server, a fault run), and one batch of model calls at a time (light on memory; the lock keeps the call rate). A run that needs both gives both in one call, the memory lock first (`runlock.sh <memory lock>,<model lock> <you> <command…>`): it waits holding nothing, then takes the model lock ahead of the other model waiters. Never nest two runlock calls: the tool refuses a nested call (2026-11-10: a nested call held the model lock idle behind 5 memory-lock tickets). Why two: on 2026-11-10 one Learn lock held 1 model batch and 5 waiters while 68 % of memory was free. Waiters queue first come, first served (tickets in `<lock>.queue/`); the merge check of a proven unit runs with `RUNLOCK_FIRST=1` and goes first, so that a proven change does not wait behind exam runs (2026-11-10 09:53: an examiner that ran back to back took the lock again at once, while 7 waiters, two of them proven merges, waited up to 75 min). Never remove a lock that you do not own.
 - A copy of the data is not a copy of a shared quota. Free model pools and API limits that the live product uses are live resources: each contract and brief names them and the cap for test runs.
-- A wait is not a session: end the turn, wake on the builder's idle notice.
+- A daemon restart kills every background session (2026-11-10 09:59: 11 sessions, the whole Learn loop). Resume each one with `claude --bg --resume <sessionId>` and no flags: with flags the CLI starts a copy with a new id, and the copies' original jobs then lost their `EnterWorktree` worktrees and branches (learn-exam-15, -18, -19; a `git worktree add` tree survived). Before any resume, stop or rm of a session, commit and push its branch. Long runs work in a `git worktree add` tree.
+- A wait is not a session: end the turn, wake on the builder's done message. Keep one background command in flight while you wait (`Tools/waitboard.sh`): the daemon retires a background session that sits idle at its prompt with nothing in flight after about 60 min (learn-orch-2, 2026-11-10).
 - Marks are a convention, not a lock: the threat is honest drift, not forgery. `Board.ts` refuses a `proven` mark without the examiner role, a set id and evidence on disk.
 
 ## Workflow Announcement
@@ -99,7 +101,7 @@ Jm: "set up a loop for form-doc"
 ```
 Session formdoc-orch-3 starts from its handoff
 → Orchestrate: Board.ts gate → Board.ts next → unit contract for row R4
-→ spawn builder formdoc-unit-U12; end the turn; wake on its idle notice
+→ spawn builder formdoc-unit-U12; start waitboard.sh in the background; end the turn; wake on its done message
 → examiner marks R4; on a pass merge and close the sessions
 ```
 
@@ -119,13 +121,15 @@ T=$HOME/.claude/skills/Automation/EndStateLoop/Tools/Board.ts
 bun $T show <board>                  # table + "N of M proven" + stall count
 bun $T validate <board>              # schema, ids, evidence paths; exit 1 when invalid
 bun $T next <board>                  # the top red row as JSON
-bun $T gate <board>                  # exit 5: two units with no move → re-plan
+bun $T gate <board>                  # exit 5: two units with no move → re-plan (unit-open refuses too)
 bun $T set-test <board> --row R --name N --kind known-answer --pass-rule "…" [--command C] [--rule-file F]
 bun $T mark <board> --row R --status proven --by learn-exam-1 --role examiner --set <id> --evidence <p1,p2> --note "…"
 bun $T rank <board> --order R4,R2,R7 --by learn-exam-1
-bun $T unit-open <board> --row R --contract <path> --builder <session>
-bun $T unit-close <board> --unit U3 --result pass|fail|too-large --note "…"
-~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <session name> <command…>   # one heavy run at a time
+bun $T unit-open <board> --row R --contract <path> --builder <session> --kind product|test   # U<n> in names = show --json nextUnit; 1 test unit per row
+bun $T unit-close <board> --unit U3 --result pass|fail|too-large --shipped "<commit; where live>"|none --note "…"
+~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <session name> <command…>   # memory lock or model lock; both: "<memory lock>,<model lock>" in one call; first come, first served
+RUNLOCK_FIRST=1 ~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <memory lock> <session name> <merge check…>   # only the merge check of a proven unit
+~/.claude/skills/Automation/EndStateLoop/Tools/waitboard.sh <board> [cap s, default 3000]          # run_in_background: keeps a waiting session alive
 ```
 
 Templates: `Templates/UnitContract.md`, `Templates/ExaminerBrief.md`, `Templates/OrchestratorStart.md`.

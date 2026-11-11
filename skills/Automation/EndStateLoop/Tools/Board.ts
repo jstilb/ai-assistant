@@ -5,8 +5,10 @@
  *
  * One row per sentence of the end state. A row's status is the status of its last mark. Only an
  * examiner mark with a set id and evidence on disk can make a row `proven`. Units record builder
- * sessions; a unit that closes with no change to any row status did not move the board, and two
- * such units in a row make `gate` exit 5 (re-plan).
+ * sessions; a unit is a `product` unit (it changes what Jm receives) or a `test` unit (at most one
+ * per row). A unit moves the board when it passed, shipped a live change, and its own row went up
+ * (untested and failed are one level). Two closed units in a row that did not move make `gate`
+ * exit 5 (re-plan), and `unit-open` refuses while it does.
  *
  * Every writing command reads the board, changes it, runs the same checks as `validate` on the
  * result, and writes it atomically (temp file in the same folder + rename) only when the result
@@ -18,7 +20,8 @@
  * taken. Before each write, the old file is copied to `<board>.bak`. Read commands take no lock.
  *
  * Usage: bun Board.ts <command> <board path> [flags]   (commands: see USAGE below)
- * Exit:  0 = ok, 1 = invalid board or refused change, 2 = bad arguments, 5 = gate says re-plan.
+ * Exit:  0 = ok, 1 = invalid board or refused change, 2 = bad arguments, 5 = gate says re-plan
+ *        (from `gate`, or `unit-open` refused).
  *
  * Skill: ~/.claude/skills/Automation/EndStateLoop/SKILL.md
  *
@@ -37,11 +40,15 @@ const ROLES = ["setup", "examiner"] as const;
 const KINDS = ["known-answer", "judged", "none"] as const;
 const RESULTS = ["open", "pass", "fail", "too-large"] as const;
 const CLOSE_RESULTS = ["pass", "fail", "too-large"] as const;
+const UNIT_KINDS = ["product", "test"] as const;
+/** The `--shipped` value of a unit that put no change live. */
+const SHIPPED_NONE = "none";
 
 export type Status = (typeof STATUSES)[number];
 export type Role = (typeof ROLES)[number];
 export type TestKind = (typeof KINDS)[number];
 export type UnitResult = (typeof RESULTS)[number];
+export type UnitKind = (typeof UNIT_KINDS)[number];
 
 export interface Mark {
   at: string;
@@ -82,9 +89,14 @@ export interface Unit {
   statusHashAtOpen: string;
   /** The unit's own row status at open. Null in units opened before 2026-11-09 23:45 PST: unit-close then reads the row's marks. */
   rowStatusAtOpen: Status | null;
-  /** True only when the unit closed "pass" and its own row went up (untested < failed < claimed < proven). */
+  /** True only when the unit closed "pass", shipped a change, and its own row went up (untested = failed < claimed < proven).
+   * Units closed before release 11 (2026-11-10) keep the moved of the old rule (untested < failed counted as up). */
   moved: boolean | null;
   note: string;
+  /** "product" (changes what Jm receives) or "test" (only a test; at most one per row). Null in units opened before release 11. */
+  kind: UnitKind | null;
+  /** What went live at close (commit and where), or "none". Null while open and in units closed before release 11. */
+  shipped: string | null;
 }
 export interface FinalCheck {
   what: string;
@@ -107,14 +119,14 @@ const FINAL_KEYS = ["what", "value", "readAt"] as const satisfies readonly (keyo
 const ROW_KEYS = ["id", "sentence", "source", "test", "status", "gap", "rank", "marks"] as const satisfies readonly (keyof Row)[];
 const TEST_KEYS = ["name", "kind", "command", "passRule", "ruleFile", "ruleSetAt"] as const satisfies readonly (keyof RowTest)[];
 const MARK_KEYS = ["at", "by", "role", "status", "evidence", "set", "note"] as const satisfies readonly (keyof Mark)[];
-const UNIT_KEYS = ["id", "row", "contract", "builder", "startedAt", "endedAt", "result", "statusHashAtOpen", "rowStatusAtOpen", "moved", "note"] as const satisfies readonly (keyof Unit)[];
+const UNIT_KEYS = ["id", "row", "contract", "builder", "startedAt", "endedAt", "result", "statusHashAtOpen", "rowStatusAtOpen", "moved", "note", "kind", "shipped"] as const satisfies readonly (keyof Unit)[];
 
 // ---------------------------------------------------------------- errors
 
 /** An expected failure: message on stderr, then exit with `code`. */
 class CliError extends Error {
   constructor(
-    readonly code: 1 | 2,
+    readonly code: 1 | 2 | 5,
     message: string,
   ) {
     super(message);
@@ -129,8 +141,11 @@ const USAGE = `usage: bun Board.ts <command> <board path> [flags]
   set-test   --row R --name N --kind known-answer|judged|none [--command C] [--pass-rule P] [--rule-file F]
   mark       --row R --status proven|claimed|failed|untested --by NAME --role setup|examiner [--set ID] [--evidence p1,p2] --note TEXT
   rank       --order R4,R2,R7 --by NAME
-  unit-open  --row R --contract PATH --builder NAME
-  unit-close --unit U --result pass|fail|too-large --note TEXT
+  unit-open  --row R --contract PATH --builder NAME --kind product|test   (refused with exit 5 while gate
+             says RE-PLAN; refused when the contract file name "U<n>-…" or the builder "…-U<n>" names
+             another id; refused for a second test unit on one row)
+  unit-close --unit U --result pass|fail|too-large --shipped "<what went live: commit and where>"|none --note TEXT
+             (moved = pass, shipped not none, and the row went up; untested -> failed is not up)
 writing commands lock <board>.lock and copy the old file to <board>.bak before the write.
 env: BOARD_LOCK_TIMEOUT_MS  ms a writing command waits for a held lock (default 10000); a lock
      older than 60 s is stale and is taken.`;
@@ -208,6 +223,15 @@ class Fields {
     if (oneOf(allowed, v)) return v;
     this.bad(key, allowed.map((a) => `"${a}"`).join(" | "));
     return fallback;
+  }
+
+  /** A string key that older boards do not have: absent or null reads as null. */
+  absentOrStr(key: string): string | null {
+    const v = this.o[key];
+    if (!(key in this.o) || v === null) return null;
+    if (typeof v === "string") return v;
+    this.bad(key, "a string or null");
+    return null;
   }
 
   /** A key that older boards do not have: absent or null reads as null. */
@@ -292,6 +316,8 @@ function parseUnit(o: Obj, where: string, errors: string[]): Unit {
     rowStatusAtOpen: f.absentOrOneOf("rowStatusAtOpen", STATUSES),
     moved: f.boolOrNull("moved"),
     note: f.str("note"),
+    kind: f.absentOrOneOf("kind", UNIT_KINDS),
+    shipped: f.absentOrStr("shipped"),
   };
 }
 
@@ -396,12 +422,17 @@ export function checkBoard(board: Board): { errors: string[]; warnings: string[]
   for (const u of board.units) {
     if (!rowIds.has(u.row)) errors.push(`${u.id}: row ${u.row} is not a row id`);
     if (badTime(u.startedAt)) errors.push(`${u.id}.startedAt: not a date "${u.startedAt}"`);
+    if (u.shipped !== null && u.shipped.trim() === "") errors.push(`${u.id}.shipped: empty (use "${SHIPPED_NONE}" when nothing went live)`);
     if (u.result === "open") {
       if (u.endedAt !== null || u.moved !== null) errors.push(`${u.id}: open unit must have endedAt null and moved null`);
-    } else if (u.endedAt === null || u.moved === null) {
-      errors.push(`${u.id}: closed unit (${u.result}) must have endedAt and moved set`);
-    } else if (badTime(u.endedAt)) {
-      errors.push(`${u.id}.endedAt: not a date "${u.endedAt}"`);
+      if (u.shipped !== null) errors.push(`${u.id}: open unit must have shipped null`);
+    } else {
+      if (u.kind !== null && u.shipped === null) errors.push(`${u.id}: closed unit with a kind (opened from release 11) must have shipped set`);
+      if (u.endedAt === null || u.moved === null) {
+        errors.push(`${u.id}: closed unit (${u.result}) must have endedAt and moved set`);
+      } else if (badTime(u.endedAt)) {
+        errors.push(`${u.id}.endedAt: not a date "${u.endedAt}"`);
+      }
     }
   }
   return { errors, warnings };
@@ -415,8 +446,9 @@ export function statusHash(board: Board): string {
     .digest("hex");
 }
 
-/** Higher is nearer the end state. untested -> failed counts as up: the row now has a test that ran. */
-const STATUS_ORDER: Record<Status, number> = { untested: 0, failed: 1, claimed: 2, proven: 3 };
+/** Higher is nearer the end state. untested and failed are one level: a test that ran and failed changes nothing
+ * that Jm receives (release 11, 2026-11-10; Jm F-011: "not just writing tests, making rows that change nothing"). */
+const STATUS_ORDER: Record<Status, number> = { untested: 0, failed: 0, claimed: 1, proven: 2 };
 
 /** A row's status at a time, from its marks (the last mark strictly before `iso`); "untested" with no such mark. */
 export function statusBefore(row: Row, iso: string): Status {
@@ -428,14 +460,19 @@ export function statusBefore(row: Row, iso: string): Status {
 
 /** The end times (ms) of the units in the current stall, newest first. */
 export function stallEnds(board: Board): number[] {
-  const ends = board.units
-    .filter((u) => u.result !== "open" && u.endedAt !== null)
-    .map((u) => ({ t: Date.parse(u.endedAt ?? ""), moved: u.moved }))
-    .sort((a, b) => b.t - a.t);
-  const run: number[] = [];
-  for (const e of ends) {
-    if (e.moved !== false) break;
-    run.push(e.t);
+  return stallUnits(board).map((u) => Date.parse(u.endedAt ?? ""));
+}
+
+/** The closed units of the current stall (consecutive by endedAt, moved === false), newest first. */
+export function stallUnits(board: Board): Unit[] {
+  const closed = board.units
+    .map((u, i) => ({ u, i }))
+    .filter(({ u }) => u.result !== "open" && u.endedAt !== null)
+    .sort((a, b) => Date.parse(b.u.endedAt ?? "") - Date.parse(a.u.endedAt ?? "") || b.i - a.i);
+  const run: Unit[] = [];
+  for (const { u } of closed) {
+    if (u.moved !== false) break;
+    run.push(u);
   }
   return run;
 }
@@ -453,6 +490,12 @@ export function stall(board: Board): number {
     k++;
   }
   return k;
+}
+
+/** The id that the next `unit-open` gives: U<highest number + 1>. */
+export function nextUnitId(board: Board): string {
+  const max = Math.max(0, ...board.units.map((u) => /^U(\d+)$/.exec(u.id)).map((m) => (m?.[1] === undefined ? 0 : Number(m[1]))));
+  return `U${max + 1}`;
 }
 
 /** The non-proven row with the lowest rank; with no ranked one, the first non-proven row. */
@@ -658,8 +701,8 @@ const COMMANDS: Record<string, CommandSpec> = {
   "set-test": { required: ["row", "name", "kind"], optional: ["command", "pass-rule", "rule-file"], switches: [] },
   mark: { required: ["row", "status", "by", "role", "note"], optional: ["set", "evidence"], switches: [] },
   rank: { required: ["order", "by"], optional: [], switches: [] },
-  "unit-open": { required: ["row", "contract", "builder"], optional: [], switches: [] },
-  "unit-close": { required: ["unit", "result", "note"], optional: [], switches: [] },
+  "unit-open": { required: ["row", "contract", "builder", "kind"], optional: [], switches: [] },
+  "unit-close": { required: ["unit", "result", "shipped", "note"], optional: [], switches: [] },
 };
 
 function parseFlags(tokens: string[], spec: CommandSpec): Args {
@@ -729,7 +772,9 @@ function cmdShow(path: string, a: Args): number {
     return 0;
   }
   const next = nextRow(board);
-  console.log(JSON.stringify({ project: board.project, counts: counts(board), stall: stall(board), next: next === null ? null : next.id }, null, 2));
+  console.log(
+    JSON.stringify({ project: board.project, counts: counts(board), stall: stall(board), next: next === null ? null : next.id, nextUnit: nextUnitId(board) }, null, 2),
+  );
   return 0;
 }
 
@@ -739,32 +784,60 @@ function cmdNext(path: string): number {
   return 0;
 }
 
-function cmdGate(path: string): number {
-  const board = loadValid(path);
+export interface GateVerdict {
+  go: boolean;
+  line: string;
+}
+
+/** A full re-plan section carries this line; the time comes from `date +%Y-%m-%dT%H:%M:%S%z` in the writing command. */
+const REPLAN_STAMP = /^Re-plan at: (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:Z|[+-]\d\d:?\d\d))\s*$/gm;
+
+/** The newest `Re-plan at:` time (ms) in a re-plan file; null with no file or no valid stamp. A stamp more than
+ * 10 min in the future is ignored (it would answer every later stall). */
+export function replanStamp(file: string, nowMs: number = Date.now()): number | null {
+  if (!existsSync(file)) return null;
+  let best: number | null = null;
+  for (const m of readFileSync(file, "utf8").matchAll(REPLAN_STAMP)) {
+    const t = Date.parse(m[1] ?? "");
+    if (Number.isFinite(t) && t <= nowMs + 600_000 && (best === null || t > best)) best = t;
+  }
+  return best;
+}
+
+/**
+ * The no-move gate. A re-plan in `REPLAN-<row>.md` next to the board, stamped during the stall, answers it
+ * until 2 more units close with no move. The row is the top red row or a row that a unit of the stall
+ * attacked; the newest stamp counts (2026-11-10: the edition re-planned R15 after U20, but the gate read only
+ * REPLAN-R2.md). The stamp is the line `Re-plan at: <time>`, not the file time: Learn appended an addendum
+ * to REPLAN-R15.md and the file time answered a real stall (learn-orch-3, 2026-11-10 07:08).
+ */
+export function gateVerdict(board: Board, boardDir: string): GateVerdict {
   const k = stall(board);
-  if (k < 2) {
-    console.log(`GO: stall ${k}`);
-    return 0;
-  }
+  if (k < 2) return { go: true, line: `GO: stall ${k}` };
   const top = nextRow(board);
-  // A re-plan of the top row that is newer than the stall's start answers the gate: it fires again only
-  // after 2 more units with no move (2026-11-10: the edition's gate said RE-PLAN at every handoff after REPLAN-R2.md).
-  const replan = top === null ? undefined : statSync(join(dirname(path), `REPLAN-${top.id}.md`), { throwIfNoEntry: false });
-  if (top !== null && replan !== undefined) {
-    const since = stallEnds(board).filter((t) => t > replan.mtimeMs).length;
-    const written = `REPLAN-${top.id}.md written ${localIso(replan.mtime)}`;
-    if (since < 2 && since < k) {
-      console.log(`GO: stall ${k}; ${written}; ${since} unit(s) with no move since then`);
-      return 0;
-    }
-    if (since < k) {
-      console.log(`RE-PLAN: ${since} units with no board move since ${written}; top red row ${top.id}: ${cut(top.sentence, 100)}`);
-      return 5;
-    }
-  }
   const red = top === null ? "none (every row is proven)" : `${top.id}: ${cut(top.sentence, 100)}`;
-  console.log(`RE-PLAN: ${k} units in a row with no board move; top red row ${red}`);
-  return 5;
+  const units = stallUnits(board);
+  const rows = [...new Set([...(top === null ? [] : [top.id]), ...units.map((u) => u.row)])];
+  const answer = `; a re-plan in REPLAN-${rows.join(".md or REPLAN-")}.md with the line "Re-plan at: <date +%Y-%m-%dT%H:%M:%S%z>" answers it`;
+  let replan: { row: string; ms: number } | null = null;
+  for (const id of rows) {
+    const t = replanStamp(join(boardDir, `REPLAN-${id}.md`));
+    if (t !== null && (replan === null || t > replan.ms)) replan = { row: id, ms: t };
+  }
+  if (replan !== null) {
+    const ms = replan.ms;
+    const since = units.filter((u) => Date.parse(u.endedAt ?? "") > ms).length;
+    const written = `REPLAN-${replan.row}.md re-plan at ${localIso(new Date(ms))}`;
+    if (since < 2 && since < k) return { go: true, line: `GO: stall ${k}; ${written}; ${since} unit(s) with no move since then` };
+    if (since < k) return { go: false, line: `RE-PLAN: ${since} units with no board move since ${written}; top red row ${red}${answer}` };
+  }
+  return { go: false, line: `RE-PLAN: ${k} units in a row with no board move; top red row ${red}${answer}` };
+}
+
+function cmdGate(path: string): number {
+  const verdict = gateVerdict(loadValid(path), dirname(path));
+  console.log(verdict.line);
+  return verdict.go ? 0 : 5;
 }
 
 function cmdSetTest(path: string, a: Args): void {
@@ -831,15 +904,38 @@ function cmdRank(path: string, a: Args): void {
 }
 
 function cmdUnitOpen(path: string, a: Args): void {
+  const kind = enumFlag(a, "kind", UNIT_KINDS);
   update(path, (board) => {
     const row = findRow(board, need(a, "row"));
-    const max = Math.max(0, ...board.units.map((u) => /^U(\d+)$/.exec(u.id)).map((m) => (m?.[1] === undefined ? 0 : Number(m[1]))));
-    const id = `U${max + 1}`;
+    // Units that only wrote tests made rows that changed nothing (Jm F-011, 2026-11-10): one test unit per row.
+    const testUnit = board.units.find((u) => u.row === row.id && u.kind === "test");
+    if (kind === "test" && testUnit !== undefined) {
+      throw new CliError(
+        1,
+        `refused: row ${row.id} already has the test unit ${testUnit.id}; put the test inside a product unit, or ask the examiner for a known-answer rule; ${path} unchanged`,
+      );
+    }
+    // The gate holds here too: edition-orch-3 closed two units and opened U22 a minute later with no gate run (2026-11-10).
+    const gate = gateVerdict(board, dirname(path));
+    if (!gate.go) throw new CliError(5, `refused: ${gate.line}\nWrite the re-plan first (Workflows/Orchestrate.md, "The loop", step 1); ${path} unchanged`);
+    const id = nextUnitId(board);
+    // A name that carries another unit id splits one unit across two ids (Learn: contract U6-R15.md and
+    // builder learn-unit-U6 on board unit U5, 2026-11-10).
+    const contract = need(a, "contract");
+    const builder = need(a, "builder");
+    for (const [what, name, m] of [
+      ["contract", basename(contract), /^(U\d+)-/.exec(basename(contract))],
+      ["builder", builder, /-(U\d+)$/.exec(builder)],
+    ] as const) {
+      if (m?.[1] !== undefined && m[1] !== id) {
+        throw new CliError(1, `refused: the ${what} name ${name} says ${m[1]}, but this unit gets the id ${id} (show --json: nextUnit); rename it; ${path} unchanged`);
+      }
+    }
     board.units.push({
       id,
       row: row.id,
-      contract: need(a, "contract"),
-      builder: need(a, "builder"),
+      contract,
+      builder,
       startedAt: localIso(),
       endedAt: null,
       result: "open",
@@ -847,6 +943,8 @@ function cmdUnitOpen(path: string, a: Args): void {
       rowStatusAtOpen: row.status,
       moved: null,
       note: "",
+      kind,
+      shipped: null,
     });
     return id;
   });
@@ -855,6 +953,8 @@ function cmdUnitOpen(path: string, a: Args): void {
 function cmdUnitClose(path: string, a: Args): void {
   const result = enumFlag(a, "result", CLOSE_RESULTS);
   const id = need(a, "unit");
+  const shipped = need(a, "shipped").trim();
+  if (shipped === "") throw usage(`--shipped needs what went live (commit and where), or "${SHIPPED_NONE}"`);
   update(path, (board) => {
     const unit = board.units.find((u) => u.id === id);
     if (unit === undefined) throw new CliError(1, `refused: unknown unit ${id}`);
@@ -862,12 +962,14 @@ function cmdUnitClose(path: string, a: Args): void {
     unit.endedAt = localIso();
     unit.result = result;
     unit.note = need(a, "note");
-    // A move is this unit's own row going up, and the unit passed. A mark on another row (a parallel
-    // exam) or a row that went up without this unit's change (result fail) is not a move (edition U2, 2026-11-09).
+    unit.shipped = shipped;
+    // A move is this unit's own row going up, the unit passed, and it put a change live. A mark on another
+    // row (a parallel exam) or a row that went up without this unit's change (result fail) is not a move
+    // (edition U2, 2026-11-09); nor is a unit that shipped nothing (release 11, Jm F-011).
     const row = findRow(board, unit.row);
     const before = unit.rowStatusAtOpen ?? statusBefore(row, unit.startedAt);
-    unit.moved = result === "pass" && STATUS_ORDER[row.status] > STATUS_ORDER[before];
-    return `${id}: ${result}, moved ${unit.moved} (${unit.row} ${before} -> ${row.status})`;
+    unit.moved = result === "pass" && shipped !== SHIPPED_NONE && STATUS_ORDER[row.status] > STATUS_ORDER[before];
+    return `${id}: ${result}, moved ${unit.moved} (${unit.row} ${before} -> ${row.status}; shipped ${shipped === SHIPPED_NONE ? "none" : "a change"})`;
   });
 }
 
