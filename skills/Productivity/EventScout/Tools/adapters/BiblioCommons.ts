@@ -8,7 +8,9 @@ const DefinitionSchema = z.object({
   title: z.string().refine((title) => title.trim().length > 0),
   start: z.string(),
   end: z.string(),
-  branchLocationId: z.string(),
+  // Off-site events (parks, partner venues) send branchLocationId: null and a nonBranchLocationId into entities.places.
+  branchLocationId: z.string().nullish(),
+  nonBranchLocationId: z.string().nullish(),
   isCancelled: z.boolean(),
   description: z.string().optional(),
 });
@@ -24,8 +26,9 @@ const LocationSchema = z.object({
   }),
 });
 const StateSchema = z.object({
-  entities: z.object({ events: z.record(z.string(), z.unknown()), locations: z.record(z.string(), z.unknown()) }),
-  events: z.object({ eventsSearch: z.object({ results: z.array(z.string().regex(/^[a-f0-9]{24}$/)), featuredEvent: z.string().regex(/^[a-f0-9]{24}$/).nullish() }) }),
+  entities: z.object({ events: z.record(z.string(), z.unknown()), locations: z.record(z.string(), z.unknown()), places: z.record(z.string(), z.unknown()).optional() }),
+  events: z.object({ eventsSearch: z.object({ results: z.array(z.string().regex(/^[a-f0-9]{24}$/)) }) }),
+  // featuredEvent is not parsed: its shape changed (string id -> object, live 2026-11 sends {}) and a featured event is also in results.
 });
 
 function localDatetime(raw: string, end: boolean): string {
@@ -57,12 +60,14 @@ export function extractBiblioCommonsEvents(html: string, source: EventSource): E
     if (!/\btype\s*=\s*["']application\/json["']/i.test(attributes) || !/\bdata-iso-key\s*=\s*["']_0["']/i.test(attributes)) continue;
     const state = StateSchema.parse(JSON.parse(match[2] ?? ""));
     const search = state.events.eventsSearch;
-    const ids = [...new Set([...search.results, ...(search.featuredEvent ? [search.featuredEvent] : [])])];
+    const ids = [...new Set(search.results)];
     const now = new Date().toISOString();
     return ids.map((id) => {
       const event = z.object({ id: z.literal(id), definition: DefinitionSchema }).parse(state.entities.events[id]);
       const definition = event.definition;
-      const location = LocationSchema.parse(state.entities.locations[definition.branchLocationId]);
+      const location = definition.branchLocationId ? LocationSchema.parse(state.entities.locations[definition.branchLocationId])
+        : definition.nonBranchLocationId ? LocationSchema.parse(state.entities.places?.[definition.nonBranchLocationId])
+        : (() => { throw new Error(`[BiblioCommons] Event has no branch or place location: ${id}`); })();
       const startDatetime = localDatetime(definition.start, false);
       const endDatetime = localDatetime(definition.end, true);
       if (Date.parse(endDatetime) < Date.parse(startDatetime)) throw new Error(`[BiblioCommons] Reversed interval: ${id}`);

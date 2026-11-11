@@ -67,12 +67,12 @@ const mockSource: EventSource = {
 
 const librarySource: EventSource = { ...mockSource, id: "county-library", url: "https://sdcl.bibliocommons.com/v2/events", categoryHint: "community" };
 const libraryId = "694889622c65973d0013cb6e";
-function libraryHtml(description = "Free parking and free resources.", start = "2026-10-30", cancelled = false): string {
+function libraryHtml(description = "Free parking and free resources.", start = "2026-10-30", cancelled = false, featuredEvent: unknown = libraryId): string {
   return `<script data-iso-key="_0" type="application/json">${JSON.stringify({
     entities: {
       events: { [libraryId]: { id: libraryId, definition: { title: "Library class", start, end: start, branchLocationId: "36", isCancelled: cancelled, description } } },
       locations: { "36": { name: "Vista", address: { number: "700", street: "Eucalyptus Avenue", city: "Vista", state: "CA", zip: "92084" }, mapLocation: { timeZone: "America/Los_Angeles", centrePoint: { lat: 33.2, lng: -117.2 } } } },
-    }, events: { eventsSearch: { results: [libraryId], featuredEvent: libraryId } },
+    }, events: { eventsSearch: { results: [libraryId], featuredEvent } },
   })}</script>`;
 }
 
@@ -82,6 +82,25 @@ test("BiblioCommons inert state reaches extraction kernel without recurrence exp
   expect(events[0]).toMatchObject({ title: "Library class", startDatetime: "2026-10-30T00:00:00-07:00", endDatetime: "2026-10-30T23:59:59-07:00", allDay: true, venue: "Vista", address: "700 Eucalyptus Avenue, Vista, CA, 92084", lat: 33.2, lng: -117.2, isFree: false });
   expect(defined(events[0]).priceMin).toBeUndefined();
   expect(defined(events[0]).ticketUrl).toBe(`https://sdcl.bibliocommons.com/v2/events/${libraryId}`);
+});
+
+test("BiblioCommons ignores featuredEvent in any shape (string id, empty object, object)", () => {
+  for (const featured of [libraryId, {}, { id: "not-a-24-hex-id", title: "Featured" }, null, undefined]) {
+    const events = extractBiblioCommonsEvents(libraryHtml(undefined, undefined, false, featured), librarySource);
+    expect(events?.length).toBe(1);
+    expect(defined(events?.[0]).title).toBe("Library class");
+  }
+});
+
+test("BiblioCommons resolves off-site events (branchLocationId null) through entities.places", () => {
+  const offsite = (place: Record<string, unknown> | undefined) => libraryHtml().replace('"branchLocationId":"36"', '"branchLocationId":null,"nonBranchLocationId":"p1"')
+    .replace('"locations":{', `${place ? `"places":{"p1":${JSON.stringify(place)}},` : ""}"locations":{`);
+  const park = { name: "Veterans Park", address: { number: "1075", street: "8th Street", city: "Imperial Beach", state: "CA", zip: "91932" }, mapLocation: { timeZone: "America/Los_Angeles", centrePoint: { lat: 32.577, lng: -117.116 } } };
+  const event = defined(extractBiblioCommonsEvents(offsite(park), librarySource)?.[0]);
+  expect(event.venue).toBe("Veterans Park");
+  expect(event.address).toBe("1075 8th Street, Imperial Beach, CA, 91932");
+  expect(() => extractBiblioCommonsEvents(offsite(undefined), librarySource)).toThrow();
+  expect(() => extractBiblioCommonsEvents(libraryHtml().replace('"branchLocationId":"36"', '"branchLocationId":null'), librarySource)).toThrow("no branch or place location");
 });
 
 test("BiblioCommons preserves explicit free lessons and cancellation", () => {
