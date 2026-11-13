@@ -57,7 +57,7 @@ BOARD=<the "Board:" path from your start file or AGENTS.md>
    - `--shipped` is required on every close. It names what went live: the commit and where (the service, the runner, the core; app code: merged for the next APK). Write `none` when nothing went live (a test unit, a branch that is not merged). A unit moves the board only when it passed, `--shipped` is not `none`, and its row went up; untested → failed is not up (a test that ran and failed changes nothing that Jm receives). A unit that does not move counts toward the gate.
    - The examiner stopped at 40 % context with rows left: write a request for those rows and start the next examiner (`<n+1>`).
 
-7. **Close the sessions.** Stop the builder and the examiner when they are idle. Stop servers, browsers, emulators and daemons that they left. Remove a merged worktree by the project's rule. Never delete a branch.
+7. **Close the sessions.** Stop the builder and the examiner when they are idle. Stop servers, browsers, emulators and daemons that they left. When a unit is closed and its commits are in main or pushed, remove its worktree and the worktrees of its exams: `git worktree remove <path>` without `--force` (git refuses a tree with changes; then save the work, or name the tree in your handoff). Keep a tree only while a note names it for a next step. Never delete a branch. (2026-11-12: the edition held 103 worktrees, about 0.6 GB each, on a disk at 97 %.)
 
 8. **Every third closed unit:** ask the examiner for a product review (it opens the real product at Jm's bar and re-ranks the red rows). Give every `FEEDBACK.md` `## Open` item a decision then.
 
