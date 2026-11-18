@@ -19,6 +19,7 @@ import { httpClient } from "../../../../lib/core/CachedHTTPClient.ts";
 import { requireSecret } from "../../../../lib/core/Secrets.ts";
 import { KAYA_HOME, VOICE_INPUT_TOOL, ensureTempDir, getVoiceInteractionConfig } from "./VoiceCommon.ts";
 import { polishTranscription } from "./STTPolishPipeline.ts";
+import { logFailure } from "../../../../lib/core/FailureLog.ts";
 import { buildWhisperPrompt } from "./VocabularyStore.ts";
 
 /**
@@ -72,6 +73,25 @@ interface TranscriptionResult {
 }
 
 /**
+ * Polish a raw transcript, falling back to the raw text when polishing throws
+ * (e.g. a malformed secrets file with cloud fallback on and Ollama down).
+ * Polish is an improvement, never a reason to lose what Jm said.
+ */
+async function polishOrRaw(
+  rawText: string,
+  polish: typeof polishTranscription = polishTranscription,
+): Promise<{ text: string; rawText: string; polished: boolean; model: string; duration_ms: number }> {
+  const start = Date.now();
+  try {
+    return await polish(rawText);
+  } catch (err) {
+    console.warn("[VoiceInputProcessor] STT polish failed, using raw transcript:", err);
+    logFailure("VoiceInputProcessor:polish", err, { chars: rawText.length });
+    return { text: rawText, rawText, polished: false, model: "none", duration_ms: Date.now() - start };
+  }
+}
+
+/**
  * Transcribe an audio file using local Whisper via VoiceInput CORE tool
  */
 async function transcribeWithWhisper(audioPath: string, model?: string): Promise<TranscriptionResult> {
@@ -110,7 +130,7 @@ async function transcribeWithWhisper(audioPath: string, model?: string): Promise
   }
 
   // Polish the raw transcription (Whisper output only -- Gemini is already clean)
-  const polishResult = await polishTranscription(rawText);
+  const polishResult = await polishOrRaw(rawText);
 
   return {
     text: polishResult.text,
@@ -337,5 +357,5 @@ if (import.meta.main) {
   });
 }
 
-export { transcribeWithWhisper, transcribeWithGemini, transcribeBuffer, recordAndTranscribe };
+export { transcribeWithWhisper, transcribeWithGemini, transcribeBuffer, recordAndTranscribe, polishOrRaw };
 export type { TranscriptionResult };
