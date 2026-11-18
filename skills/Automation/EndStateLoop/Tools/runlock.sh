@@ -39,9 +39,15 @@ CLASS=1
 [ "${RUNLOCK_FIRST:-0}" = 1 ] && CLASS=0
 
 owner_pid() { sed -n 's/^pid=//p' "$1/owner" 2>/dev/null; }
+# A pid lives unless `kill -0` says "No such process". In the Codex sandbox, `kill -0` of any process outside it fails
+# with "Operation not permitted": that process lives (2026-11-17 probe; reading it as dead removed a live lock).
+alive() { kill -0 "$1" 2>/dev/null && return 0; case "$(kill -0 "$1" 2>&1)" in *"not permitted"*) return 0 ;; esac; return 1; }
 
 # Refuse a nested call: an ancestor of this process owns a lock in the folder of either lock dir.
 ANCESTORS=" "
+if ! ps -o ppid= -p $$ >/dev/null 2>&1; then
+  echo "runlock: no process list here (a sandbox): the nested-call check is skipped" >&2
+fi
 p=$$
 while [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null; do
   p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
@@ -74,7 +80,7 @@ head_ticket() {   # <queue dir>
   for t in $(ls "$1" 2>/dev/null | sort); do
     case "$t" in [01]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) continue ;; esac
     pid=$((10#${t##*-}))
-    if kill -0 "$pid" 2>/dev/null; then echo "$t"; return; fi
+    if alive "$pid"; then echo "$t"; return; fi
     rm -f "$1/$t"
   done
 }
@@ -97,7 +103,7 @@ acquire() {   # <lock dir> <class>
   while :; do
     if [ "$(head_ticket "$lock.queue")" = "$(basename "$TICKET")" ] && mkdir "$lock" 2>/dev/null; then break; fi
     pid="$(owner_pid "$lock")"
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+    if [ -n "$pid" ] && ! alive "$pid"; then
       echo "runlock: stale lock (owner pid $pid is gone); removing it" >&2
       rm -f "$lock/owner"
       rmdir "$lock" 2>/dev/null
