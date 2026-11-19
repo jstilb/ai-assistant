@@ -309,7 +309,7 @@ export function mapActivityToEvent(a: ActiveNetActivity, todayYmd: string): Even
 // Runner — pages through the list API and returns EventItem[]
 // ============================================================================
 
-function searchBody(): string {
+function searchBody(forMap: boolean): string {
   return JSON.stringify({
     activity_search_pattern: {
       activity_select_param: 2,
@@ -336,13 +336,22 @@ function searchBody(): string {
       skills: [],
       custom_price_from: "",
       custom_price_to: "",
-      for_map: false,
+      for_map: forMap,
     },
     activity_transfer_pattern: {},
   });
 }
 
-async function fetchPage(pageNumber: number): Promise<ActiveNetListResponse> {
+interface ActiveNetMapResponse {
+  headers: { response_code: string; response_message: string };
+  body: { map_points?: Array<{ center_name: string; latitude: number | null; longitude: number | null }> };
+}
+
+/** One search request: the list view (paged) or the map view (every centre with coordinates). */
+async function postSearch<T extends { headers: { response_code: string; response_message: string } }>(
+  pageNumber: number,
+  forMap: boolean,
+): Promise<T> {
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -354,18 +363,53 @@ async function fetchPage(pageNumber: number): Promise<ActiveNetListResponse> {
       }),
       "User-Agent": "Mozilla/5.0 (EventScout; Kaya personal assistant)",
     },
-    body: searchBody(),
+    body: searchBody(forMap),
   });
   if (!res.ok) {
     throw new Error(`ActiveNet list request failed: ${res.status} ${res.statusText} (page ${pageNumber})`);
   }
-  const data = (await res.json()) as ActiveNetListResponse;
+  const data = (await res.json()) as T;
   if (data.headers.response_code !== "0000") {
     throw new Error(
       `ActiveNet list API error on page ${pageNumber}: ${data.headers.response_code} ${data.headers.response_message}`,
     );
   }
   return data;
+}
+
+function fetchPage(pageNumber: number): Promise<ActiveNetListResponse> {
+  return postSearch<ActiveNetListResponse>(pageNumber, false);
+}
+
+/** List labels abbreviate ("North Park Rec Ctr"); map centre names do not. */
+const ABBREVIATIONS: Readonly<Record<string, string>> = { rec: "recreation", ctr: "center", cmty: "community", mtn: "mountain" };
+
+/** One key for a centre name in either form: lowercase words, short forms spelled out. */
+export function centreKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => ABBREVIATIONS[word] ?? word)
+    .join(" ");
+}
+
+/**
+ * Centre coordinates from the map view of the same search: one request lists
+ * every centre (95 on 2026-11-18) with latitude/longitude. The list view gives
+ * only a name, which Nominatim misses ("North Park Rec Ctr") or places at a
+ * namesake ("Paradise Hills" → Paradise Valley) (F-006).
+ */
+async function fetchCentres(): Promise<Map<string, { lat: number; lng: number }>> {
+  const data = await postSearch<ActiveNetMapResponse>(1, true);
+  const centres = new Map<string, { lat: number; lng: number }>();
+  for (const point of data.body.map_points ?? []) {
+    if (typeof point.latitude === "number" && typeof point.longitude === "number") {
+      centres.set(centreKey(point.center_name), { lat: point.latitude, lng: point.longitude });
+    }
+  }
+  return centres;
 }
 
 /** LA calendar date (YYYY-MM-DD) for "today". */
@@ -401,8 +445,24 @@ export async function fetchActiveNetEvents(): Promise<EventItem[]> {
     }
     events.push(mapActivityToEvent(a, todayYmd));
   }
+
+  // Best-effort: without the map, events fall back to the geocoder.
+  let placed = 0;
+  try {
+    await new Promise((r) => setTimeout(r, PAGE_GAP_MS));
+    const centres = await fetchCentres();
+    for (const event of events) {
+      const point = event.venue ? centres.get(centreKey(event.venue)) : undefined;
+      if (!point) continue;
+      event.lat = point.lat;
+      event.lng = point.lng;
+      placed++;
+    }
+  } catch (err) {
+    console.warn(`  [activenet] centre map request failed; venues go to the geocoder: ${(err as Error).message}`);
+  }
   console.log(
-    `  [activenet] ${rows.length} rows → ${events.length} events ` +
+    `  [activenet] ${rows.length} rows → ${events.length} events, ${placed} placed at their centre ` +
       `(skipped: ${skipped.parent} parent, ${skipped["no-date"]} no-date, ` +
       `${skipped.ended} ended, ${skipped.youth} youth-only)`,
   );

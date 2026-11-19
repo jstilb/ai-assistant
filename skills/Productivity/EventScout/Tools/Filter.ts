@@ -5,9 +5,11 @@
  *
  * Applies all active hard constraints from the QueryContext (the agent-resolved,
  * structured query intake — see types.ts):
- *   - window:    explicit intervals overlap [window.start, window.end]. Timed
- *                ends are exclusive; all-day ends are inclusive. Missing or
- *                invalid intervals retain starts-within behavior.
+ *   - window:    multi-day intervals overlap [window.start, window.end]. Timed
+ *                ends are exclusive; all-day ends are inclusive. In a window
+ *                that starts at LA midnight (a day window), a timed session of
+ *                24 h or less keeps starts-within behavior, as does a missing
+ *                or invalid interval.
  *                Always active — QueryContext.window is never undefined (the CLI
  *                defaults it to the next 14 days when --from/--to are omitted).
  *   - home/radiusMiles: haversine miles from c.home to event ≤ radiusMiles.
@@ -33,6 +35,8 @@ import type { EventItem, QueryContext } from "./types.ts";
 import { utcMsToLaParts } from "./lib/tz.ts";
 import { haversineMiles } from "./lib/geo.ts";
 import { parseIsoDateStrict } from "./Window.ts";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ============================================================================
 // TimeOfDay band check
@@ -88,6 +92,11 @@ export function filterEvents(events: EventItem[], c: QueryContext): EventItem[] 
   {
     const windowStart = new Date(c.window.start).getTime();
     const windowEnd = new Date(c.window.end).getTime();
+    // A window from LA midnight asks for days (the 4180 table's From/To, "this
+    // Saturday"); a later start asks for a time ("at 1am"), where a running
+    // session counts.
+    const startParts = utcMsToLaParts(windowStart);
+    const dayWindow = startParts.hour === 0 && startParts.minute === 0 && startParts.second === 0;
     result = result.filter((e) => {
       const t = new Date(e.startDatetime).getTime();
       if (t >= windowStart && t <= windowEnd) return true;
@@ -99,6 +108,10 @@ export function filterEvents(events: EventItem[], c: QueryContext): EventItem[] 
       }
       const end = new Date(e.endDatetime).getTime();
       if (!Number.isFinite(end) || end <= t) return false;
+      // In a day window a timed session of a day or less counts on its start
+      // day only: a Friday 21:00–02:00 show is not in Saturday's list (F-005
+      // review, 2026-11-18). Same rule as ui/index.html augment().
+      if (dayWindow && !e.allDay && end - t <= DAY_MS) return false;
       return e.allDay ? end >= windowStart : end > windowStart;
     });
   }

@@ -28,3 +28,8 @@ test("stableId normalizeUtc hashes the UTC ISO form; unparseable passes through"
 test("stripHtml decodes common entities and blanks the rest", () => {
   expect(stripHtml("<p>Tom&#39;s &quot;Jam&quot;&nbsp;&amp; more&hellip;</p>")).toBe(`Tom's "Jam" & more`);
 });
+
+test("stripHtml decodes numeric entities and blanks invalid ones (F-006: Balboa TEC titles)", () => {
+  expect(stripHtml("Dr. Seuss&#8217;s The Grinch &#x2014; Live")).toBe("Dr. Seuss’s The Grinch — Live");
+  expect(stripHtml("Bad &#0; code &#xD800; here")).toBe("Bad code here");
+});

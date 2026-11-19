@@ -26,6 +26,7 @@ import {
   nextOccurrenceYmd,
   deriveCategory,
   stripHtml,
+  centreKey,
 } from "../Tools/adapters/ActiveNetAdapter.ts";
 import type { ActiveNetActivity } from "../Tools/adapters/ActiveNetAdapter.ts";
 
@@ -242,6 +243,13 @@ test("deriveCategory: name heuristics", () => {
   assert(deriveCategory("Dance Hip Hop JunkYard") === "arts", "dance → arts");
   assert(deriveCategory("Futsal League - Adult") === "sports", "futsal → sports");
   assert(deriveCategory("Community Yard Sale") === "community", "default community");
+});
+
+test("centreKey: list short forms match map centre names (F-006)", () => {
+  assert(centreKey("North Park Rec Ctr") === centreKey("North Park Recreation Center"), "Rec Ctr = Recreation Center");
+  assert(centreKey("Hilltop  Recreation Center") === centreKey("Hilltop Rec Ctr"), "double space collapses");
+  assert(centreKey("Ocean Beach Cmty Ctr") === "ocean beach community center", "Cmty Ctr spelled out");
+  assert(centreKey("N/A") !== centreKey("North Park Recreation Center"), "room labels match nothing");
 });
 
 test("stripHtml: collapses rich text", () => {

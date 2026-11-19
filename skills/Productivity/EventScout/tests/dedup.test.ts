@@ -574,3 +574,113 @@ test("(api-4) non-api sources are unaffected when apiTierSourceIds is passed but
     `Non-api events must still fuzzy-merge normally when apiTierSourceIds is present but irrelevant (got ${result.length})`,
   );
 });
+
+// F-005 (Jm 2026-11-18, "many 'ongoing' events have clearly ended"): a scraper
+// re-extracts an ongoing listing with the fetch day as its start (and a varying
+// end time), so one KPBS tour sat in the cache 20+ times. Multi-day rows from
+// one source with the same title whose spans overlap = one listing.
+test("overlapping multi-day copies of one listing merge across start days", () => {
+  const src = [{ sourceId: "kpbs-events", url: "https://www.kpbs.org/events/all" }];
+  const copy = (id: string, start: string, end: string, fetchedAt: string) =>
+    makeEvent({
+      id,
+      title: "Carlsbad GPS-guided Walking Tour",
+      startDatetime: start,
+      endDatetime: end,
+      sources: src,
+      fetchedAt,
+    });
+  const camp = (id: string, start: string, end: string) =>
+    makeEvent({ id, title: "Winter Art Camp", startDatetime: start, endDatetime: end, sources: src });
+  const result = dedupeAndMerge([
+    copy("c1", "2026-06-04T08:00:00-07:00", "2027-12-31T00:00:00-08:00", "2026-06-04T21:00:00Z"),
+    copy("c2", "2026-08-10T08:00:00-07:00", "2027-12-31T19:00:00-08:00", "2026-08-10T21:00:00Z"),
+    copy("c3", "2026-11-04T08:00:00-08:00", "2027-12-31T00:00:00.000Z", "2026-11-04T22:00:00Z"),
+    // The same title from another source: not merged by this rule.
+    makeEvent({
+      id: "other-src",
+      title: "Carlsbad GPS-guided Walking Tour",
+      startDatetime: "2026-11-04T08:00:00-08:00",
+      endDatetime: "2027-12-31T00:00:00-08:00",
+      sources: [{ sourceId: "sandiego-org-events", url: "https://www.sandiego.org/" }],
+    }),
+    // Two sessions of a class that do not overlap: both stay.
+    camp("camp-dec", "2026-12-20T09:00:00-08:00", "2026-12-31T15:00:00-08:00"),
+    camp("camp-jan", "2027-01-05T09:00:00-08:00", "2027-01-16T15:00:00-08:00"),
+    // Same title, sessions under a day on two days: distinct sessions, not copies.
+    makeEvent({
+      id: "s1",
+      title: "Salsa Night",
+      startDatetime: "2026-11-20T20:00:00-08:00",
+      endDatetime: "2026-11-21T01:00:00-08:00",
+      sources: src,
+    }),
+    makeEvent({
+      id: "s2",
+      title: "Salsa Night",
+      startDatetime: "2026-11-27T20:00:00-08:00",
+      endDatetime: "2026-11-28T01:00:00-08:00",
+      sources: src,
+    }),
+  ]);
+  const tours = result.filter(
+    (e) => e.sources.some((s) => s.sourceId === "kpbs-events") && e.title.startsWith("Carlsbad"),
+  );
+  assert(tours.length === 1, `expected one merged listing, got ${tours.length}`);
+  const tour = defined(tours[0]);
+  assert(tour.startDatetime === "2026-06-04T08:00:00-07:00", `earliest start kept, got ${tour.startDatetime}`);
+  assert(tour.endDatetime === "2027-12-31T19:00:00-08:00", `latest end kept, got ${tour.endDatetime}`);
+  assert(tour.fetchedAt === "2026-11-04T22:00:00Z", `latest fetch kept, got ${tour.fetchedAt}`);
+  assert(
+    result.some((e) => e.id === "other-src"),
+    "another source's row is not merged by this rule",
+  );
+  assert(result.filter((e) => e.title === "Winter Art Camp").length === 2, "non-overlapping sessions stay separate");
+  assert(result.filter((e) => e.title === "Salsa Night").length === 2, "sessions on two days stay separate");
+});
+
+// ============================================================================
+// F-006 (2026-11-18): the same event at the same start instant from one run to
+// the next, with venue text that changes ("Away", "Loveland, CO", none).
+// ============================================================================
+
+test("same instant + shared team merges despite conflicting venue text (sd-gulls)", () => {
+  const src = [{ sourceId: "sd-gulls", url: "https://www.sandiegogulls.com/games" }];
+  const game = (id: string, venue: string | undefined, performersOrTeams: string) =>
+    makeEvent({ id, title: "San Diego Gulls at Colorado Eagles", startDatetime: "2026-11-28T14:05:00-08:00", venue, performersOrTeams, sources: src });
+  const result = dedupeAndMerge([
+    game("g1", "Loveland, CO", "San Diego Gulls vs Colorado Eagles"),
+    game("g2", undefined, "San Diego Gulls, Colorado Eagles"),
+    game("g3", "Away", "San Diego Gulls at Colorado Eagles"),
+    game("g4", "Blue Arena, Loveland", "San Diego Gulls, Colorado Eagles"),
+  ]);
+  assert(result.length === 1, `Expected 1 game, got ${result.length}`);
+  // A different start instant is a different game, even with the same teams.
+  const two = dedupeAndMerge([game("g1", "Away", "San Diego Gulls, Colorado Eagles"), { ...game("g5", "Away", "San Diego Gulls, Colorado Eagles"), startDatetime: "2026-11-29T14:05:00-08:00" }]);
+  assert(two.length === 2, `Expected 2 games on 2 days, got ${two.length}`);
+});
+
+test("one source, same instant, one row without venue + near-identical title → merge", () => {
+  const src = [{ sourceId: "kpbs-events", url: "https://www.kpbs.org/events/all" }];
+  const result = dedupeAndMerge([
+    makeEvent({ id: "run-a", title: "Family Fun Run", startDatetime: "2026-11-26T07:00:00-08:00", venue: "Del Mar Racetrack", sources: src }),
+    makeEvent({ id: "run-b", title: "Family Fun Run", startDatetime: "2026-11-26T07:00:00-08:00", sources: src }),
+  ]);
+  assert(result.length === 1, `Expected 1, got ${result.length}`);
+  assert(result[0]?.venue === "Del Mar Racetrack", `Expected the venue kept, got ${result[0]?.venue}`);
+});
+
+test("guards: same title at two real venues, and cross-source date-only rows, stay separate", () => {
+  const rec = [{ sourceId: "sdparkandrec-activenet", url: "https://anc.apm.activecommunities.com/sdparkandrec" }];
+  const leagues = dedupeAndMerge([
+    makeEvent({ id: "v1", title: "Volleyball League - Youth 17 and Under", startDatetime: "2026-11-18T18:00:00-08:00", venue: "Skyline Recreation Center", sources: rec }),
+    makeEvent({ id: "v2", title: "Volleyball League - Youth 17 and Under", startDatetime: "2026-11-18T18:00:00-08:00", venue: "Paradise Hills Rec Ctr", sources: rec }),
+  ]);
+  assert(leagues.length === 2, `Same title at two rec centers must stay 2, got ${leagues.length}`);
+  const buffets = dedupeAndMerge([
+    makeEvent({ id: "b1", title: "Thanksgiving Brunch Buffet", startDatetime: "2026-11-26T00:00:00-08:00", sources: [{ sourceId: "sd-reader-bestbets", url: "https://www.sandiegoreader.com/" }] }),
+    makeEvent({ id: "b2", title: "Thanksgiving Buffet", startDatetime: "2026-11-26T00:00:00-08:00", venue: "Cosmopolitan Hotel", sources: [{ sourceId: "dosd", url: "https://dosd.com/" }] }),
+  ]);
+  assert(buffets.length === 2, `Cross-source date-only rows without a shared performer must stay 2, got ${buffets.length}`);
+});
+

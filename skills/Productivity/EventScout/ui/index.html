@@ -65,7 +65,10 @@
   #locationPanel label { width: 65px; }
   .price-help { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
   #priceError, #locationError { color: #b42318; }
-  .mobile-price { display: none; }
+  details.notes { margin-top: 6px; }
+  details.notes > summary { color: var(--muted); font-size: 12px; cursor: pointer; width: max-content; padding: 8px 0; }
+  /* Phone-only lines under the title; .source-hint (later) would show them on desktop too. */
+  .source-hint.mobile-only { display: none; }
 
   .ckbox { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; }
 
@@ -138,7 +141,8 @@
   tbody tr.ev.open { background: var(--hover); }
   td { padding: 8px 10px; vertical-align: top; }
   td.date { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; width: 1%; }
-  td.title { font-weight: 500; }
+  td.title { font-weight: 500; overflow-wrap: anywhere; }
+  td.date .until { display: block; color: var(--faint); }
   .source-hint { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; margin-top: 3px; }
   td.venue { color: var(--muted); }
   td.cat { width: 1%; }
@@ -204,9 +208,9 @@
     input[type="search"] { min-width: 0; flex: 1 1 100%; }
     .field:has(#srcRefresh) { flex: 1 1 100%; min-width: 0; }
     #srcRefresh { flex: 1; min-width: 0; }
-    th[data-sort="category"], th[data-sort="source"], th[data-sort="price"],
-    td.cat, td.src, td.price { display: none; }
-    .mobile-price { display: block; }
+    th[data-sort="venue"], th[data-sort="category"], th[data-sort="source"], th[data-sort="price"],
+    td.venue, td.cat, td.src, td.price { display: none; }
+    .source-hint.mobile-only { display: block; }
     td, thead th { padding: 7px 5px; }
     .detail-inner { flex-direction: column; gap: 12px; }
     .detail-side { width: auto; }
@@ -269,11 +273,14 @@
     <label class="ckbox" title="Show only events you saved"><input type="checkbox" id="savedOnly" /> ★ Saved<span id="savedCount"></span></label>
     <button class="linkbtn" id="clearFilters">Clear filters</button>
   </div>
-  <p class="price-help" id="priceHelp">Maximum uses the lowest advertised price, not the checkout total. Ranges and admission conditions still apply. Unknown prices are excluded while a maximum is set.</p>
+  <details class="notes">
+    <summary>Filter notes</summary>
+    <p class="price-help" id="priceHelp">Maximum uses the lowest advertised price, not the checkout total. Ranges and admission conditions still apply. Unknown prices are excluded while a maximum is set.</p>
+    <p class="price-help" id="locationHelp">Distances use a straight line from the origin, not a travel route. Unknown distances stay in the results and are not verified within the radius. Location edits apply only to this page. Clear filters removes the radius and restores the configured origin.</p>
+    <p class="price-help" id="locationSummary" role="status"></p>
+    <p class="price-help" id="recurrenceStatus" role="status" hidden></p>
+  </details>
   <p class="price-help" id="priceError" role="status" hidden>Enter a price of zero or more, such as 0 or 6.50.</p>
-  <p class="price-help" id="locationHelp">Distances use a straight line from the origin, not a travel route. Unknown distances stay in the results and are not verified within the radius. Location edits apply only to this page. Clear filters removes the radius and restores the configured origin.</p>
-  <p class="price-help" id="locationSummary" role="status"></p>
-  <p class="price-help" id="recurrenceStatus" role="status" hidden></p>
   <p class="price-help" id="locationError" role="status" hidden>Enter latitude from −90 to 90, longitude from −180 to 180, and a radius of zero or more. A radius requires both coordinates.</p>
 </header>
 
@@ -384,7 +391,10 @@ function augment(e) {
   const calendarEnd = new Date(`${endDate}T12:00:00Z`);
   const validEndDate = /^\d{4}-\d{2}-\d{2}$/.test(endDate || "") && Number.isFinite(calendarEnd.getTime()) && calendarEnd.toISOString().slice(0, 10) === endDate;
   e._endT = validEndDate && end.getTime() > e._t ? end.getTime() : NaN;
-  e._lastYmd = Number.isFinite(e._endT) ? ymdFmt.format(new Date(e._endT - (e.allDay ? 0 : 1))) : e._ymd;
+  // A timed session of a day or less belongs to its start day: a Friday 21:00–02:00
+  // show is not "Ongoing" on Saturday (F-005 review). Longer listings span their days.
+  const multiDay = Number.isFinite(e._endT) && (e.allDay || e._endT - e._t > 86_400_000);
+  e._lastYmd = multiDay ? ymdFmt.format(new Date(e._endT - (e.allDay ? 0 : 1))) : e._ymd;
   e._dateLabel = isNaN(e._t) ? "—" : dayFmt.format(d);
   e._timeLabel = (isNaN(e._t) || e.allDay) ? "" : timeFmt.format(d).replace(/\s/g, "").toLowerCase();
   e._srcIds = (e.sources || []).map((s) => s.sourceId);
@@ -574,13 +584,22 @@ function currentFiltered() {
     if (from && e._lastYmd && e._lastYmd < from) return false;
     if (to && e._ymd && e._ymd > to) return false;
     if (terms.length && !terms.every((t) => e._blob.includes(t))) return false;
+    // Started before From but still running in the window: label, don't hide (F-005).
+    e._ongoing = Boolean(from && e._ymd && e._ymd < from);
     return true;
   });
 
   const k = sort.key, dir = sort.dir;
   out.sort((a, b) => {
     let av, bv;
-    if (k === "date") { av = a._t; bv = b._t; }
+    // Date sort: ongoing listings run on the From day, so they sit after that
+    // day's dated rows (by end date), not after the last dated row months later.
+    if (k === "date") {
+      const ad = a._ongoing ? from : a._ymd, bd = b._ongoing ? from : b._ymd;
+      if (ad !== bd) return (ad < bd ? -1 : 1) * dir;
+      if (a._ongoing !== b._ongoing) return a._ongoing ? 1 : -1;
+      av = a._ongoing ? a._endT : a._t; bv = b._ongoing ? b._endT : b._t;
+    }
     else if (k === "price") { av = a._priceKey; bv = b._priceKey; }
     else if (k === "title") { av = a.title?.toLowerCase() || ""; bv = b.title?.toLowerCase() || ""; }
     else if (k === "venue") { av = a.venue?.toLowerCase() || ""; bv = b.venue?.toLowerCase() || ""; }
@@ -653,8 +672,10 @@ function rowFor(e) {
     : (e.sourceDescription ? "Source description available" : "");
   tr.innerHTML =
     `<td class="starcell"><button class="starbtn${on ? " on" : ""}" title="${on ? "Unsave" : "Save"}">${on ? "★" : "☆"}</button></td>` +
-    `<td class="date">${esc(e._dateLabel)}${e._timeLabel ? ` <span style="color:var(--faint)">${esc(e._timeLabel)}</span>` : ""}</td>` +
-    `<td class="title">${esc(e.title)}<span class="source-hint mobile-price">Price: ${esc(e._price === "—" ? "unknown" : e._price)}</span>${e.admissionNote ? `<span class="source-hint admission-note">${esc(e.admissionNote)}</span>` : ""}<span class="source-hint">${esc(distanceLabel(e))}</span>${provenance ? `<span class="source-hint">${esc(provenance)}</span>` : ""}</td>` +
+    (e._ongoing
+      ? `<td class="date">Ongoing <span class="until">until ${esc(dayFmt.format(new Date(e._endT - (e.allDay ? 0 : 1))))}</span></td>`
+      : `<td class="date">${esc(e._dateLabel)}${e._timeLabel ? ` <span style="color:var(--faint)">${esc(e._timeLabel)}</span>` : ""}</td>`) +
+    `<td class="title">${esc(e.title)}${e.venue ? `<span class="source-hint mobile-only">${esc(e.venue)}</span>` : ""}<span class="source-hint mobile-only">Price:${esc(e._price === "—" ? "unknown" : e._price)}</span>${e.admissionNote ? `<span class="source-hint admission-note">${esc(e.admissionNote)}</span>` : ""}<span class="source-hint">${esc(distanceLabel(e))}</span>${provenance ? `<span class="source-hint">${esc(provenance)}</span>` : ""}</td>` +
     `<td class="venue">${esc(e.venue || "")}</td>` +
     `<td class="cat"><span class="chip c-${e.category}">${e.category}</span></td>` +
     `<td class="src">${esc(srcShort)}</td>` +

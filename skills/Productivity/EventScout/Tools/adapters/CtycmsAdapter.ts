@@ -295,7 +295,7 @@ export function mapCardToEvent(
 
   const venue = card.venue;
   // Anchor geocoding to the complex street address; keep the venue name as a
-  // display prefix. buildGeoQuery() slices from the street number, so the prefix
+  // display prefix. buildGeoQueries() slices from the street number, so the prefix
   // doesn't hurt the lookup.
   const address = venue ? `${venue}, ${geocodeAddress}` : geocodeAddress;
 

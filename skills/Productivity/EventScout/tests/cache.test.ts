@@ -277,12 +277,47 @@ test("6. upsertEventsDeduped: api-tier events (padres-mlb) survive the whole-cac
     title: "Padres Game 2",
   };
   writeEvents([gameOne]);
-  upsertEventsDeduped([gameTwo]);
+  // A complete api feed returns both games of the doubleheader (F-006: a game
+  // the feed stops returning has left it — test 6b).
+  upsertEventsDeduped([gameOne, gameTwo]);
   const after = readEvents();
   assert(
     after.length === 2,
     `api-tier events must not be fuzzy-collapsed by the whole-cache re-dedup pass (got ${after.length})`,
   );
+});
+
+// F-006 (2026-11-18): api sources return their whole range, like ICS, so a
+// cached api row the feed stopped returning inside that range is gone. Edmtrain
+// renamed "Amtrac" to "Amtrac, Boys Don't Disco" (new id); the old row stayed.
+test("6b. upsertEventsDeduped: an api row that left its feed's range is dropped (edmtrain-sd)", () => {
+  cleanup();
+  const src = [{ sourceId: "edmtrain-sd", url: "https://edmtrain.com/san-diego-ca" }];
+  const base: EventItem = {
+    id: "edm-amtrac-old",
+    title: "Amtrac",
+    startDatetime: FUTURE_DATE,
+    allDay: false,
+    venue: "Music Box San Diego",
+    category: "music",
+    tags: [],
+    isFree: false,
+    sourceUrl: "https://edmtrain.com/san-diego-ca",
+    sources: src,
+    fetchedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    status: "scheduled",
+  };
+  const renamed: EventItem = { ...base, id: "edm-amtrac-new", title: "Amtrac, Boys Don't Disco", fetchedAt: new Date().toISOString() };
+  const later: EventItem = {
+    ...renamed,
+    id: "edm-later",
+    title: "Emancipator",
+    startDatetime: new Date(Date.parse(FUTURE_DATE) + 2 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  writeEvents([base]);
+  upsertEventsDeduped([renamed, later]);
+  const ids = readEvents().map((e: EventItem) => e.id).sort();
+  assert(JSON.stringify(ids) === JSON.stringify(["edm-amtrac-new", "edm-later"]), `Expected the renamed row only, got ${JSON.stringify(ids)}`);
 });
 
 test("7. upsertEventsDeduped: prunes expired events, keeps ones inside the 24h grace", () => {
@@ -346,6 +381,37 @@ test("9. supersededRowIds rule 2: an ICS row the feed no longer lists is dropped
   const r = supersededRowIds([gone, beyond], [fresh], ICS, NOW);
   assert(deepEqual([...r.ids], ["gone"]), `Expected only 'gone' dropped, got ${JSON.stringify([...r.ids])}`);
   assert(r.leftFeed === 1, `Expected 1 left-feed, got ${r.leftFeed}`);
+});
+
+test("9b. supersededRowIds rule 2 judges a started row only when the feed returned running events", () => {
+  // WordPress feed (ends_after): it returns an exhibit that opened in January,
+  // so a row that started in October and is no longer listed has ended.
+  const running = row("running", "Wild San Diego", "2026-01-06T10:00:00-08:00", ["feed-ics"]);
+  const ended = row("ended", "America's Musical Journey", "2026-10-29T10:00:00-07:00", ["feed-ics"]);
+  const later = row("later", "Skate Craft", "2026-11-21T10:00:00-08:00", ["feed-ics"]);
+  const r = supersededRowIds([running, ended], [{ ...running }, later], ICS, NOW);
+  assert(deepEqual([...r.ids], ["ended"]), `Expected 'ended' dropped, got ${JSON.stringify([...r.ids])}`);
+
+  // ICS feed: it returns future starts only, so a started row stays.
+  const exhibit = row("exhibit", "Exhibit", "2026-10-29T10:00:00-07:00", ["feed-ics"]);
+  const icsOnly = supersededRowIds([exhibit], [later], ICS, NOW);
+  assert(icsOnly.ids.size === 0, `ICS feed must keep a started row, got ${JSON.stringify([...icsOnly.ids])}`);
+});
+
+test("9c. supersededRowIds rule 3: a running multi-day listing unseen 7+ days is gone; a recent one stays", () => {
+  const running = (id: string, fetchedAt: string, sourceId = "html-src") => ({
+    ...row(id, `Tour ${id}`, "2026-06-04T08:00:00-07:00", [sourceId]),
+    endDatetime: "2027-12-31T00:00:00-08:00",
+    fetchedAt,
+  });
+  const fresh = row("fresh", "Salsa Social", "2026-12-01T19:00:00-08:00", ["html-src"]);
+  const gone = running("gone", "2026-10-30T21:00:00Z"); // 9 days before NOW
+  const recent = running("recent", "2026-11-06T21:00:00Z"); // 2 days before NOW
+  const failedSource = running("failed", "2026-10-01T21:00:00Z", "failed-src"); // its source returned nothing
+  const session = row("session", "Walking Tour", "2026-11-08T10:00:00-08:00", ["html-src"]); // started today, no span
+  const r = supersededRowIds([gone, recent, failedSource, session], [fresh], ICS, NOW);
+  assert(deepEqual([...r.ids], ["gone"]), `Expected only 'gone' dropped, got ${JSON.stringify([...r.ids])}`);
+  assert(r.goneListing === 1, `Expected 1 gone listing, got ${r.goneListing}`);
 });
 
 test("10. supersededRowIds keeps rows the rules do not prove stale", () => {

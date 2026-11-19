@@ -213,7 +213,7 @@
     "name": "Mic Drop Comedy San Diego",
     "fetchTier": "spa",
     "categoryHint": "comedy",
-    "geoHint": "San Diego, CA",
+    "geoHint": "Mic Drop Comedy San Diego, 8878 Clairemont Mesa Blvd, San Diego, CA 92123",
     "pollInterval": 720,
     "maxLlmWindows": 12,
     "enabled": true

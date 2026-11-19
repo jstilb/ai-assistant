@@ -124,6 +124,11 @@ test("1. Title is preserved exactly", () => {
   assert(item.title === "Backyard Wildnerness", `Expected "Backyard Wildnerness", got "${item.title}"`);
 });
 
+test("1b. HTML entities in the TEC title are decoded (F-006)", () => {
+  const item = mapTecEventToItem({ ...FIXTURE_1, title: "Dr. Seuss&#8217;s The Grinch &amp; Friends" }, TEST_SOURCE);
+  assert(item.title === "Dr. Seuss\u2019s The Grinch & Friends", `Expected a decoded title, got "${item.title}"`);
+});
+
 test("2. startDatetime contains date 2026-06-01", () => {
   const item = mapTecEventToItem(FIXTURE_1, TEST_SOURCE);
   assert(

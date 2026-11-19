@@ -169,6 +169,7 @@ interface DedupFeatures {
   titleNorm: string;
   titleTokens: Set<string>;
   performers: Set<string>;
+  sourceIds: Set<string>;
 }
 
 function computeFeatures(e: EventItem): DedupFeatures {
@@ -186,6 +187,7 @@ function computeFeatures(e: EventItem): DedupFeatures {
       .trim(),
     titleTokens: tokenize(e.title),
     performers: performerSet(e.performersOrTeams),
+    sourceIds: new Set(e.sources.map((s) => s.sourceId)),
   };
 }
 
@@ -254,12 +256,14 @@ function titleSimilar(fa: DedupFeatures, fb: DedupFeatures, threshold: number): 
 /**
  * Parse the comma-separated `performersOrTeams` string into a normalized set of
  * names (lowercase, alphanumeric-only, drop tokens <= 3 chars to avoid noise).
+ * "vs" and "at" also separate names: sources write one game as "San Diego Gulls
+ * vs Iowa Wild", "San Diego Gulls at Iowa Wild" or "San Diego Gulls, Iowa Wild".
  */
 function performerSet(perf: string | undefined): Set<string> {
   if (!perf) return new Set();
   return new Set(
     perf
-      .split(",")
+      .split(/,|\s+(?:vs\.?|at)\s+/i)
       .map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, ""))
       .filter((s) => s.length > 3),
   );
@@ -289,14 +293,16 @@ function sharePerformer(fa: DedupFeatures, fb: DedupFeatures): boolean {
  * Returns true if two events are considered duplicates.
  *
  * Predicate: same calendar day AND venue-compatible AND (title-similar OR
- * shared performer).
+ * shared performer). At the same start instant, a shared performer alone is
+ * enough, and one source's row without a venue matches its near-identical title.
  * Title and venue are evaluated SEPARATELY so venue tokens cannot inflate
  * title similarity and cause false merges (e.g. "Jazz Night" vs "Open Mic Night"
  * at the same venue).
  *
  * Missing-venue rules:
  *   - Both lack venue → skip venue check, apply stricter title threshold (0.8).
- *   - Exactly one lacks venue → venue is incompatible → no merge.
+ *   - Exactly one lacks venue → no merge, except one source at the same
+ *     instant with the stricter title threshold.
  */
 function areDuplicates(a: EventItem, b: EventItem, featureOf: FeatureOf): boolean {
   const fa = featureOf(a);
@@ -319,6 +325,12 @@ function areDuplicates(a: EventItem, b: EventItem, featureOf: FeatureOf): boolea
     }
   }
 
+  // Same start instant (F-006, 2026-11-18). A performer or team is in one place
+  // at a time, whatever the venue text says: sd-gulls wrote one game's venue as
+  // "Tech CU Arena", "Home", "Away" or nothing across runs, so it showed 3-5 times.
+  const sameInstant = Number.isFinite(fa.startMs) && fa.startMs === fb.startMs;
+  if (sameInstant && sharePerformer(fa, fb)) return true;
+
   const aHasVenue = Boolean(a.venue);
   const bHasVenue = Boolean(b.venue);
 
@@ -336,7 +348,15 @@ function areDuplicates(a: EventItem, b: EventItem, featureOf: FeatureOf): boolea
     return titleSimilar(fa, fb, TITLE_STRICT_THRESHOLD);
   }
 
-  // Exactly one has venue → cannot confirm same location → not duplicates
+  // Exactly one has venue → cannot confirm same location → not duplicates,
+  // unless ONE source lists both at the same instant under a near-identical
+  // title: a run that missed the venue, not a second event. Across sources a
+  // shared instant is weak (date-only listings all start at 00:00).
+  return sameInstant && shareSource(fa, fb) && titleSimilar(fa, fb, TITLE_STRICT_THRESHOLD);
+}
+
+function shareSource(fa: DedupFeatures, fb: DedupFeatures): boolean {
+  for (const id of fa.sourceIds) if (fb.sourceIds.has(id)) return true;
   return false;
 }
 
@@ -383,6 +403,9 @@ function mergeEvents(a: EventItem, b: EventItem): EventItem {
   return {
     ...richer,
     sources: mergedSources,
+    // The latest fetch of either twin: the merged row was seen then.
+    // biome-ignore lint/complexity/useMathMinMax: string (ISO timestamp) compare, not numbers
+    fetchedAt: richer.fetchedAt > leaner.fetchedAt ? richer.fetchedAt : leaner.fetchedAt,
     // Overlay any fields the leaner has that the richer lacks
     endDatetime: richer.endDatetime ?? leaner.endDatetime,
     venue: richer.venue ?? leaner.venue,
@@ -398,6 +421,53 @@ function mergeEvents(a: EventItem, b: EventItem): EventItem {
     // Union tags
     tags: Array.from(new Set([...richer.tags, ...leaner.tags])),
   };
+}
+
+/**
+ * Merge copies of one listing that runs for days. Scrapers re-extract
+ * "ongoing daily until December 31, 2027" with the fetch day as its start (and
+ * a varying end time, or an end that rolls forward), so its id changes every
+ * fetch and the per-day buckets below never compare the copies (2026-11-18
+ * live cache: 665 such rows; one KPBS walking tour had 20+, starts 06-04 →
+ * 11-04). Multi-day rows from the same source with the same title whose spans
+ * overlap are one listing — copies all cover the day they were fetched, while
+ * a later session of a class (Dec camp, Jan camp) does not overlap. The merged
+ * row keeps the earliest start and the latest end.
+ */
+function mergeSpanCopies(events: EventItem[], featureOf: FeatureOf): EventItem[] {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const single: EventItem[] = [];
+  const byTitle = new Map<string, EventItem[]>();
+  const sameListing = (a: EventItem, b: EventItem) => {
+    const fa = featureOf(a);
+    const fb = featureOf(b);
+    const shareSource = a.sources.some((sa) => b.sources.some((sb) => sb.sourceId === sa.sourceId));
+    return shareSource && fa.startMs <= fb.endMs && fb.startMs <= fa.endMs;
+  };
+  for (const event of events) {
+    const { startMs, endMs, titleNorm } = featureOf(event);
+    if (!(endMs - startMs > DAY_MS) || titleNorm === "") {
+      single.push(event);
+      continue;
+    }
+    const listings = byTitle.get(titleNorm) ?? [];
+    byTitle.set(titleNorm, listings);
+    const i = listings.findIndex((kept) => sameListing(kept, event));
+    const kept = listings[i];
+    if (kept === undefined) {
+      listings.push(event);
+      continue;
+    }
+    const earliest = featureOf(kept).startMs <= startMs ? kept : event;
+    const latest = featureOf(kept).endMs >= endMs ? kept : event;
+    listings[i] = {
+      ...mergeEvents(kept, event),
+      startDatetime: earliest.startDatetime,
+      allDay: earliest.allDay,
+      endDatetime: latest.endDatetime,
+    };
+  }
+  return [...single, ...[...byTitle.values()].flat()];
 }
 
 // ============================================================================
@@ -446,9 +516,11 @@ export function dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlyS
     }
   }
 
-  // Bucket by calendar day
+  const featureOf = featureCache();
+
+  // Bucket by calendar day (after one multi-day listing's copies are merged)
   const buckets = new Map<string, EventItem[]>();
-  for (const event of fuzzyInput) {
+  for (const event of mergeSpanCopies(fuzzyInput, featureOf)) {
     const day = calendarDay(event.startDatetime);
     const bucket = buckets.get(day);
     if (bucket) {
@@ -459,7 +531,6 @@ export function dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlyS
   }
 
   const result: EventItem[] = [];
-  const featureOf = featureCache();
 
   // Within each bucket, do pairwise merge
   for (const bucket of buckets.values()) {

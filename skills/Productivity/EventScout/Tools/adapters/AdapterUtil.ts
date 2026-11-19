@@ -39,8 +39,9 @@ export function stableId(
 
 /**
  * Collapse rich-text HTML into a plain one-liner: tags → space; &nbsp; &amp;
- * &lt; &gt; &quot; &#39; decoded; any other entity → space; whitespace
- * collapsed. Shared by ActiveNet, Pike13, Evvnt and WordPressTec.
+ * &lt; &gt; &quot; and numeric entities (&#8217; &#x2019;) decoded; any other
+ * entity → space; whitespace collapsed. Shared by ActiveNet, Pike13, Evvnt and
+ * WordPressTec.
  */
 export function stripHtml(html: string): string {
   return html
@@ -50,8 +51,14 @@ export function stripHtml(html: string): string {
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#(\d{1,7});/g, (match, dec: string) => codePoint(Number(dec)) ?? match)
+    .replace(/&#x([0-9a-f]{1,6});/gi, (match, hex: string) => codePoint(Number.parseInt(hex, 16)) ?? match)
     .replace(/&#?[a-z0-9]+;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** The character for a numeric HTML entity, or undefined when it is not a valid code point. */
+function codePoint(n: number): string | undefined {
+  return n > 0 && n <= 0x10ffff && (n < 0xd800 || n > 0xdfff) ? String.fromCodePoint(n) : undefined;
 }

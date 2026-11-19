@@ -337,7 +337,8 @@ export function mapTecEventToItem(raw: TecEvent, source: EventSource): EventItem
   // --- Compose EventItem ---
   const item: EventItem = {
     id,
-    title: raw.title,
+    // TEC titles are HTML ("Dr. Seuss&#8217;s …"); the id keeps the raw title so ids stay stable.
+    title: stripHtml(raw.title),
     startDatetime,
     ...(endDatetime !== undefined ? { endDatetime } : {}),
     allDay: raw.all_day === true,
@@ -372,11 +373,17 @@ export function mapTecEventToItem(raw: TecEvent, source: EventSource): EventItem
 // Fetcher — pages through the TEC REST API
 // ============================================================================
 
-function todayYmd(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
+/**
+ * Yesterday's local date. TEC reads a bare `ends_after` date as 23:59:59 of
+ * that day, so yesterday = "ends at or after the start of today" and today's
+ * events stay in the feed.
+ */
+function yesterdayYmd(): string {
+  const day = new Date();
+  day.setDate(day.getDate() - 1);
+  const y = day.getFullYear();
+  const m = String(day.getMonth() + 1).padStart(2, "0");
+  const d = String(day.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -388,7 +395,11 @@ function todayYmd(): string {
  *     when a page returns 0 events or the safety bound is reached.
  *   - On page 1, reads total_pages from the response to determine how many
  *     pages exist; caps to MAX_PAGES_SAFETY as a runaway guard.
- *   - Each page uses ?per_page=50&start_date=<today>&page=<n>.
+ *   - Each page uses ?per_page=50&ends_after=<yesterday>&page=<n>: every event
+ *     that has not ended, so running exhibits stay in the feed after they
+ *     open (start_date=<today> dropped them, 2026-11-18: 13 of 141 on
+ *     balboapark.org). The feed is then complete for the cache's
+ *     "left the feed" rule (Cache.ts supersededRowIds, rule 2).
  *   - MAX_TOTAL (200) removed — the Slice-5 withinHorizon post-filter in
  *     ingestSource bounds the far-future tail uniformly across all adapters.
  *
@@ -407,7 +418,7 @@ function todayYmd(): string {
  */
 export async function fetchWordPressTecEvents(source: EventSource): Promise<EventItem[]> {
   const origin = new URL(source.url).origin;
-  const today = todayYmd();
+  const endsAfter = yesterdayYmd();
   const baseEndpoint = `${origin}/wp-json/tribe/events/v1/events`;
 
   const allItems: EventItem[] = [];
@@ -416,7 +427,7 @@ export async function fetchWordPressTecEvents(source: EventSource): Promise<Even
   let safetyHit = false;
 
   for (let page = 1; page <= maxPages; page++) {
-    const url = `${baseEndpoint}?per_page=${PER_PAGE}&start_date=${today}&page=${page}`;
+    const url = `${baseEndpoint}?per_page=${PER_PAGE}&ends_after=${endsAfter}&page=${page}`;
 
     const res = await fetch(url, {
       headers: {

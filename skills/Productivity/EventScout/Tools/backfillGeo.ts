@@ -4,7 +4,7 @@
  *
  * ~50% of cached events have no coords because Nominatim can't resolve bare
  * venue names. `enrichWithGeo` now prefers a street address (see
- * Geocoder.buildGeoQuery), so re-running it over the cache recovers coords for
+ * Geocoder.buildGeoQueries), so re-running it over the cache recovers coords for
  * events that DO carry an address. Cache-first + 1.1s throttle on live calls.
  *
  * Usage:

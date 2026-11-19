@@ -580,7 +580,9 @@ test("15. Far event (~9mi): excluded at r=5, included at r=15", () => {
 test("interval overlap includes earlier starts and preserves timed exclusive ends", () => {
   const context: QueryContext = { rawQuery: "events during October 30", window: { start: "2026-10-30T00:00:00-07:00", end: "2026-10-30T23:59:59-07:00" }, home: HOME, radiusMiles: NO_RADIUS };
   const events = [
-    makeEvent({ id: "ongoing", startDatetime: "2026-10-29T22:00:00-07:00", endDatetime: "2026-10-30T02:00:00-07:00" }),
+    makeEvent({ id: "ongoing", startDatetime: "2026-10-28T22:00:00-07:00", endDatetime: "2026-10-30T02:00:00-07:00" }),
+    // F-005 review: a timed session of 24 h or less counts only where it starts.
+    makeEvent({ id: "overnight-session", startDatetime: "2026-10-29T22:00:00-07:00", endDatetime: "2026-10-30T02:00:00-07:00" }),
     makeEvent({ id: "ended-at-start", startDatetime: "2026-10-29T22:00:00-07:00", endDatetime: context.window.start }),
     makeEvent({ id: "starts-at-end", startDatetime: context.window.end }),
     makeEvent({ id: "after", startDatetime: "2026-10-31T00:00:00-07:00", endDatetime: "2026-11-01T00:00:00-07:00" }),

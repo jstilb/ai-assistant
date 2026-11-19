@@ -5,13 +5,13 @@
  * All tests are deterministic (cache-only, no network) except where noted.
  *
  * Test scenarios:
- *   1. Cache hit path: pre-seeded cache → geocodeVenue returns cached coords,
+ *   1. Cache hit path: pre-seeded cache → enrichWithGeo uses cached coords,
  *      and does NOT call network (fetch monkey-patched to throw).
  *   2. enrichWithGeo:
  *      (a) event with matching venue → gets lat/lng from cache.
  *      (b) event already has coords → unchanged.
  *      (c) event has no venue → coords-less.
- *   3. Query construction: buildNominatimQuery uses hint or default "San Diego, CA".
+ *   3. Query construction: buildGeoQueries order, region suffix, units; usableMatch distance rules.
  *   4. Cache negative: venue→null cached → no network call on repeat.
  *
  * Env isolation: Geocoder.ts only has a type-only import from Tools/types.ts
@@ -45,7 +45,7 @@ const TEST_KAYA_HOME = mkdtempSync(join(tmpdir(), "eventscout-geocoder-test-"));
 process.env["KAYA_HOME"] = TEST_KAYA_HOME;
 process.env["KAYA_DIR"] = TEST_KAYA_HOME;
 
-const { geocodeVenue, enrichWithGeo, buildNominatimQuery, buildGeoQuery } = await import("../Tools/Geocoder.ts");
+const { enrichWithGeo, buildGeoQueries, usableMatch } = await import("../Tools/Geocoder.ts");
 
 afterAll(() => {
   if (ORIGINAL_KAYA_HOME === undefined) delete process.env["KAYA_HOME"];
@@ -109,117 +109,103 @@ function makeEvent(overrides: Partial<EventItem>): EventItem {
 // Test Group 1: Query construction — pure helpers, no I/O
 // ============================================================================
 
-test("1a. buildNominatimQuery uses provided hint", () => {
-  const q = buildNominatimQuery("Petco Park", "San Diego, CA");
-  assert(q.includes("Petco Park"), `query includes venue name: "${q}"`);
-  assert(q.includes("San Diego, CA"), `query includes hint: "${q}"`);
+const queriesOf = (event: { venue?: string; address?: string }) => buildGeoQueries(event).map((query) => query.q);
+
+test("1a. buildGeoQueries prefers a street address over the bare venue", () => {
+  const [first] = buildGeoQueries({ venue: "Belly Up Tavern", address: "143 S. Cedros Avenue, Solana Beach" });
+  assert(first?.q === "143 S. Cedros Avenue, Solana Beach, CA", `street first, CA added: "${first?.q}"`);
+  assert(first?.assumed === true, "the CA region was assumed, so far matches are checked");
 });
 
-test("1b. buildNominatimQuery defaults to 'San Diego, CA' when no hint", () => {
-  const q = buildNominatimQuery("Petco Park", undefined);
-  assert(q.includes("San Diego, CA"), `query includes default hint: "${q}"`);
-});
-
-test("1d. buildGeoQuery prefers a street address over the bare venue", () => {
-  const q = buildGeoQuery({ venue: "Belly Up Tavern", address: "143 S. Cedros Avenue, Solana Beach" });
-  assert(q.includes("143 S. Cedros Avenue"), `uses the address: "${q}"`);
-  assert(!q.startsWith("Belly Up Tavern,"), `does not lead with the bare venue: "${q}"`);
-  assert(/\bCA\b/.test(q), `appends a CA region hint: "${q}"`);
-});
-
-test("1e. buildGeoQuery dedupes repeated address segments and falls back to venue", () => {
-  const dup = buildGeoQuery({ venue: "Spreckels Park", address: "601 Orange Ave, Coronado, CA, Coronado, CA" });
-  assert((dup.match(/Coronado/g) || []).length === 1, `collapses duplicate segments: "${dup}"`);
-
-  // No street anywhere → fall back to "venue, San Diego, CA"
-  const bare = buildGeoQuery({ venue: "Nationals Park" });
+test("1b. buildGeoQueries removes suite/unit parts and duplicate segments", () => {
   assert(
-    bare.includes("Nationals Park") && bare.includes("San Diego, CA"),
-    `bare venue falls back to hint query: "${bare}"`,
+    queriesOf({ venue: "Tender Hooligan, 221 Third Ave Suite 3" })[0] === "221 Third Ave, San Diego, CA",
+    `suite removed: ${JSON.stringify(queriesOf({ venue: "Tender Hooligan, 221 Third Ave Suite 3" }))}`,
   );
-
-  // Nothing geocodable → empty string
-  assert(buildGeoQuery({}) === "", "no venue/address → empty query");
+  assert(
+    queriesOf({ address: "4455 Morena Blvd, Ste. 101, San Diego, CA" })[0] === "4455 Morena Blvd, San Diego, CA",
+    "Ste. removed",
+  );
+  assert(
+    queriesOf({ address: "3940 Fourth Ave #200, San Diego" })[0] === "3940 Fourth Ave, San Diego, CA",
+    "#200 removed",
+  );
+  const dup = queriesOf({ venue: "Spreckels Park", address: "601 Orange Ave, Coronado, CA, Coronado, CA" })[0] ?? "";
+  assert((dup.match(/Coronado/g) || []).length === 1, `collapses duplicate segments: "${dup}"`);
 });
 
-test("1c. buildNominatimQuery encodes the combined string", () => {
-  const q = buildNominatimQuery("Petco Park", "San Diego, CA");
-  // Should be a URL-ready string (either raw or URL-encoded, both acceptable)
-  assert(q.length > 0, "query is non-empty");
-  assert(typeof q === "string", "query is a string");
+test("1c. buildGeoQueries adds San Diego only when the text names no region", () => {
+  const bare = buildGeoQueries({ venue: "Nationals Park" });
+  // Then the bare name, still assumed (Nominatim finds "San Diego Civic Theatre" only bare; F-006).
+  assert(
+    bare.length === 2 && bare[0]?.q === "Nationals Park, San Diego, CA" && bare[0].assumed && bare[1]?.q === "Nationals Park" && bare[1].assumed,
+    `bare venue → assumed San Diego, then the bare name: ${JSON.stringify(bare)}`,
+  );
+  const away = buildGeoQueries({ venue: "The Queen Mary Waterfront - Long Beach, CA" });
+  assert(away[0]?.q === "The Queen Mary Waterfront - Long Beach, CA" && !away[0].assumed, "named region → no suffix");
+  assert(away[1]?.q === "Long Beach, CA" && away[1].placeOnly === true, `city-level fallback: ${JSON.stringify(away)}`);
+  const mexico = queriesOf({ venue: "Autódromo Hermanos Rodríguez - Granjas México, Mexico" });
+  assert(mexico[1] === "Granjas México, Mexico", `country named: ${JSON.stringify(mexico)}`);
+  // A region word in the venue NAME (first segment) is not a named region.
+  assert(buildGeoQueries({ venue: "Mexico Lindo Restaurant" })[0]?.assumed === true, "name word ≠ region");
+  assert(buildGeoQueries({}).length === 0, "no venue/address → no queries");
+});
+
+test("1d. a source's street geoHint is the last query; a region-only hint adds none (F-006)", () => {
+  const hint = "Mic Drop Comedy San Diego, 8878 Clairemont Mesa Blvd, San Diego, CA 92123";
+  const q = buildGeoQueries({ venue: "Mic Drop Comedy San Diego" }, hint);
+  assert(q.at(-1)?.q === "8878 Clairemont Mesa Blvd, San Diego, CA 92123" && q.at(-1)?.assumed === false, `source address last: ${JSON.stringify(q)}`);
+  assert(buildGeoQueries({ venue: "Mic Drop Comedy San Diego" }, "San Diego, CA").length === 2, "region-only hint → no extra query");
+  assert(buildGeoQueries({}, hint).length === 1, "no venue → the source address alone");
 });
 
 // ============================================================================
-// Test Group 2: Cache hit path — no network call
+// Test Group 2: which matches stand
 // ============================================================================
 
-test("2a. geocodeVenue returns cached coords on cache hit", async () => {
-  cleanupGeoCache();
-  // Keys in the cache are stored normalized (lowercase) — match the implementation
-  const cacheKey = "petco park, san diego, ca";
-  seedGeoCache({ [cacheKey]: { lat: 32.7073, lng: -117.1566 } });
+const downtown = { lat: 32.7157, lng: -117.1611 };
+const losAngeles = { lat: 34.0403, lng: -118.2696 };
 
-  process.env["EVENTSCOUT_GEOCACHE_PATH"] = TEMP_GEOCACHE;
-
-  // Monkey-patch global fetch to throw — proves cache short-circuits before network
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = fakeFetch(() => {
-    throw new Error("NETWORK CALL FORBIDDEN IN CACHE-HIT TEST");
-  });
-
-  try {
-    const result = await geocodeVenue("Petco Park", "San Diego, CA");
-    assert(result !== null, "result is non-null");
-    assert(Math.abs((result?.lat ?? 0) - 32.7073) < 0.0001, `lat ≈ 32.7073, got ${result?.lat}`);
-    assert(Math.abs((result?.lng ?? 0) - -117.1566) < 0.0001, `lng ≈ -117.1566, got ${result?.lng}`);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("2b. geocodeVenue with wrong venue returns null from cache (miss)", async () => {
-  cleanupGeoCache();
-  seedGeoCache({}); // empty cache
-
-  process.env["EVENTSCOUT_GEOCACHE_PATH"] = TEMP_GEOCACHE;
-
-  // Monkey-patch fetch to return a Nominatim-shaped empty response
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = fakeFetch(
-    async () => new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }),
+test("2a. an assumed-San Diego query rejects a namesake outside the area", () => {
+  assert(usableMatch({ q: "Belly Up Tavern, San Diego, CA", assumed: true }, downtown), "in area → kept");
+  assert(
+    !usableMatch({ q: "Main Street Theater, San Diego, CA", assumed: true }, losAngeles),
+    "LA namesake → rejected",
   );
-
-  try {
-    const result = await geocodeVenue("Nonexistent Venue XYZ123", "San Diego, CA");
-    assert(result === null, "returns null when no results");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert(
+    usableMatch({ q: "Water & Power - Los Angeles, CA", assumed: false }, losAngeles),
+    "region named → far match kept",
+  );
 });
 
-test("2c. negative result (null) is cached — no second network call", async () => {
-  cleanupGeoCache();
-  seedGeoCache({}); // empty
+test("2b. a city-level query only places events outside the San Diego area", () => {
+  assert(usableMatch({ q: "Long Beach, CA", assumed: false, placeOnly: true }, losAngeles), "far city → kept");
+  assert(
+    !usableMatch({ q: "San Diego, CA", assumed: false, placeOnly: true }, downtown),
+    "SD city centre → rejected (fake distance)",
+  );
+});
 
+test("2c. enrichWithGeo walks the queries, skips a rejected namesake, and caches misses", async () => {
+  cleanupGeoCache();
+  seedGeoCache({});
   process.env["EVENTSCOUT_GEOCACHE_PATH"] = TEMP_GEOCACHE;
 
-  let fetchCallCount = 0;
+  const asked: string[] = [];
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = fakeFetch(async () => {
-    fetchCallCount++;
-    return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+  globalThis.fetch = fakeFetch(async (input) => {
+    const q = new URL(String(input)).searchParams.get("q") ?? "";
+    asked.push(q);
+    const body = q === "Long Beach, CA" ? [{ lat: "33.77", lon: "-118.19", display_name: "Long Beach" }] : [];
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   });
 
   try {
-    // First call: cache miss → network call (returns empty → null cached)
-    const r1 = await geocodeVenue("NoSuchVenue", "San Diego, CA");
-    assert(r1 === null, "first call returns null");
-    assert(fetchCallCount === 1, `first call made exactly 1 network request, got ${fetchCallCount}`);
-
-    // Second call: should be a cache hit → NO network call
-    const r2 = await geocodeVenue("NoSuchVenue", "San Diego, CA");
-    assert(r2 === null, "second call returns null (from cache)");
-    assert(fetchCallCount === 1, `second call did NOT make a network request (still 1), got ${fetchCallCount}`);
+    const [placed] = await enrichWithGeo([makeEvent({ venue: "The Queen Mary Waterfront - Long Beach, CA" })]);
+    assert(Math.abs((placed?.lat ?? 0) - 33.77) < 0.001, `placed by the city fallback, got ${placed?.lat}`);
+    assert(asked.length === 2, `full query, then city: ${JSON.stringify(asked)}`);
+    await enrichWithGeo([makeEvent({ venue: "The Queen Mary Waterfront - Long Beach, CA" })]);
+    assert(asked.length === 2, "second run is served from the cache (miss and hit both cached)");
   } finally {
     globalThis.fetch = originalFetch;
   }
