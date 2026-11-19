@@ -6,13 +6,18 @@
  * temp KAYA_HOME with its own secrets.json and settings.json.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pinKayaHome, restoreKayaHome } from "../test/pinKayaHome.ts";
 import { defined } from "../test/defined.ts";
 import { FakeTelegram } from "./FakeTelegram.ts";
-import { readTelegramCredentials, telegramCall, TelegramTransportError } from "./TelegramTransport.ts";
+import {
+  MAX_RETRY_AFTER_S,
+  readTelegramCredentials,
+  telegramCall,
+  TelegramTransportError,
+} from "./TelegramTransport.ts";
 
 const TOKEN = "123456:FAKE-transport-test-token";
 const CHAT_ID = "4242";
@@ -201,6 +206,59 @@ describe("invariant 6 — 429", () => {
     expect(fake.calls).toHaveLength(2);
   });
 
+  it("waits the default 5 s when the 429 carries no retry_after", async () => {
+    const sleep = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+    try {
+      fake.failNext("sendMessage", { httpStatus: 429, description: "Too Many Requests" });
+
+      const outcome = await telegramCall("sendMessage", { text: "hi" });
+
+      expect(outcome.status).toBe("ok");
+      expect(sleep).toHaveBeenCalledTimes(1);
+      expect(sleep).toHaveBeenCalledWith(5000);
+      expect(fake.calls).toHaveLength(2);
+    } finally {
+      sleep.mockRestore();
+    }
+  });
+
+  it("fails loud with rate-limited, without waiting or retrying, when retry_after is over the cap", async () => {
+    const sleep = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+    try {
+      fake.failNext("sendMessage", {
+        httpStatus: 429,
+        description: "Too Many Requests",
+        retryAfter: MAX_RETRY_AFTER_S + 1,
+      });
+
+      const err = await captureError(telegramCall("sendMessage", { text: "hi" }));
+
+      expect(err.kind).toBe("rate-limited");
+      expect(err.message).toContain(`${MAX_RETRY_AFTER_S + 1} s`);
+      expect(sleep).not.toHaveBeenCalled();
+      expect(fake.calls).toHaveLength(1);
+      expectNoToken(err);
+    } finally {
+      sleep.mockRestore();
+    }
+  });
+
+  it("still waits a retry_after exactly at the cap", async () => {
+    const sleep = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+    try {
+      fake.failNext("sendMessage", {
+        httpStatus: 429,
+        description: "Too Many Requests",
+        retryAfter: MAX_RETRY_AFTER_S,
+      });
+
+      expect((await telegramCall("sendMessage", { text: "hi" })).status).toBe("ok");
+      expect(sleep).toHaveBeenCalledWith(MAX_RETRY_AFTER_S * 1000);
+    } finally {
+      sleep.mockRestore();
+    }
+  });
+
   it("returns rejected (no retry) on another ok:false status", async () => {
     fake.failNext("sendMessage", { httpStatus: 400, description: "Bad Request: can't parse entities" });
 
@@ -219,6 +277,76 @@ describe("invariant 7 — bad response", () => {
 
     expect(err.kind).toBe("bad-response");
     expect(err.message).toContain("502");
+  });
+
+  it("counts a 2xx push with a non-JSON body as delivered — one call, no error (no double send)", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      fake.failNext("sendMessage", { httpStatus: 200, rawBody: '{"ok":true,"result":{"message_id' });
+
+      const outcome = await telegramCall("sendMessage", { text: "hi" });
+
+      expect(outcome).toEqual({ status: "ok", result: undefined, messageId: null });
+      expect(fake.calls).toHaveLength(1);
+      expect(String(log.mock.calls[0]?.[0])).toContain("body is not JSON");
+      expect(String(log.mock.calls[0]?.[0])).toContain("message_id");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("counts a 2xx push with JSON but no boolean ok as delivered", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      fake.failNext("sendPhoto", { httpStatus: 200, rawBody: '{"ok":"yes"}' });
+      const photo = new File([new Uint8Array([1])], "p.png", { type: "image/png" });
+
+      const outcome = await telegramCall("sendPhoto", { photo });
+
+      expect(outcome).toEqual({ status: "ok", result: undefined, messageId: null });
+      expect(fake.calls).toHaveLength(1);
+      expect(String(log.mock.calls[0]?.[0])).toContain('no boolean "ok"');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("fails a 2xx read (getUpdates) with no boolean ok as bad-response — there is no result to give", async () => {
+    fake.failNext("getUpdates", { httpStatus: 200, rawBody: '{"result":[]}' });
+
+    const err = await captureError(telegramCall("getUpdates"));
+
+    expect(err.kind).toBe("bad-response");
+    expect(err.message).toContain('no boolean "ok"');
+  });
+
+  it("returns rejected for a 4xx with a non-JSON body, so a lane's 400 plain resend still starts", async () => {
+    fake.failNext("sendMessage", { httpStatus: 400, rawBody: "<html>400 Bad Request</html>" });
+
+    const outcome = await telegramCall("sendMessage", { text: "*" });
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status !== "rejected") throw new Error("unreachable");
+    expect(outcome.httpStatus).toBe(400);
+    expect(outcome.description).toContain("body is not JSON");
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("keeps the token out of a logged 2xx body and a rejected 4xx body", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      fake.failNext("sendMessage", { httpStatus: 200, rawBody: `oops bot${TOKEN}` });
+      fake.failNext("sendMessage", { httpStatus: 403, rawBody: `denied bot${TOKEN}` });
+
+      await telegramCall("sendMessage", { text: "a" });
+      const rejected = await telegramCall("sendMessage", { text: "b" });
+
+      expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN);
+      expect(rejected.status).toBe("rejected");
+      expect(JSON.stringify(rejected)).not.toContain(TOKEN);
+    } finally {
+      log.mockRestore();
+    }
   });
 });
 

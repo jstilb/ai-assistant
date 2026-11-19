@@ -13,7 +13,14 @@
  *   4. the body — any Blob param → multipart, else JSON; rebuilt for each attempt;
  *   5. a timeout per attempt (default 15 000 ms) → `timeout` error;
  *   6. HTTP 429 → wait `retry_after` s (default 5), one more attempt; a second 429 → `rejected`;
- *   7. a non-JSON body or no boolean `ok` → `bad-response` error;
+ *      a `retry_after` above 60 s → `rate-limited` error at once (no long silent stall);
+ *   7. a body that is not JSON or has no boolean `ok` (an "unparsable" body):
+ *      - 2xx on a `send*` → `ok` (delivered; messageId null; the body is logged to stderr).
+ *        Telegram answered 2xx, so the message most likely went out; a failure here
+ *        would make the caller resend it — a double send;
+ *      - any other 2xx (e.g. `getUpdates`) → `bad-response` error (a read; no result to give);
+ *      - 4xx → `rejected` with that status (a 400 still starts a lane's plain resend);
+ *      - 5xx or other → `bad-response` error;
  *   8. token-free errors — messages are built from method + status + description,
  *      network text goes through redactSecrets, the original error is never attached.
  *
@@ -38,7 +45,7 @@ export type TelegramOutcome<T = unknown> =
   | { status: "suppressed" }
   | { status: "rejected"; httpStatus: number; description: string };
 
-export type TelegramTransportErrorKind = "config" | "network" | "timeout" | "bad-response";
+export type TelegramTransportErrorKind = "config" | "network" | "timeout" | "bad-response" | "rate-limited";
 
 export class TelegramTransportError extends Error {
   readonly kind: TelegramTransportErrorKind;
@@ -55,6 +62,10 @@ export class TelegramTransportError extends Error {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRY_AFTER_S = 5;
+/** The longest 429 wait the transport accepts. A bad or huge `retry_after` fails loud instead of stalling a send. */
+export const MAX_RETRY_AFTER_S = 60;
+/** How much of an unparsable body goes into an error or log line. */
+const BODY_SNIPPET_CHARS = 200;
 
 const BOTFATHER_HINT = [
   "Setup: 1. Message @BotFather on Telegram.",
@@ -113,6 +124,37 @@ interface ApiReply {
   retryAfter: number;
 }
 
+/**
+ * A reply whose body is not Bot API JSON (a proxy page, a cut-off body). See invariant 7:
+ * a 2xx push counts as delivered, a 4xx is `rejected`, anything else is a `bad-response` error.
+ */
+function unparsableReply(
+  method: string,
+  httpStatus: number,
+  problem: string,
+  text: string,
+  botToken: string,
+): ApiReply {
+  const snippet = redactSecrets(text.slice(0, BODY_SNIPPET_CHARS), [botToken]);
+  const detail = `HTTP ${httpStatus}: ${problem}`;
+  if (httpStatus >= 200 && httpStatus < 300 && isPush(method)) {
+    console.error(
+      `[TelegramTransport] ${method}: ${detail}; counted as delivered (no resend). Body: ${JSON.stringify(snippet)}`,
+    );
+    return { httpStatus, ok: true, result: undefined, description: "", retryAfter: DEFAULT_RETRY_AFTER_S };
+  }
+  if (httpStatus >= 400 && httpStatus < 500) {
+    return {
+      httpStatus,
+      ok: false,
+      result: undefined,
+      description: `(${problem}) ${snippet}`,
+      retryAfter: DEFAULT_RETRY_AFTER_S,
+    };
+  }
+  throw new TelegramTransportError("bad-response", method, detail);
+}
+
 function field(obj: object, key: string): unknown {
   return Object.hasOwn(obj, key) ? Reflect.get(obj, key) : undefined;
 }
@@ -139,13 +181,17 @@ async function attempt(
   }
 
   let parsed: unknown;
+  let parseProblem: string | null = null;
   try {
     parsed = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null || typeof field(parsed, "ok") !== "boolean") {
+      parseProblem = 'no boolean "ok" in the body';
+    }
   } catch {
-    throw new TelegramTransportError("bad-response", method, `HTTP ${httpStatus}: body is not JSON`);
+    parseProblem = "body is not JSON";
   }
-  if (typeof parsed !== "object" || parsed === null || typeof field(parsed, "ok") !== "boolean") {
-    throw new TelegramTransportError("bad-response", method, `HTTP ${httpStatus}: no boolean "ok" in the body`);
+  if (parseProblem !== null || typeof parsed !== "object" || parsed === null) {
+    return unparsableReply(method, httpStatus, parseProblem ?? "body is not JSON", text, botToken);
   }
 
   const description = field(parsed, "description");
@@ -194,6 +240,13 @@ export async function telegramCall<T = unknown>(
   // 4–7. Body per attempt, timeout per attempt, one retry on 429.
   let reply = await attempt(method, url, body, timeoutMs, botToken);
   if (!reply.ok && reply.httpStatus === 429) {
+    if (reply.retryAfter > MAX_RETRY_AFTER_S) {
+      throw new TelegramTransportError(
+        "rate-limited",
+        method,
+        `HTTP 429 asks to wait ${reply.retryAfter} s, over the ${MAX_RETRY_AFTER_S} s cap (${reply.description})`,
+      );
+    }
     await Bun.sleep(reply.retryAfter * 1000);
     reply = await attempt(method, url, body, timeoutMs, botToken);
   }

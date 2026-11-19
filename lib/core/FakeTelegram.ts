@@ -22,6 +22,8 @@ export interface FakeTelegramCall {
 
 export type FakeTelegramFailure =
   | { httpStatus: number; description: string; retryAfter?: number }
+  /** Answer with this exact body and status — not Bot API JSON (e.g. a cut-off 200, a proxy 400). */
+  | { httpStatus: number; rawBody: string }
   | "network"
   | "timeout"
   /** An HTML 502 page (a proxy answer), not Bot API JSON. */
@@ -85,6 +87,9 @@ export class FakeTelegram {
     if (failure === "timeout") return this.hang(init?.signal ?? null);
     if (failure === "bad-response") {
       return new Response("<html><body>502 Bad Gateway</body></html>", { status: 502 });
+    }
+    if (failure && "rawBody" in failure) {
+      return new Response(failure.rawBody, { status: failure.httpStatus });
     }
     if (failure) {
       const parameters = failure.retryAfter === undefined ? undefined : { retry_after: failure.retryAfter };

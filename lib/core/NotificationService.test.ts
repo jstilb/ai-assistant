@@ -7,7 +7,7 @@
  * Run: bun test NotificationService.test.ts
  */
 
-import { describe, it, expect, afterAll, afterEach, beforeEach, mock } from "bun:test";
+import { describe, it, expect, afterAll, afterEach, beforeEach, mock, spyOn } from "bun:test";
 import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -416,6 +416,101 @@ describe("NotificationService", () => {
       expect(defined(rows[0]).source).toBe("notification-service");
       expect(defined(rows[0]).text).toBe(message);
       expect(typeof defined(rows[0]).telegram_message_id).toBe("number");
+    });
+
+    it("does NOT resend plain on a non-400 Markdown rejection: logs failed with the status and returns false", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 403, description: "Forbidden: bot was blocked by the user" });
+
+      const message = `403 probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(false);
+      expect(fake.calls).toHaveLength(1);
+      const entries = readNotificationLog().filter((e) => e.message === message);
+      expect(entries.map((e) => e.event)).not.toContain("retried");
+      expect(defined(entries[0]).event).toBe("failed");
+      expect(defined(entries[0]).error).toContain("HTTP 403");
+      expect(defined(entries[0]).error).toContain("bot was blocked");
+    });
+
+    it("logs missing credentials as a failed config error and sends nothing", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      rmSync(join(scratchDir, "secrets.json"), { force: true });
+
+      const message = `no-creds probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(false);
+      expect(fake.calls).toHaveLength(0);
+      const failed = readNotificationLog().filter((e) => e.message === message && e.event === "failed");
+      expect(defined(failed[0]).error).toContain("(config)");
+      expect(defined(failed[0]).error).toContain("telegram.bot_token");
+    });
+
+    it("logs a non-JSON 5xx (proxy page) as a failed bad-response and returns false", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", "bad-response");
+
+      const message = `bad-response probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(false);
+      const failed = readNotificationLog().filter((e) => e.message === message && e.event === "failed");
+      expect(defined(failed[0]).error).toContain("(bad-response)");
+      expect(defined(failed[0]).error).toContain("502");
+    });
+
+    it("never sends twice on a 2xx with a non-JSON body, even with retries left", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      const log = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        fake.failNext("sendMessage", { httpStatus: 200, rawBody: "<html>ok</html>" });
+
+        const message = `2xx-unparsable probe ${Date.now()}`;
+        const delivered = await createNotificationService({ maxRetries: 3 }).notify(message, { channel: "telegram" });
+
+        expect(delivered).toBe(true);
+        expect(fake.calls).toHaveLength(1);
+        const events = readNotificationLog()
+          .filter((e) => e.message === message)
+          .map((e) => e.event);
+        expect(events).toEqual(["sent"]);
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it("resends plain on a 400 with a non-JSON body", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 400, rawBody: "<html>400 Bad Request</html>" });
+
+      const message = `400-unparsable probe ${Date.now()}`;
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(true);
+      expect(fake.calls).toHaveLength(2);
+      expect(defined(fake.calls[0]).params.parse_mode).toBe("Markdown");
+      expect(defined(fake.calls[1]).params.parse_mode).toBeUndefined();
+      const events = readNotificationLog()
+        .filter((e) => e.message === message)
+        .map((e) => e.event);
+      expect(events).toEqual(["retried", "sent"]);
+    });
+
+    it("fails loud on a 429 whose retry_after is over the cap, instead of stalling", async () => {
+      const { createNotificationService } = await import("./NotificationService.ts");
+      fake.failNext("sendMessage", { httpStatus: 429, description: "Too Many Requests", retryAfter: 3600 });
+
+      const message = `429-cap probe ${Date.now()}`;
+      const started = Date.now();
+      const delivered = await createNotificationService({ maxRetries: 0 }).notify(message, { channel: "telegram" });
+
+      expect(delivered).toBe(false);
+      expect(Date.now() - started).toBeLessThan(5000);
+      const failed = readNotificationLog().filter((e) => e.message === message && e.event === "failed");
+      expect(defined(failed[0]).error).toContain("(rate-limited)");
+      expect(defined(failed[0]).error).toContain("3600 s");
     });
   });
 
