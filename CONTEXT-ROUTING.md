@@ -40,7 +40,7 @@
 | Productivity preferences | USER/PRODUCTIVITY.md | 2026-02-26 |
 | Reminders | USER/REMINDERS.md | 2026-11-05 |
 | Technology stack preferences | USER/TECHSTACKPREFERENCES.md | 2026-11-05 |
-| User context summary | USER/UserContext.md | 2026-11-16 |
+| User context summary | USER/UserContext.md | 2026-11-17 |
 | USER README | USER/README.md | 2026-11-05 |
 
 ## Life Goals / Telos
@@ -58,7 +58,7 @@
 | Opinions / beliefs | USER/TELOS/BELIEFS.md | 2026-02-26 |
 | Problems | USER/TELOS/PROBLEMS.md | 2026-02-26 |
 | Projects (telos-level) | USER/TELOS/PROJECTS.md | 2026-09-11 |
-| Status (current) | USER/TELOS/STATUS.md | 2026-11-17 |
+| Status (current) | USER/TELOS/STATUS.md | 2026-11-18 |
 | updates | USER/TELOS/updates.md | 2026-06-07 |
 
 ## Projects
@@ -79,7 +79,7 @@
 |---|---|---|
 | Memory index | MEMORY/index.json | 2026-09-21 |
 | Work queue state | MEMORY/QUEUES/state.json | 2026-11-07 |
-| Notifications | MEMORY/NOTIFICATIONS/notifications.jsonl | 2026-11-17 |
+| Notifications | MEMORY/NOTIFICATIONS/notifications.jsonl | 2026-11-18 |
 
 ## Configuration
 
