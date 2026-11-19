@@ -24,12 +24,13 @@ import { join } from "node:path";
 import {
   TEMP_DIR,
   VOICE_RESPONSE_TOOL,
-  TELEGRAM_CLIENT,
   DESKTOP_CLIENT,
   ensureTempDir,
   getPingsManager,
   type ScheduledPing,
 } from "./VoiceCommon.ts";
+// cross-skill-allowed: ADR-004 Lane 2 — in-process TelegramClient send (ADR-036 transport), never a subprocess
+import { sendDocumentFile, sendTextMessage } from "../../Telegram/Tools/TelegramClient.ts";
 
 interface PingResult {
   sent: boolean;
@@ -51,6 +52,38 @@ function isDesktopActive(): boolean {
     return status.running === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Push a ping to Jm's Telegram in-process through TelegramClient (ADR-004 Lane 2),
+ * which sends via lib/core/TelegramTransport.ts (ADR-036): push switch, Jm's chat
+ * and the outbound ledger all apply. Never a TelegramClient subprocess.
+ *
+ * oggPath = the generated voice file, sent as a document captioned "Kaya" and
+ * deleted afterwards. null = voice generation failed → plain-text fallback.
+ * `sent` reflects what Telegram answered (a push-switch-off suppression is not sent).
+ */
+async function deliverTelegramPing(message: string, oggPath: string | null): Promise<PingResult> {
+  const timestamp = new Date().toISOString();
+
+  if (oggPath === null) {
+    const result = await sendTextMessage(message, { source: "proactive-pinger" });
+    if (!result.ok) console.error(`Telegram text fallback failed: ${result.description ?? "unknown error"}`);
+    return { sent: result.ok && !result.suppressed, channel: "telegram", message: `[text fallback] ${message}`, timestamp };
+  }
+
+  try {
+    const result = await sendDocumentFile(oggPath, { caption: "Kaya", source: "proactive-pinger", ledgerText: message });
+    if (!result.ok) console.error(`Telegram voice send failed: ${result.description ?? "unknown error"}`);
+    return { sent: result.ok && !result.suppressed, channel: "telegram", message, timestamp };
+  } finally {
+    // Clean up temp file
+    try {
+      unlinkSync(oggPath);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -99,41 +132,7 @@ async function sendPing(message: string, preferredChannel?: "desktop" | "telegra
       encoding: "utf-8",
       timeout: 30000,
     });
-
-    if (genResult.status !== 0) {
-      // Fallback to text message
-      spawnSync("bun", [TELEGRAM_CLIENT, "send", `${message}`], {
-        encoding: "utf-8",
-        timeout: 15000,
-      });
-
-      return {
-        sent: true,
-        channel: "telegram",
-        message: `[text fallback] ${message}`,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    // Send voice message via Telegram
-    const sendResult = spawnSync("bun", [TELEGRAM_CLIENT, "send-document", oggPath, `Kaya`], {
-      encoding: "utf-8",
-      timeout: 15000,
-    });
-
-    // Clean up temp file
-    try {
-      unlinkSync(oggPath);
-    } catch {
-      /* ignore */
-    }
-
-    return {
-      sent: sendResult.status === 0,
-      channel: "telegram",
-      message,
-      timestamp: new Date().toISOString(),
-    };
+    return deliverTelegramPing(message, genResult.status === 0 ? oggPath : null);
   }
 
   return {
@@ -328,10 +327,12 @@ Commands:
   }
 }
 
-main().catch((err) => {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+}
 
-export { sendPing, schedulePing, cancelPing, processDuePings };
+export { sendPing, deliverTelegramPing, schedulePing, cancelPing, processDuePings };
 export type { ScheduledPing, PingResult };

@@ -33,7 +33,6 @@ export const VOICE_RESPONSE_TOOL = join(
 );
 export const INTERRUPTION_TOOL = join(KAYA_HOME, "skills/Communication/VoiceInteraction/Tools/InterruptionHandler.ts");
 export const INFERENCE_TOOL = join(KAYA_HOME, "lib/core/Inference.ts");
-export const TELEGRAM_CLIENT = join(KAYA_HOME, "skills/Communication/Telegram/Tools/TelegramClient.ts");
 export const DESKTOP_CLIENT = join(KAYA_HOME, "skills/Communication/VoiceInteraction/Tools/DesktopVoiceClient.ts");
 
 // ============================================
