@@ -33,6 +33,9 @@ if [ -n "$EXTRA" ] || [ -z "$LOCK" ] || { [ -n "$LOCK2" ] && [ "$LOCK2" = "$LOCK
   exit 2
 fi
 CMD="$*"
+# Tickets and owner files hold a hash of the command, never its text: a Codex builder that waits on a lock held by an
+# examiner read the exam's command line (plant paths) from them (form-doc exam-16, 2026-11-18, guard G6).
+CMD_SHA="$(printf '%s' "$CMD" | shasum -a 256 | cut -c1-12)"
 WAIT="${RUNLOCK_WAIT_S:-7200}"
 START=$(date +%s)
 CLASS=1
@@ -71,7 +74,7 @@ new_ticket() {   # <lock dir> <class>: writes the ticket and sets TICKET to its 
   local q="$1.queue"
   mkdir -p "$q" || exit 2
   TICKET="$q/$(printf '%s-%010d-%07d' "$2" "$(date +%s)" "$$")"
-  printf 'name=%s\npid=%s\ncmd=%s\n' "$OWNER" "$$" "$CMD" > "$TICKET"
+  printf 'name=%s\npid=%s\ncmd_sha=%s\n' "$OWNER" "$$" "$CMD_SHA" > "$TICKET"
   TICKETS="$TICKETS $TICKET"
 }
 # The oldest ticket in a queue whose process lives; dead tickets are removed on the way.
@@ -117,7 +120,7 @@ acquire() {   # <lock dir> <class>
   done
   rm -f "$TICKET"
   HELD="$HELD $lock"
-  printf 'name=%s\npid=%s\nsince=%s\ncmd=%s\n' "$OWNER" "$$" "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$CMD" > "$lock/owner"
+  printf 'name=%s\npid=%s\nsince=%s\ncmd_sha=%s\n' "$OWNER" "$$" "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$CMD_SHA" > "$lock/owner"
 }
 
 acquire "$LOCK" "$CLASS"

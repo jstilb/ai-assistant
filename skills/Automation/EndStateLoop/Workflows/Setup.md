@@ -26,7 +26,7 @@ Put a project on the end-state loop: write its scoreboard, its examiner brief an
    - `failed`: the last run of the frozen rule failed, or an independent test showed that the row's test misses a fault on that sentence.
    - `untested`: no test, or it never ran.
 
-5. **Rank the rows that are not proven** (`Board.ts rank`). First: the success measure, then the rows whose test has a known hole, then the claimed rows (they need only an exam), then rows that are not built, then rows that wait on a paused project. The examiner's first product review replaces this order.
+5. **Rank the rows that are not proven** (`Board.ts rank`) by their effect on the key drivers in `KEY-DRIVERS-<n>.md` (for a new board, write `KEY-DRIVERS-1.md` first: the 2 or 3 drivers of Jm's outcome and their rows). The row that changes most what Jm receives goes first; rows that wait on a paused project go last. Testability and known holes are not rank reasons. The orchestrator re-ranks from here.
 
 6. **Check the draft.** `Board.ts validate <board>`. Then give both the board and the end-state sources to one fresh agent: is a sentence missing, is a quote wrong, is a status too generous? Apply what it proves.
 

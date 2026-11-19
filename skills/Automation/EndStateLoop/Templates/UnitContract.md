@@ -1,4 +1,4 @@
-# Unit <U-id>: <short name> (row <R-id>, project <name>)
+# Unit <U-id>: <what changes for Jm, in plain words> (row <R-id>, project <name>)
 
 You are a builder in an end-state loop. Read `~/.claude/skills/Automation/EndStateLoop/Workflows/Build.md` first, then `<project folder>/AGENTS.md`. Then do this unit and end. You have no successor.
 
@@ -10,9 +10,9 @@ Written by: <orchestrator session> · <date via `date`>
 - **What the examiner will run after you** (frozen, from the board): <row.test.passRule>
 
 ## The unit
-- **Kind:** product | test (`unit-open --kind`). product = changes what Jm receives; a test harness that the row needs goes inside it. test = only the row's test harness (at most 1 per row; the examiner brings the set).
-- **The change that Jm will see in the default product:** <one or two sentences, with the before and after; for a test unit: "none; the row gets a test that can fail">
-- **What goes live at close (`unit-close --shipped`):** <the commit and where: the service, the runner, the core; app code: merged for the next APK; or "none" for a test unit>
+- **Kind:** product (`unit-open --kind product`), on key driver <D-id> (`KEY-DRIVERS-<n>.md`): it changes what Jm receives; a test harness that the row needs goes inside it.
+- **The change that Jm will see in the default product:** <one or two sentences, with the before and after>
+- **What goes live at close (`unit-close --shipped`):** <the commit and where: the service, the runner, the core; app code: merged for the next APK; or "none">
 - **The approach, and why this one:** <one paragraph; name the earlier approach if this is a second try>
 - **In scope (files, areas):** <…>
 - **Not in scope:** <…>
@@ -21,7 +21,7 @@ Written by: <orchestrator session> · <date via `date`>
 ## Limits
 - One session. If you reach 40 % context, stop and report "too large" with a proposal to divide the unit.
 - Worktree: your own (`EnterWorktree`). Merge and deploy: <no | the exact rule>.
-  Codex builder (`Tools/codex-unit.sh`): Worktree: <path> (made by the orchestrator), branch <name>. Do not commit: put one line `Commit message: <text>` in RESULT.md; the runner commits after Codex ends. Network: on. Writable: the worktree, `<board folder>/units/<U-id>/` and <each --add-dir>. No `ps`, `pgrep` or signals to other processes (the sandbox refuses them). Heavy runs: `bash ~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <board folder>/locks/RUN.lock U<n> <command…>`. Model calls that need Kaya's tools (`Inference.ts`, Claude agents) are not available to Codex: give that part to the examiner or to a Claude unit.
+  Codex builder (`Tools/codex-unit.sh`): Worktree: <path> (made by the orchestrator), branch <name>. Do not commit: put one line `Commit message: <text>` in RESULT.md; the runner commits after Codex ends. Network: on. Writable: the worktree, `<board folder>/units/<U-id>/` and <each --add-dir>. No `ps`, `pgrep` or signals to other processes (the sandbox refuses them). Heavy runs: `bash ~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <board folder>/locks/RUN.lock U<n> <command…>`. Model calls: Codex units have run `claude -p` in this sandbox (form-doc U4, U6, U8, U10, U16); test a call before you plan around it, and never claim it cannot work without that test.
 - Do not touch: the board, `EXAMINER-BRIEF.md`, the exam folder, other chains' worktrees.
 - Heavy runs: through `~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <your session name> <command…>` (memory-heavy runs: the brief's memory lock; batches of model calls: its model lock; a run with both: one call, `runlock.sh <memory lock>,<model lock> …`; never nest two runlock calls); never remove a lock that you do not own.
 - Shared live budgets: <each free model pool or API limit that the live product also uses, its window, the cap for this unit's runs, and who counts it; or "none">

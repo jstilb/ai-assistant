@@ -1,0 +1,547 @@
+<title>End-State Loop Status</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one 680px reading column. Home = one card per loop. A loop = its newest update (a timeline steps back), then the message thread. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15181d; --muted: #59616c; --faint: #8b929c; --line: #e3e6ea; --hover: #eef1f5;
+  --accent: #2a4fc6; --accent-fg: #ffffff; --accent-soft: #e9eefb;
+  --good: #1d7a45; --good-soft: #e2f1e8; --warn: #9b5f0c; --warn-soft: #f8eedb; --bad: #b8402f; --bad-soft: #f8e4e0;
+  --info: #2c69a8; --info-soft: #e3edf8; --empty: #d9dde2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101215; --surface: #171a1e; --fg: #e5e7ea; --muted: #a0a7b0; --faint: #6e757f; --line: #2a2e35; --hover: #1f2329;
+  --accent: #8ea7ff; --accent-fg: #101215; --accent-soft: #1d2540;
+  --good: #52c48f; --good-soft: #14281e; --warn: #e2a64c; --warn-soft: #2b2313; --bad: #ef7d6e; --bad-soft: #2e1a17;
+  --info: #72aae6; --info-soft: #172334; --empty: #343941; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #101215; --surface: #171a1e; --fg: #e5e7ea; --muted: #a0a7b0; --faint: #6e757f; --line: #2a2e35; --hover: #1f2329;
+  --accent: #8ea7ff; --accent-fg: #101215; --accent-soft: #1d2540;
+  --good: #52c48f; --good-soft: #14281e; --warn: #e2a64c; --warn-soft: #2b2313; --bad: #ef7d6e; --bad-soft: #2e1a17;
+  --info: #72aae6; --info-soft: #172334; --empty: #343941; color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--sans); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 680px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+p { margin: 0; }
+h1, h2 { text-wrap: balance; margin: 0; }
+code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* shared bits */
+.pill { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; color: var(--v, var(--muted)); background: var(--v-soft, var(--hover)); white-space: nowrap; }
+.v-yes { --v: var(--good); --v-soft: var(--good-soft); }
+.v-partly { --v: var(--warn); --v-soft: var(--warn-soft); }
+.v-no { --v: var(--bad); --v-soft: var(--bad-soft); }
+.btn { max-width: 100%; min-width: 0; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; font-size: 15px; text-decoration: none; color: var(--fg); }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn .hint { font-weight: 400; opacity: 0.8; font-size: 13px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.meter { height: 6px; border-radius: 3px; background: var(--empty); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--good); }
+.note { color: var(--muted); font-size: 14px; }
+.warn-t { color: var(--warn); }
+.dead { color: var(--bad); font-size: 13px; }
+
+/* home */
+.home-head { display: grid; gap: 4px; margin-bottom: 20px; }
+.home-head h1 { font-size: 24px; font-weight: 600; }
+.loops { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.loop { display: grid; gap: 10px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: inherit; }
+.loop:hover { border-color: var(--faint); }
+.loop-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.loop-name { font-size: 18px; font-weight: 600; }
+.loop-age { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.loop-mid { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.loop-count { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.loop-why { color: var(--muted); font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.loop-msg { font-size: 14px; color: var(--accent); font-weight: 500; }
+.empty { padding: 28px 24px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); display: grid; gap: 8px; }
+.empty strong { color: var(--fg); }
+
+/* project */
+.back { display: inline-block; font-size: 15px; text-decoration: none; margin-bottom: 14px; }
+.proj { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; }
+.proj h1 { font-size: 26px; font-weight: 600; line-height: 1.2; }
+.proj-sub { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: 14px; }
+.proj-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.reveal { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 4px; }
+.reveal .note { font-size: 13px; }
+
+.timeline { margin-top: 22px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
+.step:disabled { opacity: 0.35; cursor: default; }
+.dots { list-style: none; margin: 0; padding: 0 2px; display: flex; gap: 0; overflow-x: auto; max-width: min(60vw, 360px); }
+.dotb { width: 28px; height: 28px; border: 0; padding: 0; background: none; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.dotb::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--v, var(--empty)); }
+.dotb[aria-current="true"]::before { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.tl-label { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.older { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
+
+.update { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.block { padding: 20px 22px; display: grid; gap: 10px; min-width: 0; }
+.block > * { min-width: 0; }
+.tries { min-width: 0; }
+.block + .block { border-top: 1px solid var(--line); }
+.block h2 { font-size: 15px; font-weight: 600; }
+.q { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.block ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.block .lead { font-size: 16px; }
+.tries { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+.goals { display: grid; gap: 8px; margin-top: 4px; }
+.grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.sq { width: 18px; height: 18px; border-radius: 4px; border: 0; padding: 0; background: var(--empty); }
+.sq.proven { background: var(--good); }
+.sq.claimed { background: var(--info); }
+.sq.failed { background: var(--bad); opacity: 0.75; }
+.sq.untested { background: transparent; box-shadow: inset 0 0 0 1.5px var(--empty); }
+.glist { display: grid; gap: 14px; margin-top: 4px; }
+.ggroup h3 { margin: 0 0 6px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.ggroup .sq { width: 10px; height: 10px; border-radius: 3px; }
+.ggroup ul { font-size: 14px; color: var(--muted); gap: 4px; }
+.btn .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.btn .hint { white-space: nowrap; flex: none; }
+.proj-actions .btn { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.goal-pick { font-size: 14px; padding: 10px 12px; border-radius: 8px; background: var(--hover); }
+.goal-pick b { font-weight: 600; }
+
+.drv { display: grid; gap: 14px; margin-top: 4px; }
+.driver { display: grid; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--hover); }
+.driver h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.driver .age { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.driver .age.stall { color: var(--warn); font-weight: 600; }
+.driver ul { font-size: 14px; }
+.driver .pics { display: flex; gap: 8px; margin-top: 6px; }
+.driver figure { margin: 0; flex: 1 1 0; min-width: 0; }
+.driver figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+.driver figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.where { font-size: 12px; color: var(--faint); margin-top: 2px; }
+.where summary { cursor: pointer; }
+.where code { overflow-wrap: anywhere; }
+.support-count { font-size: 13px; color: var(--faint); }
+.disclose { justify-self: start; }
+.evidence { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.evidence .up { color: var(--good); } .evidence .down { color: var(--bad); }
+
+/* messages */
+.messages { margin-top: 28px; display: grid; gap: 14px; }
+.messages h2 { font-size: 17px; font-weight: 600; }
+.thread { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.msg { display: grid; gap: 6px; }
+.bubble { padding: 10px 14px; border-radius: 12px; max-width: 88%; overflow-wrap: anywhere; white-space: pre-wrap; }
+.mine { justify-self: end; background: var(--accent-soft); border-bottom-right-radius: 4px; }
+.theirs { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.meta { font-size: 12px; color: var(--faint); }
+.mine-meta { justify-self: end; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.theirs-meta { justify-self: start; }
+.replying { font-size: 13px; color: var(--muted); }
+.compose { display: grid; gap: 8px; }
+textarea { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertical; font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.row .btns { display: flex; gap: 8px; }
+
+.toast { position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 20; }
+.loading { color: var(--muted); padding: 24px 0; }
+
+@media (max-width: 520px) {
+  .proj h1 { font-size: 22px; }
+  .block { padding: 16px; }
+  .proj-actions { width: 100%; }
+  .proj-actions .btn.primary { flex: 1; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <main id="view"><p class="loading">Loading the loops…</p></main>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const S = {
+    db: null, ready: false, failed: "",
+    updates: [], feedback: [], receipts: [],
+    ui: { evidence: false, goals: false, composer: false, replyTo: null, withdraw: null, reveal: null },
+    drafts: {},
+  };
+  const NAMES = { edition: "The edition", learn: "Learn", "form-doc": "Form Doc" };
+  const STALE_H = 12;
+  const PROGRESS = { yes: "Moving", partly: "Partly moving", no: "Not moving" };
+  const ANSWER = { yes: "Yes", partly: "Partly", no: "No" };
+  const STATUS = { proven: "passed an independent check", claimed: "passes its own test; waits for an independent check", failed: "failed its last check", untested: "not checked yet" };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ms = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t : 0; };
+  const nameOf = (p) => NAMES[p] || p.charAt(0).toUpperCase() + p.slice(1);
+  const vclass = (v) => (v === "yes" || v === "partly" || v === "no" ? "v-" + v : "");
+  const isUrl = (t) => /^https?:\/\//.test(t || "");
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* convenience only */ } } };
+  function rel(iso) {
+    if (!ms(iso)) return "";
+    const m = Math.round((Date.now() - ms(iso)) / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + " min ago";
+    const h = Math.round(m / 60);
+    return h < 36 ? h + " h ago" : Math.round(h / 24) + " days ago";
+  }
+  const abs = (iso) => (ms(iso) ? new Date(ms(iso)).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+  const hoursSince = (iso) => (Date.now() - ms(iso)) / 3600000;
+
+  // ------------------------------------------------------------------ data views
+  const projects = () => [...new Set(S.updates.map((u) => u.project).filter(Boolean))].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const updatesOf = (p) => S.updates.filter((u) => u.project === p).sort((a, b) => (a.n || 0) - (b.n || 0) || ms(a.at) - ms(b.at));
+  const latestOf = (p) => { const us = updatesOf(p); return us[us.length - 1] || null; };
+  const receiptOf = (fid) => S.receipts.find((r) => (r.feedback || r.id) === fid) || null;
+  const waitingOf = (p) => S.feedback.filter((f) => f.project === p && !receiptOf(f.id));
+  function answersOf(p, fid) {
+    const out = [];
+    for (const u of updatesOf(p)) for (const a of Array.isArray(u.answers) ? u.answers : []) if (a && a.feedback === fid) out.push({ at: u.at, text: a.text });
+    return out;
+  }
+  function thread(p) {
+    const items = S.feedback.filter((f) => f.project === p).map((f) => ({ kind: "page", at: f.at, f }));
+    for (const u of updatesOf(p)) for (const a of Array.isArray(u.answers) ? u.answers : []) if (a && !a.feedback) items.push({ kind: "other", at: u.at, a });
+    return items.sort((x, y) => ms(x.at) - ms(y.at));
+  }
+
+  // ------------------------------------------------------------------ routing
+  function route() {
+    const h = decodeURIComponent((location.hash || "").slice(1));
+    if (!h) return { project: null };
+    const ps = projects();
+    if (ps.includes(h)) return { project: h, id: null };
+    const m = /^(.*)-(\d{4})$/.exec(h);
+    if (m && ps.includes(m[1])) return { project: m[1], id: h };
+    return { project: null, missing: h };
+  }
+  function go(hash) { if (location.hash.slice(1) !== hash) location.hash = hash; else render(); }
+
+  // ------------------------------------------------------------------ pieces
+  function linkAction(l, primary, key) {
+    if (!l || !l.target) return "";
+    const dead = l.check === "dead" ? ' <span class="dead">· did not respond when posted</span>' : "";
+    if (isUrl(l.target)) return '<a class="btn' + (primary ? " primary" : "") + '" href="' + esc(l.target) + '" target="_blank" rel="noopener" title="' + esc(l.label) + '"><span class="lbl">' + esc(l.label) + '</span> <span class="hint" aria-hidden="true">↗</span>' + dead + "</a>";
+    const kind = /^[\/~]/.test(l.target) ? "path" : "command";
+    return '<button class="btn' + (primary ? " primary" : "") + '" data-copy="' + esc(key) + '" title="' + esc(l.label) + '"><span class="lbl">' + esc(l.label) + '</span><span class="hint">Copy ' + kind + "</span></button>";
+  }
+  function revealPanel(map) {
+    const r = S.ui.reveal;
+    if (!r || !map[r.key]) return "";
+    return '<div class="reveal" role="status"><code>' + esc(map[r.key].target) + '</code><span class="note">' + esc(r.copied ? "Copied. Paste it in a terminal on your Mac." : "Select the text above and copy it.") + "</span></div>";
+  }
+  function list(xs) {
+    const items = (Array.isArray(xs) ? xs : []).filter((x) => typeof x === "string" && x.trim());
+    return items.length ? "<ul>" + items.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>" : '<p class="note">Nothing listed.</p>';
+  }
+  const GROUP = { proven: "Passed", claimed: "Waiting for an independent check", failed: "Failed their last check", untested: "Not checked yet" };
+  const ORDER = ["proven", "claimed", "failed", "untested"];
+  function goals(f) {
+    const c = (f && f.counts) || {};
+    const rows = f && Array.isArray(f.rows) ? f.rows : null;
+    const squares = ORDER.flatMap((k) => (rows ? rows.filter((r) => r.status === k).map((r) => r.sentence) : Array.from({ length: c[k] || 0 }, () => ""))
+      .map((s) => '<span class="sq ' + k + '"' + (s ? ' title="' + esc(s) + '"' : "") + "></span>")).join("");
+    const legend = '<div class="legend"><span><i class="sq proven"></i>' + (c.proven || 0) + ' passed</span><span><i class="sq claimed"></i>' + (c.claimed || 0) + ' waiting for a check</span><span><i class="sq failed"></i>' + (c.failed || 0) + ' failed</span><span><i class="sq untested"></i>' + (c.untested || 0) + " not checked</span></div>";
+    let more = "";
+    if (rows) {
+      more = '<button class="link disclose" data-act="goals" aria-expanded="' + S.ui.goals + '" aria-controls="goal-list">' + (S.ui.goals ? "Hide the goals" : "Show all " + rows.length + " goals") + "</button>";
+      if (S.ui.goals) {
+        more += '<div id="goal-list" class="glist">' + ORDER.map((k) => {
+          const xs = rows.filter((r) => r.status === k);
+          return xs.length ? '<div class="ggroup"><h3><i class="sq ' + k + '"></i>' + GROUP[k] + "</h3><ul>" + xs.map((r) => "<li>" + esc(r.sentence) + "</li>").join("") + "</ul></div>" : "";
+        }).join("") + "</div>";
+      }
+    }
+    return '<div class="goals"><div class="grid" role="img" aria-label="' + esc((c.proven || 0) + " of " + (c.total || 0) + " goals passed") + '">' + squares + "</div>" + legend + more + "</div>";
+  }
+  const STALL_H = 24;
+  function drivers(u) {
+    const d = u.facts && u.facts.drivers;
+    if (!d) return "";
+    if (!d.written) return '<section class="block"><h2>What changed for you, per key driver</h2><p class="note">Key drivers: not written.</p></section>';
+    const imgOk = (u) => typeof u === "string" && (u.indexOf("/_blob/") === 0 || u.indexOf("https://") === 0);
+    const cards = (Array.isArray(d.items) ? d.items : []).map((x) => {
+      const last = x.lastShippedAt;
+      const h = last ? Math.round(hoursSince(last)) : null;
+      const age = last ? "Last live change " + (h < 1 ? "under 1 h" : h + " h") + " ago" + (h >= STALL_H ? " — stalled" : "") : "No live change yet";
+      const lis = (x.shipped || []).map((c) => {
+        const words = c.words || c.what || "";
+        return "<li>" + esc(words) + ' <span class="note">· ' + esc(c.unit || "") + " · " + esc(abs(c.at)) + "</span>" + (c.where ? '<details class="where"><summary>where</summary><code>' + esc(c.where) + "</code></details>" : "") + "</li>";
+      }).join("");
+      const im = x.images || {};
+      const side = (kind, label) => (Array.isArray(im[kind]) ? im[kind] : []).filter(imgOk).map((u) => '<figure><img loading="lazy" src="' + esc(u) + '" alt="' + esc(x.name + " — " + kind) + '"><figcaption>' + label + "</figcaption></figure>").join("");
+      const pics = side("before", "Before") + side("after", "After");
+      return '<div class="driver"><h3>' + esc(x.id + " · " + x.name) + '</h3><span class="age' + (!last || h >= STALL_H ? " stall" : "") + '">' + esc(age) + (x.shippedTotal > (x.shipped || []).length ? " · " + x.shippedTotal + " in all" : "") + "</span>" + (lis ? "<ul>" + lis + "</ul>" : "") + (pics ? '<div class="pics">' + pics + "</div>" : "") + "</div>";
+    }).join("");
+    return '<section class="block"><h2>What changed for you, per key driver</h2><div class="drv">' + (cards || '<p class="note">No driver listed.</p>') + "</div></section>";
+  }
+  function evidence(u) {
+    const f = u.facts || {};
+    const c = f.counts || {};
+    const out = [];
+    const d = typeof f.provenDelta === "number" ? f.provenDelta : null;
+    out.push("<li>" + (c.proven || 0) + " of " + (c.total || 0) + " goals passed an independent check" + (d === null ? "" : " (" + (d > 0 ? "+" + d : d === 0 ? "no change" : d) + " since the last update)") + ".</li>");
+    const since = f.sinceKind === "24h" ? "in the day before this first update" : "since the last update";
+    const moves = Array.isArray(f.rowMoves) ? f.rowMoves : [];
+    if (moves.length) {
+      const cls = (m) => (m.dir === "up" ? "up" : m.dir === "down" ? "down" : "");
+      const named = moves.filter((m) => m.sentence).sort((a, b) => (a.dir === "up" ? 0 : 1) - (b.dir === "up" ? 0 : 1));
+      const lines = named.map((m) => '<li class="' + cls(m) + '">“' + esc(m.sentence) + "” — now " + esc(STATUS[m.to] || m.to) + ".</li>");
+      // Updates posted before goal sentences were recorded: one count per new state, not one empty line per goal.
+      const unnamed = {};
+      for (const m of moves.filter((x) => !x.sentence)) unnamed[m.to] = (unnamed[m.to] || 0) + 1;
+      for (const k of ORDER) if (unnamed[k]) lines.push('<li class="' + (k === "proven" ? "up" : "") + '">' + unnamed[k] + " goal" + (unnamed[k] === 1 ? "" : "s") + " now " + esc(STATUS[k]) + ".</li>");
+      out.push("<li>Goals that changed " + since + ":<ul>" + lines.join("") + "</ul></li>");
+    }
+    const closed = Array.isArray(f.closed) ? f.closed : [];
+    const moved = closed.filter((x) => x.moved === true).length;
+    out.push("<li>" + closed.length + " work step" + (closed.length === 1 ? "" : "s") + " finished " + since + "; " + moved + " moved a goal; " + (f.liveChanges || 0) + " put a change live.</li>");
+    if (Array.isArray(f.open)) out.push("<li>" + f.open.length + " work step" + (f.open.length === 1 ? "" : "s") + " in progress.</li>");
+    if (f.stall >= 2) out.push('<li class="down">The last ' + f.stall + " finished work steps moved no goal." + (f.gate === "RE-PLAN" ? " A new plan is due before more work starts." : "") + "</li>");
+    out.push("<li>" + (f.lastExamAt ? "Last independent check: " + esc(rel(f.lastExamAt)) + "." : "No independent check yet.") + "</li>");
+    return '<ul class="evidence" id="evidence">' + out.join("") + "</ul>";
+  }
+
+  // ------------------------------------------------------------------ views
+  function driverLine(u) {
+    const d = u.facts && u.facts.drivers;
+    if (!d) return "";
+    if (!d.written) return "Key drivers: not written";
+    const items = Array.isArray(d.items) ? d.items : [];
+    const live = items.filter((x) => x.lastShippedAt).length;
+    const newest = items.map((x) => x.lastShippedAt).filter(Boolean).sort().pop();
+    return live + " of " + items.length + " drivers changed live" + (newest ? " · last " + rel(newest) : "");
+  }
+  function home() {
+    const ps = projects();
+    if (!ps.length) {
+      if (!S.ready) return '<p class="loading">' + esc(S.failed || "Loading the loops…") + "</p>";
+      return '<div class="empty"><strong>No loop has posted an update yet.</strong><p>Each loop posts here when a piece of work ends: where it stands, what it finished, what is next, and whether it moves toward its end state. You can then message the loop from its page.</p></div>';
+    }
+    const cards = ps.map((p) => {
+      const u = latestOf(p);
+      const c = (u.facts && u.facts.counts) || {};
+      const pct = c.total ? Math.round((c.proven / c.total) * 100) : 0;
+      const dr = !!(u.facts && u.facts.drivers);
+      const w = waitingOf(p).length;
+      const stale = hoursSince(u.at) > STALE_H;
+      return '<li><a class="loop" href="#' + esc(p) + '">' +
+        '<div class="loop-top"><span class="loop-name">' + esc(nameOf(p)) + '</span><span class="loop-age' + (stale ? " warn-t" : "") + '">' + (stale ? "No update for " + Math.round(hoursSince(u.at)) + " h" : "Updated " + esc(rel(u.at))) + "</span></div>" +
+        '<div class="loop-mid"><span class="pill ' + vclass(u.progress && u.progress.verdict) + '">' + esc(PROGRESS[u.progress && u.progress.verdict] || "No verdict") + '</span><span class="loop-count">' + esc(driverLine(u)) + (dr ? "" : " · " + (c.proven || 0) + " of " + (c.total || 0) + " goals passed") + "</span></div>" +
+        (dr ? "" : '<div class="meter" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
+        '<p class="loop-why">' + esc(u.progress && u.progress.why) + "</p>" +
+        (w ? '<span class="loop-msg">' + w + " message" + (w === 1 ? "" : "s") + " not read yet</span>" : "") +
+        "</a></li>";
+    }).join("");
+    return '<div class="home-head"><h1>Loops</h1><p class="note">Pick a loop to read its latest update, try its changes or message it.</p></div><ul class="loops">' + cards + "</ul>";
+  }
+
+  function project(p, id) {
+    const us = updatesOf(p);
+    let i = id ? us.findIndex((u) => u.id === id) : us.length - 1;
+    if (i < 0) i = us.length - 1;
+    const u = us[i], latest = us[us.length - 1], isLatest = i === us.length - 1;
+    const linkMap = {};
+    const apps = (Array.isArray(latest.app) ? latest.app : []).map((l, k) => { linkMap["app" + k] = l; return linkAction(l, false, "app" + k); }).join("");
+    const tries = (Array.isArray(u.try) ? u.try : []).map((l, k) => { linkMap["try" + k] = l; return linkAction(l, false, "try" + k); }).join("");
+    S.linkMap = linkMap;
+    const lv = latest.progress && latest.progress.verdict;
+
+    const dots = us.map((x, k) => '<li><button class="dotb ' + vclass(x.progress && x.progress.verdict) + '" data-go="' + esc(x.id) + '" aria-current="' + (k === i) + '" aria-label="' + esc("Update " + (k + 1) + ", " + abs(x.at) + ", " + (PROGRESS[x.progress && x.progress.verdict] || "")) + '" title="' + esc(abs(x.at)) + '"></button></li>').join("");
+    const timeline = '<div class="timeline">' +
+      (us.length > 1 ? '<button class="step" data-step="-1" aria-label="Older update"' + (i === 0 ? " disabled" : "") + '>‹</button><ol class="dots" aria-label="Updates, oldest first">' + dots + '</ol><button class="step" data-step="1" aria-label="Newer update"' + (isLatest ? " disabled" : "") + ">›</button>" : "") +
+      '<span class="tl-label">' + (us.length > 1 ? "Update " + (i + 1) + " of " + us.length : "First update") + " · " + esc(abs(u.at)) + "</span></div>";
+
+    const pv = u.progress || {}, av = u.aligned || {};
+    const hasDrivers = !!(u.facts && u.facts.drivers);
+    const article = '<article class="update" aria-label="Status update">' +
+      '<section class="block"><h2>Where it stands</h2><p class="lead">' + esc(u.where) + "</p>" + (hasDrivers ? "" : goals(u.facts)) + "</section>" + drivers(u) +
+      '<section class="block"><h2>Done since the last update</h2>' + list(u.done) + (tries ? '<div class="tries" aria-label="Try the changes">' + tries + "</div>" : "") + "</section>" +
+      '<section class="block"><h2>Next</h2>' + list(u.left) + "</section>" +
+      '<section class="block"><div class="q"><h2>Moving toward the end state?</h2><span class="pill ' + vclass(pv.verdict) + '">' + esc(ANSWER[pv.verdict] || "?") + "</span></div><p>" + esc(pv.why) + '</p><button class="link disclose" data-act="evidence" aria-expanded="' + S.ui.evidence + '" aria-controls="evidence">' + (S.ui.evidence ? "Hide the evidence" : "Show the evidence") + "</button>" + (S.ui.evidence ? evidence(u) : "") + "</section>" +
+      '<section class="block"><div class="q"><h2>Still the right goals?</h2><span class="pill ' + vclass(av.verdict) + '">' + esc(ANSWER[av.verdict] || "?") + "</span></div><p>" + esc(av.why) + "</p></section>" +
+      (hasDrivers ? '<section class="block"><p class="support-count">Support count: ' + esc(((u.facts.counts || {}).proven || 0) + " of " + ((u.facts.counts || {}).total || 0) + " rows proven by an independent check.") + (u.facts.drivers.supportShipped ? " " + esc(u.facts.drivers.supportShipped + " live change(s) on support rows.") : "") + "</p>" + goals(u.facts) + "</section>" : "") +
+      "</article>";
+
+    return '<a class="back" href="#">← All loops</a>' +
+      '<header class="proj"><div><h1>' + esc(nameOf(p)) + '</h1><p class="proj-sub"><span' + (hoursSince(latest.at) > STALE_H ? ' class="warn-t"' : "") + ">Updated " + esc(rel(latest.at)) + "</span></p></div>" +
+      '<div class="proj-actions">' + apps + '<button class="btn" data-act="message">Message the loop' + (waitingOf(p).length ? ' <span class="hint">· ' + waitingOf(p).length + " not read yet</span>" : "") + "</button></div></header>" +
+      revealPanel(linkMap) + timeline +
+      (isLatest ? "" : '<p class="older">This is an older update. <a href="#' + esc(p) + '">Show the newest</a></p>') +
+      article + messages(p, latest);
+  }
+
+  function messages(p, latest) {
+    const items = thread(p).map((t) => {
+      if (t.kind === "other") {
+        return '<li class="msg">' + (t.a.words ? '<p class="bubble mine">' + esc(t.a.words) + '</p><span class="meta mine-meta">You · said outside this page</span>' : "") +
+          '<p class="bubble theirs">' + esc(t.a.text) + '</p><span class="meta theirs-meta">Orchestrator · ' + esc(abs(t.at)) + "</span></li>";
+      }
+      const f = t.f, r = receiptOf(f.id), ans = answersOf(p, f.id);
+      const parent = f.replyTo ? S.feedback.find((x) => x.id === f.replyTo) : null;
+      let state;
+      if (!r) state = "Not read yet · " + (S.ui.withdraw === f.id ? '<button class="link" data-withdraw="' + esc(f.id) + '">Confirm: withdraw</button> <button class="link" data-act="keep">Keep</button>' : '<button class="link" data-withdraw="' + esc(f.id) + '">Withdraw</button>');
+      else state = "Read " + esc(rel(r.at)) + (ans.length ? "" : " · answer comes with the next update");
+      return '<li class="msg">' + (parent ? '<span class="replying mine-meta">Reply to “' + esc(parent.text.slice(0, 60)) + (parent.text.length > 60 ? "…" : "") + "”</span>" : "") +
+        '<p class="bubble mine">' + esc(f.text) + '</p><span class="meta mine-meta"><span>You · ' + esc(abs(f.at)) + "</span><span>" + state + "</span></span>" +
+        ans.map((x) => '<p class="bubble theirs">' + esc(x.text) + '</p><span class="meta theirs-meta">Orchestrator · ' + esc(abs(x.at)) + "</span>").join("") +
+        (ans.length ? '<button class="link theirs-meta" data-reply="' + esc(f.id) + '">Reply</button>' : "") + "</li>";
+    }).join("");
+    const to = latest ? latest.by : "";
+    let compose;
+    if (S.ui.composer) {
+      const parent = S.ui.replyTo ? S.feedback.find((x) => x.id === S.ui.replyTo) : null;
+      const draft = p in S.drafts ? S.drafts[p] : store.get("draft:" + p) || "";
+      compose = '<div class="compose">' + (parent ? '<p class="replying">Replying to “' + esc(parent.text.slice(0, 80)) + (parent.text.length > 80 ? "…" : "") + '” <button class="link" data-act="unreply">Not a reply</button></p>' : "") +
+        '<label class="sr" for="msg-text">Message to the orchestrator</label><textarea id="msg-text" placeholder="A direction, a correction or a question for the loop">' + esc(draft) + "</textarea>" +
+        '<div class="row"><span class="note">Sent to ' + esc(to || "the orchestrator") + ". It reads messages when its current step ends, at most about 50 min.</span>" +
+        '<span class="btns"><button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="send"' + (S.db ? "" : " disabled") + ">Send</button></span></div></div>";
+    } else {
+      compose = '<div><button class="btn" data-act="compose"' + (S.db ? "" : " disabled") + ">Write to the orchestrator</button></div>";
+    }
+    return '<section class="messages" aria-label="Messages"><h2>Messages with the orchestrator</h2>' + (items ? '<ol class="thread">' + items + "</ol>" : '<p class="note">No messages yet. Write when you want the loop to change course or to answer a question.</p>') + compose + "</section>";
+  }
+
+  // ------------------------------------------------------------------ render
+  function render() {
+    const r = route();
+    const t = document.activeElement && document.activeElement.id === "msg-text" ? document.activeElement : null;
+    const caret = t ? t.selectionStart : null;
+    $("view").innerHTML = r.project ? project(r.project, r.id) : home();
+    document.title = r.project ? nameOf(r.project) + " · End-State Loop Status" : "End-State Loop Status";
+    if (t || (S.ui.composer && S.ui.focusComposer)) {
+      const n = $("msg-text");
+      if (n) { n.focus(); const at = caret === null ? n.value.length : caret; n.setSelectionRange(at, at); }
+      S.ui.focusComposer = false;
+    }
+    const cur = document.querySelector('.dotb[aria-current="true"]');
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  let toastTimer = null;
+  function toast(text) {
+    const el = $("toast"); el.textContent = text; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
+  }
+  function resetUi() { S.ui = { evidence: false, goals: false, composer: false, replyTo: null, withdraw: null, reveal: null }; }
+
+  // ------------------------------------------------------------------ actions
+  function step(delta) {
+    const r = route(); if (!r.project) return;
+    const us = updatesOf(r.project);
+    let i = r.id ? us.findIndex((u) => u.id === r.id) : us.length - 1;
+    i = Math.max(0, Math.min(us.length - 1, (i < 0 ? us.length - 1 : i) + delta));
+    go(i === us.length - 1 ? r.project : us[i].id);
+  }
+  async function send() {
+    const r = route(); const n = $("msg-text");
+    if (!r.project || !n || !S.db) return;
+    const text = n.value.trim();
+    if (!text) { toast("Write a message first."); n.focus(); return; }
+    const latest = latestOf(r.project);
+    const btn = document.querySelector('[data-act="send"]'); if (btn) btn.disabled = true;
+    const doc = { project: r.project, text, at: new Date().toISOString(), to: latest ? latest.by : "" };
+    if (S.ui.replyTo) doc.replyTo = S.ui.replyTo;
+    try {
+      await S.db.collection("feedback").doc().set(doc);
+      S.drafts[r.project] = ""; store.set("draft:" + r.project, "");
+      S.ui.composer = false; S.ui.replyTo = null;
+      render(); toast("Sent. The orchestrator reads it at its next step.");
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast(e && e.code === "invalid_argument" ? "Not sent: only the page owner can send messages." : "Not sent (" + (e && e.code ? e.code : "error") + "). Your text is kept; try again.");
+    }
+  }
+  async function withdraw(id) {
+    if (S.ui.withdraw !== id) { S.ui.withdraw = id; render(); return; }
+    S.ui.withdraw = null;
+    if (receiptOf(id)) { render(); toast("Already read: it cannot be withdrawn."); return; }
+    try { await S.db.collection("feedback").doc(id).delete(); toast("Withdrawn."); } catch (e) { toast("Not withdrawn (" + (e && e.code ? e.code : "error") + ")."); }
+    render();
+  }
+  function copy(key) {
+    const l = S.linkMap && S.linkMap[key]; if (!l) return;
+    S.ui.reveal = { key, copied: false };
+    const done = (ok) => { S.ui.reveal = { key, copied: ok }; render(); if (ok) toast("Copied."); };
+    try { navigator.clipboard.writeText(l.target).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+    render();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const el = ev.target.closest("button");
+    if (!el) return;
+    const d = el.dataset;
+    if (d.go) { const p = route().project; const us = updatesOf(p); go(us.length && us[us.length - 1].id === d.go ? p : d.go); }
+    else if (d.step) step(Number(d.step));
+    else if (d.act === "goals") { S.ui.goals = !S.ui.goals; render(); }
+    else if (d.copy) copy(d.copy);
+    else if (d.withdraw) withdraw(d.withdraw);
+    else if (d.reply) { S.ui.composer = true; S.ui.replyTo = d.reply; S.ui.focusComposer = true; render(); }
+    else if (d.act === "evidence") { S.ui.evidence = !S.ui.evidence; render(); }
+    else if (d.act === "compose") { S.ui.composer = true; S.ui.focusComposer = true; render(); }
+    else if (d.act === "message") { S.ui.composer = true; S.ui.focusComposer = true; render(); const m = document.querySelector(".messages"); if (m && m.scrollIntoView) m.scrollIntoView({ block: "start" }); }
+    else if (d.act === "cancel") { S.ui.composer = false; S.ui.replyTo = null; render(); }
+    else if (d.act === "unreply") { S.ui.replyTo = null; S.ui.focusComposer = true; render(); }
+    else if (d.act === "keep") { S.ui.withdraw = null; render(); }
+    else if (d.act === "send") send();
+  });
+  document.addEventListener("input", (ev) => {
+    if (ev.target.id !== "msg-text") return;
+    const p = route().project; if (!p) return;
+    S.drafts[p] = ev.target.value; store.set("draft:" + p, ev.target.value);
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.target.id === "msg-text") {
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); send(); }
+      if (ev.key === "Escape") { S.ui.composer = false; S.ui.replyTo = null; render(); }
+      return;
+    }
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+    if (ev.key === "ArrowLeft") step(-1);
+    if (ev.key === "ArrowRight") step(1);
+  });
+  window.addEventListener("hashchange", () => {
+    const r = route();
+    if (S.lastProject !== r.project) resetUi();
+    S.lastProject = r.project;
+    render();
+    window.scrollTo(0, 0);
+  });
+  setInterval(() => { if (document.activeElement && document.activeElement.id === "msg-text") return; render(); }, 60000);
+
+  // ------------------------------------------------------------------ store
+  async function start() {
+    let db = null;
+    try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { db = null; }
+    if (!db) { S.ready = true; S.failed = "This view cannot reach the loops' updates. Open the page on claude.ai."; render(); return; }
+    S.db = db;
+    const timer = setTimeout(() => { if (!S.ready) { S.failed = "The updates do not load yet. Check the connection; the page keeps trying."; render(); } }, 10000);
+    const loaded = {};
+    for (const key of ["updates", "feedback", "receipts"]) {
+      db.collection(key).onSnapshot((snap) => {
+        S[key] = snap.docs.filter((d) => d.exists).map((d) => Object.assign({}, d.data(), { id: d.id }));
+        if (!snap.metadata.fromCache) loaded[key] = true;
+        if (loaded.updates && loaded.feedback && loaded.receipts) { S.ready = true; clearTimeout(timer); }
+        S.lastProject = route().project;
+        render();
+      }, (e) => { clearTimeout(timer); S.ready = true; S.failed = "Lost the link to the updates (" + (e && e.code ? e.code : "error") + "). Reload the page."; render(); });
+    }
+  }
+  start();
+})();
+</script>

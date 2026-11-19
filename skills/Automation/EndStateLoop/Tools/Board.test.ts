@@ -352,7 +352,7 @@ describe("units and gate", () => {
     expect(u.startedAt).toMatch(LOCAL_ISO);
   });
 
-  test("moved is true when the unit passed, shipped a change, and its own row went up", () => {
+  test("moved is true when the unit passed, shipped a change, and its own row went up (the old row-up case)", () => {
     const c = ruled();
     const id = openUnit(c, "R3");
     setupMark(c, "R3", "claimed");
@@ -372,16 +372,24 @@ describe("units and gate", () => {
     expect(unit(read(c.path), id)).toMatchObject({ moved: false, shipped: "none" });
   });
 
-  test("moved is false for untested -> failed, even with a shipped change; failed -> claimed with a shipped change moves", () => {
+  test("moved is true when a passed unit shipped a live change and no row went up", () => {
     const c = ruled();
-    const first = openUnit(c, "R3");
-    setupMark(c, "R3", "failed");
-    expect(unit(closeUnit(c, first, "pass"), first).moved).toBe(false);
-    const second = openUnit(c, "R3");
-    setupMark(c, "R3", "claimed");
-    expect(run("unit-close", c.path, "--unit", second, "--result", "pass", "--shipped", "f00 on main", "--note", "n").out).toBe(
-      `${second}: pass, moved true (R3 failed -> claimed; shipped a change)\n`,
+    const kept = openUnit(c, "R3");
+    expect(run("unit-close", c.path, "--unit", kept, "--result", "pass", "--shipped", "f00 on main, live", "--note", "n").out).toBe(
+      `${kept}: pass, moved true (R3 untested -> untested; shipped a change)\n`,
     );
+    const failed = openUnit(c, "R3");
+    setupMark(c, "R3", "failed");
+    expect(unit(closeUnit(c, failed, "pass"), failed).moved).toBe(true);
+  });
+
+  test("moved is false with --shipped none and no row up, also after a mark on another row", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    setupMark(c, "R2", "failed");
+    const r = run("unit-close", c.path, "--unit", id, "--result", "pass", "--shipped", "none", "--note", "n");
+    expect(r.out).toBe(`${id}: pass, moved false (R3 untested -> untested; shipped none)\n`);
+    expect(run("gate", c.path).out).toBe("GO: stall 1\n");
   });
 
   test("unit-open needs --kind product|test; unit-close needs a non-empty --shipped", () => {
@@ -436,13 +444,6 @@ describe("units and gate", () => {
     }
   });
 
-  test("moved is false when a mark changed another row (a parallel exam)", () => {
-    const c = ruled();
-    const id = openUnit(c, "R3");
-    setupMark(c, "R2", "failed");
-    expect(unit(closeUnit(c, id, "pass"), id).moved).toBe(false);
-  });
-
   test("moved is false when the row went up but the unit failed", () => {
     const c = ruled();
     const id = openUnit(c, "R3");
@@ -450,14 +451,21 @@ describe("units and gate", () => {
     expect(unit(closeUnit(c, id, "fail"), id).moved).toBe(false);
   });
 
-  test("moved is false when the row went down or kept its status", () => {
+  test("a passed unit that shipped a change moves even when its row went down; with shipped none it does not", () => {
     const c = setup();
     const down = openUnit(c);
     setupMark(c, "R2", "failed");
-    expect(unit(closeUnit(c, down, "pass"), down).moved).toBe(false);
+    expect(unit(closeUnit(c, down, "pass"), down).moved).toBe(true);
     const same = openUnit(c);
     setupMark(c, "R2", "failed");
-    expect(unit(closeUnit(c, same, "pass"), same).moved).toBe(false);
+    expect(unit(closeUnit(c, same, "pass", "none"), same).moved).toBe(false);
+  });
+
+  test("gate: two passed units that shipped live changes with no row up do not fire RE-PLAN", () => {
+    const c = ruled();
+    closeUnit(c, openUnit(c), "pass");
+    closeUnit(c, openUnit(c), "pass");
+    expect(run("gate", c.path)).toMatchObject({ code: 0, out: "GO: stall 0\n" });
   });
 
   test("a unit from before rowStatusAtOpen: valid, and unit-close reads the row's marks before its start", () => {
@@ -699,19 +707,22 @@ describe("set-test and show", () => {
     });
   });
 
-  test("show prints the header, stall, rows by rank, and the final check", () => {
+  test("show prints the shipped count, the proven support line, stall, rows by rank, and the final check", () => {
     const c = setup((b) => {
       row(b, "R2").sentence = "x".repeat(200);
       return b;
     });
     const lines = run("show", c.path).out.split("\n");
-    expect(lines[0]).toBe("demo: 1 of 3 proven · 1 claimed · 0 failed · 1 untested");
-    expect(lines[1]).toBe("stall: 0 closed unit(s) in a row with no board move");
+    expect(lines[0]).toBe("demo: shipped live changes in the last 10 closed units: 1");
+    expect(lines[1]).toBe("support: 1 of 3 proven · 1 claimed · 0 failed · 1 untested");
+    expect(lines[2]).toBe("stall: 0 closed unit(s) in a row with no board move");
     const ids = lines.filter((l) => /^R\d/.test(l)).map((l) => l.split(" ")[0]);
     expect(ids).toEqual(["R2", "R3", "R1"]);
     expect(lines.join("\n")).toContain(`${"x".repeat(69)}…`);
     expect(lines.join("\n")).not.toContain("x".repeat(70));
-    expect(lines).toContain("final check: Jm reads one edition = not yet (read 2026-11-09T10:00:00-08:00)");
+    expect(lines).toContain("final check: 1 item(s), read only at Jm's final check (values not shown: F-030)");
+    expect(lines.join("\n")).not.toContain("not yet");
+    expect(lines.join("\n")).not.toContain("Jm reads one edition");
   });
 
   test("show --json", () => {

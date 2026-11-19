@@ -5,10 +5,10 @@
  *
  * One row per sentence of the end state. A row's status is the status of its last mark. Only an
  * examiner mark with a set id and evidence on disk can make a row `proven`. Units record builder
- * sessions; a unit is a `product` unit (it changes what Jm receives) or a `test` unit (at most one
- * per row). A unit moves the board when it passed, shipped a live change, and its own row went up
- * (untested and failed are one level). Two closed units in a row that did not move make `gate`
- * exit 5 (re-plan), and `unit-open` refuses while it does.
+ * sessions; a unit is a `product` unit (it changes what Jm receives); `test` (at most one per row)
+ * is still accepted for old boards. A unit moves the board when it passed and shipped a live change
+ * (`--shipped` is not "none"). Two closed units in a row that did not move make `gate` exit 5
+ * (re-plan), and `unit-open` refuses while it does.
  *
  * Every writing command reads the board, changes it, runs the same checks as `validate` on the
  * result, and writes it atomically (temp file in the same folder + rename) only when the result
@@ -89,8 +89,8 @@ export interface Unit {
   statusHashAtOpen: string;
   /** The unit's own row status at open. Null in units opened before 2026-11-09 23:45 PST: unit-close then reads the row's marks. */
   rowStatusAtOpen: Status | null;
-  /** True only when the unit closed "pass", shipped a change, and its own row went up (untested = failed < claimed < proven).
-   * Units closed before release 11 (2026-11-10) keep the moved of the old rule (untested < failed counted as up). */
+  /** True when the unit closed "pass" and shipped a live change. Units closed before 2026-11-18 keep the moved of
+   * the old rules (the row also had to go up; before release 11, untested < failed counted as up). */
   moved: boolean | null;
   note: string;
   /** "product" (changes what Jm receives) or "test" (only a test; at most one per row). Null in units opened before release 11. */
@@ -145,7 +145,7 @@ const USAGE = `usage: bun Board.ts <command> <board path> [flags]
              says RE-PLAN; refused when the contract file name "U<n>-…" or the builder "…-U<n>" names
              another id; refused for a second test unit on one row)
   unit-close --unit U --result pass|fail|too-large --shipped "<what went live: commit and where>"|none --note TEXT
-             (moved = pass, shipped not none, and the row went up; untested -> failed is not up)
+             (moved = pass and shipped not none)
 writing commands lock <board>.lock and copy the old file to <board>.bak before the write.
 env: BOARD_LOCK_TIMEOUT_MS  ms a writing command waits for a held lock (default 10000); a lock
      older than 60 s is stale and is taken.`;
@@ -448,7 +448,7 @@ export function statusHash(board: Board): string {
 
 /** Higher is nearer the end state. untested and failed are one level: a test that ran and failed changes nothing
  * that Jm receives (release 11, 2026-11-10; Jm F-011: "not just writing tests, making rows that change nothing"). */
-const STATUS_ORDER: Record<Status, number> = { untested: 0, failed: 0, claimed: 1, proven: 2 };
+export const STATUS_ORDER: Record<Status, number> = { untested: 0, failed: 0, claimed: 1, proven: 2 };
 
 /** A row's status at a time, from its marks (the last mark strictly before `iso`); "untested" with no such mark. */
 export function statusBefore(row: Row, iso: string): Status {
@@ -475,6 +475,15 @@ export function stallUnits(board: Board): Unit[] {
     run.push(u);
   }
   return run;
+}
+
+/** How many of the newest `n` closed units (by endedAt) shipped a live change (`shipped` set and not "none"). */
+export function shippedLive(board: Board, n: number): number {
+  return board.units
+    .filter((u) => u.result !== "open" && u.endedAt !== null)
+    .sort((a, b) => Date.parse(b.endedAt ?? "") - Date.parse(a.endedAt ?? ""))
+    .slice(0, n)
+    .filter((u) => u.shipped !== null && u.shipped !== SHIPPED_NONE).length;
 }
 
 /** The count of the most recent consecutive closed units (by endedAt) with moved === false. */
@@ -536,7 +545,8 @@ function showText(board: Board): string {
     return byId(a.id, b.id);
   });
   const lines = [
-    `${board.project}: ${c.proven} of ${c.total} proven · ${c.claimed} claimed · ${c.failed} failed · ${c.untested} untested`,
+    `${board.project}: shipped live changes in the last 10 closed units: ${shippedLive(board, 10)}`,
+    `support: ${c.proven} of ${c.total} proven · ${c.claimed} claimed · ${c.failed} failed · ${c.untested} untested`,
     `stall: ${k} closed unit(s) in a row with no board move`,
     "",
     table([
@@ -545,8 +555,13 @@ function showText(board: Board): string {
     ]),
     "",
   ];
-  if (board.finalCheck.length === 0) lines.push("final check: none");
-  for (const f of board.finalCheck) lines.push(`final check: ${f.what} = ${f.value} (read ${f.readAt})`);
+  // F-030 (Jm 2026-11-18): no use is measured or reported during the build, so `show` never prints the final-check
+  // values (they are use counts); they stay in the board file for Jm's final check only.
+  lines.push(
+    board.finalCheck.length === 0
+      ? "final check: none"
+      : `final check: ${board.finalCheck.length} item(s), read only at Jm's final check (values not shown: F-030)`,
+  );
   return lines.join("\n");
 }
 
@@ -963,12 +978,12 @@ function cmdUnitClose(path: string, a: Args): void {
     unit.result = result;
     unit.note = need(a, "note");
     unit.shipped = shipped;
-    // A move is this unit's own row going up, the unit passed, and it put a change live. A mark on another
-    // row (a parallel exam) or a row that went up without this unit's change (result fail) is not a move
-    // (edition U2, 2026-11-09); nor is a unit that shipped nothing (release 11, Jm F-011).
+    // A move is a passed unit that put a change live: what Jm receives changed (2026-11-18, SYNTHESIS-1 cause 2;
+    // a row mark is no longer needed). A failed unit is not a move (edition U2, 2026-11-09); nor is a unit that
+    // shipped nothing, even when its row went up (release 11, Jm F-011).
     const row = findRow(board, unit.row);
     const before = unit.rowStatusAtOpen ?? statusBefore(row, unit.startedAt);
-    unit.moved = result === "pass" && shipped !== SHIPPED_NONE && STATUS_ORDER[row.status] > STATUS_ORDER[before];
+    unit.moved = result === "pass" && shipped !== SHIPPED_NONE;
     return `${id}: ${result}, moved ${unit.moved} (${unit.row} ${before} -> ${row.status}; shipped ${shipped === SHIPPED_NONE ? "none" : "a change"})`;
   });
 }

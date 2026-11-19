@@ -25,4 +25,4 @@ The file that started you names the mode: a request in `<board folder>/requests/
 <the loop's own test commands, fault tool, replay tool, with one line each>
 
 ## When you finish
-Mark with `Board.ts mark … --role examiner --set <set id>`. Send the orchestrator one message with the mark, the numbers and each real hole. Stop every process that you started. Then end.
+Mark with `Board.ts mark … --role examiner --set <set id>`. Send the orchestrator one message with the mark and the numbers. Add each real hole as one line to `HOLES.md` in the board folder. Stop every process that you started. Then end.

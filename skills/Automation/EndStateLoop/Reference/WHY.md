@@ -1,0 +1,126 @@
+# EndStateLoop: why the rules are as they are
+
+The core files (`SKILL.md`, `Workflows/Orchestrate.md`, `Workflows/Exam.md`, `Workflows/Build.md`, `Workflows/Check.md`) say what to do. This file keeps the evidence, the dated incidents and the quotes that only explain a rule. Open it when you need the why of a rule; a session does not read it at its start. Each section names the core file and the step that its notes support. The text moved here from the core on 2026-11-18 (PLAN-25) with its words unchanged.
+
+## SKILL.md
+
+### Skill origin
+
+Jm, 2026-11-09 (verbatim): "go ahead and build it, starting with the scoreboards. make a skill for this type of workflow so we can use it again in the future."
+
+### Skill evidence
+
+Why (evidence, 2026-11-09):
+- Learn caught 16 of 16 of its own planted faults, and 6 of 10 from an independent writer.
+- One session that plans, builds and marks: 12 handoffs in 10 hours (Learn). A conductor with bounded chains: 10 of 10 plans in about 9 hours with 2 conductor sessions (deepening, 2026-11-08).
+
+### Skill board
+
+Why one fixed path outside every worktree: the orchestrator and the examiner both write the board from different worktrees.
+
+### Skill status page
+
+- Redesigned 2026-11-18 after Jm: "this UI is not intuitive ... it is crowded, messy, the lack of interactivity is strange". This is why a page change is first used in a browser for each of Jm's tasks at 1280 px and 390 px and judged against the UI bar, not only for errors.
+- The store rule (only the owner writes; a Contributor-level write is refused) was checked 2026-11-18.
+- Jm's feedback reaches `FEEDBACK.md` at the orchestrator's next wake: at most about 50 min later.
+
+### Skill rules: a move
+
+Release 11, 2026-11-10: Jm, "how do we fixe the endstateloopso these aren't just writing tests, making rows that change nothing?" (Learn F-011, edition F-008). This is why a unit that shipped nothing is not a move, even when its row went up, and why a unit that changes nothing that Jm receives is not a unit (Orchestrate step 3).
+
+### Skill rules: runlock
+
+- How the two locks work: the model lock is light on memory; it keeps the call rate. A run that gives both locks in one call waits holding nothing, then takes the model lock ahead of the other model waiters.
+- `RUNLOCK_FIRST=1` exists so that a proven change does not wait behind exam runs: a proven change goes before exam runs.
+- Why two locks: on 2026-11-10 one Learn lock held 1 model batch and 5 waiters while 68 % of memory was free.
+- Never nest: 2026-11-10: a nested call held the model lock idle behind 5 memory-lock tickets.
+- `RUNLOCK_FIRST=1` for the merge check of a proven unit: 2026-11-10 09:53: an examiner that ran back to back took the lock again at once, while 7 waiters, two of them proven merges, waited up to 75 min.
+
+### Skill rules: daemon restart
+
+2026-11-10 09:59: a daemon restart killed 11 sessions, the whole Learn loop. Resumes with flags started copies with new ids, and the copies' original jobs then lost their `EnterWorktree` worktrees and branches (learn-exam-15, -18, -19; a `git worktree add` tree survived).
+
+### Skill rules: wait in flight
+
+- learn-orch-2, 2026-11-10 (05:56): the daemon retired it while it sat idle at its prompt with nothing in flight; a subscription is not work in flight.
+- learn-exam-1, 2026-11-09 22:38: an idle notice came while the session waited on its own background run. This is why an idle notice is not a result.
+
+### Skill rules: usage stop
+
+The guard is checked before each slice, with no earlier line. This keeps the real stop close to Jm's limit, so no one stops early (2026-11-10: an early 87 % line held both loops idle below Jm's 90 %).
+
+### Skill rules: no permission prompts
+
+2026-11-10: learn-unit-U19 hung 55 min on a Bash with `rm`.
+
+## Workflows/Orchestrate.md
+
+### Orchestrate step 1
+
+An addendum once answered a real stall (Learn, 2026-11-10 07:08). This is why only a full re-plan gets the `Re-plan at:` line, and why the gate reads that line, not the file time.
+
+### Orchestrate step 2
+
+The list of things that are not waits (the weekly usage, a missing prerequisite, "later in this chain") comes from Jm's check, 2026-11-10, F-015 and F-013.
+
+### Orchestrate step 3
+
+- Step 0 must decide: form-doc 2026-11-18: U19 closed "fail by one case" of 19; U15 closed an audio clock with 91.8 % recall on a raw false-onset bar; Jm, F-010: "not taking the easy way out".
+- A unit that changes nothing that Jm receives is not a unit: Jm, 2026-11-10; Learn F-011, edition F-008 (quote under "Skill rules: a move").
+
+### Orchestrate step 4
+
+- "Workspace not trusted": the workdir `~/.claude` is safe because the contract tells the builder to read `AGENTS.md` first.
+- Re-arm the wait at each wake: learn-orch-2, 2026-11-10 05:56 (see "Skill rules: wait in flight").
+- The Codex builder steps moved to `Workflows/Codex.md` (PLAN-25); their notes are under "Workflows/Codex.md" below.
+
+### Orchestrate step 5
+
+The examiner starts from a request file, not a message: a file is evidence, and a message can arrive late or be held.
+
+### Orchestrate step 7
+
+2026-11-12: the edition held 103 worktrees, about 0.6 GB each, on a disk at 97 %.
+
+### Orchestrate status page
+
+- `inbox` writes each item in the project-standard format; the page is a fourth door for Jm's feedback (SKILL.md, "Integration").
+- `--answer` with an F-item from another door reads the item from `FEEDBACK.md`, and the page shows Jm's words with your answer.
+- The page shows each goal by its sentence from the board, so a post names the goal as Jm sees it.
+- The field limits exist because Jm reads the updates on a phone.
+
+`--progress`: the page shows the facts next to the verdict, so a verdict that the facts do not carry is seen at once.
+
+Plain words: Jm, 2026-11-18, on the first page: "it is crowded, messy". The first real updates were full of codes ("U66 (R22)", "exam-81", "E1 step 0").
+
+### Orchestrate report
+
+Row counts are not progress (Jm, 2026-11-10; Learn F-010, edition F-007: "are we making real progress towards the actual end state goals and not just some proxy metric?").
+
+## Workflows/Codex.md
+
+- Codex builder: Jm 2026-11-17, form-doc F-006: "have it work on formdoc".
+- Never `--add-dir` the board folder: Codex could write the board and the exam sets.
+- No `ps`, `pgrep` or signals in a Codex contract: form-doc pilot, 2026-11-17: U2 and U3 stopped on a contract's `pgrep`. The sandbox refuses them.
+- The tool tells Codex its time cap and that "too large" comes only near the cap or at a full context (U1 stopped after 1 minute with "too large" and built nothing).
+- Codex cannot commit because its sandbox keeps `.git` read-only.
+
+## Workflows/StatusPageChange.md
+
+See "Skill status page" above (the 2026-11-18 redesign after "this UI is not intuitive").
+
+## Workflows/Exam.md
+
+### Exam step 2
+
+The known-good and known-bad run before a new rule's first real run: rules that could never pass cost the loops days on 2026-11-17/18.
+
+## Workflows/Build.md
+
+### Build step 5
+
+Look at each slice as Jm sees it: Jm 2026-11-18, F-026/F-030/F-015: "are the agents actually looking at the apps as they build them?"
+
+### Build rules
+
+A first check decides only with enough items: Jm, 2026-11-18: "not taking the easy way out".
