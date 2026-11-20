@@ -64,7 +64,7 @@ Jm reads every loop on one private page: https://claude.ai/artifact/HYZQ2KKQxtwp
 `Status.ts` keeps the record in `<board folder>/status/` (`STATUS.jsonl`, `INBOX.jsonl`) and prints each ArtifactData call to make; make it exactly as printed. If an ArtifactData call fails, the loop goes on: the record on disk stays, and you make the same call at the next wake.
 
 **At each wake: Jm's feedback first.**
-1. `bun $S pull $BOARD` prints an ArtifactData `query` call; make it. (If ArtifactData refuses the `out_dir`, run `pull` and `inbox` with `--in /tmp/<project>-status-in`.)
+1. `bun $S pull $BOARD` prints an ArtifactData `query` call; make it. (`pull` picks a save folder inside your session folder, so the save needs no approval. Do not pass `--in` outside your session folder: a save to `/tmp` waited 8.5 h on a permission prompt, 2026-11-19.)
 2. `bun $S inbox $BOARD --by <your name>` copies each new item verbatim to `FEEDBACK.md` `## Open` as the next `F-NNN` and prints one ArtifactData `batch` call; make it (the page then shows "received by <you> · saved as F-NNN"). If the project keeps `FEEDBACK.md` outside its folder (the edition: its tracker worktree), add `--feedback-file <path>`.
 3. Act on each item in this wake, as on any `## Open` item: Jm's newer words win. Answer it in your next post with `--answer "F-NNN=<what you did, or your decision and why>"` (`post` warns while an item has no answer). `--answer` also takes an F-item that came by another door (a session, Telegram, the Scratch Pad); give `post` the same `--feedback-file` as `inbox`.
 

@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { type Board, localIso } from "./Board.ts";
-import { appendFeedbackItem, checkLinks, driverSection, findFeedbackItem, imageReminders, loadBoard, nextFeedbackId, parseImage, parseKeyDrivers, parseLink, type Receipt, type StatusUpdate, unitWords } from "./Status.ts";
+import { appendFeedbackItem, checkLinks, driverSection, findFeedbackItem, allowedFolders, defaultInDir, imageReminders, insideFolder, loadBoard, nextFeedbackId, parseImage, parseKeyDrivers, parseLink, type Receipt, type StatusUpdate, unitWords } from "./Status.ts";
 
 const TOOL = join(import.meta.dir, "Status.ts");
 const ROOT = mkdtempSync(join(tmpdir(), "endstate-status-test-"));
@@ -223,10 +223,81 @@ describe("inbox and answers", () => {
 
   test("pull prints the query for this project and its out_dir", () => {
     const { dir, path } = setup("pull");
-    const r = cli("pull", path);
+    mkdirSync(join(ROOT, "job-pull"), { recursive: true });
+    writeFileSync(join(ROOT, "job-pull", "state.json"), JSON.stringify({ cwd: dir }));
+    const p = Bun.spawnSync(["bun", TOOL, "pull", path], { stdout: "pipe", stderr: "pipe", env: { ...process.env, CLAUDE_JOB_DIR: join(ROOT, "job-pull") } });
+    const r = { code: p.exitCode ?? -1, out: p.stdout.toString() };
     expect(r.code).toBe(0);
     expect(r.out).toContain(`"where":[["project","==","demo"]]`);
     expect(r.out).toContain(`"out_dir":"${join(dir, "status", "in")}"`);
+  });
+});
+
+describe("pull saves inside the session folder (incident fix 2026-11-19: saves outside it waited on a prompt)", () => {
+  function fakeJob(jobDir: string, cwd: string): string {
+    mkdirSync(join(jobDir, "tmp"), { recursive: true });
+    writeFileSync(join(jobDir, "state.json"), JSON.stringify({ state: "working", cwd }));
+    return jobDir;
+  }
+  function cliEnv(extra: Record<string, string>, ...args: string[]): { code: number; out: string; err: string } {
+    const p = Bun.spawnSync(["bun", TOOL, ...args], { stdout: "pipe", stderr: "pipe", env: { ...process.env, ...extra } });
+    return { code: p.exitCode ?? -1, out: p.stdout.toString(), err: p.stderr.toString() };
+  }
+
+  test("insideFolder respells a path in the folder's case and refuses a sibling", () => {
+    expect(insideFolder("/Users/x/Projects/learn/data/in", "/Users/x/projects/learn")).toBe("/Users/x/projects/learn/data/in");
+    expect(insideFolder("/Users/x/projects/learn", "/Users/x/projects/learn")).toBe("/Users/x/projects/learn");
+    expect(insideFolder("/Users/x/projects/learner/in", "/Users/x/projects/learn")).toBeNull();
+    expect(insideFolder("/tmp/learn-status-in", "/Users/x/projects/learn")).toBeNull();
+  });
+
+  test("board inside the session folder: its status/in, spelled with the session folder's case, no warning", () => {
+    const { dir, path } = setup("pull-case");
+    const upper = join(dirname(dir), basename(dir).toUpperCase());
+    const r = cliEnv({ CLAUDE_JOB_DIR: fakeJob(join(ROOT, "job-case"), upper) }, "pull", path);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`"out_dir":"${join(upper, "status", "in")}"`);
+    expect(r.out).not.toContain("warning:");
+  });
+
+  test("board outside the session folder: the query has no out_dir; documents saved by Bash in the job's tmp reach inbox", () => {
+    const { dir, path } = setup("pull-inline");
+    const session = join(ROOT, "session-a");
+    const job = fakeJob(join(session, "jobs", "j1"), session);
+    const r = cliEnv({ CLAUDE_JOB_DIR: job }, "pull", path);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain('"out_dir"');
+    expect(r.out).toContain(`"where":[["project","==","demo"]]`);
+    const want = join(job, "tmp", "status-in", "demo", "feedback");
+    expect(r.out).toContain(`${want}/<doc id>.json`);
+    writeFileSync(join(dir, "project", "FEEDBACK.md"), "# Feedback: demo\n\n## Open\n");
+    mkdirSync(want, { recursive: true });
+    writeFileSync(join(want, "doc1.json"), JSON.stringify({ project: "demo", text: "Saved by Bash in the job folder.", at: "2026-11-19T16:00:00.000Z", to: "demo-orch-1" }));
+    const inbox = cliEnv({ CLAUDE_JOB_DIR: job }, "inbox", path, "--by", "demo-orch-1");
+    expect(inbox.code).toBe(0);
+    expect(inbox.out).toContain('← "Saved by Bash in the job folder."');
+  });
+
+  test("a board folder that Jm allowed (additionalDirectories) takes the save even outside the session folder", () => {
+    const home = join(ROOT, "home-allowed");
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    const boardDir = join(ROOT, "Allowed-Board");
+    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ permissions: { additionalDirectories: [boardDir, "/tmp"] } }));
+    const job = fakeJob(join(ROOT, "job-allowed"), join(ROOT, "session-c"));
+    const env = { HOME: home, CLAUDE_JOB_DIR: job };
+    expect(allowedFolders(env)).toEqual([boardDir, "/tmp"]);
+    expect(defaultInDir(join(boardDir, "SCOREBOARD.json"), "demo", env)).toEqual({ dir: join(boardDir, "status", "in"), inline: false });
+    expect(defaultInDir(join(ROOT, "other-board", "SCOREBOARD.json"), "demo", env)).toEqual({ dir: join(job, "tmp", "status-in", "demo"), inline: true });
+    expect(allowedFolders({ HOME: join(ROOT, "no-such-home") })).toEqual([]);
+  });
+
+  test("an --in outside the session folder warns and keeps that out_dir", () => {
+    const { path } = setup("pull-out");
+    const job = fakeJob(join(ROOT, "job-out"), join(ROOT, "session-b"));
+    const given = cliEnv({ CLAUDE_JOB_DIR: job }, "pull", path, "--in", "/tmp/demo-status-in");
+    expect(given.code).toBe(0);
+    expect(given.out).toContain("warning: --in /tmp/demo-status-in lies outside your session folder");
+    expect(given.out).toContain(`"out_dir":"/tmp/demo-status-in"`);
   });
 });
 

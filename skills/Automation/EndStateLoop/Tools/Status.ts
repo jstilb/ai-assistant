@@ -29,7 +29,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
-import { type Board, checkBoard, gateVerdict, localIso, nextRow, parseBoard, type Status as RowStatus, STATUS_ORDER, stall, statusBefore } from "./Board.ts";
+import { allowedFolders, type Board, checkBoard, gateVerdict, localIso, nextRow, parseBoard, type Status as RowStatus, STATUS_ORDER, stall, statusBefore } from "./Board.ts";
+
+/** Kept here for callers of Status.ts; the one definition is in Board.ts (unit-open uses it too). */
+export { allowedFolders };
 
 export const STATUS_PAGE_URL = process.env.ENDSTATE_STATUS_URL ?? "https://claude.ai/artifact/HYZQ2KKQxtwphAwRGs8kXb";
 const SCHEMA = "endstate-status/v1";
@@ -231,6 +234,52 @@ export function loadBoard(path: string): Board {
 
 export function statusDir(boardPath: string): string {
   return join(dirname(resolve(boardPath)), "status");
+}
+
+/** The session's own folder: `cwd` in `$CLAUDE_JOB_DIR/state.json` (a background job), else the process cwd. */
+export function sessionFolder(env: NodeJS.ProcessEnv = process.env): string {
+  const job = env.CLAUDE_JOB_DIR;
+  if (job) {
+    try {
+      const cwd = (JSON.parse(readFileSync(join(job, "state.json"), "utf8")) as { cwd?: unknown }).cwd;
+      if (typeof cwd === "string" && cwd !== "") return resolve(cwd);
+    } catch {
+      // no readable state.json: fall back to the process cwd
+    }
+  }
+  return process.cwd();
+}
+
+/**
+ * `path` spelled inside `folder` (same letters, same case as `folder`), or null when it lies outside.
+ * macOS folders ignore case, but a save or upload outside the session folder, as the tools compare the text, asks
+ * for permission: `/Users/[user]/Projects/learn/…` from a session in `/Users/[user]/projects/learn` did.
+ */
+export function insideFolder(path: string, folder: string): string | null {
+  const p = resolve(path);
+  const f = resolve(folder);
+  if (p === f) return f;
+  const prefix = f.endsWith("/") ? f : `${f}/`;
+  return p.toLowerCase().startsWith(prefix.toLowerCase()) ? prefix + p.slice(prefix.length) : null;
+}
+
+/**
+ * Where the feedback documents for `inbox` live, and whether `pull` may ask ArtifactData to save them there.
+ * Incident fix, endstate-setup-11, 2026-11-19: an `out_dir` outside the session folder waits on a permission prompt
+ * that only Jm answers (learn-orch-13 18:38-22:00 on the board path spelled `Projects`; learn-orch-14 23:46-08:21
+ * on `/tmp/learn-status-in`; endstate-setup-11 23:49-08:2x on `/tmp`), and an `out_dir` inside the `~/.claude` repo
+ * is refused for a background session that has not isolated (formdoc-orch-10, 08:5x). So: the board's `status/in`
+ * spelled inside the session folder or a folder that Jm allowed (`allowedFolders`) takes the save (`inline: false`); else `pull` prints the query with no
+ * `out_dir` (`inline: true`) and the session writes any returned documents itself with Bash into `dir` (the job's
+ * `tmp/status-in/<project>`, else the board's `status/in`).
+ */
+export function defaultInDir(boardPath: string, project: string, env: NodeJS.ProcessEnv = process.env): { dir: string; inline: boolean } {
+  const board = join(statusDir(boardPath), "in");
+  for (const folder of [sessionFolder(env), ...allowedFolders(env)]) {
+    const inside = insideFolder(board, folder);
+    if (inside !== null) return { dir: inside, inline: false };
+  }
+  return { dir: env.CLAUDE_JOB_DIR ? join(env.CLAUDE_JOB_DIR, "tmp", "status-in", project) : board, inline: true };
 }
 
 function readJsonl<T>(path: string): T[] {
@@ -724,14 +773,26 @@ export function imageReminders(update: StatusUpdate, boardPath: string, images: 
   return out;
 }
 
-function pullCall(board: Board, inDir: string): string {
-  return JSON.stringify({ action: "query", url: STATUS_PAGE_URL, collection: "feedback", query: { where: [["project", "==", board.project]] }, out_dir: inDir });
+function pullCall(board: Board, inDir: string | null): string {
+  const call: Record<string, unknown> = { action: "query", url: STATUS_PAGE_URL, collection: "feedback", query: { where: [["project", "==", board.project]] } };
+  if (inDir !== null) call.out_dir = inDir;
+  return JSON.stringify(call);
 }
 
 function cmdPull(path: string, a: Args): void {
   const board = loadBoard(path);
-  const inDir = resolve(a.one.get("in") ?? join(statusDir(path), "in"));
-  console.log(`Make this ArtifactData call; it saves ${board.project}'s feedback documents under ${join(inDir, "feedback")}. Then run: bun Status.ts inbox ${path} --by <you>${a.one.has("in") ? ` --in ${inDir}` : ""}`);
+  const given = a.one.get("in");
+  const folder = sessionFolder();
+  if (given !== undefined && insideFolder(resolve(given), folder) === null) console.log(`warning: --in ${resolve(given)} lies outside your session folder ${folder}: the save may wait on a permission prompt that only Jm answers. Leave out --in.`);
+  const auto = defaultInDir(path, board.project);
+  if (given === undefined && auto.inline) {
+    const feedback = join(auto.dir, "feedback");
+    console.log(`Make this ArtifactData call (no out_dir: a save outside your session folder ${folder} waits on a permission prompt or is refused). If it returns no documents, stop: nothing is new. Else write each document with Bash (a heredoc) as ${feedback}/<doc id>.json holding its fields (project, text, at, to, replyTo), then run: bun Status.ts inbox ${path} --by <you>`);
+    console.log(pullCall(board, null));
+    return;
+  }
+  const inDir = given === undefined ? auto.dir : resolve(given);
+  console.log(`Make this ArtifactData call; it saves ${board.project}'s feedback documents under ${join(inDir, "feedback")}. Then run: bun Status.ts inbox ${path} --by <you>${given !== undefined ? ` --in ${inDir}` : ""}`);
   console.log(pullCall(board, inDir));
 }
 
@@ -814,14 +875,18 @@ function readFeedbackDocs(dir: string): FeedbackDoc[] {
 function cmdInbox(path: string, a: Args): void {
   const board = loadBoard(path);
   const by = oneLine(need(a, "by"));
-  const inDir = resolve(a.one.get("in") ?? join(statusDir(path), "in"));
+  const given = a.one.get("in");
+  // No --in: read the save folder of `pull` and the board's status/in (documents may sit in either; same id once).
+  const inDirs = given !== undefined ? [resolve(given)] : [...new Set([resolve(defaultInDir(path, board.project).dir), resolve(join(statusDir(path), "in"))])];
   const file = resolve(a.one.get("feedback-file") ?? join(board.folder, "FEEDBACK.md"));
   const dir = statusDir(path);
   const refOf = new Map(readReceipts(path).map((r) => [r.feedback, r.ref]));
   const seen = new Set(refOf.keys());
-  const fresh =readFeedbackDocs(join(inDir, "feedback")).filter((d) => d.project === board.project && !seen.has(d.id));
+  const docs = new Map<string, FeedbackDoc>();
+  for (const d of inDirs.flatMap((x) => readFeedbackDocs(join(x, "feedback")))) if (!docs.has(d.id)) docs.set(d.id, d);
+  const fresh = [...docs.values()].filter((d) => d.project === board.project && !seen.has(d.id));
   if (fresh.length === 0) {
-    console.log(`no new feedback for ${board.project} in ${join(inDir, "feedback")}`);
+    console.log(`no new feedback for ${board.project} in ${inDirs.map((x) => join(x, "feedback")).join(" or ")}`);
     return;
   }
   let base: string;
