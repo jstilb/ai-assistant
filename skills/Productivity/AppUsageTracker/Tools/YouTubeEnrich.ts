@@ -198,16 +198,29 @@ export async function enrichYouTubeVideos(opts: YouTubeEnrichOpts): Promise<YouT
   return summary;
 }
 
-async function main(argv: string[]): Promise<void> {
+export interface YouTubeEnrichMainDeps {
+  /** Open the DB (default: Db.open() on the live events.db). */
+  openDb?: () => Promise<Db>;
+  /** Video fetcher (default: the live YouTube Data API). */
+  fetcher?: VideoFetcher;
+}
+
+/**
+ * CLI entry. Returns the process exit code: 1 when any fetch batch failed
+ * (summary.errors > 0), so nightly-pipeline.sh marks the step FAILED instead
+ * of OK on a night the API key is missing, the quota is spent, or the API is
+ * down. The summary is always printed first.
+ */
+export async function main(argv: string[], deps: YouTubeEnrichMainDeps = {}): Promise<number> {
   const json = argv.includes("--json");
   const force = argv.includes("--force");
   const limitFlag = argv.find((a) => a.startsWith("--limit="))?.slice("--limit=".length);
   const limit = limitFlag ? parseInt(limitFlag, 10) : undefined;
 
-  const db = await Db.open();
+  const db = await (deps.openDb ?? (() => Db.open()))();
   try {
     await db.initSchema();
-    const summary = await enrichYouTubeVideos({ db, force, limit });
+    const summary = await enrichYouTubeVideos({ db, force, limit, fetcher: deps.fetcher });
     if (json) {
       console.log(JSON.stringify(summary, null, 2));
     } else {
@@ -215,13 +228,26 @@ async function main(argv: string[]): Promise<void> {
         `YouTubeEnrich: requested=${summary.requested} enriched=${summary.enriched} not_found=${summary.not_found} errors=${summary.errors}`,
       );
     }
+    if (summary.errors > 0) {
+      console.error(
+        `YouTubeEnrich: ${summary.errors} fetch batch(es) failed — see the failure log; exiting 1`,
+      );
+      return 1;
+    }
+    return 0;
   } finally {
     db.close();
   }
 }
 
 if (import.meta.main)
-  main(process.argv.slice(2)).catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  main(process.argv.slice(2)).then(
+    (code) => {
+      // exitCode (not exit()) lets stdout drain before the process ends.
+      process.exitCode = code;
+    },
+    (err) => {
+      console.error(err);
+      process.exit(1);
+    },
+  );

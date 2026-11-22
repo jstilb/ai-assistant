@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { Db } from "../Tools/Db.ts";
 import {
   enrichYouTubeVideos,
+  main,
   parseIsoDuration,
   type EnrichedVideo,
   type VideoFetcher,
@@ -19,13 +20,18 @@ import {
 const TMP = mkdtempSync(join(tmpdir(), "aw-yt-enrich-"));
 const DB_PATH = join(TMP, "events.db");
 let db: Db;
+const PRIOR_KAYA_HOME = process.env.KAYA_HOME;
 
 beforeAll(async () => {
+  // Failed batches call logFailure → pin the failure log into the temp dir.
+  process.env.KAYA_HOME = TMP;
   db = await Db.open(DB_PATH);
   await db.initSchema();
 });
 
 afterAll(() => {
+  if (PRIOR_KAYA_HOME === undefined) delete process.env.KAYA_HOME;
+  else process.env.KAYA_HOME = PRIOR_KAYA_HOME;
   if (db) db.close();
   rmSync(TMP, { recursive: true, force: true });
 });
@@ -195,3 +201,77 @@ test("enrich: force=true re-fetches even already-enriched", async () => {
   });
   expect(calls.length).toBe(2);
 });
+
+// ---- main() exit code (K05: a failed fetch batch must fail the nightly step) ----
+
+/** Run main() against the shared test db without letting it close that db. */
+async function runMain(argv: string[], fetcher: VideoFetcher): Promise<number> {
+  const borrowed = Object.create(db) as Db;
+  borrowed.close = () => {};
+  return main(argv, { openDb: async () => borrowed, fetcher });
+}
+
+test("main: a throwing fetcher → exit 1 (summary still printed)", async () => {
+  await insertHistory("aaaaaaaaaaa", "Video A", "2026-05-17T10:00:00Z");
+  const throwing: VideoFetcher = async () => {
+    throw new Error("HTTP 403 on videos.list: quotaExceeded");
+  };
+  const code = await runMain(["--json"], throwing);
+  expect(code).toBe(1);
+});
+
+test("main: all batches succeed → exit 0", async () => {
+  await insertHistory("aaaaaaaaaaa", "Video A", "2026-05-17T10:00:00Z");
+  const code = await runMain([], makeStubFetcher({ aaaaaaaaaaa: { duration_sec: 60 } }));
+  expect(code).toBe(0);
+});
+
+test("main: nothing to enrich → exit 0", async () => {
+  const code = await runMain([], makeStubFetcher({}));
+  expect(code).toBe(0);
+});
+
+test("main: one bad batch among good ones → exit 1", async () => {
+  for (let i = 0; i < 60; i++) {
+    await insertHistory(`vid${String(i).padStart(8, "0")}`, `V${i}`, "2026-05-17T10:00:00Z");
+  }
+  let call = 0;
+  const flaky: VideoFetcher = async (ids) => {
+    call++;
+    if (call === 2) throw new Error("transient");
+    return makeStubFetcher(Object.fromEntries(ids.map((id) => [id, { duration_sec: 1 }])))(ids);
+  };
+  const code = await runMain([], flaky);
+  expect(code).toBe(1);
+  expect(call).toBe(2);
+});
+
+test("CLI process: real YouTubeEnrich.ts with no API key exits 1 and prints errors=1", async () => {
+  // Sandbox HOME (→ events.db) and KAYA_HOME (→ secrets.json, failure log):
+  // no secrets.json, so the live fetcher throws before any network call.
+  const sandbox = mkdtempSync(join(tmpdir(), "aw-yt-enrich-cli-"));
+  try {
+    const sdb = await Db.open(join(sandbox, ".claude/MEMORY/AppUsage/events.db"));
+    await sdb.initSchema();
+    await sdb.run(
+      `INSERT INTO youtube_history (ts, video_id, title, channel, channel_url, source_export)
+       VALUES ('2026-05-17T10:00:00Z'::TIMESTAMP, 'aaaaaaaaaaa', 'A', 'C', 'http://c', 'test')`,
+    );
+    sdb.close();
+    const proc = Bun.spawn([process.execPath, "run", join(import.meta.dir, "../Tools/YouTubeEnrich.ts")], {
+      env: { PATH: process.env.PATH, HOME: sandbox, KAYA_HOME: sandbox },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(stdout).toContain("errors=1");
+    expect(stderr).toContain("exiting 1");
+    expect(exitCode).toBe(1);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+}, 30_000);
