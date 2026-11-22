@@ -39,12 +39,35 @@
  *   other, and never absorbed into/by a non-api event. Its only dedup is exact
  *   `id` equality (mirrors Cache.ts's upsertEvents "incoming wins" semantics).
  *
+ * Extended to the pike13 and activenet tiers (2026-11-21, K07 dedup sample):
+ *   both are structured booking-system APIs that emit stableIds the same way.
+ *   A fresh fetch of sdparkandrec-activenet (682 distinct ids) lost 66 rows to
+ *   the fuzzy pass — distinct classes collapsed into siblings ("Civic Dance -
+ *   Int Jazz 3B WM" into "Int Jazz 3A WM", "Beg Tap 1A HT" into "Beg Jazz 1A
+ *   HT", the AM line-dancing class, a ceramics studio-time block), the same
+ *   Level-1/Level-2 Salsa failure. Cross-source merges those rows took part in
+ *   against the live cache: 0. cultureshock-sd (pike13): 96 rows, 0 merges
+ *   either way. So the exemption costs nothing and stops wrong merges. The
+ *   tier list is DEDUP_EXEMPT_TIERS; every caller builds its set through
+ *   dedupExemptSourceIds().
+ *
  * Exports:
  *   dedupeAndMerge(events: EventItem[], apiTierSourceIds?: ReadonlySet<string>): EventItem[]
  */
 
 import { jaccardSimilarity, stripDiacritics, tokenizeWords } from "../../../../lib/core/TextSimilarity.ts";
-import type { EventItem } from "./types.ts";
+import type { EventItem, EventSource, FetchTier } from "./types.ts";
+
+/**
+ * Fetch Tiers whose events skip fuzzy dedup (exact-id dedup only) — see the
+ * "api-tier exemption" note above. Structured APIs with stableIds only.
+ */
+export const DEDUP_EXEMPT_TIERS: ReadonlySet<FetchTier> = new Set<FetchTier>(["api", "pike13", "activenet"]);
+
+/** Ids of the sources whose fetchTier is in DEDUP_EXEMPT_TIERS — the set dedupeAndMerge takes. */
+export function dedupExemptSourceIds(sources: readonly Pick<EventSource, "id" | "fetchTier">[]): Set<string> {
+  return new Set(sources.filter((s) => DEDUP_EXEMPT_TIERS.has(s.fetchTier)).map((s) => s.id));
+}
 
 // ============================================================================
 // Jaccard similarity — replicates ContentDeduplicator approach, tuned for events
@@ -483,8 +506,8 @@ function mergeSpanCopies(events: EventItem[], featureOf: FeatureOf): EventItem[]
  *
  * @param events           - Any mix of EventItems (from one or more adapters).
  * @param apiTierSourceIds - Optional set of source ids whose `fetchTier` is
- *                           "api" (caller resolves this from sources.json —
- *                           see SourceManager.loadApiTierSourceIds). Any event
+ *                           in DEDUP_EXEMPT_TIERS (build it with
+ *                           dedupExemptSourceIds). Any event
  *                           carrying one of these source ids is exempt from
  *                           every fuzzy check below: it is never merged with
  *                           another api-tier event, and never absorbed

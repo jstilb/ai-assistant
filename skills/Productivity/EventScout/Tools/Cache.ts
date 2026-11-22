@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { EventItemSchema, EventCacheSchema, DEFAULT_CACHE_PATH } from "./types.ts";
 import type { EventItem, EventCache } from "./types.ts";
-import { calendarDay, dedupeAndMerge } from "./Dedup.ts";
+import { calendarDay, dedupeAndMerge, dedupExemptSourceIds } from "./Dedup.ts";
 import { loadSources } from "./SourceManager.ts";
 
 // ============================================================================
@@ -172,7 +172,7 @@ export function upsertEvents(incoming: EventItem[]): void {
  * which source or run a twin arrived in. Self-healing: a cache that already
  * holds accumulated twins is cleaned on the next ingest.
  *
- * api-tier sources (sources.json fetchTier === "api") are exempt from this
+ * Dedup-exempt sources (fetchTier in Dedup.ts's DEDUP_EXEMPT_TIERS) skip this
  * fuzzy re-dedup pass — see Dedup.ts's "api-tier exemption" note. Their
  * dedup already happened above via upsertEvents' exact-id upsert.
  *
@@ -185,7 +185,7 @@ export function upsertEvents(incoming: EventItem[]): void {
  */
 export function upsertEventsDeduped(incoming: EventItem[]): void {
   const sources = loadSources();
-  const apiTierSourceIds = new Set(sources.filter((s) => s.fetchTier === "api").map((s) => s.id));
+  const apiTierSourceIds = dedupExemptSourceIds(sources);
   // Complete feeds: the fetch returns every event in its date range (rule 2).
   const feedSourceIds = new Set(
     sources.filter((s) => s.fetchTier === "ics" || s.fetchTier === "wp-tribe" || s.fetchTier === "api").map((s) => s.id),

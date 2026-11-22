@@ -26,6 +26,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventSourceSchema, DEFAULT_SOURCE_STATE_PATH } from "./types.ts";
 import type { EventSource } from "./types.ts";
+import { dedupExemptSourceIds } from "./Dedup.ts";
 import { z } from "zod";
 
 // ============================================================================
@@ -89,20 +90,15 @@ export function loadSources(): EventSource[] {
 }
 
 /**
- * Returns the ids of all sources whose `fetchTier` is "api" — the signal
- * Dedup.ts's `apiTierSourceIds` param needs to exempt structured api-tier
- * events from fuzzy merge (2026-07-10 remedy, option (a)). Reads sources.json
- * fresh each call (same freshness contract as loadSources()); callers that
- * already have an EventSource[] in hand (e.g. Ingest.ts's ingestAll,
- * which may run against an injected test list rather than the on-disk file)
- * should filter that list directly instead of calling this.
+ * Returns the ids of all sources whose events skip fuzzy dedup (fetchTier in
+ * Dedup.ts's DEDUP_EXEMPT_TIERS: api, pike13, activenet) — the set
+ * dedupeAndMerge's `apiTierSourceIds` param takes. Reads sources.json fresh
+ * each call (same freshness contract as loadSources()); callers that already
+ * have an EventSource[] in hand (e.g. Ingest.ts's ingestAll, which may run
+ * against an injected test list) should call dedupExemptSourceIds on it.
  */
-export function loadApiTierSourceIds(): Set<string> {
-  return new Set(
-    loadSources()
-      .filter((s) => s.fetchTier === "api")
-      .map((s) => s.id),
-  );
+export function loadDedupExemptSourceIds(): Set<string> {
+  return dedupExemptSourceIds(loadSources());
 }
 
 export function saveSources(sources: EventSource[]): void {

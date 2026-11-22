@@ -20,8 +20,9 @@
  *   bun test skills/Productivity/EventScout/tests/spa.test.ts
  */
 
-import { test, expect } from "bun:test";
+import { test, expect, spyOn } from "bun:test";
 import {
+  extractJsonArray,
   normalizeExtracted,
   fetchSPAEventsWithPageFn,
   todayLaDateString,
@@ -745,4 +746,35 @@ test("15b: paginated source, page 2 fails → resolves with page 1's events, log
     cap.messages.some((m) => m.includes("p05 page 2 down") && m.includes("stopping pagination")),
     `15b: the page-2 failure is logged — got: ${cap.messages.join(" | ")}`,
   );
+});
+
+// ============================================================================
+// K07 (2026-11-21): a prose answer logs one line instead of vanishing
+// ============================================================================
+
+test("extractJsonArray: prose answer → [] and exactly one warn line naming the source", () => {
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const out = extractJsonArray("I could not find any events on this page; it looks like a login wall.", "test-source");
+    expect(out).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line).toContain("test-source");
+    expect(line).toContain("no JSON array");
+    expect(line).toContain("login wall");
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test("extractJsonArray: a real empty array and a fenced array log nothing", () => {
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    expect(extractJsonArray("[]", "s")).toEqual([]);
+    expect(extractJsonArray('Here you go:\n```json\n[{"title":"A"}]\n```', "s")).toEqual([{ title: "A" }]);
+    expect(extractJsonArray('Events: [{"title":"B"}] — done.', "s")).toEqual([{ title: "B" }]);
+    expect(warn).toHaveBeenCalledTimes(0);
+  } finally {
+    warn.mockRestore();
+  }
 });

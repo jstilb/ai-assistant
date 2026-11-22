@@ -13,7 +13,7 @@
  */
 
 import { test } from "bun:test";
-import { mapMatchToEvent, isSdfcHome } from "../Tools/adapters/SdfcAdapter.ts";
+import { mapMatchToEvent, isSdfcHome, selectUpcomingHome } from "../Tools/adapters/SdfcAdapter.ts";
 import type { EspnEvent } from "../Tools/adapters/SdfcAdapter.ts";
 
 function assert(condition: boolean, message: string): void {
@@ -111,4 +111,22 @@ test("status mapping: cancelled / postponed", () => {
   assert(postponed.status === "postponed", `postponed → ${postponed.status}`);
   const scheduled = mapMatchToEvent(HOME_MATCH);
   assert(scheduled.status === "scheduled", `scheduled → ${scheduled.status}`);
+});
+
+// ============================================================================
+// selectUpcomingHome — window + dedup over merged team-schedule feeds
+// ============================================================================
+
+test("selectUpcomingHome: keeps future home matches in window, drops past/away/far/dupes, sorts", () => {
+  const now = new Date("2026-07-20T00:00Z");
+  const past = { ...HOME_MATCH, id: "p1", date: "2026-07-01T02:00Z" };
+  const later = { ...HOME_MATCH, id: "h2", date: "2026-09-01T02:00Z" };
+  const tooFar = { ...HOME_MATCH, id: "far", date: "2027-03-01T02:00Z" }; // > 180 days
+  const picked = selectUpcomingHome(
+    [later, AWAY_MATCH, past, HOME_MATCH, tooFar, { ...HOME_MATCH }],
+    now,
+    180,
+  );
+  const ids = picked.map((e) => e.id);
+  assert(JSON.stringify(ids) === JSON.stringify(["761449", "h2"]), `ids ${JSON.stringify(ids)}`);
 });

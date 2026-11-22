@@ -91,7 +91,7 @@ mock.module(modulePath("Cache"), () => ({
   },
 }));
 mock.module(modulePath("SourceManager"), () => ({
-  loadSources: () => sources, loadApiTierSourceIds: () => new Set(["api"]),
+  loadSources: () => sources, loadDedupExemptSourceIds: () => new Set(["api"]),
   updateLastFetchedBatch: updates => { stateWrites++; assert.deepEqual(Object.keys(updates).sort(), ["empty","good"]); },
 }));
 mock.module(modulePath("Ingest"), () => ({ingestSource: async source => {

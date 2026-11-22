@@ -148,7 +148,7 @@ test("Test 3: empty input is a no-op", async () => {
 // ============================================================================
 // api-tier exemption (2026-07-10) — integration proof that persistRefreshedEvents
 // is wired to the REAL sources.json (no EVENTSCOUT_SOURCES_PATH override in this
-// file, so loadApiTierSourceIds() reads the actual Tools/sources.json, where
+// file, so loadDedupExemptSourceIds() reads the actual Tools/sources.json, where
 // "majestyinmotion-classes" is fetchTier "api"). Root cause: this function's own
 // dedupeAndMerge(events) call — BEFORE anything touches the cache — is where a
 // freshly-fetched batch of api-tier events (e.g. MemberLifeAdapter's 44 class

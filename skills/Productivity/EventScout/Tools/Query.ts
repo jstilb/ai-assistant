@@ -31,7 +31,7 @@ import { loadProfile } from "./InterestProfile.ts";
 import { selectRefreshSources } from "./RefreshIntent.ts";
 import { dedupeAndMerge } from "./Dedup.ts";
 import { enrichWithGeo } from "./Geocoder.ts";
-import { loadSources, loadApiTierSourceIds, updateLastFetchedBatch } from "./SourceManager.ts";
+import { loadSources, loadDedupExemptSourceIds, updateLastFetchedBatch } from "./SourceManager.ts";
 import { runWithConcurrency } from "./lib/concurrency.ts";
 import type { QueryContext, QueryCoverage, EventItem, InterestProfile } from "./types.ts";
 import type { RankedEvent } from "./Ranker.ts";
@@ -63,7 +63,7 @@ export interface HybridQueryResult {
  * upsertEvents merges by id, so passing only the refreshed subset is safe —
  * other sources already in the cache are preserved.
  *
- * api-tier sources (sources.json fetchTier === "api") are exempt from the
+ * Dedup-exempt sources (fetchTier api / pike13 / activenet) skip the
  * fuzzy dedup pass below — see Dedup.ts's "api-tier exemption" note. This is
  * the FIRST dedup pass a live refresh batch hits (before it ever reaches the
  * cache), so it is the primary guard against api-tier events from the same
@@ -75,7 +75,7 @@ export interface HybridQueryResult {
  */
 export async function persistRefreshedEvents(events: EventItem[]): Promise<number> {
   if (events.length === 0) return 0;
-  const merged = dedupeAndMerge(events, loadApiTierSourceIds());
+  const merged = dedupeAndMerge(events, loadDedupExemptSourceIds());
   const geoEnriched = await enrichWithGeo(merged);
   // upsertEventsDeduped collapses twins across the WHOLE cache, not just this
   // batch — so cross-source duplicates already in the cache (e.g. the same show
@@ -199,7 +199,7 @@ export async function queryHybrid(
       console.log(`[hybrid] Persisted ${persisted} refreshed event(s) to cache`);
     } catch (err) {
       persistenceFailed = true;
-      const apiTierSourceIds = loadApiTierSourceIds();
+      const apiTierSourceIds = loadDedupExemptSourceIds();
       const byId = new Map(allEvents.map(event => [event.id, event]));
       for (const event of dedupeAndMerge(refreshedEvents, apiTierSourceIds)) {
         byId.set(event.id, event);

@@ -275,9 +275,13 @@ export function normalizeExtracted(raw: unknown[], source: EventSource): EventIt
  *   2. Strip ```json ... ``` code fences
  *   3. Greedy array extraction: find first '[' and matching ']'
  *
- * Returns an empty array if no valid JSON array is found.
+ * Returns an empty array if no valid JSON array is found, and logs one warn
+ * line saying so (with the start of the answer) — a prose answer used to
+ * vanish as "0 events" with no trace. A real `[]` answer logs nothing.
+ *
+ * @param label - who asked (source id), for the log line.
  */
-function extractJsonArray(text: string): unknown[] {
+export function extractJsonArray(text: string, label = "LLM"): unknown[] {
   const trimmed = text.trim();
 
   // Strategy 1: direct parse
@@ -314,6 +318,8 @@ function extractJsonArray(text: string): unknown[] {
     }
   }
 
+  const preview = trimmed.replace(/\s+/g, " ").slice(0, 120);
+  console.warn(`[SPAAdapter] ${label}: LLM answer had no JSON array — 0 events from this window. Answer began: "${preview}"`);
   return [];
 }
 
@@ -680,7 +686,7 @@ async function extractChunkViaLLM(chunk: string, source: EventSource): Promise<E
     );
   }
 
-  const rawArray = extractJsonArray(inferenceResult.output);
+  const rawArray = extractJsonArray(inferenceResult.output, source.id);
   return normalizeExtracted(rawArray, source);
 }
 

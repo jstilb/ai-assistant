@@ -249,7 +249,7 @@ test("5. upsertEventsDeduped: distinct events are preserved (no over-merge)", ()
 // ============================================================================
 // api-tier exemption (2026-07-10) — integration proof against the REAL
 // sources.json (this file sets no EVENTSCOUT_SOURCES_PATH override, so
-// upsertEventsDeduped's loadApiTierSourceIds() reads the actual
+// upsertEventsDeduped's loadDedupExemptSourceIds() reads the actual
 // Tools/sources.json, where "padres-mlb" is fetchTier "api"). Two same-
 // day/venue api-tier events with short titles that WOULD fuzzy-merge
 // (tokenize drops "1"/"2") must survive the whole-cache re-dedup pass.

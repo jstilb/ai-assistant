@@ -14,7 +14,7 @@
  */
 
 import { test } from "bun:test";
-import { dedupeAndMerge } from "../Tools/Dedup.ts";
+import { dedupeAndMerge, dedupExemptSourceIds, DEDUP_EXEMPT_TIERS } from "../Tools/Dedup.ts";
 import type { EventItem } from "../Tools/types.ts";
 import { defined } from "../../../../lib/test/defined.ts";
 
@@ -684,3 +684,43 @@ test("guards: same title at two real venues, and cross-source date-only rows, st
   assert(buffets.length === 2, `Cross-source date-only rows without a shared performer must stay 2, got ${buffets.length}`);
 });
 
+
+// ============================================================================
+// K07 (2026-11-21): pike13 + activenet join the exemption (dedup sample: 66
+// distinct ActiveNet classes fuzzy-collapsed, 0 cross-source merges lost)
+// ============================================================================
+
+test("(exempt-1) dedupExemptSourceIds covers api, pike13, activenet — not scraped tiers", () => {
+  const ids = dedupExemptSourceIds([
+    { id: "a", fetchTier: "api" },
+    { id: "p", fetchTier: "pike13" },
+    { id: "n", fetchTier: "activenet" },
+    { id: "s", fetchTier: "spa" },
+    { id: "r", fetchTier: "rss" },
+  ]);
+  if ([...ids].sort().join(",") !== "a,n,p") throw new Error(`got ${[...ids].join(",")}`);
+  if (DEDUP_EXEMPT_TIERS.size !== 3) throw new Error("tier list changed — update the K07 note in Dedup.ts");
+});
+
+test("(exempt-2) two distinct ActiveNet classes at the same slot are NOT merged", () => {
+  const mk = (id: string, title: string): EventItem => ({
+    id,
+    title,
+    startDatetime: "2027-01-09T11:15:00-08:00",
+    allDay: false,
+    category: "community",
+    tags: [],
+    isFree: false,
+    sourceUrl: `https://example.com/${id}`,
+    venue: "Civic Dance Arts Westminster",
+    sources: [{ sourceId: "sdparkandrec-activenet", url: `https://example.com/${id}` }],
+    fetchedAt: "2026-11-21T00:00:00Z",
+    status: "scheduled",
+  });
+  const events = [mk("x1", "Civic Dance - Int Jazz 3A WM"), mk("x2", "Civic Dance - Int Jazz 3B WM")];
+  // Sanity: the fuzzy pass DOES collapse them (that was the bug).
+  if (dedupeAndMerge(events).length !== 1) throw new Error("fixture no longer fuzzy-merges; pick a closer pair");
+  const exempt = dedupExemptSourceIds([{ id: "sdparkandrec-activenet", fetchTier: "activenet" }]);
+  const out = dedupeAndMerge(events, exempt);
+  if (out.length !== 2) throw new Error(`expected 2 distinct classes, got ${out.length}`);
+});

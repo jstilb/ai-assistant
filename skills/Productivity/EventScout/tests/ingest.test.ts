@@ -36,11 +36,18 @@
  *   bun test skills/Productivity/EventScout/tests/ingest.test.ts
  */
 
-import { test, describe, beforeEach, afterEach } from "bun:test";
+import { test, describe, beforeEach, afterEach, spyOn } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { adapterFor, ingestAll, ingestSource } from "../Tools/Ingest.ts";
+import {
+  adapterFor,
+  ingestAll,
+  ingestSource,
+  runIngestScript,
+  INGEST_EXIT_OK,
+  INGEST_EXIT_SOURCES_FAILED,
+} from "../Tools/Ingest.ts";
 import { EventSourceSchema } from "../Tools/types.ts";
 import type { AdapterResolver, EventSource, EventItem, SourceAdapter } from "../Tools/types.ts";
 import { fetchRSSEvents } from "../Tools/adapters/RSSAdapter.ts";
@@ -673,5 +680,58 @@ describe("Source Adapter seam", () => {
       // ICS retries 3 times with real sleeps (~750 + 1500 ms) before it throws.
       15_000,
     );
+  });
+});
+
+// ============================================================================
+// K07 (2026-11-21): the no-args script exits nonzero when a source failed
+// ============================================================================
+
+describe("runIngestScript exit code (bun Tools/Ingest.ts, no args)", () => {
+  // Quiet the report; restore after each test.
+  let logSpy: ReturnType<typeof spyOn>;
+  let errSpy: ReturnType<typeof spyOn>;
+  beforeEach(() => {
+    logSpy = spyOn(console, "log").mockImplementation(() => {});
+    errSpy = spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  test("one failing source → nonzero exit (2), the healthy source's events still counted", async () => {
+    const sources = [makeSource("good"), makeSource("bad")];
+    const adapters: Record<string, () => Promise<EventItem[]>> = {
+      good: async () => [makeEvent("good", 1)],
+      bad: async () => {
+        throw new Error("HTTP 500");
+      },
+    };
+    const code = await runIngestScript(sources, { adapterFor: fakeResolver(adapters), skipCacheWrite: true });
+    assertEq(code, INGEST_EXIT_SOURCES_FAILED, "exit code is SOURCES_FAILED");
+    assert(code !== 0, "exit code is nonzero");
+    const stderr = errSpy.mock.calls.map((c: unknown[]) => c.join(" ")).join("\n");
+    assert(stderr.includes("bad: HTTP 500"), `stderr names the failed source and reason (got: ${stderr})`);
+    const stdout = logSpy.mock.calls.map((c: unknown[]) => c.join(" ")).join("\n");
+    assert(stdout.includes("Written to cache: 1"), "the good source's event is still written");
+  });
+
+  test("all sources ok → exit 0", async () => {
+    const sources = [makeSource("good")];
+    const code = await runIngestScript(sources, {
+      adapterFor: fakeResolver({ good: async () => [makeEvent("good", 1)] }),
+      skipCacheWrite: true,
+    });
+    assertEq(code, INGEST_EXIT_OK, "exit code is OK");
+  });
+
+  test("a source that returns 0 events is not a failure → exit 0", async () => {
+    const sources = [makeSource("empty-source")];
+    const code = await runIngestScript(sources, {
+      adapterFor: fakeResolver({ "empty-source": async () => [] }),
+      skipCacheWrite: true,
+    });
+    assertEq(code, INGEST_EXIT_OK, "exit code is OK");
   });
 });

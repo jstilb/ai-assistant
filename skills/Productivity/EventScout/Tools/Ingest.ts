@@ -17,6 +17,10 @@
  *       Fetch one source: resolve → call → identity check → horizon.
  *       No cache write.
  *
+ *   runIngestScript(sources?, opts?): Promise<number>
+ *       The no-args script mode as a function: ingestAll, print the report,
+ *       return the exit code (INGEST_EXIT_*). Tests call it directly.
+ *
  *   ingestAll(sources?, opts?): Promise<IngestResult>
  *       Ingest all enabled sources, dedupe+merge, upsert to cache.
  *       Best-effort: each source is wrapped in a per-source timeout; one
@@ -28,6 +32,10 @@
  * Script mode:
  *   bun Tools/Ingest.ts               — ingest all sources from sources.json,
  *                                       print per-source counts + merge count.
+ *                                       Exit 0 = every source ok; exit 2 =
+ *                                       ran and wrote the cache, but ≥1
+ *                                       source FAILED (listed at the end);
+ *                                       exit 1 = the run itself crashed.
  *   bun Tools/Ingest.ts --source <id> — probe one source: one ingestSource,
  *                                       print count + 3 samples, no cache
  *                                       write, exit 1 on throw.
@@ -56,7 +64,7 @@ import { fetchNineteenHzEvents } from "./adapters/NineteenHzAdapter.ts";
 import { fetchSitemapLlmEvents } from "./adapters/SitemapLlmAdapter.ts";
 import { fetchEdmtrainEvents, SOURCE_ID as EDMTRAIN_ID } from "./adapters/EdmtrainAdapter.ts";
 import { fetchRaCoEvents, SOURCE_ID as RACO_ID } from "./adapters/RaCoAdapter.ts";
-import { dedupeAndMerge } from "./Dedup.ts";
+import { dedupeAndMerge, dedupExemptSourceIds } from "./Dedup.ts";
 import { enrichWithGeo } from "./Geocoder.ts";
 import { upsertEventsDeduped } from "./Cache.ts";
 import { withinHorizon, horizonDays } from "./Horizon.ts";
@@ -306,11 +314,11 @@ export async function ingestAll(sources?: EventSource[], opts: IngestOpts = {}):
     }
   });
 
-  // api-tier sources (fetchTier === "api") are exempt from fuzzy dedup — see
-  // Dedup.ts's "api-tier exemption" note. Computed from `allSources` (the
-  // actual list this run is ingesting — respects test injection) rather than
-  // re-reading sources.json, so test-supplied sources are honored exactly.
-  const apiTierSourceIds = new Set(allSources.filter((s) => s.fetchTier === "api").map((s) => s.id));
+  // Structured-API sources (fetchTier api / pike13 / activenet) are exempt
+  // from fuzzy dedup — see Dedup.ts's "api-tier exemption" note. Computed from
+  // `allSources` (the actual list this run is ingesting — respects test
+  // injection) rather than re-reading sources.json.
+  const apiTierSourceIds = dedupExemptSourceIds(allSources);
 
   const beforeDedup = allEvents.length;
   const merged = dedupeAndMerge(allEvents, apiTierSourceIds);
@@ -341,6 +349,46 @@ export async function ingestAll(sources?: EventSource[], opts: IngestOpts = {}):
   }
 
   return result;
+}
+
+/** Exit codes for `bun Tools/Ingest.ts` (no args). */
+export const INGEST_EXIT_OK = 0;
+export const INGEST_EXIT_CRASH = 1;
+/** The run finished and wrote the cache, but at least one source failed. */
+export const INGEST_EXIT_SOURCES_FAILED = 2;
+
+/**
+ * The no-args script mode: ingest, print the per-source report, and return
+ * the process exit code. A failed source still lets the run finish and write
+ * the cache (best-effort), but the exit code says so — before 2026-11-21 this
+ * exited 0 with the failed sources shown only as a count of 0.
+ */
+export async function runIngestScript(sources?: EventSource[], opts: IngestOpts = {}): Promise<number> {
+  console.log("\nEventScout — Ingest Pipeline\n");
+  try {
+    const result = await ingestAll(sources, opts);
+    const failures = Object.entries(result.failureReasons ?? {});
+
+    console.log("\n--- Results ---");
+    console.log(`Per-source counts:`);
+    for (const [id, count] of Object.entries(result.perSource)) {
+      console.log(`  ${id}: ${result.failureReasons?.[id] ? "FAILED" : count}`);
+    }
+    console.log(`\nMerges (events collapsed by dedup): ${result.merges}`);
+    console.log(`Written to cache: ${result.written}`);
+
+    if (failures.length > 0) {
+      console.error(`\n${failures.length} source(s) FAILED (cache was still written for the rest):`);
+      for (const [id, reason] of failures) console.error(`  ${id}: ${reason}`);
+      console.error(`\nExit ${INGEST_EXIT_SOURCES_FAILED}: partial run.\n`);
+      return INGEST_EXIT_SOURCES_FAILED;
+    }
+    console.log("\nDone.\n");
+    return INGEST_EXIT_OK;
+  } catch (err) {
+    console.error(`\nFATAL: ${err instanceof Error ? err.message : String(err)}`);
+    return INGEST_EXIT_CRASH;
+  }
 }
 
 // ============================================================================
@@ -380,22 +428,5 @@ if (IS_SCRIPT && sourceFlag !== -1) {
     process.exit(1);
   }
 } else if (IS_SCRIPT) {
-  console.log("\nEventScout — Ingest Pipeline (Slice 3)\n");
-
-  try {
-    const result = await ingestAll();
-
-    console.log("\n--- Results ---");
-    console.log(`Per-source counts:`);
-    for (const [id, count] of Object.entries(result.perSource)) {
-      console.log(`  ${id}: ${count}`);
-    }
-    console.log(`\nMerges (events collapsed by dedup): ${result.merges}`);
-    console.log(`Written to cache: ${result.written}`);
-    console.log("\nDone.\n");
-    process.exit(0);
-  } catch (err) {
-    console.error(`\nFATAL: ${(err as Error).message}`);
-    process.exit(1);
-  }
+  process.exit(await runIngestScript());
 }

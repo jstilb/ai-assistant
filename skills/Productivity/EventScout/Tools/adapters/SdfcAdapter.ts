@@ -5,17 +5,24 @@
  * tier-1 returned 154KB of boilerplate (above the thin-content gate, so the
  * Playwright escalation never fired) and the LLM then hallucinated unrelated
  * friendlies from promo text — missing the entire MLS home schedule. This
- * adapter pulls structured fixtures from ESPN's public scoreboard API, which
+ * adapter pulls structured fixtures from ESPN's public team-schedule API, which
  * carries exact dates, venue, and a home/away flag, so we can return ONLY home
  * matches (away games aren't San Diego events).
  *
  * Mirrors PadresAdapter: a pure mapper (unit-testable, no network) + a fetch
  * runner. fetchSdfcEvents() returns EventItem[]; it does NOT write to cache.
  *
- * API:
- *   https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard?dates=YYYYMMDD-YYYYMMDD&limit=1000
- *   San Diego FC ESPN team id = 22529. Returns league-wide events for the
- *   window; we filter to those where SDFC is the home team.
+ * API (San Diego FC ESPN team id = 22529):
+ *   https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/teams/22529/schedule?fixture=true
+ *     → upcoming fixtures (next season once published)
+ *   https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/teams/22529/schedule
+ *     → current season results + scheduled matches (playoffs)
+ *   We merge both, keep future SDFC HOME matches inside WINDOW_DAYS.
+ *
+ *   Why not the league scoreboard: since ~2026-11 ESPN answers ANY
+ *   `scoreboard?dates=A-B` range (even 2 days) with 400 "Failed to get events
+ *   endpoint." — only single-day queries still work, which would cost 180
+ *   requests per prefetch. The team schedule is one request per feed.
  */
 
 import type { EventItem, EventSource } from "../types.ts";
@@ -23,7 +30,7 @@ import { utcIsoToLaIso } from "../lib/tz.ts";
 import { stableId } from "./AdapterUtil.ts";
 
 // ============================================================================
-// ESPN scoreboard types (minimal — only fields we use)
+// ESPN schedule event types (minimal — only fields we use)
 // ============================================================================
 
 interface EspnCompetitor {
@@ -45,7 +52,7 @@ export interface EspnEvent {
   status?: { type?: { name?: string } };
 }
 
-interface EspnScoreboardResponse {
+interface EspnScheduleResponse {
   events?: EspnEvent[];
 }
 
@@ -55,7 +62,7 @@ interface EspnScoreboardResponse {
 
 const SDFC_TEAM_ID = "22529";
 export const SOURCE_ID = "sandiego-fc";
-const SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard";
+const TEAM_SCHEDULE_URL = `https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/teams/${SDFC_TEAM_ID}/schedule`;
 const SCHEDULE_PAGE_URL = "https://www.sandiegofc.com/schedule/";
 /** How far ahead to look. MLS plays into Nov; home games can be 50+ days out
  *  (the Padres' 45-day window would miss the next SDFC home match), so widen. */
@@ -113,36 +120,58 @@ export function mapMatchToEvent(ev: EspnEvent): EventItem {
 }
 
 // ============================================================================
+// Window selection — pure, unit-testable
+// ============================================================================
+
+/**
+ * From a merged list of team-schedule events, keep SDFC HOME matches that kick
+ * off between `now` and `now + windowDays`, de-duplicated by ESPN event id and
+ * sorted by kickoff. Past results (the non-fixture feed) fall out here.
+ */
+export function selectUpcomingHome(
+  events: EspnEvent[],
+  now: Date,
+  windowDays: number = WINDOW_DAYS,
+): EspnEvent[] {
+  const startMs = now.getTime();
+  const endMs = startMs + windowDays * 24 * 60 * 60 * 1000;
+  const seen = new Set<string>();
+  const out: EspnEvent[] = [];
+  for (const ev of events) {
+    if (!ev?.id || seen.has(ev.id)) continue;
+    const t = Date.parse(ev.date);
+    if (!Number.isFinite(t) || t < startMs || t > endMs) continue;
+    if (!isSdfcHome(ev)) continue;
+    seen.add(ev.id);
+    out.push(ev);
+  }
+  return out.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
+// ============================================================================
 // Runner — fetches from ESPN and returns home-game EventItem[]
 // ============================================================================
 
-/** ESPN's `dates` param wants compact YYYYMMDD (no dashes). */
-function compactDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
-}
-
-export async function fetchSdfcEvents(_source: EventSource): Promise<EventItem[]> {
-  const today = new Date();
-  const end = new Date(today);
-  end.setDate(today.getDate() + WINDOW_DAYS);
-
-  const start = compactDate(today);
-  const endStr = compactDate(end);
-
-  const url = `${SCOREBOARD_URL}?dates=${start}-${endStr}&limit=1000`;
+async function fetchSchedule(url: string): Promise<EspnEvent[]> {
   const res = await fetch(url, {
     // ESPN's API started 403ing Mozilla-prefixed UAs from non-browser clients
-    // (2026-08-20); plain curl-style UAs pass. Verified: this exact endpoint
-    // returns 200 with curl/8.7.1 and 403 with the old custom Mozilla string.
+    // (2026-08-20); plain curl-style UAs pass.
     headers: { "User-Agent": "curl/8.7.1" },
   });
   if (!res.ok) {
-    throw new Error(`ESPN scoreboard request failed: ${res.status} ${res.statusText} — ${url}`);
+    throw new Error(`ESPN team schedule request failed: ${res.status} ${res.statusText} — ${url}`);
   }
+  const data = (await res.json()) as EspnScheduleResponse;
+  return data.events ?? [];
+}
 
-  const data = (await res.json()) as EspnScoreboardResponse;
-  return (data.events ?? []).filter(isSdfcHome).map(mapMatchToEvent);
+export async function fetchSdfcEvents(_source: EventSource): Promise<EventItem[]> {
+  // Both feeds: `fixture=true` is the upcoming schedule (incl. next season once
+  // published); the plain feed is the current season incl. any playoff match
+  // that is already scheduled but not yet in the fixture list.
+  const [fixtures, season] = await Promise.all([
+    fetchSchedule(`${TEAM_SCHEDULE_URL}?fixture=true`),
+    fetchSchedule(TEAM_SCHEDULE_URL),
+  ]);
+  return selectUpcomingHome([...fixtures, ...season], new Date()).map(mapMatchToEvent);
 }

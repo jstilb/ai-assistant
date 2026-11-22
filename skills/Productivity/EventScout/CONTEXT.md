@@ -9,7 +9,7 @@ One entry in `Tools/sources.json`: an id, a URL and a Fetch Tier.
 _Avoid_: feed, site, provider
 
 **Fetch Tier**:
-How an Event Source is fetched (`rss`, `ics`, `spa`, `html-llm`, `sitemap-llm`, …); `api` means a bespoke adapter for one source, exempt from fuzzy dedup.
+How an Event Source is fetched (`rss`, `ics`, `spa`, `html-llm`, `sitemap-llm`, …); `api` means a bespoke adapter for one source. `api`, `pike13` and `activenet` (structured booking APIs) are exempt from fuzzy dedup — `DEDUP_EXEMPT_TIERS` in `Tools/Dedup.ts`.
 _Avoid_: source type, fetch mode
 
 **Source Adapter**:
