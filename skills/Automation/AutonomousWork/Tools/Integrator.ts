@@ -7,8 +7,6 @@ import { existsSync, readFileSync, statSync, mkdirSync } from "node:fs";
 import { FileLock } from "../../../../lib/core/FileLock.ts";
 import { join } from "node:path";
 import { getKayaHome, runtimeDir } from "../../../../lib/core/KayaHome.ts";
-import { getOrCreateWorktree, gcWorktreeForBranch } from "../../../../lib/core/WorktreeManager.ts";
-import { spawnAgentSync, type AgentSpawnDeps } from "../../../../lib/core/AgentSpawner.ts";
 import {
   revParseRef,
   changedFilesBetween,
@@ -33,22 +31,6 @@ interface SingleMergeResult {
   merged: boolean;
   prUrl?: string;
   reason?: string;
-}
-
-export interface ReconcileOutcome {
-  branch: string;
-  status: "merged" | "failed" | "skipped";
-  reason?: string;
-  conflictResolved?: boolean;
-  verificationPassed?: boolean;
-  gcCandidate?: boolean;
-}
-
-export interface ReconcileResult {
-  merged: string[];
-  failed: string[];
-  skipped: string[];
-  outcomes: ReconcileOutcome[];
 }
 
 // Re-export for callers that imported from MergeOrchestrator
@@ -444,512 +426,6 @@ export class Integrator {
   }
 
   // --------------------------------------------------------------------------
-  // New: reconcile()
-  // --------------------------------------------------------------------------
-
-  /**
-   * Serialized reconcile: discovers branches that diverged from main (feature/work-*,
-   * worktree-*, session/*, feat/*), merges them into a dedicated integration worktree
-   * with optional conflict resolution via headless claude -p agent, then fast-forwards
-   * main. Only one reconcile runs at a time (global FileLock).
-   */
-  async reconcile(
-    opts: { branch?: string; spawnDeps?: AgentSpawnDeps } = {},
-  ): Promise<ReconcileResult> {
-    const repoRoot = getKayaHome();
-    const locksDir = join(runtimeDir(), "locks");
-    mkdirSync(locksDir, { recursive: true });
-
-    const lock = new FileLock(join(locksDir, "integrator.lock"), 30_000, "Integrator lock");
-    await lock.acquire();
-
-    const result: ReconcileResult = { merged: [], failed: [], skipped: [], outcomes: [] };
-
-    try {
-      // --- Candidate discovery ---
-      let candidates: string[];
-
-      if (opts.branch) {
-        candidates = [opts.branch];
-      } else {
-        const branchListOutput = (() => {
-          try {
-            return execFileSync("git", ["branch", "--format=%(refname:short)"], {
-              cwd: repoRoot,
-              encoding: "utf-8",
-              stdio: "pipe",
-              timeout: 10_000,
-            }).trim();
-          } catch {
-            return "";
-          }
-        })();
-
-        const allBranches = branchListOutput
-          .split("\n")
-          .map((b) => b.trim())
-          .filter(Boolean);
-
-        // Branches checked out in active worktrees
-        const worktreeListOutput = (() => {
-          try {
-            return execFileSync("git", ["worktree", "list", "--porcelain"], {
-              cwd: repoRoot,
-              encoding: "utf-8",
-              stdio: "pipe",
-              timeout: 10_000,
-            });
-          } catch {
-            return "";
-          }
-        })();
-        const activeWorktreeBranches = new Set<string>();
-        for (const line of worktreeListOutput.split("\n")) {
-          const m = line.match(/^branch refs\/heads\/(.+)$/);
-          if (m?.[1]) activeWorktreeBranches.add(m[1]);
-        }
-
-        // Filter: keep matching prefixes, exclude main/master + active worktree branches
-        const CANDIDATE_PATTERNS = /^(feature\/work-|worktree-|session\/|feat\/)/;
-        const EXCLUDE_BASES = new Set(["main", "master"]);
-
-        candidates = allBranches.filter((b) => {
-          if (EXCLUDE_BASES.has(b)) return false;
-          if (activeWorktreeBranches.has(b)) return false;
-          if (!CANDIDATE_PATTERNS.test(b)) return false;
-          return true;
-        });
-
-        // Exclude branches already merged into main (is-ancestor)
-        candidates = candidates.filter((b) => {
-          try {
-            execFileSync("git", ["merge-base", "--is-ancestor", b, "main"], {
-              cwd: repoRoot,
-              stdio: "pipe",
-              timeout: 10_000,
-            });
-            return false; // exit 0 = already ancestor = skip
-          } catch {
-            return true; // non-zero = not an ancestor = keep
-          }
-        });
-      }
-
-      if (candidates.length === 0) {
-        return result;
-      }
-
-      // --- Integration worktree ---
-      const integrationBranch = "integration/reconcile-tmp";
-      const wt = await getOrCreateWorktree({
-        repoRoot,
-        branch: integrationBranch,
-        createdBy: "integrator",
-      });
-      const wtPath = wt.path;
-
-      // Bring the integration worktree to main's commit. We CANNOT `git checkout main`
-      // here: main is permanently checked out in the shared tree (the Kaya home),
-      // and git forbids the same branch being checked out in two worktrees — that throws
-      // "fatal: 'main' is already used by worktree". Instead, hard-reset the temp
-      // integration branch (integration/reconcile-tmp) to main's SHA; HEAD stays on the
-      // temp branch. main itself is later advanced via `git update-ref` (no checkout).
-      const syncIntegrationToMain = (): string => {
-        const mainSha = execFileSync("git", ["rev-parse", "main"], {
-          cwd: repoRoot,
-          encoding: "utf-8",
-          stdio: "pipe",
-          timeout: 10_000,
-        }).trim();
-        execFileSync("git", ["reset", "--hard", mainSha], {
-          cwd: wtPath,
-          stdio: "pipe",
-          timeout: 30_000,
-        });
-        return mainSha;
-      };
-      syncIntegrationToMain();
-
-      // --- Process each candidate ---
-      for (const branch of candidates) {
-        // Re-sync the integration worktree to (the possibly-advanced) main before each branch.
-        // Capture the SHA so we can use it as the CAS expected-old value below.
-        let expectedMainSha: string;
-        try {
-          expectedMainSha = syncIntegrationToMain();
-        } catch (e) {
-          result.failed.push(branch);
-          result.outcomes.push({
-            branch,
-            status: "failed",
-            reason: `Could not sync integration worktree to main: ${e instanceof Error ? e.message : String(e)}`,
-          });
-          console.error(`[Integrator] FAIL ${branch}: could not sync to main`);
-          continue;
-        }
-
-        // Attempt merge
-        let mergeSucceeded = false;
-        let conflictResolved = false;
-
-        try {
-          execFileSync("git", ["merge", "--no-ff", branch, "-m", `Reconcile: ${branch}`], {
-            cwd: wtPath,
-            stdio: "pipe",
-            timeout: 60_000,
-          });
-          mergeSucceeded = true;
-        } catch {
-          // Check for actual conflict markers
-          const statusOutput = (() => {
-            try {
-              return execFileSync("git", ["status", "--porcelain"], {
-                cwd: wtPath,
-                encoding: "utf-8",
-                stdio: "pipe",
-                timeout: 10_000,
-              });
-            } catch {
-              return "";
-            }
-          })();
-
-          const hasConflictMarkers = statusOutput.split("\n").some((line) => /^(UU|AA|DD|AU|UA) /.test(line));
-
-          if (!hasConflictMarkers) {
-            // Merge failed for non-conflict reasons (e.g., branch doesn't exist)
-            try {
-              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
-            } catch {
-              /* may not be in a merge state */
-            }
-            result.failed.push(branch);
-            result.outcomes.push({ branch, status: "failed", reason: "Merge failed (non-conflict)" });
-            console.error(`[Integrator] FAIL ${branch}: merge failed (non-conflict)`);
-            continue;
-          }
-
-          // Spawn conflict-resolver agent
-          const conflictResolverPrompt = [
-            `You are resolving git merge conflicts in: ${wtPath}`,
-            `Steps:`,
-            `1. Run: git -C "${wtPath}" diff --name-only --diff-filter=U`,
-            `2. For each conflicted file: read both sides with git show MERGE_HEAD:<file> and git show HEAD:<file>`,
-            `3. Edit each file to remove conflict markers and produce the correct merged content`,
-            `4. Run: git -C "${wtPath}" add <file> for each resolved file`,
-            `Do NOT commit. Just resolve the conflicts and stage the files.`,
-          ].join("\n");
-
-          // The agent door owns the launch policy (hardened env, pre-spawn
-          // rate gate, isolated flags, guard-hook/--tools switches, reap).
-          const agentResult = spawnAgentSync(
-            {
-              prompt: conflictResolverPrompt,
-              model: "sonnet",
-              allowedTools: "Bash,Read,Edit",
-              cwd: wtPath,
-              timeoutMs: 120_000,
-              maxBuffer: 32 * 1024 * 1024,
-            },
-            opts.spawnDeps,
-          );
-          if (agentResult.preSpawnGated) {
-            // The agent never ran, so the conflict markers stay and the
-            // "conflicts remain" path below aborts the merge.
-            console.warn(`[Integrator] conflict resolver for ${branch} not started: pre-spawn rate gate`);
-          }
-
-          // Check if conflicts remain
-          const postAgentStatus = (() => {
-            try {
-              return execFileSync("git", ["status", "--porcelain"], {
-                cwd: wtPath,
-                encoding: "utf-8",
-                stdio: "pipe",
-                timeout: 10_000,
-              });
-            } catch {
-              return "";
-            }
-          })();
-
-          const conflictsRemain = postAgentStatus.split("\n").some((line) => /^(UU|AA|DD|AU|UA) /.test(line));
-
-          if (!agentResult.success || conflictsRemain) {
-            // Agent failed or conflicts remain — abort
-            try {
-              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
-            } catch {
-              /* best effort */
-            }
-            result.failed.push(branch);
-            result.outcomes.push({
-              branch,
-              status: "failed",
-              // A failed agent names its cause even when conflicts remain
-              // (gate block, timeout, limit banner leave the conflicts untouched).
-              reason: agentResult.success
-                ? "Conflict resolution agent ran but conflicts remain"
-                : `${
-                    agentResult.preSpawnGated
-                      ? "Conflict resolution agent not started (rate-gated)"
-                      : `Conflict resolution agent failed (exit ${agentResult.exitCode}${agentResult.infraReason ? `, ${agentResult.infraReason}` : ""}): ${(agentResult.stderr || agentResult.stdout).slice(-200)}`
-                  }${conflictsRemain ? (agentResult.preSpawnGated ? ": conflicts remain" : "; conflicts remain") : ""}`,
-            });
-            console.error(`[Integrator] FAIL ${branch}: conflict not resolved`);
-            continue;
-          }
-
-          // Agent resolved conflicts — commit
-          try {
-            execFileSync("git", ["commit", "-m", `Reconcile (conflict resolved): ${branch}`], {
-              cwd: wtPath,
-              stdio: "pipe",
-              timeout: 30_000,
-            });
-            mergeSucceeded = true;
-            conflictResolved = true;
-          } catch (e) {
-            try {
-              execFileSync("git", ["merge", "--abort"], { cwd: wtPath, stdio: "pipe", timeout: 10_000 });
-            } catch {
-              /* best effort */
-            }
-            result.failed.push(branch);
-            result.outcomes.push({
-              branch,
-              status: "failed",
-              reason: `Could not commit after conflict resolution: ${e instanceof Error ? e.message : String(e)}`,
-            });
-            console.error(`[Integrator] FAIL ${branch}: commit after resolution failed`);
-            continue;
-          }
-        }
-
-        if (!mergeSucceeded) continue;
-
-        // Verify branch is ancestor of merge result
-        const isAnc = this.isAncestor(branch, "HEAD", wtPath);
-        if (!isAnc) {
-          result.failed.push(branch);
-          result.outcomes.push({
-            branch,
-            status: "failed",
-            reason: "Branch not ancestor of merge result — integrity check failed",
-          });
-          console.error(`[Integrator] FAIL ${branch}: ancestor verify failed`);
-          continue;
-        }
-
-        // Non-fatal build check
-        let verificationPassed: boolean | undefined;
-        try {
-          execFileSync(
-            "bun",
-            ["build", "--target=bun", join(repoRoot, "lib/core/KayaHome.ts"), "--outfile=/dev/null"],
-            {
-              cwd: wtPath,
-              timeout: 30_000,
-              stdio: "pipe",
-            },
-          );
-          verificationPassed = true;
-        } catch {
-          verificationPassed = false;
-          console.warn(`[Integrator] WARN ${branch}: bun build check failed (non-fatal)`);
-        }
-
-        // Advance main: CAS (compare-and-swap) update-ref with retry.
-        //
-        // Problem with bare 3-arg update-ref: it's unconditional last-writer-wins.
-        // Concurrent reconcile() calls each read main=X, commit on top of X, then
-        // update-ref → the second clobbers the first → orphaned commit (BUG #2).
-        //
-        // Fix: 4-arg form `git update-ref refs/heads/main <new> <expected-old>` fails
-        // atomically if main has moved. On failure we re-sync the integration worktree
-        // to the new main, re-merge this branch on top, and retry — up to MAX_CAS_RETRIES.
-        // On exhaustion, fail LOUDLY (never silently drop a commit).
-        const MAX_CAS_RETRIES = 3;
-        let casSucceeded = false;
-        let finalOldMainSha = expectedMainSha;
-        let finalNewMainSha = "";
-        let skipToNextBranch = false;
-
-        for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
-          if (attempt > 0) {
-            // CAS was rejected — another writer advanced main while we were merging.
-            // Re-sync the integration worktree to the new main and re-merge this branch.
-            console.warn(
-              `[Integrator] CAS rejected for "${branch}" (attempt ${attempt}/${MAX_CAS_RETRIES}) — ` +
-                `re-syncing to new main and re-merging`,
-            );
-            try {
-              expectedMainSha = syncIntegrationToMain();
-              execFileSync("git", ["merge", "--no-ff", branch, "-m", `Reconcile: ${branch}`], {
-                cwd: wtPath,
-                stdio: "pipe",
-                timeout: 60_000,
-              });
-              // Re-verify ancestry after re-merge (do not re-run the conflict resolver
-              // on retry — if this re-merge conflicts, fail the branch loudly)
-              if (!this.isAncestor(branch, "HEAD", wtPath)) {
-                throw new Error("branch not ancestor of re-merge result — integrity check failed");
-              }
-            } catch (retryErr) {
-              result.failed.push(branch);
-              result.outcomes.push({
-                branch,
-                status: "failed",
-                reason: `CAS retry ${attempt}: re-merge onto new main failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
-              });
-              console.error(`[Integrator] FAIL "${branch}": re-merge failed on CAS retry ${attempt}`);
-              skipToNextBranch = true;
-              break;
-            }
-          }
-
-          const integrationSha = (() => {
-            try {
-              return execFileSync("git", ["rev-parse", "HEAD"], {
-                cwd: wtPath,
-                encoding: "utf-8",
-                stdio: "pipe",
-                timeout: 10_000,
-              }).trim();
-            } catch {
-              return "";
-            }
-          })();
-
-          if (!integrationSha) {
-            result.failed.push(branch);
-            result.outcomes.push({ branch, status: "failed", reason: "Could not resolve integration HEAD SHA" });
-            skipToNextBranch = true;
-            break;
-          }
-
-          try {
-            // 4-arg CAS: exits non-zero if refs/heads/main !== expectedMainSha
-            execFileSync("git", ["update-ref", "refs/heads/main", integrationSha, expectedMainSha], {
-              cwd: repoRoot,
-              stdio: "pipe",
-              timeout: 10_000,
-            });
-            finalOldMainSha = expectedMainSha;
-            finalNewMainSha = integrationSha;
-            casSucceeded = true;
-            break; // success
-          } catch {
-            // CAS rejected — re-read current main for the next attempt
-            try {
-              expectedMainSha = execFileSync("git", ["rev-parse", "main"], {
-                cwd: repoRoot,
-                encoding: "utf-8",
-                stdio: "pipe",
-                timeout: 10_000,
-              }).trim();
-            } catch {
-              /* ignore — will retry */
-            }
-          }
-        }
-
-        if (skipToNextBranch) continue;
-
-        if (!casSucceeded) {
-          result.failed.push(branch);
-          result.outcomes.push({
-            branch,
-            status: "failed",
-            reason: `refs/heads/main CAS exhausted after ${MAX_CAS_RETRIES} attempts — concurrent writers kept advancing main`,
-          });
-          console.error(`[Integrator] FAIL "${branch}": CAS exhausted after ${MAX_CAS_RETRIES} attempts`);
-          continue;
-        }
-
-        // Working-tree sync: bring the shared tree's on-disk files into line with
-        // the new main HEAD (BUG #1 fix). The ref is already correct; this step
-        // restores the actual file contents on disk.
-        //
-        // We use a TARGETED per-file checkout (not git reset --hard) so uncommitted
-        // edits to OTHER files in the interactive session are preserved. Only the
-        // files actually changed by this merge are touched.
-        try {
-          const changedFiles = execFileSync("git", ["diff", "--name-only", finalOldMainSha, finalNewMainSha], {
-            cwd: repoRoot,
-            encoding: "utf-8",
-            stdio: "pipe",
-            timeout: 15_000,
-          })
-            .trim()
-            .split("\n")
-            .filter(Boolean);
-          if (changedFiles.length > 0) {
-            // Batch in groups of 100 to stay well within OS ARG_MAX
-            const BATCH = 100;
-            for (let i = 0; i < changedFiles.length; i += BATCH) {
-              execFileSync("git", ["checkout", "HEAD", "--", ...changedFiles.slice(i, i + BATCH)], {
-                cwd: repoRoot,
-                stdio: "pipe",
-                timeout: 30_000,
-              });
-            }
-            console.log(
-              `[Integrator] Synced ${changedFiles.length} file(s) in shared tree ` +
-                `after advancing main to ${finalNewMainSha.slice(0, 8)}`,
-            );
-          }
-        } catch (wtSyncErr) {
-          // Non-fatal: the ref is already correct. The working tree is stale but
-          // will be correct after the next explicit checkout. Warn loudly.
-          console.warn(
-            `[Integrator] WARN: main ref advanced to ${finalNewMainSha.slice(0, 8)} ` +
-              `but working-tree sync failed — ` +
-              `run: git -C ${repoRoot} checkout HEAD -- . to fix manually. ` +
-              `(${wtSyncErr instanceof Error ? wtSyncErr.message : String(wtSyncErr)})`,
-          );
-        }
-
-        result.merged.push(branch);
-        result.outcomes.push({
-          branch,
-          status: "merged",
-          conflictResolved,
-          verificationPassed,
-          gcCandidate: true,
-        });
-      }
-    } finally {
-      await lock.release();
-    }
-
-    // --- Post-reconcile GC (outside the integrator lock) ---
-    // For each successfully merged branch marked gcCandidate, attempt liveness-
-    // gated GC of its worktree. Guards: merged + clean + stale + not integrator
-    // reuse branch. Any failure is non-fatal and logged; we never block reconcile.
-    const gcCandidates = result.outcomes.filter((o) => o.status === "merged" && o.gcCandidate);
-    for (const outcome of gcCandidates) {
-      try {
-        const gcResult = await gcWorktreeForBranch(outcome.branch, repoRoot);
-        if (gcResult.removed.length > 0) {
-          console.log(`[Integrator] GC removed worktree for "${outcome.branch}": ${gcResult.removed.join(", ")}`);
-        } else if (gcResult.skipped.length > 0) {
-          const reasons = gcResult.skipped.map((s) => s.reason).join("; ");
-          console.log(`[Integrator] GC skipped worktree for "${outcome.branch}": ${reasons}`);
-        }
-        for (const e of gcResult.errors) {
-          console.warn(`[Integrator] GC error for "${outcome.branch}": ${e}`);
-        }
-      } catch (e) {
-        // GC is best-effort — never block or fail the reconcile result
-        console.warn(`[Integrator] GC threw for "${outcome.branch}": ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-
-    return result;
-  }
-
-  // --------------------------------------------------------------------------
   // Private helpers (preserved from MergeOrchestrator with identical logic)
   // --------------------------------------------------------------------------
 
@@ -958,11 +434,11 @@ export class Integrator {
   // --------------------------------------------------------------------------
 
   /**
-   * Async lock wrapper — ALL merge paths use this (reconcile, mergeItem, mergeCompleted).
+   * Async lock wrapper — ALL merge paths use this (mergeItem, mergeCompleted).
    * A single lock file serializes concurrent processes from any path.
    *
    * DEADLOCK RULE: Never call mergeItem() or mergeCompleted() from inside a fn passed
-   * to withIntegratorLock (or from reconcile(), which uses its own direct lock acquire).
+   * to withIntegratorLock.
    * Internal callers that already hold the lock must use _mergeItemCore() /
    * _mergeCompletedCore() directly — those are the unlocked variants.
    *
@@ -1035,8 +511,7 @@ export class Integrator {
   /**
    * `gh pr create` — isolated as its own method (rather than inlined at both "pr" strategy call
    * sites) so tests can override just the external `gh` CLI call on an instance, the same idiom
-   * this file uses elsewhere (checkInteractiveSessionLock, verifyDirectMergeLanded,
-   * reconcile()'s spawnDeps) — `gh` talks to real GitHub and has no hermetic
+   * this file uses elsewhere (checkInteractiveSessionLock, verifyDirectMergeLanded) — `gh` talks to real GitHub and has no hermetic
    * fake-able equivalent, whereas every git command around it (push/fetch/ancestor-check in
    * verifyPrMergeLanded) is real and runs against a real repo in tests.
    */
@@ -1193,19 +668,6 @@ export class Integrator {
     return this.currentBranch(cwd) || "main";
   }
 
-  private isAncestor(ancestor: string, descendant: string, cwd: string): boolean {
-    try {
-      execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-        cwd,
-        timeout: 10_000,
-        stdio: "pipe",
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   private detectConflict(branch: string, cwd?: string): boolean {
     const opts = { encoding: "utf-8" as const, timeout: 10_000, stdio: "pipe" as const, ...(cwd ? { cwd } : {}) };
     try {
@@ -1223,10 +685,9 @@ export class Integrator {
 // ============================================================================
 
 const USAGE = `
-Integrator — Merge completed/verified feature branches + reconcile diverged branches
+Integrator — Merge completed/verified feature branches
 
 USAGE
-  integrator reconcile [--branch <name>] [--json]
   integrator merge     --strategy <pr|direct> [--json]
   integrator pending   [--json]
   integrator approve   <id> [--merge] [--strategy <pr|direct>] [--by <name>] [--json]
@@ -1234,15 +695,12 @@ USAGE
   integrator --help
 
 COMMANDS
-  reconcile       Discover and merge diverged branches via integration worktree
-                  (conflict resolution via headless claude -p agent)
   merge           Merge all completed, verified branches (approval-required items skipped)
   pending         List verified-locally items waiting on a merge approval (Slice 3)
   approve <id>    Grant merge approval for an item; add --merge to merge it immediately
   drain           Merge all items that have a recorded approval (mergeApproved === true)
 
 OPTIONS
-  --branch        (reconcile) process only this branch
   --strategy      pr      Open a GitHub PR for each branch
                   direct  git merge --no-ff directly into HEAD (default for approve/drain)
   --merge         (approve) merge immediately after approving
@@ -1257,7 +715,6 @@ if (import.meta.main) {
     options: {
       strategy: { type: "string" },
       by: { type: "string" },
-      branch: { type: "string" },
       merge: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
@@ -1273,31 +730,6 @@ if (import.meta.main) {
 
   const command = positionals[0];
   const integrator = new Integrator();
-
-  if (command === "reconcile") {
-    const reconcileResult = await integrator.reconcile({
-      branch: values.branch as string | undefined,
-    });
-    if (values.json) {
-      console.log(JSON.stringify(reconcileResult, null, 2));
-    } else {
-      console.log(
-        `Reconcile: merged ${reconcileResult.merged.length}  failed ${reconcileResult.failed.length}  skipped ${reconcileResult.skipped.length}`,
-      );
-      for (const o of reconcileResult.outcomes) {
-        const flags = [
-          o.conflictResolved ? "conflict-resolved" : null,
-          o.verificationPassed === false ? "build-warn" : null,
-        ]
-          .filter(Boolean)
-          .join(",");
-        console.log(
-          `  ${o.status.toUpperCase()} ${o.branch}${flags ? ` (${flags})` : ""}${o.reason ? ` — ${o.reason}` : ""}`,
-        );
-      }
-    }
-    process.exit(reconcileResult.failed.length > 0 ? 1 : 0);
-  }
 
   if (command === "merge") {
     const strategy = values.strategy as string | undefined;

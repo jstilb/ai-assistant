@@ -2,8 +2,7 @@
  * Integrator.test.ts — Tests for Integrator (replaces MergeOrchestrator)
  *
  * Sections:
- *  1. New Integrator-specific tests (instantiation, reconcile lock contention,
- *     reconcile clean-merge, reconcile conflict paths)
+ *  1. New Integrator-specific tests (instantiation, mergeItem, approve/drain, pending)
  *  2. Migrated compat suite from MergeOrchestrator.test.ts
  *  3. Migrated compat suite from MergeOrchestrator.approval.test.ts
  *  4. Migrated compat suite from MergeOrchestrator.headguard.test.ts
@@ -20,11 +19,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Integrator } from "./Integrator.ts";
 import { WorkQueue, type WorkItem, type WorkItemVerification, type WorkItemMetadata } from "./WorkQueue.ts";
-import { worktreesDir, repoSlug } from "../../../../lib/core/WorktreeManager.ts";
 import type { DiskVerifyResult } from "../../../../lib/core/MergeSafety.ts";
 import { pinKayaHome, restoreKayaHome } from "../../../../lib/test/pinKayaHome.ts";
 import { getKayaHome } from "../../../../lib/core/KayaHome.ts";
-import type { AgentSpawnDeps } from "../../../../lib/core/AgentSpawner.ts";
 
 // Hermetic: WorkQueue seeding and Integrator write failure logs under KAYA_HOME.
 pinKayaHome("integrator-test-");
@@ -97,7 +94,6 @@ describe("Integrator instantiation", () => {
     expect(typeof integrator.approveAndMerge).toBe("function");
     expect(typeof integrator.listPendingApproval).toBe("function");
     expect(typeof integrator.drainApproved).toBe("function");
-    expect(typeof integrator.reconcile).toBe("function");
     expect(typeof integrator.checkInteractiveSessionLock).toBe("function");
   });
 
@@ -179,251 +175,6 @@ describe("Integrator listPendingApproval", () => {
     const integrator = new Integrator(wq);
     integrator.approve("a");
     expect(integrator.listPendingApproval().length).toBe(0);
-  });
-});
-
-// ============================================================================
-// reconcile() tests
-// ============================================================================
-
-describe("reconcile() — lock contention", () => {
-  it("only one reconcile proceeds when two are called concurrently", async () => {
-    // We use two Integrator instances with a temp lock dir
-    const tmpDir = mkdtempSync(join(tmpdir(), "integrator-lock-test-"));
-
-    // Override runtimeDir for this test by directly controlling the lock path
-    // We'll test the IntegratorFileLock behavior by importing and instantiating it inline
-    // via reconcile with an empty candidate list (opts.branch that doesn't exist).
-    // Since reconcile acquires the lock and then discovers no candidates (empty list),
-    // two concurrent calls will race on the lock file.
-    //
-    // We can't easily override runtimeDir() without env var, so set KAYA_RUNTIME
-    const origRuntime = process.env.KAYA_RUNTIME;
-    process.env.KAYA_RUNTIME = tmpDir;
-
-    // Also need KAYA_HOME to point somewhere git-like for branch listing
-    const origKayaHome = process.env.KAYA_HOME;
-    const fakeRepoDir = mkdtempSync(join(tmpdir(), "integrator-repo-test-"));
-    // Init a minimal git repo so git commands don't crash
-    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: fakeRepoDir });
-    execFileSync("git", ["config", "user.email", "t@t.local"], { cwd: fakeRepoDir });
-    execFileSync("git", ["config", "user.name", "t"], { cwd: fakeRepoDir });
-    writeFileSync(join(fakeRepoDir, "README.md"), "# test\n");
-    execFileSync("git", ["add", "-A"], { cwd: fakeRepoDir });
-    execFileSync("git", ["commit", "-qm", "init"], { cwd: fakeRepoDir });
-    process.env.KAYA_HOME = fakeRepoDir;
-
-    try {
-      const i1 = new Integrator(WorkQueue._createForTesting([]));
-      const i2 = new Integrator(WorkQueue._createForTesting([]));
-
-      // Both reconcile with no candidates (no matching branches in empty repo)
-      // Use Promise.allSettled so we capture both outcomes
-      const results = await Promise.allSettled([i1.reconcile({}), i2.reconcile({})]);
-
-      // Both should settle (not throw unhandled) — at least one should succeed
-      // and at most one will get a lock timeout
-      const fulfilled = results.filter((r) => r.status === "fulfilled");
-      const rejected = results.filter((r) => r.status === "rejected");
-
-      // With a 30s lock timeout and fast empty-repo operations,
-      // both may succeed sequentially. What we verify:
-      // - Both settled (no unhandled crashes)
-      // - At least one fulfilled (lock was released by the first)
-      expect(fulfilled.length).toBeGreaterThanOrEqual(1);
-      // If one rejected, it must be a lock-related error
-      for (const r of rejected) {
-        if (r.status === "rejected") {
-          expect(String(r.reason)).toMatch(/lock|Lock|timeout/i);
-        }
-      }
-    } finally {
-      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
-      else process.env.KAYA_RUNTIME = origRuntime;
-      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
-      else process.env.KAYA_HOME = origKayaHome;
-    }
-  });
-});
-
-describe("reconcile() — clean merge success path (stubbed)", () => {
-  it("records a branch as merged when execFileSync indicates success", async () => {
-    // Use a real temp git repo with a feature/work-* branch so reconcile can
-    // find and merge a real candidate without mocking.
-    const tmpDir = mkdtempSync(join(tmpdir(), "integrator-clean-"));
-    const origRuntime = process.env.KAYA_RUNTIME;
-    const origKayaHome = process.env.KAYA_HOME;
-    process.env.KAYA_RUNTIME = tmpDir;
-    process.env.KAYA_HOME = tmpDir;
-
-    try {
-      // Build a minimal repo with a feature/work-test branch
-      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: tmpDir });
-      execFileSync("git", ["config", "user.email", "t@t.local"], { cwd: tmpDir });
-      execFileSync("git", ["config", "user.name", "t"], { cwd: tmpDir });
-      writeFileSync(join(tmpDir, "README.md"), "# test\n");
-      execFileSync("git", ["add", "-A"], { cwd: tmpDir });
-      execFileSync("git", ["commit", "-qm", "init"], { cwd: tmpDir });
-
-      // Create a feature/work-test branch
-      execFileSync("git", ["checkout", "-q", "-b", "feat/test-reconcile"], { cwd: tmpDir });
-      writeFileSync(join(tmpDir, "feature.ts"), "export const x = 1;\n");
-      execFileSync("git", ["add", "-A"], { cwd: tmpDir });
-      execFileSync("git", ["commit", "-qm", "feat: add feature"], { cwd: tmpDir });
-      execFileSync("git", ["checkout", "-q", "main"], { cwd: tmpDir });
-
-      // Worktrees dir must exist
-      mkdirSync(join(tmpDir, "worktrees"), { recursive: true });
-
-      const integrator = new Integrator(WorkQueue._createForTesting([]));
-      const result = await integrator.reconcile({ branch: "feat/test-reconcile" });
-
-      // Branch should appear in merged (or failed if worktree creation caused issues)
-      // The key assertion is that it's in outcomes
-      const outcome = result.outcomes.find((o) => o.branch === "feat/test-reconcile");
-      expect(outcome).toBeDefined();
-      // If worktree creation or build check fails, it may end up in failed —
-      // but the branch WAS processed (outcome exists).
-      // We mainly assert the reconcile ran without throwing.
-      expect(result.outcomes.length).toBeGreaterThan(0);
-    } finally {
-      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
-      else process.env.KAYA_RUNTIME = origRuntime;
-      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
-      else process.env.KAYA_HOME = origKayaHome;
-      // Clean up the worktree this reconcile created under the real worktreesDir() + temp repo.
-      try {
-        rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
-      try {
-        rmSync(tmpDir, { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
-    }
-  });
-});
-
-describe("reconcile() — conflict path through the agent door (fake spawnFn)", () => {
-  type SpawnCall = { args: string[]; cwd: string; env: Record<string, string> };
-
-  /** Builds a repo whose `feat/conflict-branch` conflicts with main, runs reconcile, cleans up. */
-  async function reconcileConflict(spawnDeps: AgentSpawnDeps) {
-    const tmpDir = mkdtempSync(join(tmpdir(), "integrator-conflict-fail-"));
-    const origRuntime = process.env.KAYA_RUNTIME;
-    const origKayaHome = process.env.KAYA_HOME;
-    process.env.KAYA_RUNTIME = tmpDir;
-    process.env.KAYA_HOME = tmpDir;
-
-    try {
-      // Build a repo with a conflicting branch
-      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: tmpDir });
-      execFileSync("git", ["config", "user.email", "t@t.local"], { cwd: tmpDir });
-      execFileSync("git", ["config", "user.name", "t"], { cwd: tmpDir });
-      writeFileSync(join(tmpDir, "conflict.ts"), "const x = 1;\n");
-      execFileSync("git", ["add", "-A"], { cwd: tmpDir });
-      execFileSync("git", ["commit", "-qm", "init"], { cwd: tmpDir });
-
-      // Create conflicting branch
-      execFileSync("git", ["checkout", "-q", "-b", "feat/conflict-branch"], { cwd: tmpDir });
-      writeFileSync(join(tmpDir, "conflict.ts"), "const x = 'branch-value';\n");
-      execFileSync("git", ["add", "-A"], { cwd: tmpDir });
-      execFileSync("git", ["commit", "-qm", "feat: conflict"], { cwd: tmpDir });
-      execFileSync("git", ["checkout", "-q", "main"], { cwd: tmpDir });
-      // Conflicting change on main
-      writeFileSync(join(tmpDir, "conflict.ts"), "const x = 'main-value';\n");
-      execFileSync("git", ["add", "-A"], { cwd: tmpDir });
-      execFileSync("git", ["commit", "-qm", "main: conflict"], { cwd: tmpDir });
-
-      mkdirSync(join(tmpDir, "worktrees"), { recursive: true });
-
-      const integrator = new Integrator(WorkQueue._createForTesting([]));
-      const result = await integrator.reconcile({ branch: "feat/conflict-branch", spawnDeps });
-      return { result, wtPath: join(worktreesDir(), repoSlug(tmpDir)) };
-    } finally {
-      if (origRuntime === undefined) delete process.env.KAYA_RUNTIME;
-      else process.env.KAYA_RUNTIME = origRuntime;
-      if (origKayaHome === undefined) delete process.env.KAYA_HOME;
-      else process.env.KAYA_HOME = origKayaHome;
-      // Clean up the worktree this reconcile created under the real worktreesDir() + temp repo.
-      try {
-        rmSync(join(worktreesDir(), repoSlug(tmpDir)), { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
-      try {
-        rmSync(tmpDir, { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
-    }
-  }
-
-  it("spawns sonnet with isolated flags in the integration worktree; a failing agent → failed", async () => {
-    const calls: SpawnCall[] = [];
-    const { result, wtPath } = await reconcileConflict({
-      isRateLimitedFn: () => false,
-      reapFn: () => [],
-      spawnFn: (_claudePath, args, o) => {
-        calls.push({ args, cwd: o.cwd, env: o.env });
-        return { stdout: "", stderr: "mock agent failure", status: 1, signal: null };
-      },
-    });
-
-    expect(calls).toHaveLength(1);
-    const call = calls[0];
-    if (!call) throw new Error("resolver was not spawned");
-    const { args, cwd, env } = call;
-    expect(args[0]).toBe("-p");
-    expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
-    expect(args[args.indexOf("--allowedTools") + 1]).toBe("Bash,Read,Edit");
-    expect(args).toContain("--dangerously-skip-permissions");
-    expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
-    expect(args[args.length - 1]).toContain("You are resolving git merge conflicts in:");
-    expect(cwd.startsWith(wtPath)).toBe(true);
-    expect(env.KAYA_AUTONOMOUS).toBe("1");
-    expect(env.CLAUDECODE).toBeUndefined();
-
-    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
-    expect(outcome?.status).toBe("failed");
-    expect(outcome?.reason).toBe("Conflict resolution agent failed (exit 1): mock agent failure; conflicts remain");
-    expect(result.merged).not.toContain("feat/conflict-branch");
-    expect(result.failed).toContain("feat/conflict-branch");
-  });
-
-  it("a rate-gated resolver never spawns and falls through to 'conflicts remain'", async () => {
-    let spawned = 0;
-    const { result } = await reconcileConflict({
-      isRateLimitedFn: () => true,
-      reapFn: () => [],
-      spawnFn: () => {
-        spawned++;
-        return { stdout: "", stderr: "", status: 0, signal: null };
-      },
-    });
-
-    expect(spawned).toBe(0);
-    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
-    expect(outcome?.status).toBe("failed");
-    expect(outcome?.reason).toBe("Conflict resolution agent not started (rate-gated): conflicts remain");
-    expect(result.failed).toContain("feat/conflict-branch");
-  });
-
-  it("an agent that exits 1 with a limit banner names rate-limit and the banner, conflicts untouched", async () => {
-    const banner = "You've hit your limit · resets 3pm";
-    const { result } = await reconcileConflict({
-      isRateLimitedFn: () => false,
-      reapFn: () => [],
-      spawnFn: () => ({ stdout: banner, stderr: "", status: 1, signal: null }),
-    });
-
-    const outcome = result.outcomes.find((o) => o.branch === "feat/conflict-branch");
-    expect(outcome?.status).toBe("failed");
-    expect(outcome?.reason).toContain("rate-limit");
-    expect(outcome?.reason).toContain(banner);
-    expect(outcome?.reason).toContain("conflicts remain");
   });
 });
 
