@@ -3,7 +3,6 @@
   "private": true,
   "workspaces": [
     "skills/Development/Browser",
-    "skills/Data/Apify",
     "skills/Commerce/Instacart",
     "skills/Communication/Telegram/Server",
     "skills/Development/UnixCLI/Tools",

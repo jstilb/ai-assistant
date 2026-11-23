@@ -75,7 +75,7 @@ Examples below are illustrative, not exhaustive -- see each category's own `SKIL
 | **Commerce** | Instacart, JobSearch, Shopping | Online shopping and job search |
 | **Communication** | Gmail, Telegram, VoiceInteraction | Email, messaging, and voice interaction |
 | **Content** | Art, ContentAggregator, SystemFlowchart, VoiceNotes | Content generation and system visualization |
-| **Data** | Apify, BrightData, DataScience, WebAssessment | Data collection and statistical analysis |
+| **Data** | BrightData, DataScience, WebAssessment | Data collection and statistical analysis |
 | **Development** | Browser, CreateSkill, TDD, ImproveCodebaseArchitecture, Evals, PRD | Engineering, CLI, codebase tools, and agent evals |
 | **Intelligence** | Research, ArgumentMapper, Graph, VaultGraph, AgentMetacognition | Research, analysis, and pattern synthesis |
 | **Life** | Cooking, Anki, Telos, DnD, InteriorDesign | Lifestyle, goals, and hobbies |
