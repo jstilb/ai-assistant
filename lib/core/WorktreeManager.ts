@@ -19,7 +19,7 @@
  *     (Lower-risk option over making it assert the lock internally — the function
  *     is now unexported so callers cannot bypass the mutex.)
  *   - gcWorktrees(): liveness-gated GC — removes only fully-merged + clean +
- *     stale (no fresh heartbeat) worktrees; never the integrator's reuse tree.
+ *     stale (no fresh heartbeat) worktrees.
  *   - Heartbeat: refreshed in getOrCreateWorktree; written to runtimeDir()/locks/
  *
  * Usage:
@@ -177,12 +177,6 @@ function statePath(): string {
  * Default: 2 hours (configurable via gcWorktrees({ staleAfterMs }) or --stale-after CLI flag).
  */
 const GC_STALE_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-/**
- * The integrator's permanent reuse worktree branch.
- * GC must never remove this — the Integrator reuses it across reconcile runs.
- */
-const INTEGRATOR_REUSE_BRANCH = "integration/reconcile-tmp";
 
 // ============================================================================
 // State Manager
@@ -645,13 +639,12 @@ export interface GcResult {
  *   (b) The working tree is clean (no uncommitted changes).
  *   (c) It is not live: no fresh heartbeat (newer than staleAfterMs) AND
  *       the filesystem mtime shows no recent activity.
- *   (d) It is not the integrator's reuse worktree (integration/reconcile-tmp).
  *
  * NEVER force-removes a worktree that fails any check.
  * Logs every skip + reason (no silent drops).
  *
  * This is the safe replacement for the deleted SubagentStop force-removal.
- * Called by the Integrator after a successful reconcile of a gcCandidate branch.
+ * Called by the LucidTasks executor after it merges a task branch (via gcWorktreeForBranch).
  */
 export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
   const staleAfterMs = opts.staleAfterMs ?? GC_STALE_AFTER_MS;
@@ -663,13 +656,6 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
 
   for (const entry of state.entries) {
     const tag = `[gcWorktrees] ${entry.path}`;
-
-    // (d) Never remove the integrator's reuse worktree
-    if (entry.branch === INTEGRATOR_REUSE_BRANCH) {
-      result.skipped.push({ path: entry.path, reason: "integrator reuse worktree — protected" });
-      console.log(`${tag}: SKIP — integrator reuse worktree`);
-      continue;
-    }
 
     // Directory must exist to evaluate
     if (!existsSync(entry.path)) {
@@ -802,9 +788,8 @@ export async function gcWorktrees(opts: GcOptions = {}): Promise<GcResult> {
 }
 
 /**
- * GC a single worktree by its branch name (convenience wrapper for Integrator).
+ * GC a single worktree by its branch name (used by the LucidTasks executor's merge step).
  * Returns the GcResult for that one entry.
- * If the branch is the integrator's reuse branch, skips without error.
  */
 export async function gcWorktreeForBranch(branch: string, repoRoot: string, opts: GcOptions = {}): Promise<GcResult> {
   // Load state to find the entry for this branch+repo
@@ -1000,7 +985,6 @@ export {
   gitExec,
   removeStaleGitLock,
   GC_STALE_AFTER_MS,
-  INTEGRATOR_REUSE_BRANCH,
   repoSlug,
   worktreePath,
 };

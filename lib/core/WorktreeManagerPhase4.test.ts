@@ -6,7 +6,7 @@
  *   - Lock-key consistency (same canonical id as worktreePath)
  *   - Reuse stays idempotent for same owner
  *   - No-hijack when a different live owner holds a fresh heartbeat
- *   - GC: skips unmerged / dirty / live / integrator-reuse; removes merged+clean+stale
+ *   - GC: skips unmerged / dirty / live; removes merged+clean+stale
  *
  * Uses real temp git repos; does NOT call real LLMs.
  */
@@ -21,7 +21,6 @@ import {
   isHeartbeatFresh,
   worktreesDir,
   GC_STALE_AFTER_MS,
-  INTEGRATOR_REUSE_BRANCH,
   repoSlug,
   worktreePath,
 } from "./WorktreeManager.ts";
@@ -283,32 +282,6 @@ describe("getOrCreateWorktree — no-hijack with live owner", () => {
 // ============================================================================
 // 5. gcWorktrees — safety gates
 // ============================================================================
-
-describe("gcWorktrees — safety gate: integrator reuse worktree", () => {
-  let repo: string;
-  beforeEach(() => {
-    repo = makeGitRepo("gc-integ");
-  });
-  afterEach(() => {
-    cleanRepo(repo);
-  });
-
-  it("never removes the integrator reuse worktree", async () => {
-    const entry = await getOrCreateWorktree({
-      repoRoot: repo,
-      branch: INTEGRATOR_REUSE_BRANCH,
-      createdBy: "integrator",
-    });
-    // Don't push to createdWorktrees — we verify GC doesn't touch it, then clean manually
-    try {
-      const result = await gcWorktrees({ staleAfterMs: 0, dryRun: true });
-      const wasSkipped = result.skipped.some((s) => s.path === entry.path && s.reason.includes("integrator"));
-      expect(wasSkipped).toBe(true);
-    } finally {
-      await removeWorktree(entry.path);
-    }
-  });
-});
 
 describe("gcWorktrees — safety gate: live heartbeat", () => {
   let repo: string;
