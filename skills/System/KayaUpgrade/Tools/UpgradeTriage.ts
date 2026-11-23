@@ -29,7 +29,7 @@ import { extractTriageResult, sanitizeForSubagent, type TriageResult } from "./T
 // Types
 // ============================================================================
 
-interface AnthropicFindings {
+export interface AnthropicFindings {
   timestamp: string;
   daysChecked: number;
   updates: Array<{
@@ -49,7 +49,7 @@ interface AnthropicFindings {
   }>;
 }
 
-interface YouTubeFindings {
+export interface YouTubeFindings {
   timestamp: string;
   videos: Array<{
     channel: string;
@@ -80,17 +80,22 @@ const levelArg = args.find((_, i) => args[i - 1] === "--level");
  * enforcing totality over the levels this tool actually supports, rather than
  * forcing a nonsense `kimi` row into the map.
  */
-type ClaudeLevel = Exclude<InferenceLevel, "kimi">;
+export type ClaudeLevel = Exclude<InferenceLevel, "kimi">;
 
 const CLAUDE_LEVELS: readonly ClaudeLevel[] = ["fast", "standard", "smart"];
 const LEVEL: ClaudeLevel = (CLAUDE_LEVELS as readonly string[]).includes(levelArg || "")
   ? (levelArg as ClaudeLevel)
   : "smart";
 
-const MODEL_MAP: Record<ClaudeLevel, string> = {
-  fast: "claude-haiku-4-5-20251001",
-  standard: "claude-sonnet-4-6",
-  smart: "claude-opus-4-6",
+/**
+ * Claude CLI model aliases — the same ones lib/core/Inference.ts maps its levels
+ * to. Aliases track the current model of each family, so this never pins a
+ * retired ID (it used to pin claude-sonnet-4-6 / claude-opus-4-6).
+ */
+export const MODEL_MAP: Record<ClaudeLevel, string> = {
+  fast: "haiku",
+  standard: "sonnet",
+  smart: "opus",
 };
 
 // ============================================================================
@@ -212,7 +217,7 @@ const TriageHistorySchema = z.object({
   lastTriageAt: z.string(),
 });
 
-type TriageHistory = z.infer<typeof TriageHistorySchema>;
+export type TriageHistory = z.infer<typeof TriageHistorySchema>;
 
 const triageHistorySm = createStateManager<z.infer<typeof TriageHistorySchema>>({
   path: join(STATE_DIR, "triage-history.json"),
@@ -321,11 +326,19 @@ export function isFresh(timestamp: string, maxAgeHours: number): boolean {
   return Date.now() - new Date(timestamp).getTime() < maxAgeHours * 60 * 60 * 1000;
 }
 
+/**
+ * A triage result plus how it ended. `failed` = the findings were never judged
+ * (subagent failed, timed out, was gated, or returned no parseable JSON).
+ * `infraDeferred` is the infra subset of `failed`. A failed triage must leave
+ * no trace: no routing, no recorded decisions, no "0 actionable" summary.
+ */
+export type TriageOutcome = TriageResult & { failed?: true; infraDeferred?: true };
+
 async function triageFindings(
   anthropicFindings: AnthropicFindings,
   youtubeFindings: YouTubeFindings,
   level: ClaudeLevel,
-): Promise<TriageResult & { infraDeferred?: true }> {
+): Promise<TriageOutcome> {
   const totalInputs = anthropicFindings.updates.length + youtubeFindings.videos.length;
 
   if (totalInputs === 0) {
@@ -500,6 +513,7 @@ Quality over quantity. Zero actionable items is a perfectly valid outcome.`;
         narrative,
         dismissedCount: 0,
         dismissalReasoning: "",
+        failed: true,
         // Infra end (gate, limit, timeout, auth, network): the findings were never judged.
         ...(run.preSpawnGated || run.infraReason ? { infraDeferred: true as const } : {}),
       };
@@ -515,6 +529,7 @@ Quality over quantity. Zero actionable items is a perfectly valid outcome.`;
         narrative: "Triage subagent completed but returned no parseable JSON.",
         dismissedCount: 0,
         dismissalReasoning: "",
+        failed: true,
       };
     }
 
@@ -531,6 +546,7 @@ Quality over quantity. Zero actionable items is a perfectly valid outcome.`;
       narrative: `Triage error: ${errMsg}`,
       dismissedCount: 0,
       dismissalReasoning: "",
+      failed: true,
     };
   }
 }
@@ -698,15 +714,49 @@ function printReport(triage: TriageResult): void {
 // Main
 // ============================================================================
 
-async function main() {
+export interface TriageRunDeps {
+  dryRun: boolean;
+  level: ClaudeLevel;
+  notify: (message: string) => void;
+  loadAnthropic: () => Promise<AnthropicFindings>;
+  loadYouTube: () => Promise<YouTubeFindings>;
+  loadHistory: () => Promise<TriageHistory>;
+  triage: (a: AnthropicFindings, y: YouTubeFindings, level: ClaudeLevel) => Promise<TriageOutcome>;
+  route: (triage: TriageResult) => Promise<Map<string, string>>;
+  record: (
+    triage: TriageResult,
+    a: AnthropicFindings,
+    y: YouTubeFindings,
+    routedIds: Map<string, string>,
+  ) => Promise<void>;
+}
+
+/**
+ * Runs one triage pass. Returns the process exit code: 0 on a judged triage
+ * (or nothing new), 1 when the triage failed or was infra-deferred.
+ *
+ * --dry-run sends no notification, routes nothing, records nothing.
+ * A failed triage routes nothing, records nothing, sends no summary, and
+ * exits nonzero so the cron run shows red instead of a fake "0 actionable".
+ */
+export async function runTriage(deps: TriageRunDeps): Promise<number> {
+  const { dryRun } = deps;
+  const notify = (message: string) => {
+    if (dryRun) {
+      console.log(`\ud83d\udd0d [DRY RUN] Would notify: ${message}`);
+      return;
+    }
+    deps.notify(message);
+  };
+
   console.log("\ud83e\udde0 KayaUpgrade AI Triage\n");
-  console.log(`\ud83c\udfaf Level: ${LEVEL}`);
-  console.log(`\ud83d\udd0d Dry run: ${DRY_RUN ? "Yes" : "No"}`);
+  console.log(`\ud83c\udfaf Level: ${deps.level}`);
+  console.log(`\ud83d\udd0d Dry run: ${dryRun ? "Yes" : "No"}`);
   console.log();
 
   // Load raw findings
   console.log("\ud83d\udcc2 Loading raw findings...");
-  const [anthropicFindings, youtubeFindings] = await Promise.all([loadAnthropicFindings(), loadYouTubeFindings()]);
+  const [anthropicFindings, youtubeFindings] = await Promise.all([deps.loadAnthropic(), deps.loadYouTube()]);
 
   console.log(
     `   Anthropic: ${anthropicFindings.updates.length} updates (${anthropicFindings.timestamp ? "from " + anthropicFindings.timestamp.split("T")[0] : "no data"})`,
@@ -726,11 +776,11 @@ async function main() {
     console.warn(`⚠️ YouTube findings are stale (${youtubeFindings.timestamp || "no timestamp"})`);
   }
   if (!anthropicFresh && !youtubeFresh) {
-    notifySync("WARNING: KayaUpgrade triage running on stale data — check if Anthropic.ts and YouTube.ts ran");
+    notify("WARNING: KayaUpgrade triage running on stale data — check if Anthropic.ts and YouTube.ts ran");
   }
 
   // Filter out previously evaluated findings
-  const history = await triageHistorySm.load();
+  const history = await deps.loadHistory();
   const {
     anthropic: newAnthro,
     youtube: newYT,
@@ -744,34 +794,36 @@ async function main() {
 
   if (newAnthro.updates.length === 0 && newYT.videos.length === 0) {
     console.log("\n\u2728 No new findings to triage. All findings already evaluated in previous runs.");
-    notifySync("Upgrade triage: no new findings");
-    return;
+    notify("Upgrade triage: no new findings");
+    return 0;
   }
 
   // Run AI triage on new findings only
   console.log("\n\ud83e\udde0 Running AI triage...");
-  const triage = await triageFindings(newAnthro, newYT, LEVEL);
+  const triage = await deps.triage(newAnthro, newYT, deps.level);
+  const newCount = newAnthro.updates.length + newYT.videos.length;
+
+  // A failed or infra-deferred triage never judged the findings: write nothing,
+  // record nothing (they stay new for the next run), and fail loud.
+  if (triage.failed || triage.infraDeferred) {
+    const kind = triage.infraDeferred ? "deferred on infra" : "failed";
+    console.error(`\n\u274c Triage ${kind}: ${triage.narrative.slice(0, 300)}`);
+    console.error(`   ${newCount} finding(s) left unjudged for the next run; nothing routed or recorded.`);
+    notify(`Upgrade triage ${kind} — ${newCount} finding(s) left for the next run`);
+    return 1;
+  }
 
   // Print report
   printReport(triage);
 
   // Route results (unless dry-run)
-  if (!DRY_RUN) {
+  if (!dryRun) {
     console.log("\n\ud83d\udce4 Routing results...");
-    const routedIds = await routeResults(triage);
+    const routedIds = await deps.route(triage);
 
-    // Record all triage decisions so next run skips these findings — unless the
-    // triage never judged them (infra end): then they stay new for the next run.
-    if (triage.infraDeferred) {
-      console.warn(
-        `\u26a0\ufe0f Triage ended on infra (${triage.narrative.slice(0, 120)}); ${newAnthro.updates.length + newYT.videos.length} finding(s) deferred to the next run, no decisions recorded`,
-      );
-    } else {
-      await recordTriageDecisions(triage, newAnthro, newYT, routedIds);
-      console.log(
-        `\ud83d\udcbe Recorded ${newAnthro.updates.length + newYT.videos.length} triage decision(s) to history`,
-      );
-    }
+    // Record all triage decisions so next run skips these findings
+    await deps.record(triage, newAnthro, newYT, routedIds);
+    console.log(`\ud83d\udcbe Recorded ${newCount} triage decision(s) to history`);
 
     console.log("\u2705 Triage complete and results routed");
   } else {
@@ -779,18 +831,35 @@ async function main() {
   }
 
   // Summary notification
-  notifySync(`Upgrade triage: ${triage.actionableItems.length} actionable, ${triage.dismissedCount} dismissed`);
+  notify(`Upgrade triage: ${triage.actionableItems.length} actionable, ${triage.dismissedCount} dismissed`);
 
   console.log("\n\ud83c\udfaf STATUS: Triage complete");
   console.log(`\u2705 ${triage.actionableItems.length} actionable items, ${triage.dismissedCount} dismissed`);
-  if (!DRY_RUN && triage.actionableItems.length > 0) {
+  if (!dryRun && triage.actionableItems.length > 0) {
     console.log("\u27a1\ufe0f NEXT: Review queued items via /queue list");
   }
+  return 0;
+}
+
+async function main(): Promise<number> {
+  return runTriage({
+    dryRun: DRY_RUN,
+    level: LEVEL,
+    notify: (m) => notifySync(m),
+    loadAnthropic: loadAnthropicFindings,
+    loadYouTube: loadYouTubeFindings,
+    loadHistory: () => triageHistorySm.load(),
+    triage: triageFindings,
+    route: routeResults,
+    record: recordTriageDecisions,
+  });
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error("\u274c Fatal error:", error);
-    process.exit(1);
-  });
+  main()
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      console.error("\u274c Fatal error:", error);
+      process.exit(1);
+    });
 }
