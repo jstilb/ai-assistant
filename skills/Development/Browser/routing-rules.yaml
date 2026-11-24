@@ -45,8 +45,14 @@ engine_selection:
   decision_flowchart: |
     Is this an interactive session (a live tool-call loop — not headless,
     cron, or a background agent)?
-      NO  --> playwright (Browse.ts/Stagehand below)
-              Claude-in-Chrome tools don't exist outside an interactive loop.
+      NO  --> Does it only READ a page that needs Jm's login (Patreon,
+              paywall, account page)?
+                YES --> main-chrome-read (Tools/MainChromeRead.ts)
+                        AppleScript: new tab in Jm's MAIN Chrome → save MHTML
+                        → close the tab. Read-only; no clicks or forms.
+                NO  --> playwright (Browse.ts/Stagehand below)
+                        Claude-in-Chrome tools don't exist outside an
+                        interactive loop.
       YES --> Is this the dedicated claude-browser session (launched via
               bin/claude-browser — env-stripped, keychain-authed)?
                 NO  --> the Chrome bridge cannot pair (ordinary sessions carry
@@ -76,6 +82,12 @@ engine_selection:
       condition: "Interactive session AND (site requires login OR site is heavy on bot-detection)"
       tool: claude-in-chrome
       reason: "Inherits Jm's live cookies/fingerprint; Playwright's synthetic browser can't authenticate or gets blocked by bot-detection."
+
+    - id: "main-chrome-read-for-bg-logged-in-read"
+      condition: "No interactive session (background agent, headless run) AND the task only reads a page that needs Jm's login"
+      tool: main-chrome-read
+      command: "bun skills/Development/Browser/Tools/MainChromeRead.ts <url> --must <url-substring> --text"
+      reason: "Jm, 2026-11-23: 'in the future use main browser or things that are already logged in.' Jm's main Chrome already holds the login; AppleScript Save Page (MHTML) needs no Chrome setting ('Allow JavaScript from Apple Events' stays off). The tool refuses (exit 2) while Chrome is not running or an automation Chrome (--user-data-dir=, e.g. Instacart) runs, because AppleScript may then reach that instance. Never ask Jm to log in again elsewhere."
 
     - id: "playwright-for-headless-or-cron"
       condition: "No interactive session (headless run, cron job, background agent)"
