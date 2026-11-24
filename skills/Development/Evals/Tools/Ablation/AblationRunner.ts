@@ -26,7 +26,9 @@
  * use). Every cell's result is written as soon as it finishes
  * (Results/ablations/<runId>/cells/<profile>__<model>.json) and the report
  * is re-rendered after each, so a killed run still leaves a usable partial
- * matrix; `--resume <runId>` skips cells that already have a result file.
+ * matrix; `--resume <runId>` skips cells that already have a result file,
+ * except that a loaded cell's infra-skipped tasks are re-run (only those
+ * tasks) and merged back into the cell.
  *
  * Usage:
  *   bun AblationRunner.ts run --suite setup-ablation --profiles clean,full,no-skills --models haiku,sonnet [--trials 2]
@@ -102,7 +104,13 @@ export interface CellResult {
   finished_at: string;
   wall_ms: number;
   tasks: TaskCellResult[];
-  summary: { scored: number; passed: number; mean_score: number; cost_usd: number; infra_skipped: number };
+  summary: {
+    scored: number;
+    passed: number;
+    mean_score: number;
+    cost_usd: number;
+    infra_skipped: number;
+  };
   error?: string;
 }
 
@@ -325,6 +333,33 @@ export interface RunOptions {
   resumeRunId?: string;
   outDir?: string; // default ABLATIONS_DIR (matrix.json, report.md, cells/)
   profilesRoot?: string; // default defaultProfilesRoot(); profiles land in <root>/<runId>/profiles
+  /** Test seam: replaces EvalExecutor.runSuite (no agent spawns). */
+  runSuiteFn?: typeof runSuite;
+}
+
+/** Task ids a resumed cell must re-run: the ones that carried no signal. */
+export function infraSkippedTaskIds(cell: CellResult): string[] {
+  return cell.tasks.filter((t) => t.status === "infra_skipped").map((t) => t.task_id);
+}
+
+/** Merge re-run task results into a loaded cell: each re-run task replaces
+ *  the old entry with the same id (order kept); tasks the retry did not
+ *  return keep their old entry. Summary is recomputed; wall time adds up. */
+export function mergeRetriedTasks(
+  cell: CellResult,
+  retried: TaskCellResult[],
+  timing: { finished_at: string; wall_ms: number },
+): CellResult {
+  const byId = new Map(retried.map((t) => [t.task_id, t]));
+  const tasks = cell.tasks.map((t) => byId.get(t.task_id) ?? t);
+  for (const t of retried) if (!cell.tasks.some((o) => o.task_id === t.task_id)) tasks.push(t);
+  return {
+    ...cell,
+    finished_at: timing.finished_at,
+    wall_ms: cell.wall_ms + timing.wall_ms,
+    tasks,
+    summary: summarizeCell(tasks),
+  };
 }
 
 function cellFileName(profile: string, model: string): string {
@@ -411,10 +446,19 @@ export async function runAblation(opts: RunOptions): Promise<{ runDir: string; f
     console.log(`[resume] ${file.cells.length} cell(s) loaded from ${cellsDir}`);
   }
 
+  // A cell is planned when it has no usable result, or (resume) when its
+  // loaded result has infra-skipped tasks — then only those tasks re-run.
   const plan = names
     .flatMap((p) => models.map((m) => ({ p, m })))
-    .filter(({ p, m }) => !file.cells.some((c) => c.profile === p && c.model === m));
-  console.log(`\n[plan] ${plan.length} cell(s) to run: ${plan.map(({ p, m }) => `${p}×${m}`).join(", ")}`);
+    .flatMap(({ p, m }) => {
+      const prior = file.cells.find((c) => c.profile === p && c.model === m);
+      if (!prior) return [{ p, m, retry: undefined as string[] | undefined }];
+      const retry = infraSkippedTaskIds(prior);
+      return retry.length ? [{ p, m, retry }] : [];
+    });
+  const describePlan = ({ p, m, retry }: (typeof plan)[number]) =>
+    retry ? `${p}×${m} (re-run ${retry.length} infra-skipped: ${retry.join(", ")})` : `${p}×${m}`;
+  console.log(`\n[plan] ${plan.length} cell(s) to run: ${plan.map(describePlan).join(", ")}`);
   console.log(`[plan] results → ${runDir}`);
   console.log(`[plan] profiles → ${profilesDir}`);
   writeRunFile(runDir, file);
@@ -423,38 +467,54 @@ export async function runAblation(opts: RunOptions): Promise<{ runDir: string; f
     return { runDir, file };
   }
 
-  for (const { p, m } of plan) {
+  const runSuiteFn = opts.runSuiteFn ?? runSuite;
+  for (const { p, m, retry } of plan) {
     const manifest = manifests[p]!;
+    const prior = retry ? file.cells.find((c) => c.profile === p && c.model === m) : undefined;
     const startedAt = new Date();
     const t0 = performance.now();
     console.log(
-      `\n${"#".repeat(70)}\n# CELL ${p} × ${m}   (CLAUDE_CONFIG_DIR=${manifest.profile_dir})\n${"#".repeat(70)}`,
+      `\n${"#".repeat(70)}\n# CELL ${p} × ${m}${retry ? ` — re-run ${retry.length} infra-skipped task(s)` : ""}   (CLAUDE_CONFIG_DIR=${manifest.profile_dir})\n${"#".repeat(70)}`,
     );
     let cell: CellResult;
     try {
-      const { results } = await runSuite(opts.suite, {
+      const { results } = await runSuiteFn(opts.suite, {
         trials: opts.trials,
         timeout: opts.timeout,
         // systemContext deliberately undefined: the profile's own CLAUDE.md
         // (or its absence) is the thing under test — the CLI's
         // resolveContextAtRef() injection would double-load it.
-        env: { CLAUDE_CONFIG_DIR: manifest.profile_dir, KAYA_ABLATION_PROFILE: p },
+        env: {
+          CLAUDE_CONFIG_DIR: manifest.profile_dir,
+          KAYA_ABLATION_PROFILE: p,
+        },
         model: m === "default" ? undefined : m,
         noSessionPersistence: true,
         persist: false,
-        taskFilter: opts.taskFilter,
+        taskFilter: retry ?? opts.taskFilter,
       });
       const tasks = results.map(extractTaskCell);
-      cell = {
-        profile: p,
-        model: m,
-        started_at: startedAt.toISOString(),
-        finished_at: new Date().toISOString(),
-        wall_ms: Math.round(performance.now() - t0),
-        tasks,
-        summary: summarizeCell(tasks),
-      };
+      cell = prior
+        ? mergeRetriedTasks(prior, tasks, {
+            finished_at: new Date().toISOString(),
+            wall_ms: Math.round(performance.now() - t0),
+          })
+        : {
+            profile: p,
+            model: m,
+            started_at: startedAt.toISOString(),
+            finished_at: new Date().toISOString(),
+            wall_ms: Math.round(performance.now() - t0),
+            tasks,
+            summary: summarizeCell(tasks),
+          };
     } catch (e) {
+      if (prior) {
+        // A failed re-run must not throw away the cell's scored tasks: keep
+        // the loaded result (still infra-skipped) and say so.
+        console.error(`[cell ${p}×${m}] re-run of infra-skipped tasks FAILED, keeping prior result: ${e}`);
+        continue;
+      }
       cell = {
         profile: p,
         model: m,
