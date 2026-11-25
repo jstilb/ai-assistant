@@ -208,7 +208,9 @@ export interface TaskFilter {
   disposition?: Disposition | null;
   /** Row order; default `"priority"`. See `TASK_ORDER_SQL`. */
   order?: TaskOrder;
+  /** Max rows (a non-negative integer). `0` returns no rows; omit it for no limit. */
   limit?: number;
+  /** Rows to skip (a non-negative integer). Works with or without `limit`. */
   offset?: number;
 }
 
@@ -1307,10 +1309,20 @@ export class TaskDB {
    * The WHERE clause (with a leading space, or "") and its params for a TaskFilter.
    * One builder for listTasks and countTasks, so both read the filter the same way.
    * Ignores limit, offset and order.
+   *
+   * An empty string for project_id, goal_id, due_before or scheduled_date throws: it used to
+   * apply no filter at all (silently returning every row), and no real row matches "".
+   * Omit the key (or pass undefined) for "no filter".
    */
   private taskWhere(filter: TaskFilter): { where: string; params: SqlNamedParams } {
     const conditions: string[] = [];
     const params: SqlNamedParams = {};
+
+    for (const key of ["project_id", "goal_id", "due_before", "scheduled_date"] as const) {
+      if (filter[key] === "") {
+        throw new Error(`TaskFilter.${key} is an empty string; omit it for no filter`);
+      }
+    }
 
     if (filter.status) {
       if (Array.isArray(filter.status)) {
@@ -1384,10 +1396,17 @@ export class TaskDB {
     let sql = `SELECT * FROM tasks${where}`;
     sql += ` ORDER BY ${TASK_ORDER_SQL[filter.order ?? "priority"]}`;
 
-    if (filter.limit) {
-      sql += ` LIMIT ${filter.limit}`;
+    for (const key of ["limit", "offset"] as const) {
+      const v = filter[key];
+      if (v !== undefined && !(Number.isInteger(v) && v >= 0)) {
+        throw new Error(`TaskFilter.${key} must be a non-negative integer, got ${v}`);
+      }
     }
-    if (filter.offset) {
+    // SQLite needs a LIMIT before OFFSET; LIMIT -1 means "no limit".
+    if (filter.limit !== undefined || filter.offset !== undefined) {
+      sql += ` LIMIT ${filter.limit ?? -1}`;
+    }
+    if (filter.offset !== undefined) {
       sql += ` OFFSET ${filter.offset}`;
     }
 
