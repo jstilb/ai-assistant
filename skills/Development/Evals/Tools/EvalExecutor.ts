@@ -595,6 +595,11 @@ export async function executeTask(
         resultErrorSubtype: result.resultErrorSubtype,
       };
     } catch (e) {
+      // Missing claude CLI is an environment fault, not a transient infra
+      // blip: rethrow so TrialRunner records status:'error' (counted, visible)
+      // instead of the exitCode:1 path below, which classifyInfraFailure()
+      // would quietly exclude from pass_rate as 'exec_error'.
+      if (e instanceof ClaudeCliNotFoundError) throw e;
       capture.addTurn("assistant", `Error: ${e}`);
       const transcript = capture.finalize({ error: String(e) });
 
@@ -825,6 +830,30 @@ export function buildClaudeArgs(options: {
   return args;
 }
 
+/** Explicit opt-in for a simulated agent response (tests only). */
+export const EVAL_SIMULATION_ENV = "KAYA_EVAL_SIMULATE";
+
+/**
+ * Thrown when the claude CLI can't be found on the eval spawn's PATH.
+ * executeTask() rethrows it (it is NOT downgraded to an infra-skip), so the
+ * trial lands at status:'error' with this message — an error, never a score.
+ */
+export class ClaudeCliNotFoundError extends Error {
+  constructor(pathEnv: string | undefined) {
+    super(
+      `claude CLI not found on PATH (${pathEnv ?? "<unset>"}) — cannot run the eval agent. ` +
+        `Install claude or fix PATH. (Set ${EVAL_SIMULATION_ENV}=1 only in tests for a simulated response.)`,
+    );
+    this.name = "ClaudeCliNotFoundError";
+  }
+}
+
+/** Absolute path of the claude binary on the given PATH, or null. Exported for tests. */
+export function resolveClaudeBinary(pathEnv: string | undefined): string | null {
+  if (!pathEnv) return null;
+  return Bun.which("claude", { PATH: pathEnv });
+}
+
 async function executeWithClaude(
   prompt: string,
   options: {
@@ -844,16 +873,17 @@ async function executeWithClaude(
   resultIsError?: boolean;
   resultErrorSubtype?: string;
 }> {
-  // Check if claude CLI is available
-  const claudeExists = await $`which claude`
-    .quiet()
-    .then(() => true)
-    .catch(() => false);
-
-  if (!claudeExists) {
-    // Fallback to simulation mode for testing
-    console.log("Warning: claude CLI not found, running in simulation mode");
+  // Resolve the claude CLI against the SAME PATH the spawn will use. Missing
+  // CLI = fail loud: a fake response here would be graded as if it were a
+  // real agent answer (silent containment — see SEEN-NOT-FIXED K14). The
+  // only way to get a simulated response is the explicit test flag.
+  if (process.env[EVAL_SIMULATION_ENV] === "1") {
+    console.warn(`[Evals] ${EVAL_SIMULATION_ENV}=1 — returning a SIMULATED agent response (test only)`);
     return simulateExecution(prompt);
+  }
+  const claudeBin = resolveClaudeBinary(options.env.PATH);
+  if (!claudeBin) {
+    throw new ClaudeCliNotFoundError(options.env.PATH);
   }
 
   try {
@@ -869,6 +899,7 @@ async function executeWithClaude(
       model: options.model,
       noSessionPersistence: options.noSessionPersistence,
     });
+    args[0] = claudeBin;
 
     // Run claude in print mode with the prompt passed as a positional argument.
     // Using Bun.spawn for proper timeout support (Bun $ doesn't have .timeout()).
@@ -951,7 +982,9 @@ async function executeWithClaude(
 }
 
 /**
- * Simulate execution for testing when claude CLI is unavailable
+ * Simulated agent response. Reachable ONLY when the caller sets
+ * EVAL_SIMULATION_ENV=1 explicitly (tests); never as a fallback for a missing
+ * claude CLI. Output is prefixed "[Simulated]" so it can't pass for real.
  */
 function simulateExecution(prompt: string): {
   output: string;
