@@ -43,7 +43,13 @@ function keywordMatches(text: string, keyword: string): boolean {
 // Default Topic Profiles
 // ============================================================================
 
-const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
+/**
+ * Exported for the separate eval-lab repo (~/projects/eval-lab, src/kaya.ts): its
+ * articles lane reads these thresholds to apply scoreAndFilter's keep rule. No
+ * Kaya file imports it, so knip calls it unused — keep the export.
+ * @public
+ */
+export const DEFAULT_TOPIC_PROFILES: TopicProfile[] = [
   {
     id: "ai-ml",
     name: "AI & Machine Learning",
