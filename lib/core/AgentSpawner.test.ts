@@ -367,6 +367,16 @@ describe("buildAgentArgs", () => {
     expect(buildAgentArgs({ ...base, model: undefined })).not.toContain("--model");
   });
 
+  it("readonly = plan permission mode, no skip-permissions, no user settings, inline guard hooks allowed", () => {
+    const args = buildAgentArgs({ ...base, settings: "readonly", guardHooks: true, enforceTools: true });
+    expect(args).not.toContain("--dangerously-skip-permissions");
+    expect(args[args.indexOf("--permission-mode") + 1]).toBe("plan");
+    expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
+    expect(args).toContain("--settings");
+    expect(args[args.indexOf("--tools") + 1]).toBe(base.allowedTools);
+    expect(args[args.length - 1]).toBe(base.prompt);
+  });
+
   it("--tools follows enforceTools for both settings kinds", () => {
     for (const settings of ["isolated", "kaya"] as const) {
       const on = buildAgentArgs({ ...base, settings, enforceTools: true });

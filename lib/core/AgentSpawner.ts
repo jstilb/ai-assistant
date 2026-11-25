@@ -264,8 +264,12 @@ export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
  * - `kaya`: the user's settings.json supplies permissions and hooks (slash
  *   commands, CLAUDE.md). Cron agent mode. No inline guard hooks: settings.json
  *   already runs them, so they would run twice.
+ * - `readonly`: like `isolated` (no user settings, optional inline guard hooks),
+ *   but `--permission-mode plan` instead of skipping permissions: the agent reads
+ *   and cannot change files. For audits whose inputs another model wrote
+ *   (EndStateLoop ClaimAudit.ts; a Gemini loop host's rules forbid skip-permissions).
  */
-export type AgentSettings = "isolated" | "kaya";
+export type AgentSettings = "isolated" | "kaya" | "readonly";
 
 export interface AgentArgsOptions {
   prompt: string;
@@ -288,7 +292,8 @@ export interface AgentArgsOptions {
  * guard hooks, the Kaya home.
  */
 export function buildAgentArgs(o: AgentArgsOptions): string[] {
-  const isolated = (o.settings ?? "isolated") === "isolated";
+  const kind = o.settings ?? "isolated";
+  const isolated = kind !== "kaya"; // no user settings: isolated and readonly
   // `--allowedTools` is a permission-system allow-list — under
   // `--dangerously-skip-permissions` the permission system never runs, so it
   // is INERT as a boundary (verified live, S-06 slice-3 probe 0b: a Bash-less
@@ -302,7 +307,8 @@ export function buildAgentArgs(o: AgentArgsOptions): string[] {
     "-p",
     ...(o.model ? ["--model", o.model] : []),
     ...(o.effort ? ["--effort", o.effort] : []),
-    ...(isolated ? ["--dangerously-skip-permissions"] : []),
+    ...(kind === "isolated" ? ["--dangerously-skip-permissions"] : []),
+    ...(kind === "readonly" ? ["--permission-mode", "plan"] : []),
     "--allowedTools",
     o.allowedTools,
   ];
