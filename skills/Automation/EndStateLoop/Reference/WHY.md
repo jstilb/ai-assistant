@@ -124,3 +124,21 @@ Look at each slice as Jm sees it: Jm 2026-11-18, F-026/F-030/F-015: "are the age
 ### Build rules
 
 A first check decides only with enough items: Jm, 2026-11-18: "not taking the easy way out".
+
+## Workflows/Check.md
+
+### Claim audit per merge (2026-11-24)
+
+Problem: the form-doc loop on Gemini merged 23 units with 0 exams. Each unit was self-marked "moved". The exam that followed (exam-29) failed 7 of the rows it examined and found 2 false claims on Jm's page.
+
+Why exams were not the fix: from 2026-11-09 to 2026-11-18, exams were the progress currency, and they became the work. Examiners used 43 % of the tokens. 49 of 124 failed marks were test defects, not product faults. The exam clock was removed on 2026-11-18. A new exam clock and a rank-by-exam rule, built on 2026-11-24, repeated two removed designs. The watch reverted them (commit 6ec5885c8).
+
+Jm's 2026-11-19 design: a fresh reviewer after each merge, plus one exam per version. The claim audit is this reviewer, kept cheap and on the path to Jm.
+
+Jm, form-doc F-029, 2026-11-24: "how do we ensure you as the orchestraor of orchestraotrs keeps other orchestrators accountable? how do those orchestrators maintain focus to make meaningful progress (even without you steering them)?" and, on exams: "just remember that we actually moved things away from exams before because they caused issues. it may actullay be helpful to see what we've tried before."
+
+Principle: nobody checks their own work. Each layer is checked by something it cannot set. Jm sees the result without a pass through the checked layer.
+
+First live result: U78 (2026-11-24 15:43). The auditor found 2 FALSE claims of 8 (6 true): "named by starting court side" was turn parity only, and "47 of 51" was a fitted pairing. The move was revoked. Earlier the same day, a revoked U76 and a failed U77 had made the gate say RE-PLAN, and the board refused the unit-open of U78 until a re-plan file existed.
+
+A held post is a failure too: the watch held post form-doc-0060 for a correction post, and Jm's page had no update for 2 h (Jm: "why is the endstate loop artifact not being updated?"). Now the post goes at once with an audit line (`Workflows/Watch.md`, "Status page").

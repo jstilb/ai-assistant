@@ -392,6 +392,81 @@ describe("units and gate", () => {
     expect(run("gate", c.path).out).toBe("GO: stall 1\n");
   });
 
+  function audit(c: Case, id: string, result: string, ...more: string[]): { code: number; out: string; err: string } {
+    return run("unit-audit", c.path, "--unit", id, "--result", result, "--by", "auditor-1", "--note", "claim read against the product", ...more);
+  }
+
+  test("unit-audit fail revokes moved and records the audit; pass gives the move back", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    expect(unit(closeUnit(c, id, "pass"), id).moved).toBe(true);
+    const failed = audit(c, id, "fail", "--evidence", "/tmp/a.png,/tmp/b.png");
+    expect(failed.code).toBe(0);
+    expect(failed.out).toBe(`${id}: audit fail, moved false\n`);
+    const u = unit(read(c.path), id);
+    expect(u.moved).toBe(false);
+    expect(u.audit).toMatchObject({ by: "auditor-1", result: "fail", note: "claim read against the product", evidence: ["/tmp/a.png", "/tmp/b.png"] });
+    expect(u.audit?.at ?? "").toMatch(LOCAL_ISO);
+    expect(run("unit-audit", c.path, "--unit", id, "--result", "pass", "--by", "auditor-2", "--note", "re-read").code).toBe(0);
+    const back = unit(read(c.path), id);
+    expect(back.moved).toBe(true);
+    expect(back.audit).toMatchObject({ by: "auditor-2", result: "pass", evidence: [] });
+  });
+
+  test("unit-audit pass keeps moved false for a unit that shipped nothing", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    closeUnit(c, id, "pass", "none");
+    expect(audit(c, id, "pass").code).toBe(0);
+    expect(unit(read(c.path), id).moved).toBe(false);
+  });
+
+  test("two units revoked by audit in a row make gate say RE-PLAN", () => {
+    const c = ruled();
+    const a = openUnit(c, "R3");
+    closeUnit(c, a, "pass");
+    const b = openUnit(c, "R3");
+    closeUnit(c, b, "pass");
+    expect(run("gate", c.path).out).toBe("GO: stall 0\n");
+    expect(audit(c, b, "fail").code).toBe(0);
+    expect(run("gate", c.path).out).toBe("GO: stall 1\n");
+    expect(audit(c, a, "fail").code).toBe(0);
+    const g = run("gate", c.path);
+    expect(g.code).toBe(5);
+    expect(g.out).toContain("RE-PLAN: 2 units in a row with no board move");
+  });
+
+  test("unit-audit is refused for an open unit and an unknown unit, and leaves the board byte-identical", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    const before = readFileSync(c.path);
+    const open = audit(c, id, "fail");
+    expect(open.code).toBe(1);
+    expect(open.err).toContain(`refused: unit ${id} is open`);
+    const unknown = audit(c, "U99", "fail");
+    expect(unknown.code).toBe(1);
+    expect(unknown.err).toContain("refused: unknown unit U99");
+    expect(readFileSync(c.path).equals(before)).toBe(true);
+  });
+
+  test("unit-audit with a bad --result exits 2", () => {
+    const c = ruled();
+    const id = openUnit(c, "R3");
+    closeUnit(c, id, "pass");
+    const r = audit(c, id, "maybe");
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--result must be one of pass, fail");
+  });
+
+  test("a board without audit fields validates, and a writing command does not add the field", () => {
+    const c = ruled();
+    expect(run("validate", c.path).code).toBe(0);
+    const id = openUnit(c, "R3");
+    closeUnit(c, id, "pass");
+    expect(readFileSync(c.path, "utf8")).not.toContain("audit");
+    expect(run("validate", c.path).code).toBe(0);
+  });
+
   test("unit-open needs --kind product|test; unit-close needs a non-empty --shipped", () => {
     const c = setup();
     const before = readFileSync(c.path);

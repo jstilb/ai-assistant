@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { type Board, localIso } from "./Board.ts";
-import { appendFeedbackItem, checkLinks, driverSection, findFeedbackItem, allowedFolders, defaultInDir, imageReminders, insideFolder, loadBoard, nextFeedbackId, parseImage, parseKeyDrivers, parseLink, type Receipt, type StatusUpdate, unitWords } from "./Status.ts";
+import { appendFeedbackItem, checkLinks, driverSection, findFeedbackItem, allowedFolders, defaultInDir, imageReminders, insideFolder, loadBoard, nextFeedbackId, parseImage, parseKeyDrivers, parseLink, parseNumber, type Receipt, type StatusUpdate, unitWords } from "./Status.ts";
 
 const TOOL = join(import.meta.dir, "Status.ts");
 const ROOT = mkdtempSync(join(tmpdir(), "endstate-status-test-"));
@@ -504,3 +504,53 @@ describe("help", () => {
   });
 });
 
+describe("driver numbers and the audit copy", () => {
+  const APP = ["--app", "A=https://demo.example/a"];
+
+  test("post --number is kept as numbers; empty before and bar stay empty", () => {
+    const { dir, path } = setup("numbers-ok");
+    const r = cli("post", path, ...POST, ...APP, "--number", "Cards that pass|18 of 20|11 of 20|18 of 20", "--number", "Open complaints|3||");
+    expect(r.code).toBe(0);
+    expect(updates(dir)[0]?.numbers).toEqual([
+      { label: "Cards that pass", now: "18 of 20", before: "11 of 20", bar: "18 of 20" },
+      { label: "Open complaints", now: "3", before: "", bar: "" },
+    ]);
+  });
+
+  test("post --number refuses an empty label or now, 5 parts, 9 numbers, a unit code", () => {
+    const { dir, path } = setup("numbers-bad");
+    expect(cli("post", path, ...POST, ...APP, "--number", "|3||").code).toBe(1);
+    expect(cli("post", path, ...POST, ...APP, "--number", "Label||1|2").code).toBe(1);
+    expect(cli("post", path, ...POST, ...APP, "--number", "a|b|c|d|e").code).toBe(2);
+    expect(cli("post", path, ...POST, ...APP, "--number", "Row U12 passes|3||").code).toBe(1);
+    const nine = Array.from({ length: 9 }, (_, i) => ["--number", `Label ${i}|${i}||`]).flat();
+    expect(cli("post", path, ...POST, ...APP, ...nine).err).toContain("the cap is 8");
+    expect(updates(dir).length).toBe(0);
+    expect(() => parseNumber("x")).toThrow();
+  });
+
+  test("post without --number has no numbers field (old shape)", () => {
+    const { dir, path } = setup("numbers-absent");
+    expect(cli("post", path, ...POST, ...APP).code).toBe(0);
+    expect(updates(dir)[0]).not.toHaveProperty("numbers");
+  });
+
+  test("facts.closed copies the unit audit (note cut to 200); no audit: no field", () => {
+    const { dir, path } = setup("audit-copy");
+    const b = JSON.parse(readFileSync(path, "utf8")) as Board;
+    const u = b.units[0];
+    if (u === undefined) throw new Error("fixture has no unit");
+    u.audit = { at: ago(30), by: "demo-audit-1", result: "fail", note: "x".repeat(300), evidence: ["e.txt"] };
+    writeFileSync(path, JSON.stringify(b, null, 2));
+    expect(cli("post", path, ...POST, ...APP).code).toBe(0);
+    const c = updates(dir)[0]?.facts.closed[0];
+    expect(c?.audit).toEqual({ result: "fail", by: "demo-audit-1", note: "x".repeat(200) });
+    const { path: p2, dir: d2 } = setup("audit-none");
+    expect(cli("post", p2, ...POST, ...APP).code).toBe(0);
+    expect(updates(d2)[0]?.facts.closed[0]).not.toHaveProperty("audit");
+  });
+
+  test("post --help lists --number", () => {
+    expect(cli("post", "x", "--help").out).toContain("--number");
+  });
+});

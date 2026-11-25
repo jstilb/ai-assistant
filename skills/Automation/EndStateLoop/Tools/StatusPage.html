@@ -136,6 +136,15 @@ code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
 .disclose { justify-self: start; }
 .evidence { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .evidence .up { color: var(--good); } .evidence .down { color: var(--bad); }
+.block .nums, .block .audits { padding-left: 0; }
+.nums { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
+.nums-h, .audit-h { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; }
+.nums li { display: flex; flex-wrap: wrap; gap: 0 8px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.nums .nl { color: var(--muted); }
+.nums .nv { font-weight: 600; }
+.nums .nb { color: var(--faint); }
+.audits { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; overflow-wrap: anywhere; }
+.audits .ok { color: var(--good); } .audits .bad { color: var(--bad); }
 
 /* messages */
 .messages { margin-top: 28px; display: grid; gap: 14px; }
@@ -291,6 +300,30 @@ textarea { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertic
     }).join("");
     return '<section class="block"><h2>What changed for you, per key driver</h2><div class="drv">' + (cards || '<p class="note">No driver listed.</p>') + "</div></section>";
   }
+  /** "The numbers" of an update (post --number): label, before -> now, bar. Nothing when the update has none (old posts). */
+  function numbers(u) {
+    const ns = Array.isArray(u.numbers) ? u.numbers.filter((n) => n && n.label && n.now) : [];
+    if (!ns.length) return "";
+    return '<h3 class="nums-h">The numbers</h3><ul class="nums">' + ns.map((n) =>
+      '<li><span class="nl">' + esc(n.label) + ':</span> ' + (n.before ? '<span class="nb">' + esc(n.before) + " → </span>" : "") + '<span class="nv">' + esc(n.now) + "</span>" + (n.bar ? ' <span class="nb">(bar ' + esc(n.bar) + ")</span>" : "") + "</li>").join("") + "</ul>";
+  }
+  /** Closed units that have a claim audit (board unit-audit), named by their goal's sentence. */
+  function audited(u) {
+    const f = u.facts || {};
+    const rows = Array.isArray(f.rows) ? f.rows : [];
+    return (Array.isArray(f.closed) ? f.closed : []).filter((x) => x && x.audit && (x.audit.result === "pass" || x.audit.result === "fail")).map((x) => {
+      const r = rows.find((y) => y.id === x.row);
+      return { audit: x.audit, goal: r && r.sentence ? r.sentence : "" };
+    });
+  }
+  function auditLines(u) {
+    const a = audited(u);
+    if (!a.length) return "";
+    return '<h3 class="audit-h">Checked by a fresh reviewer</h3><ul class="audits">' + a.map((x) => {
+      const pass = x.audit.result === "pass";
+      return '<li class="' + (pass ? "ok" : "bad") + '">' + (x.goal ? "“" + esc(x.goal) + "”: " : "") + (pass ? "all claims hold" : "a claim did not hold — the move does not count") + "</li>";
+    }).join("") + "</ul>";
+  }
   function evidence(u) {
     const f = u.facts || {};
     const c = f.counts || {};
@@ -314,6 +347,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertic
     out.push("<li>" + closed.length + " work step" + (closed.length === 1 ? "" : "s") + " finished " + since + "; " + moved + " moved a goal; " + (f.liveChanges || 0) + " put a change live.</li>");
     if (Array.isArray(f.open)) out.push("<li>" + f.open.length + " work step" + (f.open.length === 1 ? "" : "s") + " in progress.</li>");
     if (f.stall >= 2) out.push('<li class="down">The last ' + f.stall + " finished work steps moved no goal." + (f.gate === "RE-PLAN" ? " A new plan is due before more work starts." : "") + "</li>");
+    for (const x of audited(u)) if (x.audit.note) out.push("<li>Reviewer note" + (x.goal ? " on “" + esc(x.goal) + "”" : "") + ": " + esc(x.audit.note) + "</li>");
     out.push("<li>" + (f.lastExamAt ? "Last independent check: " + esc(rel(f.lastExamAt)) + "." : "No independent check yet.") + "</li>");
     return '<ul class="evidence" id="evidence">' + out.join("") + "</ul>";
   }
@@ -374,7 +408,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertic
       '<section class="block"><h2>Where it stands</h2><p class="lead">' + esc(u.where) + "</p>" + (hasDrivers ? "" : goals(u.facts)) + "</section>" + drivers(u) +
       '<section class="block"><h2>Done since the last update</h2>' + list(u.done) + (tries ? '<div class="tries" aria-label="Try the changes">' + tries + "</div>" : "") + "</section>" +
       '<section class="block"><h2>Next</h2>' + list(u.left) + "</section>" +
-      '<section class="block"><div class="q"><h2>Moving toward the end state?</h2><span class="pill ' + vclass(pv.verdict) + '">' + esc(ANSWER[pv.verdict] || "?") + "</span></div><p>" + esc(pv.why) + '</p><button class="link disclose" data-act="evidence" aria-expanded="' + S.ui.evidence + '" aria-controls="evidence">' + (S.ui.evidence ? "Hide the evidence" : "Show the evidence") + "</button>" + (S.ui.evidence ? evidence(u) : "") + "</section>" +
+      '<section class="block"><div class="q"><h2>Moving toward the end state?</h2><span class="pill ' + vclass(pv.verdict) + '">' + esc(ANSWER[pv.verdict] || "?") + "</span></div><p>" + esc(pv.why) + "</p>" + numbers(u) + auditLines(u) + '<button class="link disclose" data-act="evidence" aria-expanded="' + S.ui.evidence + '" aria-controls="evidence">' + (S.ui.evidence ? "Hide the evidence" : "Show the evidence") + "</button>" + (S.ui.evidence ? evidence(u) : "") + "</section>" +
       '<section class="block"><div class="q"><h2>Still the right goals?</h2><span class="pill ' + vclass(av.verdict) + '">' + esc(ANSWER[av.verdict] || "?") + "</span></div><p>" + esc(av.why) + "</p></section>" +
       (hasDrivers ? '<section class="block"><p class="support-count">Support count: ' + esc(((u.facts.counts || {}).proven || 0) + " of " + ((u.facts.counts || {}).total || 0) + " rows proven by an independent check.") + (u.facts.drivers.supportShipped ? " " + esc(u.facts.drivers.supportShipped + " live change(s) on support rows.") : "") + "</p>" + goals(u.facts) + "</section>" : "") +
       "</article>";

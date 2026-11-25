@@ -64,6 +64,8 @@ Kaya's design rules (change them with evidence):
 - A test with a known answer comes first: planted faults, planted items, planted facts, held-out samples. A judge marks a row only after the judge passed its own test.
 - The pass rule is in the board before the run. A set is used once; after the run it is burned.
 - A unit fits one builder session. Two closed units in a row with no board move: the orchestrator re-plans with a different approach (Orchestrate step 1; `Board.ts gate` exits 5 and `unit-open` refuses until then). A move is a unit that closed `pass` and put a change live (`--shipped` is not `none`); a row mark is not needed. A unit that shipped nothing is not a move, even when its row went up.
+- After each merge, a fresh reviewer audits the unit's claims against the product (`Workflows/Check.md`, "Claim audit (per merge)"; `Tools/ClaimAudit.ts` when a driver, not a Claude orchestrator, runs it). A failed audit revokes the move (`Board.ts unit-audit`).
+- **Bars for "met"** (Jm form-doc F-029, 2026-11-24): a small-v1 current bet lists, for each item, the measured number now with its source (an exam or a product output, never a builder claim), the bar, and the test. Every status post gives 2 or 3 driver numbers with `Status.ts post --number "LABEL|NOW|BEFORE|BAR"`. Examples: edition `intake/AGENTS.md` "Bars for met"; form-doc `AGENTS.md`.
 - Each unit is a `product` unit: it changes what Jm receives. A test tool is built only inside a driver's product unit; product units never wait for a row's test tool or mark. A row's test rule has at most 2 versions; then the examiner judges the product directly (Exam step 2).
 - At most 2 builders per project at one time (16 GB Mac), and only on rows that touch different code.
 - Heavy runs go through `Tools/runlock.sh <lock dir> <session name> <command…>` with the two locks that the examiner brief names (Learn: `data/endstate/RUN.lock` and `data/endstate/MODEL.lock`): the memory lock for one memory-heavy run at a time (a browser, a test suite over the product, a copy server, a fault run); the model lock for one batch of model calls at a time. A run that needs both gives both in one call, the memory lock first (`runlock.sh <memory lock>,<model lock> <you> <command…>`). Never nest two runlock calls (the tool refuses). Waiters queue first come, first served (tickets in `<lock>.queue/`); only the merge check of a proven unit runs with `RUNLOCK_FIRST=1`, and it goes first. Never remove a lock that you do not own.
@@ -89,6 +91,8 @@ Running the **WorkflowName** workflow in the **EndStateLoop** skill to ACTION...
 | **Build** | a session started from a unit contract | `Workflows/Build.md` |
 | **Exam** | a session started from an examiner brief; "exam the loop", "product review" | `Workflows/Exam.md` |
 | **Check** | "check in on the loops", "are the loops making progress" | `Workflows/Check.md` |
+| **Watch** | a session started as `endstate-setup-N`; "watch the loops" | `Workflows/Watch.md` |
+| **ForeignLoop** | a loop whose orchestrator runs on a non-Claude model CLI (Gemini `agy`) | `Workflows/ForeignLoop.md` |
 
 ## Examples
 

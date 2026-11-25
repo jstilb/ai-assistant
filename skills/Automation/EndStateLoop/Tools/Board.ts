@@ -10,6 +10,11 @@
  * (`--shipped` is not "none"). Two closed units in a row that did not move make `gate` exit 5
  * (re-plan), and `unit-open` refuses while it does.
  *
+ * `unit-audit` is the independent claim audit after a merge: an auditor reads the unit's claims
+ * against the product and records pass or fail on the unit. A fail revokes the move (`moved` =
+ * false), so two revoked units in a row make `gate` say RE-PLAN; a pass gives back the move the
+ * close rule gives. The audit only revokes: it adds no gate and no wait.
+ *
  * Every writing command reads the board, changes it, runs the same checks as `validate` on the
  * result, and writes it atomically (temp file in the same folder + rename) only when the result
  * is valid. A refused command leaves the file byte-identical.
@@ -47,7 +52,9 @@ const SHIPPED_NONE = "none";
 export type Status = (typeof STATUSES)[number];
 export type Role = (typeof ROLES)[number];
 export type TestKind = (typeof KINDS)[number];
+const AUDIT_RESULTS = ["pass", "fail"] as const;
 export type UnitResult = (typeof RESULTS)[number];
+export type AuditResult = (typeof AUDIT_RESULTS)[number];
 export type UnitKind = (typeof UNIT_KINDS)[number];
 
 export interface Mark {
@@ -97,6 +104,15 @@ export interface Unit {
   kind: UnitKind | null;
   /** What went live at close (commit and where), or "none". Null while open and in units closed before release 11. */
   shipped: string | null;
+  /** The latest claim audit of the closed unit (`unit-audit`). Absent in units never audited. */
+  audit?: UnitAudit;
+}
+export interface UnitAudit {
+  at: string;
+  by: string;
+  result: AuditResult;
+  note: string;
+  evidence: string[];
 }
 export interface FinalCheck {
   what: string;
@@ -119,7 +135,8 @@ const FINAL_KEYS = ["what", "value", "readAt"] as const satisfies readonly (keyo
 const ROW_KEYS = ["id", "sentence", "source", "test", "status", "gap", "rank", "marks"] as const satisfies readonly (keyof Row)[];
 const TEST_KEYS = ["name", "kind", "command", "passRule", "ruleFile", "ruleSetAt"] as const satisfies readonly (keyof RowTest)[];
 const MARK_KEYS = ["at", "by", "role", "status", "evidence", "set", "note"] as const satisfies readonly (keyof Mark)[];
-const UNIT_KEYS = ["id", "row", "contract", "builder", "startedAt", "endedAt", "result", "statusHashAtOpen", "rowStatusAtOpen", "moved", "note", "kind", "shipped"] as const satisfies readonly (keyof Unit)[];
+const AUDIT_KEYS = ["at", "by", "result", "note", "evidence"] as const satisfies readonly (keyof UnitAudit)[];
+const UNIT_KEYS = ["audit", "id", "row", "contract", "builder", "startedAt", "endedAt", "result", "statusHashAtOpen", "rowStatusAtOpen", "moved", "note", "kind", "shipped"] as const satisfies readonly (keyof Unit)[];
 
 // ---------------------------------------------------------------- errors
 
@@ -148,6 +165,9 @@ const USAGE = `usage: bun Board.ts <command> <board path> [flags]
              or --in save outside the board folder and Jm's allowed folders)
   unit-close --unit U --result pass|fail|too-large --shipped "<what went live: commit and where>"|none --note TEXT
              (moved = pass and shipped not none)
+  unit-audit --unit U --result pass|fail --by NAME --note TEXT [--evidence p1,p2]
+             (claim audit of a closed unit; fail revokes its move, so two revoked units in a row say
+             RE-PLAN; pass gives back the move the close rule gives; refused for an open unit)
 writing commands lock <board>.lock and copy the old file to <board>.bak before the write.
 env: BOARD_LOCK_TIMEOUT_MS  ms a writing command waits for a held lock (default 10000); a lock
      older than 60 s is stale and is taken.`;
@@ -304,9 +324,27 @@ function parseRow(o: Obj, where: string, errors: string[]): Row {
   };
 }
 
+function parseAudit(o: Obj, where: string, errors: string[]): UnitAudit {
+  const f = new Fields(o, where, errors, AUDIT_KEYS);
+  return {
+    at: f.str("at"),
+    by: f.str("by"),
+    result: f.oneOf("result", AUDIT_RESULTS, "fail"),
+    note: f.str("note"),
+    evidence: f.strList("evidence"),
+  };
+}
+
 function parseUnit(o: Obj, where: string, errors: string[]): Unit {
   const f = new Fields(o, where, errors, UNIT_KEYS);
+  const auditRaw = o.audit;
+  let audit: UnitAudit | undefined;
+  if (auditRaw !== undefined) {
+    if (isObj(auditRaw)) audit = parseAudit(auditRaw, `${where}.audit`, errors);
+    else errors.push(`${where}.audit: expected an object, got ${JSON.stringify(auditRaw)}`);
+  }
   return {
+    ...(audit === undefined ? {} : { audit }),
     id: f.str("id"),
     row: f.str("row"),
     contract: f.str("contract"),
@@ -817,6 +855,7 @@ const COMMANDS: Record<string, CommandSpec> = {
   rank: { required: ["order", "by"], optional: [], switches: [] },
   "unit-open": { required: ["row", "contract", "builder", "kind"], optional: [], switches: [] },
   "unit-close": { required: ["unit", "result", "shipped", "note"], optional: [], switches: [] },
+  "unit-audit": { required: ["unit", "result", "by", "note"], optional: ["evidence"], switches: [] },
 };
 
 function parseFlags(tokens: string[], spec: CommandSpec): Args {
@@ -1098,6 +1137,21 @@ function cmdUnitClose(path: string, a: Args): void {
   });
 }
 
+function cmdUnitAudit(path: string, a: Args): void {
+  const result = enumFlag(a, "result", AUDIT_RESULTS);
+  const id = need(a, "unit");
+  const evidenceFlag = a.flags.get("evidence");
+  update(path, (board) => {
+    const unit = board.units.find((u) => u.id === id);
+    if (unit === undefined) throw new CliError(1, `refused: unknown unit ${id}`);
+    if (unit.result === "open") throw new CliError(1, `refused: unit ${id} is open; audit a closed unit`);
+    unit.audit = { at: localIso(), by: need(a, "by"), result, note: need(a, "note"), evidence: evidenceFlag === undefined ? [] : listFlag(evidenceFlag) };
+    // A failed audit takes the move back; a passed audit gives back what the close rule gives (unit-close).
+    unit.moved = result === "pass" && unit.result === "pass" && unit.shipped !== null && unit.shipped !== SHIPPED_NONE;
+    return `${id}: audit ${result}, moved ${unit.moved}`;
+  });
+}
+
 function run(argv: string[]): number {
   const [command, path, ...rest] = argv;
   if (command === undefined) throw usage("missing command");
@@ -1128,6 +1182,9 @@ function run(argv: string[]): number {
       return 0;
     case "unit-close":
       cmdUnitClose(path, a);
+      return 0;
+    case "unit-audit":
+      cmdUnitAudit(path, a);
       return 0;
     default:
       throw usage(`unknown command "${command}"`);

@@ -41,7 +41,7 @@ export type Verdict = (typeof VERDICTS)[number];
 
 /** Caps keep the page scannable: a field that does not fit is a field that says too much. Tightened 2026-11-18 after
  * Jm called the first page "crowded, messy": the first real updates had 5 items of about 200 characters each. */
-export const LIMITS = { where: 200, item: 140, items: 4, why: 180, answer: 300, label: 40, target: 400, links: 4 } as const;
+export const LIMITS = { where: 200, item: 140, items: 4, why: 180, answer: 300, label: 40, target: 400, links: 4, numbers: 8, numberPart: 60 } as const;
 
 /** Internal codes that mean nothing to Jm: unit, row and exam ids and session names (the first real updates were full
  * of "U66 (R22)", "exam-81", "E1 step 0"). The page names each goal by its sentence from the board instead. */
@@ -71,6 +71,15 @@ export interface UnitFact {
   result: string;
   moved: boolean | null;
   shipped: string | null;
+  /** From the board's `unit-audit` when the unit has one: the fresh reviewer's verdict. Absent in old records. */
+  audit?: { result: string; by: string; note: string };
+}
+/** One driver number of an update (`post --number`): before -> now against a bar. Absent in old records. */
+export interface DriverNumber {
+  label: string;
+  now: string;
+  before: string;
+  bar: string;
 }
 export interface RowMove {
   row: string;
@@ -163,6 +172,8 @@ export interface StatusUpdate {
   progress: { verdict: Verdict; why: string };
   aligned: { verdict: Verdict; why: string };
   answers: Answer[];
+  /** Optional: from `post --number`. Old records have none. */
+  numbers?: DriverNumber[];
   facts: Facts;
 }
 export interface Receipt {
@@ -190,9 +201,9 @@ const USAGE = `usage: bun Status.ts <command> <board path> [flags]
   facts      print the board facts that a post records now
   post       --by NAME --where TEXT --done TEXT… --left TEXT… --progress yes|partly|no --progress-why TEXT
              --aligned yes|partly|no --aligned-why TEXT [--try "LABEL=URL|command"…] [--app "LABEL=URL|command"…]
-             [--answer "F-NNN=TEXT"…] [--image "D1 before|after=URL"…] [--feedback-file PATH] [--no-check] [--dry-run]
+             [--answer "F-NNN=TEXT"…] [--number "LABEL|NOW|BEFORE|BAR"…] [--image "D1 before|after=URL"…] [--feedback-file PATH] [--no-check] [--dry-run]
              (--answer takes an item from the page inbox or any ### F-NNN item of FEEDBACK.md)
-             (repeat --done, --left, --try, --app, --answer once per item; --app is required on a project's
+             (repeat --done, --left, --try, --app, --answer, --number once per item; --app is required on a project's
              first update and is carried forward after it)
   pull       [--in DIR]   print the ArtifactData query that saves Jm's feedback for this project
   inbox      --by NAME [--in DIR] [--feedback-file PATH]   copy new feedback to FEEDBACK.md; print the receipt push
@@ -209,6 +220,8 @@ const POST_FIELDS = `The fields (the tool refuses longer text: where ${LIMITS.wh
 - \`--aligned\`: do the rows still say what Jm's newest words ask? With \`partly\` or \`no\`, name the row, Jm's words and the action (your re-rank or a Setup change; you do not edit rows).
 - \`--app\`: where Jm opens the product as a whole, with a short label ("Learn app", "Edition APK"): a URL that he can open, else the exact command or file path. Details such as a build date go in \`--where\`, not in the label. Required in a project's first update; then give it only when it changes (the tool carries it forward).
 - \`--try\`: for each live change, where Jm tries it (a deep link to the screen, the lesson or the edition, or the exact command), with a label that says what to look at. If a change has no place to try it, say why in \`--done\`.
+
+- \`--number\`: a driver number that the loop measures, as "LABEL|NOW|BEFORE|BAR" (for example "Cards that pass the read test|18 of 20|11 of 20|18 of 20"). BEFORE and BAR may be empty ("LABEL|NOW||"). Label and now are required. At most ${LIMITS.numbers} numbers; each part at most ${LIMITS.numberPart} characters. The page shows "before -> now (bar X)" under "Moving toward the end state?", so Jm sees measured numbers and not only the loop's words.
 
 Plain words: \`post\` refuses a unit, row or exam code or a session name in the text (\`U12\`, \`R4\`, \`E1\`, \`exam-81\`, \`edition-orch-13\`); commands in \`--try\` and \`--app\` targets may hold them. Name the goal or the change as Jm sees it ("same-story detection", "the coach card").
 
@@ -342,7 +355,15 @@ export function boardFacts(board: Board, boardPath: string, prev: StatusUpdate |
   const closed = board.units
     .filter((u) => u.result !== "open" && u.endedAt !== null && Date.parse(u.endedAt) > sinceMs)
     .sort((a, b) => Date.parse(a.endedAt ?? "") - Date.parse(b.endedAt ?? ""))
-    .map((u): UnitFact => ({ id: u.id, row: u.row, kind: u.kind, result: u.result, moved: u.moved, shipped: u.shipped }));
+    .map((u): UnitFact => ({
+      id: u.id,
+      row: u.row,
+      kind: u.kind,
+      result: u.result,
+      moved: u.moved,
+      shipped: u.shipped,
+      ...(u.audit === undefined ? {} : { audit: { result: u.audit.result, by: u.audit.by, note: oneLine(u.audit.note).slice(0, 200) } }),
+    }));
   let lastExamAt: string | null = null;
   for (const r of board.rows) {
     for (const m of r.marks) if (m.role === "examiner" && (lastExamAt === null || Date.parse(m.at) > Date.parse(lastExamAt))) lastExamAt = m.at;
@@ -558,7 +579,7 @@ const SPECS: Record<string, Spec> = {
   facts: { single: [], multi: [], switches: [], required: [] },
   post: {
     single: ["by", "where", "progress", "progress-why", "aligned", "aligned-why", "feedback-file"],
-    multi: ["done", "left", "try", "app", "answer", "image"],
+    multi: ["done", "left", "try", "app", "answer", "image", "number"],
     switches: ["no-check", "dry-run"],
     required: ["by", "where", "progress", "progress-why", "aligned", "aligned-why", "done", "left"],
   },
@@ -635,6 +656,15 @@ export function parseLink(flag: string, raw: string): Link {
   return { label, target, check: /^https?:\/\//.test(target) ? "not-checked" : "not-a-url", code: null };
 }
 
+/** "LABEL|NOW|BEFORE|BAR": before and bar may be empty. */
+export function parseNumber(raw: string): DriverNumber {
+  const parts = raw.split("|");
+  if (parts.length > 4) throw usage(`--number takes at most 4 parts "LABEL|NOW|BEFORE|BAR"; got ${parts.length} in "${raw}"`);
+  const [label = "", now = "", before = "", bar = ""] = parts;
+  const part = (what: string, v: string, required: boolean): string => (required || oneLine(v) !== "" ? capped(`--number ${what}`, v, LIMITS.numberPart) : "");
+  return { label: part("label", label, true), now: part("now", now, true), before: part("before", before, false), bar: part("bar", bar, false) };
+}
+
 /** One GET per http(s) link (5 s). The result is recorded, not enforced: a dead app is news for Jm. */
 export async function checkLinks(links: Link[]): Promise<Link[]> {
   return Promise.all(
@@ -688,6 +718,8 @@ async function cmdPost(path: string, a: Args): Promise<void> {
   }
   let tries = tryRaw.map((x) => parseLink("try", x));
   const images = (a.many.get("image") ?? []).map(parseImage);
+  const numbers = (a.many.get("number") ?? []).map(parseNumber);
+  if (numbers.length > LIMITS.numbers) throw new CliError(1, `refused: ${numbers.length} --number items; the cap is ${LIMITS.numbers}. Keep the key drivers.`);
 
   const fbFile = resolve(a.one.get("feedback-file") ?? join(board.folder, "FEEDBACK.md"));
   const answers: Answer[] = (a.many.get("answer") ?? []).map((raw) => {
@@ -728,6 +760,7 @@ async function cmdPost(path: string, a: Args): Promise<void> {
     progress,
     aligned,
     answers,
+    ...(numbers.length === 0 ? {} : { numbers }),
     facts: boardFacts(board, path, prev, new Date(), images),
   };
   const known = new Set(update.facts.drivers?.items.map((d) => d.id) ?? []);

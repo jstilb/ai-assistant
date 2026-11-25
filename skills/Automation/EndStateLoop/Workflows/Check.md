@@ -1,6 +1,6 @@
 # Check
 
-A check from outside on the live loops: are they alive, and do they move toward their end states? Run it when Jm asks, from a session that is not one of the loops. It is read-only on the projects.
+A check from outside on the live loops: are they alive, and do they move toward their end states? Run it when Jm asks, from a session that is not one of the loops. It is read-only on the projects. A new watch session (the chain that watches the loops) also starts with it: one fresh agent runs steps 1-5 before the session reads the old session's view in its handoff, and its findings go into the session's first report to Jm verbatim (Jm form-doc F-029, 2026-11-24: the watch must not inherit its predecessor's blind spots).
 
 ## Steps
 
@@ -26,6 +26,16 @@ A check from outside on the live loops: are they alive, and do they move toward 
 6. **Send findings** to each orchestrator with `SendMessage`. Label them: your proposals, not Jm's words; not a stop. The orchestrator ranks them. Never change a loop's files, a stop file or a paused chain.
 
 7. **Report to Jm** in ASD-STE100: one table (loop · alive · per key driver: did what Jm receives get better, yes or no, with the before and after images · the gap), what you sent, usage, the paused loops, and the decisions that only he can make, each with a default.
+
+## Claim audit (per merge)
+
+Why (Jm form-doc F-029, 2026-11-24): a loop that checks its own work ships false claims, and each one counts as a move, so the gate never fires. Exams cannot be the fix: as the progress currency (11-09 to 11-18) they became the work, and the 11-18 exam clock was removed (rootcause SYNTHESIS-1). Jm's 11-19 design is a fresh reviewer after each merge plus one exam per version. This audit is that fresh reviewer, kept cheap and on the path to Jm.
+
+- **When:** after each merge, before the status post that names it reaches Jm's page. For a loop whose orchestrator cannot start Claude agents (Gemini `agy`), its driver runs `Tools/ClaimAudit.ts` between steps (`next <board> --since U<n>`, then `run <board> --unit U<n> --by <name> --results <file the next step reads>`): one fresh headless sonnet with this section as its brief, `AUDIT.md`, and the `unit-audit` below; the watch reads `AUDIT.md` before it sends the post. A Claude orchestrator runs it as its fast merge check (Orchestrate.md step 5), as an Agent or with the same tool.
+- **Who:** one fresh agent (sonnet; `RateLimitGuard.ts --preferred sonnet`) that did not build or review the unit. Budget about 25 tool calls. Give it the post (or `RESULT.md`), the unit folder, the merged commit, the row sentences and Jm's words for the row; not the builder's verdict.
+- **What it checks**, per claim in the post (`where`, `done`, `progress`): the product evidence (the run's output, the report line, the picture) and the code path that makes it on the merged commit. A claim is FALSE when the evidence does not show it; when the product reads labels, a hand bank or check-half data at run time; when a count of coverage is worded as accuracy ("15 of 15 attributed"); or when a number does not recompute. UNCLEAR when the evidence is not on disk. It does not rerun the builder's own check scripts as its proof.
+- **Output:** `AUDIT.md` in the unit folder: one line per claim (TRUE / FALSE / UNCLEAR, file:line or the picture).
+- **On FALSE:** do not hold the post: send it at once with a first line that names each FALSE claim and says the move does not count (a held post left Jm's page silent for 2 h on 2026-11-24, Jm: "why is the endstate loop artifact not being updated?"); the loop's next post corrects the claims; `Board.ts unit-audit <board> --unit U<n> --result fail --by <name> --note "<claim>: <evidence>"` (the move is revoked; two revoked units in a row make the gate say RE-PLAN); mark the row `failed` with the evidence when the row's claim rests on it; send the loop a steer with a stop test. **On UNCLEAR or over-wide, with no FALSE** (a claim worded wider than its evidence, e.g. a rule said for all cases but tested on some, or a simulated number not labelled as simulated; or evidence not on disk): the loop writes a correction post that narrows or labels each such claim, and it goes to the page with the post. The move stands only when the auditor verified the live change itself (the product output on the merged commit shows it): `unit-audit --result pass --note "UNCLEAR <claim>; correction <post id>; live change: <evidence>"`. If the live change is not verified, record `--result fail`, as for FALSE (edition U172, 2026-11-24: over-wide rule wording, correction post edition-0094, live 'restated out 1' verified, so pass). **On all TRUE:** send the post; `unit-audit --result pass`.
 
 ## Do not
 
