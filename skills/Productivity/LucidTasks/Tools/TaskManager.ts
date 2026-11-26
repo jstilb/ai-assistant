@@ -2611,6 +2611,9 @@ Examples:
  * Called by QueueRouter hooks or external pollers when a queue item
  * linked to a LucidTask changes status.
  *
+ * Never reopens a closed task: a cancelled or done task stays as it is whatever
+ * the queue reports, and a completed queue item never turns a cancel into done.
+ *
  * Does NOT call db.close() — the singleton manages its own lifecycle.
  *
  * @param taskId - The LucidTask ID (t-...)
@@ -2639,6 +2642,9 @@ export function syncQueueStatus(taskId: string, queueStatus: string): void {
       );
       if (!result.closed) return;
     } else {
+      // A queue status never reopens a closed task: a cancel or done is Jm's (or a close's) decision,
+      // and a queue item re-pending or starting is not a reason to undo it (K17).
+      if (task.status === "cancelled" || task.status === "done") return;
       db.updateTask(taskId, { status: newStatus }, "queue");
     }
     db.logActivity(taskId, "status_sync", JSON.stringify({ from: task.status, to: newStatus, queueStatus }), "queue");

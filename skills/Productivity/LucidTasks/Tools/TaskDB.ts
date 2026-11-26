@@ -637,6 +637,8 @@ export function rollbackTaskEventsToActivityLog(db: Database): TaskEventsMigrati
 export class TaskDB {
   private db: Database;
   private _queueArchiveHook: QueueArchiveHook | null = null;
+  /** Side effects held until the enclosing bookkeepingClose transaction commits; null outside one. */
+  private _afterCommit: Array<() => void> | null = null;
 
   constructor(dbPath: string = defaultDbPath(), opts: { readOnly?: boolean } = {}) {
     // A reader never creates the DB or its directory.
@@ -828,6 +830,37 @@ export class TaskDB {
    */
   setQueueArchiveHook(hook: QueueArchiveHook): void {
     this._queueArchiveHook = hook;
+  }
+
+  /**
+   * Call the queue archive hook for one closed task. Fire-and-forget: success logs
+   * `queue_synced`, failure (sync throw or rejection) warns and logs `queue_sync_failed`.
+   */
+  private fireQueueArchive(taskId: string, queueItemId: string, reason: string): void {
+    const hookRef = this._queueArchiveHook;
+    if (hookRef === null) return;
+    // In short-lived CLI runs the DB may already be closed when the archive
+    // settles — activity logging is best-effort there; console is the fallback.
+    const logSyncOutcome = (action: string, detail: Record<string, string>): void => {
+      try {
+        this.logActivity(taskId, action, JSON.stringify(detail), "system");
+      } catch {
+        console.warn(`[TaskDB] ${action} for item ${queueItemId} (activity log unavailable)`);
+      }
+    };
+    const onError = (err: unknown): void => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[TaskDB] queue reverse-sync failed for item ${queueItemId}: ${msg}`);
+      logSyncOutcome("queue_sync_failed", { queueItemId, error: msg });
+    };
+    let pending: Promise<void>;
+    try {
+      pending = hookRef(queueItemId, reason);
+    } catch (err) {
+      onError(err);
+      return;
+    }
+    pending.then(() => logSyncOutcome("queue_synced", { queueItemId })).catch(onError);
   }
 
   // --------------------------------------------------------------------------
@@ -1162,27 +1195,13 @@ export class TaskDB {
       !CLOSED_TASK_STATUSES.has(existing.status) &&
       existing.queue_item_id
     ) {
-      const hookRef = this._queueArchiveHook;
       const queueItemId = existing.queue_item_id;
       const reason = `source task ${updates.status}`;
-      // In short-lived CLI runs the DB may already be closed when the archive
-      // settles — activity logging is best-effort there; console is the fallback.
-      const logSyncOutcome = (action: string, detail: Record<string, string>): void => {
-        try {
-          this.logActivity(id, action, JSON.stringify(detail), "system");
-        } catch {
-          console.warn(`[TaskDB] ${action} for item ${queueItemId} (activity log unavailable)`);
-        }
-      };
-      hookRef(queueItemId, reason)
-        .then(() => {
-          logSyncOutcome("queue_synced", { queueItemId });
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn(`[TaskDB] queue reverse-sync failed for item ${queueItemId}: ${msg}`);
-          logSyncOutcome("queue_sync_failed", { queueItemId, error: msg });
-        });
+      // Inside bookkeepingClose's transaction the archive waits for the commit (K18):
+      // a rolled-back close must not leave the queue item archived.
+      const fire = (): void => this.fireQueueArchive(id, queueItemId, reason);
+      if (this._afterCommit !== null) this._afterCommit.push(fire);
+      else fire();
     }
 
     return this.getTask(id);
@@ -1193,7 +1212,8 @@ export class TaskDB {
    * Already done/cancelled -> no write. A stored outcome an agent would accept is kept; else a
    * system outcome is recorded. The write goes through updateTask (gate, completed_at, the
    * `completed` Task event, recurrence, queue reverse-sync). Read, decision and write run in one
-   * IMMEDIATE transaction; SQLite errors propagate.
+   * IMMEDIATE transaction; SQLite errors propagate. The queue reverse-sync runs after the commit,
+   * so a failed commit leaves the queue item unarchived.
    */
   bookkeepingClose(id: string, note: BookkeepingNote, actor: string): BookkeepingCloseResult {
     const run = this.db.transaction((): BookkeepingCloseResult => {
@@ -1213,7 +1233,22 @@ export class TaskDB {
       if (!task) throw new Error(`bookkeepingClose: task ${id} vanished inside its own transaction`);
       return { closed: true, task, outcome: keep ? "kept" : "recorded" };
     });
-    return run.immediate();
+    // The queue archive hook fires only after the commit succeeds (K18). If the commit
+    // fails, the transaction rolls back and the held archive is dropped with it.
+    const outer = this._afterCommit;
+    const held: Array<() => void> = [];
+    this._afterCommit = held;
+    let result: BookkeepingCloseResult;
+    try {
+      result = run.immediate();
+    } finally {
+      this._afterCommit = outer;
+    }
+    for (const fire of held) {
+      if (outer !== null) outer.push(fire);
+      else fire();
+    }
+    return result;
   }
 
   /**
