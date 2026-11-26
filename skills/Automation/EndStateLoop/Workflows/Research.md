@@ -7,14 +7,13 @@ The gate fired (`Board.ts gate` exit 5), and the two closed units of the stall w
 
 ## Files: `<board folder>/lab/<name>/`
 - `QUESTION.md`: the capability; the score and its bar; the development set (the lab may see it); the held-out set (only the examiner opens it).
-- `SOURCES.md`, first: how others solve the problem, at least 5 sources with quotes. A Claude research agent writes it (a Codex run has no web search). No try starts before it exists.
+- `SOURCES.md`, first: how others solve the problem, at least 5 sources with quotes. A Claude research agent writes it. No try starts before it exists.
 - `LOG.md`: one table line for each try: method · n · score · minutes · keep or drop, and why.
 - `BEST.md`: the best method so far, its score, its commit.
 
 ## Rules
 - A lab is one board unit that stays open and uses one builder slot. Its tries are not units: a try that closed `shipped none` would count toward the gate.
 - A try is small (target: 30 minutes). No try decides on fewer than 60 items. A miss by 1 or 2 items is "not decided".
-- In a Codex project, each lab session is a Codex run on the lab's unit id with `--add-dir <board folder>/lab/<name>` (`Workflows/Codex.md`).
 - The first lab session must write one `LOG.md` line (the smoke test).
 
 ## Exits

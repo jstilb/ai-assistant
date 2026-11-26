@@ -72,7 +72,6 @@ The list of things that are not waits (the weekly usage, a missing prerequisite,
 
 - "Workspace not trusted": the workdir `~/.claude` is safe because the contract tells the builder to read `AGENTS.md` first.
 - Re-arm the wait at each wake: learn-orch-2, 2026-11-10 05:56 (see "Skill rules: wait in flight").
-- The Codex builder steps moved to `Workflows/Codex.md` (PLAN-25); their notes are under "Workflows/Codex.md" below.
 
 ### Orchestrate step 5
 
@@ -84,7 +83,7 @@ The examiner starts from a request file, not a message: a file is evidence, and 
 
 ### Orchestrate status page
 
-- `inbox` writes each item in the project-standard format; the page is a fourth door for Jm's feedback (SKILL.md, "Integration").
+- The page is a fourth door for Jm's feedback (SKILL.md, "Integration"). The session reads the page store and writes the item itself.
 - `--answer` with an F-item from another door reads the item from `FEEDBACK.md`, and the page shows Jm's words with your answer.
 - The page shows each goal by its sentence from the board, so a post names the goal as Jm sees it.
 - The field limits exist because Jm reads the updates on a phone.
@@ -96,14 +95,6 @@ Plain words: Jm, 2026-11-18, on the first page: "it is crowded, messy". The firs
 ### Orchestrate report
 
 Row counts are not progress (Jm, 2026-11-10; Learn F-010, edition F-007: "are we making real progress towards the actual end state goals and not just some proxy metric?").
-
-## Workflows/Codex.md
-
-- Codex builder: Jm 2026-11-17, form-doc F-006: "have it work on formdoc".
-- Never `--add-dir` the board folder: Codex could write the board and the exam sets.
-- No `ps`, `pgrep` or signals in a Codex contract: form-doc pilot, 2026-11-17: U2 and U3 stopped on a contract's `pgrep`. The sandbox refuses them.
-- The tool tells Codex its time cap and that "too large" comes only near the cap or at a full context (U1 stopped after 1 minute with "too large" and built nothing).
-- Codex cannot commit because its sandbox keeps `.git` read-only.
 
 ## Workflows/StatusPageChange.md
 
@@ -142,3 +133,14 @@ Principle: nobody checks their own work. Each layer is checked by something it c
 First live result: U78 (2026-11-24 15:43). The auditor found 2 FALSE claims of 8 (6 true): "named by starting court side" was turn parity only, and "47 of 51" was a fitted pairing. The move was revoked. Earlier the same day, a revoked U76 and a failed U77 had made the gate say RE-PLAN, and the board refused the unit-open of U78 until a re-plan file existed.
 
 A held post is a failure too: the watch held post form-doc-0060 for a correction post, and Jm's page had no update for 2 h (Jm: "why is the endstate loop artifact not being updated?"). Now the post goes at once with an audit line (`Workflows/Watch.md`, "Status page").
+
+## Cuts of 2026-11-25
+
+Jm, 2026-11-25 (verbatim): "how much of this is unnecessary deterministic tooling? these are file reads and writes. are we overcomplicating this skill?" Then: "make changes".
+
+- `Status.ts pull` and `inbox` (about 190 lines): the page store held 0 feedback documents after 7 days; three incident fixes went into the save folder of `pull`, and one save held a session 8.5 h. A session now makes one ArtifactData query and writes the item itself.
+- The contract text scan in `unit-open` (about 125 lines): a regex with negation rules read contract prose for `rm`, `EnterWorktree` and save paths. That is a judgement about content. The rule stays as text (SKILL.md, "No permission prompts"), and the stop guard shows a session that waits.
+- The `unit-open` refusal on the no-move gate: the three projects hold 46 re-plan files, form-doc row E1 has 10 versions, and its board still showed stall 9. The gate produced documents, not moves. `gate` still prints the line and exits 5, as context for the orchestrator and for the spawn script.
+- The internal-code check in `post`: a word blocklist on the model's text. The field sizes stay, because the page has fixed fields.
+- `codex-unit.sh` and `Workflows/Codex.md`: the newest Codex run log on disk was from 2026-11-19. Git has both files.
+- Before a new tool command: is it a lock, atomic state, the spawn substrate or machine state? If not, write the sentence, not the code.

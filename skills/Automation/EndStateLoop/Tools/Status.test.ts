@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { type Board, localIso } from "./Board.ts";
-import { appendFeedbackItem, checkLinks, driverSection, findFeedbackItem, allowedFolders, defaultInDir, imageReminders, insideFolder, loadBoard, nextFeedbackId, parseImage, parseKeyDrivers, parseLink, parseNumber, type Receipt, type StatusUpdate, unitWords } from "./Status.ts";
+import { checkLinks, driverSection, feedbackFiles, findFeedbackItem, imageReminders, loadBoard, parseImage, parseKeyDrivers, parseLink, parseNumber, type StatusUpdate, unitWords } from "./Status.ts";
 
 const TOOL = join(import.meta.dir, "Status.ts");
 const ROOT = mkdtempSync(join(tmpdir(), "endstate-status-test-"));
@@ -128,194 +128,54 @@ describe("post", () => {
     expect(existsSync(join(dir, "status"))).toBe(false);
   });
 
-  test("internal codes are refused in Jm's text, allowed in a command target and in --by", () => {
-    const { dir, path } = setup("codes");
-    const app = ["--app", "A=https://a.example"];
-    for (const [flag, text, code] of [
-      ["--done", "U66 shipped.", "U66"],
-      ["--left", "Then the R22 exam.", "R22"],
-      ["--done", "exam-81 passed.", "exam-81"],
-      ["--done", "E1 step 0 passed.", "E1"],
-      ["--left", "Ask edition-orch-13 first.", "edition-orch-13"],
-    ] as const) {
-      const r = cli("post", path, ...POST, ...app, flag, text);
-      expect(r.code).toBe(1);
-      expect(r.err).toContain(`internal code "${code}"`);
-    }
-    expect(existsSync(join(dir, "status"))).toBe(false);
-    const ok = cli("post", path, ...POST, ...app, "--try", "The new drill=learn drill --row R2 --unit U9");
-    expect(ok.code).toBe(0);
-    expect(updates(dir)[0]?.by).toBe("demo-orch-1");
-    expect(updates(dir)[0]?.facts.rows.map((r) => [r.id, r.status, r.sentence])).toEqual([
-      ["R1", "proven", "Row one."],
-      ["R2", "claimed", "Row two."],
-      ["R3", "untested", "Row three."],
-    ]);
-  });
 });
 
-describe("inbox and answers", () => {
-  test("new feedback goes verbatim under ## Open; a second run adds nothing; answers attach by F-number", () => {
-    const { dir, path } = setup("inbox");
-    const fb = join(dir, "project", "FEEDBACK.md");
-    writeFileSync(fb, "# Feedback: demo\n\n## Open\n\n### F-007 · 2026-11-01 · s\n- **Jm (verbatim):** \"old\"\n\n## Decided\n\n### F-002 · 2026-10-01 · s\n");
-    const inDir = join(dir, "status", "in", "feedback");
-    mkdirSync(inDir, { recursive: true });
-    writeFileSync(join(inDir, "abc123.json"), JSON.stringify({ project: "demo", text: "Ship the drill\nfirst, please.", at: "2026-11-18T23:00:00.000Z", to: "demo-orch-1" }));
-    writeFileSync(join(inDir, "zzz999.json"), JSON.stringify({ project: "other", text: "not for demo", at: "2026-11-18T23:01:00.000Z", to: "x" }));
 
-    const r = cli("inbox", path, "--by", "demo-orch-2");
-    expect(r.code).toBe(0);
-    expect(r.out).toContain('F-008 ← "Ship the drill first, please."');
-    const text = readFileSync(fb, "utf8");
-    expect(text.indexOf("### F-008")).toBeGreaterThan(text.indexOf("## Open"));
-    expect(text.indexOf("### F-008")).toBeLessThan(text.indexOf("## Decided"));
-    expect(text).toContain('- **Jm (verbatim):** "Ship the drill first, please."');
-    expect(text).not.toContain("not for demo");
-    const receipts = readFileSync(join(dir, "status", "INBOX.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as Receipt);
-    expect(receipts.map((x) => [x.feedback, x.ref, x.by])).toEqual([["abc123", "F-008", "demo-orch-2"]]);
-    expect(r.out).toContain('"collection":"receipts","doc_id":"abc123"');
 
-    const again = cli("inbox", path, "--by", "demo-orch-2");
-    expect(again.out).toContain("no new feedback");
-    expect(readFileSync(fb, "utf8")).toBe(text);
-
-    expect(cli("post", path, ...POST, "--app", "A=https://a.example", "--answer", "F-099=nope").code).toBe(1);
-    const ok = cli("post", path, ...POST, "--app", "A=https://a.example", "--answer", "F-008=Drill ships next.");
-    expect(ok.code).toBe(0);
-    expect(updates(dir)[0]?.answers).toEqual([{ feedback: "abc123", ref: "F-008", text: "Drill ships next.", words: null }]);
-    expect(ok.err).not.toContain("no answer yet");
-  });
-
-  test("--answer takes an F-item that came by another door, from FEEDBACK.md or --feedback-file", () => {
-    const { dir, path } = setup("other-door");
-    const tracker = join(dir, "tracker-FEEDBACK.md");
-    writeFileSync(tracker, '# Feedback\n\n## Open\n\n### F-028 · 2026-11-18 · a session\n- **Jm (verbatim):** "make the review answers reach Learn"\n- **Need:** x\n\n### F-0281 · 2026-11-18 · s\n- **Jm (verbatim):** "other"\n');
+describe("answers", () => {
+  const ITEM = '### F-028 · 2026-11-18 · a session\n- **Jm (verbatim):** "make the review answers reach Learn"\n- **Need:** x\n';
+  test("--answer takes an F-item from FEEDBACK.md, from --feedback-file, or from FEEDBACK-HISTORY.md beside it", () => {
+    const { dir, path } = setup("answer-files");
+    const tracker = join(dir, "tracker", "FEEDBACK.md");
+    mkdirSync(dirname(tracker), { recursive: true });
+    writeFileSync(tracker, `# Feedback\n\n## Open\n\n${ITEM}\n### F-0281 · 2026-11-18 · s\n- **Jm (verbatim):** "other"\n`);
+    expect(feedbackFiles(tracker)).toEqual([tracker]);
     expect(cli("post", path, ...POST, "--app", "A=https://a.example", "--answer", "F-028=Done in the next build.").code).toBe(1); // not in <project>/FEEDBACK.md
     const r = cli("post", path, ...POST, "--app", "A=https://a.example", "--answer", "F-028=Done in the next build.", "--feedback-file", tracker);
     expect(r.code).toBe(0);
     expect(updates(dir)[0]?.answers).toEqual([{ feedback: null, ref: "F-028", text: "Done in the next build.", words: "make the review answers reach Learn" }]);
+    // decided: the item moved to the history file beside the open file
+    writeFileSync(tracker, "# Feedback\n\n## Open\n");
+    writeFileSync(join(dirname(tracker), "FEEDBACK-HISTORY.md"), `# Feedback history\n\n${ITEM}`);
+    expect(cli("post", path, ...POST, "--answer", "F-028=It is live.", "--feedback-file", tracker).code).toBe(0);
+    expect(updates(dir)[1]?.answers[0]?.words).toBe("make the review answers reach Learn");
   });
 
-  test("a reply from the page names the item it answers", () => {
-    const { dir, path } = setup("reply");
-    const inDir = join(dir, "status", "in", "feedback");
-    mkdirSync(inDir, { recursive: true });
-    writeFileSync(join(inDir, "m1.json"), JSON.stringify({ project: "demo", text: "First message.", at: "2026-11-18T23:00:00.000Z", to: "demo-orch-1" }));
-    expect(cli("inbox", path, "--by", "demo-orch-1").code).toBe(0);
-    writeFileSync(join(inDir, "m2.json"), JSON.stringify({ project: "demo", text: "Thanks, but why?", at: "2026-11-18T23:30:00.000Z", to: "demo-orch-1", replyTo: "m1" }));
-    const r = cli("inbox", path, "--by", "demo-orch-1");
-    expect(r.out).toContain("F-002");
-    expect(r.out).toContain("a reply to your answer on F-001");
-    expect(readFileSync(join(dir, "project", "FEEDBACK.md"), "utf8")).toContain("; a reply to the answer on F-001; received by demo-orch-1");
+  test("an item with a Page item line answers Jm's page message by its doc id", () => {
+    const { dir, path } = setup("answer-page");
+    const file = join(dir, "page", "FEEDBACK.md");
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, '# Feedback\n\n## Open\n\n### F-003 · 2026-11-25 · status page\n- **Jm (verbatim):** "the list is too long"\n- **Page item:** `fb_abc123`\n');
+    expect(cli("post", path, ...POST, "--app", "A=https://a.example", "--answer", "F-003=Cut to nine.", "--feedback-file", file).code).toBe(0);
+    expect(updates(dir)[0]?.answers).toEqual([{ feedback: "fb_abc123", ref: "F-003", text: "Cut to nine.", words: null }]);
   });
 
-  test("a missing FEEDBACK.md is made from the project-standard starter", () => {
-    const { dir, path } = setup("starter");
-    const inDir = join(dir, "status", "in", "feedback");
-    mkdirSync(inDir, { recursive: true });
-    writeFileSync(join(inDir, "f1.json"), JSON.stringify({ project: "demo", text: "hello", at: "2026-11-18T23:00:00.000Z", to: "" }));
-    expect(cli("inbox", path, "--by", "demo-orch-1").code).toBe(0);
-    const text = readFileSync(join(dir, "project", "FEEDBACK.md"), "utf8");
-    expect(text).toContain("# Feedback: demo");
-    expect(text).toMatch(/### F-001 · \d{4}-\d\d-\d\d · status page/);
-  });
-
-  test("pull prints the query for this project and its out_dir", () => {
-    const { dir, path } = setup("pull");
-    mkdirSync(join(ROOT, "job-pull"), { recursive: true });
-    writeFileSync(join(ROOT, "job-pull", "state.json"), JSON.stringify({ cwd: dir }));
-    const p = Bun.spawnSync(["bun", TOOL, "pull", path], { stdout: "pipe", stderr: "pipe", env: { ...process.env, CLAUDE_JOB_DIR: join(ROOT, "job-pull") } });
-    const r = { code: p.exitCode ?? -1, out: p.stdout.toString() };
+  test("pull and inbox are removed: they print the new steps and exit 0", () => {
+    const { path } = setup("removed-door");
+    const r = cli("pull", path);
     expect(r.code).toBe(0);
-    expect(r.out).toContain(`"where":[["project","==","demo"]]`);
-    expect(r.out).toContain(`"out_dir":"${join(dir, "status", "in")}"`);
-  });
-});
-
-describe("pull saves inside the session folder (incident fix 2026-11-19: saves outside it waited on a prompt)", () => {
-  function fakeJob(jobDir: string, cwd: string): string {
-    mkdirSync(join(jobDir, "tmp"), { recursive: true });
-    writeFileSync(join(jobDir, "state.json"), JSON.stringify({ state: "working", cwd }));
-    return jobDir;
-  }
-  function cliEnv(extra: Record<string, string>, ...args: string[]): { code: number; out: string; err: string } {
-    const p = Bun.spawnSync(["bun", TOOL, ...args], { stdout: "pipe", stderr: "pipe", env: { ...process.env, ...extra } });
-    return { code: p.exitCode ?? -1, out: p.stdout.toString(), err: p.stderr.toString() };
-  }
-
-  test("insideFolder respells a path in the folder's case and refuses a sibling", () => {
-    expect(insideFolder("/Users/x/Projects/learn/data/in", "/Users/x/projects/learn")).toBe("/Users/x/projects/learn/data/in");
-    expect(insideFolder("/Users/x/projects/learn", "/Users/x/projects/learn")).toBe("/Users/x/projects/learn");
-    expect(insideFolder("/Users/x/projects/learner/in", "/Users/x/projects/learn")).toBeNull();
-    expect(insideFolder("/tmp/learn-status-in", "/Users/x/projects/learn")).toBeNull();
-  });
-
-  test("board inside the session folder: its status/in, spelled with the session folder's case, no warning", () => {
-    const { dir, path } = setup("pull-case");
-    const upper = join(dirname(dir), basename(dir).toUpperCase());
-    const r = cliEnv({ CLAUDE_JOB_DIR: fakeJob(join(ROOT, "job-case"), upper) }, "pull", path);
-    expect(r.code).toBe(0);
-    expect(r.out).toContain(`"out_dir":"${join(upper, "status", "in")}"`);
-    expect(r.out).not.toContain("warning:");
-  });
-
-  test("board outside the session folder: the query has no out_dir; documents saved by Bash in the job's tmp reach inbox", () => {
-    const { dir, path } = setup("pull-inline");
-    const session = join(ROOT, "session-a");
-    const job = fakeJob(join(session, "jobs", "j1"), session);
-    const r = cliEnv({ CLAUDE_JOB_DIR: job }, "pull", path);
-    expect(r.code).toBe(0);
-    expect(r.out).not.toContain('"out_dir"');
-    expect(r.out).toContain(`"where":[["project","==","demo"]]`);
-    const want = join(job, "tmp", "status-in", "demo", "feedback");
-    expect(r.out).toContain(`${want}/<doc id>.json`);
-    writeFileSync(join(dir, "project", "FEEDBACK.md"), "# Feedback: demo\n\n## Open\n");
-    mkdirSync(want, { recursive: true });
-    writeFileSync(join(want, "doc1.json"), JSON.stringify({ project: "demo", text: "Saved by Bash in the job folder.", at: "2026-11-19T16:00:00.000Z", to: "demo-orch-1" }));
-    const inbox = cliEnv({ CLAUDE_JOB_DIR: job }, "inbox", path, "--by", "demo-orch-1");
-    expect(inbox.code).toBe(0);
-    expect(inbox.out).toContain('← "Saved by Bash in the job folder."');
-  });
-
-  test("a board folder that Jm allowed (additionalDirectories) takes the save even outside the session folder", () => {
-    const home = join(ROOT, "home-allowed");
-    mkdirSync(join(home, ".claude"), { recursive: true });
-    const boardDir = join(ROOT, "Allowed-Board");
-    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ permissions: { additionalDirectories: [boardDir, "/tmp"] } }));
-    const job = fakeJob(join(ROOT, "job-allowed"), join(ROOT, "session-c"));
-    const env = { HOME: home, CLAUDE_JOB_DIR: job };
-    expect(allowedFolders(env)).toEqual([boardDir, "/tmp"]);
-    expect(defaultInDir(join(boardDir, "SCOREBOARD.json"), "demo", env)).toEqual({ dir: join(boardDir, "status", "in"), inline: false });
-    expect(defaultInDir(join(ROOT, "other-board", "SCOREBOARD.json"), "demo", env)).toEqual({ dir: join(job, "tmp", "status-in", "demo"), inline: true });
-    expect(allowedFolders({ HOME: join(ROOT, "no-such-home") })).toEqual([]);
-  });
-
-  test("an --in outside the session folder warns and keeps that out_dir", () => {
-    const { path } = setup("pull-out");
-    const job = fakeJob(join(ROOT, "job-out"), join(ROOT, "session-b"));
-    const given = cliEnv({ CLAUDE_JOB_DIR: job }, "pull", path, "--in", "/tmp/demo-status-in");
-    expect(given.code).toBe(0);
-    expect(given.out).toContain("warning: --in /tmp/demo-status-in lies outside your session folder");
-    expect(given.out).toContain(`"out_dir":"/tmp/demo-status-in"`);
+    expect(r.out).toContain('"collection":"feedback"');
+    expect(cli("inbox", path, "--by", "x").code).toBe(0);
   });
 });
 
 describe("helpers", () => {
-  test("nextFeedbackId skips the examples inside HTML comments", () => {
-    expect(nextFeedbackId("<!-- ### F-900 -->\n### F-004 · x\n### F-012 · y")).toBe("F-013");
-    expect(nextFeedbackId("# none")).toBe("F-001");
-  });
 
-  test("appendFeedbackItem without ## Decided appends at the end", () => {
-    const out = appendFeedbackItem("# F\n\n## Open\n", { ref: "F-001", docId: "d", words: "w", sentAt: "s", to: "", by: "b", at: "2026-11-18T10:00:00-08:00" });
-    expect(out.endsWith("<!-- feedback-end:d -->\n")).toBe(true);
-  });
 
   test("findFeedbackItem takes the exact F-number and skips comments", () => {
     const text = '<!-- ### F-028 · example -->\n### F-0281 · x\n- **Jm (verbatim):** "wrong"\n\n### F-028 · y\n- **Jm (verbatim):** "right"\n### F-029 · z\n- **Need:** n\n';
-    expect(findFeedbackItem(text, "F-028")).toEqual({ words: "right" });
-    expect(findFeedbackItem(text, "F-029")).toEqual({ words: null });
+    expect(findFeedbackItem(text, "F-028")).toEqual({ words: "right", pageDoc: null });
+    expect(findFeedbackItem(text, "F-029")).toEqual({ words: null, pageDoc: null });
     expect(findFeedbackItem(text, "F-030")).toBeNull();
     expect(findFeedbackItem(text, "F-02.")).toBeNull();
   });
@@ -500,7 +360,7 @@ describe("help", () => {
   test("post --help prints the field rules and exits 0, with no board path", () => {
     const r = cli("post", "--help");
     expect(r.code).toBe(0);
-    for (const s of ["`--where`", "`--progress`: `yes` only when what Jm receives got better", "`--app`", "`--try`", "Plain words", "refuses a unit, row or exam code", "dead link"]) expect(r.out).toContain(s);
+    for (const s of ["`--where`", "`--progress`: `yes` only when what Jm receives got better", "`--app`", "`--try`", "Plain words", "write no unit, row or exam code", "dead link"]) expect(r.out).toContain(s);
   });
 });
 
@@ -517,12 +377,11 @@ describe("driver numbers and the audit copy", () => {
     ]);
   });
 
-  test("post --number refuses an empty label or now, 5 parts, 9 numbers, a unit code", () => {
+  test("post --number refuses an empty label or now, 5 parts, 9 numbers", () => {
     const { dir, path } = setup("numbers-bad");
     expect(cli("post", path, ...POST, ...APP, "--number", "|3||").code).toBe(1);
     expect(cli("post", path, ...POST, ...APP, "--number", "Label||1|2").code).toBe(1);
     expect(cli("post", path, ...POST, ...APP, "--number", "a|b|c|d|e").code).toBe(2);
-    expect(cli("post", path, ...POST, ...APP, "--number", "Row U12 passes|3||").code).toBe(1);
     const nine = Array.from({ length: 9 }, (_, i) => ["--number", `Label ${i}|${i}||`]).flat();
     expect(cli("post", path, ...POST, ...APP, ...nine).err).toContain("the cap is 8");
     expect(updates(dir).length).toBe(0);

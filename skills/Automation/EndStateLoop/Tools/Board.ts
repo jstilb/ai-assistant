@@ -8,7 +8,7 @@
  * sessions; a unit is a `product` unit (it changes what Jm receives); `test` (at most one per row)
  * is still accepted for old boards. A unit moves the board when it passed and shipped a live change
  * (`--shipped` is not "none"). Two closed units in a row that did not move make `gate` exit 5
- * (re-plan), and `unit-open` refuses while it does.
+ * (re-plan). The count is context for the orchestrator: no command refuses because of it (2026-11-25).
  *
  * `unit-audit` is the independent claim audit after a merge: an auditor reads the unit's claims
  * against the product and records pass or fail on the unit. A fail revokes the move (`moved` =
@@ -26,7 +26,7 @@
  *
  * Usage: bun Board.ts <command> <board path> [flags]   (commands: see USAGE below)
  * Exit:  0 = ok, 1 = invalid board or refused change, 2 = bad arguments, 5 = gate says re-plan
- *        (from `gate`, or `unit-open` refused).
+ *        (from `gate` only: context for the orchestrator; no other command refuses because of it).
  *
  * Skill: ~/.claude/skills/Automation/EndStateLoop/SKILL.md
  *
@@ -158,11 +158,8 @@ const USAGE = `usage: bun Board.ts <command> <board path> [flags]
   set-test   --row R --name N --kind known-answer|judged|none [--command C] [--pass-rule P] [--rule-file F]
   mark       --row R --status proven|claimed|failed|untested --by NAME --role setup|examiner [--set ID] [--evidence p1,p2] --note TEXT
   rank       --order R4,R2,R7 --by NAME
-  unit-open  --row R --contract PATH --builder NAME --kind product|test   (refused with exit 5 while gate
-             says RE-PLAN; refused when the contract file name "U<n>-…" or the builder "…-U<n>" names
-             another id; refused for a second test unit on one row; refused when the contract tells the
-             builder to do what waits on a permission prompt: EnterWorktree into a path, \`rm\`, an out_dir
-             or --in save outside the board folder and Jm's allowed folders)
+  unit-open  --row R --contract PATH --builder NAME --kind product|test   (refused when the contract file name
+             "U<n>-…" or the builder "…-U<n>" names another id; refused for a second test unit on one row)
   unit-close --unit U --result pass|fail|too-large --shipped "<what went live: commit and where>"|none --note TEXT
              (moved = pass and shipped not none)
   unit-audit --unit U --result pass|fail --by NAME --note TEXT [--evidence p1,p2]
@@ -735,103 +732,6 @@ function update(path: string, change: (board: Board) => string): void {
   }
 }
 
-// ---------------------------------------------------------------- prompt triggers (unit-open)
-
-/** The folders that Jm allowed for every session: `permissions.additionalDirectories` in `$HOME/.claude/settings.json` (Jm added the three board folders and /tmp on 2026-11-19 08:49). */
-export function allowedFolders(env: NodeJS.ProcessEnv = process.env): string[] {
-  if (!env.HOME) return [];
-  try {
-    const dirs = (JSON.parse(readFileSync(join(env.HOME, ".claude", "settings.json"), "utf8")) as { permissions?: { additionalDirectories?: unknown } }).permissions?.additionalDirectories;
-    return Array.isArray(dirs) ? dirs.filter((d): d is string => typeof d === "string" && d !== "").map((d) => resolve(d)) : [];
-  } catch {
-    return [];
-  }
-}
-
-const NEGATION = /\b(?:never|not|no|don't|do not|cannot|can't|avoid|without)\b/i;
-const CLAUSE_ENDS = [". ", "; ", ": ", ":**"] as const;
-
-/** The clause of `line` before `at`: from the last ". ", "; ", ": " or ":**" (or the line start), at most 100 characters. */
-function clauseBefore(line: string, at: number): string {
-  const head = line.slice(0, at);
-  return head.slice(Math.max(...CLAUSE_ENDS.map((e) => head.lastIndexOf(e))) + 1).slice(-100);
-}
-
-/** The clause of `line` from `from` to the next ". ", "; ", ": ", ":**" or ")" (or the line end), at most 100 characters. */
-function clauseAfter(line: string, from: number): string {
-  const tail = line.slice(from);
-  const ends = [...CLAUSE_ENDS, ")"].map((e) => tail.indexOf(e)).filter((i) => i >= 0);
-  return tail.slice(0, ends.length > 0 ? Math.min(...ends) : tail.length).slice(0, 100);
-}
-
-/** True when the sentence of `line` around `at` (between ". " marks) forbids `word` ("never `EnterWorktree`"). */
-function sentenceBans(line: string, at: number, word: RegExp): boolean {
-  const before = line.lastIndexOf(". ", at);
-  const start = before < 0 ? 0 : before + 2;
-  const after = line.indexOf(". ", at);
-  const end = after < 0 ? line.length : after;
-  return [...line.matchAll(word)].some((m) => {
-    const i = m.index ?? 0;
-    return i >= start && i < end && NEGATION.test(clauseBefore(line, i));
-  });
-}
-
-const RM_WORD = /(?<![\w./-])rm\b/g;
-/** `rm` run as a command; package and container tools (`git rm`, `docker rm`, `bun rm`) are not the shell's rm. */
-const RM_COMMAND = /(?:^|[\s`;&|(]|\/bin\/)rm(?:\s+--?[A-Za-z]*)*\s+[^\s`-]|\bxargs\s+rm\b/g;
-/** The command segment before an `rm` (after the last "`", ";", "&", "|" or "(") starts with one of these tools. */
-const RM_TOOL_SEGMENT = /(?:^|[`;&|(])\s*(?:git|docker|podman|kubectl|bun|npm|pnpm|yarn)\b[^`;&|(]*$/;
-const SAVE_WORD = /\bout_dir\b|--in\b/g;
-const SAVE_PATH = /(?:\bout_dir\b|--in\b)[`'"]?\s*[:=]?\s*[`'"]?((?:~|\$HOME)?\/[^\s`'",)]+)/g;
-
-/**
- * Lines of a unit contract that tell a background builder to do something that waits on a permission prompt, which
- * only Jm answers (incident fix T1.2, PLAN-MITIGATE-1, 2026-11-19): edition U89 and U90 sat 85 and 45 min at "needs
- * approve: Entering worktree" because their contracts said "then `EnterWorktree` with that path"; bg sessions hang
- * on an `rm` prompt; an `out_dir` outside the session folder and Jm's allowed folders held learn-orch-14 8.5 h
- * (PLAN-28). A sentence that forbids the action ("never `EnterWorktree`", "**No `rm`** … (U19 hung on
- * `cp … && rm dist`)") is a ban, not a trigger. A line-by-line text check: a ban list under a heading on its own
- * line is not seen as a ban (the refusal names the line; reword it). `folders` are the places a save may go: Jm's
- * allowed folders and the board folder, compared as text with the same case, as the tools compare them.
- */
-export function promptTriggers(text: string, folders: readonly string[], home: string = process.env.HOME ?? ""): string[] {
-  const found: string[] = [];
-  const under = (p: string, f: string, fold: (s: string) => string) => fold(p) === fold(f) || fold(p).startsWith(fold(f.endsWith("/") ? f : `${f}/`));
-  text.split("\n").forEach((line, i) => {
-    const where = `line ${i + 1}`;
-    for (const m of line.matchAll(/EnterWorktree/g)) {
-      const at = m.index ?? 0;
-      const after = clauseAfter(line, at + m[0].length);
-      // Clause level: "Never `EnterWorktree` in the main tree; then `EnterWorktree` with that path" is a trigger.
-      if (NEGATION.test(clauseBefore(line, at)) || NEGATION.test(after)) continue;
-      if (/\bpath\b|(?:^|[\s`'"(=])~?\/[\w.~-]/.test(after)) {
-        found.push(`${where}: EnterWorktree into a path asks "approve: Entering worktree" (U89, U90); make the tree with \`git -C <repo> worktree add\` and give the builder its absolute path, with "never \`EnterWorktree\`"`);
-        break;
-      }
-    }
-    for (const m of line.matchAll(RM_COMMAND)) {
-      const at = (m.index ?? 0) + m[0].search(/rm/);
-      if (RM_TOOL_SEGMENT.test(line.slice(0, at)) || sentenceBans(line, at, RM_WORD) || NEGATION.test(clauseBefore(line, at))) continue;
-      found.push(`${where}: \`rm\` asks for approval in a background session; move to ~/.Trash, or write scratch in the job tmp`);
-      break;
-    }
-    for (const m of line.matchAll(SAVE_PATH)) {
-      const at = m.index ?? 0;
-      if (sentenceBans(line, at, SAVE_WORD) || NEGATION.test(clauseBefore(line, at))) continue;
-      const raw = (m[1] ?? "").replace(/[.;:]+$/, ""); // a sentence's last "." is not part of the path
-      const p = resolve(/^(?:~|\$HOME)\//.test(raw) ? join(home, raw.slice(raw.indexOf("/") + 1)) : raw);
-      if (folders.some((f) => under(p, f, (s) => s))) continue;
-      const sameButCase = folders.find((f) => under(p, f, (s) => s.toLowerCase()));
-      found.push(
-        sameButCase === undefined
-          ? `${where}: a save to ${raw} is outside the board folder and Jm's allowed folders (settings additionalDirectories); it waits on a prompt (PLAN-28); save under the board folder`
-          : `${where}: a save to ${raw} spells the allowed folder ${sameButCase} in other letter case; the tools compare the text, so it waits on a prompt (PLAN-28); spell it ${sameButCase}${p.slice(sameButCase.length)}`,
-      );
-    }
-  });
-  return found;
-}
-
 // ---------------------------------------------------------------- arguments
 
 interface Args {
@@ -1068,9 +968,6 @@ function cmdUnitOpen(path: string, a: Args): void {
         `refused: row ${row.id} already has the test unit ${testUnit.id}; put the test inside a product unit, or ask the examiner for a known-answer rule; ${path} unchanged`,
       );
     }
-    // The gate holds here too: edition-orch-3 closed two units and opened U22 a minute later with no gate run (2026-11-10).
-    const gate = gateVerdict(board, dirname(path));
-    if (!gate.go) throw new CliError(5, `refused: ${gate.line}\nWrite the re-plan first (Workflows/Orchestrate.md, "The loop", step 1); ${path} unchanged`);
     const id = nextUnitId(board);
     // A name that carries another unit id splits one unit across two ids (Learn: contract U6-R15.md and
     // builder learn-unit-U6 on board unit U5, 2026-11-10).
@@ -1082,17 +979,6 @@ function cmdUnitOpen(path: string, a: Args): void {
     ] as const) {
       if (m?.[1] !== undefined && m[1] !== id) {
         throw new CliError(1, `refused: the ${what} name ${name} says ${m[1]}, but this unit gets the id ${id} (show --json: nextUnit); rename it; ${path} unchanged`);
-      }
-    }
-    // A contract line that waits on a permission prompt stalls the builder until Jm answers (T1.2, 2026-11-19).
-    const boardDir = dirname(resolve(path));
-    const file = (isAbsolute(contract) ? [contract] : [join(boardDir, contract), resolve(contract)]).find((p) => existsSync(p) && statSync(p).isFile());
-    if (file === undefined) {
-      console.error(`note: contract ${contract} is not a file (looked beside the board and in the current folder); the prompt-trigger check did not run`);
-    } else {
-      const triggers = promptTriggers(readFileSync(file, "utf8"), [boardDir, ...allowedFolders()]);
-      if (triggers.length > 0) {
-        throw new CliError(1, [`refused: ${basename(file)} tells the builder to do what waits on a permission prompt that only Jm answers; rewrite these lines; ${path} unchanged`, ...triggers].join("\n"));
       }
     }
     board.units.push({

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Board, localIso, type Mark, parseBoard, promptTriggers, type Row } from "./Board.ts";
+import { type Board, localIso, type Mark, parseBoard, type Row } from "./Board.ts";
 
 const TOOL = join(import.meta.dir, "Board.ts");
 const ROOT = mkdtempSync(join(tmpdir(), "endstate-board-test-"));
@@ -592,7 +592,7 @@ describe("units and gate", () => {
     expect(readFileSync(c.path).equals(before)).toBe(true);
   });
 
-  test("gate: GO at stall 1, RE-PLAN at stall 2 (unit-open refused), GO again after a moved unit; open units ignored", () => {
+  test("gate: GO at stall 1, RE-PLAN at stall 2 (unit-open still opens: the count is context), GO again after a moved unit; open units ignored", () => {
     const c = ruled();
     expect(run("gate", c.path)).toMatchObject({ code: 0, out: "GO: stall 0\n" });
     closeUnit(c, openUnit(c));
@@ -601,11 +601,7 @@ describe("units and gate", () => {
     const replan = run("gate", c.path);
     expect(replan.code).toBe(5);
     expect(replan.out).toBe(`RE-PLAN: 2 units in a row with no board move; top red row R2: Sentence of R2.${answer("R2")}\n`);
-    const before = readFileSync(c.path);
-    const refused = run("unit-open", c.path, "--row", "R3", "--contract", join(c.dir, "contract.md"), "--builder", "demo-build", "--kind", "product");
-    expect(refused.code).toBe(5);
-    expect(refused.err).toContain("refused: RE-PLAN: 2 units in a row with no board move");
-    expect(readFileSync(c.path).equals(before)).toBe(true);
+    expect(run("unit-open", c.path, "--row", "R3", "--contract", join(c.dir, "contract.md"), "--builder", "demo-build", "--kind", "product").code).toBe(0);
     stampFile(c, "REPLAN-R2.md", localIso());
     openUnit(c);
     expect(run("gate", c.path).code).toBe(0);
@@ -815,103 +811,5 @@ describe("arguments", () => {
       expect(r.code).toBe(2);
       expect(r.err).toContain("usage: bun Board.ts");
     }
-  });
-});
-
-// Incident fix T1.2 (PLAN-MITIGATE-1, 2026-11-19): the lines below are verbatim from real contracts.
-const U89_FIRST = "- Worktree: your own (`git -C /Users/[user]/projects/intake worktree add .claude/worktrees/edition-u89-grade -b edition-u89-grade origin/main`, then `EnterWorktree` with that path). Commit and push your branch; open a PR (draft) for the record. **No merge, no deploy, no runner ff:** the orchestrator does them after its check.";
-const U89_FIXED = "- **Worktree (already made by the orchestrator; never `EnterWorktree`: it needs an approval prompt that a background session cannot answer, and the first U89 session stalled on it):** `/Users/[user]/projects/intake/.claude/worktrees/edition-u89-grade`, branch `edition-u89-grade` at origin/main b62ae17. Work there with absolute paths and `git -C <path>` from `~/.claude`.";
-const LEARN_U9 = "- Worktree: your own (`EnterWorktree`, name `learn-unit-U9`; then start your branch from the base above), then `ln -s /Users/[user]/projects/learn/node_modules node_modules`. Commit and push your branch. **Do not merge and do not deploy:** the orchestrator merges after the examiner's row exam.";
-const FORMDOC_CODEX = "You are Codex, run by `codex-unit.sh`. Build.md steps 2 (EnterWorktree), 6 (commit, push) and 8 (SendMessage) do not apply to you: the orchestrator made your worktree, the runner commits after you end, and your RESULT.md is the signal.";
-const LEARN_U1 = "- Worktree: your own (`EnterWorktree`, name `learn-unit-U1`), then `ln -s /Users/[user]/projects/learn/node_modules node_modules`. Commit and push your branch. **Do not merge and do not deploy:** the orchestrator merges after the examiner's row exam.";
-const LEARN_U21_NO_RM = "- **No `rm` and no `cd` chains into the shared checkout in one Bash call:** in a background session a command with `rm` can wait on a permission prompt that nobody answers (learn-unit-U19 hung 55+ min on `cp … && rm dist && cd …`, 2026-11-10 15:32). Move files to `~/.Trash/` with `mv`; leave the `node_modules`/`dist` links in your tree; `cp` your evidence in its own call.";
-const EDITION_NO_RM ="- Project rules that apply: no `rm` (move to `~/.Trash`; scratch in your job tmp) (Kaya rule); privacy: titles, desk names, goal texts and page texts only in `/Users/[user]/projects/intake-backups/`,";
-
-describe("prompt triggers at unit-open (T1.2)", () => {
-  const BOARD_DIR = "/b/endstate";
-  test("the first U89 contract line is a trigger; the fixed line, Learn's name-only EnterWorktree and the Codex note are not", () => {
-    const hits = promptTriggers(`intro\n${U89_FIRST}\n`, [BOARD_DIR]);
-    expect(hits).toHaveLength(1);
-    expect(hits[0]).toStartWith("line 2: EnterWorktree into a path");
-    for (const line of [U89_FIXED, LEARN_U9, LEARN_U1, FORMDOC_CODEX]) expect(promptTriggers(line, [BOARD_DIR])).toEqual([]);
-  });
-
-  test("rm: a command is a trigger; a ban, git rm and words that end in rm are not", () => {
-    expect(promptTriggers("Clean up: `rm -r /tmp/u5-scratch` after the run.", [BOARD_DIR])).toHaveLength(1);
-    expect(promptTriggers("then rm old.json", [BOARD_DIR])).toHaveLength(1);
-    for (const line of [EDITION_NO_RM, LEARN_U21_NO_RM, "never `rm -r` a tree; move it to ~/.Trash", "`git rm --cached x`", "confirm the form and perform it"]) {
-      expect(promptTriggers(line, [BOARD_DIR])).toEqual([]);
-    }
-  });
-
-  test("a save: out_dir or --in outside the board folder and the allowed folders is a trigger", () => {
-    const folders = [BOARD_DIR, "/tmp"];
-    expect(promptTriggers("ArtifactData query with out_dir /Users/x/status-in", folders)).toHaveLength(1);
-    expect(promptTriggers("`bun Status.ts pull B --in ~/notes/in`", folders, "/Users/x")).toHaveLength(1);
-    for (const line of ["out_dir /b/endstate/status/in", "out_dir: `/tmp/u5-in`", "--in /b/endstate", "never an out_dir outside the board folder", "never out_dir /Users/x/a"]) {
-      expect(promptTriggers(line, folders)).toEqual([]);
-    }
-    expect(promptTriggers("out_dir /b/endstate-other/in", folders)).toHaveLength(1);
-    expect(promptTriggers("out_dir $HOME/elsewhere", folders, "/Users/x")).toHaveLength(1);
-    expect(promptTriggers("out_dir /tmp/../etc/x", folders)).toHaveLength(1);
-    const cased = promptTriggers("out_dir /B/endstate/status/in", folders);
-    expect(cased).toHaveLength(1);
-    expect(cased[0]).toContain("in other letter case; the tools compare the text, so it waits on a prompt (PLAN-28); spell it /b/endstate/status/in");
-  });
-
-  test("review cases (2026-11-19): a ban counts only in its own sentence; more ban words; more rm forms", () => {
-    const trigger = (line: string) => expect(promptTriggers(line, [BOARD_DIR])).toHaveLength(1);
-    const clean = (line: string) => expect(promptTriggers(line, [BOARD_DIR])).toEqual([]);
-    trigger("Never use rm. Then rm -r /x/y.");
-    trigger("Do not call EnterWorktree yourself. Call EnterWorktree with the path /x/y.");
-    trigger("- **No deploy:** clean with `rm -r /tmp/x`");
-    trigger("rm -- old.json");
-    trigger("/bin/rm old.json");
-    trigger("find . -name '*.tmp' | xargs rm");
-    trigger("Never `EnterWorktree` in the main tree; then `EnterWorktree` with that path.");
-    clean("`git -C /x rm --cached a`");
-    clean("Call EnterWorktree with name only, not a path.");
-    clean("You cannot EnterWorktree into a path.");
-    clean("Avoid EnterWorktree with a path.");
-    clean("Avoid rm and use mv.");
-    clean("`EnterWorktree`/`ExitWorktree` are not for you");
-    clean("`docker rm c1` and `bun rm pkg` are fine");
-  });
-
-  test("unit-open refuses a trigger contract and leaves the board byte-identical; a clean or missing contract opens", () => {
-    const c = setup();
-    const contract = join(c.dir, "U2-R2.md");
-    writeFileSync(contract, `# U2\n\n## Limits\n${U89_FIRST}\n`);
-    const before = readFileSync(c.path);
-    const r = run("unit-open", c.path, "--row", "R2", "--contract", contract, "--builder", "demo-build", "--kind", "product");
-    expect(r.code).toBe(1);
-    expect(r.err).toContain("refused: U2-R2.md tells the builder to do what waits on a permission prompt");
-    expect(r.err).toContain("line 4: EnterWorktree into a path");
-    expect(readFileSync(c.path).equals(before)).toBe(true);
-    writeFileSync(contract, `# U2\n\n## Limits\n${U89_FIXED}\n${EDITION_NO_RM}\n`);
-    const ok = run("unit-open", c.path, "--row", "R2", "--contract", "U2-R2.md", "--builder", "demo-build", "--kind", "product");
-    expect(ok.err).toBe("");
-    expect(ok.code).toBe(0);
-    expect(ok.out.trim()).toBe("U2");
-    const missing = run("unit-open", c.path, "--row", "R2", "--contract", join(c.dir, "U3-R2.md"), "--builder", "demo-build", "--kind", "product");
-    expect(missing.code).toBe(0);
-    expect(missing.err).toContain("the prompt-trigger check did not run");
-    const folder = run("unit-open", c.path, "--row", "R2", "--contract", c.dir, "--builder", "demo-build", "--kind", "product");
-    expect(folder.code).toBe(0);
-    expect(folder.err).toContain("is not a file");
-  });
-
-  test("unit-open reads the allowed folders from $HOME/.claude/settings.json", () => {
-    const c = setup();
-    const home = join(c.dir, "home");
-    mkdirSync(join(home, ".claude"), { recursive: true });
-    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ permissions: { additionalDirectories: ["/allowed/in"] } }));
-    const contract = join(c.dir, "U2-R2.md");
-    writeFileSync(contract, "Save the page with out_dir /allowed/in/u2.\n");
-    expect(runEnv({ HOME: home }, "unit-open", c.path, "--row", "R2", "--contract", contract, "--builder", "demo-build", "--kind", "product").code).toBe(0);
-    writeFileSync(join(c.dir, "U3-R2.md"), "Save the page with out_dir /elsewhere/u3.\n");
-    const refused = runEnv({ HOME: home }, "unit-open", c.path, "--row", "R2", "--contract", join(c.dir, "U3-R2.md"), "--builder", "demo-build", "--kind", "product");
-    expect(refused.code).toBe(1);
-    expect(refused.err).toContain("a save to /elsewhere/u3 is outside the board folder");
   });
 });

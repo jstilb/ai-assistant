@@ -18,8 +18,8 @@ A check from outside on the live loops: are they alive, and do they move toward 
    - A limit claim ("cannot", "no data", "adds noise") with no test behind it.
    - A step that waits on, measures or reports Jm's use (F-030).
    - Gains that small samples cannot carry.
-   - A status page that lags: units closed with no post after them, or Jm's feedback with no receipt or no answer for more than 2 h.
-   - A `--progress yes` that the facts in the same update do not carry (live changes 0), or `--aligned yes` while a `FEEDBACK.md` `## Open` item asks for a row change.
+   - A status page that lags: units closed with no post after them, or Jm's feedback with no receipt or no answer for more than 2 h; an item that has its answer and still sits in `FEEDBACK.md`.
+   - A `--progress yes` that the facts in the same update do not carry (live changes 0), or `--aligned yes` while an open `FEEDBACK.md` item asks for a row change.
 
 5. **Usage and memory.** `MEMORY/State/rate-limits.json` (`sevenDay`), the readings in the handoffs, the reset time. Give the rate in points per hour and the time when it reaches 100 %. `top -l 1 -o mem`: name sessions and helper processes that no loop needs.
 

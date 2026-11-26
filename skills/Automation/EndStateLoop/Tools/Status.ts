@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Status.ts — status updates of an end-state loop, and Jm's feedback from the status page.
+ * Status.ts — status updates of an end-state loop, and the answers to Jm's feedback.
  *
  * The orchestrator posts when something Jm receives changed (a live change), or after 2 h with none. An update
  * answers five questions in the orchestrator's words (where the loop is, what it finished since the last
@@ -10,13 +10,14 @@
  * and its change, rows that moved, units closed, live changes, stall, gate, the time of the last exam.
  *
  * Files (next to the board, not in git): `status/STATUS.jsonl` (one update per line: the record),
- * `status/INBOX.jsonl` (one receipt per feedback item), `status/out/` (documents for the page),
- * `status/in/` (feedback documents that `ArtifactData query … out_dir` saved).
+ * `status/out/` (documents for the page).
  *
  * The page (STATUS_PAGE_URL) is a claude.ai artifact with a `db`. Only a Claude session can write it, with
  * the ArtifactData tool, so each writing command prints the exact ArtifactData call to make next.
  * Collections: `updates` (doc id `<project>-<NNNN>`), `feedback` (written by the page), `receipts`
- * (doc id = the feedback doc id). No command edits an existing document, so no write needs a version pin.
+ * (doc id = the feedback doc id). This tool writes `updates` only. A session reads `feedback` and writes
+ * `receipts` itself with ArtifactData (Workflows/Orchestrate.md, "Status page"): the `pull` and `inbox`
+ * commands were removed on 2026-11-25 (0 page items in 7 days; a save folder of `pull` held a session 8.5 h).
  *
  * Usage: bun Status.ts <command> <board path> [flags]   (see USAGE)
  * Exit:  0 = ok, 1 = refused (nothing written), 2 = bad arguments.
@@ -29,10 +30,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { createAppendLog } from "../../../../lib/core/AppendLog.ts";
-import { allowedFolders, type Board, checkBoard, gateVerdict, localIso, nextRow, parseBoard, type Status as RowStatus, STATUS_ORDER, stall, statusBefore } from "./Board.ts";
+import { type Board, checkBoard, gateVerdict, localIso, nextRow, parseBoard, type Status as RowStatus, STATUS_ORDER, stall, statusBefore } from "./Board.ts";
 
 /** Kept here for callers of Status.ts; the one definition is in Board.ts (unit-open uses it too). */
-export { allowedFolders };
+
 
 export const STATUS_PAGE_URL = process.env.ENDSTATE_STATUS_URL ?? "https://claude.ai/artifact/HYZQ2KKQxtwphAwRGs8kXb";
 const SCHEMA = "endstate-status/v1";
@@ -43,16 +44,7 @@ export type Verdict = (typeof VERDICTS)[number];
  * Jm called the first page "crowded, messy": the first real updates had 5 items of about 200 characters each. */
 export const LIMITS = { where: 200, item: 140, items: 4, why: 180, answer: 300, label: 40, target: 400, links: 4, numbers: 8, numberPart: 60 } as const;
 
-/** Internal codes that mean nothing to Jm: unit, row and exam ids and session names (the first real updates were full
- * of "U66 (R22)", "exam-81", "E1 step 0"). The page names each goal by its sentence from the board instead. */
-const CODE = /\b(?:[URE]\d{1,3}|exam-\d+|[a-z][a-z-]*-(?:orch|unit|exam|codex)-[A-Za-z]?\d+)\b/;
-
-/** Refuse a text that carries an internal code; say which one. */
-export function codeIn(text: string): string | null {
-  return CODE.exec(text)?.[0] ?? null;
-}
 const LINK_TIMEOUT_MS = 5000;
-const FEEDBACK_STARTER = join(import.meta.dir, "..", "..", "..", "Development", "ProjectStandard", "Templates", "FEEDBACK.md");
 
 // ---------------------------------------------------------------- types
 
@@ -176,18 +168,6 @@ export interface StatusUpdate {
   numbers?: DriverNumber[];
   facts: Facts;
 }
-export interface Receipt {
-  feedback: string;
-  project: string;
-  by: string;
-  at: string;
-  ref: string;
-  file: string;
-  text: string;
-  sentAt: string;
-  to: string;
-}
-
 class CliError extends Error {
   constructor(
     readonly code: 1 | 2,
@@ -202,12 +182,10 @@ const USAGE = `usage: bun Status.ts <command> <board path> [flags]
   post       --by NAME --where TEXT --done TEXT… --left TEXT… --progress yes|partly|no --progress-why TEXT
              --aligned yes|partly|no --aligned-why TEXT [--try "LABEL=URL|command"…] [--app "LABEL=URL|command"…]
              [--answer "F-NNN=TEXT"…] [--number "LABEL|NOW|BEFORE|BAR"…] [--image "D1 before|after=URL"…] [--feedback-file PATH] [--no-check] [--dry-run]
-             (--answer takes an item from the page inbox or any ### F-NNN item of FEEDBACK.md)
+             (--answer takes any ### F-NNN item of FEEDBACK.md or of FEEDBACK-HISTORY.md beside it)
              (repeat --done, --left, --try, --app, --answer, --number once per item; --app is required on a project's
              first update and is carried forward after it)
-  pull       [--in DIR]   print the ArtifactData query that saves Jm's feedback for this project
-  inbox      --by NAME [--in DIR] [--feedback-file PATH]   copy new feedback to FEEDBACK.md; print the receipt push
-  show       [--last N] [--json]   the newest updates and the feedback state
+  show       [--last N] [--json]   the newest updates
 caps: where ${LIMITS.where} chars; done/left 1-${LIMITS.items} items of ${LIMITS.item} chars; why ${LIMITS.why}; answer ${LIMITS.answer};
       ${LIMITS.links} links of each kind. env: ENDSTATE_STATUS_URL overrides the page URL.`;
 
@@ -223,7 +201,7 @@ const POST_FIELDS = `The fields (the tool refuses longer text: where ${LIMITS.wh
 
 - \`--number\`: a driver number that the loop measures, as "LABEL|NOW|BEFORE|BAR" (for example "Cards that pass the read test|18 of 20|11 of 20|18 of 20"). BEFORE and BAR may be empty ("LABEL|NOW||"). Label and now are required. At most ${LIMITS.numbers} numbers; each part at most ${LIMITS.numberPart} characters. The page shows "before -> now (bar X)" under "Moving toward the end state?", so Jm sees measured numbers and not only the loop's words.
 
-Plain words: \`post\` refuses a unit, row or exam code or a session name in the text (\`U12\`, \`R4\`, \`E1\`, \`exam-81\`, \`edition-orch-13\`); commands in \`--try\` and \`--app\` targets may hold them. Name the goal or the change as Jm sees it ("same-story detection", "the coach card").
+Plain words: write no unit, row or exam code and no session name in the text (\`U12\`, \`R4\`, \`E1\`, \`exam-81\`, \`edition-orch-13\`): they mean nothing to Jm. No check does this for you. Commands in \`--try\` and \`--app\` targets may hold them. Name the goal or the change as Jm sees it ("same-story detection", "the coach card").
 
 \`post\` opens each http(s) link once (5 s) and records a dead link, which the page marks red: fix it or say why in the next update. Write about the work only: do not paste Jm's own records (history text, logs, health or money data) into an update.`;
 
@@ -249,52 +227,6 @@ export function statusDir(boardPath: string): string {
   return join(dirname(resolve(boardPath)), "status");
 }
 
-/** The session's own folder: `cwd` in `$CLAUDE_JOB_DIR/state.json` (a background job), else the process cwd. */
-export function sessionFolder(env: NodeJS.ProcessEnv = process.env): string {
-  const job = env.CLAUDE_JOB_DIR;
-  if (job) {
-    try {
-      const cwd = (JSON.parse(readFileSync(join(job, "state.json"), "utf8")) as { cwd?: unknown }).cwd;
-      if (typeof cwd === "string" && cwd !== "") return resolve(cwd);
-    } catch {
-      // no readable state.json: fall back to the process cwd
-    }
-  }
-  return process.cwd();
-}
-
-/**
- * `path` spelled inside `folder` (same letters, same case as `folder`), or null when it lies outside.
- * macOS folders ignore case, but a save or upload outside the session folder, as the tools compare the text, asks
- * for permission: `/Users/[user]/Projects/learn/…` from a session in `/Users/[user]/projects/learn` did.
- */
-export function insideFolder(path: string, folder: string): string | null {
-  const p = resolve(path);
-  const f = resolve(folder);
-  if (p === f) return f;
-  const prefix = f.endsWith("/") ? f : `${f}/`;
-  return p.toLowerCase().startsWith(prefix.toLowerCase()) ? prefix + p.slice(prefix.length) : null;
-}
-
-/**
- * Where the feedback documents for `inbox` live, and whether `pull` may ask ArtifactData to save them there.
- * Incident fix, endstate-setup-11, 2026-11-19: an `out_dir` outside the session folder waits on a permission prompt
- * that only Jm answers (learn-orch-13 18:38-22:00 on the board path spelled `Projects`; learn-orch-14 23:46-08:21
- * on `/tmp/learn-status-in`; endstate-setup-11 23:49-08:2x on `/tmp`), and an `out_dir` inside the `~/.claude` repo
- * is refused for a background session that has not isolated (formdoc-orch-10, 08:5x). So: the board's `status/in`
- * spelled inside the session folder or a folder that Jm allowed (`allowedFolders`) takes the save (`inline: false`); else `pull` prints the query with no
- * `out_dir` (`inline: true`) and the session writes any returned documents itself with Bash into `dir` (the job's
- * `tmp/status-in/<project>`, else the board's `status/in`).
- */
-export function defaultInDir(boardPath: string, project: string, env: NodeJS.ProcessEnv = process.env): { dir: string; inline: boolean } {
-  const board = join(statusDir(boardPath), "in");
-  for (const folder of [sessionFolder(env), ...allowedFolders(env)]) {
-    const inside = insideFolder(board, folder);
-    if (inside !== null) return { dir: inside, inline: false };
-  }
-  return { dir: env.CLAUDE_JOB_DIR ? join(env.CLAUDE_JOB_DIR, "tmp", "status-in", project) : board, inline: true };
-}
-
 function readJsonl<T>(path: string): T[] {
   if (!existsSync(path)) return [];
   const out: T[] = [];
@@ -315,11 +247,7 @@ export function readUpdates(boardPath: string): StatusUpdate[] {
   return readJsonl<StatusUpdate>(join(statusDir(boardPath), "STATUS.jsonl")).sort((a, b) => a.n - b.n);
 }
 
-export function readReceipts(boardPath: string): Receipt[] {
-  return readJsonl<Receipt>(join(statusDir(boardPath), "INBOX.jsonl"));
-}
-
-/** STATUS.jsonl and INBOX.jsonl are the record, read whole: the 1 GB cap means no rotation in practice
+/** STATUS.jsonl is the record, read whole: the 1 GB cap means no rotation in practice
  * (a line is about 3 to 6 KB). A rotation would hide old updates from readUpdates and restart the numbers. */
 function appendRecord(path: string, record: object): void {
   createAppendLog(path, { maxSizeMB: 1024, retentionDays: 3650 }).append(record);
@@ -583,8 +511,6 @@ const SPECS: Record<string, Spec> = {
     switches: ["no-check", "dry-run"],
     required: ["by", "where", "progress", "progress-why", "aligned", "aligned-why", "done", "left"],
   },
-  pull: { single: ["in"], multi: [], switches: [], required: [] },
-  inbox: { single: ["by", "in", "feedback-file"], multi: [], switches: [], required: ["by"] },
   show: { single: ["last"], multi: [], switches: ["json"], required: [] },
 };
 
@@ -623,15 +549,11 @@ function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-/** One line of text for Jm: not empty, at most `max` characters, and (when `plain`) no internal code. */
-function capped(what: string, raw: string, max: number, plain = true): string {
+/** One line of text for Jm: not empty, at most `max` characters (the page's field sizes). */
+function capped(what: string, raw: string, max: number): string {
   const s = oneLine(raw);
   if (s === "") throw new CliError(1, `refused: ${what} is empty`);
   if (s.length > max) throw new CliError(1, `refused: ${what} has ${s.length} chars; the cap is ${max}. Say less: Jm reads this on a phone.`);
-  const code = plain ? codeIn(s) : null;
-  if (code !== null) {
-    throw new CliError(1, `refused: ${what} has the internal code "${code}". Say what it means to Jm (the goal or the change in words); the page names each goal by its sentence.`);
-  }
   return s;
 }
 
@@ -652,7 +574,7 @@ export function parseLink(flag: string, raw: string): Link {
   const at = raw.indexOf("=");
   if (at <= 0) throw usage(`--${flag} needs "LABEL=URL or command"; got "${raw}"`);
   const label = capped(`--${flag} label`, raw.slice(0, at), LIMITS.label);
-  const target = capped(`--${flag} target`, raw.slice(at + 1), LIMITS.target, false);
+  const target = capped(`--${flag} target`, raw.slice(at + 1), LIMITS.target);
   return { label, target, check: /^https?:\/\//.test(target) ? "not-checked" : "not-a-url", code: null };
 }
 
@@ -698,7 +620,6 @@ async function cmdPost(path: string, a: Args): Promise<void> {
   const board = loadBoard(path);
   const updates = readUpdates(path);
   const prev = updates.at(-1) ?? null;
-  const receipts = readReceipts(path);
 
   const where = capped("--where", need(a, "where"), LIMITS.where);
   const done = items("done", a.many.get("done") ?? []);
@@ -724,18 +645,16 @@ async function cmdPost(path: string, a: Args): Promise<void> {
   const fbFile = resolve(a.one.get("feedback-file") ?? join(board.folder, "FEEDBACK.md"));
   const answers: Answer[] = (a.many.get("answer") ?? []).map((raw) => {
     const at = raw.indexOf("=");
-    if (at <= 0) throw usage(`--answer needs "F-NNN=TEXT" (or "<feedback id>=TEXT"); got "${raw}"`);
+    if (at <= 0) throw usage(`--answer needs "F-NNN=TEXT"; got "${raw}"`);
     const key = raw.slice(0, at).trim();
     const text = capped(`--answer ${key}`, raw.slice(at + 1), LIMITS.answer);
-    const r = receipts.find((x) => x.ref === key || x.feedback === key);
-    if (r !== undefined) return { feedback: r.feedback, ref: r.ref, text, words: null };
-    // An item that came by another door (a session, Telegram, the Scratch Pad): answer it from FEEDBACK.md (edition-orch-14, 2026-11-18).
-    const item = /^F-\d+$/.test(key) && existsSync(fbFile) ? findFeedbackItem(readFileSync(fbFile, "utf8"), key) : null;
-    if (item !== null) return { feedback: null, ref: key, text, words: item.words };
-    throw new CliError(
-      1,
-      `refused: --answer ${key}: not received from the page (received: ${receipts.map((x) => x.ref).join(", ") || "none"}) and no ### ${key} in ${fbFile} (give --feedback-file when FEEDBACK.md is outside the project folder)`,
-    );
+    // The item is in FEEDBACK.md (it waits) or in FEEDBACK-HISTORY.md beside it (decided). An item that came through
+    // the page carries the line `- **Page item:** <doc id>`, so the page shows the answer under Jm's message.
+    for (const file of feedbackFiles(fbFile)) {
+      const item = findFeedbackItem(readFileSync(file, "utf8"), key);
+      if (item !== null) return { feedback: item.pageDoc, ref: key, text, words: item.pageDoc === null ? item.words : null };
+    }
+    throw new CliError(1, `refused: --answer ${key}: no ### ${key} in ${fbFile} or in FEEDBACK-HISTORY.md beside it (give --feedback-file when FEEDBACK.md is outside the project folder)`);
   });
 
   if (!a.on.has("no-check")) {
@@ -782,10 +701,6 @@ async function cmdPost(path: string, a: Args): Promise<void> {
     if (l.check === "dead") console.error(`warning: link "${l.label}" did not answer (${l.code ?? "no answer"}): ${l.target}. The page shows it as dead; fix it or say why in the next update.`);
   }
   for (const line of imageReminders(update, path, images)) console.error(line);
-  const answered = new Set([...updates.flatMap((u) => u.answers.map((x) => x.feedback)), ...answers.map((x) => x.feedback)]);
-  for (const r of receipts) {
-    if (!answered.has(r.feedback)) console.error(`warning: ${r.ref} from the status page has no answer yet ("${r.text.slice(0, 80)}"); answer it with --answer ${r.ref}=…`);
-  }
   console.log(`\nPush it to the page (one ArtifactData call):`);
   console.log(JSON.stringify({ action: "set", url: STATUS_PAGE_URL, collection: "updates", doc_id: id, file_path: out }));
 }
@@ -806,167 +721,44 @@ export function imageReminders(update: StatusUpdate, boardPath: string, images: 
   return out;
 }
 
-function pullCall(board: Board, inDir: string | null): string {
-  const call: Record<string, unknown> = { action: "query", url: STATUS_PAGE_URL, collection: "feedback", query: { where: [["project", "==", board.project]] } };
-  if (inDir !== null) call.out_dir = inDir;
-  return JSON.stringify(call);
+/** The marked fields of a feedback item: Jm's words (cut) and, for an item that came through the page, its doc id. */
+export interface FeedbackItemRef {
+  words: string | null;
+  /** From the item's line `- **Page item:** <doc id>`; null for an item from another door. */
+  pageDoc: string | null;
 }
 
-function cmdPull(path: string, a: Args): void {
-  const board = loadBoard(path);
-  const given = a.one.get("in");
-  const folder = sessionFolder();
-  if (given !== undefined && insideFolder(resolve(given), folder) === null) console.log(`warning: --in ${resolve(given)} lies outside your session folder ${folder}: the save may wait on a permission prompt that only Jm answers. Leave out --in.`);
-  const auto = defaultInDir(path, board.project);
-  if (given === undefined && auto.inline) {
-    const feedback = join(auto.dir, "feedback");
-    console.log(`Make this ArtifactData call (no out_dir: a save outside your session folder ${folder} waits on a permission prompt or is refused). If it returns no documents, stop: nothing is new. Else write each document with Bash (a heredoc) as ${feedback}/<doc id>.json holding its fields (project, text, at, to, replyTo), then run: bun Status.ts inbox ${path} --by <you>`);
-    console.log(pullCall(board, null));
-    return;
-  }
-  const inDir = given === undefined ? auto.dir : resolve(given);
-  console.log(`Make this ArtifactData call; it saves ${board.project}'s feedback documents under ${join(inDir, "feedback")}. Then run: bun Status.ts inbox ${path} --by <you>${given !== undefined ? ` --in ${inDir}` : ""}`);
-  console.log(pullCall(board, inDir));
-}
-
-/** Next free F-number; the examples inside HTML comments do not count (same rule as the LifeOS Router). */
-export function nextFeedbackId(content: string): string {
-  let max = 0;
-  for (const m of content.replace(/<!--[\s\S]*?-->/g, "").matchAll(/^###\s+F-(\d+)/gm)) max = Math.max(max, Number(m[1]));
-  return `F-${String(max + 1).padStart(3, "0")}`;
-}
-
-/** The `### F-NNN` item of a FEEDBACK.md (comments ignored): null when absent; `words` = its "Jm (verbatim)" text, cut. */
-export function findFeedbackItem(content: string, ref: string): { words: string | null } | null {
+/** The `### F-NNN` item of a feedback file (comments ignored): null when absent. */
+export function findFeedbackItem(content: string, ref: string): FeedbackItemRef | null {
   if (!/^F-\d+$/.test(ref)) return null;
   const lines = content.replace(/<!--[\s\S]*?-->/g, "").split("\n");
   const head = new RegExp(`^###\\s+${ref}(?!\\d)`);
   const start = lines.findIndex((l) => head.test(l));
   if (start < 0) return null;
+  const item: FeedbackItemRef = { words: null, pageDoc: null };
   for (let i = start + 1; i < lines.length && !/^#{2,3}\s/.test(lines[i] ?? ""); i++) {
-    const m = /\*\*Jm \(verbatim\):\*\*\s*"?(.*?)"?\s*$/.exec(lines[i] ?? "");
-    if (m?.[1] !== undefined && m[1] !== "") return { words: cut(m[1], 200) };
+    const line = lines[i] ?? "";
+    const w = /\*\*Jm \(verbatim\):\*\*\s*"?(.*?)"?\s*$/.exec(line);
+    if (item.words === null && w?.[1] !== undefined && w[1] !== "") item.words = cut(w[1], 200);
+    const p = /\*\*Page item:\*\*\s*`?([A-Za-z0-9_.~:@+-]+)`?/.exec(line);
+    if (item.pageDoc === null && p?.[1] !== undefined) item.pageDoc = p[1];
   }
-  return { words: null };
+  return item;
 }
 
-/** Append one item under `## Open` (before `## Decided`), in the project-standard item format. */
-export function appendFeedbackItem(
-  base: string,
-  item: { ref: string; docId: string; words: string; sentAt: string; to: string; by: string; at: string; replyRef?: string | null },
-): string {
-  const reply = item.replyRef ? `; a reply to the answer on ${item.replyRef}` : "";
-  const entry = [
-    `<!-- feedback-start:${item.docId} -->`,
-    `### ${item.ref} · ${item.at.slice(0, 10)} · status page (EndStateLoop)`,
-    `- **Jm (verbatim):** "${item.words}"`,
-    `- **Situation:** sent from the EndStateLoop status page (${STATUS_PAGE_URL}) at ${item.sentAt}${item.to === "" ? "" : `, to ${item.to}`}${reply}; received by ${item.by} at ${item.at}`,
-    `- **Need:** (write at the next review)`,
-    `<!-- feedback-end:${item.docId} -->`,
-    ``,
-  ].join("\n");
-  const decided = base.search(/^## Decided\s*$/m);
-  return decided < 0 ? `${base.replace(/\s*$/, "")}\n\n${entry}` : `${base.slice(0, decided)}${entry}\n${base.slice(decided)}`;
-}
-
-interface FeedbackDoc {
-  id: string;
-  project: string;
-  text: string;
-  at: string;
-  to: string;
-  /** The page's feedback doc id that this message replies to (Jm's "Reply" under an answer), or null. */
-  replyTo: string | null;
-}
-
-function readFeedbackDocs(dir: string): FeedbackDoc[] {
-  if (!existsSync(dir)) return [];
-  const out: FeedbackDoc[] = [];
-  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
-    let raw: unknown;
-    try {
-      raw = JSON.parse(readFileSync(join(dir, f), "utf8"));
-    } catch {
-      console.error(`warning: ${join(dir, f)} is not JSON; skipped`);
-      continue;
-    }
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
-    const o = raw as Record<string, unknown>;
-    if (typeof o.project !== "string" || typeof o.text !== "string") continue;
-    out.push({
-      id: basename(f, ".json"),
-      project: o.project,
-      text: o.text,
-      at: typeof o.at === "string" ? o.at : "",
-      to: typeof o.to === "string" ? o.to : "",
-      replyTo: typeof o.replyTo === "string" && o.replyTo !== "" ? o.replyTo : null,
-    });
-  }
-  return out.sort((x, y) => Date.parse(x.at) - Date.parse(y.at) || x.id.localeCompare(y.id));
-}
-
-function cmdInbox(path: string, a: Args): void {
-  const board = loadBoard(path);
-  const by = oneLine(need(a, "by"));
-  const given = a.one.get("in");
-  // No --in: read the save folder of `pull` and the board's status/in (documents may sit in either; same id once).
-  const inDirs = given !== undefined ? [resolve(given)] : [...new Set([resolve(defaultInDir(path, board.project).dir), resolve(join(statusDir(path), "in"))])];
-  const file = resolve(a.one.get("feedback-file") ?? join(board.folder, "FEEDBACK.md"));
-  const dir = statusDir(path);
-  const refOf = new Map(readReceipts(path).map((r) => [r.feedback, r.ref]));
-  const seen = new Set(refOf.keys());
-  const docs = new Map<string, FeedbackDoc>();
-  for (const d of inDirs.flatMap((x) => readFeedbackDocs(join(x, "feedback")))) if (!docs.has(d.id)) docs.set(d.id, d);
-  const fresh = [...docs.values()].filter((d) => d.project === board.project && !seen.has(d.id));
-  if (fresh.length === 0) {
-    console.log(`no new feedback for ${board.project} in ${inDirs.map((x) => join(x, "feedback")).join(" or ")}`);
-    return;
-  }
-  let base: string;
-  if (existsSync(file)) {
-    base = readFileSync(file, "utf8");
-  } else {
-    if (!existsSync(FEEDBACK_STARTER)) throw new CliError(1, `refused: ${file} does not exist and the starter ${FEEDBACK_STARTER} is missing`);
-    base = readFileSync(FEEDBACK_STARTER, "utf8").replace("<Project name>", board.project);
-  }
-  const writes: { op: "set"; collection: "receipts"; doc_id: string; file_path: string }[] = [];
-  const lines: string[] = [];
-  for (const d of fresh) {
-    const at = localIso();
-    const words = oneLine(d.text);
-    const sentAt = Number.isFinite(Date.parse(d.at)) ? localIso(new Date(Date.parse(d.at))) : d.at;
-    // Idempotent: a FEEDBACK.md that already holds this item (a run that died before its receipt) keeps its F-number.
-    const prior = new RegExp(`<!-- feedback-start:${d.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} -->\\n### (F-\\d+)`).exec(base);
-    const ref = prior?.[1] ?? nextFeedbackId(base);
-    const replyRef = d.replyTo === null ? null : (refOf.get(d.replyTo) ?? null);
-    if (prior === null) base = appendFeedbackItem(base, { ref, docId: d.id, words, sentAt, to: d.to, by, at, replyRef });
-    refOf.set(d.id, ref);
-    const receipt: Receipt = { feedback: d.id, project: board.project, by, at, ref, file, text: words, sentAt, to: d.to };
-    const out = join(dir, "out", `receipt-${d.id}.json`);
-    writeJson(out, { project: receipt.project, feedback: receipt.feedback, by, at, ref, file });
-    writes.push({ op: "set", collection: "receipts", doc_id: d.id, file_path: out });
-    lines.push(`${ref} ← "${words}"  (sent ${sentAt}${replyRef === null ? "" : `; a reply to your answer on ${replyRef}`})`);
-    // FEEDBACK.md first, then the receipt: a crash between them repeats nothing (the marker above).
-    writeFileSync(file, base);
-    appendRecord(join(dir, "INBOX.jsonl"), receipt);
-  }
-  console.log(`${fresh.length} new feedback item(s) from Jm, saved verbatim to ${file}:`);
-  for (const l of lines) console.log(`  ${l}`);
-  console.log(`Act on them now (Jm's newer words win), and answer each in your next post with --answer F-NNN="what you did".`);
-  console.log(`\nPush the receipts to the page (one ArtifactData call):`);
-  for (let i = 0; i < writes.length; i += 50) console.log(JSON.stringify({ action: "batch", url: STATUS_PAGE_URL, writes: writes.slice(i, i + 50) }));
+/** The file of open items and, beside it, the history of decided items (ProjectStandard v3): those that exist. */
+export function feedbackFiles(openFile: string): string[] {
+  return [openFile, join(dirname(openFile), "FEEDBACK-HISTORY.md")].filter((f) => existsSync(f));
 }
 
 function cmdShow(path: string, a: Args): void {
   const updates = readUpdates(path);
-  const receipts = readReceipts(path);
   const lastRaw = a.one.get("last") ?? "1";
   const last = Number(lastRaw);
   if (!Number.isInteger(last) || last < 1) throw usage(`--last must be a whole number >= 1; got "${lastRaw}"`);
   const shown = updates.slice(-last).reverse();
-  const answered = new Set(updates.flatMap((u) => u.answers.map((x) => x.feedback)));
   if (a.on.has("json")) {
-    console.log(JSON.stringify({ page: STATUS_PAGE_URL, updates: shown, receipts: receipts.map((r) => ({ ...r, answered: answered.has(r.feedback) })) }, null, 2));
+    console.log(JSON.stringify({ page: STATUS_PAGE_URL, updates: shown }, null, 2));
     return;
   }
   if (updates.length === 0) console.log(`no status updates yet (${join(statusDir(path), "STATUS.jsonl")}); page: ${STATUS_PAGE_URL}`);
@@ -981,7 +773,6 @@ function cmdShow(path: string, a: Args): void {
     console.log(`  app: ${u.app.map((l) => `${l.label} = ${l.target} [${l.check}]`).join("; ")}`);
     console.log(`  ${factsText(u.facts).split("\n").join("\n  ")}`);
   }
-  for (const r of receipts) console.log(`feedback ${r.ref} (${r.at}, ${answered.has(r.feedback) ? "answered" : "NOT answered"}): "${r.text.slice(0, 100)}"`);
   console.log(`page: ${STATUS_PAGE_URL}`);
 }
 
@@ -992,6 +783,11 @@ async function run(argv: string[]): Promise<number> {
     return 0;
   }
   if (command === undefined) throw usage("missing command");
+  if (command === "pull" || command === "inbox") {
+    // A session that still follows the old workflow text gets the new steps, not an error.
+    console.log(`${command} is removed (2026-11-25). Read Jm's page feedback yourself: ArtifactData ${JSON.stringify({ action: "query", url: STATUS_PAGE_URL, collection: "feedback", query: { where: [["project", "==", "<your project>"]] } })} (no out_dir). No documents: nothing is new. Else follow ~/.claude/skills/Automation/EndStateLoop/Workflows/Orchestrate.md, section "Status page".`);
+    return 0;
+  }
   const spec = SPECS[command];
   if (spec === undefined) throw usage(`unknown command "${command}"`);
   if (path === undefined || path.startsWith("--")) throw usage("missing board path");
@@ -1002,12 +798,6 @@ async function run(argv: string[]): Promise<number> {
       break;
     case "post":
       await cmdPost(path, a);
-      break;
-    case "pull":
-      cmdPull(path, a);
-      break;
-    case "inbox":
-      cmdInbox(path, a);
       break;
     case "show":
       cmdShow(path, a);

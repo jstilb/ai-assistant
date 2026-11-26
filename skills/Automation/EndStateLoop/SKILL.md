@@ -63,7 +63,7 @@ Jm's words (sources: `~/.claude/CLAUDE.md`, each project's `FEEDBACK.md`):
 Kaya's design rules (change them with evidence):
 - A test with a known answer comes first: planted faults, planted items, planted facts, held-out samples. A judge marks a row only after the judge passed its own test.
 - The pass rule is in the board before the run. A set is used once; after the run it is burned.
-- A unit fits one builder session. Two closed units in a row with no board move: the orchestrator re-plans with a different approach (Orchestrate step 1; `Board.ts gate` exits 5 and `unit-open` refuses until then). A move is a unit that closed `pass` and put a change live (`--shipped` is not `none`); a row mark is not needed. A unit that shipped nothing is not a move, even when its row went up.
+- A unit fits one builder session. Two closed units in a row with no board move: the orchestrator re-plans with a different approach (Orchestrate step 1; `Board.ts gate` exits 5; the count is context, and no command refuses because of it). A move is a unit that closed `pass` and put a change live (`--shipped` is not `none`); a row mark is not needed. A unit that shipped nothing is not a move, even when its row went up.
 - After each merge, a fresh reviewer audits the unit's claims against the product (`Workflows/Check.md`, "Claim audit (per merge)"; `Tools/ClaimAudit.ts` when a driver, not a Claude orchestrator, runs it). A failed audit revokes the move (`Board.ts unit-audit`).
 - **Bars for "met"** (Jm form-doc F-029, 2026-11-24): a small-v1 current bet lists, for each item, the measured number now with its source (an exam or a product output, never a builder claim), the bar, and the test. Every status post gives 2 or 3 driver numbers with `Status.ts post --number "LABEL|NOW|BEFORE|BAR"`. Examples: edition `intake/AGENTS.md` "Bars for met"; form-doc `AGENTS.md`.
 - Each unit is a `product` unit: it changes what Jm receives. A test tool is built only inside a driver's product unit; product units never wait for a row's test tool or mark. A row's test rule has at most 2 versions; then the examiner judges the product directly (Exam step 2).
@@ -132,6 +132,7 @@ Commands and tool usage: `Reference/QUICK-REFERENCE.md`. Templates: `Templates/U
 
 ### Feeds Into
 - Each project's `SCOREBOARD.json` and `FEEDBACK.md`; LucidTasks parent task of the project.
+- `FEEDBACK.md` in this folder: Jm's words about the loop method itself, one time (ProjectStandard, point 3). A project's file gets only words about that product.
 - The status page (https://claude.ai/artifact/HYZQ2KKQxtwphAwRGs8kXb): a fourth door for Jm's project feedback (ProjectStandard, point 3), in the same item format.
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-25

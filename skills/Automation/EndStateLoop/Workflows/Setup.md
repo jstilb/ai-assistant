@@ -5,7 +5,7 @@ Put a project on the end-state loop: write its scoreboard, its examiner brief an
 ## Before you start
 
 - The project has an end state in Jm's words or approved by Jm (`AGENTS.md` "Intent", an ALIGNMENT file, `FEEDBACK.md`). If it has none, stop and ask Jm for it: do not write one for him.
-- Read `FEEDBACK.md` `## Open` with an anchored range: `awk '/^## Open$/{p=1;next} /^## /{p=0} p' FEEDBACK.md`.
+- Read `FEEDBACK.md` (it holds only the items that wait).
 - If a loop already runs on the project, do not change its files. Send it messages.
 
 ## Steps

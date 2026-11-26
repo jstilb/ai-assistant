@@ -1,11 +1,11 @@
 # Handoff: <project>-orch (session <n> → <n+1>), <date via `date`>
 
 Board: <absolute path of SCOREBOARD.json>
-Status page: https://claude.ai/artifact/HYZQ2KKQxtwphAwRGs8kXb (`Tools/Status.ts`; pull Jm's feedback at each wake, post after each close: Orchestrate.md, section "Status page")
-FEEDBACK file: <absolute path; give it to `Status.ts inbox --feedback-file` when it is not <project folder>/FEEDBACK.md>
+Status page: https://claude.ai/artifact/HYZQ2KKQxtwphAwRGs8kXb (`Tools/Status.ts`; read Jm's feedback at each wake, post after each close: Orchestrate.md, section "Status page")
+FEEDBACK file: <absolute path; give it to `Status.ts post --feedback-file` when it is not <project folder>/FEEDBACK.md>
 App links: <what `--app` gives: where Jm opens the product; the tool carries it forward>
 
-You are the orchestrator of the project <project>. Read `~/.claude/skills/Automation/EndStateLoop/Workflows/Orchestrate.md` first and follow it. Then `<project folder>/AGENTS.md` and `FEEDBACK.md` `## Open`.
+You are the orchestrator of the project <project>. Read `~/.claude/skills/Automation/EndStateLoop/Workflows/Orchestrate.md` first and follow it. Then `<project folder>/AGENTS.md` and `FEEDBACK.md`.
 
 ## Jm's words (the source of this loop)
 > <the end state or the request, verbatim, with date and source>

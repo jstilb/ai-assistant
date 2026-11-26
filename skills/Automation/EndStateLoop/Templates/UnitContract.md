@@ -21,7 +21,6 @@ Written by: <orchestrator session> · <date via `date`>
 ## Limits
 - One session. If you reach 40 % context, stop and report "too large" with a proposal to divide the unit.
 - Worktree: your own (`EnterWorktree`). Merge and deploy: <no | the exact rule>.
-  Codex builder (`Tools/codex-unit.sh`): Worktree: <path> (made by the orchestrator), branch <name>. Do not commit: put one line `Commit message: <text>` in RESULT.md; the runner commits after Codex ends. Network: on. Writable: the worktree, `<board folder>/units/<U-id>/` and <each --add-dir>. No `ps`, `pgrep` or signals to other processes (the sandbox refuses them). Heavy runs: `bash ~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <board folder>/locks/RUN.lock U<n> <command…>`. Model calls: Codex units have run `claude -p` in this sandbox (form-doc U4, U6, U8, U10, U16); test a call before you plan around it, and never claim it cannot work without that test.
 - Do not touch: the board, `EXAMINER-BRIEF.md`, the exam folder, other chains' worktrees.
 - Heavy runs: through `~/.claude/skills/Automation/EndStateLoop/Tools/runlock.sh <lock dir> <your session name> <command…>` (memory-heavy runs: the brief's memory lock; batches of model calls: its model lock; a run with both: one call, `runlock.sh <memory lock>,<model lock> …`; never nest two runlock calls); never remove a lock that you do not own.
 - Shared live budgets: <each free model pool or API limit that the live product also uses, its window, the cap for this unit's runs, and who counts it; or "none">
