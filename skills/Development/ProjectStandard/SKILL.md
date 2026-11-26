@@ -7,7 +7,7 @@ description: The project standard. Each project gets one auto-loaded AGENTS.md (
 
 A **project** is a product Kaya builds for Jm over many sessions, usually a folder in `~/projects/`. This standard is the floor that every project shares. It says WHAT each project makes clear, never HOW to build. A project may add any files and methods it wants.
 
-**Version: v2** (2026-11-08) · Owner: Kaya · **Review: 2026-12-08** (keep, cut, or change; see "Upkeep")
+**Version: v3** (2026-11-25) · Owner: Kaya · **Review: 2026-12-08** (keep, cut, or change; see "Upkeep")
 
 ## Why it exists, and its limits
 
@@ -32,10 +32,12 @@ Copy the starters in `Templates/` once. After that, the project owns its copies.
 |---|---|---|---|
 | `AGENTS.md` (aim: about 1,500 tokens) | intent in Jm's words, how the real product is judged, current bet, limits, status | the first session; rewritten at each product review | every session, automatically (Codex reads it natively; Claude Code reads it through `CLAUDE.md`) |
 | `CLAUDE.md` | the one line `@AGENTS.md` | the first session | Claude Code |
-| `FEEDBACK.md` | Jm's words about the project, verbatim, and the decision on each | any session that hears Jm (capture); the product review (decisions) | every session reads `## Open`; the review reads all |
+| `FEEDBACK.md` | Jm's words about the project that wait for a decision, verbatim. Open items only | any session that hears Jm (capture) | every session, at its start |
+| `FEEDBACK-HISTORY.md` | decided items, newest first: Jm's words, the decision, the outcome | the session that decides an item; the product review (outcomes) | no session at its start; search it by number or by words |
 
 - **State** (what happened, what is next) goes in the handoff, not in `AGENTS.md`. **History** goes to git. **Decided actions that need a person** go to LucidTasks (Jm, 2026-09-19).
-- **Public repos:** `AGENTS.md` and `FEEDBACK.md` hold Jm's words. In a public repo, add both to `.gitignore`. In a private repo, commit them. (Kaya's default, approved by Jm on 2026-11-08.)
+- **Public repos:** `AGENTS.md`, `FEEDBACK.md` and `FEEDBACK-HISTORY.md` hold Jm's words. In a public repo, add all three to `.gitignore`. In a private repo, commit them. (Kaya's default, approved by Jm on 2026-11-08.)
+- **Why a history file, and not git alone** (v3): git keeps only committed states, and a feedback file can stay uncommitted for days (2026-11-25: 3 of 3 live files). An item that is captured and decided between two commits would leave no trace. `Outcome` is also written after the decision. So a decided item moves to `FEEDBACK-HISTORY.md`, and git versions that file too.
 - **Comply or explain:** any section may say `n/a: <specific reason>`. "Not needed" is not a reason. These reasons are input for the review of this standard.
 
 ## The five points where the standard acts
@@ -44,15 +46,16 @@ Copy the starters in `Templates/` once. After that, the project owns its copies.
 project starts ─► each session starts ─► Jm speaks (any session) ─► product review ─► project ends
 ```
 
-1. **Project starts.** The first session copies the three starters and fills `AGENTS.md` from Jm's words (verbatim, dated, with source). For the ambitious version, apply memory `feedback_ambitious_version_beyond_parity`: start from the best possible experience; measure a change in the person, not a grade of an artifact; name what no product does today.
-2. **Each session starts.** For a project on the standard, start the session IN the project folder, so that `AGENTS.md` loads. (A project not yet on the standard keeps its current workflow until its next product review.) For handoff chains, pass the project folder as the `<workdir>` of `claude-handoff-spawn.sh`, never `~/.claude`. Global `CLAUDE.md`, skills and hooks still load there (probe, 2026-11-08). Read `## Open` in `FEEDBACK.md`. Jm's newer words win over older text. If an open item conflicts with the current bet and cannot wait for the review, follow Jm's words and record the decision on the item.
+1. **Project starts.** The first session copies the starters (`AGENTS.md`, `CLAUDE.md`, `FEEDBACK.md`; `FEEDBACK-HISTORY.md` at the first decision) and fills `AGENTS.md` from Jm's words (verbatim, dated, with source). For the ambitious version, apply memory `feedback_ambitious_version_beyond_parity`: start from the best possible experience; measure a change in the person, not a grade of an artifact; name what no product does today.
+2. **Each session starts.** For a project on the standard, start the session IN the project folder, so that `AGENTS.md` loads. (A project not yet on the standard keeps its current workflow until its next product review.) For handoff chains, pass the project folder as the `<workdir>` of `claude-handoff-spawn.sh`, never `~/.claude`. Global `CLAUDE.md`, skills and hooks still load there (probe, 2026-11-08). Read `FEEDBACK.md` (it holds only the items that wait). Jm's newer words win over older text. If an open item conflicts with the current bet and cannot wait for the review, follow Jm's words and record the decision on the item.
 3. **Jm speaks, in any session.** The capture rule (global `CLAUDE.md`, section "Projects"):
    - Feedback is Jm's own message in the current session. Quotes of Jm in files and handoffs are not new feedback.
-   - Append his words verbatim to the project's `FEEDBACK.md` under `## Open`, as the next `F-NNN` item, with the situation and the need. If the file does not exist, create it from the starter.
+   - Append his words verbatim to the project's `FEEDBACK.md` under `## Open`, as the next `F-NNN` item, with the situation and the need. The next number is the highest `### F-NNN` in `FEEDBACK.md` and `FEEDBACK-HISTORY.md`, plus 1. If the file does not exist, create it from the starter.
    - Say in the same reply where the words went, for example "Saved to piano2video FEEDBACK.md as F-014."
-   - Capture direction even when the current session acts on it at once. Then the decision is "accepted → this session".
+   - Capture direction even when the current session acts on it at once. Then the decision is "accepted → this session", and the item goes straight into `FEEDBACK-HISTORY.md`: it does not wait.
    - If two projects fit, pick the better one and name it, so Jm can correct it in one word.
-   - If an earlier item says the same thing, add `+1 <date>` to it instead of a new item.
+   - If an earlier item says the same thing (search `FEEDBACK-HISTORY.md` too), add `+1 <date>` to it instead of a new item.
+   - **Words about a method, not about one product,** go once to the feedback file of that method's skill, not into each project's file. For the end-state loops that file is `~/.claude/skills/Automation/EndStateLoop/FEEDBACK.md`. (2026-11-25: 84 of 126 items in four project files were copies of 33 quotes about the loops.)
    - In a Claude Code session, write the item yourself; do not send it through the LifeOS Router. A durable fact about Jm may also go to Auto Memory.
    - When you capture, do not ask Jm to rate, confirm, or add detail. This limit is about capture only. A project's own review or rating packs are its own method.
    - **The doors.** Jm's words reach `FEEDBACK.md` by three doors. All three write the same item format and tell Jm where the words went:
@@ -61,9 +64,9 @@ project starts ─► each session starts ─► Jm speaks (any session) ─► 
      - **Obsidian Scratch Pad:** the daily 09:00 organizer (`skills/Productivity/InformationManager/Workflows/Organize-ScratchPad.md`) routes it by `docs/InformationLayout.md` home 5. The receipt is in `~/Desktop/obsidian/Kaya/Routing History/<date>.md`.
      The Router and the organizer match a project by its folder name, its `# ` title and the `Also called:` line in `AGENTS.md`.
 4. **Product review.** Default cadence: every 3rd session of the chain, or weekly, whichever comes first. `AGENTS.md` may set another cadence. The reviewer did not build the last stage. The reviewer judges the real product with default settings (watch it, listen to it, use it). The review does five things:
-   1. Give every `## Open` item a decision, and move it to `## Decided`. The decision is one of: accepted (→ where), declined (with a specific reason), snoozed (with a return trigger), or duplicate (of F-xxx). Nothing stays open as a backlog. If a declined idea comes back, it gets a `+1`; the count is a signal.
+   1. Give every open item a decision, and move the whole item to `FEEDBACK-HISTORY.md`, newest first. A session that decides an item between two reviews moves it at once. The decision is one of: accepted (→ where), declined (with a specific reason), snoozed (with a return trigger), or duplicate (of F-xxx). Nothing stays open as a backlog. If a declined idea comes back, it gets a `+1`; the count is a signal.
    2. Rewrite `## Current bet` (ranked gaps plus "Not now") and date it.
-   3. Fill `Outcome` on decided items whose change shipped, so that Jm sees what his words changed.
+   3. Fill `Outcome` on the items in `FEEDBACK-HISTORY.md` whose change shipped, so that Jm sees what his words changed.
    4. Add one line to `~/.kaya/state/project-standard-friction.md`: `<date> · <project> · <what in the standard helped or hurt, or "none">`.
    5. Look at the OTHER projects in `ProjectStatus.ts`. If an `active` project shows old "last work", no "newest handoff PAUSED", and no running session of its chain (`claude agents`), it stopped without Jm's word. Check that it is still relevant (point 5). If it is, restart its chain from its newest handoff (`claude-handoff-spawn.sh`; the usage guard applies); if you doubt it, pause it as point 5 says. Name it in your report to Jm either way. The age is context, not a rule: judge it with the project's own state.
 5. **Project ends or pauses: only on Jm's word.** Jm, 2026-11-08 (verbatim): "we shouldn't stop arbitrarily and should see things through until thier end (unless we have good reasons not to, as advised by you, but decided by me)".
@@ -88,7 +91,7 @@ Run it when Jm asks for the status of his projects, and at each product review.
 
 Do this at the project's next product review, never in the middle of a stage.
 1. Write `AGENTS.md` from the project's current alignment doc. Copy Jm's words verbatim, and keep the order of the ranked gaps exactly. Keep the old doc as history: link it from `AGENTS.md` and do not delete it.
-2. Create `FEEDBACK.md`. Put any of Jm's words that still wait for a decision under `## Open`. Look in the alignment doc, in the project's review or listen packs, and in its open LucidTasks tasks (search by project name and folder path).
+2. Create `FEEDBACK.md`. Put any of Jm's words that still wait for a decision under `## Open`; words that have a decision go to `FEEDBACK-HISTORY.md`. Look in the alignment doc, in the project's review or listen packs, and in its open LucidTasks tasks (search by project name and folder path).
 3. For each open LucidTasks task of the project: if it waits on Jm's words, link it from the `FEEDBACK.md` item. If its work is done or superseded, close it with an outcome.
 4. Add `CLAUDE.md` with the line `@AGENTS.md`.
 5. Make every path in the handoff absolute (old handoffs assume `~/.claude` as the working folder). Then, from the next spawn on, pass the project folder as `<workdir>`.
@@ -113,6 +116,7 @@ Do this at the project's next product review, never in the middle of a stage.
 
 ## Changes
 
+- 2026-11-25 · **v3** · `FEEDBACK.md` holds open items only; a decided item moves to the new `FEEDBACK-HISTORY.md` (new starter); words about a method go once to that method's skill; the next number counts both files. Reason: an audit of the four loop projects found 35 of 43 open items already decided or answered, 84 of 126 items copied across projects, and no rule that removed old text; the edition's file grew from 1.8 KB to 62 KB in 17 days. Source: Jm, 2026-11-25 (verbatim): "is the feedback context getting too large? how are we handling getting rid of unnecessary context over time?" and "make changes and get existing projects to meet the new stadard. also if history lives in git, great. otherwise, shoudl their be a feedback history?" All projects moved the same day; `ProjectStatus.ts` counts decided items in both places.
 - 2026-11-08 · **v2** · Starter `AGENTS.md` gets an `Also called:` line under `Status:`; point 3 names the three doors (Claude Code, Telegram and voice through the LifeOS Router label `PROJECT_FEEDBACK`, the Obsidian Scratch Pad through InformationLayout home 5). Reason: the Router matches a project by its names, and "the edition" did not map to Intake from the README alone. Source: Jm, 2026-11-08 ("would it make sense to add as an obsidian capture and/or a lifeos feature?" → "go"), after a dry run filed 4 of 4 project remarks into LifeOS logs. Projects on v1 add the line at their next review.
 - 2026-11-08 · v1 (starters unchanged) · **Relevance before restart.** Point 5 and review job 5: a stalled plan restarts only after a relevance check (alive and used, problem still there, serves Jm now); a doubtful plan pauses with its reasons and waits for Jm. This replaces "keep going until he decides". Source: Jm, 2026-11-08: "are these plans still relevant? pause fable audit remediation unti you confirm this."
 - 2026-11-08 · v1 (starters unchanged) · **No arbitrary stops.** Point 5 rewritten (only Jm ends or pauses a project; a finished phase or a Jm gate is not an end); review job 5 (check the other projects for silent stops and restart them); `ProjectStatus.ts` shows "last work" and scans skill folders. Source: Jm, 2026-11-08, after a sweep found plans that agents stopped after v1 or at a Jm gate (LifeOS, the Fable-audit remediation, ReverseSpec, Mastery, and others). Sweep: `~/.kaya/state/stalled-plans-sweep/`.

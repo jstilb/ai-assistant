@@ -1,4 +1,4 @@
-<!-- project-standard: v2 · ~/.claude/skills/Development/ProjectStandard/SKILL.md -->
+<!-- project-standard: v3 · ~/.claude/skills/Development/ProjectStandard/SKILL.md -->
 # <Project name>
 
 Status: active · since <YYYY-MM-DD>
@@ -6,7 +6,7 @@ Status: active · since <YYYY-MM-DD>
 Also called: <other names Jm uses for it, comma-separated, for example "p2v, piano videos">
 <!-- The capture Router matches Jm's Telegram and voice remarks to a project by these names. -->
 Folder: <absolute path> · Chain: <chain-name>-N · State: the newest handoff in ~/.kaya/handoffs/ (not this file)
-Feedback: ./FEEDBACK.md (read `## Open` at session start)
+Feedback: ./FEEDBACK.md (read it at session start; decided items are in ./FEEDBACK-HISTORY.md, which no session reads at start)
 
 ## Intent
 <!-- Jm's words decide. Label any line that is Kaya's proposal. -->

@@ -1,9 +1,10 @@
-<!-- project-standard: v2 · ~/.claude/skills/Development/ProjectStandard/SKILL.md -->
+<!-- project-standard: v3 · ~/.claude/skills/Development/ProjectStandard/SKILL.md -->
 # Feedback: <Project name>
 
-Jm's words about this project, captured in any session (rule: `~/.claude/CLAUDE.md`, section "Projects").
-Every session reads `## Open`. Each product review gives every open item a decision and moves it to `## Decided`.
-If Jm repeats an item, add `+1 <YYYY-MM-DD>` to that item instead of a new one.
+Jm's words about this project that wait for a decision (rule: `~/.claude/CLAUDE.md`, section "Projects").
+This file holds open items only. When an item gets a decision, move the whole item to `FEEDBACK-HISTORY.md` in this folder, newest first.
+The next number is the highest `### F-NNN` in this file and in `FEEDBACK-HISTORY.md`, plus 1.
+If Jm repeats an item, add `+1 <YYYY-MM-DD>` to that item (here or in the history) instead of a new one.
 
 ## Open
 
@@ -12,11 +13,4 @@ If Jm repeats an item, add `+1 <YYYY-MM-DD>` to that item instead of a new one.
 - **Jm (verbatim):** "<words>"
 - **Situation:** <what Jm was doing or looking at>
 - **Need:** <the problem under the words, separate from any fix he proposed>
--->
-
-## Decided
-
-<!-- Item format (the open item, plus):
-- **Decision (<YYYY-MM-DD>, <review or session>):** accepted → <current bet #, task id, or commit> | declined: <specific reason> | snoozed until <trigger> | duplicate of F-xxx
-- **Outcome:** <what changed in the real product, with path or commit; write it when the change ships>
 -->

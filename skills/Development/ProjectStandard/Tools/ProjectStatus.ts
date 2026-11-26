@@ -2,7 +2,7 @@
 /**
  * ProjectStatus.ts — status and gap check for projects on the project standard.
  *
- * Reads each project's AGENTS.md and FEEDBACK.md when it runs (no copy, no sync job) and prints
+ * Reads each project's AGENTS.md, FEEDBACK.md and FEEDBACK-HISTORY.md when it runs (no copy, no sync job) and prints
  * one line per project: status, standard version, age of the current bet, open and decided
  * feedback items, and the size of AGENTS.md. `--check` also lists gaps that a machine can see
  * for certain (no stamped AGENTS.md, an old standard version, no FEEDBACK.md, no CLAUDE.md
@@ -31,7 +31,7 @@
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { kayaHomePath } from "../../../../lib/core/KayaHome.ts";
 import {
   listProjectRefs,
@@ -176,8 +176,9 @@ function parseItems(sectionText: string): FeedbackItem[] {
   return items;
 }
 
-export function parseFeedback(raw: string): FeedbackInfo {
-  return { open: parseItems(section(raw, "Open")), decided: parseItems(section(raw, "Decided")) };
+/** Decided items live in FEEDBACK-HISTORY.md (standard v3); a `## Decided` section of an older FEEDBACK.md still counts. */
+export function parseFeedback(raw: string, history: string = ""): FeedbackInfo {
+  return { open: parseItems(section(raw, "Open")), decided: [...parseItems(section(raw, "Decided")), ...parseItems(stripComments(history))] };
 }
 
 function claudeImportsAgents(dir: string): boolean {
@@ -188,9 +189,20 @@ function claudeImportsAgents(dir: string): boolean {
   return /^@AGENTS\.md\s*$/m.test(readFileSync(claudePath, "utf8"));
 }
 
+/**
+ * The project's FEEDBACK.md. An AGENTS.md line `Feedback: … \`/abs/path/FEEDBACK.md\`` names a file outside the folder
+ * (the edition keeps it in its tracker worktree); 2026-11-25: the tool read the main copy and said "open 0" while
+ * the live file had 21 open items.
+ */
+export function feedbackPath(dir: string, agentsRaw: string | null): string {
+  const named = agentsRaw === null ? null : (stripComments(agentsRaw).match(/^Feedback:[^\n]*?`(\/[^`\n]*\/FEEDBACK\.md)`/m)?.[1] ?? null);
+  return named !== null && existsSync(named) ? named : join(dir, "FEEDBACK.md");
+}
+
 export function inspectProject(dir: string, handoffsDir: string = HANDOFFS_DIR): ProjectReport {
   const agentsRaw = readIfExists(join(dir, "AGENTS.md"));
-  const feedbackRaw = readIfExists(join(dir, "FEEDBACK.md"));
+  const fbPath = feedbackPath(dir, agentsRaw);
+  const feedbackRaw = readIfExists(fbPath);
   const parsed = agentsRaw === null ? null : parseAgents(agentsRaw);
   const agents = parsed && parsed.version !== null ? parsed : null;
   // A real repo has a .git folder; a git worktree has a .git file and is not a separate project.
@@ -200,7 +212,7 @@ export function inspectProject(dir: string, handoffsDir: string = HANDOFFS_DIR):
     dir,
     isGitRepo,
     agents,
-    feedback: feedbackRaw === null ? null : parseFeedback(feedbackRaw),
+    feedback: feedbackRaw === null ? null : parseFeedback(feedbackRaw, readIfExists(join(dirname(fbPath), "FEEDBACK-HISTORY.md")) ?? ""),
     claudeImportsAgents: claudeImportsAgents(dir),
     // Only for folders that are projects: the scan also sees plain folders, and git is slow per call.
     lastWork:
